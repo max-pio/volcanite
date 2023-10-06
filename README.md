@@ -1,5 +1,7 @@
 # Volcanite Renderer
 
+![Renderer Preview Image](doc/volcanite_app.jpg)
+
 A research renderer for segmentation volumes implemented in Vulkan.
 The implementation is based on the [Vulkan Volume Visualization](https://git.scc.kit.edu/vulkan-vol-vis/vvv) framework (vvv) by Reiner Dolp and Max Piochowiak which is currently closed source.
 If not stated otherwise, this implementation is owned by Karlsruhe Institute of Technology and the authors of this repository.
