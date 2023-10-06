@@ -19,7 +19,6 @@ set(CELLGROWTH_HEADERS
         include/volcanite/compression/CompressedSegmentationVolume.hpp
         include/volcanite/compression/CompSegVolHandler.hpp
         include/volcanite/compression/rans.hpp
-        include/volcanite/NastjaUtils.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp
         include/volcanite/renderer/PassCompSegVolRender.hpp

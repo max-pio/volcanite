@@ -40,7 +40,7 @@ If your IDE supports generating build files, you can directly open the `CMakeLis
 
 Start the `volcanite` executable, either providing a path to a segmentation volume as a commandline argument with
 ```
-volcanite /path/to/your/segmentation/volume
+./projects/volcanite/volcanite /path/to/your/segmentation/volume
 ```
 or by using the file dialog to select a volume file.
 See [Supported File Formats](#Supported-File-Formats) for a list of currently usable data formats.
