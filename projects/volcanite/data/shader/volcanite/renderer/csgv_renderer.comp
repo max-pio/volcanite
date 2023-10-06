@@ -1,0 +1,407 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_debug_printf : enable
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+
+#include "csgv_bindings.glsl"
+
+// includes
+#include "cpp_glsl_include/csgv_constants.h"
+#include "util.glsl"
+#include "debug_colormaps.glsl"
+#include "random.glsl"
+// Compressed Segmentation Volume specific: define array containing the encoding (input) as well as the decoding (output)
+#define CSGV_ENCODING_ARRAY g_encoding
+#define CSGV_DETAIL_ARRAY g_detail
+#define CSGV_DECODING_ARRAY g_cache
+#define CSGV_READ_ONLY
+#include "volcanite/compression/compressed_segmentation_volume.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
+
+struct Ray {
+    vec3 origin;
+    vec3 direction;
+};
+
+struct AABB {
+    vec3 top;
+    vec3 bottom;
+};
+
+
+// Slab method for ray-box intersection
+// @see https://martinopilia.com/posts/2018/09/17/volume-raycasting.html
+// @see http://www.siggraph.org/education/materials/HyperGraph/raytrace/rtinter3.htm
+void ray_box_intersection(const Ray ray, const AABB box, out float t_0, out float t_1)
+{
+    vec3 direction_inv = 1.0 / ray.direction;
+    vec3 t_top = direction_inv * (box.top - ray.origin);
+    vec3 t_bottom = direction_inv * (box.bottom - ray.origin);
+    vec3 t_min = min(t_top, t_bottom);
+    vec2 t = max(t_min.xx, t_min.yz);
+    t_0 = max(0.0, max(t.x, t.y));
+    vec3 t_max = max(t_top, t_bottom);
+    t = min(t_max.xx, t_max.yz);
+    t_1 = min(t.x, t.y);
+}
+
+ivec2 pixelFromInvocationID() {
+    // We send out one ray per block of [g_subsampling]*[g_subsampling] pixels
+    if(g_subsampling <= 1)
+        return ivec2(gl_GlobalInvocationID.xy);
+    uint idx = g_camera_still_frames;
+
+    if(g_blue_noise)
+        idx += uint(blueNoise32x32(ivec2(-gl_GlobalInvocationID.y, gl_GlobalInvocationID.x)) * g_subsampling*g_subsampling);
+
+    // ToDo: the subsampling sequence is broken. replace with a better hierarchical low discrepancy sampling
+    uint indexInSequenceX = bitfieldReverse(idx % (g_subsampling)) >> (32 - int(0.5f + log2(g_subsampling)));
+    uint indexInSequenceY = bitfieldReverse(((indexInSequenceX << 2) ^ (idx/g_subsampling)) % (g_subsampling)) >> (32 - int(0.5f + log2(g_subsampling)));
+
+    return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + ivec2(g_subsampling/2 + indexInSequenceX, g_subsampling/2 + indexInSequenceY) % g_subsampling;
+}
+
+uint get_inv_lod(ivec3 voxel) {
+    // ToDo: the LOD computation is very expensive. should at least move it to the provision shader or replace it with something cheaper.
+
+    // outside volume
+    if (any(lessThan(voxel, ivec3(0))) || any(greaterThanEqual(voxel, ivec3(g_vol_dim))))
+        return INVALID;
+
+    float voxel_size_in_world_space = 1.f / g_world_to_model_space_scaling;
+    float nearDist = 0.05f;
+    const float pixel_size_at_near = 1.f / float(imageSize(feedbackOut).x);
+    vec3 brick_to_camera_world = ((g_model_to_world_space * vec4(vec3(voxel / int(g_brick_size)) * g_brick_size, 1.f)).xyz - g_camera_position_world_space);
+    float pixel_size_at_brick = (pixel_size_at_near / nearDist) * (length(brick_to_camera_world));
+
+    return clamp(g_lod_count - 1u - uint(log2(pixel_size_at_brick / voxel_size_in_world_space + 1.f) + g_lod_bias), 0u, min(g_lod_count - 1, g_max_decoding_lod));
+}
+
+bool isEmptySpace(ivec3 voxel) {
+    uvec3 brick = uvec3(voxel / g_brick_size);
+    uint brick_info_pos = brick_to_1D(brick, g_brick_count) * 4u;
+
+    // if the brick contains nothing visible, it is empty space
+    return g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > g_lod_count;  // marked "invisible" by request shader
+}
+
+/// returns true if the block is already decompressed, false otherwise
+bool get_volume_label(ivec3 voxel, out uint label) {
+    assert(all(greaterThanEqual(npos.xyz, g_bboxMin.xyz)) && all(lessThan(npos.xyz, g_bboxMax.xyz)), "trying to read volume label out of bounds!");
+
+    if (any(lessThan(voxel, ivec3(0))) || any(greaterThanEqual(voxel, ivec3(g_vol_dim)))) {
+        label = 0u;
+        return true;
+    }
+
+    uvec3 brick = uvec3(voxel) / g_brick_size;
+    uvec3 brick_voxel = uvec3(voxel) - (brick * g_brick_size);
+    uint brick_id = brick_to_1D(brick, g_brick_count);
+    uint brick_info_pos = brick_id * 4u;
+
+    // compute optimal LOD for the center of this brick
+    uint req_inv_lod = get_inv_lod(voxel);
+
+    // tell the other shaders that we can see this brick if it's visibility state is "unknown"
+    assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] <= g_lod_count, "we try to access a brick that's flagged as invisible");
+    if(req_inv_lod > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > req_inv_lod) {
+        // if the brick was not requested so far:
+        if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= g_lod_count)
+            g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
+        // if we request a finer level than the one that was requested so far:
+        // (this should not happen if we instead compute the LOD in the provision shader)
+        // ToDo: Compute a requested brick LOD in the provision shader based on the distance brick center <-> camera
+        else if(req_inv_lod > g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD])
+            atomicMax(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], req_inv_lod);
+    }
+
+    // find the current LOD
+    uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
+    assert(cur_inv_lod != 0u, "BRICK_INFO_CUR_INV_LOD should never be zero");
+
+    // special case for coarsest LOD: we can do the lookup at the first palette element for LOD_Max
+    // or if the brick is not yet decoded
+    if (req_inv_lod == 0u || cur_inv_lod >= g_lod_count) {
+        // we could alternatively perform a small linear serach for the first *visible* label here
+        label = g_encoding[g_brick_starts[brick_id+1] - 1u];
+        // return false if the brick is not yet decoded but should be
+        return req_inv_lod == 0u;
+    }
+    // read the voxel from the brick in the cache (with the currently decoded LOD)
+    else {
+        label = readCSGVBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * 8u);
+        return true;
+    }
+}
+
+vec4 get_color(uint label) {
+    // ToDo: remove the hardcoded transfer functions
+    float v = float((4000u + 17u * label) % 4096u) / 4096.f;
+    // Cells
+    if(g_vol_dim.x == 1000u) {
+        //return vec4(colormap_inferno(v), 1.f);
+        if (label < 10)
+            return vec4(0.6f, 0.1f, 0.2f, 1.f);
+        else
+            return vec4(colormap_bluered(v), 1.f);
+    }
+
+    // Fiber
+    else if(g_vol_dim.x == 1579u)
+        return vec4(colormap_viridis(v).rgb, 1.f);
+
+    // Cortex
+    else
+        return vec4(colormap_bluered(v), 1.f);
+}
+
+/// background is a tilted interpolation between two colors
+vec4 get_background_color(vec2 fragCoord) {
+    float bgWeight = (fragCoord.x*2.f + (1.f-fragCoord.y)) / 3.f;
+    bgWeight *= bgWeight;
+    vec4 bgColor = g_background_color_a * (1.f - bgWeight) + g_background_color_b * bgWeight;
+    bgColor.rgb *= bgColor.a;
+    return bgColor;
+}
+
+
+void writePixel(ivec2 pixel, vec4 color, float depth) {
+    // fill all pixels of this subsampling block in the first frame
+    ivec2 subpixel;
+    for(subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
+        for (subpixel.x = 0; subpixel.x < g_subsampling; subpixel.x++) {
+            ivec2 opix = (pixel/g_subsampling)*g_subsampling + subpixel;
+            if (g_camera_still_frames == 0u) {
+                if (opix != pixel)  // all other pixels are reset to initial 0
+                    imageStore(feedbackOut, opix, vec4(0.f, 0.f, 0.f, 0.f));
+                else                // current pixel gets color, will be overwritten (.a=0) if depth < 0 <=> not yet decoded
+                    imageStore(feedbackOut, opix, vec4(color.rgb, depth >= 0.f ? 1.f : 0.f));
+            }
+            else {
+                if (opix != pixel)  // not our pixel, just copy from previous to current frame
+                    imageStore(feedbackOut, opix, imageLoad(feedbackIn, opix));
+                else if (depth < 0.f) { // our pixel, but invalid sample (from not yet decoded brick)
+                    vec4 prev_color = imageLoad(feedbackIn, opix);
+                    // write only if the pixel didn't have a valid sample yet, but with sample count 0 to be overwritten
+                    if (prev_color.a > 0.f)
+                        imageStore(feedbackOut, opix, prev_color);
+                    else
+                        imageStore(feedbackOut, opix, vec4(color.rgb, 0.f));
+                }
+                else
+                    imageStore(feedbackOut, opix, imageLoad(feedbackIn, pixel) + vec4(color.rgb, 1.f));
+            }
+        }
+    }
+}
+
+// all ray marching happens in the same loop to minimize thread divergence but
+// a ray can have one of multiple ray types that dictate its behavior:
+#define RT_VIEW_RAY 0       // intiial state: march until we hit a visible surface
+#define RT_SHADOW_RAY 1     // a shadowing ray send out directly in light direction
+#define RT_AO_RAY 2         // an ambient occlusion ray send out
+#define RT_SHADOW_HIT 3     // a shadow ray that hit something
+#define RT_AO_HIT 4         // an ambient occlusion ray that hit something
+
+// ToDo: we *may* want to introduce a random state here, init with g_frame and use last [returned rand vec3].z as next
+struct RayMarchState {
+    int step;           // how many ray marching steps where done so far
+    // ToDo: pos and voxel are dependend on t should we waste registers here?
+    float t;            // ray distance
+    vec3 pos;           // the position of the ray marcher
+    ivec3 voxel;        // the current voxel in which pos is
+    int ray_type;       // the current type of the ray (see above)
+    uint label;         // the label at the hit point
+    vec4 out_color;     // color to be written to the color buffer
+    float out_depth;    // depth to be written to the depth buffer. negative depth indicates an invalid hit.
+};
+
+
+void main() {
+    // obtain pixel and fragment coordinates
+    ivec2 viewport_size = imageSize(feedbackOut);
+
+    // optional subsampling
+    ivec2 pixel = pixelFromInvocationID();
+    if(isHelperLane(pixel, viewport_size))
+        return;
+
+    // We do not compute any TAA yet
+    vec2 subpixel_offset = vec2(0.f);
+    // subpixel_offset = randomVec3(vec2(pixel), 100.f + float(g_frame)).xy;
+    // subpixel_offset = spo * (subpixel_offset * subpixel_offset) - vec2(spo / 2.f);
+    // if(g_camera_still_frames < 1)
+    //        subpixel_offset = vec2(0.f);
+    vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(viewport_size);
+
+    // create view ray in model space
+    Ray ray = Ray(g_camera_position_world_space, normalize((g_pixel_to_ray_direction_world_space * vec3(pixel + subpixel_offset, 1.0f)).xyz));
+    ray.origin = (g_world_to_model_space * vec4(ray.origin, 1.f)).xyz;
+    ray.direction = normalize(g_world_to_model_space_dir * ray.direction);
+    // In world space, we hit a small cuboid (largest dimension is 1) centered around the origin.
+    // We transform this to model space, where each voxel has unit size:
+    float t_0, t_1;
+    AABB bounding_box = AABB((g_world_to_model_space * vec4((g_bboxMin.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz,
+                             (g_world_to_model_space * vec4((g_bboxMax.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz);
+    ray_box_intersection(ray, bounding_box, t_0, t_1);
+    // if we don't hit the data set, we can directly output the background
+    if (t_0 >= t_1) {
+        writePixel(pixel, get_background_color(fragCoord), BACKGROUND_DEPTH);
+        return;
+    }
+    int max_steps = min(g_maxSteps, int((t_1 - t_0 + g_stepSize) / g_stepSize));
+
+    // For debug views: only color every other pixel in the debug view to get some kind of "transparent" overlay effect
+    // As we move this pixel around, the progressive accumulation averages this with the rendered colors.
+    bool debug_view_visible = (pixel.x + pixel.y) % 3u != (g_frame % 3u); // < (viewport_size.x + viewport_size.y) / 2u);
+
+    // ToDo: DDA Traversal loop over empty bricks
+
+    // ray marching loop
+    RayMarchState state;
+    state.step = 0;
+    state.t = t_0 - (g_blue_noise ? fract(randomVec3(vec2(pixel), blueNoise32x32(pixel) * 1024.f + float(g_camera_still_frames) * 7.2348261f).x) * g_stepSize : 0.f);
+    state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
+    //state.voxel = ivec3(pos);
+    state.ray_type = RT_VIEW_RAY;
+    state.label = INVALID;
+    state.out_color = vec4(0.f);
+    state.out_depth = BACKGROUND_DEPTH;
+
+    // visualize model space coordinates
+    if(g_debug_model_space) {
+        vec3 color = floor(state.pos) / vec3(g_vol_dim);
+        vec3 borders = vec3(greaterThan(fract(state.pos), vec3(0.0f))) * vec3(lessThan(fract(state.pos - vec3(0.0001f)), vec3(0.2f)));
+        if(borders.x + borders.y + borders.z > 0.f)
+            color *= 1.f - 1.f / (t_0 / g_world_to_model_space_scaling * 64.f);
+        writePixel(pixel, vec4(color, 1.f), state.t);
+        return;
+    }
+
+    for(; state.step < max_steps; state.step++) {
+        // ToDo: replace with DDA traversal. remove unnecessary variables in RayMarchState
+        state.t += g_stepSize;
+        state.pos = ray.origin + state.t * ray.direction;
+        state.voxel = ivec3(floor(state.pos));  // floor is required so that -0.1f is not 0
+
+        // out of bounds and empty space check
+        if(isEmptySpace(state.voxel)
+            || any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
+            || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
+            continue;
+        }
+
+        // sampling (read value at pos from previously decoded volume segments in brick cache) or return the corasest
+        // LOD as a placeholder if not yet decoded, in which case the function will return false.
+        if (!get_volume_label(state.voxel, state.label)) {
+            // return a negative depth to indicate that this sample should not be counted (= overwritten in next frame)
+            state.out_color = isLabelVisible(state.label) ? get_color(state.label) : get_background_color(fragCoord);
+            state.out_depth = -BACKGROUND_DEPTH;
+            break;
+        }
+
+        assert(state.label != INVALID, "get_volume_label should never return INVALID");
+
+        // continue traversal if this is not a valid hit
+        if (!isLabelVisible(state.label)) {
+            continue;
+        }
+        else if(debug_view_visible && g_debug_brick_cache) {
+            // trigger visibility update
+            uint tmp_label;
+            get_volume_label(state.voxel, tmp_label);
+            uvec3 brick = uvec3(state.pos.xyz * vec3(g_vol_dim)) / g_brick_size;
+            uint brick_id = brick_to_1D(brick, g_brick_count);
+            uint cache_start = g_brick_info[brick_id * 4u + BRICK_INFO_CACHE_INDEX];
+            if (cache_start == INVALID || g_brick_info[brick_id * 4u + BRICK_INFO_CUR_INV_LOD] >= g_lod_count) {
+                state.out_color = vec4(1.f, 0.f, 0.f, 1.f);
+                continue;
+            } else {
+                state.out_color = vec4(0.f, 1.f, 0.2f, 1.f);
+                break;
+            }
+        }
+
+        // when a shadow / AO ray hits something, we end the traversal
+        if(state.ray_type != RT_VIEW_RAY) {
+            // ambient occlusion
+            if(state.ray_type == RT_AO_RAY) {
+                // half the AO rays will hit the wall below the surface, so we only count half of them
+                // note that this is still not "valid". we need normals for cos attenuation. at best: just path trace
+                if(randomVec3(pixel, 1111.f + float(g_frame + state.step * 234)).y > 0.5f) {
+                    float distance = state.t / g_ao_dist_strength.x;
+                    state.out_color.rgb *= clamp(1.f - g_ao_dist_strength.y / (distance * distance), 0.f, 1.f);
+                    state.ray_type = RT_AO_HIT;
+                }
+            }
+            // light source shadow
+            else if(state.ray_type == RT_SHADOW_RAY) {
+                state.out_color.rgb *= 1.f - g_ao_dist_strength.y;
+                state.ray_type = RT_SHADOW_HIT;
+            }
+
+            break;
+        }
+
+        // classification (assign color to label, opacity is always 1 on hit)
+        state.out_color = get_color(state.label);
+
+        // debug: lod vis
+        uint lod = get_inv_lod(state.voxel);
+        if (debug_view_visible && g_debug_lod && lod != INVALID) {
+            state.out_color.rgb = (state.out_color.rgb + 3.f * colormap_viridis(float(lod)/float(g_lod_count - 1u))) / 4.f;
+        }
+
+        // transform this ray into a shadow or ambient occlusion ray
+        {
+#if 0
+            // visualize visible brick id
+            uvec3 brick = uvec3(state.voxel) / g_brick_size;
+            uint brick_id = brick.x + brick.y * g_brick_count.x + brick.z * (g_brick_count.x * g_brick_count.y);
+            state.out_color = vec4(integer2colorlabel(brick_id, false), 1.f);
+            break;
+#endif
+
+            // this is the only point for which we want to store our t value in the depth buffer (ToDo: at best only if the hit was decoded to the requested LoD)
+            state.out_depth = state.t;
+            if(g_shadow_ray_enable == 0) {
+                break;
+            }
+
+            // this becomes a shadow ray / ambient occlusion ray now
+            ray.origin = state.pos;
+            state.t = g_stepSize/2.f;
+            if(randomVec3(pixel, 57.f + 2.f * float(g_frame + state.step)).x < g_shadow_ao_ray_distr) {
+                // no AO rays in interactive mode
+                if(g_camera_still_frames == 0)
+                    break;
+                // sample a random direction on the unit sphere
+                // ToDo: once we use DDA, we get normals for free and can use valid half-sphere cos importance sampling
+                ray.direction = normalize(randomSpherePoint(randomVec3(pixel, 1.f + float(g_frame + state.step))));
+                state.ray_type = RT_AO_RAY;
+            }
+            else {
+                // to light source
+                ray.direction = g_light_direction;
+                state.ray_type = RT_SHADOW_RAY;
+            }
+        }
+    }
+
+    if(g_debug_step_count) {
+        atomicAdd(gpu_raymarch_samples, state.step);
+        atomicAdd(gpu_bbox_hits, 1u);
+    }
+
+    // if no shadowing occurs, we multiply the color with the light intensity
+    if(g_shadow_ray_enable == 0 || state.ray_type == RT_SHADOW_RAY || state.ray_type == RT_AO_RAY)
+        state.out_color.rgb *= g_light_intensity;
+
+    // perform alpha blending with background
+    state.out_color.rgb = get_background_color(fragCoord).rgb * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
+
+    // write to iamge
+    writePixel(pixel, state.out_color, state.out_depth);
+}

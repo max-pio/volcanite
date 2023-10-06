@@ -1,0 +1,25 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+layout (set = 0, binding = 1, rgba8) uniform restrict writeonly image2D IMAGE_out;
+
+layout (std140, row_major, set = 0, binding = 2) uniform options {
+    uint g_frameIdx;
+};
+
+#include "util.glsl"
+
+
+void main() {
+
+    ivec2 tableSize = imageSize(IMAGE_out);
+    ivec2 threadId = ivec2(gl_GlobalInvocationID.xy);
+
+    if (isHelperLane(threadId, tableSize)) {
+        return;
+    }
+
+    imageStore(IMAGE_out, threadId, vec4(sin(float(g_frameIdx)*0.001)*0.5+0.5, 0.0, 0.0, 1.0));
+}

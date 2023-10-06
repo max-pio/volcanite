@@ -1,0 +1,153 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+layout (set = 0, binding = 0) uniform sampler1D SAMPLER_transferFunction1D;
+layout (set = 0, binding = 1, rgba16) uniform restrict writeonly image2D IMAGE_transferFunction2D;
+
+layout (std140, row_major, set = 0, binding = 2) uniform options {
+    float g_backgroundOpacity;
+    float g_foregroundOpacity;
+// a small epsilon like 0.02 instead of zero is recommended for anti-aliasing of discontinouties.
+// this is a percentage of the transfer function width. So choosing a value that smoothes around
+// 1 or 2 pixels is a good default choice.
+    float g_feathering;
+    uint g_direction;
+};
+
+// polygons are delimited by vec2 that contain a -1 followed by the rounding of the shape
+// the polygon sequence is terminated by a `vec2(-2,anything)`.
+layout(std430, set = 0, binding = 3) buffer ssbo_polygons
+{
+    vec2 g_polygons[];
+};
+const float POLYGON_END = -1;
+const float POLYGON_LIST_END = -2;
+
+layout(std430, set = 0, binding = 4) buffer ssbo_additional_data
+{
+    vec4 g_additionalData[];
+};
+
+
+#include "util.glsl"
+#include "sdf.glsl"
+
+vec4 sampleTransferFunctionUV(float unitRange) {
+    // we have to rescale to hit the pixel centers.
+    float halfSampleDistance = 0.5 / textureSize(SAMPLER_transferFunction1D, 0).x;
+    float lookupPosition = unitRange * (1.0 - 2.0*halfSampleDistance) + halfSampleDistance;
+
+    return textureLod(SAMPLER_transferFunction1D, lookupPosition, 0);
+}
+
+// adapted from: https://www.shadertoy.com/view/WdSGRd (comment from iq)
+float sdPoly(in int firstIdx, in int lastIdx, in vec2 p) {
+    float d = dot(p - g_polygons[firstIdx], p - g_polygons[firstIdx]);
+    float s = 1.0;
+
+    for (int i = firstIdx, j = lastIdx; i <= lastIdx; j = i, i++) {
+        // distance
+        vec2 e = g_polygons[j] - g_polygons[i];
+        vec2 w = p - g_polygons[i];
+        vec2 b = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+        d = min(d, dot(b,b));
+
+        // winding number from http://geomalgorithms.com/a03-_inclusion.html
+        bvec3 cond = bvec3(p.y >= g_polygons[i].y, p.y < g_polygons[j].y, e.x * w.y > e.y * w.x);
+        if(all(cond) || all(not(cond)))
+            s *= -1.0;
+    }
+
+    return s * sqrt(d);
+}
+
+float feathered_sdf(float sdf) {
+    if (g_feathering < 0)
+        return smoothstep(g_feathering, 0.0, -sdf + g_feathering);
+    else
+        return smoothstep(0.0, g_feathering, -sdf + g_feathering);
+}
+
+/**
+ * Converts a 1D transfer function to a 2D transfer function:
+ * - the scalar value of the 1D transfer function is on the x-axis and thus varies along the width
+ * - the gradient magnitude is on the y-axis and thus varies along the height
+ * - (0,0) is a the top left.
+ *
+ * In essence, the 1D transfer function is first repeated/copied to each gradient value and
+ * then masked using a set of polygons. Polygons are represented using signed distance functions.
+ * This allows us to easily feather transitions from masks.
+ *
+ * Most of the time, you want the 2d TF to have the same width, but there is nothing that prevents
+ * you from upsampling or downsampling of the x-axis.
+ *
+ * Based on https://www.shadertoy.com/view/wdBXRW.
+ *
+ * TODO(Reiner): this is a proof of concept, using triangles with vertices marked as outline or inner vertices would give the same result in probably significantly less time.
+ * TODO(Reiner): there are also closed formulas for parabulas https://www.shadertoy.com/view/ws3GD7, parabula segments https://www.shadertoy.com/view/3lSczz and cubic beziers https://www.shadertoy.com/view/MlKcDD
+ * TODO(Reiner): Two parabula distance functions could be easily combined to create the usual banana shape.
+ */
+void main() {
+    ivec2 tableSize = imageSize(IMAGE_transferFunction2D);
+    ivec2 tableIdx = ivec2(gl_GlobalInvocationID.xy);
+
+    if (isHelperLane(tableIdx, tableSize)) {
+        return;
+    }
+
+    float lookupPosition = 0;
+    if (g_direction == 0) // HORIZONTAL
+        lookupPosition = float(tableIdx.x) / float(tableSize.x - 1);
+    else if (g_direction == 1) // VERTICAL
+        lookupPosition = float(tableIdx.y) / float(tableSize.y - 1);
+    else // BOTH
+        lookupPosition = float(tableIdx.x + tableIdx.y) / float(tableSize.x + tableSize.y - 2);
+    vec4 color = sampleTransferFunctionUV(lookupPosition);
+
+    vec2 p = vec2(tableIdx) / vec2(tableSize - 1);
+
+    int polygon_length = g_polygons.length();
+
+    float overall_distance = 9999.0;
+
+    int polygon_end_marker = -1;
+
+    float tf_opacity = 0;
+    vec3 tf_color = vec3(0);
+
+    int polygon_idx = 0;
+    for (int polygon_start = 0; polygon_start < polygon_length; polygon_start = polygon_end_marker + 1) {
+        if (g_polygons[polygon_start].x == POLYGON_LIST_END)
+            break;
+
+        // find the limits of the current primitive
+        for (int i = polygon_start; i < polygon_length; i++) {
+            if (g_polygons[i].x == POLYGON_END) {
+                polygon_end_marker = i;
+                break;
+            }
+        }
+
+        // make sure we progress the loop if no end marker was found -- otherwise the OS will lock up and/or the device
+        // will get lost. This should never happen and indicates a bug during buffer creation on the host side.
+        if (polygon_end_marker <= polygon_start) {
+            imageStore(IMAGE_transferFunction2D, tableIdx, vec4(1, 0, 0, 1));
+            return;
+        }
+
+        float distance = sdPoly(polygon_start, polygon_end_marker - 1, p);
+        float alpha = feathered_sdf(distance) * g_additionalData[polygon_idx].w;
+        vec3 newColor = color.rgb;
+        if (g_additionalData[polygon_idx].r > -0.5f) newColor = g_additionalData[polygon_idx].rgb;
+        tf_opacity = mix(tf_opacity, g_additionalData[polygon_idx].w, alpha);
+        tf_color = mix(tf_color, newColor, alpha);
+
+        overall_distance = sdf_opUnion(overall_distance, distance);
+
+        polygon_idx++;
+    }
+
+    imageStore(IMAGE_transferFunction2D, tableIdx, vec4(tf_color * tf_opacity, tf_opacity));
+}

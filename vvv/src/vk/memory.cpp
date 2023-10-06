@@ -1,0 +1,204 @@
+#include "vvv/vk/memory.hpp"
+
+/**
+ * Get the index of a memory type that has all the requested property bits set
+ *
+ * @param typeBits Bit mask with bits set for each memory type supported by the resource to request for (from VkMemoryRequirements)
+ * @param properties Bit mask of properties for the memory type to request
+ * @param (Optional) memTypeFound Pointer to a bool that is set to true if a matching memory type has been found
+ *
+ * @return Index of the requested memory type
+ *
+ * @throw Throws an exception if memTypeFound is null and no memory type could be found that supports the requested properties
+ */
+
+uint32_t vvv::getMemoryType(vk::PhysicalDeviceMemoryProperties const &memoryProperties, uint32_t typeBits, vk::MemoryPropertyFlags requirementsMask) {
+    for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++) {
+        if ((typeBits & 1) == 1) {
+            if ((memoryProperties.memoryTypes[i].propertyFlags & requirementsMask) == requirementsMask) {
+                return i;
+            }
+        }
+        typeBits >>= 1;
+    }
+
+    throw std::runtime_error("Could not find a matching memory type");
+}
+
+uint32_t vvv::getMemoryType(vvv::GpuContextRef ctx, uint32_t typeBits, vk::MemoryPropertyFlags properties) {
+    const auto memoryProperties = ctx.getPhysicalDevice().getMemoryProperties();
+    return getMemoryType(memoryProperties, typeBits, properties);
+}
+
+uint32_t vvv::getMemoryType(vk::PhysicalDevice physicalDevice, uint32_t typeBits, vk::MemoryPropertyFlags properties) {
+    const auto memoryProperties = physicalDevice.getMemoryProperties();
+    return getMemoryType(memoryProperties, typeBits, properties);
+}
+
+// stolen from https://github.com/KhronosGroup/Vulkan-Hpp/blob/6d5d6661f39b7162027ad6f75d4d2e902eac4d55/samples/utils/utils.cpp
+// another implementation available on the web is: https://github.com/nvpro-samples/nvpro_core/blob/f2c05e161bba9ab9a8c96c0173bf0edf7c168dfa/nvvk/images_vk.cpp#L108-L116
+void vvv::setImageLayout(vk::CommandBuffer const &commandBuffer, vk::Image image, vk::Format format, vk::ImageLayout oldImageLayout, vk::ImageLayout newImageLayout,
+                    vk::PipelineStageFlags destinationStage) {
+    vk::AccessFlags sourceAccessMask;
+    switch (oldImageLayout) {
+    case vk::ImageLayout::eTransferDstOptimal:
+        sourceAccessMask = vk::AccessFlagBits::eTransferWrite;
+        break;
+    case vk::ImageLayout::eTransferSrcOptimal:
+        sourceAccessMask = vk::AccessFlagBits::eTransferRead;
+        break;
+    case vk::ImageLayout::ePreinitialized:
+        sourceAccessMask = vk::AccessFlagBits::eHostWrite;
+        break;
+    case vk::ImageLayout::eShaderReadOnlyOptimal:
+        sourceAccessMask = vk::AccessFlagBits::eShaderRead;
+        break;
+    case vk::ImageLayout::eColorAttachmentOptimal:
+        sourceAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+        break;
+    case vk::ImageLayout::eDepthStencilAttachmentOptimal:
+        sourceAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+        break;
+    case vk::ImageLayout::eDepthStencilReadOnlyOptimal:
+        sourceAccessMask = vk::AccessFlagBits::eShaderRead;
+        break;
+    case vk::ImageLayout::eGeneral: // sourceAccessMask is empty
+    case vk::ImageLayout::eUndefined:
+        break;
+    default:
+        assert(false);
+        break;
+    }
+
+    vk::PipelineStageFlags sourceStage;
+    switch (oldImageLayout) {
+    case vk::ImageLayout::eGeneral:
+    case vk::ImageLayout::ePreinitialized:
+        sourceStage = vk::PipelineStageFlagBits::eHost;
+        break;
+    case vk::ImageLayout::eTransferDstOptimal:
+    case vk::ImageLayout::eTransferSrcOptimal:
+        sourceStage = vk::PipelineStageFlagBits::eTransfer;
+        break;
+    case vk::ImageLayout::eShaderReadOnlyOptimal:
+        sourceStage = vk::PipelineStageFlagBits::eAllCommands; // return VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        break;
+    case vk::ImageLayout::eColorAttachmentOptimal:
+        sourceStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+        break;
+    case vk::ImageLayout::eDepthStencilAttachmentOptimal:
+        sourceStage = vk::PipelineStageFlagBits::eLateFragmentTests;
+        break;
+    case vk::ImageLayout::eDepthStencilReadOnlyOptimal:
+        sourceStage = vk::PipelineStageFlagBits::eAllCommands;
+        break;
+    case vk::ImageLayout::eUndefined:
+        sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+        break;
+    default:
+        assert(false);
+        break;
+    }
+
+    vk::AccessFlags destinationAccessMask;
+    switch (newImageLayout) {
+    case vk::ImageLayout::eColorAttachmentOptimal:
+        destinationAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+        break;
+    case vk::ImageLayout::eDepthStencilAttachmentOptimal:
+        destinationAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentRead | vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+        break;
+    case vk::ImageLayout::eGeneral: // empty destinationAccessMask
+    case vk::ImageLayout::ePresentSrcKHR:
+        break;
+    case vk::ImageLayout::eShaderReadOnlyOptimal:
+    case vk::ImageLayout::eDepthStencilReadOnlyOptimal:
+        destinationAccessMask = vk::AccessFlagBits::eShaderRead;
+        break;
+    case vk::ImageLayout::eTransferSrcOptimal:
+        destinationAccessMask = vk::AccessFlagBits::eTransferRead;
+        break;
+    case vk::ImageLayout::eTransferDstOptimal:
+        destinationAccessMask = vk::AccessFlagBits::eTransferWrite;
+        break;
+    default:
+        assert(false);
+        break;
+    }
+
+    if (destinationStage == vk::PipelineStageFlags()) {
+        switch (newImageLayout) {
+        case vk::ImageLayout::eColorAttachmentOptimal:
+            destinationStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+            break;
+        case vk::ImageLayout::eDepthStencilAttachmentOptimal:
+            destinationStage = vk::PipelineStageFlagBits::eEarlyFragmentTests;
+            break;
+        case vk::ImageLayout::eGeneral:
+            destinationStage = vk::PipelineStageFlagBits::eHost;
+            break;
+        case vk::ImageLayout::ePresentSrcKHR:
+            destinationStage = vk::PipelineStageFlagBits::eBottomOfPipe;
+            break;
+        case vk::ImageLayout::eShaderReadOnlyOptimal:
+        case vk::ImageLayout::eDepthStencilReadOnlyOptimal:
+            destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
+            break;
+        case vk::ImageLayout::eTransferDstOptimal:
+        case vk::ImageLayout::eTransferSrcOptimal:
+            destinationStage = vk::PipelineStageFlagBits::eTransfer;
+            break;
+        default:
+            assert(false);
+            break;
+        }
+    }
+
+    vk::ImageAspectFlags aspectMask;
+    if (newImageLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal
+        || newImageLayout == vk::ImageLayout::eDepthStencilReadOnlyOptimal) {
+
+        aspectMask = vk::ImageAspectFlagBits::eDepth;
+        if (format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint) {
+            aspectMask |= vk::ImageAspectFlagBits::eStencil;
+        }
+    } else {
+        aspectMask = vk::ImageAspectFlagBits::eColor;
+    }
+
+    vk::ImageSubresourceRange imageSubresourceRange(aspectMask, 0, 1, 0, 1);
+    vk::ImageMemoryBarrier imageMemoryBarrier(sourceAccessMask, destinationAccessMask, oldImageLayout, newImageLayout, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, image, imageSubresourceRange);
+    return commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, nullptr, nullptr, imageMemoryBarrier);
+}
+
+/**
+ * Create a buffer
+ *
+ * The buffer has exclusive sharing mode -- meaning the buffer has to be transfered explicitly between queues.
+ *
+ * @param size
+ * @param usage
+ * @param properties
+ * @return
+ */
+std::pair<vk::Buffer, vk::DeviceMemory> vvv::createBuffer(vvv::GpuContextRef ctx, vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, const char *label) {
+    // without this assertion, zero-sized allocations result in a out of memory error
+    assert(size > 0 && "vulkan buffers MUST allocate at least one byte");
+
+    const auto device = ctx.getDevice();
+    vk::BufferCreateInfo bufferInfo({}, size, usage);
+
+    const auto buffer = device.createBuffer(bufferInfo);
+    const auto memRequirements = device.getBufferMemoryRequirements(buffer);
+    const auto memoryTypeIndex = getMemoryType(ctx, memRequirements.memoryTypeBits, properties);
+    vk::MemoryAllocateInfo allocInfo(memRequirements.size, memoryTypeIndex);
+    const auto bufferMemory = device.allocateMemory(allocInfo);
+    device.bindBufferMemory(buffer, bufferMemory, 0);
+
+    if (label != nullptr && !std::string(label).empty()) {
+        ctx.debugMarker->setName(buffer, label);
+        ctx.debugMarker->setName(bufferMemory, label);
+    }
+
+    return {buffer, bufferMemory};
+}

@@ -1,0 +1,64 @@
+#pragma once
+
+#include <vvv/core/preamble_forward_decls.hpp>
+
+namespace vvv {
+
+/**
+ * A timeline semaphore is a `counting semaphore` that
+ *
+ * - wait until semaphore value is >= N
+ * - the execution state is the semaphore value M_h known to the CPU (host)
+ * - the actual execution state is the semaphore value M_d on the GPU (device)
+ * - M_d >= M_h
+ * - the planing state is the maximal semahpore value M_p of all waited (signaled and unsignaled) semaphore values.
+ *   Consequently M_d = M_p implies that all planned work has already executed.
+ * - M_p >= M_d >= M_h
+ */
+class TimelineSemaphore {
+public:
+    /**
+     * @param semaphoreId some arbitrary integer that can be used by external code to map this semaphore to metadata
+     */
+    explicit TimelineSemaphore(size_t semaphoreId = 0) : m_semaphoreId(semaphoreId) {}
+    ~TimelineSemaphore() { deallocateResources(); }
+
+    vk::Semaphore getHandle() const { return m_semaphore; }
+
+    void initResources(vk::Device device) {
+        // TODO(Reiner): ensure that a deallocate/init sequence on an existing timeline semaphore class instance is in sync with `m_nextId`. Currently they get out of sync.
+        if (m_device != static_cast<vk::Device>(nullptr)) {
+            return;
+        }
+
+        m_device = device;
+        m_semaphore = createTimelineSemaphore();
+    }
+
+    void deallocateResources() { VK_DEVICE_DESTROY(m_device, m_semaphore); }
+
+    //! Increment the planing state. This effectively reserves the returned semaphore value for the caller.
+    //! The caller should use that value in the list of semaphores to signal in some Vulkan API call.
+    uint64_t incrementPlaningState() { return m_nextId++; }
+
+    //! get the highest semaphore value __already in use__.
+    uint64_t getPlaningState() const { return m_nextId-1; }
+    size_t getId() const { return m_semaphoreId; }
+
+private:
+    vk::Semaphore createTimelineSemaphore() {
+        vk::SemaphoreCreateInfo create_info;
+        vk::SemaphoreTypeCreateInfoKHR type_create_info(vk::SemaphoreType::eTimeline, 0); // generateSubmitId()
+        create_info.pNext = &type_create_info;
+        return m_device.createSemaphore(create_info);
+    }
+
+    size_t m_semaphoreId;
+
+    /** the timeline semaphore `m_semaphore` was used to plan a schedule up to `m_nextId` */
+    uint64_t m_nextId = 1; // zero is the initial state
+    vk::Semaphore m_semaphore = nullptr;
+    vk::Device m_device = nullptr;
+};
+
+}; // namespace vvv

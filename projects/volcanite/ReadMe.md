@@ -1,0 +1,74 @@
+# Volcanite Segmentation Volume Renderer
+
+ToDo: extend this Volcanite project ReadMe
+
+## Renderer
+
+There are two executable targets for the renderer:
+* [volcanite.cpp](src/bin/volcanite.cpp) is the release renderer,
+* [compression.cpp](src/bin/compression.cpp) is the development version of the renderer.
+
+The development version contains additional GUI elements for enabling debugging functionality and automatic evaluation of the included segmentation volume compression.
+
+The renderer has a host (CPU) and device (GPU) site.
+The host side uses the PassCompute abstraction from *libvvv* and is implemented in the [CompressedSegmentationVolumeRenderer](./include/volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp) and [PassCompSegVolRender](./include/volcanite/renderer/PassCompSegVolRender.hpp) classes.
+On device site, everything is implemented in compute shaders which you can find in [data/shader/volcanite/renderer](./data/shader/volcanite/renderer).
+Most of the shader stages are concerned with the brick cache management.
+To get an idea of the inner workings of those stages, have a look at the supplemental material of the ["Shading Atlas Streaming"](https://www.tugraz.at/institute/icg/research/team-steinberger/research-projects/sas) paper.
+
+```
+┌───────────────┐ ┌─────────────────┐ ┌──────────────┐ ┌────────────────────┐ ┌──────────────────┐
+│ Cache Request ├─► Cache Provision ├─► Cache Assign ├─► Ray March Renderer ├─► Upsample Resolve │
+└───────────────┘ └─────────────────┘ └──────────────┘ └────────────────────┘ └──────────────────┘
+   ─────────────────────v────────────────────────         ──────────────────v─────────────────
+     Caching, similar to SAS, and Decompression               Rendering and Post Processing
+```
+You can find the main renderer in [csgv_renderer.comp](./data/shader/volcanite/renderer/csgv_renderer.comp).
+The caching and decompression for visible volume bricks is handled in the [csgv_request](./data/shader/volcanite/renderer/csgv_request.comp), [csgv_resolve](./data/shader/volcanite/renderer/csgv_resolve.comp), and [csgv_assign](./data/shader/volcanite/renderer/csgv_assign.comp) shaders.
+As the renderer uses the brick compression from the paper ["Fast Compressed Segmenation Volumes for Scientific Visualization"](https://cg.ivd.kit.edu/english/compsegvol.php), additional shaders are located in [data/shader/compression](data/shader/volcanite/compression). 
+
+
+**Ray Marching Initialization:**
+Rendering happens with one thread per pixel.
+A view ray is sent out for which entry and exit depth for an axis aligned bounding box of the volume is computed.
+In world space, this box is centered around the origin and normalized so that its largest dimension is 1.
+However, we compute voxel traversal in model space where each voxel is a unit cube and the smallest coordinate is (0,0,0).
+
+**Ray Marching Traversal:**
+All traversal happens with a single ray per pixel in the same ray marching loop to minimize thread divergence.
+To that end, the ray has a type - or state - depending on if it is a camera view ray or a shadow ray into which it is transformed after a hit.
+The traversal performance should be increased by  
+
+**Handling of Ray Hits:**
+In the renderer, the segmentation voxel data sets are (mostly) opaquely handled as bricks with a power of two brick size in a certain level-of-detail (LOD) while each voxel stores one unsigned integer as its label.
+If the ray marching acesses a brick that is not in the cache yet, it is requested and will be decoded in the next frame.
+All requests are for a certain level-of-detail which only depends on the distance between brick center and camera.
+This way, all rays request the same LOD and no race conditions occur in the request buffer.
+If a ray hits an undecoded brick, its coarsest representation (the brick's first palette entry) is read from the volume encoding instead of a cache value.
+Colors of such 
+
+**Temporal Accumulation:**
+Two ping-pong 32 bit floating point buffers are used for temporal accumulation of color information and sample counts.
+The [csgv_upsample_resolve](./data/shader/volcanite/renderer/csgv_upsample_resolve.comp) shader handles the feedback loop and blitting to the output color  buffer.
+Any color space conversion, tonemapping or other post-processing can be handled in this stage.
+In general, our temporal accumulation allows us to
+* draw a different number of samples per pixel (including 0) between different pixels in the same frame,
+* progressively accumulate indirect illumination or ambient occlusion over time,
+* perform temporal anti-aliasing, and currently not implemented
+* perform volumetric Monte-Carlo path tracing.
+
+
+
+## Additional Information
+
+#### Contact
+Max Piochowiak\
+E-Mail: [max.piochowiak@kit.edu](mailto:max.piochowiak@kit.edu)\
+Website: [https://cg.ivd.kit.edu/piochowiak/staff_index.php](https://cg.ivd.kit.edu/piochowiak/staff_index.php)
+
+#### Relevant Papers
+* [Fast Compressed Segmentation Volumes for Scientific Visualization](https://cg.ivd.kit.edu/english/compsegvol.php), Piochowiak and Dachsbacher 2023. Transactions on Visualization and Computer Graphics (Proc. IEEE Vis)
+* [Shading Atlas Streaming](https://www.tugraz.at/institute/icg/research/team-steinberger/research-projects/sas), Mueller et al. 2018. Transactions on Graphics (Proc. SIGASIA)
+* [Monte Carlo Methods for Volumetric Light Transport](https://jannovak.info/publications/VolumeSTAR/index.html), Novák et al. 2018. Computer Graphics Forum (Proc. EG)
+* [A Fast Voxel Traversal Algorithm for Ray Tracing](http://www.cse.yorku.ca/~amana/research/grid.pdf), Amanatides and Woo 1987, Proc. EG
+* [A Survey of Temporal Antialiasing Techniques](http://behindthepixels.io/assets/files/TemporalAA.pdf), Yang et al. 2020. Computer Graphics Forum (Proc. EG)

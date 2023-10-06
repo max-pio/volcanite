@@ -1,0 +1,79 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+layout (set = 0, binding = 0) uniform sampler1D SAMPLER_transferFunction1D;
+layout (set = 0, binding = 1, rgba32f) uniform restrict writeonly image2D IMAGE_transferFunction1Dpreintegrated;
+
+// TODO(Reiner): preintegrate with shading
+
+layout (std140, row_major, set = 0, binding = 2) uniform options {
+// step count per unit value. So for example, the table entry for [0,1] is integrated
+// with `g_stepCount` steps, and the table entry for `[0,2]` is integrated with `g_stepCount * 2`
+// step counts. Consequently, the stepSize is constant in the data range of the volume the TF
+// is applied to in order to have a constant sampling rate of the TF.
+    uint g_stepCount;
+};
+
+#include "util.glsl"
+#include "transfer_function.glsl"
+#include "blending.glsl"
+
+vec4 sampleTransferFunctionUV(float unitRange) {
+    // we have to rescale to hit the pixel centers.
+    float halfSampleDistance = 0.5 / textureSize(SAMPLER_transferFunction1D, 0).x;
+    float lookupPosition = unitRange * (1.0 - 2.0*halfSampleDistance) + halfSampleDistance;
+
+    return textureLod(SAMPLER_transferFunction1D, lookupPosition, 0);
+}
+
+/**
+ * Preintegrates a 1D Transferfunction to a 2D lookup table with the following layout:
+ * - scalar_front (`sf`) is on the x-axis and thus varies along the width
+ * - scalar_back (`sb`) is on the y-axis and thus varies along the height
+ * - (0,0) is a the top left. Note that this implies that the diagonal with sf==sb for homogenous slabs
+ *   is stored from top-left to right-bottom
+ *
+ * This samples the input 1D TF with a constant step size, e.g. the number of steps used
+ * for quadrature is variable for each texel in the 2D lookup table since a different
+ * interval in the 1D TF is integrated.
+ */
+void main() {
+    // TODO(Reiner): there is a lot of computational overlap between invocations here. Also, each increment
+    // of the tableIdx position does twice the work, so the distribution of work to threads in a warp is
+    // very uneven. A better schedule would probably be a single thread that walks a row or column.
+
+    ivec2 tableSize = imageSize(IMAGE_transferFunction1Dpreintegrated);
+    ivec2 tableIdx = ivec2(gl_GlobalInvocationID.xy);
+
+    if (isHelperLane(tableIdx, tableSize)) {
+        return;
+    }
+
+    // Note: there is not much use in tableSize.x != tableSize.y
+    // Note: the scaling here implies a minimal TF size of 2x2
+    float scalar_front = float(tableIdx.x) / float(tableSize.x - 1);
+    float scalar_back = float(tableIdx.y) / float(tableSize.y - 1);
+
+    // Note: scaling by the output texture size IMAGE_transferFunction1Dpreintegrated, would give the more commonly used interpretation of `g_stepCount`
+    float texelsInputTexture = abs(scalar_back - scalar_front) * float(textureSize(SAMPLER_transferFunction1D, 0) - 1);
+
+    // TODO(Reiner): the diagonal currently works more by chance. What we should do here is
+    // - this should be stepCount - 1 to reach 1.0
+    // - max(1, ...) gurantees sampling of the diagonal with an absolute difference of zero. Instead, we should
+    //   just catch this edge case in `opacityCorrection` or guarantee a sample using `y <= stepCount`
+    uint stepCount = uint(ceil(max(1.0, texelsInputTexture * float(g_stepCount))));
+    float stepSize = clamp(1.0f / stepCount, 0.0, 1.0);
+
+    vec4 accumulated_color = vec4(0);
+
+    for (uint y = 0; y < stepCount; ++y) {
+        float sampleUV = mix(scalar_front, scalar_back, stepSize * float(y));
+        vec4 color = sampleTransferFunctionUV(sampleUV);
+        vec4 colorCorrected = opacityCorrection(color, stepSize);
+        accumulated_color = blend_front_to_back_premultiplied(accumulated_color, colorCorrected);
+    }
+
+    imageStore(IMAGE_transferFunction1Dpreintegrated, tableIdx, accumulated_color);
+}

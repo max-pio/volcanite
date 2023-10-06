@@ -1,0 +1,56 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
+
+layout (set = 0, binding = 0) uniform sampler3D SAMPLER_data;
+
+// Note: the write only qualifier cannot be added since we use atomic operations
+layout (set = 0, binding = 1, r32ui) uniform /* restrict */ coherent uimage2D IMAGE_2dHistogram;
+
+layout (std140, row_major, set = 0, binding = 2) uniform options {
+    vec2 g_gradientLimits;
+    vec2 g_valueLimits;
+};
+
+#include "util.glsl"
+
+vec3 compute_gradient(ivec3 position)
+{
+    float dx = 0.5 * (texelFetch(SAMPLER_data, position + ivec3(1, 0, 0), 0).r - texelFetch(SAMPLER_data, position - ivec3(1, 0, 0), 0).r);
+    float dy = 0.5 * (texelFetch(SAMPLER_data, position + ivec3(0, 1, 0), 0).r - texelFetch(SAMPLER_data, position - ivec3(0, 1, 0), 0).r);
+    float dz = 0.5 * (texelFetch(SAMPLER_data, position + ivec3(0, 0, 1), 0).r - texelFetch(SAMPLER_data, position - ivec3(0, 0, 1), 0).r);
+
+    return vec3(dx, dy, dz);
+}
+
+/**
+ * Visualizes the data of a 3d volume for a 2d transfer function by plotting it into a 2d histogram texture as follows:
+ * - the scalar data value varies along the x-axis
+ * - the gradient magnitude is ploted along the y-axis
+ * - (0,0) is a the top left. Thus, inner homogenous areas will result in large values along the top of the histogram texture.
+ *   Transitions/Isosurfaces will be plotted as parabels that open to the top.
+ */
+void main() {
+    // TODO(Reiner): this is totally unoptimized, each thread accumulates a single value directly into global memory with a atomic operation
+
+    ivec2 histogramSize = imageSize(IMAGE_2dHistogram);
+    ivec3 volumeSize = textureSize(SAMPLER_data, 0);
+    ivec3 volumePosition = ivec3(gl_GlobalInvocationID.xyz);
+
+    if (isHelperLane(volumePosition, volumeSize)) {
+        return;
+    }
+
+    vec3 gradient = compute_gradient(volumePosition) * vec3(65535);
+    float gradientMagnitude = length(gradient);
+    float val = texelFetch(SAMPLER_data, volumePosition, 0).r * 65535;// TODO: this comes in normalized to the unit interval, we should fix the limits on the client side
+
+    // position in the histogram texture in UV coordinates
+    float continousGradientMagnitudeBucket = (gradientMagnitude - g_gradientLimits.x) / (g_gradientLimits.y - g_gradientLimits.x);
+    float continousValueBucket = (val - g_valueLimits.x) / (g_valueLimits.y - g_valueLimits.x);
+
+    // convert UV coordinates on the unit square to actual texel indices
+    ivec2 histogramBucket = ivec2(round(vec2(clamp(continousValueBucket, 0, 1), clamp(continousGradientMagnitudeBucket, 0, 1)) * vec2(histogramSize)));
+    imageAtomicAdd(IMAGE_2dHistogram, histogramBucket, 1);
+}

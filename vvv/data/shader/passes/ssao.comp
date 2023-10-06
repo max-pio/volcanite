@@ -1,0 +1,187 @@
+#version 450
+
+#if !defined(SSAO_CRYTEK) && !defined(SSAO_STARCRAFT) && !defined(SSAO_HBAO)
+//#define SSAO_CRYTEK
+#define SSAO_STARCRAFT
+//#define SSAO_HBAO
+#endif
+
+layout (local_size_x = 16, local_size_y = 16) in;
+
+layout (std140, set = 0, binding = 0) uniform per_frame_constants {
+    mat4 projection_to_world_space;
+    mat4 world_to_projection_space;
+    mat4 projection_to_view_space;
+    float near;
+    float far;
+    float radius;
+    int num_samples;
+    float bias;
+    float falloff;
+    int num_steps;
+};
+
+layout(set = 1, binding = 0) uniform sampler2D depthTexture;
+layout(set = 1, binding = 1) uniform sampler2D normalTexture;
+layout(set = 1, binding = 2, rgba8) uniform image2D outputTexture;
+
+const float M_PIf  = 3.141592653589793238462643383280f;
+const float M_2PIf = 6.283185307179586476925286766559f;
+
+// https://stackoverflow.com/a/52207531/13565664
+const uint hash_k = 1103515245U;
+vec3 hash(uvec3 x) {
+    x = ((x>>8U)^x.yzx)*hash_k;
+    x = ((x>>8U)^x.yzx)*hash_k;
+    x = ((x>>8U)^x.yzx)*hash_k;
+    return vec3(x)*(1.0/float(0xffffffffU));
+}
+
+vec3 sample_direction(in vec2 xy) {
+    float z = -1.0f + 2.0f * xy.x;
+    float theta = M_2PIf * xy.y;
+    float r = sqrt(1.0f - z * z);
+    return vec3(r * cos(theta), r * sin(theta), z);
+}
+vec3 sample_sphere(in vec3 xyz) {
+    return sample_direction(xyz.xy) * pow(xyz.z, 1.0 / 3.0);
+}
+
+float depth_to_view_space(float bufferValue) {
+    return near + (far - near) * bufferValue;
+}
+float read_depth(vec2 uv) {
+    return depth_to_view_space(texture(depthTexture, uv).x);
+}
+
+// from Interaktive Computergrafik, 01 - NormalMapping (Update inkl. Displacement Mapping), slide 45
+void computeTangentSpace(in vec3 N, out mat3 TS) {
+    vec3 NeverCoLinear = vec3(N.y, N.z, -N.x);
+    vec3 T = normalize(cross(NeverCoLinear, N));
+    vec3 B = cross(N, T);
+    TS = mat3(T, B, N);
+}
+
+void main() {
+    ivec2 P = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = ivec2(gl_NumWorkGroups * gl_WorkGroupSize);
+    vec2 uv = vec2(P) / (size - ivec2(1));
+
+    vec3 normal = -1.0f + 2.0f * texture(normalTexture, uv).xyz;
+
+    float depth = texture(depthTexture, uv).x;
+
+    if (depth > 0.99999f) {
+        // background, no AO needed here
+        imageStore(outputTexture, P, vec4(1));
+        return;
+    }
+
+    vec4 hWorldPos = projection_to_world_space * vec4(2.0 * uv - vec2(1.0), depth, 1);
+    vec3 worldPos = hWorldPos.xyz / hWorldPos.w;
+
+    float ao = 1.0f;
+
+    // Overview of different SSAO techniques for mobile:
+    // [Optimized Screen-Space Ambient Occlusion in Mobile Devices, Sunet,Vazquez, 2016] https://dl.acm.org/doi/pdf/10.1145/2945292.2945300
+    // Blog Post on different SSAO techniques:
+    // [Ambient Occlusion – approaches in screen space (SSAO), Keutel, 2010] http://www.michaelkeutel.de/computer-graphics/ambient-occlusion/ssao-screen-space-approaches-to-ambient-occlusion/
+#if defined(SSAO_CRYTEK)
+    // note: this darkens the image on flat surfaces, use min(2 * ao, 1) if flat surfaces sould have ao=1
+    // ref:  [Finding Next Gen – CryEngine 2, Mittring, Crytek, 2007] https://dl.acm.org/doi/pdf/10.1145/1281500.1281671
+    for(int i = 0; i < num_samples; i++) {
+        vec3 rand = hash(uvec3(P, i + 11));
+        vec3 offset = sample_sphere(rand);
+        vec3 sampleWorldPos = worldPos + offset * radius;
+        vec4 hSampleProjected = world_to_projection_space * vec4(sampleWorldPos, 1);
+        vec3 sampleProjected = hSampleProjected.xyz / hSampleProjected.w;
+        vec2 sampleUV = vec2(sampleProjected.x * 0.5f + 0.5f, sampleProjected.y * 0.5f + 0.5f);
+        float sampleDepth = texture(depthTexture, sampleUV).r;
+        if(sampleDepth < sampleProjected.z)
+            ao -= 1.0f / num_samples;
+    }
+#elif defined(SSAO_STARCRAFT)
+    // ref: [Effects & techniques, Filion, McNaughton, 2008] https://dl.acm.org/doi/pdf/10.1145/1404435.1404441
+    const float eps = bias;
+    const float power = falloff;
+    for(int i = 0; i < num_samples; i++) {
+        vec3 rand = hash(uvec3(P, i + 11));
+        vec3 offset = sample_sphere(rand);
+        if (dot(offset, normal) < 0) offset *= -1;
+        vec3 sampleWorldPos = worldPos + offset * radius;
+        vec4 hSampleProjected = world_to_projection_space * vec4(sampleWorldPos, 1);
+        vec3 sampleProjected = hSampleProjected.xyz / hSampleProjected.w;
+        vec2 sampleUV = vec2(sampleProjected.x * 0.5f + 0.5f, sampleProjected.y * 0.5f + 0.5f);
+        float sampleDepth = texture(depthTexture, sampleUV).r;
+        // float sampleDepthViewSpace = read_depth(sampleUV);
+        float depthViewSpace = depth_to_view_space(sampleProjected.z);
+        float delta = depth - sampleDepth;
+
+
+        vec4 hSampleRealViewSpacePos = projection_to_view_space * vec4(sampleUV, sampleDepth, 1);
+        float sampleRealDepthViewSpace = hSampleRealViewSpacePos.z / hSampleRealViewSpacePos.w;
+        vec4 hSampleViewSpacePos = projection_to_view_space * hSampleProjected;
+        float sampleDepthViewSpace = hSampleViewSpacePos.z / hSampleViewSpacePos.w;
+        delta = sampleRealDepthViewSpace - sampleDepthViewSpace;
+
+        // delta = depth - texture(depthTexture, sampleUV).r;
+        // delta < 0: no occlusion
+        // delta > eps: occlusion
+        // step(eps, delta) * 
+        float occ = step(eps, delta) * pow(power, -delta + eps);
+        occ = min(1, max(0, occ));
+        ao -= occ / num_samples;
+    }
+#elif defined(SSAO_HBAO)
+    // ref: [Image-Space Horizon-Based Ambient Occlusion, Bavoil, Sainz, Dimitrov, 2008] https://dl.acm.org/doi/pdf/10.1145/1401032.1401061
+    vec4 hCamPos = projection_to_world_space * vec4(0,0,0,1);
+    vec3 camPos = hCamPos.xyz / hCamPos.w;
+    vec3 V = normalize(camPos - worldPos);
+    mat3 TBN;
+    computeTangentSpace(V, TBN);
+    mat3 inv_TBN = inverse(TBN);
+
+    float start_direction = hash(uvec3(P, 11)).x * M_2PIf;
+    for (int i = 0; i < num_samples; i++) {
+        float rand_d = hash(uvec3(P, i + 11)).y;
+        float direction = start_direction + (float(i) + rand_d) / float(num_samples) * M_2PIf;
+
+        vec3 outmostPointWorldSpace = worldPos + radius * TBN * vec3(cos(direction), sin(direction), 0);
+        vec4 hOutmostPoint = world_to_projection_space * vec4(outmostPointWorldSpace, 1);
+        vec3 outmostPoint = hOutmostPoint.xyz / hOutmostPoint.w;
+        vec2 outmostPointUV = 0.5 * outmostPoint.xy + vec2(0.5);
+
+        float horizon = 0;
+        float dist = 0;
+        float lastAO = 0;
+        float WAO = 0;
+        for (int j = 0; j < num_steps; j++) {
+            float rand = hash(uvec3(P, i + j + 22)).y;
+            vec2 sampleUV = mix(uv, outmostPointUV, (float(j) + rand) / num_steps);
+            vec2 sampleProjSpace = 2.0 * sampleUV - vec2(1.0);
+            float sampleDepth = texelFetch(depthTexture, ivec2(sampleUV * size), 0).r;
+            vec4 hSampleWorldSpace = projection_to_world_space * vec4(sampleProjSpace, sampleDepth, 1);
+            vec3 sampleWorldSpace = hSampleWorldSpace.xyz / hSampleWorldSpace.w;
+            vec3 D_worldSpace = sampleWorldSpace - worldPos;
+            vec3 D = inv_TBN * D_worldSpace - vec3(0, 0, bias);
+            float new_horizon = atan(D.z, length(D.xy)); // new_horizon \in [-pi,pi]
+            float new_dist = length(D_worldSpace);
+            if (new_horizon > horizon && new_dist < radius) {
+                horizon = new_horizon;
+                dist = new_dist;
+            }
+
+            float AO = sin(horizon);
+            float r = dist / radius;
+            WAO += (AO - lastAO) * (1 - r * r);
+            lastAO = AO;
+        }
+        ao -= WAO / float(num_samples);
+    }
+#else
+    #error "No SSAO algorithm is selected. Use for example -DSSAO_CRYTEK=1 when compiling this shader"
+#endif
+
+    vec4 outColor = vec4(vec3(ao), 1);
+    imageStore(outputTexture, P, outColor);
+}
