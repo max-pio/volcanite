@@ -12,6 +12,7 @@ Do not distribute this code or any fragments or builds of it without permission!
 ### 1. Building the Executable
 
 #### Ubuntu / Debian
+*Tested on Ubuntu 22.04*
 
 1. Install recent GPU drivers. Under Ubuntu, you can select recent proprietary drivers in the "Additional Drivers" GUI.
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
@@ -32,9 +33,9 @@ cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . --target volcanite -j 8
 Instead of the commandline build from step 5, you can alternatively open the CMake project with an IDE of your choice, e.g. CLion or MS Visual Studio Code.
 If your IDE supports generating build files, you can directly open the `CMakeLists.txt` in the root folder.
 
-*Tested on Ubuntu 22.04*
 
 #### Windows
+*Not Tested*
 
 1. Install recent GPU drivers. This should happen automatically with Windows updates. Otherwise, find them at your GPU vendor webpage.
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
@@ -49,6 +50,8 @@ If your IDE supports generating build files, you can directly open the `CMakeLis
 .\vcpkg install hdf5 tiff sqlite3 --triplet=x64-windows
 ```
 7. Build the project. Choose one of the following, depending on your development environment:
+
+*Note that MSVC compilers - and thus Visual Studio - are currently not supported. Use MinGW (CLion) or GCC!*
 
 **Visual Studio**
 Integrate vcpkg into Visual Studio with the following command (may require administrator elevation):
