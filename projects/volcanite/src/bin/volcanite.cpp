@@ -68,7 +68,7 @@ int compression(int argc, char *argv[]) {
 
         // Open a file dialog to choose a file
         auto selected_file = pfd::open_file("Choose Segmentation Volume to open", pfd::path::home(),
-                                            { "Segmentation Volumes (.vti .hdf5 .raw)", "*.vti *.hdf5 *.nrrd", "All Files", "*" });
+                                            { "Segmentation Volumes (.vti .hdf5 .raw)", "*.vti *.hdf5 *.raw", "All Files", "*" });
         if(selected_file.result().empty()) {
             Logger(ERROR) << "No segmentation volume file was provided. Aborting.";
             return -1;
