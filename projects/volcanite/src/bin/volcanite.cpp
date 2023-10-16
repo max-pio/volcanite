@@ -4,9 +4,6 @@
 #include "vvvwindow/App.hpp"
 #include "vvvwindow/entrypoint.hpp"
 
-#include "portable-file-dialogs.h"
-
-
 // run the interactive renderer after compression
 #define RUN_APP
 
@@ -14,6 +11,9 @@
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "vvv/volren/Volume.hpp"
+
+// include this last, as it includes windows.h which defines ERROR = 0
+#include "portable-file-dialogs.h"
 
 using namespace vvv;
 

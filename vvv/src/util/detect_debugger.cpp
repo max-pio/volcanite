@@ -37,9 +37,10 @@ bool vvv::debuggerIsAttached() {
     return false;
 }
 #else
+
+#include "debugapi.h"
+
 bool vvv::debuggerIsAttached() {
-    // TODO(Patrick): fix detect_debugger in Windows
-    // return IsDebuggerPresent();
-    return false;
+    return IsDebuggerPresent();
 }
 #endif

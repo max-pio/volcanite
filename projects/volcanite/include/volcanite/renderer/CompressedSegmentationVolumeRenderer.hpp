@@ -207,11 +207,11 @@ private:
 
     // debugging
     struct GPUStats {
-        uint gpu_blocks_decoded[6];
-        uint gpu_blocks_in_cache[6];
-        uint gpu_cache_size;
-        uint gpu_raymarch_samples;
-        uint gpu_bbox_hits;
+        uint32_t gpu_blocks_decoded[6];
+        uint32_t gpu_blocks_in_cache[6];
+        uint32_t gpu_cache_size;
+        uint32_t gpu_raymarch_samples;
+        uint32_t gpu_bbox_hits;
     } m_last_gpu_stats = {};
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
 

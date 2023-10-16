@@ -64,13 +64,15 @@ template <typename T> std::shared_ptr<Volume<T>> load_simple_cellsinsilico_(std:
         throw std::invalid_argument("invalid NRRD physical volume size");
     }
 
-    // thats a 8GiB volume for 8bit samples, 16GiB for 16bit samples
-    const uint64_t MAX_ALLOWED_VOXELS = 2048ul * 2048 * 2048;
+    // 2048^3 voxels. thats a 8GiB volume for 8bit samples, 16GiB for 16bit samples, 32GiB for 32bit samples.
+    const uint64_t MAX_ALLOWED_VOXELS = 8589934592ul;
     const uint64_t voxel_count = img_width * img_height * img_depth;
 
     if (MAX_ALLOWED_VOXELS < voxel_count) {
         nrrd.close();
-        throw std::invalid_argument("NRRD volume exceeds maximum allowed size");
+        std::string err = "NRRD volume exceeds maximum allowed size with ";
+        err += str(glm::uvec3(img_width, img_height, img_depth)) + " >= " + std::to_string(MAX_ALLOWED_VOXELS);
+        throw std::invalid_argument(err);
     }
 
     size_t byte_size = voxel_count * (bits_per_sample / 8);
