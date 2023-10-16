@@ -402,8 +402,10 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<glm::vec4>("g_background_color_a", m_background_color_a);
         m_urender_info->setUniform<glm::vec4>("g_background_color_b", m_background_color_b);
         glm::uvec2 label_minmax;
-        label_minmax.x = static_cast<uint32_t>((1ul << m_label_minmax.x) - 1);
-        label_minmax.y = static_cast<uint32_t>((1ul << m_label_minmax.y) - 1);
+        uint64_t tmp_64bit = 1ul;   // store this in a variable to force 64 bit computation
+        label_minmax.x = static_cast<uint32_t>((tmp_64bit << m_label_minmax.x) - 1);
+        tmp_64bit = 1ul;
+        label_minmax.y = static_cast<uint32_t>((tmp_64bit << m_label_minmax.y) - 1ul);
         m_urender_info->setUniform<glm::uvec2>("g_label_minmax", label_minmax);
         uint32_t empty_label = static_cast<uint32_t>(m_empty_label);
         m_urender_info->setUniform<uint32_t>("g_empty_label", empty_label);

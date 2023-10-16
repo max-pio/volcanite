@@ -39,6 +39,31 @@ public:
             operator<<("[" + getLabel(m_msglevel) + "]");
         }
     }
+
+#ifdef _WIN64
+    // todo: not a great fix to work around the ERROR = 0 define in wingdi.h (windows.h)
+    explicit Logger(int level, bool overwriteWithNextLine = false) {
+        if(level == 0)
+            m_msglevel = ERROR;
+        else
+            m_msglevel = INFO;
+        if (m_msglevel > WARN)
+            m_out = &std::cerr;
+        else
+            m_out = &std::cout;
+
+        if(s_overwriteLastLine) {
+            operator<<("\r");
+            s_overwriteLastLine = false;
+        }
+        m_overwriteThisLine = overwriteWithNextLine;
+
+        if (s_printHeader) {
+            operator<<(getLabel(m_msglevel));
+        }
+    }
+#endif
+
     explicit Logger(loglevel type, bool overwriteWithNextLine = false) {
         m_msglevel = type;
         if (m_msglevel > WARN)

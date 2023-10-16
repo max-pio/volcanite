@@ -25,8 +25,8 @@ int entrypoint_main(int(*main)(int, char**), int argc, char **argv, const std::s
 
             return ret;
         } catch (const std::exception &exc) {
-            vvv::Logger(vvv::ERROR) << "An exception occurred: " << exc.what();
-
+            using namespace vvv;
+            Logger(ERROR) << "An exception occurred: " << exc.what();
             #ifdef _WIN64
             MessageBoxA(NULL, exc.what(), "An exception occurred.", MB_OK | MB_ICONERROR);
             #endif
@@ -34,6 +34,7 @@ int entrypoint_main(int(*main)(int, char**), int argc, char **argv, const std::s
             throw exc;
         }
     } else {
+        vvv::Logger(vvv::DEBUG) << "Running in DEBUG mode";
         vvv::Paths::initPaths(dataDirs);
         return main(argc, argv);
     }
