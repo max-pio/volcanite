@@ -89,7 +89,7 @@ bool isEmptySpace(ivec3 voxel) {
 
 /// returns true if the block is already decompressed, false otherwise
 bool get_volume_label(ivec3 voxel, out uint label) {
-    assert(all(greaterThanEqual(npos.xyz, g_bboxMin.xyz)) && all(lessThan(npos.xyz, g_bboxMax.xyz)), "trying to read volume label out of bounds!");
+    assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label out of bounds!");
 
     if (any(lessThan(voxel, ivec3(0))) || any(greaterThanEqual(voxel, ivec3(g_vol_dim)))) {
         label = 0u;
