@@ -56,7 +56,7 @@ If your IDE supports generating build files, you can directly open the `CMakeLis
 **Visual Studio**
 Integrate vcpkg into Visual Studio with the following command (may require administrator elevation):
 ```
-.\vcpkg\vcpkg integrate install
+.\vcpkg integrate install
 ```
 Then you can open the project root folder in Visual Studio and build the `volcanite` executable.
 
