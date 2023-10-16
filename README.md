@@ -35,7 +35,7 @@ If your IDE supports generating build files, you can directly open the `CMakeLis
 
 
 #### Windows
-*Not Tested*
+*Tested on Windows 10 with CLion (gcc)*
 
 1. Install recent GPU drivers. This should happen automatically with Windows updates. Otherwise, find them at your GPU vendor webpage.
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
