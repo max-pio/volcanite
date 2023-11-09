@@ -75,6 +75,15 @@ public:
                     ImGui::DragFloatRange2("Splitting Plane Z", &m_bboxMin.z, &m_bboxMax.z, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
                 },
                 "Splitting Planes");
+            g->addCustomCode(
+                    [this]() {
+                        ImGui::InputFloat3("Voxel Size", &m_voxel_size.x);
+                        if(glm::any(glm::lessThanEqual(m_voxel_size, glm::vec3(0.f)))) {
+                            Logger(WARN) << "voxel size must be > 0 in all dimensions! Resetting..";
+                            m_voxel_size = glm::vec3(1.f);
+                        }
+                    },
+                    "Voxel Size");
             g->addInt(&m_empty_label, "Empty Label");
             g->addInt(&m_label_minmax.x, "Cell ID Min. 2^n", 0, 32, 1);
             g->addInt(&m_label_minmax.y, "Cell ID Max. 2^n", 0, 32, 1);
@@ -95,6 +104,15 @@ public:
                     ImGui::DragFloatRange2("Splitting Plane Z", &m_bboxMin.z, &m_bboxMax.z, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
                 },
                 "Splitting Planes");
+            g->addCustomCode(
+                    [this]() {
+                        ImGui::InputFloat3("Voxel Size", &m_voxel_size.x);
+                        if(glm::any(glm::lessThanEqual(m_voxel_size, glm::vec3(0.f)))) {
+                            Logger(WARN) << "voxel size must be > 0 in all dimensions! Resetting..";
+                            m_voxel_size = glm::vec3(1.f);
+                        }
+                    },
+                    "Voxel Size");
             g->addInt(&m_empty_label, "Empty Label");
             g->addInt(&m_label_minmax.x, "Label Min. 2^", 0, 32, 1);
             g->addInt(&m_label_minmax.y, "Label Max. 2^", 0, 32, 1);
@@ -153,6 +171,7 @@ private:
     float m_step_size = 0.002f;
     int m_max_steps = 2048;
     int m_subsampling = 0;
+    glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
     float m_lod_bias = -2.5f;
