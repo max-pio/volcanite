@@ -19,9 +19,9 @@ template <typename T> std::shared_ptr<Volume<T>> load_simple_cellsinsilico_(std:
     }
 
     // read dimension
-    int img_width = 0;
-    int img_height = 0;
-    int img_depth = 0;
+    uint64_t img_width = 0;
+    uint64_t img_height = 0;
+    uint64_t img_depth = 0;
     uint16_t bits_per_sample = 0;
 
     // read header

@@ -41,9 +41,9 @@ template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::strin
     }
 
     // read dimension
-    int img_width = 0;
-    int img_height = 0;
-    int img_depth = 0;
+    uint64_t img_width = 0;
+    uint64_t img_height = 0;
+    uint64_t img_depth = 0;
     float physical_size_x;
     float physical_size_y;
     float physical_size_z;
