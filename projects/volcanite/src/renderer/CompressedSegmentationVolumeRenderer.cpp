@@ -392,10 +392,11 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
     const auto screenExtent = getRenderResolution();
 
     glm::vec3 voldim = glm::vec3(m_compressed_segmentation_volume->getVolumeDim());
+    glm::vec3 physical_voldim = voldim * m_voxel_size;
 
     // size in world space: uniformly scaled so that the largest component is one
-    float scalingFactor = glm::max(voldim.x, glm::max(voldim.y, voldim.z));
-    glm::vec4 normalized_volume_size(voldim / scalingFactor, 1.f);
+    float scalingFactor = glm::max(physical_voldim.x, glm::max(physical_voldim.y, physical_voldim.z));
+    glm::vec4 normalized_volume_size(physical_voldim / scalingFactor, 1.f);
 
     // render info uniform
     {
@@ -473,6 +474,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         auto newCamHash = hashMemory(&world_to_projection_space[0].x, sizeof(glm::mat4));
         newCamHash = hashMemory(&m_bboxMin, sizeof(m_bboxMin), newCamHash);
         newCamHash = hashMemory(&m_bboxMax, sizeof(m_bboxMax), newCamHash);
+        newCamHash = hashMemory(&m_voxel_size, sizeof(m_voxel_size), newCamHash);
         newCamHash = hashMemory(&m_show_model_space, sizeof(m_show_model_space), newCamHash);
         newCamHash = hashMemory(&m_show_brick_cache, sizeof(m_show_brick_cache), newCamHash);
         newCamHash = hashMemory(&m_show_lod, sizeof(m_show_lod), newCamHash);
@@ -503,6 +505,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
     {
         uint32_t brick_size = m_compressed_segmentation_volume->getBrickSize();
         m_usegmented_volume_info->setUniform<glm::uvec3>("g_vol_dim", m_compressed_segmentation_volume->getVolumeDim());
+        m_usegmented_volume_info->setUniform<glm::vec3>("g_voxel_size", m_voxel_size);
+        m_usegmented_volume_info->setUniform<glm::vec3>("g_physical_vol_dim", physical_voldim);
         m_usegmented_volume_info->setUniform<glm::vec3>("g_normalized_volume_size", normalized_volume_size);
         m_usegmented_volume_info->setUniform<uint32_t>("g_vol_max_label", 1000000);
         m_usegmented_volume_info->setUniform<uint32_t>("g_brick_size", brick_size);

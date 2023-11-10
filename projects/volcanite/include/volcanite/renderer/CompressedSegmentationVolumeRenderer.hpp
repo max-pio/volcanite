@@ -77,10 +77,11 @@ public:
                 "Splitting Planes");
             g->addCustomCode(
                     [this]() {
+                        auto old_voxel_size = m_voxel_size;
                         ImGui::InputFloat3("Voxel Size", &m_voxel_size.x);
                         if(glm::any(glm::lessThanEqual(m_voxel_size, glm::vec3(0.f)))) {
                             Logger(WARN) << "voxel size must be > 0 in all dimensions! Resetting..";
-                            m_voxel_size = glm::vec3(1.f);
+                            m_voxel_size = old_voxel_size;
                         }
                     },
                     "Voxel Size");
@@ -106,10 +107,11 @@ public:
                 "Splitting Planes");
             g->addCustomCode(
                     [this]() {
+                        auto old_voxel_size = m_voxel_size;
                         ImGui::InputFloat3("Voxel Size", &m_voxel_size.x);
                         if(glm::any(glm::lessThanEqual(m_voxel_size, glm::vec3(0.f)))) {
                             Logger(WARN) << "voxel size must be > 0 in all dimensions! Resetting..";
-                            m_voxel_size = glm::vec3(1.f);
+                            m_voxel_size = old_voxel_size;
                         }
                     },
                     "Voxel Size");

@@ -272,7 +272,7 @@ void main() {
 
     // visualize model space coordinates
     if(g_debug_model_space) {
-        vec3 color = floor(state.pos) / vec3(g_vol_dim);
+        vec3 color = floor(state.pos) / g_physical_vol_dim;
         vec3 borders = vec3(greaterThan(fract(state.pos), vec3(0.0f))) * vec3(lessThan(fract(state.pos - vec3(0.0001f)), vec3(0.2f)));
         if(borders.x + borders.y + borders.z > 0.f)
             color *= 1.f - 1.f / (t_0 / g_world_to_model_space_scaling * 64.f);
@@ -284,7 +284,7 @@ void main() {
         // ToDo: replace with DDA traversal. remove unnecessary variables in RayMarchState
         state.t += g_stepSize;
         state.pos = ray.origin + state.t * ray.direction;
-        state.voxel = ivec3(floor(state.pos));  // floor is required so that -0.1f is not 0
+        state.voxel = ivec3(floor(state.pos / g_voxel_size));  // floor is required so that -0.1f is not 0
 
         // out of bounds and empty space check
         if(isEmptySpace(state.voxel)

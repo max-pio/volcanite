@@ -56,9 +56,9 @@ int compression(int argc, char *argv[]) {
     }
     else {
         Logger(INFO) << "call with 'volcanite [path_to_volume]' to compress and visualize a segmentation volume.";
-        Logger(INFO) << "  compression options:        'segvolvis [path_to_vti] [brick_dimension {8|16|32|64}] [rANS_mode {n|s|d}]";
-        Logger(INFO) << "  best rendering performance: 'segvolvis [path_to_vti] 8 n";
-        Logger(INFO) << "  best compression rate:      'segvolvis [path_to_vti] 64 d";
+        Logger(INFO) << "  compression options:        'segvolvis [path_to_volume] [brick_dimension {8|16|32|64}] [rANS_mode {n|s|d}]";
+        Logger(INFO) << "  best rendering performance: 'segvolvis [path_to_volume] 8 n";
+        Logger(INFO) << "  best compression rate:      'segvolvis [path_to_volume] 64 d";
 
         if (!pfd::settings::available())
         {
