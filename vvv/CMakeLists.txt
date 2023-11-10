@@ -160,6 +160,16 @@ if(USE_TIFF_SUPPORT)
     endif ()
 endif()
 
+option(USE_XML_SUPPORT  "Includes the PUGIXML library for processing XML data" ON)
+if(USE_XML_SUPPORT)
+    find_package(PUGIXML)
+    if(PUGIXML_FOUND)
+        message("PUGIXML found!")
+    else ()
+        message(WARNING "USE_XML_SUPPORT was set but PUGIXML library could not be found!")
+    endif ()
+endif()
+
 # setting glslangValidator via the Vulkan package requires CMAKE 3.21
 set(SHADER_COMPILER_EXECUTABLE ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE})
 string(TIMESTAMP BUILD_TIME_ISO8601 "%Y-%m-%dT%H:%M:%SZ" UTC)
@@ -188,6 +198,10 @@ endif ()
 if (TIFF_FOUND)
     target_link_libraries(libvvv PRIVATE TIFF::TIFF)
     target_compile_definitions(libvvv PUBLIC -DLIB_TIFF)
+endif ()
+if (PUGIXML_FOUND)
+    target_link_libraries(libvvv PRIVATE pugixml::pugixml)
+    target_compile_definitions(libvvv PUBLIC -DLIB_PUGIXML)
 endif ()
 
 # remove comment for automatic /data copy:
