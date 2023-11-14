@@ -18,11 +18,11 @@ Do not distribute this code or any fragments or builds of it without permission!
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
 3. Install all required packages:
 ```
-sudo apt install build-essential cmake libglfw3-dev libglm-dev -y
+sudo apt install build-essential cmake libglfw3-dev libglm-dev libtclap-dev -y
 ```
 4. Optional: Install optional packages:
 ```
-sudo apt install libhdf5-dev libtiff-dev libsqlite3-dev -y
+sudo apt install libhdf5-dev libtiff-dev libpugixml-dev libsqlite3-dev -y
 ```
 5. Build the project. Run in project root directory:
 ```
@@ -155,12 +155,14 @@ If you have questions about certain parts in the implementation, feel free to co
 | glm                 | 0.9.9.8      | GLSL equivalents for host code | `libglm-dev`                                            |
 | GLFW                | 3.3.6        | windowing for GLFW application | `libglfw3-dev`                                          |
 
-| Optional Dependency | Min. Version | Usage                                   | Ubuntu / Debian package name                                           |
-|---------------------|:-------------|-----------------------------------------|------------------------------------------------------------------------|
-| HDF5                | 1.10.7       | read .hdf5 segmentation volumes         | `libhdf5-dev`                                                          |
-| SQLite              | 3.37.2       | read/write sqlite label attribute files | `libsqlite3-dev`                                                       |
-| TIFF                | 4.3.0        | read TIFF volumes                       | `libtiff-dev`                                                           |
-| OpenMP              | 4.5          | CPU parallelization                     | included in compiler                                                   |
+| Optional Dependency | Min. Version  | Usage                                   | Ubuntu / Debian package name |
+|---------------------|:--------------|-----------------------------------------|------------------------------|
+| HDF5                | 1.10.7        | read .hdf5 segmentation volumes         | `libhdf5-dev`                |
+| SQLite              | 3.37.2        | read/write sqlite label attribute files | `libsqlite3-dev`             |
+| TIFF                | 4.3.0         | read TIFF volumes                       | `libtiff-dev`                |
+| PugiXML             | 1.12.1        |  parse XML data                         | `libpugixml-dev`             |
+| TCLAP               | 1.2.5         | parse command line arguments            | `libtclap-dev`               |
+| OpenMP              | 4.5           | CPU parallelization                     | included in compiler         |
 
 
 ### Development Tools

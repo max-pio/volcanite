@@ -30,12 +30,14 @@ target_compile_definitions(libvvvwindow PRIVATE -DVULKAN_HPP_STORAGE_SHARED=1)
 #set(THREADS_PREFER_PTHREAD_FLAG ON)
 #find_package(Threads REQUIRED)
 find_package(glfw3 REQUIRED)
+find_package(tclap REQUIRED)
 
 # link libraries
 target_link_libraries(libvvvwindow
         PUBLIC LibVVV::libvvv
         PRIVATE ${GLFW_LIBRARIES}
         PRIVATE ${CMAKE_DL_LIBS}
+        PRIVATE tclap::tclap
 #        PRIVATE Threads::Threads
         )
 if (TARGET imgui)

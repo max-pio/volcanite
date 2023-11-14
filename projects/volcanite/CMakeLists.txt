@@ -12,7 +12,8 @@ if (USE_SQLite3)
 endif ()
 
 # set all sources and headers
-set(CELLGROWTH_HEADERS
+set(VOLCANITE_HEADERS
+        include/volcanite/VolcaniteArgs.hpp
         include/volcanite/compression/bitpack.hpp
         include/volcanite/compression/VolumeCompressionBase.hpp
         data/shader/cpp_glsl_include/csgv_constants.h
@@ -25,7 +26,7 @@ set(CELLGROWTH_HEADERS
         include/volcanite/renderer/HelloVolumeRenderer.hpp
         )
 
-set(CELLGROWTH_SOURCES
+set(VOLCANITE_SOURCES
         src/volcanite/compression/CompressedSegmentationVolume.cpp
         src/volcanite/compression/rans.cpp
         src/PassCompression.cpp
@@ -35,11 +36,11 @@ set(CELLGROWTH_SOURCES
         src/renderer/HelloVolumeRenderer.cpp
         )
 
-# some data sets are hardcoded into the renderer with a path relative to VOLCANITE_DEFAULT_DATA_PATH
+# ToDo: remove: some data sets are hardcoded into the renderer with a path relative to VOLCANITE_DEFAULT_DATA_PATH
 set(VOLCANITE_DEFAULT_DATA_PATH CACHE PATH "Volcanite path prefix for hardcoded data set locations")
 
 function(makeVolcaniteExecutable name)
-    makeExecutable(${name} ${CELLGROWTH_HEADERS} ${CELLGROWTH_SOURCES})
+    makeExecutable(${name} ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
 
     target_link_libraries(${name} PRIVATE libryg-rans portable_file_dialogs)
     if (SQLite3_FOUND)
@@ -47,6 +48,7 @@ function(makeVolcaniteExecutable name)
         target_compile_definitions(${name} PUBLIC -DLIB_SQLITE3)
     endif ()
     target_compile_definitions(${name} PRIVATE "-DVOLCANITE_DEFAULT_DATA_PATH=\"${VOLCANITE_DEFAULT_DATA_PATH}\"")
+    target_compile_definitions(${name} PRIVATE "-DVOLCANITE_VERSION=\"${CMAKE_PROJECT_VERSION}\"")
     target_include_directories(${name} PRIVATE data/shader/cpp_glsl_include)
 
     installExecutable(${name})
