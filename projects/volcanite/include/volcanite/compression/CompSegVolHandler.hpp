@@ -348,6 +348,37 @@ public:
         return true;
     }
 
+    static bool setIdsToTypeFromFile(std::string url, std::unordered_map<uint32_t, uint32_t> &type_per_id) {
+        std::ifstream nrrd(url, std::ios_base::in | std::ios_base::binary);
+        if (!nrrd.is_open()) {
+            Logger(ERROR) << " you can provide a file " << url << " containing one label ID per line to set these labels to zero / invisible.";
+            return false;
+        }
+
+        type_per_id.clear();
+
+        std::string line;
+        // ToDo: replace empty IDs csv with a list containing one label entry per line. all those are set to zero.
+        // first line contains csv header
+        if (!std::getline(nrrd, line)) {
+            nrrd.close();
+            throw std::runtime_error("unexpected end of file in " + url);
+        }
+        // read all other lines containing [cellid],[celltype]
+        uint32_t type, cell_id;
+        while (std::getline(nrrd, line)) {
+            auto pos = line.rfind(',');
+            cell_id = static_cast<uint32_t>(std::stol(line.substr(0, pos)));
+            type = static_cast<uint32_t>(std::stol(line.substr(pos + 1, std::string::npos)));
+
+            type_per_id[cell_id] = type;
+        }
+
+        nrrd.close();
+        return true;
+    }
+
+
     static std::string formatChunkPath(const std::string& formatted_path, int x, int y, int z) {
         std::string path = formatted_path;
         if (path.find_first_of("{}") != std::string::npos)
@@ -390,6 +421,40 @@ public:
             volume = Volume<uint32_t>::load_vti(path);
         else
             throw std::runtime_error("Segmentation volume filetype not supported!");
+
+        // set all cells with an "invisible" cell type to 0
+        // ToDo: remove SET_EMPTY_TO_ZERO macro, or replace it with reading a line CSV containing JUST the empty IDs
+#ifdef SET_EMPTY_TO_ZERO
+        std::unordered_set<uint32_t> empty_ids;
+        if (tryGetEmptyIDsFromFile(path + "_celltypes.csv", empty_ids)) {
+            Logger(INFO) << " " << path + " set empty cell ids to zero";
+
+            size_t volume_size = volume->size();
+            uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
+
+            #pragma omp parallel for default(none) shared(data, empty_ids, volume_size)
+            for (int i = 0; i < volume_size; i++) {
+                if (empty_ids.contains(data[i]))
+                    data[i] = 0u;
+            }
+        }
+#endif
+
+#ifdef SET_IDS_TO_TYPE
+        std::unordered_map<uint32_t, uint32_t> id_types;
+        if (setIdsToTypeFromFile(path + "_celltypes.csv", id_types)) {
+            Logger(INFO) << " " << path + " set ids to type";
+            size_t volume_size = volume->size();
+            uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
+
+            #pragma omp parallel for default(none) shared(data, id_types, volume_size)
+            for (int i = 0; i < volume_size; i++) {
+                data[i] = id_types[data[i]];
+            }
+        }
+#endif
+
+
     }
 
 
@@ -469,23 +534,7 @@ public:
 
                             loadSegmentationVolumeFile(path, volume);
                             volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
-                            // set all cells with an "invisible" cell type to 0
-// ToDo: remove SET_EMPTY_TO_ZERO macro, or replace it with reading a line CSV containing JUST the empty IDs
-#ifdef SET_EMPTY_TO_ZERO
-                            std::unordered_set<uint32_t> empty_ids;
-                            if (tryGetEmptyIDsFromFile(path + "_celltypes.csv", empty_ids)) {
-                                Logger(INFO) << " " << path + " set empty cell ids to zero";
 
-                                size_t volume_size = volume->size();
-                                uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
-
-                                #pragma omp parallel for default(none) shared(data, empty_ids, volume_size)
-                                for (int i = 0; i < volume_size; i++) {
-                                    if (empty_ids.contains(data[i]))
-                                        data[i] = 0u;
-                                }
-                            }
-#endif
                             size_t tmp_code_frequencies[32];
                             csgv->setCompressionOptions(brick_dim, CompressedSegmentationVolume::NO_RANS);
                             csgv->compressForFrequencyTable(volume->data(), volume_dim, tmp_code_frequencies, freq_subsampling, rANS_mode == CompressedSegmentationVolume::DOUBLE_TABLE_RANS, false);
@@ -557,23 +606,6 @@ public:
                             Logger(INFO) << "Running Encoding  -------------------------------------------";
                         }
 
-                        // set all cells with an "invisible" cell type to 0
-// ToDo: remove SET_EMPTY_TO_ZERO macro, or replace it with reading a line CSV containing JUST the empty IDs
-#ifdef SET_EMPTY_TO_ZERO
-                        std::unordered_set<uint32_t> empty_ids;
-                        if (tryGetEmptyIDsFromFile(path + "_celltypes.csv", empty_ids)) {
-                            Logger(INFO) << " " << path + " set empty cell ids to zero";
-
-                            size_t volume_size = volume->size();
-                            uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
-
-#pragma omp parallel for default(none) shared(data, empty_ids, volume_size)
-                            for (int i = 0; i < volume_size; i++) {
-                                if (empty_ids.contains(data[i]))
-                                    data[i] = 0u;
-                            }
-                        }
-#endif
                         // do the actual compression
                         csgv->setCompressionOptions64(brick_dim, rANS_mode, code_frequencies.data(), detail_code_frequencies.data());
                         csgv->compress(volume->data(), volume_dim, verbose);
