@@ -76,7 +76,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::strin
     }
     // second line contains the ImageData header
     if (!std::getline(file, line)) { file.close(); throw std::runtime_error("unexpected end of file in " + url); }
-    if (6 != std::sscanf(line.c_str(), "<ImageData WholeExtent=\"0 %i 0 %i 0 %i\" Origin=\"0 0 0\" Spacing=\"%f %f %f\">", &img_width, &img_height, &img_depth,
+    if (6 != std::sscanf(line.c_str(), "<ImageData WholeExtent=\"0 %lu 0 %lu 0 %lu\" Origin=\"0 0 0\" Spacing=\"%f %f %f\">", &img_width, &img_height, &img_depth,
                                                                                                                                      &physical_size_x, &physical_size_y, &physical_size_z)) {
         file.close(); throw std::runtime_error("Could not read <ImageData ..> header from second line in .vti file " + url);
     }
