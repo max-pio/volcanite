@@ -92,6 +92,7 @@ Start the `volcanite` executable, either providing a path to a segmentation volu
 ./projects/volcanite/volcanite /path/to/your/segmentation/volume
 ```
 or by using the file dialog to select a volume file.
+Run `./volcanite --help` for a complete list of arguments and commands.
 See [Supported File Formats](#Supported-File-Formats) for a list of currently usable data formats.
 You can find a collection of example data sets listed in [Example_Data](doc/Example_Data.md). 
 

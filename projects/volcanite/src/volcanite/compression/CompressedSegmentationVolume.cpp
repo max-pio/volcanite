@@ -1393,7 +1393,7 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
         Logger(INFO) << " brick count: " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z) << " with brick size " << m_brick_size << "^3";
     }
 
-    Logger(INFO, true) << " Progress 0.0%";
+    Logger(INFO, true) << " Prepass Progress 0.0%";
     MiniTimer progressTimer;
     MiniTimer totalTimer;
     int bricks_since_last_update = 0;
@@ -1428,7 +1428,7 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
                 if (progressTimer.elapsed() >= PROGRESS_UPDATE_INTERVAL) {
                     float bricks_per_second = static_cast<float>(bricks_since_last_update) / progressTimer.elapsed();
                     std::stringstream stream;
-                    stream << " Progress " << std::fixed << std::setprecision(1) << static_cast<float>(brick_idx) / static_cast<float>(brickCount.x * brickCount.y * brickCount.z / subsampling_factor / subsampling_factor / subsampling_factor) * 100.f << "%"
+                    stream << " Prepass Progress " << std::fixed << std::setprecision(1) << static_cast<float>(brick_idx) / static_cast<float>(brickCount.x * brickCount.y * brickCount.z / subsampling_factor / subsampling_factor / subsampling_factor) * 100.f << "%"
                            << " (" << std::setprecision(2) << (bricks_per_second * m_brick_size * m_brick_size * m_brick_size / 1000000.f)
                            << " million voxels/second)";
                     Logger(INFO, true) << stream.str();
@@ -1451,7 +1451,10 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
 
     float total_seconds = totalTimer.elapsed();
     m_last_total_freq_prepass_seconds = total_seconds;
-    Logger(INFO) << " Progress 100% in " << std::fixed << std::setprecision(3) << total_seconds << "s freq: " <<  arrayToString(freq_out, 16) << " | " << arrayToString(freq_out + 16, 16) ;
+    if(verbose)
+        Logger(INFO) << " Prepass Progress 100% in " << std::fixed << std::setprecision(3) << total_seconds << "s operation freq: " <<  arrayToString(freq_out, 16) << " | " << arrayToString(freq_out + 16, 16) ;
+    else
+        Logger(INFO) << " Prepass Progress 100% in " << std::fixed << std::setprecision(3) << total_seconds << "s";
 }
 
 }; // namespace vvv

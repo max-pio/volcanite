@@ -27,7 +27,7 @@ using namespace vvv;
 int compression(int argc, char *argv[]) {
     // configuration -------------------
     glm::uvec3 chunk_files(0);
-    std::string path = std::string(VOLCANITE_DEFAULT_DATA_PATH) + "/Big01/000_longer/outdir/nrrd_uint32/cells_frame065_100x100x100.raw";     // complex small
+    //std::string path = std::string(VOLCANITE_DEFAULT_DATA_PATH) + "/Big01/000_longer/outdir/nrrd_uint32/cells_frame065_100x100x100.raw";     // complex small
     //std::string path = std::string(VOLCANITE_DEFAULT_DATA_PATH) + "/Big01/000_longer/outdir/nrrd_uint32/cells_frame065_500x500x500.raw";     // complex medium
     //std::string path = std::string(VOLCANITE_DEFAULT_DATA_PATH) + "/Big01/000/outdir/nrrd_uint32/cells_frame055.raw";                        // complex large
     //std::string path = std::string(VOLCANITE_DEFAULT_DATA_PATH) + "/OneCell_degrade_persistentRW/14002/out0/nrrd_uint32/cells_frame024.raw"; // empty space with spot noise

@@ -7,95 +7,100 @@
 // run the interactive renderer after compression
 #define RUN_APP
 
+#include "volcanite/VolcaniteArgs.hpp"
 #include "volcanite/compression/CompSegVolHandler.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "vvv/volren/Volume.hpp"
+
 
 // include this last, as it includes windows.h which defines ERROR = 0
 #include "portable-file-dialogs.h"
 
 using namespace vvv;
 
-int compression(int argc, char *argv[]) {
+int volcanite(int argc, char *argv[]) {
 
-    if(!vvv::debuggerIsAttached())
+    // parse command line arguments
+    VolcaniteArgs args;
+    {
+        auto _args = VolcaniteArgs::parseArguments(argc, argv);
+        if(!_args.has_value()) {
+            Logger(ERROR) << "Exiting because of invalid arguments. See volcanite --help for available commands.";
+            return -2;
+        }
+        args = _args.value();
+    }
+
+    if(!vvv::debuggerIsAttached() && !args.verbose)
         Logger::s_minLevel = INFO;
 
-    // configuration -------------------
-    glm::uvec3 chunk_files(0);  // max. xyz index of chunk files. e.g. (1,3,0) would load 8 chunk files.
-    std::string path;           // path of segmentation volume. For chunked files, three {} are replaced with chunk ids.
-    int brick_dim = 16;                                                         // size of one brick
-    bool force_recompute = false;                                                // do a fresh compression even if there is a precomputed file
-    CompressedSegmentationVolume::RANSMode rANS_mode = CompressedSegmentationVolume::RANSMode::NO_RANS;  // use no rANS, rANS with one table for everything, or rANS with a second freq. table for the finest LoD
-    unsigned int frequency_pass_subsampling = 8u;                               // only use every n³th block in every 2nd chunk file for computing frequencies
-    bool use_detail_separation = false;                                         // split off the operation stream of the finest LoD for on-demand CPU to GPU streaming
-    std::string appName = "Volcanite Renderer";
-    bool vsync = true;
-    // ---------------------------------
+    // ToDo: we *could* check here if a previously compressed csgv with the correct parameters lies next to the input volume
+    // In that case, set the input file to that csgv and set args.compress_export_file = "".
+    // For comrpession, we can also try to export the csgv file to the location of the input volume, if writing there is possible,
+    // and use the tmp directory only as a fallback.
+    // (see getCSGVFileName in CompSegVolHandler). Move all output file logic from CompSegVolHandler either here
+    // or into a spearate method in CompSegVolHandler.
+    // Also think about the processing of chunked data.. Could it be necessary to still keep the getCSGVFileName and
+    // force_recompute logic in the handler for that reason? Or should we create two handlers for chunked / non-chunked?
 
-    // build with cmake --build ./cmake-build-release --target volcanite -j 12
+    std::shared_ptr<vvv::CompressedSegmentationVolume> compressedSegmentationVolume;
+    // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
+    if(args.performCompression()) {
+        glm::uvec3 max_chunk_id = glm::uvec3(args.chunk_files[0], args.chunk_files[1], args.chunk_files[2]);
+        if(!args.verbose)
+            Logger(INFO) << "compressing segmentation volume " << args.input_file << (args.chunked ? " with max. chunks " + str(max_chunk_id) : "");
 
-    // ToDo: replace with a cleaner and more powerful command line parser
-    std::string _rANS_str[3] = {"no rANS", "single table rANS", "double table rANS"};
-    if(argc > 1) {
-        // to make the evaluation of multiple compression runs easier, you can call this binary with some predefined arguments:
-        // input_filepath brick_size rANS_mode (n/0, s/1, d/2)
-
-        path = std::string(argv[1]);
-        if(argc > 2)
-            brick_dim = std::stoi(argv[2]);
-        if(argc > 3) {
-            rANS_mode = vvv::CompressedSegmentationVolume::NO_RANS;
-            if (argv[3][0] == '1' || argv[3][0] == 's' || argv[3][0] == 'S')
-                rANS_mode = vvv::CompressedSegmentationVolume::SINGLE_TABLE_RANS;
-            else if (argv[3][0] == '2' || argv[3][0] == 'd' || argv[3][0] == 'D')
-                rANS_mode = vvv::CompressedSegmentationVolume::DOUBLE_TABLE_RANS;
-        }
-        Logger(INFO) << "processing " << path << " " << " b=" << brick_dim << " " << _rANS_str[rANS_mode];
+        compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
+                                                                                  args.compress_export_file,
+                                                                                  args.brick_size, args.rANS_mode,
+                                                                                  args.stream_lod, !args.chunked,
+                                                                                  args.chunked, max_chunk_id,
+                                                                                  args.freq_subsampling, args.verbose);
+        if(args.verbose)
+            Logger(INFO) << compressedSegmentationVolume->decodingInfoString() << "\n\n";
     }
+    // otherwise, we load a previously decompressed volume
     else {
-        Logger(INFO) << "call with 'volcanite [path_to_volume]' to compress and visualize a segmentation volume.";
-        Logger(INFO) << "  compression options:        'segvolvis [path_to_volume] [brick_dimension {8|16|32|64}] [rANS_mode {n|s|d}]";
-        Logger(INFO) << "  best rendering performance: 'segvolvis [path_to_volume] 8 n";
-        Logger(INFO) << "  best compression rate:      'segvolvis [path_to_volume] 64 d";
-
-        if (!pfd::settings::available())
-        {
-            Logger(ERROR) << "Portable File Dialogs are not available on this platform. Aborting.";
-            return -1;
-        }
-
-        // Open a file dialog to choose a file
-        auto selected_file = pfd::open_file("Choose Segmentation Volume to open", pfd::path::home(),
-                                            { "Segmentation Volumes (.vti .hdf5 .raw)", "*.vti *.hdf5 *.raw", "All Files", "*" });
-        if(selected_file.result().empty()) {
-            Logger(ERROR) << "No segmentation volume file was provided. Aborting.";
-            return -1;
-        }
-
-        path = selected_file.result().at(0);
+        compressedSegmentationVolume = std::make_shared<CompressedSegmentationVolume>();
+        compressedSegmentationVolume->importFromFile(args.input_file, args.verbose);
     }
 
-    // Load a data set and encode it as a CompressedSegmentationVolume
-    std::shared_ptr<vvv::CompressedSegmentationVolume> compressedSegmentationVolume =
-        CompSegVolHandler::createCompressedSegmentationVolume(path, brick_dim, rANS_mode, use_detail_separation, force_recompute, chunk_files, frequency_pass_subsampling, false);
-    if (compressedSegmentationVolume == nullptr) {
-        Logger(ERROR) << "could not create / load Compressed Segmentation Volume. Aborting.";
+    if(args.performDecompression()) {
+        // ToDo add decompression
+        Logger(ERROR) << "decompression not yet supported";
         return -1;
     }
-    Logger(DEBUG) << compressedSegmentationVolume->decodingInfoString() << "\n\n";
 
-    Logger(INFO) << " --------------------------------------------------- ";
+    if (compressedSegmentationVolume == nullptr) {
+        Logger(ERROR) << "could not create or load Compressed Segmentation Volume. Aborting.";
+        return -1;
+    }
 
-    // create and run the interactive Application
-    const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(true);
-    renderer->setCompressedSegmentationVolume(compressedSegmentationVolume);
-    auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
+    // we only need the rendering part for screenshots or the interactive app
+    if (!args.headless || !args.screenshot_output_file.empty()) {
+        Logger(INFO) << "--------------------------------------------------- ";
+        Logger(INFO) << "initializing Volcanite renderer";
 
-    // execute app
-    app->setVSync(vsync);
-    return app->exec();
+        const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
+        renderer->setCompressedSegmentationVolume(compressedSegmentationVolume);
+
+        if (!args.screenshot_output_file.empty()) {
+            // ToDo add screenshot export to renderer for when command line argument is set
+            Logger(ERROR) << "screenshot export not yet supported";
+        }
+
+        // only start the application if we are not in headless mode
+        if (!args.headless) {
+            std::string appName = "Volcanite " + VolcaniteArgs::getVolcaniteVersionString();
+            bool vsync = true;  // ToDo: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
+            auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
+            app->setVSync(vsync);
+            return app->exec();
+        }
+    }
+
+    return 0;
 }
 
-ENTRYPOINT(compression)
+ENTRYPOINT(volcanite)
