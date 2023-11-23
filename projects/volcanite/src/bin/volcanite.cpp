@@ -1,6 +1,7 @@
 #include <string>
 #include "vvv/util/Logger.hpp"
 #include "vvv/util/detect_debugger.hpp"
+#include "vvv/core/HeadlessRendering.hpp"
 #include "vvvwindow/App.hpp"
 #include "vvvwindow/entrypoint.hpp"
 
@@ -78,6 +79,7 @@ int volcanite(int argc, char *argv[]) {
     }
 
     // we only need the rendering part for screenshots or the interactive app
+    std::string appName = "Volcanite " + VolcaniteArgs::getVolcaniteVersionString();
     if (!args.headless || !args.screenshot_output_file.empty()) {
         Logger(INFO) << "--------------------------------------------------- ";
         Logger(INFO) << "initializing Volcanite renderer";
@@ -85,19 +87,27 @@ int volcanite(int argc, char *argv[]) {
         const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume);
 
+        // return value
+        int ret = -1;
+
+        // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)
         if (!args.screenshot_output_file.empty()) {
-            // ToDo add screenshot export to renderer for when command line argument is set
-            Logger(ERROR) << "screenshot export not yet supported";
+            auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
+            ret = renderEngine->exec();
+            if(ret != 0) {
+                return ret;
+            }
         }
 
         // only start the application if we are not in headless mode
         if (!args.headless) {
-            std::string appName = "Volcanite " + VolcaniteArgs::getVolcaniteVersionString();
             bool vsync = true;  // ToDo: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
             auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
             app->setVSync(vsync);
-            return app->exec();
+            ret = app->exec();
         }
+
+        return ret;
     }
 
     return 0;

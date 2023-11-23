@@ -20,8 +20,8 @@ namespace vvv {
 class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuContext {
 
 public:
-    CompressedSegmentationVolumeRenderer(bool release_version = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false), m_camHash(0ul),
-                                                                         m_framesSinceCameraMove(0), m_frame(0u), m_release_version(release_version) {}
+    CompressedSegmentationVolumeRenderer(bool release_version = false, bool headless = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false), m_camHash(0ul),
+                                                                         m_framesSinceCameraMove(0), m_frame(0u), m_release_version(release_version), m_headless(headless) {}
 
     RendererOutput renderNextFrame(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override;
     /**
@@ -44,20 +44,28 @@ public:
      * We limit the render resolution to max. 4K (4096x2160) or Full-HD.
      */
     vk::Extent2D getRenderResolution() const {
-        auto screen = getCtx()->getWsi()->getScreenExtent();
-
+        // ToDo: remove hardcoded render resolution. Move the WSI dependency to Application / HeadlessRendering or the Renderer class?
         const vk::Extent2D max_resolution = {1920u, 1080u};
         //const vk::Extent2D max_resolution = {4096u, 2160u};
 
-        float oversizeFactor = static_cast<float>(screen.width)/static_cast<float>(max_resolution.width);
-        if (static_cast<float>(screen.height)/static_cast<float>(max_resolution.height) > oversizeFactor)
-            oversizeFactor = static_cast<float>(screen.height)/static_cast<float>(max_resolution.height);
-        if(oversizeFactor > 1.f) {
-            screen.width = static_cast<uint32_t>(static_cast<float>(screen.width)/oversizeFactor);
-            screen.height = static_cast<uint32_t>(static_cast<float>(screen.height)/oversizeFactor);
-        }
+        auto wsi = getCtx()->getWsi();
+        // context is associated with a window
+        if (wsi) {
+            auto screen = wsi->getScreenExtent();
 
-        return screen;
+            float oversizeFactor = static_cast<float>(screen.width) / static_cast<float>(max_resolution.width);
+            if (static_cast<float>(screen.height) / static_cast<float>(max_resolution.height) > oversizeFactor)
+                oversizeFactor = static_cast<float>(screen.height) / static_cast<float>(max_resolution.height);
+            if (oversizeFactor > 1.f) {
+                screen.width = static_cast<uint32_t>(static_cast<float>(screen.width) / oversizeFactor);
+                screen.height = static_cast<uint32_t>(static_cast<float>(screen.height) / oversizeFactor);
+            }
+            return screen;
+        }
+        // headless rendering
+        else {
+            return max_resolution;
+        }
     }
 
     void initGui(vvv::GuiInterface * gui) override {
@@ -135,7 +143,7 @@ public:
             g->addBool(&m_show_brick_cache, "Show Brick Cache");
             g->addBool(&m_show_lod, "Show LOD Levels");
             g->addBool(&m_show_step_count, "Show Ray Step Count");
-            g->addAction([this]() { getCtx()->getWsi()->getCamera()->reset(); }, "Reset Camera");
+            g->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
             g->addAction(
                 [this]() {
                     if (m_pass)
@@ -159,9 +167,8 @@ public:
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
 private:
-    // gui parameters
+    // (gui) parameters
     glm::vec4 m_background_color_a = glm::vec4(0.9f, 0.9f, 0.95f, 1.f);
-//    glm::vec4 m_background_color_a = glm::vec4(1.f, 1.f, 1.f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
     glm::ivec2 m_label_minmax = glm::ivec2(0, 32);
     bool m_tonemap_enabled = false;
@@ -187,11 +194,12 @@ private:
     bool m_clear_accum_every_frame = false;
     int m_max_decoding_lod = 5;
     int m_empty_label = 0;
-    std::string m_gui_resolution_text = "";
+    std::string m_gui_resolution_text;
 
 
     void updateUniformDescriptorset();
 
+    bool m_headless = false;
     std::unique_ptr<PassCompSegVolRender> m_pass = nullptr;
     std::shared_ptr<Texture> m_feedback_tex[2] = {nullptr, nullptr};
     std::shared_ptr<Texture> m_outDepth = nullptr;

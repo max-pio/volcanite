@@ -274,8 +274,7 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     m_gpu_stats_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_gpu_stats_buffer", .byteSize = sizeof(GPUStats), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
 
     // Set camera to a nice start position
-    const auto wsi = ctx->getWsi();
-    auto camera = wsi->getCamera();
+    auto camera = getCamera();
     camera->position_world_space = {-0.8, 0.6666, -0.8};
     camera->rotation_x = 0.6;
     camera->rotation_y = 2.25;
@@ -311,7 +310,11 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
         shader_defines.push_back("SEPARATE_DETAIL");
     }
-    m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), shader_defines);
+    // ToDo: does this work? if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
+    if(getCtx()->getWsi())
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), shader_defines);
+    else
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, shader_defines);
     m_pass->allocateResources();
     m_pass->resetCacheOnNextCall();
     m_urender_info = m_pass->getUniformSet("render_info");
@@ -387,8 +390,7 @@ void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
 }
 
 void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
-    const auto wsi = getCtx()->getWsi();
-    const auto camera = wsi->getCamera();
+    const auto camera = getCamera();
     const auto screenExtent = getRenderResolution();
 
     glm::vec3 voldim = glm::vec3(m_compressed_segmentation_volume->getVolumeDim());

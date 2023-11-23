@@ -12,6 +12,7 @@ set(VVV_HEADERS
         include/vvv/core/DefaultGpuContext.hpp
         include/vvv/core/GpuContext.hpp
         include/vvv/core/GuiInterface.hpp
+        include/vvv/core/HeadlessRendering.hpp
         include/vvv/core/MultiBuffering.hpp
         include/vvv/core/Renderer.hpp
         include/vvv/core/Shader.hpp
@@ -78,6 +79,7 @@ set(VVV_SOURCES
         src/core/Camera.cpp
         src/core/DefaultGpuContext.cpp
         src/core/GpuContext.cpp
+        src/core/HeadlessRendering.cpp
         src/core/MultiBuffering.cpp
         src/core/Shader.cpp
         src/core/Synchronization.cpp
