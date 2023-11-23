@@ -1,5 +1,7 @@
 #pragma once
 
+#include <utility>
+
 #include "GpuContext.hpp"
 #include "GuiInterface.hpp"
 #include "Texture.hpp"
@@ -50,6 +52,12 @@ public:
     virtual void releaseShaderResources(){};
     virtual void releaseGui(){};
     virtual void releaseSwapchain(){};
+
+    virtual std::shared_ptr<Camera> getCamera() { return m_camera; }
+    virtual void setCamera(std::shared_ptr<Camera> camera) { m_camera = std::move(camera); }
+
+protected:
+    std::shared_ptr<Camera> m_camera = nullptr;
 };
 
 }

@@ -363,7 +363,7 @@ void Application::acquireResources() {
 
 void Application::createQueues() {
     m_queues.graphics = getDevice().getQueue(getQueueFamilyIndices().graphics.value(), 0);
-    debugMarker->setName(m_queues.graphics, "Application.m_queues.present");
+    debugMarker->setName(m_queues.graphics, "Application.m_queues.graphics");
 
     m_queues.present = getDevice().getQueue(getQueueFamilyIndices().present.value(), 0);
     debugMarker->setName(m_queues.present, "Application.m_queues.present");
@@ -893,11 +893,11 @@ void Application::recreateInnerRenderingEngine() {
 void Application::processParameterRecording() {
     // write
     if(m_record_out.has_value()) {
-        m_camera->writeTo(m_record_out.value());
+        getCamera()->writeTo(m_record_out.value());
     }
     // read
     else if(m_record_in.has_value()) {
-        m_camera->readFrom(m_record_in.value());
+        getCamera()->readFrom(m_record_in.value());
         if(m_record_in->eof()) {
             m_record_in->close();
             m_record_in = {};
@@ -933,6 +933,8 @@ void Application::updateCamera() {
     if (ImGui::GetIO().WantCaptureMouse)
         scrollWheelDelta = 0.f;
 
+    auto camera = getCamera();
+
     // Figure out how much time has passed since the last invocation
     static double last_time = 0.0;
     double now = glfwGetTime();
@@ -952,35 +954,35 @@ void Application::updateCamera() {
     double mouse_position_double[2];
     glfwGetCursorPos(m_window, &mouse_position_double[0], &mouse_position_double[1]);
     float mouse_position[2] = {(float)mouse_position_double[0], (float)mouse_position_double[1]};
-    if (!m_camera->rotate_camera && (right_mouse_state == GLFW_PRESS || left_mouse_state == GLFW_PRESS)) {
-        m_camera->rotate_camera = true;
-        m_camera->rotation_x_0 = m_camera->rotation_x - mouse_position[1] * mouse_radians_per_pixel;
-        m_camera->rotation_y_0 = m_camera->rotation_y - mouse_position[0] * mouse_radians_per_pixel;
+    if (!camera->rotate_camera && (right_mouse_state == GLFW_PRESS || left_mouse_state == GLFW_PRESS)) {
+        camera->rotate_camera = true;
+        camera->rotation_x_0 = camera->rotation_x - mouse_position[1] * mouse_radians_per_pixel;
+        camera->rotation_y_0 = camera->rotation_y - mouse_position[0] * mouse_radians_per_pixel;
     }
     // in orbital mode, shift and control can lock rotation axes
-    if (m_camera->orbital && m_camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-        m_camera->rotation_x_0 = m_camera->rotation_x - mouse_position[1] * mouse_radians_per_pixel;
+    if (camera->orbital && camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+        camera->rotation_x_0 = camera->rotation_x - mouse_position[1] * mouse_radians_per_pixel;
     }
-    if (m_camera->orbital && m_camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
-        m_camera->rotation_y_0 = m_camera->rotation_y - mouse_position[0] * mouse_radians_per_pixel;
+    if (camera->orbital && camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+        camera->rotation_y_0 = camera->rotation_y - mouse_position[0] * mouse_radians_per_pixel;
     }
 
     if ((left_mouse_state == GLFW_RELEASE && right_mouse_state != GLFW_PRESS) || (right_mouse_state == GLFW_RELEASE && left_mouse_state != GLFW_PRESS))
-        m_camera->rotate_camera = false;
-    if (m_camera->rotate_camera) {
-        m_camera->rotation_x = m_camera->rotation_x_0 + mouse_radians_per_pixel * mouse_position[1];
-        m_camera->rotation_y = m_camera->rotation_y_0 + mouse_radians_per_pixel * mouse_position[0];
-        m_camera->rotation_x = (m_camera->rotation_x < -std::numbers::pi) ? -std::numbers::pi : m_camera->rotation_x;
-        m_camera->rotation_x = (m_camera->rotation_x > std::numbers::pi) ? std::numbers::pi : m_camera->rotation_x;
+        camera->rotate_camera = false;
+    if (camera->rotate_camera) {
+        camera->rotation_x = camera->rotation_x_0 + mouse_radians_per_pixel * mouse_position[1];
+        camera->rotation_y = camera->rotation_y_0 + mouse_radians_per_pixel * mouse_position[0];
+        camera->rotation_x = (camera->rotation_x < -std::numbers::pi) ? -std::numbers::pi : camera->rotation_x;
+        camera->rotation_x = (camera->rotation_x > std::numbers::pi) ? std::numbers::pi : camera->rotation_x;
     }
-    if(m_camera->orbital) {
-        if(!m_camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_R)) {
-            m_camera->rotation_y += 0.01f;
+    if(camera->orbital) {
+        if(!camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_R)) {
+            camera->rotation_y += 0.01f;
         }
         constexpr float pi_eps = std::numbers::pi / 2.f - 0.001f;
-        m_camera->rotation_x = glm::clamp(m_camera->rotation_x, -pi_eps, pi_eps);
+        camera->rotation_x = glm::clamp(camera->rotation_x, -pi_eps, pi_eps);
 
-        float final_speed = m_camera->speed * 0.5f;
+        float final_speed = camera->speed * 0.5f;
         final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 2.0f : 1.0f;
         final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) ? 0.1f : 1.0f;
         float step = time_delta * final_speed;
@@ -988,19 +990,19 @@ void Application::updateCamera() {
         float forward = 0.0f;
         forward += (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
         forward -= (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
-        m_camera->orbital_radius -= (forward + scrollWheelDelta/10.f) * final_speed * m_camera->orbital_radius;
-        m_camera->orbital_radius = glm::max(0.001f, m_camera->orbital_radius);
-        m_camera->position_world_space = glm::vec3(m_camera->orbital_radius * cos(m_camera->rotation_y) * cos(m_camera->rotation_x),
-                                                   m_camera->orbital_radius * sin(m_camera->rotation_x),
-                                                   m_camera->orbital_radius * sin(m_camera->rotation_y) * cos(m_camera->rotation_x));
+        camera->orbital_radius -= (forward + scrollWheelDelta/10.f) * final_speed * camera->orbital_radius;
+        camera->orbital_radius = glm::max(0.001f, camera->orbital_radius);
+        camera->position_world_space = glm::vec3(camera->orbital_radius * cos(camera->rotation_y) * cos(camera->rotation_x),
+                                                   camera->orbital_radius * sin(camera->rotation_x),
+                                                   camera->orbital_radius * sin(camera->rotation_y) * cos(camera->rotation_x));
 
-        if (scrollWheelDelta != 0.f || m_camera->rotate_camera) {
-            m_camera->onCameraUpdate();
+        if (scrollWheelDelta != 0.f || camera->rotate_camera) {
+            camera->onCameraUpdate();
         }
     }
     else {
         // Modify the speed
-        float final_speed = m_camera->speed * 0.5f;
+        float final_speed = camera->speed * 0.5f;
         final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 2.0f : 1.0f;
         final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) ? 0.1f : 1.0f;
         float step = time_delta * final_speed;
@@ -1013,15 +1015,15 @@ void Application::updateCamera() {
         vertical += (glfwGetKey(m_window, GLFW_KEY_E) == GLFW_PRESS) ? step : 0.0f;
         vertical -= (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) ? step : 0.0f;
         // Implement camera movement
-        float cos_y = cosf(m_camera->rotation_y), sin_y = sinf(m_camera->rotation_y);
-        m_camera->position_world_space[0] +=  sin_y * forward;
-        m_camera->position_world_space[0] +=  cos_y * right;
-        m_camera->position_world_space[2] += -cos_y * forward;
-        m_camera->position_world_space[2] +=  sin_y * right;
-        m_camera->position_world_space[1] +=  vertical;
+        float cos_y = cosf(camera->rotation_y), sin_y = sinf(camera->rotation_y);
+        camera->position_world_space[0] +=  sin_y * forward;
+        camera->position_world_space[0] +=  cos_y * right;
+        camera->position_world_space[2] += -cos_y * forward;
+        camera->position_world_space[2] +=  sin_y * right;
+        camera->position_world_space[1] +=  vertical;
 
-        if (forward != 0.0f || right != 0.0f || vertical != 0.0f || m_camera->rotate_camera) {
-            m_camera->onCameraUpdate();
+        if (forward != 0.0f || right != 0.0f || vertical != 0.0f || camera->rotate_camera) {
+            camera->onCameraUpdate();
         }
     }
 

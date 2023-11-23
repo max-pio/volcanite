@@ -15,8 +15,11 @@
 class Application : public vvv::DefaultGpuContext, public vvv::WindowingSystemIntegration, public std::enable_shared_from_this<Application> {
 private:
     Application(std::string appName, std::shared_ptr<vvv::Renderer> renderer, std::shared_ptr<vvv::DebugUtilities> debugUtilities)
-        : DefaultGpuContext({.debugUtilities = debugUtilities, .appName = appName}), m_renderer(renderer), m_camera(new vvv::Camera(true)), m_gui(std::make_unique<GuiImgui>(this))
+        : DefaultGpuContext({.debugUtilities = debugUtilities, .appName = appName}), m_renderer(renderer), m_gui(std::make_unique<GuiImgui>(this))
         {
+            // choose a camera controller for the renderer
+            m_renderer->setCamera(std::make_shared<vvv::Camera>(false));
+
             auto video_directory = std::filesystem::absolute("vvv_video");
             if(!std::filesystem::exists(video_directory) && !std::filesystem::create_directory(video_directory)) {
                 vvv::Logger(vvv::WARN) << "Could not create non-existing video export directory " << video_directory;
@@ -67,7 +70,7 @@ public:
 
     void setWindowSize(int width, int height) const override;
 
-    vvv::Camera *getCamera() const override { return m_camera.get(); }
+    vvv::Camera *getCamera() const override { return m_renderer->getCamera().get(); }
     /*! Implements camera controls based on keyboard and mouse input obtained from
     GLFW.
     \param camera The camera that will be updated.
@@ -152,7 +155,6 @@ private:
     GLFWwindow *m_window = nullptr;
     static double s_mouse_scroll_wheel;
     double m_mouse_scroll_wheel_previous_frame = 0.f;
-    std::unique_ptr<vvv::Camera> m_camera;
     std::unique_ptr<GuiImgui> m_gui;
 
     struct {

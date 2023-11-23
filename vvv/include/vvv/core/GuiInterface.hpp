@@ -17,6 +17,7 @@
 
 typedef size_t gui_id;
 
+// ToDo: Refactor GuiInterface to ParameterInterface as parameters can be managed with it without having a visible GUI
 
 /**
  * Steps to add a new data or entry type T:
