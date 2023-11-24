@@ -7,6 +7,8 @@
 
 #include "glm/gtc/matrix_transform.hpp"
 
+#include "portable-file-dialogs.h"
+
 namespace vvv {
 
 
@@ -49,6 +51,18 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
     // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts finished)
     getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution);
+
+    // if a screenshot export was requested, we do this here
+    if(m_download_frame_to_image_file.has_value() && m_mostRecentFrame.has_value()) {
+        Logger(INFO) << "exporting screenshot to " << m_download_frame_to_image_file.value();
+        try {
+            m_mostRecentFrame->texture->writeFile(m_download_frame_to_image_file.value());
+        }
+        catch(std::runtime_error e) {
+            Logger(ERROR) << "image export error: " << e.what();
+        }
+        m_download_frame_to_image_file = {};
+    }
 
     // we have to know if the detail buffer is still in an uploading state. If yes, we don't do anything else with the detail buffer
     bool detail_buffer_dirty = !m_compressed_segmentation_volume->isUsingSeparateDetail()
@@ -539,5 +553,89 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
     }
 }
+
+    void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
+        auto g = gui->get("Compressed Segmentation Volume Renderer");
+
+        g->addColor(&m_background_color_a, "Background Color A");
+        g->addColor(&m_background_color_b, "Background Color B");
+        g->addFloat(&m_step_size, "Step Size", 0.0005f, 0.01f, 0.0005f, 4);
+        if(!m_release_version) {
+            g->addInt(&m_max_steps, "Max Steps", 1, 2048, 1);
+            g->addInt(&m_subsampling, "Subsampling Factor (2^n)", 0, 2, 1);
+        }
+        g->addCustomCode(
+                [this]() {
+                    ImGui::DragFloatRange2("Splitting Plane X", &m_bboxMin.x, &m_bboxMax.x, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
+                    ImGui::DragFloatRange2("Splitting Plane Y", &m_bboxMin.y, &m_bboxMax.y, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
+                    ImGui::DragFloatRange2("Splitting Plane Z", &m_bboxMin.z, &m_bboxMax.z, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
+                },
+                "Splitting Planes");
+        g->addCustomCode(
+                [this]() {
+                    auto old_voxel_size = m_voxel_size;
+                    ImGui::InputFloat3("Voxel Size", &m_voxel_size.x);
+                    if(glm::any(glm::lessThanEqual(m_voxel_size, glm::vec3(0.f)))) {
+                        Logger(WARN) << "voxel size must be > 0 in all dimensions! Resetting..";
+                        m_voxel_size = old_voxel_size;
+                    }
+                },
+                "Voxel Size");
+        g->addInt(&m_empty_label, "Empty Label");
+        g->addInt(&m_label_minmax.x, "Label ID Min. 2^", 0, 32, 1);
+        g->addInt(&m_label_minmax.y, "Label ID Max. 2^", 0, 32, 1);
+
+        if(!m_release_version) {
+            g->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
+            g->addBool(&m_blue_noise, "Blue Noise Shift");
+            g->addBool(&m_dda_traversal, "DDA Traversal");
+            g->addBool(&m_tonemap_enabled, "Tone Mapping");
+        }
+        g->addBool(&m_shadow_ray_enabled, "Shadow Ray Enabled");
+        if(!m_release_version)
+            g->addFloat(&m_shadow_ao_ray_distr, "Shadow / AO Ray Ratio", 0.f, 1.f, 0.1f, 1);
+        g->addDirection(&m_light_direction, "Light Direction");
+        if(!m_release_version)
+            g->addFloat(&m_light_intensity, "Light Intensity", 0.f, 10.f, 0.02f, 2);
+
+        g->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
+        g->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
+
+        if(!m_release_version) {
+            g->addFloat(&m_ambient_occlusion_dist_strength.x, "Ambient Occlusion Distance", 1.f, 32.f, 1.f);
+            g->addFloat(&m_ambient_occlusion_dist_strength.y, "Ambient Occlusion Strength", 0.f, 1.f, 0.1f);
+            g->addSeparator();
+            g->addLabel("Debug");
+            g->addInt(&m_max_decoding_lod, "Max. LOD", 0, 5, 1);
+            g->addBool(&m_show_model_space, "Show Model Space");
+            g->addBool(&m_show_brick_cache, "Show Brick Cache");
+            g->addBool(&m_show_lod, "Show LOD Levels");
+            g->addBool(&m_show_step_count, "Show Ray Step Count");
+            g->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
+            g->addAction(
+                    [this]() {
+                        if (m_pass)
+                            m_pass->resetCacheOnNextCall();
+                    },
+                    "Hard Reset Brick Cache");
+            g->addBool(&m_clear_cache_every_frame, "Clear Cache Every Frame");
+            g->addBool(&m_clear_accum_every_frame, "Clear Accumulation Every Frame");
+            g->addSeparator();
+        }
+        g->addDynamicText(&m_gui_resolution_text);
+        g->addAction([this]() {
+            if (!pfd::settings::available()) {
+                Logger(WARN) << "Can not open file dialog for screenshot export. Using default file ./volcanite_output.png";
+                m_download_frame_to_image_file = "./volcanite_output.png";
+                return;
+            }
+
+            // Open a file dialog to choose a file
+            auto selected_file = pfd::save_file("Save Screenshot", pfd::path::home(),
+                                                { "Image File (.png .jpg .jpeg)", "*.png *.jpg *.jpeg", "All Files", "*" });
+            if(!selected_file.result().empty())
+                m_download_frame_to_image_file = selected_file.result();
+        }, "Screenshot");
+    }
 
 } // namespace vvv

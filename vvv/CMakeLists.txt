@@ -125,9 +125,7 @@ set(VVV_SOURCES
         ../extern/SPIRV-Reflect/spirv_reflect.cpp
 
         ../extern/stb/stb_image.cpp
-
-# [deprecated] tinyexr is currently not used
-#        ../extern/tinyexr/tinyexr.cpp
+        ../extern/tinyexr/tinyexr.cpp
         )
 
 # Target and Packages --------------------------------------------------------------------------------------------------

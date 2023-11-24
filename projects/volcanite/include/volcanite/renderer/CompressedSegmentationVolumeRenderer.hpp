@@ -75,96 +75,7 @@ public:
         }
     }
 
-    void initGui(vvv::GuiInterface * gui) override {
-        auto g = gui->get("Compressed Segmentation Volume Renderer");
-
-        if(m_release_version) {
-            // for released versions, we show a simplified variant of the gui
-            g->addColor(&m_background_color_a, "Background Color Bottom Left");
-            g->addColor(&m_background_color_b, "Background Color Top Right");
-            g->addFloat(&m_step_size, "Step Size", 0.0005f, 0.01f, 0.0005f, 4);
-            g->addCustomCode(
-                [this]() {
-                    ImGui::DragFloatRange2("Splitting Plane X", &m_bboxMin.x, &m_bboxMax.x, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                    ImGui::DragFloatRange2("Splitting Plane Y", &m_bboxMin.y, &m_bboxMax.y, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                    ImGui::DragFloatRange2("Splitting Plane Z", &m_bboxMin.z, &m_bboxMax.z, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                },
-                "Splitting Planes");
-            g->addCustomCode(
-                    [this]() {
-                        auto old_voxel_size = m_voxel_size;
-                        ImGui::InputFloat3("Voxel Size", &m_voxel_size.x);
-                        if(glm::any(glm::lessThanEqual(m_voxel_size, glm::vec3(0.f)))) {
-                            Logger(WARN) << "voxel size must be > 0 in all dimensions! Resetting..";
-                            m_voxel_size = old_voxel_size;
-                        }
-                    },
-                    "Voxel Size");
-            g->addInt(&m_empty_label, "Empty Label");
-            g->addInt(&m_label_minmax.x, "Cell ID Min. 2^n", 0, 32, 1);
-            g->addInt(&m_label_minmax.y, "Cell ID Max. 2^n", 0, 32, 1);
-            g->addBool(&m_shadow_ray_enabled, "Shadow Ray Enabled");
-            g->addDirection(&m_light_direction, "Light Direction");
-            g->addDynamicText(&m_gui_resolution_text);
-        }
-        else {
-            g->addColor(&m_background_color_a, "Background Color A");
-            g->addColor(&m_background_color_b, "Background Color B");
-            g->addInt(&m_subsampling, "Subsampling Factor (2^n)", 0, 2, 1);
-            g->addFloat(&m_step_size, "Step Size", 0.0005f, 0.01f, 0.0005f, 4);
-            g->addInt(&m_max_steps, "Max Steps", 1, 2048, 1);
-            g->addCustomCode(
-                [this]() {
-                    ImGui::DragFloatRange2("Splitting Plane X", &m_bboxMin.x, &m_bboxMax.x, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                    ImGui::DragFloatRange2("Splitting Plane Y", &m_bboxMin.y, &m_bboxMax.y, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                    ImGui::DragFloatRange2("Splitting Plane Z", &m_bboxMin.z, &m_bboxMax.z, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                },
-                "Splitting Planes");
-            g->addCustomCode(
-                    [this]() {
-                        auto old_voxel_size = m_voxel_size;
-                        ImGui::InputFloat3("Voxel Size", &m_voxel_size.x);
-                        if(glm::any(glm::lessThanEqual(m_voxel_size, glm::vec3(0.f)))) {
-                            Logger(WARN) << "voxel size must be > 0 in all dimensions! Resetting..";
-                            m_voxel_size = old_voxel_size;
-                        }
-                    },
-                    "Voxel Size");
-            g->addInt(&m_empty_label, "Empty Label");
-            g->addInt(&m_label_minmax.x, "Label Min. 2^", 0, 32, 1);
-            g->addInt(&m_label_minmax.y, "Label Max. 2^", 0, 32, 1);
-            g->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
-            g->addBool(&m_blue_noise, "Blue Noise Shift");
-            g->addBool(&m_dda_traversal, "DDA Traversal");
-            g->addBool(&m_tonemap_enabled, "Tone Mapping");
-            g->addBool(&m_shadow_ray_enabled, "Shadow Ray Enabled");
-            g->addFloat(&m_shadow_ao_ray_distr, "Shadow / AO Ray Ratio", 0.f, 1.f, 0.1f, 1);
-            g->addDirection(&m_light_direction, "Light Direction");
-            g->addFloat(&m_light_intensity, "Light Intensity", 0.f, 10.f, 0.02f, 2);
-            g->addFloat(&m_ambient_occlusion_dist_strength.x, "Ambient Occlusion Distance", 1.f, 32.f, 1.f);
-            g->addFloat(&m_ambient_occlusion_dist_strength.y, "Ambient Occlusion Strength", 0.f, 1.f, 0.1f);
-            g->addSeparator();
-            g->addLabel("Debug");
-            g->addInt(&m_max_decoding_lod, "Max. LOD", 0, 5, 1);
-            g->addBool(&m_show_model_space, "Show Model Space");
-            g->addBool(&m_show_brick_cache, "Show Brick Cache");
-            g->addBool(&m_show_lod, "Show LOD Levels");
-            g->addBool(&m_show_step_count, "Show Ray Step Count");
-            g->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
-            g->addAction(
-                [this]() {
-                    if (m_pass)
-                        m_pass->resetCacheOnNextCall();
-                },
-                "Hard Reset Brick Cache");
-            g->addBool(&m_clear_cache_every_frame, "Clear Cache Every Frame");
-            g->addBool(&m_clear_accum_every_frame, "Clear Accumulation Every Frame");
-            g->addSeparator();
-            g->addDynamicText(&m_gui_resolution_text);
-            g->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
-            g->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
-        }
-    }
+    void initGui(vvv::GuiInterface * gui) override;
 
     void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> tree) {
         m_compressed_segmentation_volume = std::move(tree);
@@ -202,6 +113,7 @@ private:
     int m_max_decoding_lod = 5;
     int m_empty_label = 0;
     std::string m_gui_resolution_text;
+    std::optional<std::string> m_download_frame_to_image_file = {};
 
 
     void updateUniformDescriptorset();

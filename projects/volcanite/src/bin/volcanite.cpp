@@ -14,10 +14,6 @@
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "vvv/volren/Volume.hpp"
 
-
-// include this last, as it includes windows.h which defines ERROR = 0
-#include "portable-file-dialogs.h"
-
 using namespace vvv;
 
 constexpr int RET_SUCCESS = 0;
@@ -28,20 +24,10 @@ constexpr int RET_RENDER_ERROR = 4;
 
 
 
-int export_texture(Texture* tex, const std::string screenshot_file) {
+int export_texture(Texture* tex, const std::string export_file_path) {
     try {
-        std::filesystem::path file = std::filesystem::absolute(screenshot_file).lexically_normal();
-        std::filesystem::path dir = file;
-        std::filesystem::create_directories(dir.remove_filename());
-        Logger(INFO) << "Exporting render output to " << file.string();
-        if(screenshot_file.ends_with(".png"))
-            tex->writePng(std::filesystem::absolute(file).lexically_normal());
-        else if (screenshot_file.ends_with(".jpg") || screenshot_file.ends_with(".jpeg"))
-            tex->writeJpeg(std::filesystem::absolute(file).lexically_normal(), 90);
-        else {
-            throw std::runtime_error("unsupported image file type "
-                + screenshot_file.substr(screenshot_file.rfind("."), screenshot_file.length()) + ", use png or jpg");
-        }
+        Logger(INFO) << "Exporting render output to " << export_file_path;
+        tex->writeFile(export_file_path);
     }
     catch(std::runtime_error e) {
         Logger(ERROR) << "Render export error: " << e.what();
