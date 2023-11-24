@@ -195,7 +195,7 @@ public:
         const auto data = download();
 
         const char *exrErr = nullptr;
-        if (SaveEXR(reinterpret_cast<const float *>(data.data()), width, height, componentCount, /* fp16? */ isFloat16, path.c_str(), &exrErr)) {
+        if (SaveEXR(reinterpret_cast<const float *>(data.data()), width, height, componentCount, /* fp16? */ isFloat16, path.c_str(), &exrErr) != TINYEXR_SUCCESS) {
             throw std::runtime_error(exrErr);
         }
     }
@@ -222,7 +222,7 @@ public:
 
         const auto data = download();
 
-        if (stbi_write_hdr(path.c_str(), width, height, componentCount, reinterpret_cast<const float *>(data.data()))) {
+        if (!stbi_write_hdr(path.c_str(), width, height, componentCount, reinterpret_cast<const float *>(data.data()))) {
             throw std::runtime_error("writing HDR file failed.");
         }
     }
@@ -272,7 +272,7 @@ public:
 
         const auto data = download();
 
-        if (stbi_write_jpg(path.c_str(), width, height, componentCount, reinterpret_cast<const void *>(data.data()), quality)) {
+        if (!stbi_write_jpg(path.c_str(), width, height, componentCount, reinterpret_cast<const void *>(data.data()), quality)) {
             throw std::runtime_error("writing JPEG failed.");
         }
     }
