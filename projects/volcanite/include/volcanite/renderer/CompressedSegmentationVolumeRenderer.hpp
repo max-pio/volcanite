@@ -20,8 +20,10 @@ namespace vvv {
 class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuContext {
 
 public:
-    CompressedSegmentationVolumeRenderer(bool release_version = false, bool headless = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false), m_camHash(0ul),
-                                                                         m_framesSinceCameraMove(0), m_frame(0u), m_release_version(release_version), m_headless(headless) {}
+    CompressedSegmentationVolumeRenderer(bool release_version = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false), m_camHash(0ul),
+                                                                         m_framesSinceCameraMove(0), m_frame(0u), m_release_version(release_version) {}
+
+    ~CompressedSegmentationVolumeRenderer() { resetGPU(); m_compressed_segmentation_volume.reset(); }
 
     RendererOutput renderNextFrame(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override;
     /**
@@ -39,6 +41,11 @@ public:
      */
     void initSwapchainResources() override;
     void releaseSwapchain() override;
+
+    /**
+     * Releases all GPU states and resources but does not reset the segmentation volume.
+     */
+    void resetGPU();
 
     /**
      * We limit the render resolution to max. 4K (4096x2160) or Full-HD.
@@ -199,7 +206,6 @@ private:
 
     void updateUniformDescriptorset();
 
-    bool m_headless = false;
     std::unique_ptr<PassCompSegVolRender> m_pass = nullptr;
     std::shared_ptr<Texture> m_feedback_tex[2] = {nullptr, nullptr};
     std::shared_ptr<Texture> m_outDepth = nullptr;

@@ -5,6 +5,7 @@
 #include "vvv/core/Shader.hpp"
 
 #include <optional>
+#include <memory>
 #include <thread>
 #include <utility>
 #include <utility>
@@ -23,12 +24,13 @@ private:
 
 public:
     [[nodiscard]] static std::shared_ptr<HeadlessRendering> create(std::string appName, std::shared_ptr<vvv::Renderer> renderer, std::shared_ptr<vvv::DebugUtilities> debugUtilities = {}) {
-        // Not using std::make_shared<Best> because the c'tor is private.
+        // Not using std::make_shared<Best> because the constructor is private.
         return std::shared_ptr<HeadlessRendering>(new HeadlessRendering(std::move(appName), std::move(renderer), std::move(debugUtilities)));
     }
 
     /**
-     * Acquire all GPU resources including instance, device and swapchain resources.
+     * Acquire all GPU resources including instance and device resources. This method must be called before any
+     * rendering is processed.
      * This method is reintrant.
      */
     void acquireResources();
@@ -39,17 +41,18 @@ public:
     void releaseResources();
 
     /**
-     * Run the renderloop taking ownership of the current thread.
-     * @return status code
+     * Run the renderloop for number_of_frames taking ownership of the current thread.
+     * If a frame finished callback is passed it is called everytime a frame finished with the current texture output
+     * @return the final Texture of the render loop
      */
-    int exec();
+    std::shared_ptr<Texture> renderFrames(size_t number_of_frames, void (*frameFinishedCallback)(Texture*) = nullptr);
 
-    /**
-     * Run the renderloop without taking ownership of the current thread.
-     * You MUST NOT call `execAsync` or `exec` to invoke a second instance of the renderloop until the forked renderloop terminates.
-     */
-    void execAsync();
-    std::thread execAsyncAttached();
+//    /**
+//     * Run the renderloop without taking ownership of the current thread.
+//     * You MUST NOT call `execAsync` or `exec` to invoke a second instance of the renderloop until the forked renderloop terminates.
+//     */
+//    void execAsync();
+//    std::thread execAsyncAttached();
 
     vk::Extent2D getRenderResolution() const;
     void setRenderResolution(int width, int height);

@@ -278,6 +278,9 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     camera->position_world_space = {-0.8, 0.6666, -0.8};
     camera->rotation_x = 0.6;
     camera->rotation_y = 2.25;
+
+    if(m_compressed_segmentation_volume)
+        m_data_changed = true; // trigger re-upload to new buffers
 }
 
 void CompressedSegmentationVolumeRenderer::releaseResources() {
@@ -293,10 +296,11 @@ void CompressedSegmentationVolumeRenderer::releaseResources() {
     m_detail_requests_buffer = nullptr;
     m_detail_starts_staging.second = nullptr;
     m_detail_staging.second = nullptr;
+    setCtx(nullptr);
 }
 
 void CompressedSegmentationVolumeRenderer::initShaderResources() {
-    assert(getCtx() != nullptr);
+    assert(getCtx() != nullptr && "renderer needs a valid GPU context");
     assert(m_compressed_segmentation_volume && "can't render without a CompressedSegmentationVolume");
 
     std::vector<std::string> shader_defines;
@@ -332,8 +336,10 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     }
     m_pass->setStorageBuffer(0, 16, *m_gpu_stats_buffer);
     m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(), m_compressed_segmentation_volume->getLodCountPerBrick());
-    // reset all camera hashes
+    // reset all camera hashes and frame counters
     m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    m_framesSinceCameraMove = 0;
+    m_frame = 0u;
 }
 
 void CompressedSegmentationVolumeRenderer::releaseShaderResources() {
@@ -377,6 +383,8 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
 }
 
 void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
+    m_mostRecentFrame->texture = nullptr;
+    m_mostRecentFrame->renderingComplete = {};
     if (m_outColor)
         m_outColor = nullptr;
     if(m_outDepth)
@@ -387,6 +395,15 @@ void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
         m_feedback_tex[1] = nullptr;
     if (m_inpaintedOutColor)
         m_inpaintedOutColor.reset();// = nullptr;
+}
+
+void CompressedSegmentationVolumeRenderer::resetGPU() {
+    releaseGui();
+    releaseSwapchain();
+    releaseShaderResources();
+    releaseResources();
+
+    //m_compressed_segmentation_volume = nullptr;
 }
 
 void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {

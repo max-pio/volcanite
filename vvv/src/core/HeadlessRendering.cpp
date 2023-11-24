@@ -33,28 +33,32 @@ RendererOutput HeadlessRendering::renderFrame(AwaitableList awaitBeforeExecution
     return m_renderer->renderNextFrame(awaitBeforeExecution, {});
 }
 
-std::thread HeadlessRendering::execAsyncAttached() {
-    std::thread guiThread(&HeadlessRendering::exec, this);
-    return guiThread;
-}
+//std::thread HeadlessRendering::execAsyncAttached() {
+//    std::thread renderThread(&HeadlessRendering::exec, this);
+//    return renderThread;
+//}
+//
+//void HeadlessRendering::execAsync() { execAsyncAttached().detach(); }
 
-void HeadlessRendering::execAsync() { execAsyncAttached().detach(); }
-
-int HeadlessRendering::exec() {
-    acquireResources();
+std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames, void (*frameFinishedCallback)(vvv::Texture *)) {
+    if(!isGpuContextCreated()) {
+        Logger(ERROR) << "GPU context not available. You must call acquireResources() before rendering.";
+        return nullptr;
+    }
 
     // ToDo: decouple HeadlessRendering::exec in an initialization method and multiple render calls, respect m_pendingRecreation
     // e.g.: hr.init(); hr.setRenderResolution(400, 400); hr.renderToFile(120); hr.setRenderParametersFromFile(path); auto output = hr.render(60);
 
-    // how many frames to render
-    const size_t m_render_frames = 60;
-
     RendererOutput rendererOutput = {nullptr, {}};
     MiniTimer timer;
-    for (size_t frame_idx = 0; frame_idx < m_render_frames; frame_idx++) {
+    for (size_t frame_idx = 0; frame_idx < number_of_frames; frame_idx++) {
         // render one frame after the other = wait for the last renderingComplete to finish
         // ToDo: should we use MultiBuffering in headless mode as well?
         rendererOutput = renderFrame({rendererOutput.renderingComplete});
+
+        if(frameFinishedCallback) {
+            frameFinishedCallback(rendererOutput.texture);
+        }
     }
     double endTime = timer.elapsed();
 
@@ -62,14 +66,28 @@ int HeadlessRendering::exec() {
         getDevice().waitIdle();
     }
 
-    double frame_time = endTime / static_cast<double>(m_render_frames);
-    Logger(INFO) << "rendering of " << m_render_frames << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
+    double frame_time = endTime / static_cast<double>(number_of_frames);
+    Logger(INFO) << "rendering of " << number_of_frames << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
 
-    // ToDo: download the result to return?
-    // std::vector<uint8_t> renderedImage = rendererOutput.texture->download();
-    // dummy export of the output
-    rendererOutput.texture->writePng("./volcanite_output.png");
-    return 0;
+    // copy the last output texture to a new texture that we can return.
+    // this way the original rendering texture could be overwritten or destroyed without affecting the return texture.
+    auto ret_tex = std::make_shared<Texture>(this, rendererOutput.texture->format, rendererOutput.texture->width, rendererOutput.texture->height,
+                                             vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eStorage);
+    ret_tex->ensureResources();
+    const auto layoutTransformDone = ret_tex->setImageLayout(vk::ImageLayout::eTransferDstOptimal, vk::PipelineStageFlagBits::eAllCommands);
+    rendererOutput.renderingComplete.push_back(layoutTransformDone);
+    sync->hostWaitOnDevice(rendererOutput.renderingComplete);
+    sync->hostWaitOnDevice({this->executeCommands([rendererOutput, ret_tex](vk::CommandBuffer cmd){
+        auto width = rendererOutput.texture->width;
+        auto height = rendererOutput.texture->height;
+        const auto originalLayout = rendererOutput.texture->descriptor.imageLayout;
+        rendererOutput.texture->setImageLayout(cmd, vk::ImageLayout::eTransferSrcOptimal);
+        vk::ImageCopy copyRegion(vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0),
+                                 vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(width, height, 1));
+        cmd.copyImage(rendererOutput.texture->image, vk::ImageLayout::eTransferSrcOptimal, ret_tex->image, vk::ImageLayout::eTransferDstOptimal, {copyRegion});
+        rendererOutput.texture->setImageLayout(cmd, originalLayout);
+    })});
+    return ret_tex;
 }
 
 void HeadlessRendering::acquireResources() {

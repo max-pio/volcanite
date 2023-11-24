@@ -20,15 +20,44 @@
 
 using namespace vvv;
 
-int volcanite(int argc, char *argv[]) {
+constexpr int RET_SUCCESS = 0;
+constexpr int RET_INVALID_ARG = 1;
+constexpr int RET_NOT_SUPPORTED = 2;
+constexpr int RET_COMPR_ERROR = 3;
+constexpr int RET_RENDER_ERROR = 4;
 
+
+
+int export_texture(Texture* tex, const std::string screenshot_file) {
+    try {
+        std::filesystem::path file = std::filesystem::absolute(screenshot_file).lexically_normal();
+        std::filesystem::path dir = file;
+        std::filesystem::create_directories(dir.remove_filename());
+        Logger(INFO) << "Exporting render output to " << file.string();
+        if(screenshot_file.ends_with(".png"))
+            tex->writePng(std::filesystem::absolute(file).lexically_normal());
+        else if (screenshot_file.ends_with(".jpg") || screenshot_file.ends_with(".jpeg"))
+            tex->writeJpeg(std::filesystem::absolute(file).lexically_normal(), 90);
+        else {
+            throw std::runtime_error("unsupported image file type "
+                + screenshot_file.substr(screenshot_file.rfind("."), screenshot_file.length()) + ", use png or jpg");
+        }
+    }
+    catch(std::runtime_error e) {
+        Logger(ERROR) << "Render export error: " << e.what();
+        return RET_RENDER_ERROR;
+    }
+    return 0;
+}
+
+int volcanite(int argc, char *argv[]) {
     // parse command line arguments
     VolcaniteArgs args;
     {
         auto _args = VolcaniteArgs::parseArguments(argc, argv);
         if(!_args.has_value()) {
             Logger(ERROR) << "Exiting because of invalid arguments. See volcanite --help for available commands.";
-            return -2;
+            return RET_INVALID_ARG;
         }
         args = _args.value();
     }
@@ -70,12 +99,12 @@ int volcanite(int argc, char *argv[]) {
     if(args.performDecompression()) {
         // ToDo add decompression
         Logger(ERROR) << "decompression not yet supported";
-        return -1;
+        return RET_NOT_SUPPORTED;
     }
 
     if (compressedSegmentationVolume == nullptr) {
         Logger(ERROR) << "could not create or load Compressed Segmentation Volume. Aborting.";
-        return -1;
+        return RET_COMPR_ERROR;
     }
 
     // we only need the rendering part for screenshots or the interactive app
@@ -87,16 +116,20 @@ int volcanite(int argc, char *argv[]) {
         const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume);
 
-        // return value
-        int ret = -1;
-
         // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)
         if (!args.screenshot_output_file.empty()) {
+            // obtain a headless rendering engine
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
-            ret = renderEngine->exec();
-            if(ret != 0) {
-                return ret;
+            renderEngine->acquireResources();
+            // let the rendering converge for some frames
+            auto texture = renderEngine->renderFrames(60);
+            if(texture == nullptr || export_texture(texture.get(), args.screenshot_output_file)) {
+                Logger(ERROR) << "internal rendering error";
+                return RET_RENDER_ERROR;
             }
+            texture.reset();
+            texture = nullptr;
+            renderEngine->releaseResources();
         }
 
         // only start the application if we are not in headless mode
@@ -104,13 +137,11 @@ int volcanite(int argc, char *argv[]) {
             bool vsync = true;  // ToDo: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
             auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
             app->setVSync(vsync);
-            ret = app->exec();
+            return app->exec();
         }
-
-        return ret;
     }
 
-    return 0;
+    return RET_SUCCESS;
 }
 
 ENTRYPOINT(volcanite)
