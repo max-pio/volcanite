@@ -117,6 +117,11 @@ public:
             // general arguments
             va.verbose = verboseArg.getValue();
             va.headless = headlessArg.getValue();
+#ifdef HEADLESS
+            if(!va.headless) {
+                throw ArgException("Volcanite was build with CMake option HEADLESS set. You must run volcanite with --headless option and can not view interactive windows.", headlessArg.longID());
+            }
+#endif
             va.decompress_export_file = decompresspathArg.getValue();
             va.compress_export_file = compresspathArg.getValue();
             // rendering arguments

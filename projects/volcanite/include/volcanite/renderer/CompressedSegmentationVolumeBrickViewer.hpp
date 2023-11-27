@@ -11,7 +11,9 @@
 #include "vvv/reflection/UniformReflection.hpp"
 #include "vvv/passes/PassCompute.hpp"
 
-#include "imgui.h"
+#ifdef IMGUI
+    #include "imgui.h"
+#endif
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
 namespace vvv {
@@ -50,6 +52,7 @@ public:
         g->addInt(&m_label_color_mult, "Label Color Cycle", 1, 100000, 5);
         g->addBool(&m_show_label_bits, "Show Label Bits");
         g->addCombo(&m_show_code_mode, {"All", "New Palette", "Flat"}, [this](int v) { m_show_code_mode = v; });
+#ifdef IMGUI
         g->addCustomCode([this](){
             auto mousePos = ImGui::GetMousePos();
             m_mouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
@@ -58,6 +61,7 @@ public:
                 m_mousePos = mousePos;
             }
         }, "Mouse");
+#endif
     };
 
     void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> tree) {

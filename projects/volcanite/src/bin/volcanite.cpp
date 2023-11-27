@@ -2,11 +2,12 @@
 #include "vvv/util/Logger.hpp"
 #include "vvv/util/detect_debugger.hpp"
 #include "vvv/core/HeadlessRendering.hpp"
-#include "vvvwindow/App.hpp"
-#include "vvvwindow/entrypoint.hpp"
-
-// run the interactive renderer after compression
-#define RUN_APP
+#ifdef HEADLESS
+    #include "vvv/headless_entrypoint.hpp"
+#else
+    #include "vvvwindow/App.hpp"
+    #include "vvvwindow/entrypoint.hpp"
+#endif
 
 #include "volcanite/VolcaniteArgs.hpp"
 #include "volcanite/compression/CompSegVolHandler.hpp"
@@ -119,12 +120,14 @@ int volcanite(int argc, char *argv[]) {
         }
 
         // only start the application if we are not in headless mode
+#ifndef HEADLESS
         if (!args.headless) {
             bool vsync = true;  // ToDo: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
             auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
             app->setVSync(vsync);
             return app->exec();
         }
+#endif
     }
 
     return RET_SUCCESS;

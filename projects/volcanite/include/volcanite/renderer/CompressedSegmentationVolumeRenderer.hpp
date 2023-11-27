@@ -11,7 +11,6 @@
 #include "vvv/reflection/UniformReflection.hpp"
 #include "vvv/passes/PassCompute.hpp"
 
-#include "imgui.h"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/renderer/PassCompSegVolRender.hpp"
 

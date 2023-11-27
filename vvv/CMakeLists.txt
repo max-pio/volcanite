@@ -71,6 +71,10 @@ set(VVV_HEADERS
         ../extern/tinyexr/tinyexr.hpp
         )
 
+if(HEADLESS)
+    list(APPEND VVV_HEADERS include/vvv/headless_entrypoint.hpp)
+endif()
+
 set(VVV_SOURCES
         src/vvv.cpp
         src/core/config.cpp
@@ -127,6 +131,10 @@ set(VVV_SOURCES
         ../extern/stb/stb_image.cpp
         ../extern/tinyexr/tinyexr.cpp
         )
+
+if(HEADLESS)
+    list(APPEND VVV_SOURCES src/headless_entrypoint.cpp)
+endif()
 
 # Target and Packages --------------------------------------------------------------------------------------------------
 

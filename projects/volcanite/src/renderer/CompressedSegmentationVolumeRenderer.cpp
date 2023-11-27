@@ -8,6 +8,9 @@
 #include "glm/gtc/matrix_transform.hpp"
 
 #include "portable-file-dialogs.h"
+#ifdef IMGUI
+#include "imgui.h"
+#endif
 
 namespace vvv {
 
@@ -564,6 +567,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
             g->addInt(&m_max_steps, "Max Steps", 1, 2048, 1);
             g->addInt(&m_subsampling, "Subsampling Factor (2^n)", 0, 2, 1);
         }
+//ToDo: addFloatRange2 to the GUIInterface
+#ifdef IMGUI
         g->addCustomCode(
                 [this]() {
                     ImGui::DragFloatRange2("Splitting Plane X", &m_bboxMin.x, &m_bboxMax.x, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
@@ -581,6 +586,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
                     }
                 },
                 "Voxel Size");
+#endif
         g->addInt(&m_empty_label, "Empty Label");
         g->addInt(&m_label_minmax.x, "Label ID Min. 2^", 0, 32, 1);
         g->addInt(&m_label_minmax.y, "Label ID Max. 2^", 0, 32, 1);

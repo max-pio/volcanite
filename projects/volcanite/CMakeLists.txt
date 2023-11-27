@@ -42,7 +42,7 @@ set(VOLCANITE_DEFAULT_DATA_PATH CACHE PATH "Volcanite path prefix for hardcoded 
 function(makeVolcaniteExecutable name)
     makeExecutable(${name} ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
 
-    target_link_libraries(${name} PRIVATE libryg-rans portable_file_dialogs)
+    target_link_libraries(${name} PRIVATE libryg-rans tclap::tclap portable_file_dialogs)
     if (SQLite3_FOUND)
         target_link_libraries(${name} PRIVATE SQLite::SQLite3)
         target_compile_definitions(${name} PUBLIC -DLIB_SQLITE3)
