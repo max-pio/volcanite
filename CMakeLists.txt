@@ -103,7 +103,11 @@ endif()
 option(MAKE_EXAMPLES "Build examples for the VVV Framework" ON)
 
 if (MAKE_EXAMPLES)
-    add_subdirectory(projects/examples)
+    if (HEADLESS)
+        message(WARNING "MAKE_EXAMPLES is ON but cannot be used in combination with HEADLESS. Ignoring.")
+    else()
+        add_subdirectory(projects/examples)
+    endif()
 endif()
 
 # add extern rANS encoding library

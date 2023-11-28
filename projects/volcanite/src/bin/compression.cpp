@@ -1,3 +1,7 @@
+// ToDo: compression.cpp executable is probably no longer required. Remove?
+
+#ifndef HEADLESS
+
 #include <string>
 #include "vvv/util/csv_utils.hpp"
 #include "vvv/util/Logger.hpp"
@@ -135,3 +139,5 @@ int compression(int argc, char *argv[]) {
 }
 
 ENTRYPOINT(compression)
+
+#endif
