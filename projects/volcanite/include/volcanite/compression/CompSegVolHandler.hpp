@@ -674,9 +674,9 @@ public:
                         }
 #ifdef RUN_TEST
                         if (!volume) {
-                            loadSegmentationVolumeFile(path, volume);
+                            loadSegmentationVolumeFile(chunk_input_path, volume);
                             volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
-                            Logger(INFO) << path + " loaded with dim " << str(volume_dim);
+                            Logger(INFO) << chunk_input_path + " loaded with dim " << str(volume_dim);
                         }
                         if (!csgv->test(volume->data(), volume_dim)) {
                             return nullptr;

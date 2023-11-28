@@ -9,7 +9,8 @@
 #include "vvv/vk/memory.hpp"
 
 #include "stb/stb_image_write.hpp"
-#include "tinyexr/tinyexr.hpp"
+// ToDo: include tinyexr for SaveEXR again
+//#include "tinyexr/tinyexr.hpp"
 #include "vvv/util/util.hpp"
 
 #include <set>
@@ -175,6 +176,7 @@ public:
      * @discouraged this is a shorthand that drains the GPU pipeline and waits on the host.
      */
     void writeExr(const std::string path) {
+#ifdef TINYEXR_H_
         // TODO(Reiner): use the lower level API to support more formats
 
         const auto componentCount = FormatComponentCount(static_cast<VkFormat>(format));
@@ -198,6 +200,9 @@ public:
         if (SaveEXR(reinterpret_cast<const float *>(data.data()), width, height, componentCount, /* fp16? */ isFloat16, path.c_str(), &exrErr) != TINYEXR_SUCCESS) {
             throw std::runtime_error(exrErr);
         }
+#else
+        throw std::runtime_error("texture EXR export is not available because tinyexr implementation is missing.");
+#endif
     }
 
     /**

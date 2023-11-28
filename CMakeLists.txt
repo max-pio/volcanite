@@ -61,7 +61,7 @@ include(makeExecutable)
 
 # LIBRARIES ------------------------------------------------------------------------------------------------------------
 
-option(HEADLESS "Build without GUI and windowing functionality to run only in --headless mode." ON)
+option(HEADLESS "Build without GUI and windowing functionality to run only in --headless mode." OFF)
 
 # add extern public imgui library
 if(NOT HEADLESS)
