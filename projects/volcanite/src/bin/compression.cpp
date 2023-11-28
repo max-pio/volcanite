@@ -1,6 +1,6 @@
 // ToDo: compression.cpp executable is probably no longer required. Remove?
 
-#ifndef HEADLESS
+#if 0
 
 #include <string>
 #include "vvv/util/csv_utils.hpp"

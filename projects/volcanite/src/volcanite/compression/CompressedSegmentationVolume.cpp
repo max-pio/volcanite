@@ -961,8 +961,8 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     fin.close();
     glm::uvec3 brickCount = getBrickCount();
     if(verbose)
-        Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with brick count: " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z)
-                      << " with brick size " << m_brick_size << "^3";
+        Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim) << " voxels and " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z)
+                      << " bricks for brick size " << m_brick_size << "^3";
     return true;
 }
 

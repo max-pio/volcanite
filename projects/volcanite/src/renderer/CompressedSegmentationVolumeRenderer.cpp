@@ -478,14 +478,13 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         // In model space, one voxel must be a unit cube. The normalization transform scales this down to world space [-0.5, 0.5]^3
         glm::mat4 world_to_model_space;
         // ToDo: generalize switching model space axes in the GUI as axes selector [xyz, xzy, yxz, ...]) and remove the hacky fix
-        // hacky fix for switching axes for the mouse cortex
-        if(m_compressed_segmentation_volume->getVolumeDim().x > 2000) {
-            glm::mat4 _world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), glm::vec3(scalingFactor)), glm::vec3(normalized_volume_size / 2.f));
-            world_to_model_space = glm::mat4(_world_to_model_space[0], _world_to_model_space[2], _world_to_model_space[1], _world_to_model_space[3]);
-        }
-        else {
-            world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), glm::vec3(scalingFactor)), glm::vec3(normalized_volume_size /2.f));
-        }
+//        // hacky fix for switching axes for the mouse cortex
+//        if(m_compressed_segmentation_volume->getVolumeDim().x > 2000) {
+//            glm::mat4 _world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), glm::vec3(scalingFactor)), glm::vec3(normalized_volume_size / 2.f));
+//            world_to_model_space = glm::mat4(_world_to_model_space[0], _world_to_model_space[2], _world_to_model_space[1], _world_to_model_space[3]);
+//        }
+//        else
+        world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), glm::vec3(scalingFactor)), glm::vec3(normalized_volume_size /2.f));
         m_urender_info->setUniform<glm::mat4x4>("g_model_to_world_space", glm::inverse(world_to_model_space));
         m_urender_info->setUniform<glm::mat4x4>("g_world_to_model_space", world_to_model_space);
         m_urender_info->setUniform<glm::mat3x3>("g_world_to_model_space_dir",  glm::mat3(world_to_model_space));

@@ -68,7 +68,8 @@ set(VVV_HEADERS
         ../extern/stb/stb_image.hpp
         ../extern/stb/stb_image_write.hpp
 
-        ../extern/tinyexr/tinyexr.hpp
+# ToDo: why are builds breaking on some machines when including tinyexr?
+#        ../extern/tinyexr/tinyexr.hpp
         )
 
 if(HEADLESS)
@@ -129,7 +130,8 @@ set(VVV_SOURCES
         ../extern/SPIRV-Reflect/spirv_reflect.cpp
 
         ../extern/stb/stb_image.cpp
-        ../extern/tinyexr/tinyexr.cpp
+# ToDo: why are builds breaking on some machines when including tinyexr?
+#        ../extern/tinyexr/tinyexr.cpp
         )
 
 if(HEADLESS)
