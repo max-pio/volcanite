@@ -7,7 +7,7 @@ if (USE_SQLite3)
     find_package(SQLite3)
     if (SQLite3_FOUND)
     else ()
-        message(FATAL_ERROR "USE_SQLite3 was set but SQLite3 library could not be found")
+        message(WARNING "USE_SQLite3 was set but SQLite3 library could not be found")
     endif ()
 endif ()
 
