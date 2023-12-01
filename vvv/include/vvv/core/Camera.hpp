@@ -94,15 +94,31 @@ public:
 
     void onCameraUpdate();
 
-    void writeTo(std::ostream& out) {
-        out.write(reinterpret_cast<char*>(&rotation_x), sizeof(rotation_x));
-        out.write(reinterpret_cast<char*>(&rotation_y), sizeof(rotation_y));
-        out.write(reinterpret_cast<char*>(&position_world_space), sizeof(position_world_space));
+    void writeTo(std::ostream& out, bool human_readable=false) {
+        if(human_readable) {
+            out << "position: " << position_world_space.x << " " << position_world_space.y << " " << position_world_space.z << std::endl;
+            out << "rotation: " << rotation_x << " " << rotation_y << std::endl;
+        } else {
+            out.write(reinterpret_cast<char *>(&rotation_x), sizeof(rotation_x));
+            out.write(reinterpret_cast<char *>(&rotation_y), sizeof(rotation_y));
+            out.write(reinterpret_cast<char *>(&position_world_space), sizeof(position_world_space));
+        }
     }
-    void readFrom(std::istream& in) {
-        in.read(reinterpret_cast<char*>(&rotation_x), sizeof(rotation_x));
-        in.read(reinterpret_cast<char*>(&rotation_y), sizeof(rotation_y));
-        in.read(reinterpret_cast<char*>(&position_world_space), sizeof(position_world_space));
+    void readFrom(std::istream& in, bool human_readable=false) {
+        if(human_readable) {
+            std::string tmp;
+            in >> tmp; // "position:"
+            in >> position_world_space.x;
+            in >> position_world_space.y;
+            in >> position_world_space.z;
+            in >> tmp; // "rotation:"
+            in >> rotation_x;
+            in >> rotation_y;
+        } else {
+            in.read(reinterpret_cast<char *>(&rotation_x), sizeof(rotation_x));
+            in.read(reinterpret_cast<char *>(&rotation_y), sizeof(rotation_y));
+            in.read(reinterpret_cast<char *>(&position_world_space), sizeof(position_world_space));
+        }
     }
 
 private:

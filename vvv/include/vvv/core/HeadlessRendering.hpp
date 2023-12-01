@@ -19,7 +19,7 @@ private:
             m_renderer(std::move(renderer)), m_renderResolution(1920, 1080), m_pendingRecreation(false)
     {
         // choose a camera controller for the renderer
-        m_renderer->setCamera(std::make_shared<vvv::Camera>());
+        m_renderer->setCamera(std::make_shared<vvv::Camera>(false));
     };
 
 public:

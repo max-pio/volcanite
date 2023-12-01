@@ -152,6 +152,7 @@ private:
 
     std::shared_ptr<vvv::Renderer> m_renderer;
 
+    bool m_resources_acquired = false;
     GLFWwindow *m_window = nullptr;
     static double s_mouse_scroll_wheel;
     double m_mouse_scroll_wheel_previous_frame = 0.f;

@@ -276,7 +276,8 @@ std::thread Application::execAsyncAttached() {
 void Application::execAsync() { execAsyncAttached().detach(); }
 
 int Application::exec() {
-    acquireResources();
+    if(!m_resources_acquired)
+        acquireResources();
 
     double accumulatedTime{0.0};
     size_t frameCount{0};
@@ -359,6 +360,8 @@ void Application::acquireResources() {
     m_gui->setGuiScaling(getScreenContentScale());
     m_renderer->initGui(this->getGui());
 #endif
+
+    m_resources_acquired = true;
 }
 
 void Application::createQueues() {
@@ -432,7 +435,9 @@ void Application::destroyWindow() {
     if (m_window != nullptr) {
         glfwDestroyWindow(m_window);
         glfwTerminate(); // TODO(Reiner): when do we have to call `glfwTerminate`, inside or outside the if-conditional
-                         // this glfwTerminate() sometimes gives me a segfault (on AMD)
+        // this glfwTerminate() sometimes gives me a segfault (on AMD)
+        // Could be: https://github.com/KhronosGroup/Vulkan-LoaderAndValidationLayers/issues/1894
+        // http://www.xfree86.org/4.7.0/DRI11.html suggests that the (GL, but Vulkan here) can register a callback with Xlib. When the application calls XCloseDisplay, this callback is called and will segfault if the driver had already been unloaded, which could happen when the Vulkan instance is destroyed. Fix is to destroy the instance after cleaning up the display connection.
         m_window = nullptr;
     }
 }

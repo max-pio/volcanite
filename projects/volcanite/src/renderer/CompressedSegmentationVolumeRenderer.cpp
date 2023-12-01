@@ -368,7 +368,6 @@ void CompressedSegmentationVolumeRenderer::releaseShaderResources() {
 }
 
 
-
 void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
     const auto screen = getRenderResolution();
 
@@ -462,7 +461,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<glm::vec4>("g_bboxMax", glm::vec4(m_bboxMax, 1.f));
         m_urender_info->setUniform<uint32_t>("g_dda_traversal", m_dda_traversal ? 1 : 0);
         m_urender_info->setUniform<uint32_t>("g_blue_noise", m_blue_noise ? 1 : 0);
-        m_urender_info->setUniform<float>("g_opacityThreshold", 0.5); // TODO: we have this low opacity treshold to render opaque first hits
+        m_urender_info->setUniform<float>("g_opacityThreshold",
+                                          0.5); // TODO: we have this low opacity treshold to render opaque first hits
         m_urender_info->setUniform<glm::vec3>("g_camera_position_world_space", camera->position_world_space);
         m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
 
@@ -484,24 +484,32 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
 //            world_to_model_space = glm::mat4(_world_to_model_space[0], _world_to_model_space[2], _world_to_model_space[1], _world_to_model_space[3]);
 //        }
 //        else
-        world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), glm::vec3(scalingFactor)), glm::vec3(normalized_volume_size /2.f));
+        world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), glm::vec3(scalingFactor)),
+                                              glm::vec3(normalized_volume_size / 2.f));
         m_urender_info->setUniform<glm::mat4x4>("g_model_to_world_space", glm::inverse(world_to_model_space));
         m_urender_info->setUniform<glm::mat4x4>("g_world_to_model_space", world_to_model_space);
-        m_urender_info->setUniform<glm::mat3x3>("g_world_to_model_space_dir",  glm::mat3(world_to_model_space));
+        m_urender_info->setUniform<glm::mat3x3>("g_world_to_model_space_dir", glm::mat3(world_to_model_space));
         m_urender_info->setUniform<float>("g_world_to_model_space_scaling", scalingFactor);
         const auto world_to_projection_space = camera->get_world_to_projection_space(screenExtent);
         const auto projection_to_world_space = glm::inverse(world_to_projection_space);
         m_urender_info->setUniform<glm::mat4x4>("g_world_to_projection_space", world_to_projection_space);
         m_urender_info->setUniform<glm::mat4x4>("g_projection_to_world_space", projection_to_world_space);
-        m_urender_info->setUniform<glm::mat4x4>("g_projection_to_view_space", glm::inverse(camera->get_view_to_projection_space(screenExtent)));
-        m_urender_info->setUniform<glm::mat4x4>("g_view_to_world_space", glm::inverse(camera->get_world_to_view_space()));
-        m_urender_info->setUniform<glm::mat4x4>("g_view_to_projection_space", camera->get_view_to_projection_space(screenExtent));
+        m_urender_info->setUniform<glm::mat4x4>("g_projection_to_view_space",
+                                                glm::inverse(camera->get_view_to_projection_space(screenExtent)));
+        m_urender_info->setUniform<glm::mat4x4>("g_view_to_world_space",
+                                                glm::inverse(camera->get_world_to_view_space()));
+        m_urender_info->setUniform<glm::mat4x4>("g_view_to_projection_space",
+                                                camera->get_view_to_projection_space(screenExtent));
         m_urender_info->setUniform<glm::mat4x4>("g_world_to_view_space", camera->get_world_to_view_space());
         glm::mat4 projection_to_world_space_no_translation = projection_to_world_space;
         glm::vec2 viewportScale(2.0f / screenExtent.width, 2.0f / screenExtent.height);
-        glm::mat4 pixel_to_ray_direction_projection_space({viewportScale[0], 0.0f, 0.0f, 0.0f}, {0.0f, viewportScale[1], 0.0f, 0.0f},
-                                                          {0.5f * viewportScale[0] - 1.0f, 0.5f * viewportScale[1] - 1.0f, 1.0f, 1.0f}, {0.f, 0.f, 0.f, 1.f});
-        m_urender_info->setUniform<glm::mat3x3>("g_pixel_to_ray_direction_world_space", glm::mat3x3(projection_to_world_space_no_translation * pixel_to_ray_direction_projection_space));
+        glm::mat4 pixel_to_ray_direction_projection_space({viewportScale[0], 0.0f, 0.0f, 0.0f},
+                                                          {0.0f, viewportScale[1], 0.0f, 0.0f},
+                                                          {0.5f * viewportScale[0] - 1.0f,
+                                                           0.5f * viewportScale[1] - 1.0f, 1.0f, 1.0f},
+                                                          {0.f, 0.f, 0.f, 1.f});
+        m_urender_info->setUniform<glm::mat3x3>("g_pixel_to_ray_direction_world_space", glm::mat3x3(
+                projection_to_world_space_no_translation * pixel_to_ray_direction_projection_space));
 
         // detect if the camera was moved since the last frame (useful for progressive rendering etc.)
         // (or if any rendering parameters changed, technically not "camera" only anymore, but we can use it for resetting all accumulation buffers.)
@@ -521,18 +529,19 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         newCamHash = hashMemory(&m_shadow_ray_enabled, sizeof(m_shadow_ray_enabled), newCamHash);
         newCamHash = hashMemory(&m_light_direction, sizeof(m_light_direction), newCamHash);
         newCamHash = hashMemory(&m_light_intensity, sizeof(m_light_intensity), newCamHash);
-        newCamHash = hashMemory(&m_ambient_occlusion_dist_strength, sizeof(m_ambient_occlusion_dist_strength), newCamHash);
+        newCamHash = hashMemory(&m_ambient_occlusion_dist_strength, sizeof(m_ambient_occlusion_dist_strength),
+                                newCamHash);
         newCamHash = hashMemory(&m_step_size, sizeof(m_step_size), newCamHash);
         newCamHash = hashMemory(&m_tonemap_enabled, sizeof(m_tonemap_enabled), newCamHash);
         newCamHash = hashMemory(&m_shadow_ao_ray_distr, sizeof(m_shadow_ao_ray_distr), newCamHash);
         newCamHash = hashMemory(&m_max_decoding_lod, sizeof(m_max_decoding_lod), newCamHash);
-        if(newCamHash != m_camHash || m_clear_accum_every_frame || m_pass->willCacheBeResetOnNextCall()) {
+        if (newCamHash != m_camHash || m_clear_accum_every_frame || m_pass->willCacheBeResetOnNextCall()) {
             m_framesSinceCameraMove = 0u;
             m_camHash = newCamHash;
         }
         m_urender_info->setUniform<uint32_t>("g_camera_still_frames", m_framesSinceCameraMove);
         // random seed
-        m_urender_info->setUniform<float>("g_random_seed",  static_cast<float>(m_frame) / 10000.f);
+        m_urender_info->setUniform<float>("g_random_seed", static_cast<float>(m_frame) / 10000.f);
         m_urender_info->setUniform<uint32_t>("g_swapchain_index", m_pass->getActiveIndex());
     }
 
@@ -545,7 +554,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_usegmented_volume_info->setUniform<glm::vec3>("g_normalized_volume_size", normalized_volume_size);
         m_usegmented_volume_info->setUniform<uint32_t>("g_vol_max_label", 1000000);
         m_usegmented_volume_info->setUniform<uint32_t>("g_brick_size", brick_size);
-        m_usegmented_volume_info->setUniform<glm::uvec3>("g_brick_count", m_compressed_segmentation_volume->getBrickCount());
+        m_usegmented_volume_info->setUniform<glm::uvec3>("g_brick_count",
+                                                         m_compressed_segmentation_volume->getBrickCount());
         auto lod_count = m_compressed_segmentation_volume->getLodCountPerBrick();
         m_usegmented_volume_info->setUniform<uint32_t>("g_lod_count", lod_count);
         m_usegmented_volume_info->setUniform<uint32_t>("g_frame", m_frame);
@@ -556,91 +566,130 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
     }
 }
 
-    void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
-        auto g = gui->get("Compressed Segmentation Volume Renderer");
+void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
+    Renderer::initGui(gui);
+    GuiInterface::GuiElementList* g = gui->get("Compressed Segmentation Volume Renderer");
+    GuiInterface::GuiElementList* dev;
+    if(m_release_version) {
+        // we create an invisible GUI window to export all parameter but keep them hidden from the user
+        dev = gui->get("Development");
+        gui->getWindow("Development")->setVisible(false);
+    } else {
+        dev = g;
+    }
 
-        g->addColor(&m_background_color_a, "Background Color A");
-        g->addColor(&m_background_color_b, "Background Color B");
-        g->addFloat(&m_step_size, "Step Size", 0.0005f, 0.01f, 0.0005f, 4);
-        if(!m_release_version) {
-            g->addInt(&m_max_steps, "Max Steps", 1, 2048, 1);
-            g->addInt(&m_subsampling, "Subsampling Factor (2^n)", 0, 2, 1);
-        }
+    g->addColor(&m_background_color_a, "Background Color A");
+    g->addColor(&m_background_color_b, "Background Color B");
+    g->addFloat(&m_step_size, "Step Size", 0.0005f, 0.01f, 0.0005f, 4);
+    dev->addInt(&m_max_steps, "Max Steps", 1, 2048, 1);
+    dev->addInt(&m_subsampling, "Subsampling Factor (2^n)", 0, 2, 1);
 //ToDo: addFloatRange2 to the GUIInterface
 #ifdef IMGUI
-        g->addCustomCode(
-                [this]() {
-                    ImGui::DragFloatRange2("Splitting Plane X", &m_bboxMin.x, &m_bboxMax.x, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                    ImGui::DragFloatRange2("Splitting Plane Y", &m_bboxMin.y, &m_bboxMax.y, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                    ImGui::DragFloatRange2("Splitting Plane Z", &m_bboxMin.z, &m_bboxMax.z, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                },
-                "Splitting Planes");
-        g->addCustomCode(
-                [this]() {
-                    auto old_voxel_size = m_voxel_size;
-                    ImGui::InputFloat3("Voxel Size", &m_voxel_size.x);
-                    if(glm::any(glm::lessThanEqual(m_voxel_size, glm::vec3(0.f)))) {
-                        Logger(WARN) << "voxel size must be > 0 in all dimensions! Resetting..";
-                        m_voxel_size = old_voxel_size;
-                    }
-                },
-                "Voxel Size");
+    g->addCustomCode(
+            [this]() {
+                ImGui::DragFloatRange2("Splitting Plane X", &m_bboxMin.x, &m_bboxMax.x, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
+                ImGui::DragFloatRange2("Splitting Plane Y", &m_bboxMin.y, &m_bboxMax.y, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
+                ImGui::DragFloatRange2("Splitting Plane Z", &m_bboxMin.z, &m_bboxMax.z, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
+            },
+            "Splitting Planes");
+    g->addCustomCode(
+            [this]() {
+                auto old_voxel_size = m_voxel_size;
+                ImGui::InputFloat3("Voxel Size", &m_voxel_size.x);
+                if(glm::any(glm::lessThanEqual(m_voxel_size, glm::vec3(0.f)))) {
+                    Logger(WARN) << "voxel size must be > 0 in all dimensions! Resetting..";
+                    m_voxel_size = old_voxel_size;
+                }
+            },
+            "Voxel Size");
 #endif
-        g->addInt(&m_empty_label, "Empty Label");
-        g->addInt(&m_label_minmax.x, "Label ID Min. 2^", 0, 32, 1);
-        g->addInt(&m_label_minmax.y, "Label ID Max. 2^", 0, 32, 1);
-
-        if(!m_release_version) {
-            g->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
-            g->addBool(&m_blue_noise, "Blue Noise Shift");
-            g->addBool(&m_dda_traversal, "DDA Traversal");
-            g->addBool(&m_tonemap_enabled, "Tone Mapping");
+    g->addInt(&m_empty_label, "Empty Label");
+    g->addInt(&m_label_minmax.x, "Label ID Min. 2^", 0, 32, 1);
+    g->addInt(&m_label_minmax.y, "Label ID Max. 2^", 0, 32, 1);
+    dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
+    dev->addBool(&m_blue_noise, "Blue Noise Shift");
+    dev->addBool(&m_dda_traversal, "DDA Traversal");
+    dev->addBool(&m_tonemap_enabled, "Tone Mapping");
+    g->addBool(&m_shadow_ray_enabled, "Shadow Ray Enabled");
+    dev->addFloat(&m_shadow_ao_ray_distr, "Shadow / AO Ray Ratio", 0.f, 1.f, 0.1f, 1);
+    g->addDirection(&m_light_direction, "Light Direction");
+    dev->addFloat(&m_light_intensity, "Light Intensity", 0.f, 10.f, 0.02f, 2);
+    g->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
+    g->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
+    dev->addFloat(&m_ambient_occlusion_dist_strength.x, "Ambient Occlusion Distance", 1.f, 32.f, 1.f);
+    dev->addFloat(&m_ambient_occlusion_dist_strength.y, "Ambient Occlusion Strength", 0.f, 1.f, 0.1f);
+    dev->addSeparator();
+    dev->addLabel("Debug");
+    dev->addInt(&m_max_decoding_lod, "Max. LOD", 0, 5, 1);
+    dev->addBool(&m_show_model_space, "Show Model Space");
+    dev->addBool(&m_show_brick_cache, "Show Brick Cache");
+    dev->addBool(&m_show_lod, "Show LOD Levels");
+    dev->addBool(&m_show_step_count, "Show Ray Step Count");
+    dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
+    dev->addAction(
+            [this]() {
+                if (m_pass)
+                    m_pass->resetCacheOnNextCall();
+            },
+            "Hard Reset Brick Cache");
+    dev->addBool(&m_clear_cache_every_frame, "Clear Cache Every Frame");
+    dev->addBool(&m_clear_accum_every_frame, "Clear Accumulation Every Frame");
+    dev->addSeparator();
+    g->addDynamicText(&m_gui_resolution_text);
+    g->addAction([this]() {
+        if (!pfd::settings::available()) {
+            Logger(WARN) << "Can not open file dialog for screenshot export. Using default file ./volcanite_output.png";
+            m_download_frame_to_image_file = "./volcanite_output.png";
+            return;
         }
-        g->addBool(&m_shadow_ray_enabled, "Shadow Ray Enabled");
-        if(!m_release_version)
-            g->addFloat(&m_shadow_ao_ray_distr, "Shadow / AO Ray Ratio", 0.f, 1.f, 0.1f, 1);
-        g->addDirection(&m_light_direction, "Light Direction");
-        if(!m_release_version)
-            g->addFloat(&m_light_intensity, "Light Intensity", 0.f, 10.f, 0.02f, 2);
 
-        g->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
-        g->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
+        // Open a file dialog to choose a file
+        auto selected_file = pfd::save_file("Save Screenshot", pfd::path::home(),
+                                            { "Image File (.png .jpg .jpeg)", "*.png *.jpg *.jpeg", "All Files", "*" });
+        if(!selected_file.result().empty())
+            m_download_frame_to_image_file = selected_file.result();
+    }, "Screenshot");
 
-        if(!m_release_version) {
-            g->addFloat(&m_ambient_occlusion_dist_strength.x, "Ambient Occlusion Distance", 1.f, 32.f, 1.f);
-            g->addFloat(&m_ambient_occlusion_dist_strength.y, "Ambient Occlusion Strength", 0.f, 1.f, 0.1f);
-            g->addSeparator();
-            g->addLabel("Debug");
-            g->addInt(&m_max_decoding_lod, "Max. LOD", 0, 5, 1);
-            g->addBool(&m_show_model_space, "Show Model Space");
-            g->addBool(&m_show_brick_cache, "Show Brick Cache");
-            g->addBool(&m_show_lod, "Show LOD Levels");
-            g->addBool(&m_show_step_count, "Show Ray Step Count");
-            g->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
-            g->addAction(
-                    [this]() {
-                        if (m_pass)
-                            m_pass->resetCacheOnNextCall();
-                    },
-                    "Hard Reset Brick Cache");
-            g->addBool(&m_clear_cache_every_frame, "Clear Cache Every Frame");
-            g->addBool(&m_clear_accum_every_frame, "Clear Accumulation Every Frame");
-            g->addSeparator();
+    g->addAction([this]() {
+        std::string file;
+        if (!pfd::settings::available()) {
+            Logger(WARN) << "Can not open file dialog. Using default file ./parameters.vcfg";
+            file = "./parameters.vcfg";
         }
-        g->addDynamicText(&m_gui_resolution_text);
-        g->addAction([this]() {
-            if (!pfd::settings::available()) {
-                Logger(WARN) << "Can not open file dialog for screenshot export. Using default file ./volcanite_output.png";
-                m_download_frame_to_image_file = "./volcanite_output.png";
-                return;
-            }
 
-            // Open a file dialog to choose a file
-            auto selected_file = pfd::save_file("Save Screenshot", pfd::path::home(),
-                                                { "Image File (.png .jpg .jpeg)", "*.png *.jpg *.jpeg", "All Files", "*" });
-            if(!selected_file.result().empty())
-                m_download_frame_to_image_file = selected_file.result();
-        }, "Screenshot");
-    }
+        // Open a file dialog to choose a file
+        auto selected_file = pfd::open_file("Import Parameters", pfd::path::home(),
+                                            { "Parameter Config (.vcfg)", "*.vcfg", "All Files", "*" });
+        if(!selected_file.result().empty())
+            file = selected_file.result().at(0);
+
+        std::ifstream in(file);
+        if(in.is_open()) {
+            if (!readParameters(in, VOLCANITE_VERSION))
+                Logger(WARN) << "Could not import parameters from " << file;
+            in.close();
+        }
+    }, "Import Parameters");
+    g->addAction([this]() {
+        std::string file;
+        if (!pfd::settings::available()) {
+            Logger(WARN) << "Can not open file dialog. Using default file ./parameters.vcfg";
+            file = "./parameters.vcfg";
+        }
+
+        // Open a file dialog to choose a file
+        auto selected_file = pfd::save_file("Export Parameters", pfd::path::home(),
+                                            { "Parameter Config (.vcfg)", "*.vcfg", "All Files", "*" });
+        if(!selected_file.result().empty())
+            file = selected_file.result();
+
+        std::ofstream out(file);
+        if(out.is_open()) {
+            if (!writeParameters(out, VOLCANITE_VERSION))
+                Logger(WARN) << "Could not export parameters to " << file;
+            out.close();
+        }
+    }, "Export Parameters");
+}
 
 } // namespace vvv

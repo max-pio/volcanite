@@ -128,78 +128,17 @@ public:
         gui_id m_id_counter = 0;
 
         // helper functions for adding gui elements that are used in the macros. decimals is unused for non-decimal elements.
-        template <class T> gui_id add(T *v, const std::string &name, GuiType type, int decimals = 3) {
-            auto entry = new GuiEntry<T>();
-            entry->id = m_id_counter++;
-            entry->type = type;
-            entry->value = v;
-            entry->label = name;
-            entry->floatDecimals = decimals;
-
-            m_entries.emplace_back(entry);
-            return entry->id;
-        }
-
-        template <class T> gui_id add(T *v, const std::string &name, GuiType type, T min, T max, T step, int decimals = 3) {
-            auto entry = new GuiEntry<T>();
-            entry->id = m_id_counter++;
-            entry->type = type;
-            entry->value = v;
-            entry->label = name;
-            entry->min = min;
-            entry->max = max;
-            entry->step = step;
-            entry->floatDecimals = decimals;
-
-            m_entries.push_back(entry);
-            return entry->id;
-        }
+        template <class T> gui_id add(T *v, const std::string &name, GuiType type, int decimals = 3);
+        template <class T> gui_id add(T *v, const std::string &name, GuiType type, T min, T max, T step, int decimals = 3);
 
         // --- getter setter ---
-        template <class T> gui_id add(std::function<void(T)> setter, std::function<T()> getter, const std::string &name, GuiType type, int decimals = 3) {
-            auto entry = new GuiEntry<T>();
-            entry->id = m_id_counter++;
-            entry->type = type;
-            entry->getter = getter;
-            entry->setter = setter;
-            entry->label = name;
-            entry->floatDecimals = decimals;
-
-            m_entries.push_back(entry);
-            return entry->id;
-        }
-
-        template <class T> gui_id add(std::function<void(T)> setter, std::function<T()> getter, const std::string &name, GuiType type, T min, T max, T step, int decimals = 3) {
-            auto entry = new GuiEntry<T>();
-            entry->id = m_id_counter++;
-            entry->type = type;
-            entry->getter = getter;
-            entry->setter = setter;
-            entry->label = name;
-            entry->min = min;
-            entry->max = max;
-            entry->step = step;
-            entry->floatDecimals = decimals;
-
-            m_entries.push_back(entry);
-            return entry->id;
-        }
+        template <class T> gui_id add(std::function<void(T)> setter, std::function<T()> getter, const std::string &name, GuiType type, int decimals = 3);
+        template <class T> gui_id add(std::function<void(T)> setter, std::function<T()> getter, const std::string &name, GuiType type, T min, T max, T step, int decimals = 3);
 
     public:
-        virtual bool remove(gui_id id) {
-            auto it = std::find_if(m_entries.begin(), m_entries.end(), [id](const BaseGuiEntry *g) { return g->id == id; });
-            if (it != m_entries.end()) {
-                m_entries.erase(it);
-                return true;
-            } else
-                return false;
-        }
+        virtual bool remove(gui_id id);
         virtual bool remove(std::string name) { throw std::runtime_error("not implemented yet!"); }
-        virtual void clear() {
-            for (BaseGuiEntry *e : m_entries)
-                delete e;
-            m_entries.clear();
-        }
+        virtual void clear();
 
         // ------- Gui entries --------
         // base types
@@ -220,96 +159,20 @@ public:
         PROPERTY_REF(addColor, glm::vec4, GuiColor)
 
         // vvv types
-        virtual gui_id addTF1D(VectorTransferFunction* tf, std::vector<float> *histogram = nullptr, float *histMin = nullptr, float *histMax = nullptr, std::function<void()> onChanged = nullptr) {
-            auto entry = new GuiTF1DEntry();
-            entry->id = m_id_counter++;
-            entry->type = GuiTF1D;
-            entry->value = tf;
-            entry->histogram = histogram;
-            entry->histogramMin = histMin;
-            entry->histogramMax = histMax;
-            entry->onChanged = std::move(onChanged);
-            m_entries.push_back(entry);
-            return entry->id;
-        }
-        virtual gui_id addTF2D(TransferFunction2D* tf, Texture* histogramTexture, bool* histogramChanged = nullptr, std::function<void()> onChanged = nullptr, glm::vec2* histogramMin = nullptr, glm::vec2* histogramMax = nullptr) {
-            auto entry = new GuiTF2DEntry();
-            entry->id = m_id_counter++;
-            entry->type = GuiTF2D;
-            entry->value = tf;
-            entry->histogramTexture = histogramTexture;
-            entry->histogramMin = histogramMin;
-            entry->histogramMax = histogramMax;
-            entry->histogramChanged = histogramChanged;
-            entry->onChanged = std::move(onChanged);
-            m_entries.push_back(entry);
-            return entry->id;
-        }
+        virtual gui_id addTF1D(VectorTransferFunction* tf, std::vector<float> *histogram = nullptr, float *histMin = nullptr, float *histMax = nullptr, std::function<void()> onChanged = nullptr);
+        virtual gui_id addTF2D(TransferFunction2D* tf, Texture* histogramTexture, bool* histogramChanged = nullptr, std::function<void()> onChanged = nullptr, glm::vec2* histogramMin = nullptr, glm::vec2* histogramMax = nullptr);
 
         // special types and grouping
-        virtual gui_id addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int)> onChanged = nullptr, const std::string& name = "") {
-            auto entry = new GuiComboEntry();
-            entry->id = m_id_counter++;
-            entry->type = GuiCombo;
-            entry->selection = selection;
-            entry->onChanged = std::move(onChanged);
-            entry->options = options;
-            entry->label = name;
-            m_entries.push_back(entry);
-            return entry->id;
-        }
-        virtual gui_id addAction(void (*callback)(), std::string name) {
-            auto entry = new GuiFuncEntry();
-            entry->id = m_id_counter++;
-            entry->type = GuiAction;
-            entry->label = name;
-            entry->function = callback;
-            m_entries.push_back(entry);
-            return entry->id;
-        }
-        virtual gui_id addAction(std::function<void()> callback, std::string name) {
-            auto entry = new GuiFuncEntry();
-            entry->id = m_id_counter++;
-            entry->type = GuiAction;
-            entry->label = name;
-            entry->function = callback;
-            m_entries.push_back(entry);
-            return entry->id;
-        }
-        virtual gui_id addCustomCode(std::function<void()> callback, std::string name) {
-            auto entry = new GuiFuncEntry();
-            entry->id = m_id_counter++;
-            entry->type = GuiCustomCode;
-            entry->label = name;
-            entry->function = callback;
-            m_entries.push_back(entry);
-            return entry->id;
-        }
-        virtual gui_id addLabel(std::string name) {
-            auto entry = new BaseGuiEntry();
-            entry->id = m_id_counter++;
-            entry->type = GuiLabel;
-            entry->label = name;
-            m_entries.push_back(entry);
-            return entry->id;
-        }
-        virtual gui_id addDynamicText(std::string* text, std::string name = "") {
-            auto entry = new GuiEntry<std::string>();
-            entry->value = text;
-            entry->type = GuiDynamicText;
-            entry->label = name;
-            m_entries.push_back(entry);
-            return entry->id;
-        }
-        virtual gui_id addSeparator() {
-            auto entry = new BaseGuiEntry();
-            entry->id = m_id_counter++;
-            entry->type = GuiSeparator;
-            entry->label = "Separator" + std::to_string(entry->id);
-            m_entries.push_back(entry);
-            return entry->id;
-        }
+        virtual gui_id addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int)> onChanged = nullptr, const std::string& name = "");
+        virtual gui_id addAction(void (*callback)(), std::string name);
+        virtual gui_id addAction(std::function<void()> callback, std::string name);
+        virtual gui_id addCustomCode(std::function<void()> callback, std::string name);
+        virtual gui_id addLabel(std::string name);
+        virtual gui_id addDynamicText(std::string* text, std::string name = "");
+        virtual gui_id addSeparator();
 
+        virtual bool writeParameters(std::ostream& out) const;
+        virtual bool readParameters(std::istream& in);
     };
 
 protected:
@@ -321,13 +184,17 @@ protected:
     protected:
         std::string m_name;
         std::vector<GuiElementList> m_columns;
+        bool m_visible;
 
         constexpr static unsigned int MAX_GUI_COLUMN_COUNT = 8;     // we only allow this many columns per window
 
     public:
-        explicit GuiWindow(std::string name) : m_name(std::move(name)),  m_columns{GuiElementList()} {}
+        explicit GuiWindow(std::string name) : m_name(std::move(name)),  m_columns{GuiElementList()}, m_visible(true) {}
         GuiWindow() : m_name(),  m_columns{GuiElementList()} {}
         virtual ~GuiWindow() { clear(); }
+
+        void setVisible(bool visible) { m_visible = visible; }
+        bool isVisible() const { return m_visible; }
 
         const std::string& getName() const { return m_name; }
 
@@ -358,6 +225,35 @@ protected:
             }
             return false;
         }
+
+        virtual bool writeParameters(std::ostream& out) const {
+            out << "[" << m_name << "]" << std::endl;
+            for(const auto& c: m_columns) {
+                if(!c.writeParameters(out))
+                    return false;
+                out << std::endl;
+            }
+            return true;
+        }
+
+        virtual bool readParameters(std::istream& in) {
+            std::string tmp;
+            // read window name
+            while(tmp.empty() && in.good())
+                std::getline(in, tmp); // one empty line
+            if(tmp != "[" + m_name + "]") {
+                Logger(WARN) << "Reading window parameters for " << tmp << " instead of expected " << m_name << ":";
+                return false;
+            }
+            else {
+                Logger(DEBUG) << tmp;
+            }
+            for(auto& c: m_columns) {
+                if(!c.readParameters(in))
+                    return false;
+            }
+            return true;
+        }
     };
 
     // --------------------------- GUI WINDOW CLASS END ------------------------------------- //
@@ -368,7 +264,7 @@ protected:
     static std::vector<BaseGuiEntry*>& getEntriesForColumn(GuiElementList& l) { return l.m_entries; }
 
 public:
-    GuiElementList* get(const std::string& windowName, unsigned int column = 0) {
+    GuiElementList* get(const std::string windowName, unsigned int column = 0) {
         // use of non-existing window name inserts a new window object.
         if(!m_windows.contains(windowName))
             m_windows.insert({{windowName, GuiWindow(windowName)}});
@@ -376,9 +272,11 @@ public:
         return m_windows[windowName].getColumn(column);
     }
 
-    GuiWindow getWindow(std::string name) {
+    GuiWindow* getWindow(std::string windowName) {
         // use of non-existing window name inserts a new window object.
-        return m_windows[name];
+        if(!m_windows.contains(windowName))
+            m_windows.insert({{windowName, GuiWindow(windowName)}});
+        return &(m_windows[windowName]);
     }
 
     void removeWindow(std::string windowName) {
@@ -396,6 +294,22 @@ public:
             return false;
         }
         return m_windows[windowName].removeColumn(column);
+    }
+
+    bool writeParameters(std::ostream& out) {
+        for(const auto& w: m_windows) {
+            if(!w.second.writeParameters(out))
+                return false;
+        }
+        return true;
+    }
+
+    bool readParameters(std::istream& in) {
+        for(auto& w: m_windows) {
+            if(!w.second.readParameters(in))
+                return false;
+        }
+        return true;
     }
 
     /**

@@ -37,6 +37,26 @@ int export_texture(Texture* tex, const std::string export_file_path) {
     return 0;
 }
 
+int tryImportRenderConfig(VolcaniteArgs& args, std::shared_ptr<CompressedSegmentationVolumeRenderer> renderer) {
+    // read optional config file
+    if(!args.rendering_config_file.empty()) {
+        std::ifstream in(args.rendering_config_file);
+        if(in.is_open()) {
+            if (!renderer->readParameters(in, VOLCANITE_VERSION)) {
+                Logger(ERROR) << "Could not import parameters from " << args.rendering_config_file;
+                return RET_INVALID_ARG;
+            }
+            in.close();
+        }
+        else {
+            Logger(ERROR) << "Could not open config file " << args.rendering_config_file;
+            return RET_INVALID_ARG;
+        }
+        Logger(DEBUG) << "Imported rendering config from " << args.rendering_config_file;
+    }
+    return 0;
+}
+
 int volcanite(int argc, char *argv[]) {
     // parse command line arguments
     VolcaniteArgs args;
@@ -108,6 +128,7 @@ int volcanite(int argc, char *argv[]) {
             // obtain a headless rendering engine
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
             renderEngine->acquireResources();
+            tryImportRenderConfig(args, renderer);
             // let the rendering converge for some frames
             auto texture = renderEngine->renderFrames(60);
             if(texture == nullptr || export_texture(texture.get(), args.screenshot_output_file)) {
@@ -125,6 +146,8 @@ int volcanite(int argc, char *argv[]) {
             bool vsync = true;  // ToDo: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
             auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
             app->setVSync(vsync);
+            app->acquireResources();
+            tryImportRenderConfig(args, renderer);
             return app->exec();
         }
 #endif
