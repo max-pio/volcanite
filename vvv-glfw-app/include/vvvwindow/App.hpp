@@ -69,6 +69,8 @@ public:
     float getScreenContentScale() const override;
 
     void setWindowSize(int width, int height) const override;
+    void setWindowResizable(bool resizable) const override;
+    bool isWindowResizable() const override;
 
     vvv::Camera *getCamera() const override { return m_renderer->getCamera().get(); }
     /*! Implements camera controls based on keyboard and mouse input obtained from

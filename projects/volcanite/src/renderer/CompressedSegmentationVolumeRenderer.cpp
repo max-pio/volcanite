@@ -614,8 +614,11 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     dev->addFloat(&m_shadow_ao_ray_distr, "Shadow / AO Ray Ratio", 0.f, 1.f, 0.1f, 1);
     g->addDirection(&m_light_direction, "Light Direction");
     dev->addFloat(&m_light_intensity, "Light Intensity", 0.f, 10.f, 0.02f, 2);
+    g->addSeparator();
+    g->addBool([this](bool b) { getCtx()->getWsi()->setWindowResizable(b); }, [this]() { return getCtx()->getWsi()->isWindowResizable(); }, "Resizable Window");
     g->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
     g->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
+    g->addSeparator();
     dev->addFloat(&m_ambient_occlusion_dist_strength.x, "Ambient Occlusion Distance", 1.f, 32.f, 1.f);
     dev->addFloat(&m_ambient_occlusion_dist_strength.y, "Ambient Occlusion Strength", 0.f, 1.f, 0.1f);
     dev->addSeparator();

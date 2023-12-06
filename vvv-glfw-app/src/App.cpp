@@ -1130,3 +1130,11 @@ float Application::getScreenContentScale() const {
 void Application::setWindowSize(int width, int height) const {
     glfwSetWindowSize(m_window, width, height);
 }
+
+void Application::setWindowResizable(bool resizable) const {
+    glfwSetWindowAttrib(m_window, GLFW_RESIZABLE, resizable);
+}
+
+bool Application::isWindowResizable() const {
+    return static_cast<bool>(glfwGetWindowAttrib(m_window, GLFW_RESIZABLE));
+}
