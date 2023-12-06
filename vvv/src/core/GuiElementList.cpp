@@ -1,67 +1,6 @@
 #include "vvv/core/GuiInterface.hpp"
 
 namespace vvv {
-
-    template<class T>
-    gui_id GuiInterface::GuiElementList::add(T *v, const std::string &name, GuiType type, int decimals) {
-        auto entry = new GuiEntry<T>();
-        entry->id = m_id_counter++;
-        entry->type = type;
-        entry->value = v;
-        entry->label = name;
-        entry->floatDecimals = decimals;
-
-        m_entries.emplace_back(entry);
-        return entry->id;
-    }
-
-    template<class T>
-    gui_id GuiInterface::GuiElementList::add(T *v, const std::string &name, GuiType type, T min, T max, T step, int decimals) {
-        auto entry = new GuiEntry<T>();
-        entry->id = m_id_counter++;
-        entry->type = type;
-        entry->value = v;
-        entry->label = name;
-        entry->min = min;
-        entry->max = max;
-        entry->step = step;
-        entry->floatDecimals = decimals;
-
-        m_entries.push_back(entry);
-        return entry->id;
-    }
-
-// --- getter setter ---
-    template<class T>
-    gui_id GuiInterface::GuiElementList::add(std::function<void(T)> setter, std::function<T()> getter, const std::string &name, GuiType type, int decimals) {
-        auto entry = new GuiEntry<T>();
-        entry->id = m_id_counter++;
-        entry->type = type;
-        entry->getter = getter;
-        entry->setter = setter;
-        entry->label = name;
-        entry->floatDecimals = decimals;
-
-        m_entries.push_back(entry);
-        return entry->id;
-    }
-
-    template<class T> gui_id GuiInterface::GuiElementList::add(std::function<void(T)> setter, std::function<T()> getter, const std::string &name, GuiType type, T min, T max, T step, int decimals) {
-        auto entry = new GuiEntry<T>();
-        entry->id = m_id_counter++;
-        entry->type = type;
-        entry->getter = getter;
-        entry->setter = setter;
-        entry->label = name;
-        entry->min = min;
-        entry->max = max;
-        entry->step = step;
-        entry->floatDecimals = decimals;
-
-        m_entries.push_back(entry);
-        return entry->id;
-    }
-
     bool GuiInterface::GuiElementList::remove(gui_id id) {
         auto it = std::find_if(m_entries.begin(), m_entries.end(), [id](const BaseGuiEntry *g) { return g->id == id; });
         if (it != m_entries.end()) {

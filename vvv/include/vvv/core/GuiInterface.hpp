@@ -29,17 +29,17 @@ typedef size_t gui_id;
  * (3) update the methods to render GUI in the derived classes of GuiInterface to include the new type
  */
 
-#define PROPERTY_REF(F, T, G)                                                                                                                                                                          \
+#define PROPERTY_REF(F, T, G)                                                                                                                                                                     \
     virtual gui_id F(T *v, const std::string &name) { return add<T>(v, name, G); }                                                                                                                \
     virtual gui_id F(std::function<void(T)> setter, std::function<T()> getter, const std::string &name = "") { return add<T>(setter, getter, name, G); }
 
-#define PROPERTY_REF_MINMAX(F, T, G)                                                                                                                                                                   \
+#define PROPERTY_REF_MINMAX(F, T, G)                                                                                                                                                              \
     virtual gui_id F(T *v, const std::string &name, T min, T max, T step) { return add<T>(v, name, G, min, max, step, 0); }                                                                       \
     virtual gui_id F(std::function<void(T)> setter, std::function<T()> getter, const std::string &name, T min, T max, T step) { return add<T>(setter, getter, name, G, min, max, step, 0); }
 
-#define FLOAT_PROPERTY_REF(F, T, G)                                                                                                                                                                    \
+#define FLOAT_PROPERTY_REF(F, T, G)                                                                                                                                                               \
     virtual gui_id F(T *v, const std::string &name, int decimals = 3) { return add<T>(v, name, G, decimals); }                                                                                    \
-    virtual gui_id F(T *v, const std::string &name, T min, T max, T step, int decimals = 3) { return add<T>(v, name, G, min, max, step, decimals); }                                                   \
+    virtual gui_id F(T *v, const std::string &name, T min, T max, T step, int decimals = 3) { return add<T>(v, name, G, min, max, step, decimals); }                                              \
     virtual gui_id F(std::function<void(T)> setter, std::function<T()> getter, const std::string &name = "", int decimals = 3) { return add<T>(setter, getter, name, G, decimals); }
 
 #define GUI_CAST(e, T) (reinterpret_cast<GuiEntry<T> *>(e))
@@ -155,7 +155,7 @@ public:
         FLOAT_PROPERTY_REF(addVec2, glm::vec2, GuiVec2)
         FLOAT_PROPERTY_REF(addVec3, glm::vec3, GuiVec3)
         PROPERTY_REF(addDirection, glm::vec3, GuiDirection)
-        FLOAT_PROPERTY_REF(addVec4, glm::vec4, GuiVec3)
+        FLOAT_PROPERTY_REF(addVec4, glm::vec4, GuiVec4)
         PROPERTY_REF(addColor, glm::vec4, GuiColor)
 
         // vvv types
@@ -319,5 +319,69 @@ public:
     virtual void updateGui() = 0;
 
 };
+
+
+
+// Implementations for templated add functions
+
+template<class T>
+gui_id GuiInterface::GuiElementList::add(T *v, const std::string &name, GuiType type, int decimals) {
+    auto entry = new GuiEntry<T>();
+    entry->id = m_id_counter++;
+    entry->type = type;
+    entry->value = v;
+    entry->label = name;
+    entry->floatDecimals = decimals;
+
+    m_entries.emplace_back(entry);
+    return entry->id;
+}
+
+template<class T>
+gui_id GuiInterface::GuiElementList::add(T *v, const std::string &name, GuiType type, T min, T max, T step, int decimals) {
+    auto entry = new GuiEntry<T>();
+    entry->id = m_id_counter++;
+    entry->type = type;
+    entry->value = v;
+    entry->label = name;
+    entry->min = min;
+    entry->max = max;
+    entry->step = step;
+    entry->floatDecimals = decimals;
+
+    m_entries.push_back(entry);
+    return entry->id;
+}
+
+// --- getter setter ---
+template<class T>
+gui_id GuiInterface::GuiElementList::add(std::function<void(T)> setter, std::function<T()> getter, const std::string &name, GuiType type, int decimals) {
+    auto entry = new GuiEntry<T>();
+    entry->id = m_id_counter++;
+    entry->type = type;
+    entry->getter = getter;
+    entry->setter = setter;
+    entry->label = name;
+    entry->floatDecimals = decimals;
+
+    m_entries.push_back(entry);
+    return entry->id;
+}
+
+template<class T> gui_id GuiInterface::GuiElementList::add(std::function<void(T)> setter, std::function<T()> getter, const std::string &name, GuiType type, T min, T max, T step, int decimals) {
+    auto entry = new GuiEntry<T>();
+    entry->id = m_id_counter++;
+    entry->type = type;
+    entry->getter = getter;
+    entry->setter = setter;
+    entry->label = name;
+    entry->min = min;
+    entry->max = max;
+    entry->step = step;
+    entry->floatDecimals = decimals;
+
+    m_entries.push_back(entry);
+    return entry->id;
+}
 
 } // namespace vvv
