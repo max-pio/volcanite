@@ -25,6 +25,11 @@ public:
     ~CompressedSegmentationVolumeRenderer() { resetGPU(); m_compressed_segmentation_volume.reset(); }
 
     RendererOutput renderNextFrame(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override;
+
+    void configureExtensionsAndLayersAndFeatures(GpuContextRwPtr ctx) override {
+        ctx->enableDeviceExtension("VK_EXT_memory_budget");
+    }
+
     /**
      * Initializes Descriptorsets and calls pipeline initialization.
      */
@@ -112,8 +117,11 @@ private:
     int m_max_decoding_lod = 5;
     int m_empty_label = 0;
     std::string m_gui_resolution_text;
+    std::string m_gui_device_mem_text;
     std::optional<std::string> m_download_frame_to_image_file = {};
 
+
+    void updateDeviceMemoryUsage();
 
     void updateUniformDescriptorset();
 

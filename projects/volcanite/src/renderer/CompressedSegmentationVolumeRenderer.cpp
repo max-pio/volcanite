@@ -217,6 +217,11 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         }
     }
 
+    // Update GPU memory usage regularly
+    if(m_frame % 300  == 0u) {
+        updateDeviceMemoryUsage();
+    }
+
     // update tracking variables
     m_frame = m_frame >= UINT32_MAX ? 0u : m_frame + 1u;
 
@@ -229,6 +234,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
 void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     setCtx(ctx);
+    updateDeviceMemoryUsage();
+    Logger(DEBUG) << "Device memory on startup: " << m_gui_device_mem_text;
+
     // allocate GPU buffers for our data
     size_t bricks_in_volume = 0u;
     size_t lods_in_volume = 0u;
@@ -639,6 +647,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     dev->addBool(&m_clear_accum_every_frame, "Clear Accumulation Every Frame");
     dev->addSeparator();
     g->addDynamicText(&m_gui_resolution_text);
+    g->addDynamicText(&m_gui_device_mem_text);
     g->addAction([this]() {
         if (!pfd::settings::available()) {
             Logger(WARN) << "Can not open file dialog for screenshot export. Using default file ./volcanite_output.png";
@@ -694,5 +703,16 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         }
     }, "Export Parameters");
 }
+
+    void CompressedSegmentationVolumeRenderer::updateDeviceMemoryUsage() {
+        auto bu = getMemoryHeapBudgetAndUsage(*getCtx());
+        size_t total = getMemoryHeapSize(*getCtx());
+        std::stringstream ss;
+        ss.precision(4);
+        ss << "GPU Memory: " << static_cast<float>(bu.second) / 1073741824.f << "/"
+                             << static_cast<float>(bu.first) / 1073741824.f << "/"
+                             << static_cast<float>(total) / 1073741824.f << " GB (used/avail/total)";
+        m_gui_device_mem_text = ss.str();
+    }
 
 } // namespace vvv
