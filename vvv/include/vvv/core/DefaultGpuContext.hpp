@@ -57,8 +57,8 @@ public:
         m_builder.deviceFeatures2.pNext = featuresKhr;
     }
 
-    bool hasDeviceExtension(const char *name) override;
-    bool hasInstanceExtension(const char *name) override;
+    bool hasDeviceExtension(const char *name) const override;
+    bool hasInstanceExtension(const char *name) const override;
     bool hasEnabledInstanceExtension(const char *name) override;
     bool hasEnabledInstanceLayer(const char *name) override;
     PFN_vkVoidFunction getDeviceFunction(const char *name) override;

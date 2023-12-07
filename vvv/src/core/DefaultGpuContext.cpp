@@ -9,9 +9,6 @@
 #include <thread>
 #include <cstdlib>
 
-bool vvv::DefaultGpuContext::hasDeviceExtension(const char *name) { return true; }   // TODO(Reiner): is implemented below?
-bool vvv::DefaultGpuContext::hasInstanceExtension(const char *name) { return true; } // TODO(Reiner): is implemented below?
-
 bool vvv::DefaultGpuContext::hasEnabledInstanceExtension(const char *name) { return std::find(m_builder.instanceExtensions.begin(), m_builder.instanceExtensions.end(), name) != m_builder.instanceExtensions.end(); }
 bool vvv::DefaultGpuContext::hasEnabledInstanceLayer(const char *name) { return std::find(m_builder.instanceLayers.begin(), m_builder.instanceLayers.end(), name) != m_builder.instanceLayers.end(); }
 
@@ -53,7 +50,6 @@ void vvv::DefaultGpuContext::createGpuContext() {
 
     // GpuContext provides a simple synchronization API using a timeline semaphore
     physicalDeviceFeaturesV12().setTimelineSemaphore(true);
-//    physicalDeviceFeatures().setWideLines(true);
     physicalDeviceFeaturesV13().setDynamicRendering(true);
 
     createInstance();
@@ -114,6 +110,9 @@ bool is_device_extension_supported(vk::PhysicalDevice device, std::string name) 
     }
     return false;
 }
+
+bool vvv::DefaultGpuContext::hasDeviceExtension(const char *name) const { return is_device_extension_supported(m_gpu.physicalDevice, std::string(name)); }
+bool vvv::DefaultGpuContext::hasInstanceExtension(const char *name) const { return is_instance_extension_supported(std::string(name)); }
 
 bool log_supported_device_extensions(vk::PhysicalDevice device) {
     const auto extensions = device.enumerateDeviceExtensionProperties(); //get number of extensions

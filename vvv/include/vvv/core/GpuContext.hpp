@@ -214,11 +214,11 @@ public:
      */
     virtual std::shared_ptr<const WindowingSystemIntegration> getWsi() const { return nullptr; }
 
-    virtual bool hasDeviceExtension(char const *name) = 0;
-    virtual bool hasDeviceExtension(std::string name) { return hasDeviceExtension(name.c_str()); }
+    virtual bool hasDeviceExtension(char const *name) const = 0;
+    virtual bool hasDeviceExtension(std::string name) const { return hasDeviceExtension(name.c_str()); }
 
-    virtual bool hasInstanceExtension(char const *name) = 0;
-    virtual bool hasInstanceExtension(std::string name) { return hasInstanceExtension(name.c_str()); }
+    virtual bool hasInstanceExtension(char const *name) const = 0;
+    virtual bool hasInstanceExtension(std::string name) const { return hasInstanceExtension(name.c_str()); }
 
     virtual PFN_vkVoidFunction getDeviceFunction(char const *name) = 0;
     virtual PFN_vkVoidFunction getDeviceFunction(std::string name) { return getDeviceFunction(name.c_str()); }
