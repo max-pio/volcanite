@@ -207,6 +207,12 @@ void writePixel(ivec2 pixel, vec4 color, float depth) {
 
 // ToDo: we *may* want to introduce a random state here, init with g_frame and use last [returned rand vec3].z as next
 struct RayMarchState {
+    //DDA traversal parameter
+    vec3 side_dist;     // distance to the next cell in each dimension
+    vec3 normal;
+    ivec3 stp;
+    vec3 delta;
+    // ray marching
     int step;           // how many ray marching steps where done so far
     // ToDo: pos and voxel are dependend on t should we waste registers here?
     float t;            // ray distance
@@ -218,6 +224,18 @@ struct RayMarchState {
     float out_depth;    // depth to be written to the depth buffer. negative depth indicates an invalid hit.
 };
 
+
+RayMarchState dda_step(RayMarchState state, Ray ray) {
+    //float next_t = min(state.side_dist.x, min(state.side_dist.y, state.side_dist.z));
+    vec3 mask = vec3(lessThanEqual(state.side_dist.xyz, min(state.side_dist.yzx, state.side_dist.zxy)));
+
+    state.t = dot(mask, state.side_dist);
+
+    state.side_dist += state.delta * mask;
+    state.voxel += state.stp * ivec3(mask);
+    state.normal = -mask * state.stp * vec3(1.0);
+    return state;
+}
 
 void main() {
     // obtain pixel and fragment coordinates
@@ -257,8 +275,6 @@ void main() {
     // As we move this pixel around, the progressive accumulation averages this with the rendered colors.
     bool debug_view_visible = (pixel.x + pixel.y) % 3u != (g_frame % 3u); // < (viewport_size.x + viewport_size.y) / 2u);
 
-    // ToDo: DDA Traversal loop over empty bricks
-
     // ray marching loop
     RayMarchState state;
     state.step = 0;
@@ -280,11 +296,24 @@ void main() {
         return;
     }
 
+    // DDA traversal initialisation
+    state.voxel = ivec3(floor(state.pos + 0.)); // DDA traversal start voxel
+    // delta.i equals to the length the ray has to travel to hit the next cell in i direction.
+    // side_dist is the distance from the ray origin to the next cell in each dimension.
+    vec3 rdinv = 1.0 / ray.direction;
+    state.stp = ivec3( ray.direction.x >= 0.0 ? 1.0 : -1.0, ray.direction.y >= 0.0 ? 1.0 : -1.0, ray.direction.z >= 0.0 ? 1.0 : -1.0);
+    state.delta = min(rdinv * state.stp, 1.0);
+    state.side_dist = abs((vec3(state.voxel) + max(state.stp, vec3(0.0)) - state.pos) * state.delta);
+
     for(; state.step < max_steps; state.step++) {
-        // ToDo: replace with DDA traversal. remove unnecessary variables in RayMarchState
-        state.t += g_stepSize;
-        state.pos = ray.origin + state.t * ray.direction;
-        state.voxel = ivec3(floor(state.pos));  // floor is required so that -0.1f is not 0
+        if (g_dda_traversal) {
+            state = dda_step(state, ray);
+        } else {
+            // ray marching
+            state.t += g_stepSize;
+            state.pos = ray.origin + state.t * ray.direction;
+            state.voxel = ivec3(floor(state.pos));  // floor is required so that -0.1f is not 0
+        }
 
         // out of bounds and empty space check
         if(isEmptySpace(state.voxel)
@@ -371,9 +400,7 @@ void main() {
             }
 
             // this becomes a shadow ray / ambient occlusion ray now
-            ray.origin = state.pos;
-            state.t = g_stepSize/2.f;
-            if(randomVec3(pixel, 57.f + 2.f * float(g_frame + state.step)).x < g_shadow_ao_ray_distr) {
+            if (randomVec3(pixel, 57.f + 2.f * float(g_frame + state.step)).x < g_shadow_ao_ray_distr) {
                 // no AO rays in interactive mode
                 if(g_camera_still_frames == 0)
                     break;
@@ -386,6 +413,21 @@ void main() {
                 // to light source
                 ray.direction = g_light_direction;
                 state.ray_type = RT_SHADOW_RAY;
+            }
+
+            if (g_dda_traversal) {
+                ray.origin = state.voxel;
+                vec3 rdinv = 1.0 / ray.direction;
+                state.stp = ivec3(ray.direction.x >= 0.0 ? 1.0 : -1.0, ray.direction.y >= 0.0 ? 1.0 : -1.0, ray.direction.z >= 0.0 ? 1.0 : -1.0);
+                state.delta = min(rdinv * state.stp, 1.0);
+                state.side_dist = abs((vec3(state.voxel) + max(state.stp, vec3(0.0)) - ray.origin) * state.delta);
+
+                // perform one dda_step to avoid self shadowing.
+                state = dda_step(state, ray);
+
+            } else {
+                ray.origin = state.pos;
+                state.t = g_stepSize/2.f;
             }
         }
     }
