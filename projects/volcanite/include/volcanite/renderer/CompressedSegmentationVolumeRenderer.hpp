@@ -19,8 +19,9 @@ namespace vvv {
 class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuContext {
 
 public:
-    CompressedSegmentationVolumeRenderer(bool release_version = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false), m_camHash(0ul),
-                                                                         m_framesSinceCameraMove(0), m_frame(0u), m_release_version(release_version) {}
+    CompressedSegmentationVolumeRenderer(bool release_version = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false),
+                                                                         m_camHash(0ul), m_resolution(1920,1080), m_framesSinceCameraMove(0), m_frame(0u),
+                                                                         m_release_version(release_version) {}
 
     ~CompressedSegmentationVolumeRenderer() { resetGPU(); m_compressed_segmentation_volume.reset(); }
 
@@ -51,13 +52,27 @@ public:
      */
     void resetGPU();
 
-    /**
-     * We limit the render resolution to max. 4K (4096x2160) or Full-HD.
-     */
+    void setRenderResolution(vk::Extent2D resolution) {
+        m_resolution = resolution;
+
+        // trigger a "swapchain" recreation
+        if(getCtx()) {
+            getCtx()->getDevice().waitIdle();
+            releaseSwapchain();
+            initSwapchainResources();
+        }
+    }
+
     vk::Extent2D getRenderResolution() const {
+        return m_resolution;
+    }
+
+    /**
+    * We limit the render resolution to max. 4K (4096x2160) or Full-HD.
+    */
+    void updateRenderResolutionFromWSI() {
         // ToDo: remove hardcoded render resolution. Move the WSI dependency to Application / HeadlessRendering or the Renderer class?
-        const vk::Extent2D max_resolution = {1920u, 1080u};
-        //const vk::Extent2D max_resolution = {4096u, 2160u};
+        const vk::Extent2D max_resolution = {4096u, 2160u};
 
         auto wsi = getCtx()->getWsi();
         // context is associated with a window
@@ -71,11 +86,7 @@ public:
                 screen.width = static_cast<uint32_t>(static_cast<float>(screen.width) / oversizeFactor);
                 screen.height = static_cast<uint32_t>(static_cast<float>(screen.height) / oversizeFactor);
             }
-            return screen;
-        }
-        // headless rendering
-        else {
-            return max_resolution;
+            m_resolution = screen;
         }
     }
 
@@ -171,6 +182,7 @@ private:
 
     bool m_release_version = false;     // set to true if this is used in a renderer to release. Some parameters are hidden / set to default values in that case.
 
+    vk::Extent2D m_resolution;
     size_t m_camHash;       // todo: make multibuffered
     uint32_t m_framesSinceCameraMove;
     uint32_t m_frame;

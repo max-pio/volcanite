@@ -419,8 +419,7 @@ void Application::createWindow() {
 
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    vk::Extent2D windowExtent(static_cast<uint32_t>(1280 * getScreenContentScale()), static_cast<uint32_t>(720 * getScreenContentScale()));
-    m_window = glfwCreateWindow(windowExtent.width, windowExtent.height, getAppName().c_str(), nullptr, nullptr);
+    m_window = glfwCreateWindow(static_cast<int>(m_startup_resolution.width), static_cast<int>(m_startup_resolution.height), getAppName().c_str(), nullptr, nullptr);
     glfwSetWindowUserPointer(m_window, this);
     glfwSetScrollCallback(m_window, &Application::glfwUpdateScrollWheel);
     glfwSetFramebufferSizeCallback(m_window, framebufferResizeCallback);
@@ -1128,13 +1127,17 @@ float Application::getScreenContentScale() const {
 }
 
 void Application::setWindowSize(int width, int height) const {
-    glfwSetWindowSize(m_window, width, height);
+    if(m_window)
+        glfwSetWindowSize(m_window, width, height);
 }
 
 void Application::setWindowResizable(bool resizable) const {
-    glfwSetWindowAttrib(m_window, GLFW_RESIZABLE, resizable);
+    if(m_window)
+        glfwSetWindowAttrib(m_window, GLFW_RESIZABLE, resizable);
 }
 
 bool Application::isWindowResizable() const {
-    return static_cast<bool>(glfwGetWindowAttrib(m_window, GLFW_RESIZABLE));
+    if(m_window)
+        return static_cast<bool>(glfwGetWindowAttrib(m_window, GLFW_RESIZABLE));
+    return false;
 }

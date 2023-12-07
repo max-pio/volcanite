@@ -32,6 +32,7 @@ public:
     Mode rendering_mode = GUI_APP_RENDERING;
     std::string rendering_config_file;
     std::string screenshot_output_file;
+    uint32_t render_resolution[2] = {1920, 1080};
     bool stream_lod;
     size_t cache_size_MB = 1024ul;
     bool show_development_gui = false;
@@ -52,7 +53,7 @@ public:
     static std::string getHelpString() {
         std::stringstream ss;
         ss << "EXAMPLES:" << std::endl;
-        ss << "./volcanite --headless -i screenshot.png volume.vti" << std::endl <<
+        ss << "./volcanite --headless -r 1920x1080 -i screenshot.png volume.vti" << std::endl <<
         "\tExports a render image without starting the application." << std::endl;
         ss << "./volcanite --headless -b 64 -s 2 -c out.csgv volume.vti" << std::endl <<
         "\tExports a strongly compressed volume." << std::endl;
@@ -103,6 +104,7 @@ public:
             ValueArg<uint32_t> cachesizeArg("", "cache-size", "Size in MB to allocate for GPU renderer brick cache.", false, va.cache_size_MB, "size", cmd);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup", false, va.screenshot_output_file, "file", cmd);
+            ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height]", false, "", "file", cmd);
             ValueArg<std::string> renderconfigArg("", "config", "Import render parameters from config file.", false, va.rendering_config_file, "file", cmd);
             // general arguments
             SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
@@ -127,6 +129,16 @@ public:
             // rendering arguments
             va.rendering_config_file = renderconfigArg.getValue();
             va.screenshot_output_file = imageArg.getValue();
+            if(!resolutionArg.getValue().empty()) {
+                std::stringstream ss(resolutionArg.getValue());
+                ss >> va.render_resolution[0];
+                ss.ignore();
+                ss >> va.render_resolution[1];
+                if (ss.fail())
+                    throw ArgException(resolutionArg.longID() + " must have the format '[width]x[height]'", resolutionArg.longID());
+                if(va.render_resolution[0] == 0u || va.render_resolution[1] == 0u)
+                    throw ArgException(resolutionArg.longID() + " must contain positive integers only", resolutionArg.longID());
+            }
             va.stream_lod = streamlodArg.getValue();
             va.cache_size_MB = cachesizeArg.getValue();
             va.show_development_gui = devArg.getValue();

@@ -38,6 +38,8 @@ int export_texture(Texture* tex, const std::string export_file_path) {
 }
 
 int tryImportRenderConfig(VolcaniteArgs& args, std::shared_ptr<CompressedSegmentationVolumeRenderer> renderer) {
+    // set the startup resolution
+    //renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
     // read optional config file
     if(!args.rendering_config_file.empty()) {
         std::ifstream in(args.rendering_config_file);
@@ -145,6 +147,7 @@ int volcanite(int argc, char *argv[]) {
         if (!args.headless) {
             bool vsync = true;  // ToDo: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
             auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
+//            app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
             app->setVSync(vsync);
             app->acquireResources();
             tryImportRenderConfig(args, renderer);

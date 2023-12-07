@@ -377,29 +377,29 @@ void CompressedSegmentationVolumeRenderer::releaseShaderResources() {
 
 
 void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
-    const auto screen = getRenderResolution();
+    updateRenderResolutionFromWSI();
 
     // tell the pass the new invocation size
-    m_pass->setImageInfo(screen.width, screen.height);
+    m_pass->setImageInfo(m_resolution.width, m_resolution.height);
 
     // recreate all swapchain image sized textures
     vvv::AwaitableList reinitDone;
-    m_feedback_tex[0] = m_pass->reflectTexture("feedbackIn", {.width = screen.width, .height = screen.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
-    m_feedback_tex[1] = m_pass->reflectTexture("feedbackOut", {.width = screen.width, .height = screen.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_feedback_tex[0] = m_pass->reflectTexture("feedbackIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_feedback_tex[1] = m_pass->reflectTexture("feedbackOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     for (auto & texture : m_feedback_tex) {
         texture->ensureResources();
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
     }
     m_inpaintedOutColor = m_pass->reflectTextures(
-        "inpaintedOutColor", {.width = screen.width, .height = screen.height, .format = vk::Format::eR8G8B8A8Unorm, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+        "inpaintedOutColor", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8B8A8Unorm, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     for (auto& texture : *m_inpaintedOutColor){
         texture->ensureResources();
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
     }
 
-    m_gui_resolution_text = "Render resolution: " + std::to_string(screen.width) + "x" + std::to_string(screen.height);
+    m_gui_resolution_text = "Render resolution: " + std::to_string(m_resolution.width) + "x" + std::to_string(m_resolution.height);
     getCtx()->sync->hostWaitOnDevice(reinitDone);
 
     // trigger a temporal accumulation flush
@@ -407,8 +407,10 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
 }
 
 void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
-    m_mostRecentFrame->texture = nullptr;
-    m_mostRecentFrame->renderingComplete = {};
+    if(m_mostRecentFrame.has_value()) {
+        m_mostRecentFrame->texture = nullptr;
+        m_mostRecentFrame->renderingComplete = {};
+    }
     if (m_outColor)
         m_outColor = nullptr;
     if(m_outDepth)
@@ -432,7 +434,7 @@ void CompressedSegmentationVolumeRenderer::resetGPU() {
 
 void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
     const auto camera = getCamera();
-    const auto screenExtent = getRenderResolution();
+    updateRenderResolutionFromWSI();
 
     glm::vec3 voldim = glm::vec3(m_compressed_segmentation_volume->getVolumeDim());
     glm::vec3 physical_voldim = voldim * m_voxel_size;
@@ -498,19 +500,19 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<glm::mat4x4>("g_world_to_model_space", world_to_model_space);
         m_urender_info->setUniform<glm::mat3x3>("g_world_to_model_space_dir", glm::mat3(world_to_model_space));
         m_urender_info->setUniform<float>("g_world_to_model_space_scaling", scalingFactor);
-        const auto world_to_projection_space = camera->get_world_to_projection_space(screenExtent);
+        const auto world_to_projection_space = camera->get_world_to_projection_space(m_resolution);
         const auto projection_to_world_space = glm::inverse(world_to_projection_space);
         m_urender_info->setUniform<glm::mat4x4>("g_world_to_projection_space", world_to_projection_space);
         m_urender_info->setUniform<glm::mat4x4>("g_projection_to_world_space", projection_to_world_space);
         m_urender_info->setUniform<glm::mat4x4>("g_projection_to_view_space",
-                                                glm::inverse(camera->get_view_to_projection_space(screenExtent)));
+                                                glm::inverse(camera->get_view_to_projection_space(m_resolution)));
         m_urender_info->setUniform<glm::mat4x4>("g_view_to_world_space",
                                                 glm::inverse(camera->get_world_to_view_space()));
         m_urender_info->setUniform<glm::mat4x4>("g_view_to_projection_space",
-                                                camera->get_view_to_projection_space(screenExtent));
+                                                camera->get_view_to_projection_space(m_resolution));
         m_urender_info->setUniform<glm::mat4x4>("g_world_to_view_space", camera->get_world_to_view_space());
         glm::mat4 projection_to_world_space_no_translation = projection_to_world_space;
-        glm::vec2 viewportScale(2.0f / screenExtent.width, 2.0f / screenExtent.height);
+        glm::vec2 viewportScale(2.0f / m_resolution.width, 2.0f / m_resolution.height);
         glm::mat4 pixel_to_ray_direction_projection_space({viewportScale[0], 0.0f, 0.0f, 0.0f},
                                                           {0.0f, viewportScale[1], 0.0f, 0.0f},
                                                           {0.5f * viewportScale[0] - 1.0f,

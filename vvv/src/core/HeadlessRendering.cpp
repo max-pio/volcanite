@@ -25,6 +25,8 @@ void HeadlessRendering::recreateSwapchain() {
     // (Speak: Run the destructor up to the swapchain deletion)
     m_renderer->releaseSwapchain();
     m_renderer->initSwapchainResources();
+
+    m_pendingRecreation = false;
 }
 
 RendererOutput HeadlessRendering::renderFrame(AwaitableList awaitBeforeExecution) {
@@ -131,10 +133,6 @@ void HeadlessRendering::releaseResources() {
     destroyGpuContext();
 }
 
-vk::Extent2D HeadlessRendering::getRenderResolution() const {
-    return m_renderResolution;
-}
-
 void HeadlessRendering::recreateShaderResources() {
     if (!getDevice()) {
         return;
@@ -164,14 +162,6 @@ void HeadlessRendering::recreateInnerRenderingEngine() {
     m_renderer->initResources(this);
     m_renderer->initShaderResources();
     m_renderer->initSwapchainResources();
-}
-
-
-
-void HeadlessRendering::setRenderResolution(int width, int height) {
-    m_renderResolution.width = width;
-    m_renderResolution.height = height;
-    m_pendingRecreation = true;
 }
 
 } // namespace vvv

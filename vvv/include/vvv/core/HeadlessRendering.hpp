@@ -16,7 +16,7 @@ class HeadlessRendering : public vvv::DefaultGpuContext, public std::enable_shar
 private:
     HeadlessRendering(std::string appName, std::shared_ptr<vvv::Renderer> renderer, std::shared_ptr<vvv::DebugUtilities> debugUtilities)
             : DefaultGpuContext({.debugUtilities = std::move(debugUtilities), .appName = std::move(appName)}),
-            m_renderer(std::move(renderer)), m_renderResolution(1920, 1080), m_pendingRecreation(false)
+            m_renderer(std::move(renderer)), m_pendingRecreation(false)
     {
         // choose a camera controller for the renderer
         m_renderer->setCamera(std::make_shared<vvv::Camera>(false));
@@ -54,9 +54,6 @@ public:
 //    void execAsync();
 //    std::thread execAsyncAttached();
 
-    vk::Extent2D getRenderResolution() const;
-    void setRenderResolution(int width, int height);
-
     vvv::Camera *getCamera() const { return m_renderer->getCamera().get(); }
 
     ~HeadlessRendering() { releaseResources(); }
@@ -74,7 +71,6 @@ private:
     RendererOutput renderFrame(AwaitableList awaitBeforeExecution);
 
     std::shared_ptr<vvv::Renderer> m_renderer;
-    vk::Extent2D m_renderResolution;
     bool m_pendingRecreation;
 
     struct {

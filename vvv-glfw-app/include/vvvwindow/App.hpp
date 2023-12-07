@@ -15,7 +15,8 @@
 class Application : public vvv::DefaultGpuContext, public vvv::WindowingSystemIntegration, public std::enable_shared_from_this<Application> {
 private:
     Application(std::string appName, std::shared_ptr<vvv::Renderer> renderer, std::shared_ptr<vvv::DebugUtilities> debugUtilities)
-        : DefaultGpuContext({.debugUtilities = debugUtilities, .appName = appName}), m_renderer(renderer), m_gui(std::make_unique<GuiImgui>(this))
+        : DefaultGpuContext({.debugUtilities = debugUtilities, .appName = appName}), m_renderer(renderer),
+        m_gui(std::make_unique<GuiImgui>(this)), m_startup_resolution(1920, 1080)
         {
             // choose a camera controller for the renderer
             m_renderer->setCamera(std::make_shared<vvv::Camera>(false));
@@ -64,6 +65,7 @@ public:
     void execAsync();
     std::thread execAsyncAttached();
 
+    void setStartupWindowSize(vk::Extent2D resolution) { m_startup_resolution = resolution; }
     vk::Extent2D getScreenExtent() const override;
 
     float getScreenContentScale() const override;
@@ -154,6 +156,7 @@ private:
 
     std::shared_ptr<vvv::Renderer> m_renderer;
 
+    vk::Extent2D m_startup_resolution;
     bool m_resources_acquired = false;
     GLFWwindow *m_window = nullptr;
     static double s_mouse_scroll_wheel;
