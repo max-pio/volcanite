@@ -212,6 +212,7 @@ struct RayMarchState {
     vec3 normal;
     ivec3 stp;
     vec3 delta;
+
     // ray marching
     int step;           // how many ray marching steps where done so far
     // ToDo: pos and voxel are dependend on t should we waste registers here?
@@ -226,14 +227,25 @@ struct RayMarchState {
 
 
 RayMarchState dda_step(RayMarchState state, Ray ray) {
-    //float next_t = min(state.side_dist.x, min(state.side_dist.y, state.side_dist.z));
+//    float next_t = min(state.side_dist.x, min(state.side_dist.y, state.side_dist.z));
     vec3 mask = vec3(lessThanEqual(state.side_dist.xyz, min(state.side_dist.yzx, state.side_dist.zxy)));
-
-    state.t = dot(mask, state.side_dist);
-
+    state.t = dot(mask, state.side_dist);// + state.t_0;
     state.side_dist += state.delta * mask;
     state.voxel += state.stp * ivec3(mask);
-    state.normal = -mask * state.stp * vec3(1.0);
+    state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
+//    state.normal = -mask * state.stp * vec3(1.0);
+    return state;
+}
+
+RayMarchState dda_init(RayMarchState state, Ray ray) {
+    // DDA traversal initialisation
+    // delta.i equals to the length the ray has to travel to hit the next cell in i direction.
+    // side_dist is the distance from the ray origin to the next cell in each dimension.
+    vec3 rdinv = 1.0 / ray.direction;
+    state.stp = ivec3( ray.direction.x >= 0.0 ? 1.0 : -1.0, ray.direction.y >= 0.0 ? 1.0 : -1.0, ray.direction.z >= 0.0 ? 1.0 : -1.0);
+    state.delta = abs(rdinv); // min(rdinv * state.stp, 1.0);//
+    state.side_dist = abs((vec3(state.voxel) + max(state.stp, vec3(0.0)) - ray.origin) * state.delta);
+
     return state;
 }
 
@@ -296,14 +308,8 @@ void main() {
         return;
     }
 
-    // DDA traversal initialisation
     state.voxel = ivec3(floor(state.pos + 0.)); // DDA traversal start voxel
-    // delta.i equals to the length the ray has to travel to hit the next cell in i direction.
-    // side_dist is the distance from the ray origin to the next cell in each dimension.
-    vec3 rdinv = 1.0 / ray.direction;
-    state.stp = ivec3( ray.direction.x >= 0.0 ? 1.0 : -1.0, ray.direction.y >= 0.0 ? 1.0 : -1.0, ray.direction.z >= 0.0 ? 1.0 : -1.0);
-    state.delta = min(rdinv * state.stp, 1.0);
-    state.side_dist = abs((vec3(state.voxel) + max(state.stp, vec3(0.0)) - state.pos) * state.delta);
+    state = dda_init(state, ray);
 
     for(; state.step < max_steps; state.step++) {
         if (g_dda_traversal) {
@@ -416,14 +422,11 @@ void main() {
             }
 
             if (g_dda_traversal) {
-                ray.origin = state.voxel;
-                vec3 rdinv = 1.0 / ray.direction;
-                state.stp = ivec3(ray.direction.x >= 0.0 ? 1.0 : -1.0, ray.direction.y >= 0.0 ? 1.0 : -1.0, ray.direction.z >= 0.0 ? 1.0 : -1.0);
-                state.delta = min(rdinv * state.stp, 1.0);
-                state.side_dist = abs((vec3(state.voxel) + max(state.stp, vec3(0.0)) - ray.origin) * state.delta);
+                ray.origin = state.pos;
+                ray.direction = normalize(ray.direction);
 
-                // perform one dda_step to avoid self shadowing.
-                state = dda_step(state, ray);
+                state = dda_init(state, ray);
+//                state = dda_step(state, ray); // performs one dda_step to avoid self shadowing.
 
             } else {
                 ray.origin = state.pos;
