@@ -54,6 +54,7 @@ namespace vvv {
         }
 
         static const glm::ivec2* asVec(const int sequence[][2]) { return reinterpret_cast<const glm::ivec2*>(sequence); };
+        static const glm::ivec2* haltonNxNVec(int power_of_two) { return asVec(haltonNxN(power_of_two)); }
     };
 
 } // namespace vvv
