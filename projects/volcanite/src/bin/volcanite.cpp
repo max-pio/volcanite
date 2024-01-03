@@ -14,6 +14,7 @@
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "vvv/volren/Volume.hpp"
+#include "volcanite/compression/CSGVMetaData.hpp"
 
 using namespace vvv;
 
@@ -89,6 +90,9 @@ int volcanite(int argc, char *argv[]) {
         glm::uvec3 max_chunk_id = glm::uvec3(args.chunk_files[0], args.chunk_files[1], args.chunk_files[2]);
         if(!args.verbose)
             Logger(INFO) << "compressing segmentation volume " << args.input_file << (args.chunked ? " with max. chunks " + str(max_chunk_id) : "");
+
+//        CSGVMetaData msgv;
+//        msgv.importOrProcessVolume(args.input_file, args.chunked, max_chunk_id);
 
         compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
                                                                                   args.compress_export_file,

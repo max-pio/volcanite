@@ -20,6 +20,7 @@ set(VOLCANITE_HEADERS
         data/shader/cpp_glsl_include/csgv_constants.h
         include/volcanite/compression/CompressedSegmentationVolume.hpp
         include/volcanite/compression/CompSegVolHandler.hpp
+        include/volcanite/compression/CSGVMetaData.hpp
         include/volcanite/compression/rans.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp
