@@ -594,7 +594,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g->addColor(&m_background_color_b, "Background Color B");
     g->addFloat(&m_step_size, "Step Size", 0.0005f, 0.01f, 0.0005f, 4);
     dev->addInt(&m_max_steps, "Max Steps", 1, 2048, 1);
-    dev->addInt(&m_subsampling, "Subsampling Factor (2^n)", 0, 2, 1);
+    g->addInt(&m_subsampling, "Subsampling Factor (2^n)", 0, 2, 1);
 //ToDo: addFloatRange2 to the GUIInterface
 #ifdef IMGUI
     g->addCustomCode(
