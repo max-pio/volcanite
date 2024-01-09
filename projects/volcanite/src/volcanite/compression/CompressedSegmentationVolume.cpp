@@ -273,11 +273,11 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
 
 float CompressedSegmentationVolume::separateDetail() {
     if(!m_detail_encoding.empty())
-        throw std::runtime_error("Detail segmentation was already performed!");
+        throw std::runtime_error("Detail separation was already performed!");
     if(m_encoding.empty())
         throw std::runtime_error("Segmentation volume is not yet compressed! Call compress() before performing detail separation.");
     if(m_rANS_mode != DOUBLE_TABLE_RANS)
-        throw std::runtime_error("Detail segmentation can only be used in combination with rANS in double table mode!");
+        throw std::runtime_error("Detail separation can only be used in combination with rANS in double table mode!");
 
     const size_t max_brick_index = m_brick_starts.size() - 1;
 
@@ -952,6 +952,10 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
         fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
         m_detail_encoding.resize(size);
         fin.read(reinterpret_cast<char *>(&m_detail_encoding[0]), static_cast<long>(size * sizeof(uint32_t)));
+    }
+    else {
+        m_detail_starts.clear();
+        m_detail_encoding.clear();
     }
 
     char single_byte;
