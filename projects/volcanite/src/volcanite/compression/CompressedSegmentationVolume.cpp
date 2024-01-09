@@ -582,8 +582,8 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     m_volume_dim = volume_dim;
     glm::uvec3 brickCount = getBrickCount();
     if(verbose) {
-        Logger(INFO) << " running with " << m_cpu_threads << " threads on " << std::thread::hardware_concurrency() << " CPU cores";
-        Logger(INFO) << " brick count: " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z) << " with brick size " << m_brick_size << "^3";
+        Logger(DEBUG) << " running with " << m_cpu_threads << " threads on " << std::thread::hardware_concurrency() << " CPU cores";
+        Logger(DEBUG) << " brick count: " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z) << " with brick size " << m_brick_size << "^3";
     }
     m_encoding.clear();
     size_t reserved_size = static_cast<size_t>(volume_dim.x) * volume_dim.y * volume_dim.z / 12ul / 4ul; // assume that we have a compression rate below 1/12

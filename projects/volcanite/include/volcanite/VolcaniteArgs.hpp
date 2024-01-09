@@ -27,6 +27,7 @@ public:
     std::string input_file;                  // must be .csgv if compress is false, otherwise vti / raw / hdf5
     bool chunked = false;                    // if the first 3 {} in the input string should be chunk ids formatted
     uint32_t chunk_files[3] = {0u, 0u, 0u};  // max. xyz index of chunk files. e.g. (1,3,0) would load 8 chunk files
+    uint32_t threads = 0;                    // number of CPU threads (0 = system supported concurrent threads)
 
     // rendering args
     Mode rendering_mode = GUI_APP_RENDERING;
@@ -93,6 +94,7 @@ public:
             ValueArg<std::string> compresspathArg("c", "compress", "Export the compressed volume to given csgv file.", false, va.compress_export_file, "file", cmd);
             ValueArg<std::string> chunkedArg("", "chunked", "Compress chunked segmented volume using formatted <volume> path with inclusive x, y, and z chunk file ranges as: \".*{[0..<xn>]}.*{[0..<yn>]}.*{[0..<zn>]}.*\".", false, "", "xn,yn,zn", cmd);
             ValueArg<uint32_t> subsamplingArg("", "freq-sampling", "Compression prepass acceleration by given factor cubed. Affects strength 1 or 2 only.", false, va.freq_subsampling, "int", cmd);
+            ValueArg<uint32_t> threadsArg("", "threads", "Number of CPU threads for (de)compression parallelization.", false, va.threads, "int", cmd);
             ValuesConstraint<uint32_t> allowedStrength({0u, 1u, 2u});
             ValueArg<uint32_t> strengthArg("s", "strength", "Compress with more expensive but stronger variable bit-length encoding (1). Use two frequency tables for even stronger compression (2).", false, 2, &allowedStrength);
             cmd.add(strengthArg);
@@ -183,6 +185,7 @@ public:
                 const CompressedSegmentationVolume::RANSMode _strengths[] = {CompressedSegmentationVolume::NO_RANS, CompressedSegmentationVolume::SINGLE_TABLE_RANS, CompressedSegmentationVolume::DOUBLE_TABLE_RANS};
                 va.rANS_mode = _strengths[strengthArg.getValue()];
                 va.freq_subsampling = subsamplingArg.getValue();
+                va.threads = threadsArg.getValue();
                 va.chunked = !chunkedArg.getValue().empty();
                 if(va.chunked) {
                     std::string chunk_indices = chunkedArg.getValue();

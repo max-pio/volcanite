@@ -47,7 +47,7 @@ private:
      * "test_{}_{}_{}" will be replaced up to "test_1_2_3" with max_file_index=(1,2,3)"
      */
     static std::shared_ptr<CompressedSegmentationVolume> mergeCompressedSegmentationVolumeChunksFromFiles(const std::string& complete_csgv_path, const std::string& chunk_output_path_template, glm::ivec3 max_file_index, int brick_dim,
-                                                                                                          CompressedSegmentationVolume::RANSMode rANS_mode, bool use_detail_separation) {
+                                                                                                          CompressedSegmentationVolume::RANSMode rANS_mode, bool use_detail_separation, uint32_t cpu_threads) {
         Logger(INFO, true) << "Merging Compressed Segmentation Volume chunk files 0%";
 
         // our final filename
@@ -106,11 +106,13 @@ private:
         size_t detailstarts_offset = 0ul;
         // we load all Compressed Segmentation Volumes in one X-line at once
         CompressedSegmentationVolume dt_line[max_file_index.x + 1];
+        for(int i=0; i<max_file_index.x + 1; i++)
+            dt_line[i].setCPUThreadCount(cpu_threads);
         while (glm::all(glm::lessThanEqual(chunk_index, max_file_index))) {
             if (glm::any(glm::notEqual(chunk_index, last_chunk_index))) {
-                static constexpr int NUM_READ_THREADS = 4;
+                const int NUM_READ_THREADS = cpu_threads < 4 ? cpu_threads : 4;
                 // read next "line" of chunks
-                #pragma omp parallel for num_threads(4) default(none) shared(dt_line, chunk_output_path_template, max_file_index, chunk_index, brick_dim, rANS_mode, use_detail_separation)
+                #pragma omp parallel for num_threads(NUM_READ_THREADS) default(none) shared(dt_line, chunk_output_path_template, max_file_index, chunk_index, brick_dim, rANS_mode, use_detail_separation)
                 for (int x = 0; x <= max_file_index.x; x++) {
 
                     bool success = dt_line[x].importFromFile(formatChunkPath(chunk_output_path_template, x, chunk_index.y, chunk_index.z), false);
@@ -308,6 +310,7 @@ private:
         std::this_thread::sleep_for(std::chrono::milliseconds(4000)); // wait for cleanup
 
         std::shared_ptr<CompressedSegmentationVolume> dt = std::make_shared<vvv::CompressedSegmentationVolume>();
+        dt->setCPUThreadCount(cpu_threads);
         bool reimport_success = dt->importFromFile(complete_csgv_path, false);
         if(!reimport_success)
             throw std::runtime_error("Error re-importing exported merged Compressed Segmentation Volume!");
@@ -464,9 +467,13 @@ public:
     static std::shared_ptr<CompressedSegmentationVolume> createCompressedSegmentationVolume(const std::string& input_path,
                                                                                             const std::string& output_path = "", int brick_dim = 32,
                                                                                             CompressedSegmentationVolume::RANSMode rANS_mode = CompressedSegmentationVolume::DOUBLE_TABLE_RANS,
-                                                                                            bool use_detail_separation = false, bool force_recompute = false,
+                                                                                            uint32_t cpu_threads = 0u, bool use_detail_separation = false, bool force_recompute = false,
                                                                                             bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u),
                                                                                             uint32_t freq_subsampling = 8u, bool verbose = true, std::string* latex_table_out_entry = nullptr) {
+
+        if (cpu_threads == 0u)
+            cpu_threads = std::thread::hardware_concurrency();
+
 
         if(use_detail_separation && rANS_mode != CompressedSegmentationVolume::DOUBLE_TABLE_RANS)
             throw std::runtime_error("Detail separation can only be used in combination with double table rANS!");
@@ -516,6 +523,7 @@ public:
         }
 
         std::shared_ptr<CompressedSegmentationVolume> csgv = std::make_shared<vvv::CompressedSegmentationVolume>();
+        csgv->setCPUThreadCount(cpu_threads);
         // check if we can load a precomputed compressed segmentation volume
         if (!force_recompute && csgv->importFromFile(complete_csgv_path, false)) {
 #ifdef RUN_TEST
@@ -703,7 +711,7 @@ public:
         << "including file IO: " << total_encoding_import_export_timer.elapsed() << "s.";
         if (chunked_input_data && glm::any(glm::greaterThan(max_file_index, glm::uvec3(0)))) {
             // Log the total encoding times to a file
-            csgv = mergeCompressedSegmentationVolumeChunksFromFiles(complete_csgv_path, chunk_output_path_template, max_file_index, brick_dim, rANS_mode, use_detail_separation);
+            csgv = mergeCompressedSegmentationVolumeChunksFromFiles(complete_csgv_path, chunk_output_path_template, max_file_index, brick_dim, rANS_mode, use_detail_separation, cpu_threads);
         }
 
         // create a latex table entry with the format | CR (%) | Time (s) | GB/s | encoded GB |

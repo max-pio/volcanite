@@ -97,6 +97,7 @@ int volcanite(int argc, char *argv[]) {
         compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
                                                                                   args.compress_export_file,
                                                                                   args.brick_size, args.rANS_mode,
+                                                                                  args.threads,
                                                                                   args.stream_lod, !args.chunked,
                                                                                   args.chunked, max_chunk_id,
                                                                                   args.freq_subsampling, args.verbose);
