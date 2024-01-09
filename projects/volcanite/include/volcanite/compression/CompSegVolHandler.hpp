@@ -513,9 +513,8 @@ public:
         // Compressing a chunked file can take a long time. We export all independently compressed chunks first, given
         // this file name template (creates a path like my/path/tmp_x{}_y{}_z{}_bs64_rANS2.csgv for example):
         std::string chunk_output_path_template = complete_csgv_path.substr(0, complete_csgv_path.length() - 5) + "_x{}_y{}_z{}.csgv";
-        std::string chunk_output_path_template_no_separation = chunk_output_path_template;
+        std::string chunk_output_path_template_no_separation = CompressedSegmentationVolume::getCSGVFileName(chunk_output_path_template, brick_dim, rANS_mode, false);
         chunk_output_path_template = CompressedSegmentationVolume::getCSGVFileName(chunk_output_path_template, brick_dim, rANS_mode, use_detail_separation);
-        chunk_output_path_template_no_separation = CompressedSegmentationVolume::getCSGVFileName(chunk_output_path_template, brick_dim, rANS_mode, false);
 
 
         if(verbose) {
@@ -560,7 +559,7 @@ public:
         if (rANS_mode != CompressedSegmentationVolume::NO_RANS) {
             // We may have a precomputed frequency table.
             // As operation frequencies do not change between rANS in single table or no rANS mode, we could use the same filename to store precomputed freq. tables in both cases.
-            std::string freq_path = CompressedSegmentationVolume::getCSGVFileName(complete_csgv_path, brick_dim, rANS_mode, use_detail_separation, ".cfrq");
+            std::string freq_path = CompressedSegmentationVolume::getCSGVFileName(complete_csgv_path, brick_dim, rANS_mode, false, ".cfrq");
             if (!force_recompute && std::filesystem::exists(freq_path)) {
                 Logger(DEBUG) << "using operation frequencies from file " << freq_path;
                 std::ifstream freq_file(freq_path, std::ios_base::in | std::ios::binary);
@@ -648,15 +647,13 @@ public:
                     // create file input and output paths for this single chunk
                     std::string chunk_input_path = chunked_input_data ? formatChunkPath(input_path, x, y, z) : input_path;
                     std::string chunk_output_path = chunked_input_data ? formatChunkPath(chunk_output_path_template, x, y, z) : complete_csgv_path;
-                    std::string chunk_output_path_no_separation = chunked_input_data ? formatChunkPath(chunk_output_path_template_no_separation, x, y, z) : complete_csgv_path;
-
 
                     bool recompute = force_recompute || (max_file_index.x + max_file_index.y + max_file_index.z == 0u)      // if this is just one chunk, we also have to recompute at this point
                                      || !csgv->importFromFile(chunk_output_path, false);
                     // special case: we can load a volume without detail separation and THEN separate the detail (ToDo: this piece of code is a crime against humanity)
                     if(recompute && !force_recompute && (max_file_index.x + max_file_index.y + max_file_index.z != 0u) && use_detail_separation) {
                         // try to load the volume without detail separation
-                        recompute = !csgv->importFromFile(chunk_output_path_no_separation, false);
+                        recompute = !csgv->importFromFile(formatChunkPath(chunk_output_path_template_no_separation, x, y, z), false);
                         // .. and separate detail on success
                         if(!recompute)
                             csgv->separateDetail();
