@@ -513,7 +513,10 @@ public:
         // Compressing a chunked file can take a long time. We export all independently compressed chunks first, given
         // this file name template (creates a path like my/path/tmp_x{}_y{}_z{}_bs64_rANS2.csgv for example):
         std::string chunk_output_path_template = complete_csgv_path.substr(0, complete_csgv_path.length() - 5) + "_x{}_y{}_z{}.csgv";
+        std::string chunk_output_path_template_no_separation = chunk_output_path_template;
         chunk_output_path_template = CompressedSegmentationVolume::getCSGVFileName(chunk_output_path_template, brick_dim, rANS_mode, use_detail_separation);
+        chunk_output_path_template_no_separation = CompressedSegmentationVolume::getCSGVFileName(chunk_output_path_template, brick_dim, rANS_mode, false);
+
 
         if(verbose) {
             Logger(INFO) << "Compressing " << input_path <<
@@ -645,15 +648,25 @@ public:
                     // create file input and output paths for this single chunk
                     std::string chunk_input_path = chunked_input_data ? formatChunkPath(input_path, x, y, z) : input_path;
                     std::string chunk_output_path = chunked_input_data ? formatChunkPath(chunk_output_path_template, x, y, z) : complete_csgv_path;
+                    std::string chunk_output_path_no_separation = chunked_input_data ? formatChunkPath(chunk_output_path_template_no_separation, x, y, z) : complete_csgv_path;
+
 
                     bool recompute = force_recompute || (max_file_index.x + max_file_index.y + max_file_index.z == 0u)      // if this is just one chunk, we also have to recompute at this point
                                      || !csgv->importFromFile(chunk_output_path, false);
+                    // special case: we can load a volume without detail separation and THEN separate the detail (ToDo: this piece of code is a crime against humanity)
+                    if(recompute && !force_recompute && (max_file_index.x + max_file_index.y + max_file_index.z != 0u) && use_detail_separation) {
+                        // try to load the volume without detail separation
+                        recompute = !csgv->importFromFile(chunk_output_path_no_separation, false);
+                        // .. and separate detail on success
+                        if(!recompute)
+                            csgv->separateDetail();
+                    }
                     if (recompute) {
                         loadSegmentationVolumeFile(chunk_input_path, volume);
                         volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
                         if (verbose) {
                             Logger(INFO) << " " << chunk_input_path + " loaded with dim " << str(volume_dim);
-                            Logger(INFO) << "Running Encoding  -------------------------------------------";
+                            Logger(INFO) << "Running Encoding  --------------------------------------------";
                         }
 
                         // do the actual compression
