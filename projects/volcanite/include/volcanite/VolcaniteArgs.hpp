@@ -204,15 +204,15 @@ public:
                     // character between consecutive placeholders {}.
                     {
                         int count = 0;
-                        size_t pos = va.input_file.find("{}", pos);
+                        size_t pos = va.input_file.find("{}");
                         while (pos < va.input_file.length() && count < 4) {
+                            count++;
                             size_t last_pos = pos;
                             pos = va.input_file.find("{}", pos + 1);
                             if (pos - last_pos < 3)
                                 throw ArgException(
                                         "Input file path must contain at least one other character between consecutive {} for x,y,z indices in chunked data",
                                         inputpathArg.longID());
-                            count++;
                         }
                         if (count != 3)
                             throw ArgException(

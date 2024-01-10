@@ -841,6 +841,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
         Logger(WARN) << "File " << path << " already exist. Skipping.";
         return;
     }
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
     std::ofstream file(path, std::ios_base::out | std::ios::binary);
     if (!file.is_open()) {
         Logger(ERROR) << "Unable to open export file " << path << ". Skipping.";
