@@ -155,9 +155,9 @@ private:
                 brickstarts_offset += (brick_starts->at(last_brick_index) - first_brick_start);
                 if(use_detail_separation)
                     detailstarts_offset += (detail_starts->at(last_brick_index) - first_detail_start);
-                if(brickstarts_offset >= (1u << 31u))
+                if(brickstarts_offset >= (~0u))
                     throw std::runtime_error("Brick start indexing exceeds 32 bit domain!");
-                if(detailstarts_offset >= (1u << 31u))
+                if(detailstarts_offset >= (~0u))
                     throw std::runtime_error("detailstarts indexing exceeds 32 bit domain!");
                 encoding_file.write(reinterpret_cast<const char *>(&(dt_line[chunk_index.x].getEncoding()->at(first_brick_start))), (last_brick_end - first_brick_start) * sizeof(uint32_t));
                 if(use_detail_separation)
