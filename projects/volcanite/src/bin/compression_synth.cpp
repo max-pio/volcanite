@@ -1,3 +1,7 @@
+// ToDo: compression_synth.cpp executable must be updated, e.g. to support HEADLESS mode
+
+#ifndef HEADLESS
+
 #include <string>
 #include "vvv/util/csv_utils.hpp"
 #include "vvv/util/Logger.hpp"
@@ -201,3 +205,5 @@ int compression_synth(int argc, char *argv[]) {
 }
 
 ENTRYPOINT(compression_synth)
+
+#endif // HEADLESS

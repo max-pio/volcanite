@@ -18,11 +18,11 @@ Do not distribute this code or any fragments or builds of it without permission!
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
 3. Install all required packages:
 ```
-sudo apt install build-essential cmake libglfw3-dev libglm-dev -y
+sudo apt install build-essential cmake libglfw3-dev libglm-dev libtclap-dev -y
 ```
 4. Optional: Install optional packages:
 ```
-sudo apt install libhdf5-dev libtiff-dev libsqlite3-dev -y
+sudo apt install libhdf5-dev libtiff-dev libpugixml-dev libsqlite3-dev -y
 ```
 5. Build the project. Run in project root directory:
 ```
@@ -43,7 +43,7 @@ If your IDE supports generating build files, you can directly open the `CMakeLis
 4. Install [MS Visual Studio](https://visualstudio.microsoft.com/downloads/) 2015 Update 3 or greater and select the tools for C++ desktop development: `MSVC`, `C++-CMake-Tools`, `C++ AddressSanitizer`.
 5. Install the [vcpkg](https://vcpkg.io/en/getting-started) package manager. From the vcpkg install directory, install the required 64 bit packages in a powershell console:
 ```
-.\vcpkg install glfw3 glm --triplet=x64-windows
+.\vcpkg install glfw3 glm tclap --triplet=x64-windows
 ```
 6. Optional: Install optional packages:
 ```
@@ -92,6 +92,7 @@ Start the `volcanite` executable, either providing a path to a segmentation volu
 ./projects/volcanite/volcanite /path/to/your/segmentation/volume
 ```
 or by using the file dialog to select a volume file.
+Run `./volcanite --help` for a complete list of arguments and commands.
 See [Supported File Formats](#Supported-File-Formats) for a list of currently usable data formats.
 You can find a collection of example data sets listed in [Example_Data](doc/Example_Data.md). 
 
@@ -132,6 +133,33 @@ This format is only available when the hdf5 library is available:
 Either by installing the package `libhdf5-dev` on Ubuntu or by using the [precompiled binary distributions](https://www.hdfgroup.org/downloads/hdf5/) from the HDF group.
 File name must end with `.hdf5`.
    
+
+## Headless Builds
+
+It is possible to run Volcanite without opening a GUI window.
+This is useful on a machine where no windowing system is present (e.g. a remote server) or for automating Volcanite operations from scripts.
+To start Volcanite without opening a window, pass the optional command line argument `--headless`.
+
+Volcanite can be built without any windowing system and GUI window dependencies by enabling the CMake option `HEADLESS`.
+In this case, the GLFW library does not have to be present on the system.
+GPU drivers and Vulkan SDK still need to be available and Volcanite can only be run with the `--headless` argument.
+Replace steps 3. to 4. from the [quick start build guide](#Quick-Start)  with the following: 
+
+H3. Install all required packages without GLFW:
+```
+sudo apt install build-essential cmake libglm-dev libtclap-dev -y
+```
+H4. Optional: Install optional packages:
+```
+sudo apt install libhdf5-dev libtiff-dev libpugixml-dev libsqlite3-dev -y
+```
+H5. Build the project with the `HEADLESS` option set. Run in project root directory:
+```
+mkdir cmake-build-release && cd cmake-build-release
+cmake -DHEADLESS=ON -DCMAKE_BUILD_TYPE=Release .. && cmake --build . --target volcanite -j 8
+```
+
+
 ---
 
 ## Development
@@ -147,20 +175,22 @@ If you have questions about certain parts in the implementation, feel free to co
 
 ### Dependencies
 
-| Required Dependency | Min. Version | Usage                          | Ubuntu / Debian package name                            |
-|---------------------|:-------------|--------------------------------|---------------------------------------------------------|
-| CMake               | 3.16         | creating project build files   | `cmake`                                                 |
-| Vulkan SDK          | 1.3          | Vulkan development tools and headers    | Download from [https://vulkan.lunarg.com/](https://vulkan.lunarg.com/) |
-| glslangValidator    | 11:12.2      | SPIR-V shader compiler         | included in drivers, alternative package`glslang-tools` |
-| glm                 | 0.9.9.8      | GLSL equivalents for host code | `libglm-dev`                                            |
-| GLFW                | 3.3.6        | windowing for GLFW application | `libglfw3-dev`                                          |
+| Required Dependency | Min. Version | Usage                                | Ubuntu / Debian package name                                            |
+|---------------------|:-------------|--------------------------------------|-------------------------------------------------------------------------|
+| CMake               | 3.16         | creating project build files         | `cmake`                                                                 |
+| Vulkan SDK          | 1.3          | Vulkan development tools and headers | Download from [https://vulkan.lunarg.com/](https://vulkan.lunarg.com/)  |
+| glslangValidator    | 11:12.2      | SPIR-V shader compiler               | included in drivers, alternative package`glslang-tools`                 |
+| glm                 | 0.9.9.8      | GLSL equivalents for host code       | `libglm-dev`                                                            |
+| GLFW                | 3.3.6        | windowing for GLFW application       | `libglfw3-dev`                                                          |
+| TCLAP               | 1.2.5        | parse command line arguments         | `libtclap-dev`                                                          |
 
-| Optional Dependency | Min. Version | Usage                                   | Ubuntu / Debian package name                                           |
-|---------------------|:-------------|-----------------------------------------|------------------------------------------------------------------------|
-| HDF5                | 1.10.7       | read .hdf5 segmentation volumes         | `libhdf5-dev`                                                          |
-| SQLite              | 3.37.2       | read/write sqlite label attribute files | `libsqlite3-dev`                                                       |
-| TIFF                | 4.3.0        | read TIFF volumes                       | `libtiff-dev`                                                           |
-| OpenMP              | 4.5          | CPU parallelization                     | included in compiler                                                   |
+| Optional Dependency | Min. Version  | Usage                                   | Ubuntu / Debian package name |
+|---------------------|:--------------|-----------------------------------------|------------------------------|
+| HDF5                | 1.10.7        | read .hdf5 segmentation volumes         | `libhdf5-dev`                |
+| SQLite              | 3.37.2        | read/write sqlite label attribute files | `libsqlite3-dev`             |
+| TIFF                | 4.3.0         | read TIFF volumes                       | `libtiff-dev`                |
+| PugiXML             | 1.12.1        |  parse XML data                         | `libpugixml-dev`             |
+| OpenMP              | 4.5           | CPU parallelization                     | included in compiler         |
 
 
 ### Development Tools

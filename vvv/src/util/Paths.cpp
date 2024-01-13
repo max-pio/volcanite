@@ -34,7 +34,7 @@ std::vector<std::string> split(const std::string& s, char delimiter) {
 void Paths::initPaths(const std::string& dataPathsStr) {
     auto executableDataPath = findExecutablePath() / "data";
     useSourcePaths = !std::filesystem::exists(executableDataPath);
-    Logger(INFO) << (useSourcePaths ? "no data/ directory found in binary directory. Use source paths." : "use data/ directory relative to binary.");
+    Logger(DEBUG) << (useSourcePaths ? "no data/ directory found in binary directory. Use source paths." : "use data/ directory relative to binary.");
 
     if (useSourcePaths) {
         auto paths = split(dataPathsStr, ';');

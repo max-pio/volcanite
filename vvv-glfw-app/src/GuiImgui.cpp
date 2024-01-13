@@ -50,6 +50,10 @@ void GuiImgui::renderGui() {
 
     // iterate over all windows
     for(const auto& window : m_windows) {
+
+        if(!window.second.isVisible())
+            continue;
+
         // begin window (implicitly pushes the ID of its name)
         ImGui::Begin(window.first.c_str());
 

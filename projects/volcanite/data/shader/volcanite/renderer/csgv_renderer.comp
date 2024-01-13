@@ -51,16 +51,8 @@ ivec2 pixelFromInvocationID() {
     // We send out one ray per block of [g_subsampling]*[g_subsampling] pixels
     if(g_subsampling <= 1)
         return ivec2(gl_GlobalInvocationID.xy);
-    uint idx = g_camera_still_frames;
-
-    if(g_blue_noise)
-        idx += uint(blueNoise32x32(ivec2(-gl_GlobalInvocationID.y, gl_GlobalInvocationID.x)) * g_subsampling*g_subsampling);
-
-    // ToDo: the subsampling sequence is broken. replace with a better hierarchical low discrepancy sampling
-    uint indexInSequenceX = bitfieldReverse(idx % (g_subsampling)) >> (32 - int(0.5f + log2(g_subsampling)));
-    uint indexInSequenceY = bitfieldReverse(((indexInSequenceX << 2) ^ (idx/g_subsampling)) % (g_subsampling)) >> (32 - int(0.5f + log2(g_subsampling)));
-
-    return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + ivec2(g_subsampling/2 + indexInSequenceX, g_subsampling/2 + indexInSequenceY) % g_subsampling;
+    else
+        return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + g_subsampling_pixel;
 }
 
 uint get_inv_lod(ivec3 voxel) {
@@ -175,7 +167,7 @@ void writePixel(ivec2 pixel, vec4 color, float depth) {
             ivec2 opix = (pixel/g_subsampling)*g_subsampling + subpixel;
             if (g_camera_still_frames == 0u) {
                 if (opix != pixel)  // all other pixels are reset to initial 0
-                    imageStore(feedbackOut, opix, vec4(0.f, 0.f, 0.f, 0.f));
+                    imageStore(feedbackOut, opix, vec4(0.f));
                 else                // current pixel gets color, will be overwritten (.a=0) if depth < 0 <=> not yet decoded
                     imageStore(feedbackOut, opix, vec4(color.rgb, depth >= 0.f ? 1.f : 0.f));
             }
@@ -300,7 +292,7 @@ void main() {
 
     // visualize model space coordinates
     if(g_debug_model_space) {
-        vec3 color = floor(state.pos) / vec3(g_vol_dim);
+        vec3 color = floor(state.pos) / g_physical_vol_dim;
         vec3 borders = vec3(greaterThan(fract(state.pos), vec3(0.0f))) * vec3(lessThan(fract(state.pos - vec3(0.0001f)), vec3(0.2f)));
         if(borders.x + borders.y + borders.z > 0.f)
             color *= 1.f - 1.f / (t_0 / g_world_to_model_space_scaling * 64.f);

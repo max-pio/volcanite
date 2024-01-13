@@ -1,6 +1,6 @@
 #include "vvv/volren/Volume.hpp"
 
-#ifdef LIB_TIFF
+#if defined(LIB_TIFF) && defined(LIB_PUGIXLM)
 #include <cassert>
 #include <cmath>
 #include <cstring>
@@ -24,7 +24,7 @@ bool is_valid_physical_size(float v) { return v > 0.f && std::isfinite(v); }
 #endif
 
 template<> std::shared_ptr<vvv::Volume<uint16_t>> vvv::Volume<uint16_t>::load_ome_tiff(std::string url) {
-#ifdef TIFF_FOUND
+#if defined(LIB_TIFF) && defined(LIB_PUGIXLM)
     TIFF *tif = TIFFOpen(url.c_str(), "r");
 
     if (tif == nullptr) {
@@ -127,7 +127,7 @@ template<> std::shared_ptr<vvv::Volume<uint16_t>> vvv::Volume<uint16_t>::load_om
 
     return std::make_shared<Volume>(physical_size_x, physical_size_y, physical_size_z, img_width, img_height, pagecount, vk::Format::eR16Unorm, payload);
 #else
-    throw std::runtime_error("TIFF libraries not found! Can not load TIFF volume file!");
+    throw std::runtime_error("TIFF or PUGIXML libraries not found! Can not load TIFF volume file!");
     return nullptr;
 #endif
 }

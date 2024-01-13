@@ -1,101 +1,167 @@
 #include <string>
 #include "vvv/util/Logger.hpp"
 #include "vvv/util/detect_debugger.hpp"
-#include "vvvwindow/App.hpp"
-#include "vvvwindow/entrypoint.hpp"
+#include "vvv/core/HeadlessRendering.hpp"
+#ifdef HEADLESS
+    #include "vvv/headless_entrypoint.hpp"
+#else
+    #include "vvvwindow/App.hpp"
+    #include "vvvwindow/entrypoint.hpp"
+#endif
 
-// run the interactive renderer after compression
-#define RUN_APP
-
+#include "volcanite/VolcaniteArgs.hpp"
 #include "volcanite/compression/CompSegVolHandler.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "vvv/volren/Volume.hpp"
-
-// include this last, as it includes windows.h which defines ERROR = 0
-#include "portable-file-dialogs.h"
+#include "volcanite/compression/CSGVMetaData.hpp"
 
 using namespace vvv;
 
-int compression(int argc, char *argv[]) {
+constexpr int RET_SUCCESS = 0;
+constexpr int RET_INVALID_ARG = 1;
+constexpr int RET_NOT_SUPPORTED = 2;
+constexpr int RET_COMPR_ERROR = 3;
+constexpr int RET_RENDER_ERROR = 4;
 
-    if(!vvv::debuggerIsAttached())
-        Logger::s_minLevel = INFO;
 
-    // configuration -------------------
-    glm::uvec3 chunk_files(0);  // max. xyz index of chunk files. e.g. (1,3,0) would load 8 chunk files.
-    std::string path;           // path of segmentation volume. For chunked files, three {} are replaced with chunk ids.
-    int brick_dim = 16;                                                         // size of one brick
-    bool force_recompute = false;                                                // do a fresh compression even if there is a precomputed file
-    CompressedSegmentationVolume::RANSMode rANS_mode = CompressedSegmentationVolume::RANSMode::NO_RANS;  // use no rANS, rANS with one table for everything, or rANS with a second freq. table for the finest LoD
-    unsigned int frequency_pass_subsampling = 8u;                               // only use every n³th block in every 2nd chunk file for computing frequencies
-    bool use_detail_separation = false;                                         // split off the operation stream of the finest LoD for on-demand CPU to GPU streaming
-    std::string appName = "Volcanite Renderer";
-    bool vsync = true;
-    // ---------------------------------
 
-    // build with cmake --build ./cmake-build-release --target volcanite -j 12
-
-    // ToDo: replace with a cleaner and more powerful command line parser
-    std::string _rANS_str[3] = {"no rANS", "single table rANS", "double table rANS"};
-    if(argc > 1) {
-        // to make the evaluation of multiple compression runs easier, you can call this binary with some predefined arguments:
-        // input_filepath brick_size rANS_mode (n/0, s/1, d/2)
-
-        path = std::string(argv[1]);
-        if(argc > 2)
-            brick_dim = std::stoi(argv[2]);
-        if(argc > 3) {
-            rANS_mode = vvv::CompressedSegmentationVolume::NO_RANS;
-            if (argv[3][0] == '1' || argv[3][0] == 's' || argv[3][0] == 'S')
-                rANS_mode = vvv::CompressedSegmentationVolume::SINGLE_TABLE_RANS;
-            else if (argv[3][0] == '2' || argv[3][0] == 'd' || argv[3][0] == 'D')
-                rANS_mode = vvv::CompressedSegmentationVolume::DOUBLE_TABLE_RANS;
-        }
-        Logger(INFO) << "processing " << path << " " << " b=" << brick_dim << " " << _rANS_str[rANS_mode];
+int export_texture(Texture* tex, const std::string export_file_path) {
+    try {
+        Logger(INFO) << "Exporting render output to " << export_file_path;
+        tex->writeFile(export_file_path);
     }
-    else {
-        Logger(INFO) << "call with 'volcanite [path_to_volume]' to compress and visualize a segmentation volume.";
-        Logger(INFO) << "  compression options:        'segvolvis [path_to_vti] [brick_dimension {8|16|32|64}] [rANS_mode {n|s|d}]";
-        Logger(INFO) << "  best rendering performance: 'segvolvis [path_to_vti] 8 n";
-        Logger(INFO) << "  best compression rate:      'segvolvis [path_to_vti] 64 d";
-
-        if (!pfd::settings::available())
-        {
-            Logger(ERROR) << "Portable File Dialogs are not available on this platform. Aborting.";
-            return -1;
-        }
-
-        // Open a file dialog to choose a file
-        auto selected_file = pfd::open_file("Choose Segmentation Volume to open", pfd::path::home(),
-                                            { "Segmentation Volumes (.vti .hdf5 .raw)", "*.vti *.hdf5 *.raw", "All Files", "*" });
-        if(selected_file.result().empty()) {
-            Logger(ERROR) << "No segmentation volume file was provided. Aborting.";
-            return -1;
-        }
-
-        path = selected_file.result().at(0);
+    catch(std::runtime_error e) {
+        Logger(ERROR) << "Render export error: " << e.what();
+        return RET_RENDER_ERROR;
     }
-
-    // Load a data set and encode it as a CompressedSegmentationVolume
-    std::shared_ptr<vvv::CompressedSegmentationVolume> compressedSegmentationVolume =
-        CompSegVolHandler::createCompressedSegmentationVolume(path, brick_dim, rANS_mode, use_detail_separation, force_recompute, chunk_files, frequency_pass_subsampling, false);
-    if (compressedSegmentationVolume == nullptr) {
-        Logger(ERROR) << "could not create / load Compressed Segmentation Volume. Aborting.";
-        return -1;
-    }
-    Logger(DEBUG) << compressedSegmentationVolume->decodingInfoString() << "\n\n";
-
-    Logger(INFO) << " --------------------------------------------------- ";
-
-    // create and run the interactive Application
-    const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(true);
-    renderer->setCompressedSegmentationVolume(compressedSegmentationVolume);
-    auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
-
-    // execute app
-    app->setVSync(vsync);
-    return app->exec();
+    return 0;
 }
 
-ENTRYPOINT(compression)
+int tryImportRenderConfig(VolcaniteArgs& args, std::shared_ptr<CompressedSegmentationVolumeRenderer> renderer) {
+    // set the startup resolution
+    //renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
+    // read optional config file
+    if(!args.rendering_config_file.empty()) {
+        std::ifstream in(args.rendering_config_file);
+        if(in.is_open()) {
+            if (!renderer->readParameters(in, VOLCANITE_VERSION)) {
+                Logger(ERROR) << "Could not import parameters from " << args.rendering_config_file;
+                return RET_INVALID_ARG;
+            }
+            in.close();
+        }
+        else {
+            Logger(ERROR) << "Could not open config file " << args.rendering_config_file;
+            return RET_INVALID_ARG;
+        }
+        Logger(DEBUG) << "Imported rendering config from " << args.rendering_config_file;
+    }
+    return 0;
+}
+
+int volcanite(int argc, char *argv[]) {
+    // parse command line arguments
+    VolcaniteArgs args;
+    {
+        auto _args = VolcaniteArgs::parseArguments(argc, argv);
+        if(!_args.has_value()) {
+            Logger(ERROR) << "Exiting because of invalid arguments. See volcanite --help for available commands.";
+            return RET_INVALID_ARG;
+        }
+        args = _args.value();
+    }
+
+    if(!vvv::debuggerIsAttached() && !args.verbose)
+        Logger::s_minLevel = INFO;
+
+    // ToDo: we *could* check here if a previously compressed csgv with the correct parameters lies next to the input volume
+    // In that case, set the input file to that csgv and set args.compress_export_file = "".
+    // For comrpession, we can also try to export the csgv file to the location of the input volume, if writing there is possible,
+    // and use the tmp directory only as a fallback.
+    // (see getCSGVFileName in CompSegVolHandler). Move all output file logic from CompSegVolHandler either here
+    // or into a spearate method in CompSegVolHandler.
+    // Also think about the processing of chunked data.. Could it be necessary to still keep the getCSGVFileName and
+    // force_recompute logic in the handler for that reason? Or should we create two handlers for chunked / non-chunked?
+
+    std::shared_ptr<vvv::CompressedSegmentationVolume> compressedSegmentationVolume;
+    // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
+    if(args.performCompression()) {
+        glm::uvec3 max_chunk_id = glm::uvec3(args.chunk_files[0], args.chunk_files[1], args.chunk_files[2]);
+        if(!args.verbose)
+            Logger(INFO) << "compressing segmentation volume " << args.input_file << (args.chunked ? " with max. chunks " + str(max_chunk_id) : "");
+
+//        CSGVMetaData msgv;
+//        msgv.importOrProcessVolume(args.input_file, args.chunked, max_chunk_id);
+
+        compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
+                                                                                  args.compress_export_file,
+                                                                                  args.brick_size, args.rANS_mode,
+                                                                                  args.threads,
+                                                                                  args.stream_lod, !args.chunked,
+                                                                                  args.chunked, max_chunk_id,
+                                                                                  args.freq_subsampling, args.verbose);
+        if(args.verbose)
+            Logger(INFO) << compressedSegmentationVolume->decodingInfoString() << "\n\n";
+    }
+    // otherwise, we load a previously decompressed volume
+    else {
+        compressedSegmentationVolume = std::make_shared<CompressedSegmentationVolume>();
+        compressedSegmentationVolume->importFromFile(args.input_file, args.verbose);
+    }
+
+    if(args.performDecompression()) {
+        // ToDo add decompression
+        Logger(ERROR) << "decompression not yet supported";
+        return RET_NOT_SUPPORTED;
+    }
+
+    if (compressedSegmentationVolume == nullptr) {
+        Logger(ERROR) << "could not create or load Compressed Segmentation Volume. Aborting.";
+        return RET_COMPR_ERROR;
+    }
+
+    // we only need the rendering part for screenshots or the interactive app
+    std::string appName = "Volcanite " + VolcaniteArgs::getVolcaniteVersionString();
+    if (!args.headless || !args.screenshot_output_file.empty()) {
+        Logger(INFO) << "--------------------------------------------------- ";
+        Logger(INFO) << "initializing Volcanite renderer";
+
+        const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
+        renderer->setCompressedSegmentationVolume(compressedSegmentationVolume);
+
+        // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)
+        if (!args.screenshot_output_file.empty()) {
+            // obtain a headless rendering engine
+            auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
+            renderEngine->acquireResources();
+            tryImportRenderConfig(args, renderer);
+            // let the rendering converge for some frames
+            auto texture = renderEngine->renderFrames(60);
+            if(texture == nullptr || export_texture(texture.get(), args.screenshot_output_file)) {
+                Logger(ERROR) << "internal rendering error";
+                return RET_RENDER_ERROR;
+            }
+            texture.reset();
+            texture = nullptr;
+            renderEngine->releaseResources();
+        }
+
+        // only start the application if we are not in headless mode
+#ifndef HEADLESS
+        if (!args.headless) {
+            bool vsync = true;  // ToDo: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
+            auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
+//            app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
+            app->setVSync(vsync);
+            app->acquireResources();
+            tryImportRenderConfig(args, renderer);
+            return app->exec();
+        }
+#endif
+    }
+
+    return RET_SUCCESS;
+}
+
+ENTRYPOINT(volcanite)

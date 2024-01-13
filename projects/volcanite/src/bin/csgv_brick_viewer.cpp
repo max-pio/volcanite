@@ -1,3 +1,6 @@
+// ToDo: Update csgv_brick_viewer.cpp and gracefully exclude in HEADLESS build
+#ifndef HEADLESS
+
 #include <string>
 #include "vvv/util/Logger.hpp"
 #include "vvvwindow/entrypoint.hpp"
@@ -54,3 +57,5 @@ int csgv_brick_viewer(int argc, char *argv[]) {
 }
 
 ENTRYPOINT(csgv_brick_viewer)
+
+#endif // HEADLESS

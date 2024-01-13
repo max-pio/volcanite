@@ -1,3 +1,6 @@
+// ToDo: move hello_volume_renderer.cpp to examples
+#ifndef HEADLESS
+
 #include <string>
 #include <memory>
 #include "vvv/util/Logger.hpp"
@@ -36,3 +39,5 @@ int hello_volume_renderer(int argc, char *argv[]) {
 }
 
 ENTRYPOINT(hello_volume_renderer)
+
+#endif // HEADLESS

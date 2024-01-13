@@ -3,6 +3,8 @@
 
 layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uvec3 g_vol_dim;            // xyz dimension of the original volume
+    vec3 g_voxel_size;          // relative size of a single voxel
+    vec3 g_physical_vol_dim;    // physical volume size: g_vol_dim * g_voxel_size
     vec3 g_normalized_volume_size;   // world space size of the volume (usually ~1m^3)
     uint g_vol_max_label;       // maximum label in the segmented volume
     uint g_brick_size;          // power of 2 size along one axis of the bricks
@@ -124,6 +126,7 @@ layout (std140, set = 0, binding = 10) uniform render_info {
     vec4 g_bboxMax;
     float g_opacityThreshold;
     uint g_camera_still_frames;
+    ivec2 g_subsampling_pixel;
     float g_random_seed;
     bool g_debug_model_space;
     bool g_debug_brick_cache;

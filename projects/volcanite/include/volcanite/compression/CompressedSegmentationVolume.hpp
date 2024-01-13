@@ -4,15 +4,13 @@
 #include <fstream>
 #include <omp.h>
 #include <map>
+#include <thread>
 
 #include "VolumeCompressionBase.hpp"
 #include "csgv_constants.h" // in data/shader/cpp_glsl_include
 #include "volcanite/compression/rans.hpp"
 #include "vvv/util/util.hpp"
 
-#ifndef NUM_THREADS
-    #define NUM_THREADS 8
-#endif
 
 namespace vvv {
 
@@ -181,7 +179,22 @@ public:
     enum RANSMode {NO_RANS=0, SINGLE_TABLE_RANS=1, DOUBLE_TABLE_RANS=2};
 
     explicit CompressedSegmentationVolume() : VolumeCompressionBase(), m_brick_size(0u), m_encoding(), m_brick_starts(), m_detail_encoding(), m_detail_starts(), m_volume_dim(-1),
-                                                    m_rANS_mode(NO_RANS), m_separate_detail(false) {}
+                                                    m_rANS_mode(NO_RANS), m_separate_detail(false), m_cpu_threads(std::thread::hardware_concurrency()) {}
+
+    /**
+     * Specifies the number of CPU threads to parallelize CPU computations.
+     * A value of 0 sets a count equal to the hardware concurrency.
+     */
+    void setCPUThreadCount(uint32_t thread_count = 0u) {
+        uint32_t hardware_concurrency = std::thread::hardware_concurrency();
+        if(thread_count > hardware_concurrency)
+            Logger(WARN) << "setting thread count of " << thread_count << " > hardware concurrency of " << hardware_concurrency;
+
+        if(thread_count == 0u)
+            m_cpu_threads = hardware_concurrency;
+        else
+            m_cpu_threads = thread_count;
+    }
 
     /**
      * Performs a pseudo compression pass to obtain operation frequency tables for later rANS encoding.
@@ -452,6 +465,8 @@ public:
     }
 
 private:
+    uint32_t m_cpu_threads;                     // number of CPU threads to parallelize computations
+
     uint32_t m_brick_size;
     glm::uvec3 m_volume_dim;
     std::vector<uint32_t> m_encoding;           // contains all compressed entries for all bricks and each brick is capable of reconstructing all LODs, except the finest one!

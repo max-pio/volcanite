@@ -35,6 +35,56 @@ uint32_t vvv::getMemoryType(vk::PhysicalDevice physicalDevice, uint32_t typeBits
     return getMemoryType(memoryProperties, typeBits, properties);
 }
 
+size_t vvv::getMemoryHeapSize(vvv::GpuContextRef ctx, vk::MemoryHeapFlagBits requirementMask) {
+    // See https://asawicki.info/news_1740_vulkan_memory_types_on_pc_and_how_to_use_them for a description of vendor
+    // specific memory types. Keep in mind that these methods do not work 100% of the time, as there are so many nuances
+    // in terms of vendor memory implementation and access.
+
+    size_t total_heap_memory = 0ul;
+    const auto memoryProperties = ctx.getPhysicalDevice().getMemoryProperties();
+    for (uint32_t heap_idx = 0; heap_idx < memoryProperties.memoryHeapCount; heap_idx++) {
+        if(memoryProperties.memoryHeaps[heap_idx].flags & requirementMask) {
+            total_heap_memory += memoryProperties.memoryHeaps[heap_idx].size;
+        }
+    }
+
+    if(total_heap_memory == 0ul)
+        throw std::runtime_error("Could not find a matching memory heap");
+    return total_heap_memory;
+}
+
+std::pair<size_t, size_t> vvv::getMemoryHeapBudgetAndUsage(vvv::GpuContextRef ctx, vk::MemoryHeapFlagBits requirementMask) {
+    // See https://asawicki.info/news_1740_vulkan_memory_types_on_pc_and_how_to_use_them for a description of vendor
+    // specific memory types. Keep in mind that these methods do not work 100% of the time, as there are so many nuances
+    // in terms of vendor memory implementation and access.
+
+    vk::PhysicalDeviceMemoryBudgetPropertiesEXT budgetProperties;
+    vk::PhysicalDeviceMemoryProperties2 memoryProperties2;
+    memoryProperties2.pNext = &budgetProperties;
+
+    if(ctx.hasDeviceExtension("VK_EXT_memory_budget")) {
+        ctx.getPhysicalDevice().getMemoryProperties2(&memoryProperties2);
+    } else {
+        throw std::runtime_error("Could not query video heap budget and usage because VK_EXT_memory_budget vulkan extension is missing/not enabled");
+    }
+
+    size_t budget_heap_memory = 0ul;
+    size_t used_heap_memory = 0ul;
+
+    const auto memoryProperties = ctx.getPhysicalDevice().getMemoryProperties();
+    for (uint32_t heap_idx = 0; heap_idx < memoryProperties.memoryHeapCount; heap_idx++) {
+        if(memoryProperties.memoryHeaps[heap_idx].flags & requirementMask) {
+            budget_heap_memory += budgetProperties.heapBudget[heap_idx];
+            used_heap_memory += budgetProperties.heapUsage[heap_idx];
+        }
+    }
+
+    if(budget_heap_memory == 0ul)
+        throw std::runtime_error("Could not find a matching memory heap");
+
+    return std::make_pair(budget_heap_memory, used_heap_memory);
+}
+
 // stolen from https://github.com/KhronosGroup/Vulkan-Hpp/blob/6d5d6661f39b7162027ad6f75d4d2e902eac4d55/samples/utils/utils.cpp
 // another implementation available on the web is: https://github.com/nvpro-samples/nvpro_core/blob/f2c05e161bba9ab9a8c96c0173bf0edf7c168dfa/nvvk/images_vk.cpp#L108-L116
 void vvv::setImageLayout(vk::CommandBuffer const &commandBuffer, vk::Image image, vk::Format format, vk::ImageLayout oldImageLayout, vk::ImageLayout newImageLayout,

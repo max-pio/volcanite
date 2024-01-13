@@ -9,7 +9,8 @@
 #include "vvv/vk/memory.hpp"
 
 #include "stb/stb_image_write.hpp"
-#include "tinyexr/tinyexr.hpp"
+// ToDo: include tinyexr for SaveEXR again
+//#include "tinyexr/tinyexr.hpp"
 #include "vvv/util/util.hpp"
 
 #include <set>
@@ -175,6 +176,7 @@ public:
      * @discouraged this is a shorthand that drains the GPU pipeline and waits on the host.
      */
     void writeExr(const std::string path) {
+#ifdef TINYEXR_H_
         // TODO(Reiner): use the lower level API to support more formats
 
         const auto componentCount = FormatComponentCount(static_cast<VkFormat>(format));
@@ -195,9 +197,12 @@ public:
         const auto data = download();
 
         const char *exrErr = nullptr;
-        if (SaveEXR(reinterpret_cast<const float *>(data.data()), width, height, componentCount, /* fp16? */ isFloat16, path.c_str(), &exrErr)) {
+        if (SaveEXR(reinterpret_cast<const float *>(data.data()), width, height, componentCount, /* fp16? */ isFloat16, path.c_str(), &exrErr) != TINYEXR_SUCCESS) {
             throw std::runtime_error(exrErr);
         }
+#else
+        throw std::runtime_error("texture EXR export is not available because tinyexr implementation is missing.");
+#endif
     }
 
     /**
@@ -222,7 +227,7 @@ public:
 
         const auto data = download();
 
-        if (stbi_write_hdr(path.c_str(), width, height, componentCount, reinterpret_cast<const float *>(data.data()))) {
+        if (!stbi_write_hdr(path.c_str(), width, height, componentCount, reinterpret_cast<const float *>(data.data()))) {
             throw std::runtime_error("writing HDR file failed.");
         }
     }
@@ -272,9 +277,48 @@ public:
 
         const auto data = download();
 
-        if (stbi_write_jpg(path.c_str(), width, height, componentCount, reinterpret_cast<const void *>(data.data()), quality)) {
+        if (!stbi_write_jpg(path.c_str(), width, height, componentCount, reinterpret_cast<const void *>(data.data()), quality)) {
             throw std::runtime_error("writing JPEG failed.");
         }
+    }
+
+    /**
+     * Select an export image file type based on the file ending (png, jp(e)g, hdr, exr).
+     * May throw a runtime error if filesystem or image export functionality fails or if the file type is not supported.
+     */
+    void writeFile(const std::string path) {
+        std::filesystem::path file = std::filesystem::absolute(path).lexically_normal();
+        std::filesystem::path dir = file;
+        std::filesystem::create_directories(dir.remove_filename());
+
+        const auto componentCount = FormatComponentCount(static_cast<VkFormat>(format));
+        const auto planeCount = FormatPlaneCount(static_cast<VkFormat>(format));
+        const auto texelSize = FormatTexelSize(static_cast<VkFormat>(format));
+        const auto componentSize = texelSize / componentCount;
+        if(path.ends_with(".png") || path.ends_with(".jpg") || path.ends_with(".jpeg")) {
+            if(!(componentCount == 4 || componentCount == 3 || componentCount == 1)
+                || planeCount != 1 || !(FormatIsUInt(static_cast<VkFormat>(format)) || FormatIsUNorm(static_cast<VkFormat>(format)))
+                || !FormatElementIsTexel(static_cast<VkFormat>(format)) || componentSize != 1)
+                throw std::runtime_error("texture format does not support png/jpg export");
+        }
+        else if(path.ends_with(".exr") || path.ends_with(".hdr")) {
+            if(!(componentCount == 4 || componentCount == 3 || componentCount == 1)
+               || planeCount != 1 || !FormatIsFloat(static_cast<VkFormat>(format))
+               || !FormatElementIsTexel(static_cast<VkFormat>(format)) || componentSize != 4)
+                throw std::runtime_error("texture format does not support exr/hdr export");
+        } else {
+            throw std::runtime_error("unsupported image file type "
+                                     + path.substr(path.rfind("."), path.length()) + ", use png, jpg, exr or hdr");
+        }
+
+        if(path.ends_with(".png"))
+            this->writePng(std::filesystem::absolute(file).lexically_normal());
+        else if (path.ends_with(".jpg") || path.ends_with(".jpeg"))
+            this->writeJpeg(std::filesystem::absolute(file).lexically_normal(), 90);
+        else if (path.ends_with(".exr"))
+            this->writeExr(std::filesystem::absolute(file).lexically_normal());
+        else if (path.ends_with(".hdr"))
+            this->writeHdr(std::filesystem::absolute(file).lexically_normal());
     }
 
     /**

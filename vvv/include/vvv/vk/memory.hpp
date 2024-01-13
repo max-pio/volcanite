@@ -21,6 +21,8 @@ namespace vvv {
 uint32_t getMemoryType(vk::PhysicalDeviceMemoryProperties const &memoryProperties, uint32_t typeBits, vk::MemoryPropertyFlags requirementsMask);
 uint32_t getMemoryType(vvv::GpuContextRef ctx, uint32_t typeBits, vk::MemoryPropertyFlags properties);
 uint32_t getMemoryType(vk::PhysicalDevice physicalDevice, uint32_t typeBits, vk::MemoryPropertyFlags properties);
+size_t getMemoryHeapSize(vvv::GpuContextRef ctx, vk::MemoryHeapFlagBits requirementMask = vk::MemoryHeapFlagBits::eDeviceLocal);
+std::pair<size_t, size_t> getMemoryHeapBudgetAndUsage(vvv::GpuContextRef ctx, vk::MemoryHeapFlagBits requirementMask = vk::MemoryHeapFlagBits::eDeviceLocal);
 
 void setImageLayout(vk::CommandBuffer const &commandBuffer, vk::Image image, vk::Format format, vk::ImageLayout oldImageLayout, vk::ImageLayout newImageLayout,
                     vk::PipelineStageFlags destinationStage = vk::PipelineStageFlags());
