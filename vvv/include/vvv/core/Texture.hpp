@@ -312,13 +312,13 @@ public:
         }
 
         if(path.ends_with(".png"))
-            this->writePng(std::filesystem::absolute(file).lexically_normal());
+            this->writePng(std::filesystem::absolute(file).lexically_normal().string());
         else if (path.ends_with(".jpg") || path.ends_with(".jpeg"))
-            this->writeJpeg(std::filesystem::absolute(file).lexically_normal(), 90);
+            this->writeJpeg(std::filesystem::absolute(file).lexically_normal().string(), 90);
         else if (path.ends_with(".exr"))
-            this->writeExr(std::filesystem::absolute(file).lexically_normal());
+            this->writeExr(std::filesystem::absolute(file).lexically_normal().string());
         else if (path.ends_with(".hdr"))
-            this->writeHdr(std::filesystem::absolute(file).lexically_normal());
+            this->writeHdr(std::filesystem::absolute(file).lexically_normal().string());
     }
 
     /**
