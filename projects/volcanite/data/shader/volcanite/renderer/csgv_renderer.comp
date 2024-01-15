@@ -56,18 +56,13 @@ ivec2 pixelFromInvocationID() {
 
 uint get_inv_lod(ivec3 voxel) {
     // ToDo: the LOD computation is very expensive. should at least move it to the provision shader or replace it with something cheaper.
-
     // outside volume
-    if (any(lessThan(voxel, ivec3(0))) || any(greaterThanEqual(voxel, ivec3(g_vol_dim))))
-        return INVALID;
+    // if (any(lessThan(voxel, ivec3(0))) || any(greaterThanEqual(voxel, ivec3(g_vol_dim))))
+    //    return INVALID;
 
-    float voxel_size_in_world_space = 1.f / g_world_to_model_space_scaling;
-    float nearDist = 0.05f;
-    const float pixel_size_at_near = 1.f / float(imageSize(feedbackOut).x);
-    vec3 brick_to_camera_world = ((g_model_to_world_space * vec4(vec3(voxel / int(g_brick_size)) * g_brick_size, 1.f)).xyz - g_camera_position_world_space);
-    float pixel_size_at_brick = (pixel_size_at_near / nearDist) * (length(brick_to_camera_world));
-
-    return clamp(g_lod_count - 1u - uint(log2(pixel_size_at_brick / voxel_size_in_world_space + 1.f) + g_lod_bias), 0u, min(g_lod_count - 1, g_max_decoding_lod));
+    float dist = length((g_model_to_world_space * vec4((vec3(0.5f) + vec3(voxel / int(g_brick_size))) * g_brick_size, 1.f)).xyz - g_camera_position_world_space) + (float(g_brick_size)/g_world_to_model_space_scaling);
+    float voxels_per_pixel_at_hit = g_voxels_per_pixel_per_dist * dist;
+    return g_lod_count - 1u - clamp(uint(g_lod_bias + log2(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
 }
 
 bool isEmptySpace(ivec3 voxel) {
@@ -218,6 +213,17 @@ void main() {
     ivec2 pixel = pixelFromInvocationID();
     if(isHelperLane(pixel, viewport_size))
         return;
+
+    if(g_debug_lod) {
+        for (uint lod = 0; lod < g_lod_count; lod++) {
+            if (any(greaterThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) - 2u)))) {
+                if (all(lessThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) + 2u)))) {
+                    writePixel(pixel, vec4(colormap_viridis(float(g_lod_count - 1u - lod)/float(g_lod_count - 1u)), 1.f), BACKGROUND_DEPTH);
+                    return;
+                }
+            }
+        }
+    }
 
     // We do not compute any TAA yet
     vec2 subpixel_offset = vec2(0.f);

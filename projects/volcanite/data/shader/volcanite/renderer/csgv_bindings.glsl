@@ -111,6 +111,7 @@ layout (std140, set = 0, binding = 10) uniform render_info {
     uint g_empty_label;
     float g_transferFunction_limits_min;
     float g_transferFunction_limits_max;
+    float g_voxels_per_pixel_per_dist;
     float g_lod_bias;
     int g_tonemap_enable;
     int g_shadow_ray_enable;

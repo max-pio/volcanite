@@ -405,6 +405,8 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
 
     // trigger a temporal accumulation flush
     m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    // trigger a cache reset
+    m_pass->resetCacheOnNextCall();
 }
 
 void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
@@ -478,6 +480,9 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
                                           0.5); // TODO: we have this low opacity treshold to render opaque first hits
         m_urender_info->setUniform<glm::vec3>("g_camera_position_world_space", camera->position_world_space);
         m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
+        // the g_voxels_per_pixel_per_dist determines how many voxels an image pixel footprint overlaps for a camera distance
+        float voxels_per_pixel_at_near = scalingFactor / float(m_resolution.height);
+        m_urender_info->setUniform<float>("g_voxels_per_pixel_per_dist", glm::tan(this->getCamera()->vertical_fov) * voxels_per_pixel_at_near);
 
         // debug
         m_urender_info->setUniform<uint32_t>("g_debug_model_space", m_show_model_space ? 1 : 0);

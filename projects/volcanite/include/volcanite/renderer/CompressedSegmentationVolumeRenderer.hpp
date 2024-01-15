@@ -119,7 +119,7 @@ private:
     glm::ivec3 m_subblock_start = glm::ivec3(0, 0, 0);
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
-    float m_lod_bias = -2.5f;
+    float m_lod_bias = 0.f;
     bool m_dda_traversal = false;
     bool m_blue_noise = true;
     bool m_show_model_space = false;
