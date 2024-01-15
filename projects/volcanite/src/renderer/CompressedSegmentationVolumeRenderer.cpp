@@ -236,7 +236,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     setCtx(ctx);
     updateDeviceMemoryUsage();
-    Logger(DEBUG) << "Device memory on startup: " << m_gui_device_mem_text;
+    Logger(INFO) << "Device memory on startup: " << m_gui_device_mem_text;
 
     // allocate GPU buffers for our data
     size_t bricks_in_volume = 0u;
@@ -438,6 +438,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
     updateRenderResolutionFromWSI();
 
     glm::vec3 voldim = glm::vec3(m_compressed_segmentation_volume->getVolumeDim());
+    if(m_subblock_enabled)
+        voldim = m_subblock_size;
     glm::vec3 physical_voldim = voldim * m_voxel_size;
 
     // size in world space: uniformly scaled so that the largest component is one
@@ -526,9 +528,13 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         // (or if any rendering parameters changed, technically not "camera" only anymore, but we can use it for resetting all accumulation buffers.)
         m_framesSinceCameraMove++;
         auto newCamHash = hashMemory(&world_to_projection_space[0].x, sizeof(glm::mat4));
+        newCamHash = hashMemory(&m_subsampling, sizeof(m_subsampling), newCamHash);
         newCamHash = hashMemory(&m_bboxMin, sizeof(m_bboxMin), newCamHash);
         newCamHash = hashMemory(&m_bboxMax, sizeof(m_bboxMax), newCamHash);
         newCamHash = hashMemory(&m_voxel_size, sizeof(m_voxel_size), newCamHash);
+        newCamHash = hashMemory(&m_subblock_start, sizeof(m_subblock_start), newCamHash);
+        newCamHash = hashMemory(&m_subblock_size, sizeof(m_subblock_size), newCamHash);
+        newCamHash = hashMemory(&m_subblock_enabled, sizeof(m_subblock_enabled), newCamHash);
         newCamHash = hashMemory(&m_show_model_space, sizeof(m_show_model_space), newCamHash);
         newCamHash = hashMemory(&m_show_brick_cache, sizeof(m_show_brick_cache), newCamHash);
         newCamHash = hashMemory(&m_show_lod, sizeof(m_show_lod), newCamHash);
@@ -546,6 +552,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         newCamHash = hashMemory(&m_tonemap_enabled, sizeof(m_tonemap_enabled), newCamHash);
         newCamHash = hashMemory(&m_shadow_ao_ray_distr, sizeof(m_shadow_ao_ray_distr), newCamHash);
         newCamHash = hashMemory(&m_max_decoding_lod, sizeof(m_max_decoding_lod), newCamHash);
+        newCamHash = hashMemory(&m_lod_bias, sizeof(m_lod_bias), newCamHash);
         if (newCamHash != m_camHash || m_clear_accum_every_frame || m_pass->willCacheBeResetOnNextCall()) {
             m_framesSinceCameraMove = 0u;
             m_camHash = newCamHash;
@@ -562,6 +569,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         uint32_t brick_size = m_compressed_segmentation_volume->getBrickSize();
         m_usegmented_volume_info->setUniform<glm::uvec3>("g_vol_dim", m_compressed_segmentation_volume->getVolumeDim());
         m_usegmented_volume_info->setUniform<glm::vec3>("g_voxel_size", m_voxel_size);
+        m_usegmented_volume_info->setUniform<glm::ivec3>("g_vol_translation", m_subblock_enabled ? m_subblock_start : glm::ivec3(0));
         m_usegmented_volume_info->setUniform<glm::vec3>("g_physical_vol_dim", physical_voldim);
         m_usegmented_volume_info->setUniform<glm::vec3>("g_normalized_volume_size", normalized_volume_size);
         m_usegmented_volume_info->setUniform<uint32_t>("g_vol_max_label", 1000000);
@@ -614,6 +622,19 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                 }
             },
             "Voxel Size");
+            g->addBool(&m_subblock_enabled, "Use Sub-Block");
+            g->addCustomCode([this]() {
+                if(m_subblock_enabled) {
+                    auto old = m_subblock_size;
+                    ImGui::InputInt3("Sub-Block Size", &m_subblock_size.x);
+                    if (glm::any(glm::lessThanEqual(m_subblock_size, glm::ivec3(0.f)))) {
+                        Logger(WARN) << "Sub-Block size must be > 0 in all dimensions! Resetting..";
+                        m_subblock_size = old;
+                    }
+                    ImGui::InputInt3("Sub-Block Start", &m_subblock_start.x);
+                }
+            },
+            "Sub-Block");
 #endif
     g->addInt(&m_empty_label, "Empty Label");
     g->addInt(&m_label_minmax.x, "Label ID Min. 2^", 0, 32, 1);

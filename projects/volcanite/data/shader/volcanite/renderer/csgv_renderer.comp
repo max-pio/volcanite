@@ -4,7 +4,6 @@
 
 layout (local_size_x = 8, local_size_y = 8) in;
 
-
 #include "csgv_bindings.glsl"
 
 // includes
@@ -276,7 +275,7 @@ void main() {
         // ToDo: replace with DDA traversal. remove unnecessary variables in RayMarchState
         state.t += g_stepSize;
         state.pos = ray.origin + state.t * ray.direction;
-        state.voxel = ivec3(floor(state.pos / g_voxel_size));  // floor is required so that -0.1f is not 0
+        state.voxel = ivec3(floor(state.pos / g_voxel_size)) + g_vol_translation;  // floor is required so that -0.1f is not 0
 
         // out of bounds and empty space check
         if(isEmptySpace(state.voxel)

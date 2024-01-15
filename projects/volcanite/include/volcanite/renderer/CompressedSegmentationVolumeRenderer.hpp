@@ -114,6 +114,9 @@ private:
     int m_max_steps = 2048;
     int m_subsampling = 0;
     glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
+    bool m_subblock_enabled = false;
+    glm::ivec3 m_subblock_size = glm::ivec3(128, 128, 128);
+    glm::ivec3 m_subblock_start = glm::ivec3(0, 0, 0);
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
     float m_lod_bias = -2.5f;
