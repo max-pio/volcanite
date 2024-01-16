@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(vvv-volcanite VERSION 0.1.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES CXX)
-
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
 # GENERAL BUILD CONFIG -------------------------------------------------------------------------------------------------
 
 # Require out-of-source builds
