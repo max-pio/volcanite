@@ -245,3 +245,33 @@ If you want to create a new project, have a look at the [ReadMe](projects/README
 The [ReadMe](vvv-glfw-app/README.md) file of the GLFW Application contains further information for using the GUI window.
 Information about using the vvv library and implementing or extending GPU renderers will follow in the future.
 Until then, you can have a look at the [code examples](projects/examples/src/bin) and other existing Volcanite renderers to make yourself familiar with the code base.
+
+
+### Git Branching Strategy
+
+* Each developer starts own branch names with a prefix `ab/<branch>`. Usually, `ab` are your initials.
+* Each developer has their own development branch from which additional branches for features can be created.
+* Merging happens to the `staging` branch first where merging bugs can be fixed. We do not rebase here.
+* Ideally, we test the `staging` branch with different builds (Ubuntu, MCSV Windows, headless, ..) before release.
+* If the `staging` branch feels complete and bug free, it can be merged into `main` by the repository maintainer.
+
+```
+  ab/feature   ab/development   cd/development   staging      main
+      .              ┌─┐              .             .           .
+      .              └┬┘             ┌─┐            .           .
+      .               │              └┬┘            .           .
+      .              ┌▼┐              │             .           .
+      ┌──────────────┴┬┘             ┌▼┐            .           .
+      │               │              └┬┘            .           .
+     ┌▼┐              │               └───────────►┌─┐          .
+     └┬┘ feature     ┌▼┐              .            └┬┘          .
+      │  branch      └┬┘              .             │           .
+     ┌▼┐              │               .            ┌▼┐          .
+     └─┴────────────►┌▼┐              .            └┬┘ bugfix   .
+      .              └┬┘              .             │           .
+      .               │               .             │           .
+      .               └───────────────────────────►┌▼┐          .
+      .               .               .            └┬┘          .
+      .               .               .             └─────────►┌─┐
+      .               .               .                        └─┘ tag 0.1
+```
