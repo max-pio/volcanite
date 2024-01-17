@@ -275,7 +275,8 @@ void main() {
         writePixel(pixel, get_background_color(fragCoord), BACKGROUND_DEPTH);
         return;
     }
-    int max_steps = min(g_maxSteps, int((t_1 - t_0 + g_stepSize) / g_stepSize));
+    t_0 -= 0.0001f; // Epsilon
+    int max_steps = g_dda_traversal ? g_maxSteps : min(g_maxSteps, int((t_1 - t_0 + g_stepSize) / g_stepSize));
 
     // For debug views: only color every other pixel in the debug view to get some kind of "transparent" overlay effect
     // As we move this pixel around, the progressive accumulation averages this with the rendered colors.
@@ -286,7 +287,7 @@ void main() {
     // ray marching loop
     RayMarchState state;
     state.step = 0;
-    state.t = t_0 - (g_blue_noise ? fract(randomVec3(vec2(pixel), blueNoise32x32(pixel) * 1024.f + float(g_camera_still_frames) * 7.2348261f).x) * g_stepSize : 0.f);
+    state.t = t_0 - (!g_dda_traversal && g_blue_noise ? fract(randomVec3(vec2(pixel), blueNoise32x32(pixel) * 1024.f + float(g_camera_still_frames) * 7.2348261f).x) * g_stepSize : 0.f);
     state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
     //state.voxel = ivec3(pos);
     state.ray_type = RT_VIEW_RAY;
