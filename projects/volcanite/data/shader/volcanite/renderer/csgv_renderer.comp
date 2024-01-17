@@ -212,7 +212,7 @@ struct RayMarchState {
 };
 
 
-RayMarchState dda_step(RayMarchState state, Ray ray) {
+void dda_step(inout RayMarchState state, const Ray ray) {
 //    float next_t = min(state.side_dist.x, min(state.side_dist.y, state.side_dist.z));
     vec3 mask = vec3(lessThanEqual(state.side_dist.xyz, min(state.side_dist.yzx, state.side_dist.zxy)));
     state.t = dot(mask, state.side_dist);// + state.t_0;
@@ -220,10 +220,9 @@ RayMarchState dda_step(RayMarchState state, Ray ray) {
     state.voxel += state.stp * ivec3(mask);
     state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
 //    state.normal = -mask * state.stp * vec3(1.0);
-    return state;
 }
 
-RayMarchState dda_init(RayMarchState state, Ray ray) {
+void dda_init(inout RayMarchState state, const Ray ray) {
     // DDA traversal initialisation
     // delta.i equals to the length the ray has to travel to hit the next cell in i direction.
     // side_dist is the distance from the ray origin to the next cell in each dimension.
@@ -231,8 +230,6 @@ RayMarchState dda_init(RayMarchState state, Ray ray) {
     state.stp = ivec3( ray.direction.x >= 0.0 ? 1.0 : -1.0, ray.direction.y >= 0.0 ? 1.0 : -1.0, ray.direction.z >= 0.0 ? 1.0 : -1.0);
     state.delta = abs(rdinv); // min(rdinv * state.stp, 1.0);//
     state.side_dist = abs((vec3(state.voxel) + max(state.stp, vec3(0.0)) - ray.origin) * state.delta);
-
-    return state;
 }
 
 void main() {
@@ -308,11 +305,11 @@ void main() {
     }
 
     state.voxel = ivec3(floor(state.pos + 0.)); // DDA traversal start voxel
-    state = dda_init(state, ray);
+    dda_init(state, ray);
 
     for(; state.step < max_steps; state.step++) {
         if (g_dda_traversal) {
-            state = dda_step(state, ray);
+            dda_step(state, ray);
         } else {
             // ray marching
             state.t += g_stepSize;
@@ -424,8 +421,8 @@ void main() {
                 ray.origin = state.pos;
                 ray.direction = normalize(ray.direction);
 
-                state = dda_init(state, ray);
-//                state = dda_step(state, ray); // performs one dda_step to avoid self shadowing.
+                dda_init(state, ray);
+//              dda_step(state, ray); // performs one dda_step to avoid self shadowing.
 
             } else {
                 ray.origin = state.pos;
