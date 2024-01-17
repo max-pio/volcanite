@@ -23,3 +23,7 @@ compile_commands.json
 /out
 /CMakeSettings.json
 
+# vulkan, volcanite and imgui specific ignores
+imgui.ini
+volcanite
+vulkan_pipeline_cache.data
