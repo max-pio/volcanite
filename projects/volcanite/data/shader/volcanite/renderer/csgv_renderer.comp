@@ -333,7 +333,14 @@ void main() {
             break;
         }
 
-        assert(state.label != INVALID, "get_volume_label should never return INVALID");
+#ifndef NDEBUG
+        if(state.label == INVALID){
+            state.out_color = vec4(1.f, 0.f, 1.f, 1.f);
+            state.out_depth = 0.f;
+            assert(false, "get_volume_label returned INVALID. Possible corrupt data in brick cache.");
+            break;
+        }
+#endif
 
         // continue traversal if this is not a valid hit
         if (!isLabelVisible(state.label)) {

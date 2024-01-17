@@ -92,7 +92,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         cache_usage = requested_ids[m_max_detail_requests_per_frame + 1u];
     }
     else {
-        // ToDo: download the cache_usage also if we don't use detail separation
+        // ToDo: download the cache_usage also if we don't use detail separation, e.g. m_last_gpu_stats.gpu_cache_size which is currently only set when m_show_step_count
     }
 
     // trigger garbage collection on demand, but only if we have a different camHash since the last garbage collection
@@ -137,7 +137,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             cache_state << "inv. LOD" << (i+1) << ": " << m_last_gpu_stats.gpu_blocks_in_cache[i] << ", ";
         }
         cache_state << static_cast<double>(decoded_bytes_total) / 1000. / 1000.f << " MB total";
-        Logger(INFO) << cache_state.str() << "   |   " << m_last_gpu_stats.gpu_raymarch_samples << " block samples - " << static_cast<double>(m_last_gpu_stats.gpu_raymarch_samples) / static_cast<double>(m_last_gpu_stats.gpu_bbox_hits) << " per ray.";
+        Logger(INFO) << cache_state.str() << "   |   " << m_last_gpu_stats.gpu_raymarch_samples << " ray samples (" << static_cast<double>(m_last_gpu_stats.gpu_raymarch_samples) / static_cast<double>(m_last_gpu_stats.gpu_bbox_hits) << " per ray).";
         if (decoded_bytes_in_frame > 0)
             Logger(INFO) << "decoded " << std::fixed << std::setprecision(3) << static_cast<double>(decoded_bytes_in_frame) / 1000. / 1000. << " MB";
     }
@@ -585,7 +585,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         auto lod_count = m_compressed_segmentation_volume->getLodCountPerBrick();
         m_usegmented_volume_info->setUniform<uint32_t>("g_lod_count", lod_count);
         m_usegmented_volume_info->setUniform<uint32_t>("g_frame", m_frame);
-        m_usegmented_volume_info->setUniform<uint32_t>("g_max_decoding_lod", m_max_decoding_lod);
+        m_usegmented_volume_info->setUniform<uint32_t>("g_max_decoding_lod", glm::min(static_cast<uint32_t>(m_max_decoding_lod), lod_count));
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_capacity", m_cache_capacity);
         m_usegmented_volume_info->setUniform<uint32_t>("g_free_stack_capacity", m_free_stack_capacity);
         m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
@@ -662,7 +662,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     dev->addFloat(&m_ambient_occlusion_dist_strength.y, "Ambient Occlusion Strength", 0.f, 1.f, 0.1f);
     dev->addSeparator();
     dev->addLabel("Debug");
-    dev->addInt(&m_max_decoding_lod, "Max. LOD", 0, 5, 1);
+    dev->addInt(&m_max_decoding_lod, "Max. Decoding LoD", 0, 6, 1);
     dev->addBool(&m_show_model_space, "Show Model Space");
     dev->addBool(&m_show_brick_cache, "Show Brick Cache");
     dev->addBool(&m_show_lod, "Show LOD Levels");

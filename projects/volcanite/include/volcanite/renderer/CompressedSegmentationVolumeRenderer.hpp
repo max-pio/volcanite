@@ -92,8 +92,13 @@ public:
 
     void initGui(vvv::GuiInterface * gui) override;
 
-    void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> tree) {
-        m_compressed_segmentation_volume = std::move(tree);
+    void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> csgv) {
+        if(csgv->getBrickCount().x < csgv->getLodCountPerBrick()) {
+            Logger(WARN) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
+                         ") in one dimension than there are brick level-of-details (" << csgv->getLodCountPerBrick() <<
+                         "). This may break some shaders. Advice: Re-Compress with a smaller brick-size.";
+        }
+        m_compressed_segmentation_volume = std::move(csgv);
         m_data_changed = true;
     }
 
@@ -128,7 +133,7 @@ private:
     bool m_show_step_count = false;
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
-    int m_max_decoding_lod = 5;
+    int m_max_decoding_lod = 6;
     int m_empty_label = 0;
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text;
