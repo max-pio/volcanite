@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(vvv-volcanite VERSION 0.1.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES CXX)
+project(vvv-volcanite VERSION 0.1.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES C CXX)
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
 # GENERAL BUILD CONFIG -------------------------------------------------------------------------------------------------
 
@@ -61,8 +61,12 @@ include(makeExecutable)
 
 # LIBRARIES ------------------------------------------------------------------------------------------------------------
 
+option(HEADLESS "Build without GUI and windowing functionality to run only in --headless mode." OFF)
+
 # add extern public imgui library
-add_subdirectory(extern/imgui)
+if(NOT HEADLESS)
+    add_subdirectory(extern/imgui)
+endif()
 
 # add extern HighFive simplified hdf5 library if libhdf5-dev is installed
 # we can not do this in the vvv library cmake as extern/HighFive cannot be added as a subdirectory from there
@@ -87,21 +91,30 @@ if (USE_HDF5_SUPPORT)
     endif ()
 endif ()
 
+# TCLAP for command line argument parsing (used by multiple subprojects)
+find_package(tclap REQUIRED)
 
 # Add vvv and vvv glfw application libraries
 add_subdirectory(vvv)
-add_subdirectory(vvv-glfw-app)
+if(NOT HEADLESS)
+    add_subdirectory(vvv-glfw-app)
+endif()
 
 option(MAKE_EXAMPLES "Build examples for the VVV Framework" ON)
 
 if (MAKE_EXAMPLES)
-    add_subdirectory(projects/examples)
+    if (HEADLESS)
+        message(WARNING "MAKE_EXAMPLES is ON but cannot be used in combination with HEADLESS. Ignoring.")
+    else()
+        add_subdirectory(projects/examples)
+    endif()
 endif()
 
 # add extern rANS encoding library
 add_subdirectory(extern/ryg_rans)
 
 # add extern portable file dialog
+# ToDo: also remove when build in HEADLESS mode?
 add_subdirectory(extern/portable-file-dialogs)
 
 # PROJECTS  ------------------------------------------------------------------------------------------------------------

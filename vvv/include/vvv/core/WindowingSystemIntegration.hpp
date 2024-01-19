@@ -14,8 +14,10 @@ public:
     virtual float getScreenContentScale() const = 0;
 
     virtual void setWindowSize(int width, int height) const = 0;
+    virtual void setWindowResizable(bool resizable) const = 0;
+    virtual bool isWindowResizable() const = 0;
 
-    // TODO: does not really belong here...
+    // TODO: does not really belong here... camera should be part of the [Renderer](vvv/include/Renderer.cpp), not the WSI
     virtual Camera *getCamera() const = 0;
 
     /** Number of swapchain images. This is not necessarily the maximal number of images concurrently in flight!

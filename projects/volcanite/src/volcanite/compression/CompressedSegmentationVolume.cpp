@@ -273,11 +273,11 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
 
 float CompressedSegmentationVolume::separateDetail() {
     if(!m_detail_encoding.empty())
-        throw std::runtime_error("Detail segmentation was already performed!");
+        throw std::runtime_error("Detail separation was already performed!");
     if(m_encoding.empty())
         throw std::runtime_error("Segmentation volume is not yet compressed! Call compress() before performing detail separation.");
     if(m_rANS_mode != DOUBLE_TABLE_RANS)
-        throw std::runtime_error("Detail segmentation can only be used in combination with rANS in double table mode!");
+        throw std::runtime_error("Detail separation can only be used in combination with rANS in double table mode!");
 
     const size_t max_brick_index = m_brick_starts.size() - 1;
 
@@ -298,7 +298,7 @@ float CompressedSegmentationVolume::separateDetail() {
     std::vector<uint32_t> base_encoding;
     // the base encoding levels are smaller because they don't store the detail encoding and a header that is one element shorter than before
     base_encoding.resize(m_encoding.size() - currentDetailStart - max_brick_index, 0u);
-    #pragma omp parallel for num_threads(NUM_THREADS) default(none) shared(max_brick_index, base_encoding, header_size, lod_count, m_detail_encoding)
+    #pragma omp parallel for num_threads(m_cpu_threads) default(none) shared(max_brick_index, base_encoding, header_size, lod_count, m_detail_encoding)
     for(size_t i = 0; i < max_brick_index; i++) {
         // we are only allowed to read from m_brick_starts[i], m_brick_starts[i+1] is undefined!
         uint32_t* base_encoding_start = base_encoding.data() + m_brick_starts[i] - m_detail_starts[i] - i;  // output position of this brick in the base encoding output array
@@ -582,8 +582,8 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     m_volume_dim = volume_dim;
     glm::uvec3 brickCount = getBrickCount();
     if(verbose) {
-        Logger(INFO) << " running with " << NUM_THREADS << " threads on " << std::thread::hardware_concurrency() << " CPU cores";
-        Logger(INFO) << " brick count: " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z) << " with brick size " << m_brick_size << "^3";
+        Logger(DEBUG) << " running with " << m_cpu_threads << " threads on " << std::thread::hardware_concurrency() << " CPU cores";
+        Logger(DEBUG) << " brick count: " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z) << " with brick size " << m_brick_size << "^3";
     }
     m_encoding.clear();
     size_t reserved_size = static_cast<size_t>(volume_dim.x) * volume_dim.y * volume_dim.z / 12ul / 4ul; // assume that we have a compression rate below 1/12
@@ -604,12 +604,12 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     MiniTimer totalTimer;
     int bricks_since_last_update = 0;
 
-    // compute the next NUM_THREADS brick encodings in parallel
+    // compute the next m_cpu_threads brick encodings in parallel
     const uint32_t max_encoded_brick_count_32bit = m_brick_size * m_brick_size * m_brick_size;
-    std::vector<uint32_t> encodedBrick[NUM_THREADS];
-    uint32_t encoded_element_count[NUM_THREADS];
-    uint32_t encoded_element_count_prefix_sum[NUM_THREADS];
-    for (int thread_id = 0; thread_id < NUM_THREADS; thread_id++) {
+    std::vector<uint32_t> encodedBrick[m_cpu_threads];
+    uint32_t encoded_element_count[m_cpu_threads];
+    uint32_t encoded_element_count_prefix_sum[m_cpu_threads];
+    for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
         encodedBrick[thread_id].resize(max_encoded_brick_count_32bit / 2u);     // we assume that the worst case compression rate is 50%
         encoded_element_count[thread_id] = 0u;
         encoded_element_count_prefix_sum[thread_id] = 0u;
@@ -618,9 +618,9 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     glm::uvec3 brick;
     for (brick.z = 0u; brick.z < brickCount.z; brick.z++) {
         for (brick.y = 0u; brick.y < brickCount.y; brick.y++) {
-            for (brick.x = 0u; brick.x < brickCount.x; brick.x += NUM_THREADS) {
+            for (brick.x = 0u; brick.x < brickCount.x; brick.x += m_cpu_threads) {
 
-                #pragma omp parallel num_threads(NUM_THREADS) default(none) shared(brick, brickCount, volume, encodedBrick, encoded_element_count)
+                #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(brick, brickCount, volume, encodedBrick, encoded_element_count)
                 {
                     unsigned int thread_id = omp_get_thread_num();
                     encoded_element_count[thread_id] = 0u;
@@ -631,15 +631,15 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
                 }
 
                 // a prefix sum of the element counts tells us the local offsets. We also check how many new elements we need in total.
-                for (int thread_id = 1; thread_id < NUM_THREADS; thread_id++)
+                for (int thread_id = 1; thread_id < m_cpu_threads; thread_id++)
                     encoded_element_count_prefix_sum[thread_id] = encoded_element_count_prefix_sum[thread_id - 1] + encoded_element_count[thread_id - 1];
                 size_t old_encoding_size = m_encoding.size();
-                size_t new_encoding_size = old_encoding_size + encoded_element_count_prefix_sum[NUM_THREADS - 1] + encoded_element_count[NUM_THREADS - 1];
+                size_t new_encoding_size = old_encoding_size + encoded_element_count_prefix_sum[m_cpu_threads - 1] + encoded_element_count[m_cpu_threads - 1];
                 m_encoding.resize(new_encoding_size);
 
                 // append the results
-                #pragma omp parallel num_threads(NUM_THREADS) default(none) shared(brick, brickCount, encoded_element_count, encoded_element_count_prefix_sum, encodedBrick, old_encoding_size)
-                for (int thread_id = 0; thread_id < NUM_THREADS; thread_id++) {
+                #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(brick, brickCount, encoded_element_count, encoded_element_count_prefix_sum, encodedBrick, old_encoding_size)
+                for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
                     if (encoded_element_count[thread_id] == 0u)
                         continue;
                     // store the start index of the brick within the encoding array
@@ -652,11 +652,11 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
 
                 // output a progress update
                 if(verbose) {
-                    bricks_since_last_update += NUM_THREADS;
+                    bricks_since_last_update += m_cpu_threads;
                     constexpr const double PROGRESS_UPDATE_INTERVAL = 2.;
                     if (progressTimer.elapsed() >= PROGRESS_UPDATE_INTERVAL) {
                         float bricks_per_second = static_cast<float>(bricks_since_last_update) / progressTimer.elapsed();
-                        uint32_t last_brick_index = pos2idx(glm::uvec3(brick.x + NUM_THREADS - 1, brick.y, brick.z), brickCount);
+                        uint32_t last_brick_index = pos2idx(glm::uvec3(brick.x + m_cpu_threads - 1, brick.y, brick.z), brickCount);
                         float remaining_seconds = static_cast<float>(brickCount.x * brickCount.y * brickCount.z - last_brick_index) / bricks_per_second;
                         std::stringstream stream;
                         stream << " Progress " << std::fixed << std::setprecision(1) << static_cast<float>(last_brick_index) / static_cast<float>(brickCount.x * brickCount.y * brickCount.z) * 100.f << "%"
@@ -698,13 +698,13 @@ void CompressedSegmentationVolume::decompressLOD(int target_lod, std::vector<uin
     // this would run in parallel on the GPU later!
     glm::uvec3 brick_pos;
 #ifndef NO_BRICK_DECODE_INDEX_REMAP
-    std::vector<uint32_t> brick_cache[NUM_THREADS]; // in morton order
+    std::vector<uint32_t> brick_cache[m_cpu_threads]; // in morton order
     for (auto &bc : brick_cache)
         bc.resize(m_brick_size * m_brick_size * m_brick_size);
 #else
     void* brick_cache = nullptr; // just for OpenMP
 #endif
-#pragma omp parallel for num_threads(NUM_THREADS) default(none) private(brick_pos) shared(brickCount, brick_cache, out, inv_lod)
+#pragma omp parallel for num_threads(m_cpu_threads) default(none) private(brick_pos) shared(brickCount, brick_cache, out, inv_lod)
     for (uint32_t z = 0; z < brickCount.z; z++) {
         unsigned int thread_id = omp_get_thread_num();
         brick_pos.z = z; // we need that for omp...
@@ -779,7 +779,7 @@ bool CompressedSegmentationVolume::testLOD(const std::vector<uint32_t> &volume, 
         for (uint32_t z = 0u; z < brickCount.z; z++) {
             brick.z = z;
             for (brick.y = 0u; brick.y < brickCount.y; brick.y++) {
-                for (brick.x = 0u; brick.x < brickCount.x; brick.x += NUM_THREADS) {
+                for (brick.x = 0u; brick.x < brickCount.x; brick.x += m_cpu_threads) {
 
                     // construct target multigrid for this brick (a bit efficient since we only test one level here..)
                     std::vector<MultiGridNode> multigrid;
@@ -841,6 +841,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
         Logger(WARN) << "File " << path << " already exist. Skipping.";
         return;
     }
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
     std::ofstream file(path, std::ios_base::out | std::ios::binary);
     if (!file.is_open()) {
         Logger(ERROR) << "Unable to open export file " << path << ". Skipping.";
@@ -953,6 +954,10 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
         m_detail_encoding.resize(size);
         fin.read(reinterpret_cast<char *>(&m_detail_encoding[0]), static_cast<long>(size * sizeof(uint32_t)));
     }
+    else {
+        m_detail_starts.clear();
+        m_detail_encoding.clear();
+    }
 
     char single_byte;
     fin.read(&single_byte, 1);
@@ -961,8 +966,8 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     fin.close();
     glm::uvec3 brickCount = getBrickCount();
     if(verbose)
-        Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with brick count: " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z)
-                      << " with brick size " << m_brick_size << "^3";
+        Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim) << " voxels and " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z)
+                      << " bricks for brick size " << m_brick_size << "^3";
     return true;
 }
 
@@ -1132,7 +1137,7 @@ std::vector<std::map<std::string, float>> CompressedSegmentationVolume::gatherBr
     std::vector<std::map<std::string, float>> statistics(brickCount.x * brickCount.y * brickCount.z);
 
     glm::uvec3 brick_pos;
-    #pragma omp parallel for num_threads(NUM_THREADS) default(none) private(brick_pos) shared(brickCount, statistics)
+    #pragma omp parallel for num_threads(m_cpu_threads) default(none) private(brick_pos) shared(brickCount, statistics)
     for (uint32_t z = 0; z < brickCount.z; z++) {
         unsigned int thread_id = omp_get_thread_num();
         brick_pos.z = z; // we need that for omp...
@@ -1389,19 +1394,19 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
     m_volume_dim = volume_dim;
     glm::uvec3 brickCount = getBrickCount();
     if(verbose) {
-        Logger(INFO) << " running with " << NUM_THREADS << " threads on " << std::thread::hardware_concurrency() << " CPU cores";
+        Logger(INFO) << " running with " << m_cpu_threads << " threads on " << std::thread::hardware_concurrency() << " CPU cores";
         Logger(INFO) << " brick count: " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z) << " with brick size " << m_brick_size << "^3";
     }
 
-    Logger(INFO, true) << " Progress 0.0%";
+    Logger(INFO, true) << " Prepass Progress 0.0%";
     MiniTimer progressTimer;
     MiniTimer totalTimer;
     int bricks_since_last_update = 0;
 
-    // compute the next NUM_THREADS brick encodings in parallel
-    size_t brick_freq[NUM_THREADS][32]; // last 16 elements are detail frequencies, if detail separation is used
-    //std::vector<uint32_t> tmpBrick[NUM_THREADS];
-    for (int thread_id = 0; thread_id < NUM_THREADS; thread_id++) {
+    // compute the next m_cpu_threads brick encodings in parallel
+    size_t brick_freq[m_cpu_threads][32]; // last 16 elements are detail frequencies, if detail separation is used
+    //std::vector<uint32_t> tmpBrick[m_cpu_threads];
+    for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
         for(int i = 0; i < 32; i++) {
             brick_freq[thread_id][i] = 0ul;
         }
@@ -1411,9 +1416,9 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
     size_t brick_idx = 0;
     for (brick.z = 0u; brick.z < brickCount.z; brick.z+=subsampling_factor) {
         for (brick.y = 0u; brick.y < brickCount.y; brick.y+=subsampling_factor) {
-            for (brick.x = 0u; brick.x < brickCount.x; brick.x+=(subsampling_factor * NUM_THREADS)) {
+            for (brick.x = 0u; brick.x < brickCount.x; brick.x+=(subsampling_factor * m_cpu_threads)) {
 
-                #pragma omp parallel num_threads(NUM_THREADS) default(none) shared(brick, brickCount, volume, brick_freq, subsampling_factor, detail_freq)
+                #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(brick, brickCount, volume, brick_freq, subsampling_factor, detail_freq)
                 {
                     unsigned int thread_id = omp_get_thread_num();
                     if (brick.x + thread_id*subsampling_factor < brickCount.x) {
@@ -1423,12 +1428,12 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
                 }
 
                 // output a progress update
-                bricks_since_last_update += NUM_THREADS;
+                bricks_since_last_update += m_cpu_threads;
                 constexpr const double PROGRESS_UPDATE_INTERVAL = 2.;
                 if (progressTimer.elapsed() >= PROGRESS_UPDATE_INTERVAL) {
                     float bricks_per_second = static_cast<float>(bricks_since_last_update) / progressTimer.elapsed();
                     std::stringstream stream;
-                    stream << " Progress " << std::fixed << std::setprecision(1) << static_cast<float>(brick_idx) / static_cast<float>(brickCount.x * brickCount.y * brickCount.z / subsampling_factor / subsampling_factor / subsampling_factor) * 100.f << "%"
+                    stream << " Prepass Progress " << std::fixed << std::setprecision(1) << static_cast<float>(brick_idx) / static_cast<float>(brickCount.x * brickCount.y * brickCount.z / subsampling_factor / subsampling_factor / subsampling_factor) * 100.f << "%"
                            << " (" << std::setprecision(2) << (bricks_per_second * m_brick_size * m_brick_size * m_brick_size / 1000000.f)
                            << " million voxels/second)";
                     Logger(INFO, true) << stream.str();
@@ -1444,14 +1449,17 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
     #pragma omp parallel for default(none) shared(freq_out, brick_freq)
     for(int i = 0; i < 32; i++) {
         freq_out[i] = 0ul;
-        for (int thread_id = 0; thread_id < NUM_THREADS; thread_id++) {
+        for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
             freq_out[i] += brick_freq[thread_id][i];
         }
     }
 
     float total_seconds = totalTimer.elapsed();
     m_last_total_freq_prepass_seconds = total_seconds;
-    Logger(INFO) << " Progress 100% in " << std::fixed << std::setprecision(3) << total_seconds << "s freq: " <<  arrayToString(freq_out, 16) << " | " << arrayToString(freq_out + 16, 16) ;
+    if(verbose)
+        Logger(INFO) << " Prepass Progress 100% in " << std::fixed << std::setprecision(3) << total_seconds << "s operation freq: " <<  arrayToString(freq_out, 16) << " | " << arrayToString(freq_out + 16, 16) ;
+    else
+        Logger(INFO) << " Prepass Progress 100% in " << std::fixed << std::setprecision(3) << total_seconds << "s";
 }
 
 }; // namespace vvv

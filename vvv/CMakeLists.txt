@@ -12,6 +12,7 @@ set(VVV_HEADERS
         include/vvv/core/DefaultGpuContext.hpp
         include/vvv/core/GpuContext.hpp
         include/vvv/core/GuiInterface.hpp
+        include/vvv/core/HeadlessRendering.hpp
         include/vvv/core/MultiBuffering.hpp
         include/vvv/core/Renderer.hpp
         include/vvv/core/Shader.hpp
@@ -67,8 +68,13 @@ set(VVV_HEADERS
         ../extern/stb/stb_image.hpp
         ../extern/stb/stb_image_write.hpp
 
-        ../extern/tinyexr/tinyexr.hpp
+# ToDo: why are builds breaking on some machines when including tinyexr?
+#        ../extern/tinyexr/tinyexr.hpp
         )
+
+if(HEADLESS)
+    list(APPEND VVV_HEADERS include/vvv/headless_entrypoint.hpp)
+endif()
 
 set(VVV_SOURCES
         src/vvv.cpp
@@ -77,7 +83,9 @@ set(VVV_SOURCES
         src/core/Buffer.cpp
         src/core/Camera.cpp
         src/core/DefaultGpuContext.cpp
+        src/core/GuiElementList.cpp
         src/core/GpuContext.cpp
+        src/core/HeadlessRendering.cpp
         src/core/MultiBuffering.cpp
         src/core/Shader.cpp
         src/core/Synchronization.cpp
@@ -123,10 +131,13 @@ set(VVV_SOURCES
         ../extern/SPIRV-Reflect/spirv_reflect.cpp
 
         ../extern/stb/stb_image.cpp
-
-# [deprecated] tinyexr is currently not used
+# ToDo: why are builds breaking on some machines when including tinyexr?
 #        ../extern/tinyexr/tinyexr.cpp
         )
+
+if(HEADLESS)
+    list(APPEND VVV_SOURCES src/headless_entrypoint.cpp)
+endif()
 
 # Target and Packages --------------------------------------------------------------------------------------------------
 
@@ -153,10 +164,16 @@ find_package(OpenMP)
 option(USE_TIFF_SUPPORT  "Includes the TIFF library for importing and exporting tiff files" ON)
 if(USE_TIFF_SUPPORT)
     find_package(TIFF)
-    if(TIFF_FOUND)
-        message("TIFF found!")
-    else ()
+    if(NOT TIFF_FOUND)
         message(WARNING "USE_TIFF_SUPPORT was set but TIFF library could not be found!")
+    endif ()
+endif()
+
+option(USE_XML_SUPPORT  "Includes the PUGIXML library for processing XML data" ON)
+if(USE_XML_SUPPORT)
+    find_package(PUGIXML)
+    if(NOT PUGIXML_FOUND)
+        message(WARNING "USE_XML_SUPPORT was set but PUGIXML library could not be found!")
     endif ()
 endif()
 
@@ -188,6 +205,10 @@ endif ()
 if (TIFF_FOUND)
     target_link_libraries(libvvv PRIVATE TIFF::TIFF)
     target_compile_definitions(libvvv PUBLIC -DLIB_TIFF)
+endif ()
+if (PUGIXML_FOUND)
+    target_link_libraries(libvvv PRIVATE pugixml::pugixml)
+    target_compile_definitions(libvvv PUBLIC -DLIB_PUGIXML)
 endif ()
 
 # remove comment for automatic /data copy:

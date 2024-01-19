@@ -149,6 +149,15 @@ public:
         return static_cast<float>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) / 1000.f;
     }
 
+    static std::string getCurrentDateTime(const std::string& format = "%Y-%m-%d %X") {
+        auto now = std::chrono::system_clock::now();
+        auto in_time_t = std::chrono::system_clock::to_time_t(now);
+
+        std::stringstream ss;
+        ss << std::put_time(std::localtime(&in_time_t), format.c_str());
+        return ss.str();
+    }
+
 private:
     std::chrono::time_point<std::chrono::system_clock> m_startTime;
 };

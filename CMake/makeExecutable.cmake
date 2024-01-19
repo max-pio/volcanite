@@ -47,22 +47,36 @@ function(makeExecutable name)
             # WIN32_EXECUTABLE TRUE # this hides the console window. Disabled, because we need to see the console output! maybe re-enable for distribution
             MACOSX_BUNDLE TRUE
             )
-    target_link_libraries(${name} PRIVATE LibVVV::libvvv LibVVV::libvvvwindow)
+    target_link_libraries(${name} PRIVATE LibVVV::libvvv)
+    if(NOT HEADLESS)
+        target_link_libraries(${name} PRIVATE LibVVV::libvvvwindow)
+    endif()
     target_include_directories(${name} PRIVATE include)
 
     target_compile_definitions(${name} PRIVATE
             -DVULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1 -DVULKAN_HPP_STORAGE_SHARED=1
             -DEXECUTABLE_${name}=1)
+
+    if(HEADLESS)
+        target_compile_definitions(${name} PUBLIC -DHEADLESS=1)
+    endif()
 endfunction()
 
 # same as makeExecutabe, but for libraries. Can be used to build a library from all shared project files and link that for each executable.
 function(makeLibrary name)
     add_library(${name} ${ARGN})
-    target_link_libraries(${name} PRIVATE LibVVV::libvvv LibVVV::libvvvwindow)
+    target_link_libraries(${name} PRIVATE LibVVV::libvvv)
+    if(NOT HEADLESS)
+        target_link_libraries(${name} PRIVATE LibVVV::libvvvwindow)
+    endif()
     target_include_directories(${name} PRIVATE include)
 
     target_compile_definitions(${name} PRIVATE
             -DVULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1 -DVULKAN_HPP_STORAGE_SHARED=1)
+
+    if(HEADLESS)
+        target_compile_definitions(${name} PUBLIC -DHEADLESS=1)
+    endif()
 endfunction()
 
 # This will add install()-definitions for this executable. This includes copying all dependent data/-Folders upon `ninja install` or packaging the data/-Files with `cpack`.

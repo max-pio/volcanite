@@ -24,9 +24,9 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
 
     // TODO(Max): read fields with key/value pairs from nrrd file
     // read dimension
-    int img_width = 0;
-    int img_height = 0;
-    int img_depth = 0;
+    uint64_t img_width = 0;
+    uint64_t img_height = 0;
+    uint64_t img_depth = 0;
     uint16_t bits_per_sample = 0;
 
     std::optional<std::string> detachedPayload;
@@ -179,9 +179,9 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::strin
 
     // TODO(Max): read fields with key/value pairs from nrrd file
     // read dimension
-    int img_width = 0;
-    int img_height = 0;
-    int img_depth = 0;
+    uint64_t img_width = 0;
+    uint64_t img_height = 0;
+    uint64_t img_depth = 0;
     std::string payloadTy;
     uint32_t payloadComponentSize;
     float minVal = std::numeric_limits<float>::max();
