@@ -92,7 +92,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         cache_usage = requested_ids[m_max_detail_requests_per_frame + 1u];
     }
     else {
-        // ToDo: download the cache_usage also if we don't use detail separation
+        // ToDo: download the cache_usage also if we don't use detail separation, e.g. m_last_gpu_stats.gpu_cache_size which is currently only set when m_show_step_count
     }
 
     // trigger garbage collection on demand, but only if we have a different camHash since the last garbage collection
@@ -137,7 +137,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             cache_state << "inv. LOD" << (i+1) << ": " << m_last_gpu_stats.gpu_blocks_in_cache[i] << ", ";
         }
         cache_state << static_cast<double>(decoded_bytes_total) / 1000. / 1000.f << " MB total";
-        Logger(INFO) << cache_state.str() << "   |   " << m_last_gpu_stats.gpu_raymarch_samples << " block samples - " << static_cast<double>(m_last_gpu_stats.gpu_raymarch_samples) / static_cast<double>(m_last_gpu_stats.gpu_bbox_hits) << " per ray.";
+        Logger(INFO) << cache_state.str() << "   |   " << m_last_gpu_stats.gpu_raymarch_samples << " ray samples (" << static_cast<double>(m_last_gpu_stats.gpu_raymarch_samples) / static_cast<double>(m_last_gpu_stats.gpu_bbox_hits) << " per ray).";
         if (decoded_bytes_in_frame > 0)
             Logger(INFO) << "decoded " << std::fixed << std::setprecision(3) << static_cast<double>(decoded_bytes_in_frame) / 1000. / 1000. << " MB";
     }
@@ -236,7 +236,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     setCtx(ctx);
     updateDeviceMemoryUsage();
-    Logger(DEBUG) << "Device memory on startup: " << m_gui_device_mem_text;
+    Logger(INFO) << "Device memory on startup: " << m_gui_device_mem_text;
 
     // allocate GPU buffers for our data
     size_t bricks_in_volume = 0u;
@@ -405,6 +405,8 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
 
     // trigger a temporal accumulation flush
     m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    // trigger a cache reset
+    m_pass->resetCacheOnNextCall();
 }
 
 void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
@@ -438,6 +440,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
     updateRenderResolutionFromWSI();
 
     glm::vec3 voldim = glm::vec3(m_compressed_segmentation_volume->getVolumeDim());
+    if(m_subblock_enabled)
+        voldim = m_subblock_size;
     glm::vec3 physical_voldim = voldim * m_voxel_size;
 
     // size in world space: uniformly scaled so that the largest component is one
@@ -476,6 +480,9 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
                                           0.5); // TODO: we have this low opacity treshold to render opaque first hits
         m_urender_info->setUniform<glm::vec3>("g_camera_position_world_space", camera->position_world_space);
         m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
+        // the g_voxels_per_pixel_per_dist determines how many voxels an image pixel footprint overlaps for a camera distance
+        float voxels_per_pixel_at_near = scalingFactor / float(m_resolution.height);
+        m_urender_info->setUniform<float>("g_voxels_per_pixel_per_dist", glm::tan(this->getCamera()->vertical_fov) * voxels_per_pixel_at_near);
 
         // debug
         m_urender_info->setUniform<uint32_t>("g_debug_model_space", m_show_model_space ? 1 : 0);
@@ -526,9 +533,13 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         // (or if any rendering parameters changed, technically not "camera" only anymore, but we can use it for resetting all accumulation buffers.)
         m_framesSinceCameraMove++;
         auto newCamHash = hashMemory(&world_to_projection_space[0].x, sizeof(glm::mat4));
+        newCamHash = hashMemory(&m_subsampling, sizeof(m_subsampling), newCamHash);
         newCamHash = hashMemory(&m_bboxMin, sizeof(m_bboxMin), newCamHash);
         newCamHash = hashMemory(&m_bboxMax, sizeof(m_bboxMax), newCamHash);
         newCamHash = hashMemory(&m_voxel_size, sizeof(m_voxel_size), newCamHash);
+        newCamHash = hashMemory(&m_subblock_start, sizeof(m_subblock_start), newCamHash);
+        newCamHash = hashMemory(&m_subblock_size, sizeof(m_subblock_size), newCamHash);
+        newCamHash = hashMemory(&m_subblock_enabled, sizeof(m_subblock_enabled), newCamHash);
         newCamHash = hashMemory(&m_show_model_space, sizeof(m_show_model_space), newCamHash);
         newCamHash = hashMemory(&m_show_brick_cache, sizeof(m_show_brick_cache), newCamHash);
         newCamHash = hashMemory(&m_show_lod, sizeof(m_show_lod), newCamHash);
@@ -543,9 +554,11 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         newCamHash = hashMemory(&m_ambient_occlusion_dist_strength, sizeof(m_ambient_occlusion_dist_strength),
                                 newCamHash);
         newCamHash = hashMemory(&m_step_size, sizeof(m_step_size), newCamHash);
+        newCamHash = hashMemory(&m_dda_traversal, sizeof(m_dda_traversal), newCamHash);
         newCamHash = hashMemory(&m_tonemap_enabled, sizeof(m_tonemap_enabled), newCamHash);
         newCamHash = hashMemory(&m_shadow_ao_ray_distr, sizeof(m_shadow_ao_ray_distr), newCamHash);
         newCamHash = hashMemory(&m_max_decoding_lod, sizeof(m_max_decoding_lod), newCamHash);
+        newCamHash = hashMemory(&m_lod_bias, sizeof(m_lod_bias), newCamHash);
         if (newCamHash != m_camHash || m_clear_accum_every_frame || m_pass->willCacheBeResetOnNextCall()) {
             m_framesSinceCameraMove = 0u;
             m_camHash = newCamHash;
@@ -562,6 +575,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         uint32_t brick_size = m_compressed_segmentation_volume->getBrickSize();
         m_usegmented_volume_info->setUniform<glm::uvec3>("g_vol_dim", m_compressed_segmentation_volume->getVolumeDim());
         m_usegmented_volume_info->setUniform<glm::vec3>("g_voxel_size", m_voxel_size);
+        m_usegmented_volume_info->setUniform<glm::ivec3>("g_vol_translation", m_subblock_enabled ? m_subblock_start : glm::ivec3(0));
         m_usegmented_volume_info->setUniform<glm::vec3>("g_physical_vol_dim", physical_voldim);
         m_usegmented_volume_info->setUniform<glm::vec3>("g_normalized_volume_size", normalized_volume_size);
         m_usegmented_volume_info->setUniform<uint32_t>("g_vol_max_label", 1000000);
@@ -571,7 +585,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         auto lod_count = m_compressed_segmentation_volume->getLodCountPerBrick();
         m_usegmented_volume_info->setUniform<uint32_t>("g_lod_count", lod_count);
         m_usegmented_volume_info->setUniform<uint32_t>("g_frame", m_frame);
-        m_usegmented_volume_info->setUniform<uint32_t>("g_max_decoding_lod", m_max_decoding_lod);
+        m_usegmented_volume_info->setUniform<uint32_t>("g_max_decoding_lod", glm::min(static_cast<uint32_t>(m_max_decoding_lod), lod_count));
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_capacity", m_cache_capacity);
         m_usegmented_volume_info->setUniform<uint32_t>("g_free_stack_capacity", m_free_stack_capacity);
         m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
@@ -614,6 +628,19 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                 }
             },
             "Voxel Size");
+            g->addBool(&m_subblock_enabled, "Use Sub-Block");
+            g->addCustomCode([this]() {
+                if(m_subblock_enabled) {
+                    auto old = m_subblock_size;
+                    ImGui::InputInt3("Sub-Block Size", &m_subblock_size.x);
+                    if (glm::any(glm::lessThanEqual(m_subblock_size, glm::ivec3(0.f)))) {
+                        Logger(WARN) << "Sub-Block size must be > 0 in all dimensions! Resetting..";
+                        m_subblock_size = old;
+                    }
+                    ImGui::InputInt3("Sub-Block Start", &m_subblock_start.x);
+                }
+            },
+            "Sub-Block");
 #endif
     g->addInt(&m_empty_label, "Empty Label");
     g->addInt(&m_label_minmax.x, "Label ID Min. 2^", 0, 32, 1);
@@ -635,7 +662,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     dev->addFloat(&m_ambient_occlusion_dist_strength.y, "Ambient Occlusion Strength", 0.f, 1.f, 0.1f);
     dev->addSeparator();
     dev->addLabel("Debug");
-    dev->addInt(&m_max_decoding_lod, "Max. LOD", 0, 5, 1);
+    dev->addInt(&m_max_decoding_lod, "Max. Decoding LoD", 0, 6, 1);
     dev->addBool(&m_show_model_space, "Show Model Space");
     dev->addBool(&m_show_brick_cache, "Show Brick Cache");
     dev->addBool(&m_show_lod, "Show LOD Levels");

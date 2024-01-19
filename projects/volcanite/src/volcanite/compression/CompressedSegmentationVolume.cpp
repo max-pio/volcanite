@@ -656,7 +656,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
                     constexpr const double PROGRESS_UPDATE_INTERVAL = 2.;
                     if (progressTimer.elapsed() >= PROGRESS_UPDATE_INTERVAL) {
                         float bricks_per_second = static_cast<float>(bricks_since_last_update) / progressTimer.elapsed();
-                        uint32_t last_brick_index = pos2idx(glm::uvec3(brick.x + m_cpu_threads - 1, brick.y, brick.z), brickCount);
+                        uint32_t last_brick_index = pos2idx(glm::uvec3(glm::min(brick.x + m_cpu_threads - 1, brickCount.x - 1u), brick.y, brick.z), brickCount);
                         float remaining_seconds = static_cast<float>(brickCount.x * brickCount.y * brickCount.z - last_brick_index) / bricks_per_second;
                         std::stringstream stream;
                         stream << " Progress " << std::fixed << std::setprecision(1) << static_cast<float>(last_brick_index) / static_cast<float>(brickCount.x * brickCount.y * brickCount.z) * 100.f << "%"

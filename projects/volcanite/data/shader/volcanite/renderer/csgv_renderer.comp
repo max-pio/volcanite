@@ -4,7 +4,6 @@
 
 layout (local_size_x = 8, local_size_y = 8) in;
 
-
 #include "csgv_bindings.glsl"
 
 // includes
@@ -57,18 +56,13 @@ ivec2 pixelFromInvocationID() {
 
 uint get_inv_lod(ivec3 voxel) {
     // ToDo: the LOD computation is very expensive. should at least move it to the provision shader or replace it with something cheaper.
-
     // outside volume
-    if (any(lessThan(voxel, ivec3(0))) || any(greaterThanEqual(voxel, ivec3(g_vol_dim))))
-        return INVALID;
+    // if (any(lessThan(voxel, ivec3(0))) || any(greaterThanEqual(voxel, ivec3(g_vol_dim))))
+    //    return INVALID;
 
-    float voxel_size_in_world_space = 1.f / g_world_to_model_space_scaling;
-    float nearDist = 0.05f;
-    const float pixel_size_at_near = 1.f / float(imageSize(feedbackOut).x);
-    vec3 brick_to_camera_world = ((g_model_to_world_space * vec4(vec3(voxel / int(g_brick_size)) * g_brick_size, 1.f)).xyz - g_camera_position_world_space);
-    float pixel_size_at_brick = (pixel_size_at_near / nearDist) * (length(brick_to_camera_world));
-
-    return clamp(g_lod_count - 1u - uint(log2(pixel_size_at_brick / voxel_size_in_world_space + 1.f) + g_lod_bias), 0u, min(g_lod_count - 1, g_max_decoding_lod));
+    float dist = length((g_model_to_world_space * vec4((vec3(0.5f) + vec3(voxel / int(g_brick_size))) * g_brick_size, 1.f)).xyz - g_camera_position_world_space) + (float(g_brick_size)/g_world_to_model_space_scaling);
+    float voxels_per_pixel_at_hit = g_voxels_per_pixel_per_dist * dist;
+    return g_lod_count - 1u - clamp(uint(g_lod_bias + log2(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
 }
 
 bool isEmptySpace(ivec3 voxel) {
@@ -218,7 +212,7 @@ struct RayMarchState {
 };
 
 
-RayMarchState dda_step(RayMarchState state, Ray ray) {
+void dda_step(inout RayMarchState state, const Ray ray) {
 //    float next_t = min(state.side_dist.x, min(state.side_dist.y, state.side_dist.z));
     vec3 mask = vec3(lessThanEqual(state.side_dist.xyz, min(state.side_dist.yzx, state.side_dist.zxy)));
     state.t = dot(mask, state.side_dist);// + state.t_0;
@@ -226,10 +220,9 @@ RayMarchState dda_step(RayMarchState state, Ray ray) {
     state.voxel += state.stp * ivec3(mask);
     state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
 //    state.normal = -mask * state.stp * vec3(1.0);
-    return state;
 }
 
-RayMarchState dda_init(RayMarchState state, Ray ray) {
+void dda_init(inout RayMarchState state, const Ray ray) {
     // DDA traversal initialisation
     // delta.i equals to the length the ray has to travel to hit the next cell in i direction.
     // side_dist is the distance from the ray origin to the next cell in each dimension.
@@ -237,8 +230,6 @@ RayMarchState dda_init(RayMarchState state, Ray ray) {
     state.stp = ivec3( ray.direction.x >= 0.0 ? 1.0 : -1.0, ray.direction.y >= 0.0 ? 1.0 : -1.0, ray.direction.z >= 0.0 ? 1.0 : -1.0);
     state.delta = abs(rdinv); // min(rdinv * state.stp, 1.0);//
     state.side_dist = abs((vec3(state.voxel) + max(state.stp, vec3(0.0)) - ray.origin) * state.delta);
-
-    return state;
 }
 
 void main() {
@@ -249,6 +240,17 @@ void main() {
     ivec2 pixel = pixelFromInvocationID();
     if(isHelperLane(pixel, viewport_size))
         return;
+
+    if(g_debug_lod) {
+        for (uint lod = 0; lod < g_lod_count; lod++) {
+            if (any(greaterThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) - 2u)))) {
+                if (all(lessThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) + 2u)))) {
+                    writePixel(pixel, vec4(colormap_viridis(float(g_lod_count - 1u - lod)/float(g_lod_count - 1u)), 1.f), BACKGROUND_DEPTH);
+                    return;
+                }
+            }
+        }
+    }
 
     // We do not compute any TAA yet
     vec2 subpixel_offset = vec2(0.f);
@@ -273,16 +275,19 @@ void main() {
         writePixel(pixel, get_background_color(fragCoord), BACKGROUND_DEPTH);
         return;
     }
+    t_0 -= 0.0001f; // Epsilon
     int max_steps = g_dda_traversal ? g_maxSteps : min(g_maxSteps, int((t_1 - t_0 + g_stepSize) / g_stepSize));
 
     // For debug views: only color every other pixel in the debug view to get some kind of "transparent" overlay effect
     // As we move this pixel around, the progressive accumulation averages this with the rendered colors.
     bool debug_view_visible = (pixel.x + pixel.y) % 3u != (g_frame % 3u); // < (viewport_size.x + viewport_size.y) / 2u);
 
+    // ToDo: DDA Traversal loop over empty bricks
+
     // ray marching loop
     RayMarchState state;
     state.step = 0;
-    state.t = t_0 - (g_dda_traversal && g_blue_noise ? fract(randomVec3(vec2(pixel), blueNoise32x32(pixel) * 1024.f + float(g_camera_still_frames) * 7.2348261f).x) * g_stepSize : 0.f);
+    state.t = t_0 - (!g_dda_traversal && g_blue_noise ? fract(randomVec3(vec2(pixel), blueNoise32x32(pixel) * 1024.f + float(g_camera_still_frames) * 7.2348261f).x) * g_stepSize : 0.f);
     state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
     //state.voxel = ivec3(pos);
     state.ray_type = RT_VIEW_RAY;
@@ -301,11 +306,11 @@ void main() {
     }
 
     state.voxel = ivec3(floor(state.pos + 0.)); // DDA traversal start voxel
-    state = dda_init(state, ray);
+    dda_init(state, ray);
 
     for(; state.step < max_steps; state.step++) {
         if (g_dda_traversal) {
-            state = dda_step(state, ray);
+            dda_step(state, ray);
         } else {
             // ray marching
             state.t += g_stepSize;
@@ -329,7 +334,14 @@ void main() {
             break;
         }
 
-        assert(state.label != INVALID, "get_volume_label should never return INVALID");
+#ifndef NDEBUG
+        if(state.label == INVALID){
+            state.out_color = vec4(1.f, 0.f, 1.f, 1.f);
+            state.out_depth = 0.f;
+            assert(false, "get_volume_label returned INVALID. Possible corrupt data in brick cache.");
+            break;
+        }
+#endif
 
         // continue traversal if this is not a valid hit
         if (!isLabelVisible(state.label)) {
@@ -417,8 +429,8 @@ void main() {
                 ray.origin = state.pos;
                 ray.direction = normalize(ray.direction);
 
-                state = dda_init(state, ray);
-                state = dda_step(state, ray); // performs one dda_step to avoid self shadowing.
+                dda_init(state, ray);
+//              dda_step(state, ray); // performs one dda_step to avoid self shadowing.
 
             } else {
                 ray.origin = state.pos;
