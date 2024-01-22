@@ -126,6 +126,7 @@ private:
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
     float m_lod_bias = 0.f;
     bool m_dda_traversal = false;
+    bool m_show_normals = false;
     bool m_blue_noise = true;
     bool m_show_model_space = false;
     bool m_show_brick_cache = false;

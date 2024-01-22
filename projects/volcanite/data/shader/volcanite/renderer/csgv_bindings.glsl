@@ -130,6 +130,7 @@ layout (std140, set = 0, binding = 10) uniform render_info {
     uint g_camera_still_frames;
     ivec2 g_subsampling_pixel;
     float g_random_seed;
+    bool g_debug_normals;
     bool g_debug_model_space;
     bool g_debug_brick_cache;
     bool g_debug_lod;
