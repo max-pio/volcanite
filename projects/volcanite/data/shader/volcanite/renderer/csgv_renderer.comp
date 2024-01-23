@@ -160,24 +160,24 @@ void writePixel(ivec2 pixel, vec4 color, float depth) {
         for (subpixel.x = 0; subpixel.x < g_subsampling; subpixel.x++) {
             ivec2 opix = (pixel/g_subsampling)*g_subsampling + subpixel;
             if (g_camera_still_frames == 0u) {
-                if (opix != pixel)  // all other pixels are reset to initial 0
+                // writing other pixel: initialize with 0
+                if (any(notEqual(opix, pixel)))
                     imageStore(feedbackOut, opix, vec4(0.f));
-                else                // current pixel gets color, will be overwritten (.a=0) if depth < 0 <=> not yet decoded
-                    imageStore(feedbackOut, opix, vec4(color.rgb, depth >= 0.f ? 1.f : 0.f));
+                // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame (set .a=0)
+                else
+                    imageStore(feedbackOut, opix, vec4(color.rgb, depth < 0.f ? 0.f : 1.f));
             }
             else {
-                if (opix != pixel)  // not our pixel, just copy from previous to current frame
-                    imageStore(feedbackOut, opix, imageLoad(feedbackIn, opix));
-                else if (depth < 0.f) { // our pixel, but invalid sample (from not yet decoded brick)
-                    vec4 prev_color = imageLoad(feedbackIn, opix);
-                    // write only if the pixel didn't have a valid sample yet, but with sample count 0 to be overwritten
-                    if (prev_color.a > 0.f)
-                        imageStore(feedbackOut, opix, prev_color);
-                    else
-                        imageStore(feedbackOut, opix, vec4(color.rgb, 0.f));
-                }
+                vec4 prev_color = imageLoad(feedbackIn, opix);
+                // writing other pixel: just copy from previous to current frame
+                if (any(notEqual(opix, pixel)))
+                    imageStore(feedbackOut, opix, prev_color);
+                // writing our pixel, but invalid new sample (from not yet decoded brick)
+                else if (depth < 0.f)
+                    imageStore(feedbackOut, opix, prev_color.a > 0.f ? prev_color : vec4(color.rgb, 0.f));
+                // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
                 else
-                    imageStore(feedbackOut, opix, imageLoad(feedbackIn, pixel) + vec4(color.rgb, 1.f));
+                    imageStore(feedbackOut, opix, vec4(color.rgb, 1.f) + (prev_color.a > 0.f ? prev_color : vec4(0.f)));
             }
         }
     }

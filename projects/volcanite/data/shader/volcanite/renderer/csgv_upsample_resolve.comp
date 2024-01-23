@@ -27,8 +27,7 @@ void main() {
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
 
     // we output a low resolution image were multiple pixel are merged into one if the image does not have all pixels set yet
-    // not sure if this formula is right..
-    const int current_block_size = clamp(2 << int(log2(g_subsampling / int(ceil(sqrt(g_camera_still_frames + 1))))), 1, g_subsampling);
+    const int current_block_size = clamp(g_subsampling / (1 << int(log2(sqrt(g_camera_still_frames + 1)))), 1, g_subsampling);
     pixel *= current_block_size;
 
     // only one thread per pixel block
