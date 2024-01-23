@@ -117,7 +117,7 @@ private:
     float m_light_intensity = 1.f;
     float m_step_size = 0.002f;
     int m_max_steps = 2048;
-    int m_subsampling = 0;
+    int m_subsampling = 2;
     glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
     bool m_subblock_enabled = false;
     glm::ivec3 m_subblock_size = glm::ivec3(128, 128, 128);
@@ -125,7 +125,7 @@ private:
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
     float m_lod_bias = 0.f;
-    bool m_dda_traversal = false;
+    bool m_dda_traversal = true;
     bool m_show_normals = false;
     bool m_blue_noise = true;
     bool m_show_model_space = false;
