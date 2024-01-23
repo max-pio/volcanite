@@ -496,6 +496,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<uint32_t>("g_debug_brick_cache", m_show_brick_cache ? 1 : 0);
         m_urender_info->setUniform<uint32_t>("g_debug_lod", m_show_lod ? 1 : 0);
         m_urender_info->setUniform<uint32_t>("g_debug_step_count", m_show_step_count ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_debug_normals", m_show_normals ? 1 : 0);
 
         // Transformation matrices:
         // ToDo: use push constants for camera related changes and upload uniforms only on demand
@@ -562,6 +563,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
                                 newCamHash);
         newCamHash = hashMemory(&m_step_size, sizeof(m_step_size), newCamHash);
         newCamHash = hashMemory(&m_dda_traversal, sizeof(m_dda_traversal), newCamHash);
+        newCamHash = hashMemory(&m_show_normals, sizeof(m_show_normals), newCamHash);
         newCamHash = hashMemory(&m_tonemap_enabled, sizeof(m_tonemap_enabled), newCamHash);
         newCamHash = hashMemory(&m_shadow_ao_ray_distr, sizeof(m_shadow_ao_ray_distr), newCamHash);
         newCamHash = hashMemory(&m_max_decoding_lod, sizeof(m_max_decoding_lod), newCamHash);
@@ -675,6 +677,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     dev->addBool(&m_show_brick_cache, "Show Brick Cache");
     dev->addBool(&m_show_lod, "Show LOD Levels");
     dev->addBool(&m_show_step_count, "Show Ray Step Count");
+    dev->addBool(&m_show_normals, "Show Normals");
     dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
     dev->addAction(
             [this]() {

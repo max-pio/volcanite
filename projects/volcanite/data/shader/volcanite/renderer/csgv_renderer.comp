@@ -223,7 +223,7 @@ void dda_step(inout RayMarchState state, const Ray ray) {
     state.side_dist += state.delta * mask;
     state.voxel += state.stp * ivec3(mask);
     state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
-//    state.normal = -mask * state.stp * vec3(1.0);
+    state.normal = -mask * state.stp;
 }
 
 void dda_init(inout RayMarchState state, const Ray ray) {
@@ -363,6 +363,11 @@ void main() {
             }
         }
 
+        if (g_debug_normals) {
+            state.out_color = vec4((state.normal + vec3(1.f)) * vec3(0.5f), 1.f);
+            break;
+        }
+
         // when a shadow / AO ray hits something, we end the traversal
         if(state.ray_type != RT_VIEW_RAY) {
             // ambient occlusion
@@ -403,6 +408,12 @@ void main() {
             break;
 #endif
 
+            if (g_dda_traversal && dot(state.normal, g_light_direction) < 0) {
+                state.out_color.rgb *= 1.f - g_ao_dist_strength.y;
+                state.ray_type = RT_SHADOW_HIT;
+                break;
+            }
+
             // this is the only point for which we want to store our t value in the depth buffer (ToDo: at best only if the hit was decoded to the requested LoD)
             state.out_depth = state.t;
             if(g_shadow_ray_enable == 0) {
@@ -430,7 +441,7 @@ void main() {
                 ray.direction = normalize(ray.direction);
 
                 dda_init(state, ray);
-//              dda_step(state, ray); // performs one dda_step to avoid self shadowing.
+//                dda_step(state, ray); // performs one dda_step to avoid self shadowing.
 
             } else {
                 ray.origin = state.pos;
