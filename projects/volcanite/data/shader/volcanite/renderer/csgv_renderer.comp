@@ -252,12 +252,8 @@ void main() {
         }
     }
 
-    // We do not compute any TAA yet
-    vec2 subpixel_offset = vec2(0.f);
-    // subpixel_offset = randomVec3(vec2(pixel), 100.f + float(g_frame)).xy;
-    // subpixel_offset = spo * (subpixel_offset * subpixel_offset) - vec2(spo / 2.f);
-    // if(g_camera_still_frames < 1)
-    //        subpixel_offset = vec2(0.f);
+    // Add a subpixel offset in [0, 1) to perform temporal anti-aliasing
+    vec2 subpixel_offset = randomVec3(vec2(pixel), 1347.f + float(g_camera_still_frames / (g_subsampling * g_subsampling))).xy;
     vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(viewport_size);
 
     // create view ray in model space
