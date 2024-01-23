@@ -408,15 +408,15 @@ void main() {
             break;
 #endif
 
-            if (g_dda_traversal && dot(state.normal, g_light_direction) < 0) {
-                state.out_color.rgb *= 1.f - g_ao_dist_strength.y;
-                state.ray_type = RT_SHADOW_HIT;
-                break;
-            }
-
             // this is the only point for which we want to store our t value in the depth buffer (ToDo: at best only if the hit was decoded to the requested LoD)
             state.out_depth = state.t;
             if(g_shadow_ray_enable == 0) {
+                break;
+            }
+
+            if (g_dda_traversal && dot(state.normal, g_light_direction) < 0) {
+                state.out_color.rgb *= 1.f - g_ao_dist_strength.y;
+                state.ray_type = RT_SHADOW_HIT;
                 break;
             }
 
