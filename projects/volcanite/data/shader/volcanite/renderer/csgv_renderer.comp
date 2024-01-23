@@ -10,6 +10,7 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #include "cpp_glsl_include/csgv_constants.h"
 #include "util.glsl"
 #include "debug_colormaps.glsl"
+#include "morton.glsl"
 #include "random.glsl"
 // Compressed Segmentation Volume specific: define array containing the encoding (input) as well as the decoding (output)
 #define CSGV_ENCODING_ARRAY g_encoding
@@ -50,8 +51,11 @@ ivec2 pixelFromInvocationID() {
     // We send out one ray per block of [g_subsampling]*[g_subsampling] pixels
     if(g_subsampling <= 1)
         return ivec2(gl_GlobalInvocationID.xy);
-    else
-        return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + g_subsampling_pixel;
+    else {
+        // offset the subsampling pixel with some blue noise
+        int blueNoiseIdx = g_blue_noise ? int(blueNoise32x32(ivec2(gl_GlobalInvocationID.xy)) * float(g_subsampling * g_subsampling)) : 0;
+        return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + ivec2(mod(g_subsampling_pixel + morton2Di2p(blueNoiseIdx), ivec2(g_subsampling)));
+    }
 }
 
 uint get_inv_lod(ivec3 voxel) {
