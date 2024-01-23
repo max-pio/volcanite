@@ -117,6 +117,12 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         m_usegmented_volume_info->upload(m_pass->getActiveIndex());
     }
 
+    // if we only accumulate a certain number of frames, we just return the last result
+    if (m_accum_frames > 0 && m_framesSinceCameraMove >= m_accum_frames) {
+        m_framesSinceCameraMove = m_accum_frames;
+        return m_mostRecentFrame.value();
+    }
+
     if (m_compressed_segmentation_volume->isUsingSeparateDetail()) {
         if(!detail_buffer_dirty && m_detail_update_required && m_constructed_detail_starts.back() > 0u) {
             m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
@@ -156,6 +162,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 //        renderAwaitableList.push_back(m_detail_starts_staging.first);
 //    if(m_detail_staging.first)
 //        renderAwaitableList.push_back(m_detail_staging.first);
+
     const auto renderingFinished = m_pass->execute(renderAwaitableList, awaitBinaryAwaitableList, signalBinarySemaphore);
     
     if(m_compressed_segmentation_volume->isUsingSeparateDetail() && !detail_buffer_dirty) {
@@ -559,12 +566,13 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         newCamHash = hashMemory(&m_shadow_ao_ray_distr, sizeof(m_shadow_ao_ray_distr), newCamHash);
         newCamHash = hashMemory(&m_max_decoding_lod, sizeof(m_max_decoding_lod), newCamHash);
         newCamHash = hashMemory(&m_lod_bias, sizeof(m_lod_bias), newCamHash);
+        newCamHash = hashMemory(&m_accum_frames, sizeof(m_accum_frames), newCamHash);
         if (newCamHash != m_camHash || m_clear_accum_every_frame || m_pass->willCacheBeResetOnNextCall()) {
             m_framesSinceCameraMove = 0u;
             m_camHash = newCamHash;
         }
         m_urender_info->setUniform<uint32_t>("g_camera_still_frames", m_framesSinceCameraMove);
-        m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::haltonNxNVec(m_subsampling)[m_framesSinceCameraMove % (1 << m_subsampling)]);
+        m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::haltonNxNVec(m_subsampling)[m_framesSinceCameraMove % ((1 << m_subsampling)*(1 << m_subsampling))]);
         // random seed
         m_urender_info->setUniform<float>("g_random_seed", static_cast<float>(m_frame) / 10000.f);
         m_urender_info->setUniform<uint32_t>("g_swapchain_index", m_pass->getActiveIndex());
@@ -608,7 +616,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g->addColor(&m_background_color_b, "Background Color B");
     g->addFloat(&m_step_size, "Step Size", 0.0005f, 0.01f, 0.0005f, 4);
     dev->addInt(&m_max_steps, "Max Steps", 1, 2048, 1);
-    g->addInt(&m_subsampling, "Subsampling Factor (2^n)", 0, 2, 1);
+    g->addInt(&m_subsampling, "Subsampling Factor (2^n)", 0, 3, 1);
 //ToDo: addFloatRange2 to the GUIInterface
 #ifdef IMGUI
     g->addCustomCode(
@@ -676,6 +684,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             "Hard Reset Brick Cache");
     dev->addBool(&m_clear_cache_every_frame, "Clear Cache Every Frame");
     dev->addBool(&m_clear_accum_every_frame, "Clear Accumulation Every Frame");
+    dev->addInt(&m_accum_frames, "Accumulation Frames");
     dev->addSeparator();
     g->addDynamicText(&m_gui_resolution_text);
     g->addDynamicText(&m_gui_device_mem_text);

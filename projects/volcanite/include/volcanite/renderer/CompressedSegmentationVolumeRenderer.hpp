@@ -133,6 +133,7 @@ private:
     bool m_show_step_count = false;
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
+    int m_accum_frames = 0;
     int m_max_decoding_lod = 6;
     int m_empty_label = 0;
     std::string m_gui_resolution_text;
