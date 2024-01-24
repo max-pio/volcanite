@@ -1,16 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(volcanite VERSION 0.2.0 DESCRIPTION "Volcanite Renderers" LANGUAGES CXX)
 
-# find additional libraries that are not part of libvvv and libvvvwindow
-option(USE_SQLite3 "Includes the SQLite3 library for importing and exporting .sqlite files" ON)
-if (USE_SQLite3)
-    find_package(SQLite3)
-    if (SQLite3_FOUND)
-    else ()
-        message(WARNING "USE_SQLite3 was set but SQLite3 library could not be found")
-    endif ()
-endif ()
-
 # set all sources and headers
 set(VOLCANITE_HEADERS
         include/volcanite/VolcaniteArgs.hpp
@@ -45,10 +35,6 @@ function(makeVolcaniteExecutable name)
     makeExecutable(${name} ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
 
     target_link_libraries(${name} PRIVATE libryg-rans tclap::tclap portable_file_dialogs)
-    if (SQLite3_FOUND)
-        target_link_libraries(${name} PRIVATE SQLite::SQLite3)
-        target_compile_definitions(${name} PUBLIC -DLIB_SQLITE3)
-    endif ()
     target_compile_definitions(${name} PRIVATE "-DVOLCANITE_DEFAULT_DATA_PATH=\"${VOLCANITE_DEFAULT_DATA_PATH}\"")
     target_compile_definitions(${name} PRIVATE "-DVOLCANITE_VERSION=\"${CMAKE_PROJECT_VERSION}\"")
     target_include_directories(${name} PRIVATE data/shader/cpp_glsl_include)
