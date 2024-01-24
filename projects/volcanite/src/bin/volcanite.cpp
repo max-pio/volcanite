@@ -91,16 +91,37 @@ int volcanite(int argc, char *argv[]) {
         if(!args.verbose)
             Logger(INFO) << "compressing segmentation volume " << args.input_file << (args.chunked ? " with max. chunks " + str(max_chunk_id) : "");
 
-//        CSGVMetaData msgv;
-//        msgv.importOrProcessVolume(args.input_file, args.chunked, max_chunk_id);
+        std::string complete_csgv_path;
+        bool use_temporary_output_file = args.compress_export_file.empty();
+        if(use_temporary_output_file) {
+            // construct a temporary .csgv output path if no output path was specified
+            // ToDo: try to use the location of the input file for temp csgv output files?
+            create_directory(std::filesystem::temp_directory_path() / "vvv");
+            //complete_csgv_path = (std::filesystem::temp_directory_path() / "vvv" / "tmp.csgv").string();
+            complete_csgv_path = (std::filesystem::temp_directory_path() / "vvv" / "tmp.csgv").string();
+            if (std::filesystem::exists(complete_csgv_path))
+                std::filesystem::remove(complete_csgv_path);
+        }
+        else {
+            complete_csgv_path = args.compress_export_file;
+        }
+
+        CSGVMetaData msgv;
+        msgv.importOrProcessChunkedVolume(args.input_file, complete_csgv_path.substr(0, complete_csgv_path.length() - 5) + "_csgv.db3", args.chunked, max_chunk_id);
+        return 0; // ToDo: REMOVE TEST ABORT
 
         compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
-                                                                                  args.compress_export_file,
+                                                                                             complete_csgv_path,
                                                                                   args.brick_size, args.rANS_mode,
                                                                                   args.threads,
                                                                                   args.stream_lod, !args.chunked,
                                                                                   args.chunked, max_chunk_id,
                                                                                   args.freq_subsampling, args.verbose);
+
+        if(use_temporary_output_file) {
+            if (std::filesystem::exists(complete_csgv_path))
+                std::filesystem::remove(complete_csgv_path);
+        }
         if(args.verbose)
             Logger(INFO) << compressedSegmentationVolume->decodingInfoString() << "\n\n";
     }

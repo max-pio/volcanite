@@ -4,6 +4,7 @@
 #include "vvv/util/space_filling_curves.hpp"
 
 #include "volcanite/compression/CompSegVolHandler.hpp"
+#include "SQLiteCpp/VariadicBind.h"
 
 #include <glm/glm.hpp>
 
@@ -11,6 +12,11 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#ifdef LIB_SQLITE3
+#include <SQLiteCpp/SQLiteCpp.h>
+#include <SQLiteCpp/VariadicBind.h>
+#endif
 
 namespace vvv {
 
@@ -20,151 +26,161 @@ private:
 public:
     CSGVMetaData() = default;
 
-    bool importFromFile(const std::string& msgv_file) {
-        std::ifstream fin(msgv_file, std::ios::in);
-        if(!fin.is_open()) {
-            Logger(WARN) << "could not open file " << msgv_file << " to import volume meta data";
-            return false;
-        }
+    bool importFromSqlite(const std::string& sqlite_path) {
+        MiniTimer t;
+        SQLite::Database db(sqlite_path, SQLite::OPEN_READONLY);
 
-        std::string header;
-        getline(fin, header);
-        if(header != CURRENT_MCSV_HEADER) {
-            Logger(WARN) << "Header " << header << " in file " << msgv_file << " does not match expected " << CURRENT_MCSV_HEADER;
-            fin.close();
-            return false;
-        }
+        // clear the label_to_index map and reserve memory
+        uint32_t columns = db.execAndGet("SELECT COUNT(*) FROM volcanite").getUInt();
+        m_label_to_index.clear();
+        m_label_to_index.reserve(columns);
 
-        fin >> m_volume_dimension[0] >> m_volume_dimension[1] >> m_volume_dimension[2];
-        fin >> m_chunk_dimension[0] >> m_chunk_dimension[1] >> m_chunk_dimension[2];
-        size_t label_count;
-        fin >> label_count;
-        m_index_to_label.resize(label_count);
-        for(size_t i = 0ul; i < label_count; i++)
-            fin >> m_index_to_label[i];
+        // fill the map with entries for all labels
+        SQLite::Statement query(db, "SELECT volcanite_id label FROM volcanite");
+        const int id_column = query.getColumnIndex("volcanite_id");
+        const int label_column = query.getColumnIndex("label");
+        while (query.executeStep())
+            m_label_to_index[query.getColumn(label_column)] = query.getColumn(id_column);
 
-        fin.close();
+        Logger(DEBUG) << "imported data from sqlite " << db.getFilename() << " in " << t.elapsed() << " seconds";
         return true;
     }
 
-    bool exportToFile(const std::string& msgv_file) {
+    bool exportToSqlite(const std::string& sqlite_path) {
 
-        // ToDo: storing this information uncompressed in plaintext may be a huge memory problem! for 64,000,000 labels, we would approximately store almost a GB
+        MiniTimer t;
+        SQLite::Database db(sqlite_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
 
-        std::ofstream fout(msgv_file, std::ios::out);
-        if(!fout.is_open()) {
-            Logger(WARN) << "could not open file " << msgv_file << " to export volume meta data";
-            return false;
+        // store general volume info
+        {
+            db.exec("CREATE TABLE volcanite_info (volume_width INTEGER, volume_height INTEGER, volume_depth INTEGER, chunk_width INTEGER, chunk_height INTEGER, chunk_depth INTEGER)");
+            SQLite::Statement query(db, "INSERT INTO volcanite_info VALUES (?, ?, ?, ?, ?, ?)");
+            SQLite::bind(query, m_volume_dimension[0], m_volume_dimension[1], m_volume_dimension[2], m_chunk_dimension[0], m_chunk_dimension[1], m_chunk_dimension[2]);
+            if(query.exec() != 1) {
+                Logger(WARN) << "Could not export volcanite_info to sqlite";
+            }
         }
 
-        fout << CURRENT_MCSV_HEADER << std::endl;
-        fout << m_volume_dimension[0] << " " << m_volume_dimension[1] << " " << m_volume_dimension[2] << std::endl;
-        fout << m_chunk_dimension[0] << " " << m_chunk_dimension[1] << " " << m_chunk_dimension[2] << std::endl;
-        fout << m_index_to_label.size() << std::endl;
-        for(const auto& l : m_index_to_label)
-            fout << l << std::endl;
+        // store mapping of original volume label <-> volcanite ids
+        db.exec("CREATE TABLE volcanite (id INTEGER PRIMARY KEY, label INTEGER UNIQUE)");
 
-        fout.close();
+        SQLite::Transaction transaction(db);
+        SQLite::Statement query(db, "INSERT INTO volcanite VALUES (?, ?)");
+        for(const auto& e : m_label_to_index) {
+            SQLite::bind(query, e.second, e.first); // volcanite_id, label
+            query.exec();
+            query.reset();
+        }
+        transaction.commit();
+        Logger(DEBUG) << "exported data to sqlite " << db.getFilename() << " in " << t.elapsed() << " seconds";
         return true;
     }
+
+
 
     /** Iterates over all voxels in the given volume in morton order and pushes any labels that are not yet included
      * int index_to_label to index_to_label. Can be used to iteratively process multiple chunks of a single volume.
      * If the set existing_labels is provided to speed up the search, it must contain all labels from index_to_label.
      */
-    void addLabelsFromVolume(std::shared_ptr<Volume<uint32_t>> volume, std::vector<uint32_t>& index_to_label, std::set<uint32_t>* existing_labels = nullptr) {
-
-        std::set<uint32_t>* label_set = existing_labels ? existing_labels : new std::set<uint32_t>(index_to_label.begin(), index_to_label.end());
-
-        if(index_to_label.size() != label_set->size())
+    static void addLabelsFromVolume(const std::shared_ptr<Volume<uint32_t>>& volume, std::unordered_map<uint32_t, uint32_t>& label_to_index, std::unordered_set<uint32_t>* existing_labels = nullptr) {
+        // we use a hash set to speed up the check if a label was already processed
+        std::unordered_set<uint32_t>* label_set = existing_labels;
+        if(label_set == nullptr) {
+            label_set = new std::unordered_set<uint32_t>();
+            for(const auto& e : label_to_index) {
+                label_set->insert(e.first);
+            }
+        }
+        if(label_to_index.size() != label_set->size())
             throw std::runtime_error("existing_labels set does not match index_to_label size in volume label occurrence processing");
 
-        // iterate over all voluem voxels in morton order
+        // iterate over all volume voxels in morton order
         size_t i = 0ul;
         glm::uvec3 voxel(0ul);
         glm::uvec3 vol_dim(volume->dim_x, volume->dim_y, volume->dim_z);
 
-        // ToDo: parallelize with OpenMP
+        // ToDo: parallelize with OpenMP?
         do {
             if(glm::all(glm::lessThan(voxel, vol_dim))) {
                 uint32_t label = volume->getElement(voxel);
                 if (!label_set->contains(label)) {
+                    label_to_index[label] = label_set->size();
                     label_set->insert(label);
-                    index_to_label.push_back(label);
                 }
             }
-
             i++;
             voxel = sfc::Morton3D::i2p(i);
         } while(glm::any(glm::lessThan(voxel, vol_dim)));
 
+        assert(label_to_index.size() == label_set->size() && "label_to_index and label_set must have same size");
         if(!existing_labels)
             delete label_set;
     }
 
-    void processVolume(const std::string& input_path, bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u)) {
-
+    void processChunkedVolume(const std::string& input_path, bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u)) {
         std::shared_ptr<Volume<uint32_t>> volume = nullptr;
-        m_index_to_label.clear();
-        m_existing_labels.clear();
+        std::unordered_set<uint32_t> m_existing_labels = {};    // hash set to speed up the {label already exists} check
+        m_label_to_index.clear();
 
         // iterate over all chunk files in morton order
-        size_t chunk_index1 = 0ul;
+        bool chunk_dimensions_vary = false;
+        size_t chunk_index1D = 0ul;
         glm::uvec3 chunk_index(0ul);
         do {
-
+            chunk_index = sfc::Morton3D::i2p(chunk_index1D);
             if(glm::all(glm::lessThanEqual(chunk_index, max_file_index))) {
-                    // create file input and output paths for this single chunk
+                    // create file input path for this single chunk
                     std::string chunk_input_path = chunked_input_data ? CompSegVolHandler::formatChunkPath(input_path, chunk_index.x, chunk_index.y, chunk_index.z)
                                                                       : input_path;
                     // load chunk volume
+                    Logger(DEBUG) << "Label preprocessing " << chunk_input_path;
                     CompSegVolHandler::loadSegmentationVolumeFile(chunk_input_path, volume);
                     glm::uvec3 cur_chunk_dim(volume->dim_x, volume->dim_y, volume->dim_z);
 
                     // process chunk volume
-                    if(chunk_index1 == 0ul) {
+                    if(chunk_index1D == 0ul) {
                         m_chunk_dimension[0] = cur_chunk_dim.x;
                         m_chunk_dimension[1] = cur_chunk_dim.y;
                         m_chunk_dimension[2] = cur_chunk_dim.z;
                     } else if(m_chunk_dimension[0] != cur_chunk_dim.x
                            || m_chunk_dimension[1] != cur_chunk_dim.y
                            || m_chunk_dimension[2] != cur_chunk_dim.z) {
-                        Logger(WARN) << "chunk " << chunk_input_path << " dimension " << str(cur_chunk_dim)
-                        << " differs from expected dimension " << str(glm::uvec3(m_chunk_dimension[0], m_chunk_dimension[1], m_chunk_dimension[2]));
+                        chunk_dimensions_vary = true;
                     }
 
                     // update tracking information
                     m_volume_dimension[0] += cur_chunk_dim.x;
                     m_volume_dimension[1] += cur_chunk_dim.y;
                     m_volume_dimension[2] += cur_chunk_dim.z;
-                    addLabelsFromVolume(volume, m_index_to_label, &m_existing_labels);
+                    addLabelsFromVolume(volume, m_label_to_index, &m_existing_labels);
             }
 
-            chunk_index1++;
-            chunk_index = sfc::Morton3D::i2p(chunk_index1);
+            chunk_index1D++;
         } while(chunked_input_data && glm::any(glm::lessThanEqual(chunk_index, max_file_index)));
 
-        // output meta data information to file
-        std::string output_path = chunked_input_data ? CompSegVolHandler::combinedPath(input_path, max_file_index) : input_path;
-        exportToFile(output_path + ".msgv");
+        if(chunk_dimensions_vary)
+            Logger(WARN) << "chunk dimensions vary and can differ from expected dimension " << str(glm::uvec3(m_chunk_dimension[0], m_chunk_dimension[1], m_chunk_dimension[2]));
     }
 
-    /** Tries to load a precomputed .msgv file for the given volume.
-     *     If it does not exists, the .msgv file is created after preprocessing the volume instead.
+    /** Tries to load a precomputed sqlite file for the given volume.
+     *  If it does not exists, the sqlite file is created after preprocessing the volume instead.
      */
-    void importOrProcessVolume(const std::string& input_path, bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u)) {
-        std::string msgv_path = chunked_input_data ? CompSegVolHandler::combinedPath(input_path, max_file_index) : input_path;
-        msgv_path += ".msgv";
-        if(!std::filesystem::exists(msgv_path) || !importFromFile(msgv_path)) {
-            processVolume(input_path, chunked_input_data, max_file_index);
+    void importOrProcessChunkedVolume(const std::string& input_path, const std::string& sqlite_path, bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u)) {
+        if(!std::filesystem::exists(sqlite_path)) {
+            processChunkedVolume(input_path, chunked_input_data, max_file_index);
+            exportToSqlite(sqlite_path);
+        }
+        else {
+            importFromSqlite(sqlite_path);
         }
     }
 
+    inline uint32_t labelToIndex(uint32_t label) const { return m_label_to_index.at(label); }
+
 private:
-    std::set<uint32_t> m_existing_labels = {};                 // hash set to speed up the {label already exists} check
-    std::vector<uint32_t> m_index_to_label = {};               // list of unique labels in Morton order of occurrence
-    uint32_t m_volume_dimension[3] = {0u, 0u, 0u};             // total size in voxels
-    uint32_t m_chunk_dimension[3] = {0u, 0u, 0u};              // dimension of a single chunk
+    std::unordered_map<uint32_t, uint32_t> m_label_to_index = {};   // map original file's labels to volcanite's voxel ids
+    uint32_t m_volume_dimension[3] = {0u, 0u, 0u};                  // total size in voxels
+    uint32_t m_chunk_dimension[3] = {0u, 0u, 0u};                   // dimension of a single chunk
 };
 
 

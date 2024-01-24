@@ -465,7 +465,7 @@ public:
 
 
     static std::shared_ptr<CompressedSegmentationVolume> createCompressedSegmentationVolume(const std::string& input_path,
-                                                                                            const std::string& output_path = "", int brick_dim = 32,
+                                                                                            const std::string& complete_csgv_path, int brick_dim = 32,
                                                                                             CompressedSegmentationVolume::RANSMode rANS_mode = CompressedSegmentationVolume::DOUBLE_TABLE_RANS,
                                                                                             uint32_t cpu_threads = 0u, bool use_detail_separation = false, bool force_recompute = false,
                                                                                             bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u),
@@ -492,20 +492,7 @@ public:
 
         MiniTimer total_encoding_import_export_timer;
 
-        // determine output path for the complete volume
-        std::string complete_csgv_path;
-        bool use_temporary_output_file = output_path.empty();
-        if(use_temporary_output_file) {
-            // construct a temporary .csgv output path if no output path was specified
-            // ToDo: try to use the location of the input file for temp csgv output files
-            create_directory(std::filesystem::temp_directory_path() / "vvv");
-            complete_csgv_path = (std::filesystem::temp_directory_path() / "vvv" / "tmp.csgv").string();
-            if (std::filesystem::exists(complete_csgv_path))
-                std::filesystem::remove(complete_csgv_path);
-        }
-        else {
-            complete_csgv_path = output_path;
-        }
+        // check output path for the complete volume
         if(!complete_csgv_path.ends_with(".csgv")) {
             throw std::runtime_error("Output file must end with .csgv!");
         }
@@ -780,10 +767,6 @@ public:
             s = complete_csgv_path.substr(0, complete_csgv_path.length() - 5) + "_detail.tmp";
             if (std::filesystem::exists(s))
                 std::filesystem::remove(s);
-        }
-        if(use_temporary_output_file) {
-            if (std::filesystem::exists(complete_csgv_path))
-                std::filesystem::remove(complete_csgv_path);
         }
 
         return csgv;
