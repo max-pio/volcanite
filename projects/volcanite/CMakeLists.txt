@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(volcanite VERSION 0.1.0 DESCRIPTION "Volcanite Renderers" LANGUAGES CXX)
+project(volcanite VERSION 0.2.0 DESCRIPTION "Volcanite Renderers" LANGUAGES CXX)
 
 # find additional libraries that are not part of libvvv and libvvvwindow
 option(USE_SQLite3 "Includes the SQLite3 library for importing and exporting .sqlite files" ON)
