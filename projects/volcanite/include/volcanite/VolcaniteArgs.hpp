@@ -38,10 +38,11 @@ public:
     size_t cache_size_MB = 1024ul;
     bool show_development_gui = false;
 
-    // ToDo: attribute args
-    // std::string attribute_file;     // sqlite3 file with attributes for volume labels
-    // std::string label_attribute;    // name of the label attribute. if empty: first column in attribute_file
-    // bool label_remapping = false;   // if label ids in the volume should be remapped to a consecutive interval
+    // attribute args
+    std::string attribute_database;     // SQlite3 file with attributes for volume labels
+    std::string attribute_table;        // table or view containing the attributes for the volume labels
+    std::string attribute_label;        // name of the label attribute
+    bool label_remapping = false;       // if label ids in the volume should be remapped to a consecutive interval
 
     // compression args
     std::string compress_export_file;      // !empty = perform compression to file         Only one of
@@ -91,7 +92,7 @@ public:
 
             // compression arguments
             ValueArg<std::string> decompresspathArg("d", "decompress", "Export the decompressed volume to given file.", false, va.decompress_export_file, "file", cmd);
-            ValueArg<std::string> compresspathArg("c", "compress", "Export the compressed volume to given csgv file.", false, va.compress_export_file, "file", cmd);
+            ValueArg<std::string> compresspathArg("c", "compress", "Export the compressed volume to the given csgv file and any attribute database along with it.", false, va.compress_export_file, "file", cmd);
             ValueArg<std::string> chunkedArg("", "chunked", "Compress chunked segmented volume using formatted <volume> path with inclusive x, y, and z chunk file ranges as: \".*{[0..<xn>]}.*{[0..<yn>]}.*{[0..<zn>]}.*\".", false, "", "xn,yn,zn", cmd);
             ValueArg<uint32_t> subsamplingArg("", "freq-sampling", "Compression prepass acceleration by given factor cubed. Affects strength 1 or 2 only.", false, va.freq_subsampling, "int", cmd);
             ValueArg<uint32_t> threadsArg("", "threads", "Number of CPU threads for (de)compression parallelization.", false, va.threads, "int", cmd);
@@ -101,12 +102,15 @@ public:
             ValuesConstraint<uint32_t> allowedBrickSize({8u, 16u, 32u, 64u, 128u});
             ValueArg<uint32_t> bricksizeArg("b", "brick-size", "Compress with given brick size.", false, va.brick_size, &allowedBrickSize);
             cmd.add(bricksizeArg);
+            // attribute arguments
+            SwitchArg noLabelRemappingArg("", "no-relabel", "Omit the voxel relabeling preprocessing step.", cmd);
+            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath},{attribute table/view name},{name of the label column referenced by the volume}\".", false, "", "database,table,label", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal all development render parameters in GUI.", cmd);
             ValueArg<uint32_t> cachesizeArg("", "cache-size", "Size in MB to allocate for GPU renderer brick cache.", false, va.cache_size_MB, "size", cmd);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
-            ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup", false, va.screenshot_output_file, "file", cmd);
-            ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height]", false, "", "file", cmd);
+            ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
+            ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "file", cmd);
             ValueArg<std::string> renderconfigArg("", "config", "Import render parameters from config file.", false, va.rendering_config_file, "file", cmd);
             // general arguments
             SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
@@ -177,8 +181,40 @@ public:
                 }
 
                 if(!va.decompress_export_file.empty()) {
-                    throw ArgException(decompresspathArg.longID() + " can only be used with a .csgv input file", decompresspathArg.longID());
+                    throw ArgException(decompresspathArg.longID() + " can only be used with a .csgv input file.", decompresspathArg.longID());
                 }
+
+                // attribute arguments (if we import a .csgv file, the attributes are already stored in a database along with it)
+#ifndef LIB_SQLITE3
+                if(!noLabelRemappingArg.getValue()) {
+                    throw ArgException(noLabelRemappingArg.longID() + " must be set as SQLite3 library is not available.", noLabelRemappingArg.longID());
+                }
+                if(!attributeArg.getValue().empty()) {
+                    throw ArgException(attributeArg.longID() + " is not available as SQLite3 library is not available.", attributeArg.longID());
+                }
+                va.label_remapping = false;
+                va.attribute_database = "";
+                va.attribute_table = "";
+                va.attribute_label = "";
+#else
+                va.label_remapping = !noLabelRemappingArg.getValue();
+                if(!attributeArg.getValue().empty()) {
+                    const std::string attribute_info = attributeArg.getValue();
+                    auto comma0 = attribute_info.find(',', 0);
+                    auto comma1 = attribute_info.find(',', comma0 + 1);
+                    if(comma0 == std::string::npos || comma1 == std::string::npos || attribute_info.find(',', comma1 + 1) != std::string::npos)
+                        throw ArgException(attributeArg.longID() + " must contain exactly three comma separated arguments.", attributeArg.longID());
+
+                    va.attribute_database = attribute_info.substr(0, comma0);
+                    va.attribute_table = attribute_info.substr(comma0+1, (comma1 - comma0-1));
+                    va.attribute_label = attribute_info.substr(comma1+1);
+
+                    if(va.attribute_database.empty() || va.attribute_table.empty() || va.attribute_label.empty())
+                        throw ArgException(attributeArg.longID() + " database, table, and label must all be provided.", attributeArg.longID());
+                    if(!std::filesystem::exists(va.attribute_database))
+                        throw ArgException(attributeArg.longID() + " attribute database file does not exists or can not be accessed.", attributeArg.longID());
+                }
+#endif
 
                 // compression arguments
                 va.brick_size = bricksizeArg.getValue();

@@ -110,7 +110,9 @@ int volcanite(int argc, char *argv[]) {
         // we open a precomputed csgv database for this volume if it exists or create it otherwise
         std::string database_path = complete_csgv_path.substr(0, complete_csgv_path.length() - 5) + "_csgv.db3";
         MiniTimer t;
-        csgvDatabase->importOrProcessChunkedVolume(args.input_file, database_path, args.chunked, max_chunk_id);
+        csgvDatabase->importOrProcessChunkedVolume(args.input_file, database_path,
+                                                   args.attribute_database, args.attribute_table, args.attribute_label,
+                                                   args.chunked, max_chunk_id);
         // obtain the label re-mapping from the database
         auto label_remapping = csgvDatabase->getLabelRemapping();
         if(args.verbose)

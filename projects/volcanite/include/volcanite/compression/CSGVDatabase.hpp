@@ -41,6 +41,7 @@ private:
         }
 
         try{
+            std::string label_name = label_column.empty() ? "label" : label_column;
             SQLite::Database db(sqlite_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
             // store general volume info
             {
@@ -48,14 +49,14 @@ private:
                         " (volume_width INTEGER, volume_height INTEGER, volume_depth INTEGER, chunk_width INTEGER, chunk_height INTEGER, chunk_depth INTEGER, label_column TEXT)");
                 SQLite::Statement query(db, "INSERT INTO " + INFO_TABLE + " VALUES (?, ?, ?, ?, ?, ?, ?)");
                 SQLite::bind(query, volume_dimension[0], volume_dimension[1], volume_dimension[2],
-                             chunk_dimension[0], chunk_dimension[1], chunk_dimension[2], label_column);
+                             chunk_dimension[0], chunk_dimension[1], chunk_dimension[2], label_name);
                 if (query.exec() != 1)
                     Logger(WARN) << "Could not export " + INFO_TABLE + " to sqlite";
             }
 
             // store mapping of original volume label <-> our packed csgv ids
             {
-                db.exec("CREATE TABLE " + ATTRIBUTE_TABLE + " (" + ID_COLUMN + " UNSIGNED INT PRIMARY KEY, " + label_column +
+                db.exec("CREATE TABLE " + ATTRIBUTE_TABLE + " (" + ID_COLUMN + " UNSIGNED INT PRIMARY KEY, " + label_name +
                         " UNSIGNED INT UNIQUE)");
 
                 SQLite::Transaction transaction(db);
@@ -101,7 +102,6 @@ private:
                 // 2. add new columns for all existing attributes to csgv attribute table, and
                 // 3. add original attribute values via UPDATE to the csgv attribute table
                 // ToDo: Can we speed this up with JOINs instead of UPDATEs or something?
-                MiniTimer t;
                 {
                     std::string alter_query_format = "ALTER TABLE " + ATTRIBUTE_TABLE + " ADD COLUMN ";
                     std::string update_query_format[3] = {"UPDATE " + ATTRIBUTE_TABLE + " SET ", " = (SELECT ", " FROM attr_db." + attribute_table + " WHERE " + ATTRIBUTE_TABLE + "." +
@@ -117,7 +117,6 @@ private:
                     }
                     transaction.commit();
                 }
-                Logger(ERROR) << t.elapsed();
             }
 
             db.exec("DETACH DATABASE attr_db");
@@ -144,23 +143,25 @@ public:
 
     /** If a precomputed CSGV database exists already, it is openend.
      *  If not, the given (possibly chunked) volume at input_path is preprocessed and the result is stored in a new database.
+     *  In that case, either all three or none of the attribute_* parameters must be provided.
+     *  If they are provided, the label attributes for the CSGV database are imported from the given
+     *  attribute_table in the attribute_database and the attribute_label is used as the key column for voxel labels in the volume file.
      */
-    void importOrProcessChunkedVolume(const std::string& volume_input_path, const std::string& sqlite_path, bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u)) {
-        if(!std::filesystem::exists(sqlite_path)) {
-            processVolumeAndCreateSqlite(sqlite_path, volume_input_path,
-                                         "/home/max/data/segmented_volumes/chunk_test/cells.sqlite", "frame249", "CellID",
+    void importOrProcessChunkedVolume(const std::string& volume_input_path, const std::string& sqlite_output_path,
+                                      const std::string& attribute_database = "", const std::string& attribute_table = "", const std::string& attribute_label = "",
+                                      bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u)) {
+        if(!std::filesystem::exists(sqlite_output_path)) {
+            processVolumeAndCreateSqlite(sqlite_output_path, volume_input_path,
+                                         attribute_database, attribute_table, attribute_label,
                                          chunked_input_data, max_file_index);
         }
         else {
-            importFromSqlite(sqlite_path);
+            importFromSqlite(sqlite_output_path);
         }
     }
 
     void importFromSqlite(const std::string& sqlite_path) {
         m_db = std::make_unique<SQLite::Database>(sqlite_path, SQLite::OPEN_READONLY);
-        {
-
-        }
     }
 
     /** For a (possibly chunked) volume, the following preprocessing is carried out and exported to a new database:\n
@@ -169,7 +170,7 @@ public:
      */
     void processVolumeAndCreateSqlite(const std::string& sqlite_export_path, const std::string& volume_input_path,
                                       const std::string& attribute_database, const std::string& attribute_table,
-                                      const std::string& attribute_column,
+                                      const std::string& label_column,
                                       bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u)) {
         std::shared_ptr<Volume<uint32_t>> volume = nullptr;
         std::unordered_set<uint32_t> label_set = {};    // hash set to speed up the {label already exists} check
@@ -244,10 +245,7 @@ public:
 
         // create new SQLite database, export all data and then re-import as read only
         databaseExportAndOpen(sqlite_export_path, index_to_label, volume_dimension, chunk_dimension,
-                              attribute_database, attribute_table, attribute_column);
-    }
-
-    void attachAttributeDatabase(const std::string& attribute_db, const std::string& select_statement) {
+                              attribute_database, attribute_table, label_column);
     }
 
     /**
