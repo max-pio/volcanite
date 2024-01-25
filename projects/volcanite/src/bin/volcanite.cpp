@@ -14,7 +14,7 @@
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "vvv/volren/Volume.hpp"
-#include "volcanite/compression/CSGVMetaData.hpp"
+#include "volcanite/compression/CSGVDatabase.hpp"
 
 using namespace vvv;
 
@@ -85,6 +85,7 @@ int volcanite(int argc, char *argv[]) {
     // force_recompute logic in the handler for that reason? Or should we create two handlers for chunked / non-chunked?
 
     std::shared_ptr<vvv::CompressedSegmentationVolume> compressedSegmentationVolume;
+    std::shared_ptr<vvv::CSGVDatabase> csgvDatabase = std::make_shared<vvv::CSGVDatabase>();;
     // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
     if(args.performCompression()) {
         glm::uvec3 max_chunk_id = glm::uvec3(args.chunk_files[0], args.chunk_files[1], args.chunk_files[2]);
@@ -106,24 +107,32 @@ int volcanite(int argc, char *argv[]) {
             complete_csgv_path = args.compress_export_file;
         }
 
-        CSGVMetaData msgv;
-        msgv.importOrProcessChunkedVolume(args.input_file, complete_csgv_path.substr(0, complete_csgv_path.length() - 5) + "_csgv.db3", args.chunked, max_chunk_id);
-        return 0; // ToDo: REMOVE TEST ABORT
+        // we open a precomputed csgv database for this volume if it exists or create it otherwise
+        std::string database_path = complete_csgv_path.substr(0, complete_csgv_path.length() - 5) + "_csgv.db3";
+        MiniTimer t;
+        csgvDatabase->importOrProcessChunkedVolume(args.input_file, database_path, args.chunked, max_chunk_id);
+        // obtain the label re-mapping from the database
+        auto label_remapping = csgvDatabase->getLabelRemapping();
+        if(args.verbose)
+            Logger(INFO) << "Initialized csgv database " << database_path << " in " << t.elapsed() << " seconds";
 
+        CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),
+                                                        .rANS_mode = args.rANS_mode,
+                                                        .label_remapping = label_remapping,
+                                                        .cpu_threads = args.threads,
+                                                        .use_detail_separation = args.stream_lod,
+                                                        .force_recompute = !args.chunked,
+                                                        .chunked_input_data = args.chunked,
+                                                        .max_file_index = max_chunk_id,
+                                                        .freq_subsampling = args.freq_subsampling,
+                                                        .verbose = args.verbose};
         compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
-                                                                                             complete_csgv_path,
-                                                                                  args.brick_size, args.rANS_mode,
-                                                                                  args.threads,
-                                                                                  args.stream_lod, !args.chunked,
-                                                                                  args.chunked, max_chunk_id,
-                                                                                  args.freq_subsampling, args.verbose);
+                                                                                             complete_csgv_path, cfg);
 
         if(use_temporary_output_file) {
             if (std::filesystem::exists(complete_csgv_path))
                 std::filesystem::remove(complete_csgv_path);
         }
-        if(args.verbose)
-            Logger(INFO) << compressedSegmentationVolume->decodingInfoString() << "\n\n";
     }
     // otherwise, we load a previously decompressed volume
     else {
