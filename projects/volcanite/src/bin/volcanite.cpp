@@ -134,7 +134,7 @@ int volcanite(int argc, char *argv[]) {
                 std::filesystem::remove(complete_csgv_path);
         }
     }
-    // otherwise, we load a previously decompressed volume
+    // otherwise, we load a previously compressed volume
     else {
         compressedSegmentationVolume = std::make_shared<CompressedSegmentationVolume>();
         compressedSegmentationVolume->importFromFile(args.input_file, args.verbose);
