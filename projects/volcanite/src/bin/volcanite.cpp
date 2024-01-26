@@ -107,16 +107,26 @@ int volcanite(int argc, char *argv[]) {
             complete_csgv_path = args.compress_export_file;
         }
 
+        if(!args.label_remapping && !args.attribute_database.empty()) {
+            Logger(ERROR) << "Attribute database can not be used without label remapping. Aborting.";
+            return RET_INVALID_ARG;
+        }
+
         // we open a precomputed csgv database for this volume if it exists or create it otherwise
-        std::string database_path = complete_csgv_path.substr(0, complete_csgv_path.length() - 5) + "_csgv.db3";
-        MiniTimer t;
-        csgvDatabase->importOrProcessChunkedVolume(args.input_file, database_path,
-                                                   args.attribute_database, args.attribute_table, args.attribute_label,
-                                                   args.chunked, max_chunk_id);
-        // obtain the label re-mapping from the database
-        auto label_remapping = csgvDatabase->getLabelRemapping();
-        if(args.verbose)
-            Logger(INFO) << "Initialized csgv database " << database_path << " in " << t.elapsed() << " seconds";
+        std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> label_remapping = nullptr;
+        if(args.label_remapping) {
+            std::string database_path = complete_csgv_path.substr(0, complete_csgv_path.length() - 5) + "_csgv.db3";
+            MiniTimer t;
+            Logger(INFO) << "Initializing attribute database " << database_path;
+            csgvDatabase->importOrProcessChunkedVolume(args.input_file, database_path,
+                                                       args.attribute_database, args.attribute_table,
+                                                       args.attribute_label,
+                                                       args.chunked, max_chunk_id);
+            // obtain the label re-mapping from the database
+            label_remapping = csgvDatabase->getLabelRemapping();
+            if (args.verbose)
+                Logger(INFO) << "  finished in " << t.elapsed() << " seconds";
+        }
 
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),
                                                         .rANS_mode = args.rANS_mode,
