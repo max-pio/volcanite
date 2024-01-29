@@ -3,7 +3,6 @@
 #ifndef HEADLESS
 
 #include <string>
-#include "vvv/util/csv_utils.hpp"
 #include "vvv/util/Logger.hpp"
 #include "vvvwindow/App.hpp"
 #include "vvvwindow/entrypoint.hpp"
