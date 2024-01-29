@@ -127,6 +127,7 @@ bool get_volume_label(ivec3 voxel, out uint label) {
 }
 
 vec4 get_color(uint label) {
+    return vec4(colormap_viridis(g_attributes[label]/1000.f).rgb, 1.f);
     // ToDo: remove the hardcoded transfer functions
     float v = float((4000u + 17u * label) % 4096u) / 4096.f;
     // Cells

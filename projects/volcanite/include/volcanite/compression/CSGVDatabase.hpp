@@ -365,6 +365,28 @@ public:
         return m_label_count;
     }
 
+    /**
+     * Fills the memory area with the float attribute for the given attribute index. The buffer must be large enough
+     * to fit getLabelCount() elements. If maxSize > getLabelCount(), only getLabelCount() elements are written.
+     *
+     * @return the number of written elements
+     */
+    size_t getAttribute(int attributeIndex, float* begin, size_t maxSize) {
+        if(attributeIndex >= m_attribute_names.size())
+            throw std::runtime_error("invalid attribute index " + std::to_string(attributeIndex));
+        if(maxSize < m_label_count)
+            throw std::runtime_error("Buffer for attribute " + m_attribute_names[attributeIndex] + "(" + std::to_string(attributeIndex) + ") does not fit " + std::to_string(m_label_count) + " elements.");
+
+        SQLite::Statement query(*m_db, "SELECT " + m_attribute_names[attributeIndex] + " FROM " + CSGV_ATTRIBUTE_TABLE);
+        float* it = begin;
+        while (query.executeStep()) {
+            *it = static_cast<float>(query.getColumn(0).getDouble());
+            it++;
+        }
+        assert((it == begin + m_label_count) && "Did not write expected number of attribute values");
+        return (it - begin);
+    }
+
 private:
     std::unique_ptr<SQLite::Database> m_db = nullptr;   // sqlite database
     std::vector<std::string> m_attribute_names = {};

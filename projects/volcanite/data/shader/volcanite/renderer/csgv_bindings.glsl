@@ -154,3 +154,7 @@ layout(std430, set = 0, binding = 16) buffer restrict writeonly gpu_stats
     uint gpu_bbox_hits;
 };
 
+layout(std430, set = 0, binding = 17) buffer restrict readonly attributes
+{
+    float g_attributes[];      // multi-variate attributes, back to back in memory with [labelCount] elements per attribute
+};

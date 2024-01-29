@@ -31,7 +31,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         assert(!m_compressed_segmentation_volume->getBrickStarts()->empty() && !m_compressed_segmentation_volume->getEncoding()->empty() && "CompressedSegmentationVolume not initialized!");
         auto [encoding_upload_finished, _encoding_staging_buffer] = m_encoding_buffer->uploadWithStagingBuffer(*(m_compressed_segmentation_volume->getEncoding()), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
         auto [brickstarts_upload_finished, _brickstarts_staging_buffer] = m_brick_starts_buffer->uploadWithStagingBuffer(*(m_compressed_segmentation_volume->getBrickStarts()),  {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-        // we have a getDevice().waitIdle() at the end of this scope anyway, so we won't add those awaitables to any list
+
+        awaitBeforeExecution.push_back(encoding_upload_finished);
+        awaitBeforeExecution.push_back(brickstarts_upload_finished);
 
         // reset cache
         m_pass->resetCacheOnNextCall();
@@ -48,9 +50,22 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         // reset all accumulation buffers
         m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
 
-        // wait until everything is uploaded
-        getCtx()->getDevice().waitIdle();
+        // ToDo? is this required? wait until everything is uploaded
+        //getCtx()->getDevice().waitIdle();
         m_data_changed = false;
+    }
+
+    if(m_attribute_changed) {
+        if(!m_csgv_db)
+            throw std::runtime_error("Must provide CSGV database to use attributes in rendering");
+
+        std::vector<float> attr(m_csgv_db->getLabelCount());
+        m_csgv_db->getAttribute(m_selected_attribute_id, &attr[0], attr.size());
+
+        auto [attr_upload_finished, _attr_staging_buffer] = m_attribute_buffer->uploadWithStagingBuffer(attr.data(), attr.size() * sizeof(float), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        getCtx()->sync->hostWaitOnDevice({attr_upload_finished});
+
+        m_attribute_changed = false;
     }
 
     // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts finished)
@@ -280,6 +295,7 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     }
     m_brick_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_brick_start_buffer", .byteSize = (bricks_in_volume + 1u)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_encoding_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_encoding_buffer", .byteSize = encoding_byte_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    m_attribute_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_attribute_buffer", .byteSize = m_max_attribute_buffer_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
 
     m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = m_cache_capacity * (2u*2u*2u) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_free_stack_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_free_stack_buffer", .byteSize = (m_free_stack_capacity * (lods_in_volume - 1u) + (lods_in_volume + 1u)) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
@@ -306,6 +322,9 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     // GPU stats buffer
     m_gpu_stats_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_gpu_stats_buffer", .byteSize = sizeof(GPUStats), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
 
+    updateDeviceMemoryUsage();
+    Logger(INFO) << "Device memory after initialization: " << m_gui_device_mem_text;
+
     // Set camera to a nice start position
     auto camera = getCamera();
     camera->position_world_space = {-0.8, 0.6666, -0.8};
@@ -314,6 +333,8 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
 
     if(m_compressed_segmentation_volume)
         m_data_changed = true; // trigger re-upload to new buffers
+    if(m_csgv_db)
+        m_attribute_changed = true;
 }
 
 void CompressedSegmentationVolumeRenderer::releaseResources() {
@@ -322,6 +343,7 @@ void CompressedSegmentationVolumeRenderer::releaseResources() {
     m_cache_info_buffer = nullptr;
     m_free_stack_buffer = nullptr;
     m_cache_buffer = nullptr;
+    m_attribute_buffer = nullptr;
     m_encoding_buffer = nullptr;
     m_brick_starts_buffer = nullptr;
     m_detail_buffer = nullptr;
@@ -368,6 +390,7 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         m_pass->setStorageBuffer(0, 9, *m_detail_requests_buffer);
     }
     m_pass->setStorageBuffer(0, 16, *m_gpu_stats_buffer);
+    m_pass->setStorageBuffer(0, 17, *m_attribute_buffer);
     m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(), m_compressed_segmentation_volume->getLodCountPerBrick());
     // reset all camera hashes and frame counters
     m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
@@ -654,6 +677,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 #endif
     if(m_csgv_db) {
         g->addCombo(&m_selected_attribute_id, m_csgv_db->getAttributeNames(), [this](int id) {
+            m_attribute_changed = true;
             Logger(DEBUG) << "Selected " << m_csgv_db->getAttributeNames()[id] << " with values in " << str(m_csgv_db->getAttributeMinMax()[id]);
         }, "Attribute");
     }

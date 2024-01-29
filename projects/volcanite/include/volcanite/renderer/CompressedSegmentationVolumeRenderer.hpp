@@ -169,8 +169,11 @@ private:
 
     std::shared_ptr<CompressedSegmentationVolume> m_compressed_segmentation_volume = nullptr;
     std::shared_ptr<CSGVDatabase> m_csgv_db = nullptr;
-    bool m_data_changed;
+    bool m_data_changed = false;
     std::shared_ptr<Buffer> m_encoding_buffer = nullptr;
+    const size_t m_max_attribute_buffer_size = ((64ul << 10) << 10);   // MB to store different floating point attributes back to back
+    bool m_attribute_changed = false;
+    std::shared_ptr<Buffer> m_attribute_buffer = nullptr;       // stores attributes back to back
     std::shared_ptr<Buffer> m_brick_starts_buffer = nullptr;
     const size_t m_cache_capacity = 96000000ul;    // this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x sizeof(uint)=32 bytes large, so a capacity of 32000000 equals 1024MB
     const size_t m_free_stack_capacity = 262144ul;  // this many elements (one uint=4byte each) fit into the free stack of EACH LoD > 0. We need max. volume_size/brick_size/lod_width³ elements. a capacity of 262144 equals 1MB * (lod_count-1)
