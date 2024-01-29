@@ -51,7 +51,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
 
         // ToDo? is this required? wait until everything is uploaded
-        //getCtx()->getDevice().waitIdle();
+        getCtx()->getDevice().waitIdle();
         m_data_changed = false;
     }
 
@@ -64,6 +64,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
         auto [attr_upload_finished, _attr_staging_buffer] = m_attribute_buffer->uploadWithStagingBuffer(attr.data(), attr.size() * sizeof(float), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
         getCtx()->sync->hostWaitOnDevice({attr_upload_finished});
+
+        // reset all accumulation buffers
+        m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
 
         m_attribute_changed = false;
     }
