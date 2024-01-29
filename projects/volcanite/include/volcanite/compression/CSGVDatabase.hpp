@@ -83,6 +83,10 @@ private:
                     throw std::runtime_error(
                             "When providing an attribute database you must also provide its attribute table and label column name");
 
+                // ToDo: allow attribute_database to be a csv filepath and import from csv instead
+                if(attribute_database.ends_with(".csv"))
+                    throw std::runtime_error("Importing attributes from CSV files is not yet supported!");
+
                 db.exec("ATTACH DATABASE '" + attribute_database + "' AS attr_db");
                 // 0. check if the provide label column only contains unique elements
                 {
@@ -91,8 +95,8 @@ private:
                                                        attribute_table + " GROUP BY " + label_column +
                                                        " HAVING cnt > 1");
                     if (check_duplicates.executeStep())
-                        throw std::runtime_error(
-                                "Label column " + label_column + " in " + attribute_database + "." + attribute_table +
+                        throw SQLite::Exception(
+                                "Label column " + label_column + " in " + attribute_database + " : " + attribute_table +
                                 " contains forbidden duplicate entries.");
                 }
 
@@ -186,7 +190,7 @@ private:
         }
 
         // reimport database as read only
-        m_db = std::make_unique<SQLite::Database>(sqlite_path, SQLite::OPEN_READONLY);
+        importFromSqlite(sqlite_path);
         return true;
     }
 
@@ -196,6 +200,9 @@ public:
 
     void close() {
         m_db = nullptr;
+        m_attribute_names.clear();
+        m_attribute_minmax.clear();
+        m_label_count = 0;
     }
 
     /** If a precomputed CSGV database exists already, it is openend.
@@ -219,6 +226,17 @@ public:
 
     void importFromSqlite(const std::string& sqlite_path) {
         m_db = std::make_unique<SQLite::Database>(sqlite_path, SQLite::OPEN_READONLY);
+
+        // read label count, attribute names, and min/max values from columns
+        m_label_count = m_db->execAndGet("SELECT COUNT(*) FROM " + CSGV_ATTRIBUTE_TABLE).getInt64();
+        m_attribute_names.clear();
+        m_attribute_minmax.clear();
+        SQLite::Statement column_query(*m_db, "SELECT name FROM pragma_table_info('" + CSGV_ATTRIBUTE_TABLE + "') ORDER BY cid");
+        while (column_query.executeStep()) {
+            m_attribute_names.push_back(column_query.getColumn(0).getString());
+            m_attribute_minmax.emplace_back(static_cast<float>(m_db->execAndGet("SELECT MIN(" + m_attribute_names.back() + ") FROM " + CSGV_ATTRIBUTE_TABLE).getDouble()),
+                                            static_cast<float>(m_db->execAndGet("SELECT MAX(" + m_attribute_names.back() + ") FROM " + CSGV_ATTRIBUTE_TABLE).getDouble()));
+        }
     }
 
     /** For a (possibly chunked) volume, the following preprocessing is carried out and exported to a new database:\n
@@ -335,8 +353,23 @@ public:
         return label_to_index;
     }
 
+    const std::vector<std::string>& getAttributeNames() const {
+        return m_attribute_names;
+    }
+
+    const std::vector<glm::vec2>& getAttributeMinMax() const {
+        return m_attribute_minmax;
+    }
+
+    size_t getLabelCount() const {
+        return m_label_count;
+    }
+
 private:
     std::unique_ptr<SQLite::Database> m_db = nullptr;   // sqlite database
+    std::vector<std::string> m_attribute_names = {};
+    std::vector<glm::vec2> m_attribute_minmax = {};
+    size_t m_label_count = 0;
 };
 
 

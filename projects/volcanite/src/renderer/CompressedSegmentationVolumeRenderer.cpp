@@ -652,6 +652,11 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             },
             "Sub-Block");
 #endif
+    if(m_csgv_db) {
+        g->addCombo(&m_selected_attribute_id, m_csgv_db->getAttributeNames(), [this](int id) {
+            Logger(DEBUG) << "Selected " << m_csgv_db->getAttributeNames()[id] << " with values in " << str(m_csgv_db->getAttributeMinMax()[id]);
+        }, "Attribute");
+    }
     g->addInt(&m_empty_label, "Empty Label");
     g->addInt(&m_label_minmax.x, "Label ID Min. 2^", 0, 32, 1);
     g->addInt(&m_label_minmax.y, "Label ID Max. 2^", 0, 32, 1);

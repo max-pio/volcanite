@@ -115,6 +115,7 @@ set(VVV_SOURCES
         src/vk/memory.cpp
         src/vk/queue.cpp
 
+        src/util/csv_utils.cpp
         src/util/Logger.cpp
         src/util/PointUtils.cpp
         src/util/detect_debugger.cpp

@@ -13,6 +13,7 @@
 
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/renderer/PassCompSegVolRender.hpp"
+#include "volcanite/compression/CSGVDatabase.hpp"
 
 namespace vvv {
 
@@ -92,7 +93,10 @@ public:
 
     void initGui(vvv::GuiInterface * gui) override;
 
-    void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> csgv) {
+    void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> csgv, std::shared_ptr<CSGVDatabase> db = nullptr) {
+        if(!csgv) {
+            throw std::runtime_error("CompressedSegmentationVolume must not be null");
+        }
         if(csgv->getBrickCount().x < csgv->getLodCountPerBrick()) {
             Logger(WARN) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
                          ") in one dimension than there are brick level-of-details (" << csgv->getLodCountPerBrick() <<
@@ -100,30 +104,39 @@ public:
         }
         m_compressed_segmentation_volume = std::move(csgv);
         m_data_changed = true;
+
+        // when a database is provided, we use it for attribute visualization
+        m_csgv_db = db;
     }
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
 private:
-    // (gui) parameters
+    // (gui) parameters:
+    // transfer function
+    glm::ivec2 m_label_minmax = glm::ivec2(0, 32);
+    int m_empty_label = 0;
+    int m_selected_attribute_id = 0;
+    // shading and post processing
     glm::vec4 m_background_color_a = glm::vec4(0.9f, 0.9f, 0.95f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
-    glm::ivec2 m_label_minmax = glm::ivec2(0, 32);
+    int m_subsampling = 2;
     bool m_tonemap_enabled = false;
     bool m_shadow_ray_enabled = true;
     float m_shadow_ao_ray_distr = 0.f;
     glm::vec2 m_ambient_occlusion_dist_strength = glm::vec2(15.f, 0.5f);
     glm::vec3 m_light_direction = glm::vec3(-1.f, 1.f, 0.1f);
     float m_light_intensity = 1.f;
+    // voxel traversal
     float m_step_size = 0.002f;
     int m_max_steps = 2048;
-    int m_subsampling = 2;
     glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
     bool m_subblock_enabled = false;
     glm::ivec3 m_subblock_size = glm::ivec3(128, 128, 128);
     glm::ivec3 m_subblock_start = glm::ivec3(0, 0, 0);
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
+    // debugging and dev options
     float m_lod_bias = 0.f;
     bool m_dda_traversal = true;
     bool m_show_normals = false;
@@ -136,7 +149,7 @@ private:
     bool m_clear_accum_every_frame = false;
     int m_accum_frames = 0;
     int m_max_decoding_lod = 6;
-    int m_empty_label = 0;
+    // utility
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text;
     std::optional<std::string> m_download_frame_to_image_file = {};
@@ -154,7 +167,8 @@ private:
     std::shared_ptr<UniformReflected> m_urender_info = nullptr;
     std::shared_ptr<UniformReflected> m_usegmented_volume_info = nullptr;
 
-    std::shared_ptr<CompressedSegmentationVolume> m_compressed_segmentation_volume;
+    std::shared_ptr<CompressedSegmentationVolume> m_compressed_segmentation_volume = nullptr;
+    std::shared_ptr<CSGVDatabase> m_csgv_db = nullptr;
     bool m_data_changed;
     std::shared_ptr<Buffer> m_encoding_buffer = nullptr;
     std::shared_ptr<Buffer> m_brick_starts_buffer = nullptr;

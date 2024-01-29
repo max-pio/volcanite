@@ -170,7 +170,7 @@ int volcanite(int argc, char *argv[]) {
         Logger(INFO) << "initializing Volcanite renderer";
 
         const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
-        renderer->setCompressedSegmentationVolume(compressedSegmentationVolume);
+        renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
 
         // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)
         if (!args.screenshot_output_file.empty()) {
