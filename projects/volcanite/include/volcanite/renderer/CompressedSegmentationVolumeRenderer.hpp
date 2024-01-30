@@ -22,7 +22,9 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 public:
     CompressedSegmentationVolumeRenderer(bool release_version = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false),
                                                                          m_camHash(0ul), m_resolution(1920,1080), m_framesSinceCameraMove(0), m_frame(0u),
-                                                                         m_release_version(release_version) {}
+                                                                         m_release_version(release_version) {
+        m_materials.resize(4);
+    }
 
     ~CompressedSegmentationVolumeRenderer() { resetGPU(); m_compressed_segmentation_volume.reset(); }
 
@@ -117,6 +119,7 @@ private:
     glm::ivec2 m_label_minmax = glm::ivec2(0, 32);
     int m_empty_label = 0;
     int m_selected_attribute_id = 0;
+    std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(4);
     // shading and post processing
     glm::vec4 m_background_color_a = glm::vec4(0.9f, 0.9f, 0.95f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);

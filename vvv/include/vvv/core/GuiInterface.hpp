@@ -2,6 +2,7 @@
 
 #include <vvv/volren/tf/VectorTransferFunction.hpp>
 #include <vvv/volren/tf/TransferFunction2D.hpp>
+#include <vvv/volren/tf/SegmentedVolumeMaterial.hpp>
 #include <vvv/util/Logger.hpp>
 
 #include <glm/glm.hpp>
@@ -47,6 +48,7 @@ typedef size_t gui_id;
 
 namespace vvv {
 
+
 /**
  * Connection to a (graphical) parameter interface.
  *
@@ -68,7 +70,7 @@ namespace vvv {
  */
 class GuiInterface {
 protected:
-    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiAction, GuiLabel, GuiDynamicText, GuiSeparator, GuiTF1D, GuiTF2D, GuiCustomCode };
+    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiAction, GuiLabel, GuiDynamicText, GuiSeparator, GuiTF1D, GuiTF2D, GuiTFSegmentedVolume, GuiCustomCode };
 
     // ------------------------------- GUI ENTRIES ------------------------------------ //
 public:
@@ -118,6 +120,13 @@ public:
         std::vector<std::string> options = {};
     };
 
+    struct GuiTFSegmentedVolumeEntry : BaseGuiEntry {
+        std::vector<SegmentedVolumeMaterial> *materials;
+        std::function<void(int)> onChanged = {};
+        std::vector<std::string> attributeNames = {};
+        std::vector<glm::vec2> attributeMinMax = {};
+    };
+
     //  ------------------------------ GUI ELEMENT LIST ------------------------------- //
 public:
     class GuiElementList {
@@ -161,6 +170,7 @@ public:
         // vvv types
         virtual gui_id addTF1D(VectorTransferFunction* tf, std::vector<float> *histogram = nullptr, float *histMin = nullptr, float *histMax = nullptr, std::function<void()> onChanged = nullptr);
         virtual gui_id addTF2D(TransferFunction2D* tf, Texture* histogramTexture, bool* histogramChanged = nullptr, std::function<void()> onChanged = nullptr, glm::vec2* histogramMin = nullptr, glm::vec2* histogramMax = nullptr);
+        virtual gui_id addTFSegmentedVolume(std::vector<SegmentedVolumeMaterial>* materials, const std::vector<std::string>& attributeNames, const std::vector<glm::vec2>& attributeMinMax, std::function<void(int)> onChanged = nullptr, const std::string& name = "");
 
         // special types and grouping
         virtual gui_id addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int)> onChanged = nullptr, const std::string& name = "");

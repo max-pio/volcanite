@@ -38,6 +38,7 @@ set(VVV_HEADERS
         include/vvv/volren/tf/TransferFunction.hpp
         include/vvv/volren/tf/VectorTransferFunction.hpp
         include/vvv/volren/tf/TransferFunction1D.hpp
+        include/vvv/volren/tf/SegmentedVolumeMaterial.hpp
         include/vvv/volren/tf/builtin.hpp
         include/vvv/volren/tf/color.hpp
         include/vvv/volren/Volume.hpp

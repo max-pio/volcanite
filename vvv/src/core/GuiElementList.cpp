@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "vvv/core/GuiInterface.hpp"
 
 namespace vvv {
@@ -40,6 +42,20 @@ namespace vvv {
         m_entries.push_back(entry);
         return entry->id;
     }
+
+    gui_id  GuiInterface::GuiElementList::addTFSegmentedVolume(std::vector<SegmentedVolumeMaterial> *materials, const std::vector<std::string>& attributeNames, const std::vector<glm::vec2>& attributeMinMax, std::function<void(int)> onChanged, const std::string& name) {
+        auto entry = new GuiTFSegmentedVolumeEntry();
+        entry->id = m_id_counter++;
+        entry->type = GuiTFSegmentedVolume;
+        entry->materials = materials;
+        entry->attributeNames = attributeNames;
+        entry->attributeMinMax = attributeMinMax;
+        entry->onChanged = std::move(onChanged);
+        entry->label = name;
+        m_entries.push_back(entry);
+        return entry->id;
+    }
+
 
     // special types and grouping
     gui_id GuiInterface::GuiElementList::addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int)> onChanged, const std::string& name) {
