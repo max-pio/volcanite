@@ -150,6 +150,18 @@ int volcanite(int argc, char *argv[]) {
     else {
         compressedSegmentationVolume = std::make_shared<CompressedSegmentationVolume>();
         compressedSegmentationVolume->importFromFile(args.input_file, args.verbose);
+
+        // try to load a precomputed database
+        std::string database_path = args.input_file.substr(0, args.input_file.length() - 5) + "_csgv.db3";
+        if(std::filesystem::exists(database_path)) {
+            MiniTimer t;
+            csgvDatabase->importFromSqlite(database_path);
+            if (args.verbose)
+                Logger(INFO) << "Imported attribute database " << database_path << " in " << t.elapsed() << " seconds";
+        }
+        else {
+            Logger(INFO) << "No attribute database " << database_path << " found";
+        }
     }
 
     if(args.performDecompression()) {
