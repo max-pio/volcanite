@@ -493,8 +493,13 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<glm::uvec2>("g_label_minmax", label_minmax);
         uint32_t empty_label = static_cast<uint32_t>(m_empty_label);
         m_urender_info->setUniform<uint32_t>("g_empty_label", empty_label);
-        m_urender_info->setUniform<float>("g_transferFunction_limits_min", 0);
-        m_urender_info->setUniform<float>("g_transferFunction_limits_max", 1000);
+        if(m_csgv_db) {
+            m_urender_info->setUniform<float>("g_transferFunction_limits_min", m_csgv_db->getAttributeMinMax().at(m_selected_attribute_id).x);
+            m_urender_info->setUniform<float>("g_transferFunction_limits_max", m_csgv_db->getAttributeMinMax().at(m_selected_attribute_id).y);
+        } else {
+            m_urender_info->setUniform<float>("g_transferFunction_limits_min", 0);
+            m_urender_info->setUniform<float>("g_transferFunction_limits_max", 1000);
+        }
         m_urender_info->setUniform<int32_t>("g_shadow_ray_enable", m_shadow_ray_enabled ? 1 : 0);
         m_urender_info->setUniform<float>("g_shadow_ao_ray_distr", m_shadow_ao_ray_distr);
         m_urender_info->setUniform<int32_t>("g_tonemap_enable", m_tonemap_enabled ? 1 : 0);
