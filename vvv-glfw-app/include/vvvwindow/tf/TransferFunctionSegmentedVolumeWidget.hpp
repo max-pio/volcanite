@@ -12,6 +12,12 @@ public:
             auto& mat = e->materials->at(m);
             mat.discrInterval = e->attributeMinMax[mat.discrAttribute];
             mat.tfMinMax = e->attributeMinMax[mat.tfAttribute];
+            // we use opaque transfer functions
+            mat.tf->m_controlPointsOpacity.resize(4);
+            mat.tf->m_controlPointsOpacity[0] = 0.f;
+            mat.tf->m_controlPointsOpacity[1] = 1.f;
+            mat.tf->m_controlPointsOpacity[2] = 1.f;
+            mat.tf->m_controlPointsOpacity[3] = 1.f;
             // initialize all colormaps with viridis
             guiMaterials[m].precomputedIdx = viridsLocation < availableColormaps.size() ? viridsLocation : 0;
             updateVectorColormap(m);

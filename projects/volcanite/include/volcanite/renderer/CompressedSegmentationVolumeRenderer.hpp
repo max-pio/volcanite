@@ -22,9 +22,7 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 public:
     CompressedSegmentationVolumeRenderer(bool release_version = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false),
                                                                          m_camHash(0ul), m_resolution(1920,1080), m_framesSinceCameraMove(0), m_frame(0u),
-                                                                         m_release_version(release_version) {
-        m_materials.resize(4);
-    }
+                                                                         m_release_version(release_version) {}
 
     ~CompressedSegmentationVolumeRenderer() { resetGPU(); m_compressed_segmentation_volume.reset(); }
 
@@ -108,7 +106,7 @@ public:
         m_data_changed = true;
 
         // when a database is provided, we use it for attribute visualization
-        m_csgv_db = db;
+        m_csgv_db = std::move(db);
     }
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
@@ -119,7 +117,7 @@ private:
     glm::ivec2 m_label_minmax = glm::ivec2(0, 32);
     int m_empty_label = 0;
     int m_selected_attribute_id = 0;
-    std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(4);
+    std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(2);
     // shading and post processing
     glm::vec4 m_background_color_a = glm::vec4(0.9f, 0.9f, 0.95f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
@@ -159,7 +157,7 @@ private:
 
 
     void updateDeviceMemoryUsage();
-
+    void updateSegmentedVolumeMaterial(int m);
     void updateUniformDescriptorset();
 
     std::unique_ptr<PassCompSegVolRender> m_pass = nullptr;
@@ -172,6 +170,7 @@ private:
 
     std::shared_ptr<CompressedSegmentationVolume> m_compressed_segmentation_volume = nullptr;
     std::shared_ptr<CSGVDatabase> m_csgv_db = nullptr;
+    std::vector<std::shared_ptr<TransferFunction1D>> m_materialTransferFunctions;
     bool m_data_changed = false;
     std::shared_ptr<Buffer> m_encoding_buffer = nullptr;
     const size_t m_max_attribute_buffer_size = ((64ul << 10) << 10);   // MB to store different floating point attributes back to back

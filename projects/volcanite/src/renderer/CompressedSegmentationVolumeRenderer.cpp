@@ -354,6 +354,8 @@ void CompressedSegmentationVolumeRenderer::releaseResources() {
     m_detail_requests_buffer = nullptr;
     m_detail_starts_staging.second = nullptr;
     m_detail_staging.second = nullptr;
+    for(auto& tf : m_materialTransferFunctions)
+        tf = nullptr;
     setCtx(nullptr);
 }
 
@@ -631,6 +633,10 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_usegmented_volume_info->setUniform<uint32_t>("g_free_stack_capacity", m_free_stack_capacity);
         m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
     }
+
+    // transfer functions and materials
+    {
+    }
 }
 
 void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
@@ -684,11 +690,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             "Sub-Block");
 #endif
     if(m_csgv_db) {
-//        g->addCombo(&m_selected_attribute_id, m_csgv_db->getAttributeNames(), [this](int id) {
-//            m_attribute_changed = true;
-//            Logger(DEBUG) << "Selected " << m_csgv_db->getAttributeNames()[id] << " with values in " << str(m_csgv_db->getAttributeMinMax()[id]);
-//        }, "Attribute");
-        g->addTFSegmentedVolume(&m_materials, m_csgv_db->getAttributeNames(), m_csgv_db->getAttributeMinMax(), nullptr, "Materials");
+        g->addTFSegmentedVolume(&m_materials, m_csgv_db->getAttributeNames(), m_csgv_db->getAttributeMinMax(), [this](int m) { updateSegmentedVolumeMaterial(m); }, "Materials");
     }
     g->addInt(&m_empty_label, "Empty Label");
     g->addInt(&m_label_minmax.x, "Label ID Min. 2^", 0, 32, 1);
@@ -794,6 +796,22 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                              << static_cast<float>(bu.first) / 1073741824.f << "/"
                              << static_cast<float>(total) / 1073741824.f << " GB (used/avail/total)";
         m_gui_device_mem_text = ss.str();
+    }
+
+    void CompressedSegmentationVolumeRenderer::updateSegmentedVolumeMaterial(int m) {
+        constexpr int TF_WIDTH = 256;
+        getCtx()->sync->hostWaitOnDevice(m_mostRecentFrame->renderingComplete);
+        if (m_materialTransferFunctions.size() < m_materials.size())
+            m_materialTransferFunctions.resize(m_materials.size(), nullptr);
+        m_materialTransferFunctions[m] = m_materials[m].tf->rasterize(getCtx(), TF_WIDTH);
+        auto [tf1dAwait, tf1dStagingBuf] = m_materialTransferFunctions[m]->upload();
+        getCtx()->sync->hostWaitOnDevice({tf1dAwait});
+
+        if(m == 0)
+            m_pass->setImageSampler("transferFunctions", m_materialTransferFunctions[m]->texture(), vk::ImageLayout::eReadOnlyOptimal, false);
+
+        // reset accumulation
+        m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
     }
 
 } // namespace vvv
