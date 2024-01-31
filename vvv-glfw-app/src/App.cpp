@@ -937,6 +937,9 @@ void Application::updateCamera() {
     if (ImGui::GetIO().WantCaptureMouse)
         scrollWheelDelta = 0.f;
 
+    // do not process keyboard input if ImGui obtains text input
+    bool captureKeyboard = !ImGui::GetIO().WantCaptureKeyboard;
+
     auto camera = getCamera();
 
     // Figure out how much time has passed since the last invocation
@@ -980,7 +983,7 @@ void Application::updateCamera() {
         camera->rotation_x = (camera->rotation_x > std::numbers::pi) ? std::numbers::pi : camera->rotation_x;
     }
     if(camera->orbital) {
-        if(!camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_R)) {
+        if(captureKeyboard && !camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_R)) {
             camera->rotation_y += 0.01f;
         }
         constexpr float pi_eps = std::numbers::pi / 2.f - 0.001f;
@@ -1012,12 +1015,14 @@ void Application::updateCamera() {
         float step = time_delta * final_speed;
         // Determine camera movement
         float forward = 0.0f, right = 0.0f, vertical = 0.0f;
-        forward += (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
-        forward -= (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
-        right += (glfwGetKey(m_window, GLFW_KEY_D) == GLFW_PRESS) ? step : 0.0f;
-        right -= (glfwGetKey(m_window, GLFW_KEY_A) == GLFW_PRESS) ? step : 0.0f;
-        vertical += (glfwGetKey(m_window, GLFW_KEY_E) == GLFW_PRESS) ? step : 0.0f;
-        vertical -= (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) ? step : 0.0f;
+        if (captureKeyboard) {
+            forward += (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
+            forward -= (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
+            right += (glfwGetKey(m_window, GLFW_KEY_D) == GLFW_PRESS) ? step : 0.0f;
+            right -= (glfwGetKey(m_window, GLFW_KEY_A) == GLFW_PRESS) ? step : 0.0f;
+            vertical += (glfwGetKey(m_window, GLFW_KEY_E) == GLFW_PRESS) ? step : 0.0f;
+            vertical -= (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) ? step : 0.0f;
+        }
         // Implement camera movement
         float cos_y = cosf(camera->rotation_y), sin_y = sinf(camera->rotation_y);
         camera->position_world_space[0] +=  sin_y * forward;
