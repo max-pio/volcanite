@@ -7,7 +7,13 @@ namespace vvv {
 class GuiTFSegmentedVolumeData {
 public:
     explicit GuiTFSegmentedVolumeData(GuiInterface::GuiTFSegmentedVolumeEntry &entry) : e(&entry), guiMaterials(entry.materials->size()) {
+        int viridsLocation = static_cast<int>(std::find(availableColormaps.begin(), availableColormaps.end(), "viridis") - availableColormaps.begin());
         for(int m = 0; m < e->materials->size(); m++) {
+            auto& mat = e->materials->at(m);
+            mat.discrInterval = e->attributeMinMax[mat.discrAttribute];
+            mat.tfMinMax = e->attributeMinMax[mat.tfAttribute];
+            // initialize all colormaps with viridis
+            guiMaterials[m].precomputedIdx = viridsLocation < availableColormaps.size() ? viridsLocation : 0;
             updateVectorColormap(m);
             if(e->onChanged)
                 e->onChanged(m);
@@ -19,8 +25,8 @@ public:
 private:
     static std::vector<std::string> makeAvailableColormaps() {
         std::vector<std::string> v;
-        v.reserve(colormaps::colormaps.size());
-        for(const auto& m : colormaps::colormaps)
+        v.reserve(colormaps::good_colormaps.size());
+        for(const auto& m : colormaps::good_colormaps)
             v.push_back(m.first);
         return v;
     }
@@ -29,7 +35,7 @@ private:
 
     struct GuiMaterialData {
         ColorMapType type = Precomputed;
-        glm::vec3 color[2] = {glm::vec3(0.9f, 0.05f, 0.1f), glm::vec3(0.05f, 0.1f, 0.9f)};
+        glm::vec3 color[2] = {glm::vec3(00.2298f,0.2987f,0.7537f), glm::vec3(0.7057f,0.01556f,0.1502f)};
         int precomputedIdx = 0;
     };
 

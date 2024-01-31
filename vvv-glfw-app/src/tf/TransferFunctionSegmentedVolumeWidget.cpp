@@ -34,6 +34,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                 const bool is_selected = i == mat.discrAttribute;
                 if (ImGui::Selectable(e->attributeNames.at(i).c_str(), is_selected)) {
                     mat.discrAttribute = i;
+                    mat.discrInterval = e->attributeMinMax[i];
                     materialChanged = true;
                 }
                 if (is_selected)
@@ -58,7 +59,6 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
         ImGui::PopID();
         ImGui::Separator();
 
-        // ToDo: replace VectorControlPoint TF with normal 1D TF?
         // -------------------------------------------------------------------------------------------------------------
         //               COLORMAP EDITOR
         glm::vec2 colormap_canvas_p0 = ImGui::GetCursorScreenPos();
@@ -67,9 +67,10 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
         ImGui::NewLine();
         ImGui::Columns(2, nullptr, false);   // colormap column layout
         ImGui::PushID(id++);
+        // ToDo: add PNG import for colormaps?
         std::string types[] =  {"Solid Color", "Divergent Colormap", "Precomputed Colormap", "PNG Import"};
         if (ImGui::BeginCombo("", types[d.type].c_str())) {
-            for(int i = 0; i < 4; i++) {
+            for(int i = 0; i < 3; i++) {
                 const bool is_selected = i == d.type;
                 if (ImGui::Selectable(types[i].c_str(), is_selected)) {
                     d.type = static_cast<ColorMapType>(i);
