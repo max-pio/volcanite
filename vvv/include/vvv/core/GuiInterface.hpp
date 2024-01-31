@@ -114,17 +114,18 @@ public:
         std::any widgetData = {};
     };
 
-    struct GuiComboEntry : BaseGuiEntry {
-        int *selection = nullptr;
-        std::function<void(int)> onChanged = {};
-        std::vector<std::string> options = {};
-    };
-
     struct GuiTFSegmentedVolumeEntry : BaseGuiEntry {
         std::vector<SegmentedVolumeMaterial> *materials;
         std::function<void(int)> onChanged = {};
         std::vector<std::string> attributeNames = {};
         std::vector<glm::vec2> attributeMinMax = {};
+        std::any widgetData = {};   // ToDo: any is not nice
+    };
+
+    struct GuiComboEntry : BaseGuiEntry {
+        int *selection = nullptr;
+        std::function<void(int)> onChanged = {};
+        std::vector<std::string> options = {};
     };
 
     //  ------------------------------ GUI ELEMENT LIST ------------------------------- //

@@ -3,54 +3,208 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_impl_vulkan.h>
 
-void vvv::renderGuiTFSegmentedVolume(GuiInterface::GuiTFSegmentedVolumeEntry& e, GpuContextPtr) {
+void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
+    int id = static_cast<int>(e->id);
 
-    // ToDo: use ImGui::pushID to not use labels as ids
+    ImGui::TextUnformatted((e->label + " " + std::to_string(e->materials->size())).c_str());
 
-    ImGui::TextUnformatted((e.label + " " + std::to_string(e.materials->size())).c_str());
-
-    if(e.attributeNames.empty() || e.attributeMinMax.empty())
+    if(e->attributeNames.empty() || e->attributeMinMax.empty())
         throw std::runtime_error("No attributes for segmented volume material editor specified");
 
     // iterate over all materials
-    for(int m = 0; m < e.materials->size(); m++) {
-        SegmentedVolumeMaterial& mat = (*e.materials)[m];
-        std::string prefix = ("M" + std::to_string(m) + " ");
+    for(int m = 0; m < e->materials->size(); m++) {
+        SegmentedVolumeMaterial& mat = (*e->materials)[m];
+        GuiMaterialData& d = guiMaterials[m];
+
         bool materialChanged = false;
-        ImGui::BeginChild((prefix + " Material").c_str(),  ImVec2(0, ImGui::GetFontSize() * 10.0f), true, ImGuiWindowFlags_MenuBar);
+        bool colormapChanged = false;
+
+        ImGui::BeginChild(id++,  ImVec2(ImGui::GetWindowContentRegionWidth(), ImGui::GetFontSize() * 14.0f), true, ImGuiWindowFlags_MenuBar);
 
         // Text field to give the material a name
-        ImGui::InputText((prefix + "Name").c_str(), mat.name, sizeof(mat.name) / sizeof(char));
+        ImGui::PushID(id++);
+        ImGui::InputText("Name", mat.name, sizeof(mat.name) / sizeof(char));
+        // (we do not set materialChanged when the name was changed)
+        ImGui::PopID();
 
         // Combo to select Discriptor Attribute
-        if (ImGui::BeginCombo((prefix + "Discriminator").c_str(), (e.attributeNames.at(mat.discrAttribute) + "    [" + std::to_string(e.attributeMinMax.at(mat.discrAttribute).x) + " - " + std::to_string(e.attributeMinMax.at(mat.discrAttribute).y) + "]").c_str())) {
-            for(int i = 0; i < e.attributeNames.size(); i++) {
+        ImGui::PushID(id++);
+        if (ImGui::BeginCombo("Discriminator", e->attributeNames.at(mat.discrAttribute).c_str())) {
+            for(int i = 0; i < e->attributeNames.size(); i++) {
                 const bool is_selected = i == mat.discrAttribute;
-                if (ImGui::Selectable(e.attributeNames.at(i).c_str(), is_selected)) {
+                if (ImGui::Selectable(e->attributeNames.at(i).c_str(), is_selected)) {
                     mat.discrAttribute = i;
+                    materialChanged = true;
                 }
                 if (is_selected)
                     ImGui::SetItemDefaultFocus();
             }
             ImGui::EndCombo();
-            materialChanged = true;
         }
+        ImGui::PopID();
 
         // Discriminator range
-        glm::vec2 attrRange = e.attributeMinMax.at(mat.discrAttribute);
-        ImGui::DragFloatRange2((prefix + "Range").c_str(),
-                   &mat.discrInterval.x, &mat.discrInterval.y,
-                   glm::max(1.f, (attrRange.y - attrRange.x) / 1000.f),
-                   e.attributeMinMax.at(mat.discrAttribute).x, e.attributeMinMax.at(mat.discrAttribute).y);
-
+        glm::vec2 attrRange = e->attributeMinMax.at(mat.discrAttribute);
+        ImGui::PushID(id++);
+        std::stringstream rangeLabel;
+        rangeLabel << std::fixed << std::setprecision(3) << "Range  ["
+                   << e->attributeMinMax.at(mat.discrAttribute).x << " - "
+                   << e->attributeMinMax.at(mat.discrAttribute).y << "]";
+        materialChanged |= ImGui::DragFloatRange2(rangeLabel.str().c_str(),
+                                                  &mat.discrInterval.x, &mat.discrInterval.y,
+                                                  glm::max(0.1f, (attrRange.y - attrRange.x) / 1000.f),
+                                                  e->attributeMinMax.at(mat.discrAttribute).x,
+                                                  e->attributeMinMax.at(mat.discrAttribute).y);
+        ImGui::PopID();
         ImGui::Separator();
 
         // ToDo: replace VectorControlPoint TF with normal 1D TF?
-        ImGui::ColorEdit3((prefix + "Color").c_str(), &(mat.tf->m_controlPointsRgb.at(0)));
+        // -------------------------------------------------------------------------------------------------------------
+        //               COLORMAP EDITOR
+        glm::vec2 colormap_canvas_p0 = ImGui::GetCursorScreenPos();
+        glm::vec2 colormap_canvas_sz = ImGui::GetContentRegionAvail();
+        ImGui::NewLine();
+        ImGui::NewLine();
+        ImGui::Columns(2, nullptr, false);   // colormap column layout
+        ImGui::PushID(id++);
+        std::string types[] =  {"Solid Color", "Divergent Colormap", "Precomputed Colormap", "PNG Import"};
+        if (ImGui::BeginCombo("", types[d.type].c_str())) {
+            for(int i = 0; i < 4; i++) {
+                const bool is_selected = i == d.type;
+                if (ImGui::Selectable(types[i].c_str(), is_selected)) {
+                    d.type = static_cast<ColorMapType>(i);
+                    colormapChanged = true;
+                }
+                if (is_selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::PopID();
+        switch (d.type) {
+            case SolidColor:
+                ImGui::PushID(id++);
+                ImGui::NextColumn();
+                colormapChanged |= ImGui::ColorEdit3("", &d.color[0].r);
+                ImGui::PopID();
+                break;
+            case Divergent:
+                ImGui::PushID(id++);
+                ImGui::NextColumn();
+                colormapChanged |= ImGui::ColorEdit3("", &d.color[0].r);
+                ImGui::PopID();
+                ImGui::NextColumn();
+                ImGui::NextColumn();
+                ImGui::PushID(id++);
+                colormapChanged |= ImGui::ColorEdit3("", &d.color[1].r);
+                ImGui::PopID();
+                break;
+            case Precomputed:
+                ImGui::PushID(id++);
+                ImGui::NextColumn();
+                if (ImGui::BeginCombo("", availableColormaps[d.precomputedIdx].c_str())) {
+                    for(int i = 0; i < availableColormaps.size(); i++) {
+                        const bool is_selected = i == d.precomputedIdx;
+                        if (ImGui::Selectable(availableColormaps[i].c_str(), is_selected)) {
+                            d.precomputedIdx = i;
+                            colormapChanged = true;
+                        }
+                        if (is_selected)
+                            ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }                ImGui::PopID();
+                ImGui::NextColumn();
+                break;
+            default:
+                Logger(WARN) << "unknown segmentation volume transfer function colormap " << d.type;
+        }
+        ImGui::Columns(); // colormap column layout
+        if(colormapChanged) {
+            materialChanged = true;
+            updateVectorColormap(m);
+        }
+        // draw the colormap
+        {
+            if (colormap_canvas_sz.x < 50.0f)
+                colormap_canvas_sz.x = 50.0f;
+            colormap_canvas_sz.y = ImGui::GetTextLineHeightWithSpacing() * 2.f;
 
+            ImDrawList *draw_list = ImGui::GetWindowDrawList();
+            auto colormap_canvas_p1 = colormap_canvas_p0 + colormap_canvas_sz;
+            for (int x = static_cast<int>(colormap_canvas_p0.x) + 5; x <= static_cast<int>(colormap_canvas_p1.x) - 5; x++) {
+                float value_x = (x - colormap_canvas_p0.x - 5) / (colormap_canvas_sz.x - 10);
+                auto color = mat.tf->sampleRgb(value_x);
+                draw_list->AddRectFilled({static_cast<float>(x), colormap_canvas_p0.y + 5},
+                                         {static_cast<float>(x + 1), colormap_canvas_p1.y - 5},
+                                         ImGui::GetColorU32(ImVec4(color.r, color.g, color.b, 1)));
+            }
+        }
+
+
+        // -------------------------------------------------------------------------------------------------------------
         ImGui::EndChild();
-        if (materialChanged && e.onChanged)
-            e.onChanged(m);
+
+        if (materialChanged && e->onChanged)
+            e->onChanged(m);
     }
+}
+
+void vvv::GuiTFSegmentedVolumeData::updateVectorColormap(int material) {
+    SegmentedVolumeMaterial& mat = (*e->materials)[material];
+    GuiMaterialData& d = guiMaterials[material];
+
+    // transfer functions are currently fully opaque
+    if(mat.tf->m_controlPointsOpacity.size() != 4) {
+        mat.tf->m_controlPointsOpacity.resize(4);
+        mat.tf->m_controlPointsOpacity[0] = 0.f;
+        mat.tf->m_controlPointsOpacity[1] = 1.f;
+        mat.tf->m_controlPointsOpacity[2] = 1.f;
+        mat.tf->m_controlPointsOpacity[3] = 1.f;
+    }
+    switch(d.type) {
+        case SolidColor:
+            if(mat.tf->m_controlPointsRgb.size() != 8) {
+                mat.tf->m_controlPointsRgb.resize(8);
+            }
+            mat.tf->m_controlPointsRgb[0] = 0.f;
+            mat.tf->m_controlPointsRgb[1] = d.color[0].r;
+            mat.tf->m_controlPointsRgb[2] = d.color[0].g;
+            mat.tf->m_controlPointsRgb[3] = d.color[0].b;
+            mat.tf->m_controlPointsRgb[4] = 1.f;
+            mat.tf->m_controlPointsRgb[5] = d.color[0].r;
+            mat.tf->m_controlPointsRgb[6] = d.color[0].g;
+            mat.tf->m_controlPointsRgb[7] = d.color[0].b;
+            break;
+        case Divergent:
+            if(mat.tf->m_controlPointsRgb.size() != 12) {
+                mat.tf->m_controlPointsRgb.resize(12);
+            }
+            mat.tf->m_controlPointsRgb[0] = 0.f;
+            mat.tf->m_controlPointsRgb[1] = d.color[0].r;
+            mat.tf->m_controlPointsRgb[2] = d.color[0].g;
+            mat.tf->m_controlPointsRgb[3] = d.color[0].b;
+            mat.tf->m_controlPointsRgb[4] = 0.5f;
+            mat.tf->m_controlPointsRgb[5] = 1.f;
+            mat.tf->m_controlPointsRgb[6] = 1.f;
+            mat.tf->m_controlPointsRgb[7] = 1.f;
+            mat.tf->m_controlPointsRgb[8] = 1.f;
+            mat.tf->m_controlPointsRgb[9] = d.color[1].r;
+            mat.tf->m_controlPointsRgb[10] = d.color[1].g;
+            mat.tf->m_controlPointsRgb[11] = d.color[1].b;
+            break;
+        case Precomputed:
+            mat.tf->m_controlPointsRgb = colormaps::colormaps.at(availableColormaps[d.precomputedIdx]);
+            break;
+        default:
+            Logger(WARN) << "unknown segmentation volume transfer function colormap " << d.type;
+    }
+}
+
+
+void vvv::renderGuiTFSegmentedVolume(GuiInterface::GuiTFSegmentedVolumeEntry& entry, GpuContextPtr ctx) {
+    if (!entry.widgetData.has_value())
+        entry.widgetData.emplace<GuiTFSegmentedVolumeData>(entry);
+    std::any_cast<GuiTFSegmentedVolumeData&>(entry.widgetData).renderGui(ctx);
 }
 

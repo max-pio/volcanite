@@ -45,7 +45,8 @@ namespace vvv {
 
     gui_id  GuiInterface::GuiElementList::addTFSegmentedVolume(std::vector<SegmentedVolumeMaterial> *materials, const std::vector<std::string>& attributeNames, const std::vector<glm::vec2>& attributeMinMax, std::function<void(int)> onChanged, const std::string& name) {
         auto entry = new GuiTFSegmentedVolumeEntry();
-        entry->id = m_id_counter++;
+        entry->id = m_id_counter;
+        m_id_counter += 100;    // pragmatic: we reserve more IDs because the TF editor will add multiple ImGUI elements with PushID(id + X)
         entry->type = GuiTFSegmentedVolume;
         entry->materials = materials;
         entry->attributeNames = attributeNames;
