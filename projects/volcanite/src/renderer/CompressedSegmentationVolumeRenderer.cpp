@@ -55,20 +55,35 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         m_data_changed = false;
     }
 
-    if(m_attribute_changed) {
-        if(!m_csgv_db)
-            throw std::runtime_error("Must provide CSGV database to use attributes in rendering");
+    updateAttributeBuffers();
+    // if one of our materials changed, we update the whole buffer
+    if(std::find(m_gpu_material_changed.begin(), m_gpu_material_changed.end(), true) != m_gpu_material_changed.end()) {
+        std::vector<GPUSegmentedVolumeMaterial> gpu_mat(m_materials.size());
+        for (int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
+            // check which attributes we need on the GPU
+            // (we do not need to upload the attribute 0 which is the csgv_id, e.g. the voxel value)
+            if (m_materials[m].discrAttribute == 0) {
+                gpu_mat[m].discrAttributeStart = -1;
+            }
+            if (m_materials[m].discrAttribute > 0 &&
+                m_attribute_start_position[m_materials[m].getSafeDiscrAttribute()] < 0) {
+                gpu_mat[m].discrAttributeStart = -2;
+                throw std::runtime_error("GPU attribute buffer does not fit all selected attributes!");
+            } else {
+                gpu_mat[m].discrAttributeStart = m_attribute_start_position[gpu_mat[m].discrAttributeStart];
+                assert(gpu_mat[m].discrAttributeStart >= 0 &&
+                       gpu_mat[m].discrAttributeStart < (m_max_attribute_buffer_size / sizeof(float)) &&
+                       "invalid start index in GPU attribute buffer");
+            }
+            gpu_mat[m].discrInterval = m_materials[m].getDiscrInterval();
+            gpu_mat[m].tfInterval = m_materials[m].tfMinMax;
 
-        std::vector<float> attr(m_csgv_db->getLabelCount());
-        m_csgv_db->getAttribute(m_selected_attribute_id, &attr[0], attr.size());
-
-        auto [attr_upload_finished, _attr_staging_buffer] = m_attribute_buffer->uploadWithStagingBuffer(attr.data(), attr.size() * sizeof(float), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-        getCtx()->sync->hostWaitOnDevice({attr_upload_finished});
-
-        // reset all accumulation buffers
-        m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
-
-        m_attribute_changed = false;
+            m_gpu_material_changed[m] = false;
+        }
+        // upload material buffer
+        auto [attribute_upload_finished, _attribute_staging_buffer] = m_attribute_buffer->uploadWithStagingBuffer(
+                gpu_mat.data(), sizeof(GPUSegmentedVolumeMaterial) * m_materials.size(), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        awaitBeforeExecution.push_back(attribute_upload_finished);
     }
 
     // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts finished)
@@ -819,9 +834,68 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         getCtx()->sync->hostWaitOnDevice({tf1dAwait});
         m_pass->setImageSamplerArray("s_transferFunctions", m, m_materialTransferFunctions[m]->texture(), vk::ImageLayout::eReadOnlyOptimal, false);
 
-        Logger(WARN) << " UPDATED material " << m;
         // reset accumulation
         m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    }
+
+    vvv::AwaitableList CompressedSegmentationVolumeRenderer::updateAttributeBuffers() {
+        if(!m_csgv_db)
+            return {};
+
+        // check which attributes should be present in GPU memory
+        std::vector<bool> attributeNeeded(m_attribute_start_position.size(), false);
+        for(int m = 0; m < m_materials.size(); m++) {
+            if(m_materials[m].discrAttribute > 0)
+                attributeNeeded[m_materials[m].discrAttribute] = true;
+            if(m_materials[m].tfAttribute > 0)
+                attributeNeeded[m_materials[m].tfAttribute] = true;
+        }
+
+        // check at which positions in the attribute buffer an element starts
+        int numberOfSlots = m_max_attribute_buffer_size / sizeof(float) / m_csgv_db->getLabelCount();
+        int requiredSlots = 0;
+        std::vector<int> possiblePositions(numberOfSlots, -1);
+        for(int a = 0; a < m_csgv_db->getAttributeCount(); a++) {
+            if(attributeNeeded[a])
+                requiredSlots++;
+            if(attributeNeeded[a] && m_attribute_start_position[a] >= 0) {
+                assert(m_attribute_start_position[a] / m_csgv_db->getLabelCount() < 0 && "two attributes were assigned to the same position in the attribute buffer");
+                possiblePositions.at(m_attribute_start_position[a] / m_csgv_db->getLabelCount()) = a;
+            }
+        }
+        Logger(INFO) << "Number of slots: " << numberOfSlots << ", required slots: " << requiredSlots;
+        if(requiredSlots > numberOfSlots)
+            throw::std::runtime_error("attribute buffer is not large enough with " + std::to_string(numberOfSlots) + " out of " + std::to_string(requiredSlots) + " required slots");
+
+        // store all attributes back to back
+        // ToDo: upload attributes independently from another instead of as one large buffer?
+        // ToDo: only upload the number of requried Slots (would need to re-pack attributes each frame) instead of all slots?
+        std::vector<float> attributes(numberOfSlots * m_csgv_db->getLabelCount());
+
+        // put attributes in available slots
+        for(int a = 0; a < m_csgv_db->getAttributeCount(); a++) {
+            if(attributeNeeded[a] && m_attribute_start_position[a] < 0) {
+                for(int p = 0; p < possiblePositions.size(); p++) {
+                    if(possiblePositions[p] < 0) {
+                        m_attribute_start_position[a] = p * m_csgv_db->getLabelCount();
+                        possiblePositions[p] = a;
+                        break;
+                    }
+                }
+                if(m_attribute_start_position[a] < 0)
+                    Logger(WARN) << "could not find an attribute slot for attribute " << m_csgv_db->getAttributeNames()[a] << " in " << numberOfSlots << " slots";
+            }
+            // copy attribute to buffer
+            if(m_attribute_start_position[a] >= 0) {
+                m_csgv_db->getAttribute(m_selected_attribute_id, &attributes[m_attribute_start_position[a]], attributes.size() - m_attribute_start_position[a]);
+            }
+        }
+        
+        // reset all accumulation buffers
+        m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+
+        auto [attr_upload_finished, _attr_staging_buffer] = m_attribute_buffer->uploadWithStagingBuffer(attributes.data(), attributes.size() * sizeof(float), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        return {attr_upload_finished};
     }
 
 } // namespace vvv

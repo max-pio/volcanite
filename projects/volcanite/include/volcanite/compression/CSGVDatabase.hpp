@@ -353,6 +353,10 @@ public:
         return label_to_index;
     }
 
+    size_t getAttributeCount() const {
+        return m_attribute_names.size();
+    }
+
     const std::vector<std::string>& getAttributeNames() const {
         return m_attribute_names;
     }

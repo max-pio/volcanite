@@ -10,6 +10,7 @@ public:
         int viridsLocation = static_cast<int>(std::find(availableColormaps.begin(), availableColormaps.end(), "viridis") - availableColormaps.begin());
         for(int m = 0; m < e->materials->size(); m++) {
             auto& mat = e->materials->at(m);
+            mat.discrAttribute = (m == 0) ? SegmentedVolumeMaterial::DISCR_ANY : SegmentedVolumeMaterial::DISCR_NONE;
             mat.discrInterval = e->attributeMinMax[mat.discrAttribute];
             mat.tfMinMax = e->attributeMinMax[mat.tfAttribute];
             // we use opaque transfer functions
@@ -24,6 +25,11 @@ public:
             if(e->onChanged)
                 e->onChanged(m);
         }
+
+        // Disable (-2), Any (-1), attributes (0..) for the visibility test of the material
+        discriminatorNames.push_back("Disable");
+        discriminatorNames.push_back("Any");
+        discriminatorNames.insert(discriminatorNames.end(), e->attributeNames.begin(), e->attributeNames.end());
     }
 
     void renderGui(GpuContextPtr ctx);
@@ -38,6 +44,7 @@ private:
     }
     const std::vector<std::string> availableColormaps = makeAvailableColormaps();
     enum ColorMapType { SolidColor = 0, Divergent, Precomputed, PNGimport};
+    std::vector<std::string> discriminatorNames;
 
     struct GuiMaterialData {
         ColorMapType type = Precomputed;

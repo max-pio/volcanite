@@ -11,8 +11,13 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
     if(e->attributeNames.empty() || e->attributeMinMax.empty())
         throw std::runtime_error("No attributes for segmented volume material editor specified");
 
-    // iterate over all materials
-    for(int m = 0; m < e->materials->size(); m++) {
+    // iterate over all materials (we only show GUIs for all non-disabled materials + 1)
+    int displayMaterialCount = 1;
+    for(int m = 0; m < e->materials->size(); m++)
+        if (e->materials->at(m).discrAttribute != SegmentedVolumeMaterial::DISCR_NONE)
+            displayMaterialCount = m + 2;
+    displayMaterialCount = glm::min(displayMaterialCount, static_cast<int>(e->materials->size()));
+    for(int m = 0; m < displayMaterialCount; m++) {
         SegmentedVolumeMaterial& mat = (*e->materials)[m];
         GuiMaterialData& d = guiMaterials[m];
 
@@ -27,14 +32,15 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
         // (we do not set materialChanged when the name was changed)
         ImGui::PopID();
 
-        // Combo to select Discriptor Attribute
+        // Combo to select Discriminator Attribute
         ImGui::PushID(id++);
-        if (ImGui::BeginCombo("Discriminator", e->attributeNames.at(mat.discrAttribute).c_str())) {
-            for(int i = 0; i < e->attributeNames.size(); i++) {
-                const bool is_selected = i == mat.discrAttribute;
-                if (ImGui::Selectable(e->attributeNames.at(i).c_str(), is_selected)) {
-                    mat.discrAttribute = i;
-                    mat.discrInterval = e->attributeMinMax[i];
+        if (ImGui::BeginCombo("Discriminator", discriminatorNames.at(mat.discrAttribute + 2).c_str())) {
+            for(int i = 0; i < discriminatorNames.size(); i++) {
+                const bool is_selected = (i - 2) == mat.discrAttribute;
+                if (ImGui::Selectable(discriminatorNames.at(i).c_str(), is_selected)) {
+                    mat.discrAttribute = i - 2; // DISCR_NONE / disabled = -2, DISCR_ANY / any = -1
+                    if(mat.discrAttribute >= 0)
+                        mat.discrInterval = e->attributeMinMax[mat.discrAttribute];
                     materialChanged = true;
                 }
                 if (is_selected)
@@ -45,17 +51,20 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
         ImGui::PopID();
 
         // Discriminator range
-        glm::vec2 attrRange = e->attributeMinMax.at(mat.discrAttribute);
+        glm::vec2 attrRange = mat.discrAttribute >= 0 ? e->attributeMinMax.at(mat.discrAttribute) : glm::vec2(0.f, 0.f);
         ImGui::PushID(id++);
         std::stringstream rangeLabel;
-        rangeLabel << std::fixed << std::setprecision(3) << "Range  ["
-                   << e->attributeMinMax.at(mat.discrAttribute).x << " - "
-                   << e->attributeMinMax.at(mat.discrAttribute).y << "]";
+        if(mat.discrAttribute >= 0) {
+            rangeLabel << std::fixed << std::setprecision(3) << "Range  [" << attrRange.x << " - " << attrRange.y << "]";
+        }
+        else {
+            rangeLabel << discriminatorNames.at(mat.discrAttribute + 2);
+        }
         materialChanged |= ImGui::DragFloatRange2(rangeLabel.str().c_str(),
                                                   &mat.discrInterval.x, &mat.discrInterval.y,
                                                   glm::max(0.1f, (attrRange.y - attrRange.x) / 1000.f),
-                                                  e->attributeMinMax.at(mat.discrAttribute).x,
-                                                  e->attributeMinMax.at(mat.discrAttribute).y);
+                                                  attrRange.x,
+                                                  attrRange.y);
         ImGui::PopID();
         ImGui::Separator();
 

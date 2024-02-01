@@ -107,6 +107,9 @@ public:
 
         // when a database is provided, we use it for attribute visualization
         m_csgv_db = std::move(db);
+        if(m_csgv_db) {
+            m_attribute_start_position.resize(m_csgv_db->getAttributeCount(), -1);
+        }
     }
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
@@ -117,7 +120,7 @@ private:
     glm::ivec2 m_label_minmax = glm::ivec2(0, 32);
     int m_empty_label = 0;
     int m_selected_attribute_id = 0;
-    static constexpr uint32_t SEGMENTED_VOLUME_MATERIAL_COUNT = 2;
+    static constexpr uint32_t SEGMENTED_VOLUME_MATERIAL_COUNT = 8;
     std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
     // shading and post processing
     glm::vec4 m_background_color_a = glm::vec4(0.9f, 0.9f, 0.95f, 1.f);
@@ -156,9 +159,9 @@ private:
     std::string m_gui_device_mem_text;
     std::optional<std::string> m_download_frame_to_image_file = {};
 
-
     void updateDeviceMemoryUsage();
     void updateSegmentedVolumeMaterial(int m);
+    vvv::AwaitableList updateAttributeBuffers();
     void updateUniformDescriptorset();
 
     std::unique_ptr<PassCompSegVolRender> m_pass = nullptr;
@@ -169,15 +172,25 @@ private:
     std::shared_ptr<UniformReflected> m_urender_info = nullptr;
     std::shared_ptr<UniformReflected> m_usegmented_volume_info = nullptr;
 
+
+    struct GPUSegmentedVolumeMaterial {
+        int discrAttributeStart = -1;                 // start attribute read location in g_attributes. a value < 0 means to use the label directly (csgv_id)
+        glm::vec2 discrInterval = {FLT_MIN, FLT_MAX};   // discrAttribute values within this interval [min, max) assign the label to this material
+        int tfAttributeStart = -1;                    // start attribute read location in g_attributes
+        glm::vec2 tfInterval = {0.f, 1000.f};   // attribute min / max values mapped to the TF interval [0, 1]
+    };
     std::shared_ptr<CompressedSegmentationVolume> m_compressed_segmentation_volume = nullptr;
     std::shared_ptr<CSGVDatabase> m_csgv_db = nullptr;
+    std::vector<bool> m_gpu_material_changed = std::vector<bool>(SEGMENTED_VOLUME_MATERIAL_COUNT, true);
+    std::vector<GPUSegmentedVolumeMaterial> m_gpu_materials{SEGMENTED_VOLUME_MATERIAL_COUNT};
 
     std::vector<std::shared_ptr<TransferFunction1D>> m_materialTransferFunctions{SEGMENTED_VOLUME_MATERIAL_COUNT, nullptr};
     bool m_data_changed = false;
     std::shared_ptr<Buffer> m_encoding_buffer = nullptr;
     const size_t m_max_attribute_buffer_size = ((64ul << 10) << 10);   // MB to store different floating point attributes back to back
-    bool m_attribute_changed = false;
+    std::vector<int> m_attribute_start_position = {};           // the start index in the attribute_buffer for each attribute
     std::shared_ptr<Buffer> m_attribute_buffer = nullptr;       // stores attributes back to back
+    std::shared_ptr<Buffer> m_materials_buffer = nullptr;       // stores the material information
     std::shared_ptr<Buffer> m_brick_starts_buffer = nullptr;
     const size_t m_cache_capacity = 96000000ul;    // this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x sizeof(uint)=32 bytes large, so a capacity of 32000000 equals 1024MB
     const size_t m_free_stack_capacity = 262144ul;  // this many elements (one uint=4byte each) fit into the free stack of EACH LoD > 0. We need max. volume_size/brick_size/lod_width³ elements. a capacity of 262144 equals 1MB * (lod_count-1)
