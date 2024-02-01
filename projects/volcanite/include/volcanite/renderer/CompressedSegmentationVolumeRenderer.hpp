@@ -125,7 +125,8 @@ private:
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
     float m_lod_bias = 0.f;
-    bool m_dda_traversal = false;
+    bool m_dda_traversal = true;
+    bool m_lambert_shading = false;
     bool m_show_normals = false;
     bool m_blue_noise = true;
     bool m_show_model_space = false;

@@ -198,6 +198,7 @@ struct RayMarchState {
     vec3 normal;
     ivec3 stp;
     vec3 delta;
+    vec3 normal_isect;  // normal of the intersection point
 
     // ray marching
     int step;           // how many ray marching steps where done so far
@@ -363,6 +364,9 @@ void main() {
             }
         }
 
+        // intersection found so the state.normal is the normal at the intersection point
+        state.normal_isect = state.normal;
+
         if (g_debug_normals) {
             state.out_color = vec4((state.normal + vec3(1.f)) * vec3(0.5f), 1.f);
             break;
@@ -407,16 +411,17 @@ void main() {
             state.out_color = vec4(integer2colorlabel(brick_id, false), 1.f);
             break;
 #endif
-
-            if (g_dda_traversal && dot(state.normal, g_light_direction) < 0) {
-                state.out_color.rgb *= 1.f - g_ao_dist_strength.y;
-                state.ray_type = RT_SHADOW_HIT;
-                break;
-            }
-
             // this is the only point for which we want to store our t value in the depth buffer (ToDo: at best only if the hit was decoded to the requested LoD)
             state.out_depth = state.t;
             if(g_shadow_ray_enable == 0) {
+                break;
+            }
+
+            if (g_dda_traversal && dot(state.normal, g_light_direction) < 0) {
+                // for self shadowing single bricks.
+                // same code as for a shadow hit!
+                state.out_color.rgb *= 1.f - g_ao_dist_strength.y;
+                state.ray_type = RT_SHADOW_HIT;
                 break;
             }
 
@@ -441,7 +446,6 @@ void main() {
                 ray.direction = normalize(ray.direction);
 
                 dda_init(state, ray);
-//                dda_step(state, ray); // performs one dda_step to avoid self shadowing.
 
             } else {
                 ray.origin = state.pos;
@@ -457,7 +461,11 @@ void main() {
 
     // if no shadowing occurs, we multiply the color with the light intensity
     if(g_shadow_ray_enable == 0 || state.ray_type == RT_SHADOW_RAY || state.ray_type == RT_AO_RAY)
-        state.out_color.rgb *= g_light_intensity;
+        if (g_lambert_shading) {
+            state.out_color.rgb *= g_light_intensity * max(dot(state.normal_isect, g_light_direction), g_ao_dist_strength.y);
+        } else {
+            state.out_color.rgb *= g_light_intensity ;
+        }
 
     // perform alpha blending with background
     state.out_color.rgb = get_background_color(fragCoord).rgb * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;

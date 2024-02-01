@@ -124,6 +124,7 @@ layout (std140, set = 0, binding = 10) uniform render_info {
     int g_maxSteps;
     bool g_blue_noise;
     bool g_dda_traversal;
+    bool g_lambert_shading;
     vec4 g_bboxMin;
     vec4 g_bboxMax;
     float g_opacityThreshold;
