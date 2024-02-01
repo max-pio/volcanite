@@ -127,7 +127,7 @@ bool get_volume_label(ivec3 voxel, out uint label) {
 }
 
 vec4 get_color(uint label) {
-    return texture(transferFunctions, (g_attributes[label] - g_transferFunction_limits_min) / g_transferFunction_limits_max);
+    return texture(s_transferFunctions[0], (g_attributes[label] - g_transferFunction_limits_min) / g_transferFunction_limits_max);
     return vec4(colormap_viridis((g_attributes[label] - g_transferFunction_limits_min) / g_transferFunction_limits_max).rgb, 1.f);
     // ToDo: remove the hardcoded transfer functions
     float v = float((4000u + 17u * label) % 4096u) / 4096.f;

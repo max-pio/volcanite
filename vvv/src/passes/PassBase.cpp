@@ -57,7 +57,8 @@ DescriptorBinding PassBase::findDescriptorBindingByName(const std::string &name)
         }
     }
 
-    throw std::runtime_error("unknown binding '" + name + "' in compute pass '" + m_label + "'");
+    Logger(ERROR) << "unknown binding '" + name + "' in pass '" + m_label + "'";
+    throw std::runtime_error("unknown binding '" + name + "' in pass '" + m_label + "'");
 }
 
 void PassBase::setImageSampler(uint32_t setIdx, uint32_t bindingIdx, Texture &texture, vk::ImageLayout layout, bool atActiveIndex) {
@@ -66,9 +67,20 @@ void PassBase::setImageSampler(uint32_t setIdx, uint32_t bindingIdx, Texture &te
     updateDescriptorSetsImage(setIdx, bindingIdx, texture, vk::DescriptorType::eCombinedImageSampler, layout, atActiveIndex);
 }
 
+void PassBase::setImageSamplerArray(uint32_t setIdx, uint32_t bindingIdx, uint32_t arrayElement, Texture &texture, vk::ImageLayout layout, bool atActiveIndex) {
+    // TODO: array element support
+    // TODO: batching into a single write with multiple sets, does that improve perf?
+    updateDescriptorSetsImageArray(setIdx, bindingIdx, arrayElement, texture, vk::DescriptorType::eCombinedImageSampler, layout, atActiveIndex);
+}
+
 void PassBase::setImageSampler(const std::string &name, Texture &texture, vk::ImageLayout layout, bool atActiveIndex) {
     auto descriptor = findDescriptorBindingByName(name);
     setImageSampler(descriptor.set_number, descriptor.binding.binding, texture, layout, atActiveIndex);
+}
+
+void PassBase::setImageSamplerArray(const std::string &name, uint32_t arrayElement, Texture &texture, vk::ImageLayout layout, bool atActiveIndex) {
+    auto descriptor = findDescriptorBindingByName(name);
+    setImageSamplerArray(descriptor.set_number, descriptor.binding.binding, arrayElement, texture, layout, atActiveIndex);
 }
 
 void PassBase::setImageSampler(uint32_t setIdx, uint32_t bindingIdx, MultiBufferedResource<std::shared_ptr<Texture>> &textures, vk::ImageLayout layout) {
@@ -86,9 +98,19 @@ void PassBase::setStorageImage(uint32_t setIdx, uint32_t bindingIdx, Texture &te
     updateDescriptorSetsImage(setIdx, bindingIdx, texture, vk::DescriptorType::eStorageImage, layout, atActiveIndex);
 }
 
+void PassBase::setStorageImageArray(uint32_t setIdx, uint32_t bindingIdx, uint32_t arrayElement, Texture &texture, vk::ImageLayout layout, bool atActiveIndex) {
+    updateDescriptorSetsImageArray(setIdx, bindingIdx, arrayElement, texture, vk::DescriptorType::eStorageImage, layout, atActiveIndex);
+}
+
 void PassBase::setStorageImage(const std::string &name, Texture &texture, vk::ImageLayout layout, bool atActiveIndex) {
     auto descriptor = findDescriptorBindingByName(name);
+    assert(descriptor.binding.descriptorCount == 1 && "you should use the setStorageImageArray(.., arrayElement, ..) method to set the image array element");
     setStorageImage(descriptor.set_number, descriptor.binding.binding, texture, layout, atActiveIndex);
+}
+
+void PassBase::setStorageImageArray(const std::string &name, uint32_t arrayElement, Texture &texture, vk::ImageLayout layout, bool atActiveIndex) {
+    auto descriptor = findDescriptorBindingByName(name);
+    setStorageImageArray(descriptor.set_number, descriptor.binding.binding, arrayElement, texture, layout, atActiveIndex);
 }
 
 void PassBase::setStorageImage(uint32_t setIdx, uint32_t bindingIdx, MultiBufferedResource<std::shared_ptr<Texture>> &textures, vk::ImageLayout layout) {
@@ -101,7 +123,10 @@ void PassBase::setStorageImage(const std::string &name, MultiBufferedResource<st
 }
 
 void PassBase::updateDescriptorSetsImage(uint32_t setIdx, uint32_t bindingIdx, Texture &texture, vk::DescriptorType descriptorType, vk::ImageLayout layout, bool atActiveIndex) {
-    const auto arrayElement = 0;
+    updateDescriptorSetsImageArray(setIdx, bindingIdx, 0u, texture, descriptorType, layout, atActiveIndex);
+}
+
+void PassBase::updateDescriptorSetsImageArray(uint32_t setIdx, uint32_t bindingIdx, uint32_t arrayElement, Texture &texture, vk::DescriptorType descriptorType, vk::ImageLayout layout, bool atActiveIndex) {
     const auto descriptorCount = 1;
 
     assert(texture.areResourcesInitialized());
@@ -116,18 +141,18 @@ void PassBase::updateDescriptorSetsImage(uint32_t setIdx, uint32_t bindingIdx, T
     //  we can define the descriptor sets for all the frames in flight at once only one time.
 
     detail::BindingState state = {
-        .setIdx = setIdx,
-        .writeOp = {}
+            .setIdx = setIdx,
+            .writeOp = {}
     };
 
     if (atActiveIndex) {
         state.writeOp.emplace_back(
-            m_descriptorSets->getActive()[setIdx], bindingIdx, arrayElement, descriptorCount, descriptorType, &texture.descriptor
+                m_descriptorSets->getActive()[setIdx], bindingIdx, arrayElement, descriptorCount, descriptorType, &texture.descriptor
         );
     } else {
         for (uint32_t i = 0; i < getIndexCount(); i++) {
             state.writeOp.emplace_back(
-                (*m_descriptorSets)[i][setIdx], bindingIdx, arrayElement, descriptorCount, descriptorType, &texture.descriptor
+                    (*m_descriptorSets)[i][setIdx], bindingIdx, arrayElement, descriptorCount, descriptorType, &texture.descriptor
             );
         }
     }
@@ -160,13 +185,13 @@ void PassBase::updateDescriptorSetsImage(uint32_t setIdx, uint32_t bindingIdx, M
     std::vector<vk::WriteDescriptorSet> writeOp = {};
     for (uint32_t i = 0; i < getIndexCount(); i++) {
         writeOp.emplace_back(
-            (*m_descriptorSets)[i][setIdx], bindingIdx, arrayElement, descriptorCount, descriptorType, &textures[i]->descriptor
+                (*m_descriptorSets)[i][setIdx], bindingIdx, arrayElement, descriptorCount, descriptorType, &textures[i]->descriptor
         );
     }
 
     detail::BindingState state = {
-        .setIdx = setIdx,
-        .writeOp = writeOp
+            .setIdx = setIdx,
+            .writeOp = writeOp
     };
 
     if (layout != vk::ImageLayout::eUndefined) {
@@ -189,14 +214,14 @@ void PassBase::setStorageBuffer(uint32_t setIdx, uint32_t bindingIdx, Buffer &bu
     } else {
         for (uint32_t i = 0; i < getIndexCount(); i++) {
             writeOp.emplace_back(vk::WriteDescriptorSet(
-            (*m_descriptorSets)[i][setIdx], bindingIdx, 0,vk::DescriptorType::eStorageBuffer, {}, buffer.descriptor
+                    (*m_descriptorSets)[i][setIdx], bindingIdx, 0,vk::DescriptorType::eStorageBuffer, {}, buffer.descriptor
             ));
         }
     }
 
     detail::BindingState state = {
-        .setIdx = setIdx,
-        .writeOp = writeOp
+            .setIdx = setIdx,
+            .writeOp = writeOp
     };
 
     m_descriptorSetWrites[m_descriptorSetNumberToIdx[setIdx]][bindingIdx] = state;
@@ -250,13 +275,13 @@ void PassBase::setUniformBuffer(uint32_t setIdx, uint32_t bindingIdx, UniformRef
     std::vector<vk::WriteDescriptorSet> writeOp = {};
     for (uint32_t i = 0; i < getIndexCount(); i++) {
         writeOp.emplace_back(vk::WriteDescriptorSet(
-            (*m_descriptorSets)[i][setIdx], bindingIdx, 0, vk::DescriptorType::eUniformBuffer, {}, uniformBufferInfo[i]));
+                (*m_descriptorSets)[i][setIdx], bindingIdx, 0, vk::DescriptorType::eUniformBuffer, {}, uniformBufferInfo[i]));
     }
 
     detail::BindingState state = {
-        .setIdx = setIdx,
-        .writeOp = writeOp,
-        .uniformBufferInfo = uniformBufferInfo};
+            .setIdx = setIdx,
+            .writeOp = writeOp,
+            .uniformBufferInfo = uniformBufferInfo};
 
     m_descriptorSetWrites[m_descriptorSetNumberToIdx[setIdx]][bindingIdx] = state;
 
@@ -264,7 +289,7 @@ void PassBase::setUniformBuffer(uint32_t setIdx, uint32_t bindingIdx, UniformRef
     // TODO(Reiner): rewrite this code. its outrageous
     for (uint32_t i = 0; i < getIndexCount(); i++) {
         m_descriptorSetWrites[m_descriptorSetNumberToIdx[setIdx]][bindingIdx].writeOp[i].pBufferInfo =
-            &m_descriptorSetWrites[m_descriptorSetNumberToIdx[setIdx]][bindingIdx].uniformBufferInfo[i];
+                &m_descriptorSetWrites[m_descriptorSetNumberToIdx[setIdx]][bindingIdx].uniformBufferInfo[i];
     }
 
     device().updateDescriptorSets(writeOp, {});
@@ -312,6 +337,10 @@ void PassBase::createPipelineLayout(uint32_t push_constant_byte_size) {
                     descriptorCounts[binding.descriptorType] = 0;
                 }
                 descriptorCounts[binding.descriptorType] += binding.descriptorCount;
+
+                if(binding.descriptorCount > 1) {
+                    Logger(INFO) << binding.descriptorCount << " - " << to_string(binding.descriptorType);
+                }
             }
         }
     }
@@ -327,7 +356,7 @@ void PassBase::createPipelineLayout(uint32_t push_constant_byte_size) {
 
     if (hasDescriptors()) {
         m_descriptorPool =
-            device.createDescriptorPool(vk::DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, m_descriptorSetLayouts.size() * getIndexCount(), poolSizes));
+                device.createDescriptorPool(vk::DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, m_descriptorSetLayouts.size() * getIndexCount(), poolSizes));
         debug->setName(m_descriptorPool, m_label + ".m_descriptorPool");
 
         m_descriptorSets = std::make_unique<MultiBufferedResource<std::vector<vk::DescriptorSet>>>(getMultiBuffering());

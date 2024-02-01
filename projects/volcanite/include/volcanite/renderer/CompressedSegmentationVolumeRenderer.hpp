@@ -117,7 +117,8 @@ private:
     glm::ivec2 m_label_minmax = glm::ivec2(0, 32);
     int m_empty_label = 0;
     int m_selected_attribute_id = 0;
-    std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(2);
+    static constexpr uint32_t SEGMENTED_VOLUME_MATERIAL_COUNT = 2;
+    std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
     // shading and post processing
     glm::vec4 m_background_color_a = glm::vec4(0.9f, 0.9f, 0.95f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
@@ -170,7 +171,8 @@ private:
 
     std::shared_ptr<CompressedSegmentationVolume> m_compressed_segmentation_volume = nullptr;
     std::shared_ptr<CSGVDatabase> m_csgv_db = nullptr;
-    std::vector<std::shared_ptr<TransferFunction1D>> m_materialTransferFunctions;
+
+    std::vector<std::shared_ptr<TransferFunction1D>> m_materialTransferFunctions{SEGMENTED_VOLUME_MATERIAL_COUNT, nullptr};
     bool m_data_changed = false;
     std::shared_ptr<Buffer> m_encoding_buffer = nullptr;
     const size_t m_max_attribute_buffer_size = ((64ul << 10) << 10);   // MB to store different floating point attributes back to back

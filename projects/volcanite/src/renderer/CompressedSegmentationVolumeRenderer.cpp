@@ -374,6 +374,7 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
         shader_defines.push_back("SEPARATE_DETAIL");
     }
+    shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
     // ToDo: does this work? if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if(getCtx()->getWsi())
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), shader_defines);
@@ -433,6 +434,14 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
         texture->ensureResources();
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
+    }
+
+    // write all transfer function samplers once
+    for(int m = 0; m < m_materials.size(); m++) {
+        if(m >= m_materialTransferFunctions.size() || !m_materialTransferFunctions[m])
+            updateSegmentedVolumeMaterial(m);
+        else
+            m_pass->setImageSamplerArray("s_transferFunctions", m, m_materialTransferFunctions[m]->texture(), vk::ImageLayout::eReadOnlyOptimal, false);
     }
 
     m_gui_resolution_text = "Render resolution: " + std::to_string(m_resolution.width) + "x" + std::to_string(m_resolution.height);
@@ -800,16 +809,17 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
     void CompressedSegmentationVolumeRenderer::updateSegmentedVolumeMaterial(int m) {
         constexpr int TF_WIDTH = 256;
-        getCtx()->sync->hostWaitOnDevice(m_mostRecentFrame->renderingComplete);
+        if(m_mostRecentFrame.has_value())
+            getCtx()->sync->hostWaitOnDevice(m_mostRecentFrame->renderingComplete);
         if (m_materialTransferFunctions.size() < m_materials.size())
             m_materialTransferFunctions.resize(m_materials.size(), nullptr);
         m_materialTransferFunctions[m] = m_materials[m].tf->rasterize(getCtx(), TF_WIDTH);
         auto [tf1dAwait, tf1dStagingBuf] = m_materialTransferFunctions[m]->upload();
+
         getCtx()->sync->hostWaitOnDevice({tf1dAwait});
+        m_pass->setImageSamplerArray("s_transferFunctions", m, m_materialTransferFunctions[m]->texture(), vk::ImageLayout::eReadOnlyOptimal, false);
 
-        if(m == 0)
-            m_pass->setImageSampler("transferFunctions", m_materialTransferFunctions[m]->texture(), vk::ImageLayout::eReadOnlyOptimal, false);
-
+        Logger(WARN) << " UPDATED material " << m;
         // reset accumulation
         m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
     }
