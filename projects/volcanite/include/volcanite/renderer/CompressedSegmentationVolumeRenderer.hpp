@@ -127,6 +127,9 @@ private:
     float m_lod_bias = 0.f;
     bool m_dda_traversal = true;
     bool m_lambert_shading = false;
+    float m_factor_ambient = 0.1f;
+    float m_ratio_spec_diff = 0.8f;
+    bool m_cook_torrance_shading = false;
     bool m_show_normals = false;
     bool m_blue_noise = true;
     bool m_show_model_space = false;
