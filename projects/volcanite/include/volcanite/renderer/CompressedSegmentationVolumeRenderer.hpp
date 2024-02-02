@@ -22,7 +22,21 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 public:
     CompressedSegmentationVolumeRenderer(bool release_version = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false),
                                                                          m_camHash(0ul), m_resolution(1920,1080), m_framesSinceCameraMove(0), m_frame(0u),
-                                                                         m_release_version(release_version) {}
+                                                                         m_release_version(release_version) {
+        // initialize the shading materials with something reasonable
+        for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
+            auto &mat = m_materials[m];
+            mat.discrAttribute = (m == 0) ? SegmentedVolumeMaterial::DISCR_ANY : SegmentedVolumeMaterial::DISCR_NONE;
+            mat.discrInterval = glm::vec2(0.f, 1.f);
+            mat.tfMinMax = glm::vec2(0.f, 1.f);
+            // we use opaque transfer functions
+            mat.tf->m_controlPointsOpacity.resize(4);
+            mat.tf->m_controlPointsOpacity[0] = 0.f;
+            mat.tf->m_controlPointsOpacity[1] = 1.f;
+            mat.tf->m_controlPointsOpacity[2] = 1.f;
+            mat.tf->m_controlPointsOpacity[3] = 1.f;
+        }
+    }
 
     ~CompressedSegmentationVolumeRenderer() { resetGPU(); m_compressed_segmentation_volume.reset(); }
 

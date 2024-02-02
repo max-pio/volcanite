@@ -108,6 +108,7 @@ namespace vvv {
     }
     gui_id GuiInterface::GuiElementList::addDynamicText(std::string* text, std::string name) {
         auto entry = new GuiEntry<std::string>();
+        entry->id = m_id_counter++;
         entry->value = text;
         entry->type = GuiDynamicText;
         entry->label = name;
@@ -125,10 +126,20 @@ namespace vvv {
 
 
 
+    std::string sanitizeExportString(std::string s) {
+        std::replace(s.begin(), s.end(), ' ', '~');
+        return s;
+    }
+
+    std::string sanitizeImportString(std::string s) {
+        std::replace(s.begin(), s.end(), ' ', '~');
+        return s;
+    }
+
     std::string sanitizeExportString(std::string s, gui_id id) {
         std::replace(s.begin(), s.end(), ' ', '_');
         if(s.empty())
-            return std::to_string(id);
+            return std::string("GUI_") + std::to_string(id);
         return s;
     }
 
@@ -192,7 +203,7 @@ namespace vvv {
                     break;
                 }
                 case GuiDynamicText: {
-                    vstr = *GUI_CAST(be, std::string)->value;
+                    vstr = sanitizeExportString(*GUI_CAST(be, std::string)->value);
                     break;
                 }
                 case GuiTFSegmentedVolume: {
@@ -200,7 +211,7 @@ namespace vvv {
                     vstr = std::to_string(e->materials->size()) + " ";
                     for(int i = 0; i < e->materials->size(); i++) {
                         const auto& mat = e->materials->at(i);
-                        std::string name = std::string(mat.name);
+                        std::string name = sanitizeExportString(mat.name);
                         vstr.append(name.empty() ? "# " : name + " ");
                         vstr.append(std::to_string(mat.discrAttribute) + " ");
                         vstr.append(std::to_string(mat.discrInterval.x) + " ");
@@ -262,8 +273,6 @@ namespace vvv {
                         *e->value = value;
                 }
             };
-
-            Logger(INFO) << be->label;
 
             switch (be->type) {
                 // some parameters do not need to be exported because they are 'constant'
@@ -362,7 +371,9 @@ namespace vvv {
                 case GuiDynamicText: {
                     if(!checkLabel(in, be))
                         return false;
-                    in >> *GUI_CAST(be, std::string)->value;
+                    std::string text;
+                    in >> text;
+                    *GUI_CAST(be, std::string)->value = sanitizeImportString(text);
                     break;
                 }
                 case GuiTFSegmentedVolume: {
@@ -381,6 +392,7 @@ namespace vvv {
                         auto& mat = e->materials->at(m);
                         std::string name;
                         in >> name;
+                        sanitizeImportString(name);
                         if(name == "#")
                             mat.name[0] = '\0';
                         else
@@ -393,7 +405,7 @@ namespace vvv {
                         in >> mat.tfMinMax.y;
                         //
                         auto& cm = e->colormapConfig[m];
-                        for(auto c : cm.color) {
+                        for(glm::vec3& c : cm.color) {
                             in >> c.r;
                             in >> c.g;
                             in >> c.b;
@@ -401,10 +413,9 @@ namespace vvv {
                         in >> cm.precomputedIdx;
                         int type;
                         in >> type;
+                        Logger(INFO) << type;
                         cm.type = static_cast<GuiTFSegmentedVolumeEntry::ColorMapType>(type);
-                        if(e->onChanged)
-                            e->onChanged(m);
-                        updateVectorColormap(m);
+                        e->widgetData = {};    // the GUI reinitialization triggers all updates
                     }
                     break;
                 }
