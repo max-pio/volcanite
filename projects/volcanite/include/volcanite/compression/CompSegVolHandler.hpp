@@ -13,6 +13,7 @@
 #include <chrono>
 #include <thread>
 
+#define RELABEL_IDS_FROM_CSV_SUFFIX "_relabel.csv"
 
 namespace vvv {
 
@@ -352,30 +353,28 @@ public:
         return true;
     }
 
-    static bool setIdsToTypeFromFile(std::string url, std::unordered_map<uint32_t, uint32_t> &type_per_id) {
+    static bool relabelVoxelsFromCSV(std::string url, std::unordered_map<uint32_t, uint32_t> &type_per_id) {
         std::ifstream nrrd(url, std::ios_base::in | std::ios_base::binary);
         if (!nrrd.is_open()) {
-            Logger(ERROR) << " you can provide a file " << url << " containing one label ID per line to set these labels to zero / invisible.";
             return false;
         }
 
         type_per_id.clear();
 
         std::string line;
-        // ToDo: replace empty IDs csv with a list containing one label entry per line. all those are set to zero.
         // first line contains csv header
         if (!std::getline(nrrd, line)) {
             nrrd.close();
             throw std::runtime_error("unexpected end of file in " + url);
         }
         // read all other lines containing [cellid],[celltype]
-        uint32_t type, cell_id;
+        uint32_t new_label, cell_id;
         while (std::getline(nrrd, line)) {
             auto pos = line.rfind(',');
             cell_id = static_cast<uint32_t>(std::stol(line.substr(0, pos)));
-            type = static_cast<uint32_t>(std::stol(line.substr(pos + 1, std::string::npos)));
+            new_label = static_cast<uint32_t>(std::stol(line.substr(pos + 1, std::string::npos)));
 
-            type_per_id[cell_id] = type;
+            type_per_id[cell_id] = new_label;
         }
 
         nrrd.close();
@@ -446,13 +445,12 @@ public:
         }
 #endif
 
-#ifdef SET_IDS_TO_TYPE
+#ifdef RELABEL_IDS_FROM_CSV_SUFFIX
         std::unordered_map<uint32_t, uint32_t> id_types;
-        if (setIdsToTypeFromFile(path + "_celltypes.csv", id_types)) {
-            Logger(INFO) << " " << path + " set ids to type";
+        if (relabelVoxelsFromCSV(path + RELABEL_IDS_FROM_CSV_SUFFIX, id_types)) {
+            Logger(INFO) << "  relabeling ids from " << path << RELABEL_IDS_FROM_CSV_SUFFIX;
             size_t volume_size = volume->size();
             uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
-
             #pragma omp parallel for default(none) shared(data, id_types, volume_size)
             for (int i = 0; i < volume_size; i++) {
                 data[i] = id_types[data[i]];
@@ -659,6 +657,15 @@ public:
                             csgv->separateDetail();
                     }
                     if (recompute) {
+#ifdef RELABEL_IDS_FROM_CSV_SUFFIX
+                        if(!std::filesystem::exists(chunk_input_path + RELABEL_IDS_FROM_CSV_SUFFIX))
+                        Logger(WARN) << "Provide a file " << chunk_input_path << RELABEL_IDS_FROM_CSV_SUFFIX << " with the following format to relabel voxels:\n";
+                        Logger(WARN) << "# One Line Header (first line will be ignored)";
+                        Logger(WARN) << "[OldLabel0],[NewLabel0]";
+                        Logger(WARN) << "[OldLabel1],[NewLabel1]";
+                        Logger(WARN) << "...\n";
+#endif
+
                         loadSegmentationVolumeFile(chunk_input_path, volume);
                         volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
                         if (verbose) {

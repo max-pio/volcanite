@@ -841,7 +841,12 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
         Logger(WARN) << "File " << path << " already exist. Skipping.";
         return;
     }
-    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    try {
+        // ToDo: if the path is only one file in root it has no parent_path() which causes an invalid argument
+        std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    } catch(std::filesystem::filesystem_error e) {
+        throw std::runtime_error("Filesystem error: could not create parent directories for path " + std::filesystem::path(path).string());
+    }
     std::ofstream file(path, std::ios_base::out | std::ios::binary);
     if (!file.is_open()) {
         Logger(ERROR) << "Unable to open export file " << path << ". Skipping.";
