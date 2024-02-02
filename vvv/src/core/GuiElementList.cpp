@@ -52,6 +52,7 @@ namespace vvv {
         entry->attributeNames = attributeNames;
         entry->attributeMinMax = attributeMinMax;
         entry->onChanged = std::move(onChanged);
+        entry->colormapConfig = std::vector<GuiTFSegmentedVolumeEntry::ColorMapConfig>(materials->size());
         entry->label = name;
         m_entries.push_back(entry);
         return entry->id;
@@ -193,6 +194,10 @@ namespace vvv {
                 case GuiDynamicText: {
                     vstr = *GUI_CAST(be, std::string)->value;
                     break;
+                }
+                case GuiTFSegmentedVolume: {
+                    auto e = reinterpret_cast<GuiTFSegmentedVolumeEntry*>(be);
+                    // ToDo
                 }
                 // some parameters do not need to be exported because they are 'constant'
                 case GuiAction:

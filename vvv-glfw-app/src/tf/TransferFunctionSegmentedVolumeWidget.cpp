@@ -19,7 +19,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
     displayMaterialCount = glm::min(displayMaterialCount, static_cast<int>(e->materials->size()));
     for(int m = 0; m < displayMaterialCount; m++) {
         SegmentedVolumeMaterial& mat = (*e->materials)[m];
-        GuiMaterialData& d = guiMaterials[m];
+        GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapConfig& d = e->colormapConfig[m];
 
         bool materialChanged = false;
         bool colormapChanged = false;
@@ -123,7 +123,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                 for (int i = 0; i < 3; i++) {
                     const bool is_selected = i == d.type;
                     if (ImGui::Selectable(types[i].c_str(), is_selected)) {
-                        d.type = static_cast<ColorMapType>(i);
+                        d.type = static_cast< GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapType>(i);
                         colormapChanged = true;
                     }
                     if (is_selected)
@@ -133,13 +133,13 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
             }
             ImGui::PopID();
             switch (d.type) {
-                case SolidColor:
+                case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFSolidColor:
                     ImGui::PushID(id++);
                     ImGui::NextColumn();
                     colormapChanged |= ImGui::ColorEdit3("", &d.color[0].r);
                     ImGui::PopID();
                     break;
-                case Divergent:
+                case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFDivergent:
                     ImGui::PushID(id++);
                     ImGui::NextColumn();
                     colormapChanged |= ImGui::ColorEdit3("", &d.color[0].r);
@@ -150,7 +150,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                     colormapChanged |= ImGui::ColorEdit3("", &d.color[1].r);
                     ImGui::PopID();
                     break;
-                case Precomputed:
+                case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFPrecomputed:
                     ImGui::PushID(id++);
                     ImGui::NextColumn();
                     if (ImGui::BeginCombo("", availableColormaps[d.precomputedIdx].c_str())) {
@@ -206,7 +206,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
 
 void vvv::GuiTFSegmentedVolumeData::updateVectorColormap(int material) {
     SegmentedVolumeMaterial& mat = (*e->materials)[material];
-    GuiMaterialData& d = guiMaterials[material];
+    GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapConfig& d = e->colormapConfig[material];
 
     // transfer functions are currently fully opaque
     if(mat.tf->m_controlPointsOpacity.size() != 4) {
@@ -217,7 +217,7 @@ void vvv::GuiTFSegmentedVolumeData::updateVectorColormap(int material) {
         mat.tf->m_controlPointsOpacity[3] = 1.f;
     }
     switch(d.type) {
-        case SolidColor:
+        case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFSolidColor:
             if(mat.tf->m_controlPointsRgb.size() != 8) {
                 mat.tf->m_controlPointsRgb.resize(8);
             }
@@ -230,7 +230,7 @@ void vvv::GuiTFSegmentedVolumeData::updateVectorColormap(int material) {
             mat.tf->m_controlPointsRgb[6] = d.color[0].g;
             mat.tf->m_controlPointsRgb[7] = d.color[0].b;
             break;
-        case Divergent:
+        case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFDivergent:
             if(mat.tf->m_controlPointsRgb.size() != 12) {
                 mat.tf->m_controlPointsRgb.resize(12);
             }
@@ -247,7 +247,7 @@ void vvv::GuiTFSegmentedVolumeData::updateVectorColormap(int material) {
             mat.tf->m_controlPointsRgb[10] = d.color[1].g;
             mat.tf->m_controlPointsRgb[11] = d.color[1].b;
             break;
-        case Precomputed:
+        case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFPrecomputed:
             mat.tf->m_controlPointsRgb = colormaps::colormaps.at(availableColormaps[d.precomputedIdx]);
             break;
         default:
@@ -261,4 +261,3 @@ void vvv::renderGuiTFSegmentedVolume(GuiInterface::GuiTFSegmentedVolumeEntry& en
         entry.widgetData.emplace<GuiTFSegmentedVolumeData>(entry);
     std::any_cast<GuiTFSegmentedVolumeData&>(entry.widgetData).renderGui(ctx);
 }
-

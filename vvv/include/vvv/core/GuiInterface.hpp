@@ -119,6 +119,16 @@ public:
         std::function<void(int)> onChanged = {};
         std::vector<std::string> attributeNames = {};
         std::vector<glm::vec2> attributeMinMax = {};
+
+        // colormap information (stored here so we can import/export)
+        enum ColorMapType { SVTFSolidColor = 0, SVTFDivergent, SVTFPrecomputed, SVTFPNGimport};
+        struct ColorMapConfig {
+            ColorMapType type = SVTFPrecomputed;
+            int precomputedIdx = 0;
+            glm::vec3 color[2] = {glm::vec3(00.2298f,0.2987f,0.7537f), glm::vec3(0.7057f,0.01556f,0.1502f)};
+        };
+        std::vector<ColorMapConfig> colormapConfig = {};
+        // additional widget data
         std::any widgetData = {};   // ToDo: any is not nice
     };
 
