@@ -983,7 +983,7 @@ void Application::updateCamera() {
         camera->rotation_x = (camera->rotation_x > std::numbers::pi) ? std::numbers::pi : camera->rotation_x;
     }
     if(camera->orbital) {
-        if(captureKeyboard && !camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_R)) {
+        if (captureKeyboard && !camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_R)) {
             camera->rotation_y += 0.01f;
         }
         constexpr float pi_eps = std::numbers::pi / 2.f - 0.001f;
@@ -995,8 +995,10 @@ void Application::updateCamera() {
         float step = time_delta * final_speed;
         // Determine camera movement
         float forward = 0.0f;
-        forward += (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
-        forward -= (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
+        if (captureKeyboard) {
+            forward += (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
+            forward -= (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
+        }
         camera->orbital_radius -= (forward + scrollWheelDelta/10.f) * final_speed * camera->orbital_radius;
         camera->orbital_radius = glm::max(0.001f, camera->orbital_radius);
         camera->position_world_space = glm::vec3(camera->orbital_radius * cos(camera->rotation_y) * cos(camera->rotation_x),

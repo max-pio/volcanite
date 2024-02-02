@@ -104,9 +104,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             m_gpu_material_changed[m] = false;
         }
         // upload material buffer
-        auto [attribute_upload_finished, _attribute_staging_buffer] = m_materials_buffer->uploadWithStagingBuffer(
+        auto [material_upload_finished, _material_upload_staging_buffer] = m_materials_buffer->uploadWithStagingBuffer(
                 gpu_mat.data(), sizeof(GPUSegmentedVolumeMaterial) * m_materials.size(), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-        awaitBeforeExecution.push_back(attribute_upload_finished);
+        getCtx()->sync->hostWaitOnDevice({material_upload_finished}); // we have to wait here, otherwise the upload_staging buffer is freed immediately
     }
 
     // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts finished)
@@ -943,7 +943,10 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
 
         auto [attr_upload_finished, _attr_staging_buffer] = m_attribute_buffer->uploadWithStagingBuffer(attributes.data(), attributes.size() * sizeof(float), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-        return {attr_upload_finished};
+        getCtx()->sync->hostWaitOnDevice({attr_upload_finished});
+        // can't just return the awaitable as _attr_staging_buffer can not be freed yet
+        // return {attr_upload_finished};
+        return {};
     }
 
 } // namespace vvv
