@@ -171,14 +171,7 @@ private:
     std::shared_ptr<vvv::MultiBufferedResource<std::shared_ptr<Texture>>> m_inpaintedOutColor = nullptr; // this is the output texture and thus the only resource that we have to duplicate for each swapchain image
     std::shared_ptr<UniformReflected> m_urender_info = nullptr;
     std::shared_ptr<UniformReflected> m_usegmented_volume_info = nullptr;
-
-
-    struct GPUSegmentedVolumeMaterial {
-        int discrAttributeStart = -1;                 // start attribute read location in g_attributes. a value < 0 means to use the label directly (csgv_id)
-        glm::vec2 discrInterval = {FLT_MIN, FLT_MAX};   // discrAttribute values within this interval [min, max) assign the label to this material
-        int tfAttributeStart = -1;                    // start attribute read location in g_attributes
-        glm::vec2 tfInterval = {0.f, 1000.f};   // attribute min / max values mapped to the TF interval [0, 1]
-    };
+    
     std::shared_ptr<CompressedSegmentationVolume> m_compressed_segmentation_volume = nullptr;
     std::shared_ptr<CSGVDatabase> m_csgv_db = nullptr;
     std::vector<bool> m_gpu_material_changed = std::vector<bool>(SEGMENTED_VOLUME_MATERIAL_COUNT, true);

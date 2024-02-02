@@ -22,7 +22,7 @@ public:
         if(discrAttribute == DISCR_NONE)        // accept none
             return glm::vec2(1.f, 0.f);
         else if(discrAttribute == DISCR_ANY)    // accept all
-            return glm::vec2(std::numeric_limits<float>::min(), std::numeric_limits<float>::max());
+            return glm::vec2(std::numeric_limits<float>::lowest(), std::numeric_limits<float>::max());
         else
             return discrInterval;
     }

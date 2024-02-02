@@ -1,3 +1,4 @@
+#include "cpp_glsl_include/csgv_constants.h"
 
 // ToDo: control which buffers/images are read- and/or writeonly with defines
 
@@ -108,6 +109,7 @@ layout (std140, binding = 10) uniform render_info {
     vec4 g_background_color_a;
     vec4 g_background_color_b;
     uvec2 g_label_minmax;
+    int g_max_active_material;
     uint g_empty_label;
     float g_voxels_per_pixel_per_dist;
     float g_lod_bias;
@@ -157,16 +159,9 @@ layout(std430, binding = 17) buffer restrict readonly attributes
     float g_attributes[];      // multi-variate attributes, back to back in memory with [labelCount] elements per attribute
 };
 
-struct SegmentedVolumeMaterial {
-    int discrAttributeStart;       // start attribute read location in g_attributes. a value < 0 means to use the label directly (csgv_id)
-    vec2 discrInterval;            // discrAttribute values within this interval [min, max) assign the label to this material
-    int tfAttributeStart;          // start attribute read location in g_attributes
-    vec2 tfInterval;               // attribute min / max values mapped to the TF interval [0, 1]
-};
-
 layout(std430, binding = 18) buffer restrict readonly materials
 {
-    SegmentedVolumeMaterial g_materials[];
+    GPUSegmentedVolumeMaterial g_materials[];
 };
 
 layout(binding = 19) uniform sampler1D s_transferFunctions[SEGMENTED_VOLUME_MATERIAL_COUNT];

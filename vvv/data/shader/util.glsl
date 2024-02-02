@@ -54,4 +54,12 @@ vec3 integer2colorlabel(uint id, bool linear) {
     return hsv2rgb(vec3(float(id % 256) / 255.f, float((id/256)%128)/255.f + 0.5f, 0.375f + float((id/32768)%64)/255.f));
 }
 
+bool isCenterWorkItem() {
+    return all(equal(gl_GlobalInvocationID, (gl_NumWorkGroups * gl_WorkGroupSize)/2));
+}
+
+bool isFirstWorkItem() {
+    return all(equal(gl_GlobalInvocationID, uvec3(0u)));
+}
+
 #endif /* UTIL_H */
