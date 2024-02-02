@@ -197,7 +197,27 @@ namespace vvv {
                 }
                 case GuiTFSegmentedVolume: {
                     auto e = reinterpret_cast<GuiTFSegmentedVolumeEntry*>(be);
-                    // ToDo
+                    vstr = std::to_string(e->materials->size()) + " ";
+                    for(int i = 0; i < e->materials->size(); i++) {
+                        const auto& mat = e->materials->at(i);
+                        std::string name = std::string(mat.name);
+                        vstr.append(name.empty() ? "# " : name + " ");
+                        vstr.append(std::to_string(mat.discrAttribute) + " ");
+                        vstr.append(std::to_string(mat.discrInterval.x) + " ");
+                        vstr.append(std::to_string(mat.discrInterval.y) + " ");
+                        vstr.append(std::to_string(mat.tfAttribute) + " ");
+                        vstr.append(std::to_string(mat.tfMinMax.x) + " ");
+                        vstr.append(std::to_string(mat.tfMinMax.y) + " ");
+                        //
+                        const auto& cm = e->colormapConfig[i];
+                        for(auto c : cm.color)
+                            vstr.append(std::to_string(c.r) + " " + std::to_string(c.g) + " " + std::to_string(c.b) + " ");
+                        vstr.append(std::to_string(cm.precomputedIdx) + " ");
+                        vstr.append(std::to_string(static_cast<int>(cm.type)));
+                        if(i != e->materials->size() - 1)
+                            vstr.append(" ");
+                    }
+                    break;
                 }
                 // some parameters do not need to be exported because they are 'constant'
                 case GuiAction:
@@ -343,6 +363,49 @@ namespace vvv {
                     if(!checkLabel(in, be))
                         return false;
                     in >> *GUI_CAST(be, std::string)->value;
+                    break;
+                }
+                case GuiTFSegmentedVolume: {
+                    if(!checkLabel(in, be))
+                        return false;
+
+                    auto e = reinterpret_cast<GuiTFSegmentedVolumeEntry*>(be);
+                    size_t matCount;
+                    in >> matCount;
+                    if(e->materials->size() != matCount) {
+                        Logger(ERROR) << "Material count does not match imported file material count";
+                        return false;
+                    }
+
+                    for(int m = 0; m < matCount; m++) {
+                        auto& mat = e->materials->at(m);
+                        std::string name;
+                        in >> name;
+                        if(name == "#")
+                            mat.name[0] = '\0';
+                        else
+                            memcpy(mat.name, name.data(),sizeof(mat.name));
+                        in >> mat.discrAttribute;
+                        in >> mat.discrInterval.x;
+                        in >> mat.discrInterval.y;
+                        in >> mat.tfAttribute;
+                        in >> mat.tfMinMax.x;
+                        in >> mat.tfMinMax.y;
+                        //
+                        auto& cm = e->colormapConfig[m];
+                        for(auto c : cm.color) {
+                            in >> c.r;
+                            in >> c.g;
+                            in >> c.b;
+                        }
+                        in >> cm.precomputedIdx;
+                        int type;
+                        in >> type;
+                        cm.type = static_cast<GuiTFSegmentedVolumeEntry::ColorMapType>(type);
+                        if(e->onChanged)
+                            e->onChanged(m);
+                        updateVectorColormap(m);
+                    }
                     break;
                 }
                 default: {
