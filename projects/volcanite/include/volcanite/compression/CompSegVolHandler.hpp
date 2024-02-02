@@ -658,12 +658,14 @@ public:
                     }
                     if (recompute) {
 #ifdef RELABEL_IDS_FROM_CSV_SUFFIX
-                        if(!std::filesystem::exists(chunk_input_path + RELABEL_IDS_FROM_CSV_SUFFIX))
-                        Logger(WARN) << "Provide a file " << chunk_input_path << RELABEL_IDS_FROM_CSV_SUFFIX << " with the following format to relabel voxels:\n";
-                        Logger(WARN) << "# One Line Header (first line will be ignored)";
-                        Logger(WARN) << "[OldLabel0],[NewLabel0]";
-                        Logger(WARN) << "[OldLabel1],[NewLabel1]";
-                        Logger(WARN) << "...\n";
+                        if(!std::filesystem::exists(chunk_input_path + RELABEL_IDS_FROM_CSV_SUFFIX)) {
+                            Logger(INFO) << "You can provide a file " << chunk_input_path << RELABEL_IDS_FROM_CSV_SUFFIX
+                                         << " with the following format to relabel voxels:\n";
+                            Logger(INFO) << "# One Line Header (first line will be ignored)";
+                            Logger(INFO) << "[OldLabel0],[NewLabel0]";
+                            Logger(INFO) << "[OldLabel1],[NewLabel1]";
+                            Logger(INFO) << "...\n";
+                        }
 #endif
 
                         loadSegmentationVolumeFile(chunk_input_path, volume);
