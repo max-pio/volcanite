@@ -337,10 +337,6 @@ void PassBase::createPipelineLayout(uint32_t push_constant_byte_size) {
                     descriptorCounts[binding.descriptorType] = 0;
                 }
                 descriptorCounts[binding.descriptorType] += binding.descriptorCount;
-
-                if(binding.descriptorCount > 1) {
-                    Logger(INFO) << binding.descriptorCount << " - " << to_string(binding.descriptorType);
-                }
             }
         }
     }

@@ -17,7 +17,8 @@ namespace vvv {
 
 
 RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore *signalBinarySemaphore) {
-    assert(m_usegmented_volume_info && m_urender_info && m_compressed_segmentation_volume && "CompressedSegmentationVolumeRenderer data missing!");
+    if(!(m_usegmented_volume_info && m_urender_info && m_compressed_segmentation_volume && m_csgv_db))
+        throw std::runtime_error("CompressedSegmentationVolumeRenderer data missing!");
 
     // we only want to render the next frame, if the previous frame finished execution
     if(m_mostRecentFrame.has_value()) {
@@ -60,12 +61,6 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     if(std::find(m_gpu_material_changed.begin(), m_gpu_material_changed.end(), true) != m_gpu_material_changed.end()) {
         std::vector<GPUSegmentedVolumeMaterial> gpu_mat(m_materials.size());
         for (int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
-            // if we don't have a database, we can only directly read from the label itself and do not use any attribute buffers
-            if(!m_csgv_db) {
-                m_materials[m].discrAttribute = 0;
-                m_materials[m].tfAttribute = 0;
-            }
-
             // Discriminator
             // (we do not need to upload the attribute 0 which is the csgv_id, e.g. the voxel value)
             if (m_materials[m].getSafeDiscrAttribute() <= 0) {
@@ -375,12 +370,11 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
 
     if(m_compressed_segmentation_volume)
         m_data_changed = true; // trigger re-upload to new buffers
-    if(m_csgv_db) {
-        for (int m = 0; m < m_gpu_material_changed.size(); m++)
-            m_gpu_material_changed[m] = true;
-        for (int a = 0; a < m_csgv_db->getAttributeCount(); a++)
-            m_attribute_start_position[a] = -1;
-    }
+    for (int m = 0; m < m_gpu_material_changed.size(); m++)
+        m_gpu_material_changed[m] = true;
+    int attributeCount = m_csgv_db ? static_cast<int>(m_csgv_db->getAttributeCount()) : 1;
+    for (int a = 0; a < attributeCount; a++)
+        m_attribute_start_position.at(a) = -1;
 }
 
 void CompressedSegmentationVolumeRenderer::releaseResources() {
@@ -869,10 +863,9 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     }
 
     vvv::AwaitableList CompressedSegmentationVolumeRenderer::updateAttributeBuffers() {
-        if(!m_csgv_db)
-            return {};
-
         // ToDo: this whole thing could be cleaned up. Encapsulate attribute / material / data buffers in another struct or class at least. And see the notes regarding the attribute upload below.
+        if(!m_csgv_db)
+            throw std::runtime_error("Missing csgv database at attribute buffer creation.");
 
         // check which attributes should be present in GPU memory
         std::vector<bool> attributeNeeded(m_attribute_start_position.size(), false);

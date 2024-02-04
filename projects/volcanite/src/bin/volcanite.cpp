@@ -160,7 +160,8 @@ int volcanite(int argc, char *argv[]) {
                 Logger(INFO) << "Imported attribute database " << database_path << " in " << t.elapsed() << " seconds";
         }
         else {
-            Logger(INFO) << "No attribute database " << database_path << " found";
+            csgvDatabase->createDummy(&(*compressedSegmentationVolume));
+            Logger(INFO) << "No attribute database " << database_path << " found. Using dummy database.";
         }
     }
 

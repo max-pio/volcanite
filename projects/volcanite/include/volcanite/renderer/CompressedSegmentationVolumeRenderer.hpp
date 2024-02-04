@@ -107,10 +107,13 @@ public:
 
     void initGui(vvv::GuiInterface * gui) override;
 
-    void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> csgv, std::shared_ptr<CSGVDatabase> db = nullptr) {
-        if(!csgv) {
+    void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> csgv, std::shared_ptr<CSGVDatabase> db) {
+        if(!csgv)
             throw std::runtime_error("CompressedSegmentationVolume must not be null");
-        }
+        if(!db)
+            throw std::runtime_error("CompressedSegmentationVolume database must not be null");
+
+
         if(csgv->getBrickCount().x < csgv->getLodCountPerBrick()) {
             Logger(WARN) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
                          ") in one dimension than there are brick level-of-details (" << csgv->getLodCountPerBrick() <<
@@ -121,9 +124,7 @@ public:
 
         // when a database is provided, we use it for attribute visualization
         m_csgv_db = std::move(db);
-        if(m_csgv_db) {
-            m_attribute_start_position.resize(m_csgv_db->getAttributeCount(), -1);
-        }
+        m_attribute_start_position.resize(m_csgv_db->getAttributeCount(), -1);
     }
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
@@ -195,7 +196,7 @@ private:
     bool m_data_changed = false;
     std::shared_ptr<Buffer> m_encoding_buffer = nullptr;
     const size_t m_max_attribute_buffer_size = ((64ul << 10) << 10);   // MB to store different floating point attributes back to back
-    std::vector<int> m_attribute_start_position = {};           // the start index in the attribute_buffer for each attribute
+    std::vector<int> m_attribute_start_position = {-1};           // the start index in the attribute_buffer for each attribute
     std::shared_ptr<Buffer> m_attribute_buffer = nullptr;       // stores attributes back to back
     std::shared_ptr<Buffer> m_materials_buffer = nullptr;       // stores the material information
     std::shared_ptr<Buffer> m_brick_starts_buffer = nullptr;

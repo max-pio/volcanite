@@ -205,6 +205,19 @@ public:
         m_label_count = 0;
     }
 
+    /** This database will not contain any real information but will return a label count of uint32_MAX and a single
+     * attribute name "csgv_id". This way it can be used in the csgv renderer which will implicitly map this single
+     * attribute to the voxel labels from the csgv volume.
+     */
+    void createDummy(const CompressedSegmentationVolume* csgv) {
+        m_db = nullptr;
+        //ToDo: could create a in-memory database if we need more dummy functionality
+        // m_db =  std::make_unique<SQLite::Database>(":memory:", SQLite::OPEN_MEMORY);
+        m_label_count = ~0u;    // uint32 Max ToDo: find the maximum palette label within the csgv file
+        m_attribute_names = {"csgv_id"};
+        m_attribute_minmax = {glm::vec2(0.f, static_cast<float>(m_label_count))};
+    }
+
     /** If a precomputed CSGV database exists already, it is openend.
      *  If not, the given (possibly chunked) volume at input_path is preprocessed and the result is stored in a new database.
      *  In that case, either all three or none of the attribute_* parameters must be provided.
@@ -376,6 +389,9 @@ public:
      * @return the number of written elements
      */
     size_t getAttribute(int attributeIndex, float* begin, size_t maxSize) {
+        if(!m_db)
+            throw std::runtime_error("No CSGV sqlite database present.");
+
         if(attributeIndex >= m_attribute_names.size())
             throw std::runtime_error("invalid attribute index " + std::to_string(attributeIndex));
         if(maxSize < m_label_count)
