@@ -108,9 +108,7 @@ layout (std140, binding = 10) uniform render_info {
     vec3 g_camera_position_world_space;
     vec4 g_background_color_a;
     vec4 g_background_color_b;
-    uvec2 g_label_minmax;
     int g_max_active_material;
-    uint g_empty_label;
     float g_voxels_per_pixel_per_dist;
     float g_lod_bias;
     int g_tonemap_enable;

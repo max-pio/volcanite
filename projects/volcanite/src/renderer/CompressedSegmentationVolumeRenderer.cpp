@@ -535,14 +535,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
     {
         m_urender_info->setUniform<glm::vec4>("g_background_color_a", m_background_color_a);
         m_urender_info->setUniform<glm::vec4>("g_background_color_b", m_background_color_b);
-        glm::uvec2 label_minmax;
-        uint64_t tmp_64bit = 1ul;   // store this in a variable to force 64 bit computation
-        label_minmax.x = static_cast<uint32_t>((tmp_64bit << m_label_minmax.x) - 1);
-        tmp_64bit = 1ul;
-        label_minmax.y = static_cast<uint32_t>((tmp_64bit << m_label_minmax.y) - 1ul);
-        m_urender_info->setUniform<glm::uvec2>("g_label_minmax", label_minmax);
-        uint32_t empty_label = static_cast<uint32_t>(m_empty_label);
-        m_urender_info->setUniform<uint32_t>("g_empty_label", empty_label);
         int max_active_material = -1;
         for(int m = 0; m < m_materials.size(); m++)
             if (m_materials[m].isActive())
@@ -633,8 +625,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         newCamHash = hashMemory(&m_show_step_count, sizeof(m_show_step_count), newCamHash);
         newCamHash = hashMemory(&m_background_color_a, sizeof(m_background_color_a), newCamHash);
         newCamHash = hashMemory(&m_background_color_b, sizeof(m_background_color_b), newCamHash);
-        newCamHash = hashMemory(&m_label_minmax, sizeof(m_label_minmax), newCamHash);
-        newCamHash = hashMemory(&m_empty_label, sizeof(m_empty_label), newCamHash);
         newCamHash = hashMemory(&m_shadow_ray_enabled, sizeof(m_shadow_ray_enabled), newCamHash);
         newCamHash = hashMemory(&m_light_direction, sizeof(m_light_direction), newCamHash);
         newCamHash = hashMemory(&m_light_intensity, sizeof(m_light_intensity), newCamHash);
@@ -679,10 +669,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_usegmented_volume_info->setUniform<uint32_t>("g_free_stack_capacity", m_free_stack_capacity);
         m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
     }
-
-    // transfer functions and materials
-    {
-    }
 }
 
 void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
@@ -721,26 +707,23 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                 }
             },
             "Voxel Size");
-            g->addBool(&m_subblock_enabled, "Use Sub-Block");
-            g->addCustomCode([this]() {
-                if(m_subblock_enabled) {
-                    auto old = m_subblock_size;
-                    ImGui::InputInt3("Sub-Block Size", &m_subblock_size.x);
-                    if (glm::any(glm::lessThanEqual(m_subblock_size, glm::ivec3(0.f)))) {
-                        Logger(WARN) << "Sub-Block size must be > 0 in all dimensions! Resetting..";
-                        m_subblock_size = old;
-                    }
-                    ImGui::InputInt3("Sub-Block Start", &m_subblock_start.x);
-                }
-            },
-            "Sub-Block");
+    dev->addBool(&m_subblock_enabled, "Use Sub-Block");
+    dev->addCustomCode([this]() {
+        if(m_subblock_enabled) {
+            auto old = m_subblock_size;
+            ImGui::InputInt3("Sub-Block Size", &m_subblock_size.x);
+            if (glm::any(glm::lessThanEqual(m_subblock_size, glm::ivec3(0.f)))) {
+                Logger(WARN) << "Sub-Block size must be > 0 in all dimensions! Resetting..";
+                m_subblock_size = old;
+            }
+            ImGui::InputInt3("Sub-Block Start", &m_subblock_start.x);
+        }
+    },
+    "Sub-Block");
 #endif
     if(m_csgv_db) {
         g->addTFSegmentedVolume(&m_materials, m_csgv_db->getAttributeNames(), m_csgv_db->getAttributeMinMax(), [this](int m) { updateSegmentedVolumeMaterial(m); }, "Materials");
     }
-    g->addInt(&m_empty_label, "Empty Label");
-    g->addInt(&m_label_minmax.x, "Label ID Min. 2^", 0, 32, 1);
-    g->addInt(&m_label_minmax.y, "Label ID Max. 2^", 0, 32, 1);
     dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
     dev->addBool(&m_blue_noise, "Blue Noise Shift");
     dev->addBool(&m_dda_traversal, "DDA Traversal");

@@ -136,10 +136,7 @@ public:
 
 private:
     // (gui) parameters:
-    // transfer function
-    glm::ivec2 m_label_minmax = glm::ivec2(0, 32);
-    int m_empty_label = 0;
-    int m_selected_attribute_id = 0;
+    // materials
     static constexpr uint32_t SEGMENTED_VOLUME_MATERIAL_COUNT = 8;
     std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
     // shading and post processing
