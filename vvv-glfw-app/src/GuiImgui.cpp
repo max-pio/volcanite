@@ -4,6 +4,7 @@
 
 #include "vvvwindow/tf/TransferFunction1DWidget.hpp"
 #include "vvvwindow/tf/TransferFunction2DWidget.hpp"
+#include "vvvwindow/tf/TransferFunctionSegmentedVolumeWidget.hpp"
 
 #include "vvv/core/GpuContext.hpp"
 #include "imgui/imgui.h"
@@ -95,6 +96,11 @@ void GuiImgui::renderGui() {
                 case GuiTF2D: {
                     auto e = reinterpret_cast<GuiTF2DEntry*>(be);
                     renderGuiTF2D(*e, getCtx());
+                    break;
+                }
+                case GuiTFSegmentedVolume: {
+                    auto e = reinterpret_cast<GuiTFSegmentedVolumeEntry*>(be);
+                    renderGuiTFSegmentedVolume(*e, getCtx());
                     break;
                 }
                 case GuiBool: {

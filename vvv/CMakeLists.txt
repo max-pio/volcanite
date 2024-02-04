@@ -38,6 +38,7 @@ set(VVV_HEADERS
         include/vvv/volren/tf/TransferFunction.hpp
         include/vvv/volren/tf/VectorTransferFunction.hpp
         include/vvv/volren/tf/TransferFunction1D.hpp
+        include/vvv/volren/tf/SegmentedVolumeMaterial.hpp
         include/vvv/volren/tf/builtin.hpp
         include/vvv/volren/tf/color.hpp
         include/vvv/volren/Volume.hpp
@@ -115,6 +116,7 @@ set(VVV_SOURCES
         src/vk/memory.cpp
         src/vk/queue.cpp
 
+        src/util/csv_utils.cpp
         src/util/Logger.cpp
         src/util/PointUtils.cpp
         src/util/detect_debugger.cpp
@@ -201,6 +203,10 @@ endif()
 if (HDF5_FOUND)
     target_link_libraries(libvvv PRIVATE HighFive)
     target_compile_definitions(libvvv PUBLIC -DLIB_HIGHFIVE)
+endif ()
+if (SQLite3_FOUND)
+    target_link_libraries(libvvv PUBLIC SQLiteCpp SQLite::SQLite3) # pthread dl
+    target_compile_definitions(libvvv PUBLIC -DLIB_SQLITE3)
 endif ()
 if (TIFF_FOUND)
     target_link_libraries(libvvv PRIVATE TIFF::TIFF)

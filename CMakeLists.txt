@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
-project(vvv-volcanite VERSION 0.1.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES C CXX)
+project(vvv-volcanite VERSION 0.2.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES C CXX)
+if (MSVC)
+    message(FATAL_ERROR "MSVC compiler is currently not supported as it only provides OpenMP version < 4.5")
+endif (MSVC)
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
+
 # GENERAL BUILD CONFIG -------------------------------------------------------------------------------------------------
 
 # Require out-of-source builds
@@ -88,6 +92,19 @@ if (USE_HDF5_SUPPORT)
         add_subdirectory(extern/HighFive)
     else ()
         message(WARNING "USE_HDF5_SUPPORT was set but hdf5 library could not be found!")
+    endif ()
+endif ()
+
+# add extern SQLiteCpp library if libsqlite3-dev is installed
+# we can not do this in the volcanite project cmake as extern/SQLiteCpp cannot be added as a subdirectory from there
+option(USE_SQLite3 "Includes the SQLite3 library for importing and exporting .sqlite files" ON)
+if (USE_SQLite3)
+    find_package(SQLite3)
+    if (SQLite3_FOUND)
+        set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "Run cpplint.py tool for Google C++ StyleGuide.")
+        add_subdirectory(extern/SQLiteCpp)
+    else ()
+        message(WARNING "USE_SQLite3 was set but SQLite3 library could not be found")
     endif ()
 endif ()
 

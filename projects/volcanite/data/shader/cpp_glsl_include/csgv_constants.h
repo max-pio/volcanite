@@ -17,4 +17,17 @@
 #define INVALID 0xFFFFFFFFu
 
 
+// Material definition
+
+#define LABEL_AS_ATTRIBUTE 0xFFFFFFFFu
+
+struct GPUSegmentedVolumeMaterial {
+    uint discrAttributeStart;       // start attribute read location in g_attributes. a value < 0 means to use the label directly (csgv_id)
+    float discrIntervalMin;         // discrAttribute values within this interval [min, max) assign the label to this material
+    float discrIntervalMax;         // discrAttribute values within this interval [min, max) assign the label to this material
+    uint tfAttributeStart;          // start attribute read location in g_attributes
+    float tfIntervalMin;            // attribute min / max values mapped to the TF interval [0, 1]
+    float tfIntervalMax;            // attribute min / max values mapped to the TF interval [0, 1]
+};
+
 #endif // CSGV_CONSTANTS_HPP

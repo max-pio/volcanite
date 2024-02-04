@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "vvv/core/GuiInterface.hpp"
 
 namespace vvv {
@@ -40,6 +42,22 @@ namespace vvv {
         m_entries.push_back(entry);
         return entry->id;
     }
+
+    gui_id  GuiInterface::GuiElementList::addTFSegmentedVolume(std::vector<SegmentedVolumeMaterial> *materials, const std::vector<std::string>& attributeNames, const std::vector<glm::vec2>& attributeMinMax, std::function<void(int)> onChanged, const std::string& name) {
+        auto entry = new GuiTFSegmentedVolumeEntry();
+        entry->id = m_id_counter;
+        m_id_counter += 100;    // pragmatic: we reserve more IDs because the TF editor will add multiple ImGUI elements with PushID(id + X)
+        entry->type = GuiTFSegmentedVolume;
+        entry->materials = materials;
+        entry->attributeNames = attributeNames;
+        entry->attributeMinMax = attributeMinMax;
+        entry->onChanged = std::move(onChanged);
+        entry->colormapConfig = std::vector<GuiTFSegmentedVolumeEntry::ColorMapConfig>(materials->size());
+        entry->label = name;
+        m_entries.push_back(entry);
+        return entry->id;
+    }
+
 
     // special types and grouping
     gui_id GuiInterface::GuiElementList::addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int)> onChanged, const std::string& name) {
@@ -90,6 +108,7 @@ namespace vvv {
     }
     gui_id GuiInterface::GuiElementList::addDynamicText(std::string* text, std::string name) {
         auto entry = new GuiEntry<std::string>();
+        entry->id = m_id_counter++;
         entry->value = text;
         entry->type = GuiDynamicText;
         entry->label = name;
@@ -107,10 +126,20 @@ namespace vvv {
 
 
 
+    std::string sanitizeExportString(std::string s) {
+        std::replace(s.begin(), s.end(), ' ', '~');
+        return s;
+    }
+
+    std::string sanitizeImportString(std::string s) {
+        std::replace(s.begin(), s.end(), ' ', '~');
+        return s;
+    }
+
     std::string sanitizeExportString(std::string s, gui_id id) {
         std::replace(s.begin(), s.end(), ' ', '_');
         if(s.empty())
-            return std::to_string(id);
+            return std::string("GUI_") + std::to_string(id);
         return s;
     }
 
@@ -174,7 +203,31 @@ namespace vvv {
                     break;
                 }
                 case GuiDynamicText: {
-                    vstr = *GUI_CAST(be, std::string)->value;
+                    vstr = sanitizeExportString(*GUI_CAST(be, std::string)->value);
+                    break;
+                }
+                case GuiTFSegmentedVolume: {
+                    auto e = reinterpret_cast<GuiTFSegmentedVolumeEntry*>(be);
+                    vstr = std::to_string(e->materials->size()) + " ";
+                    for(int i = 0; i < e->materials->size(); i++) {
+                        const auto& mat = e->materials->at(i);
+                        std::string name = sanitizeExportString(mat.name);
+                        vstr.append(name.empty() ? "# " : name + " ");
+                        vstr.append(std::to_string(mat.discrAttribute) + " ");
+                        vstr.append(std::to_string(mat.discrInterval.x) + " ");
+                        vstr.append(std::to_string(mat.discrInterval.y) + " ");
+                        vstr.append(std::to_string(mat.tfAttribute) + " ");
+                        vstr.append(std::to_string(mat.tfMinMax.x) + " ");
+                        vstr.append(std::to_string(mat.tfMinMax.y) + " ");
+                        //
+                        const auto& cm = e->colormapConfig[i];
+                        for(auto c : cm.color)
+                            vstr.append(std::to_string(c.r) + " " + std::to_string(c.g) + " " + std::to_string(c.b) + " ");
+                        vstr.append(std::to_string(cm.precomputedIdx) + " ");
+                        vstr.append(std::to_string(static_cast<int>(cm.type)));
+                        if(i != e->materials->size() - 1)
+                            vstr.append(" ");
+                    }
                     break;
                 }
                 // some parameters do not need to be exported because they are 'constant'
@@ -220,8 +273,6 @@ namespace vvv {
                         *e->value = value;
                 }
             };
-
-            Logger(INFO) << be->label;
 
             switch (be->type) {
                 // some parameters do not need to be exported because they are 'constant'
@@ -320,7 +371,52 @@ namespace vvv {
                 case GuiDynamicText: {
                     if(!checkLabel(in, be))
                         return false;
-                    in >> *GUI_CAST(be, std::string)->value;
+                    std::string text;
+                    in >> text;
+                    *GUI_CAST(be, std::string)->value = sanitizeImportString(text);
+                    break;
+                }
+                case GuiTFSegmentedVolume: {
+                    if(!checkLabel(in, be))
+                        return false;
+
+                    auto e = reinterpret_cast<GuiTFSegmentedVolumeEntry*>(be);
+                    size_t matCount;
+                    in >> matCount;
+                    if(e->materials->size() != matCount) {
+                        Logger(ERROR) << "Material count does not match imported file material count";
+                        return false;
+                    }
+
+                    for(int m = 0; m < matCount; m++) {
+                        auto& mat = e->materials->at(m);
+                        std::string name;
+                        in >> name;
+                        sanitizeImportString(name);
+                        if(name == "#")
+                            mat.name[0] = '\0';
+                        else
+                            memcpy(mat.name, name.data(),sizeof(mat.name));
+                        in >> mat.discrAttribute;
+                        in >> mat.discrInterval.x;
+                        in >> mat.discrInterval.y;
+                        in >> mat.tfAttribute;
+                        in >> mat.tfMinMax.x;
+                        in >> mat.tfMinMax.y;
+                        //
+                        auto& cm = e->colormapConfig[m];
+                        for(glm::vec3& c : cm.color) {
+                            in >> c.r;
+                            in >> c.g;
+                            in >> c.b;
+                        }
+                        in >> cm.precomputedIdx;
+                        int type;
+                        in >> type;
+                        Logger(INFO) << type;
+                        cm.type = static_cast<GuiTFSegmentedVolumeEntry::ColorMapType>(type);
+                        e->widgetData = {};    // the GUI reinitialization triggers all updates
+                    }
                     break;
                 }
                 default: {

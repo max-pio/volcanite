@@ -7,6 +7,7 @@ set(HEADERS
         include/vvvwindow/entrypoint.hpp
         include/vvvwindow/tf/TransferFunction1DWidget.hpp
         include/vvvwindow/tf/TransferFunction2DWidget.hpp
+        include/vvvwindow/tf/TransferFunctionSegmentedVolumeWidget.hpp
         )
 
 set(SOURCES
@@ -15,6 +16,7 @@ set(SOURCES
         src/entrypoint.cpp
         src/tf/TransferFunction1DWidget.cpp
         src/tf/TransferFunction2DWidget.cpp
+        src/tf/TransferFunctionSegmentedVolumeWidget.cpp
         )
 
 # create library target

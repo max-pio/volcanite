@@ -122,6 +122,7 @@ public:
             Logger(WARN) << "Error reading render parameters from file.";
             return false;
         }
+        in >> tmp;
         if(!(in.rdstate() & std::istream::eofbit))
             Logger(WARN) << "Possible parameter import error. Did not reach end of file.";
         return true;

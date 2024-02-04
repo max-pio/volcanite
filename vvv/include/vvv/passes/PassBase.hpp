@@ -128,12 +128,16 @@ public:
     // we could use negative numbers to indicates this.
 
     void setImageSampler(uint32_t setIdx, uint32_t bindingIdx, Texture &texture, vk::ImageLayout layout = vk::ImageLayout::eUndefined, bool atActiveIndex = true);
+    void setImageSamplerArray(uint32_t setIdx, uint32_t bindingIdx, uint32_t arrayElement, Texture &texture, vk::ImageLayout layout = vk::ImageLayout::eUndefined, bool atActiveIndex = true);
     void setImageSampler(const std::string &name, Texture &texture, vk::ImageLayout layout = vk::ImageLayout::eUndefined, bool atActiveIndex = true);
+    void setImageSamplerArray(const std::string &name, uint32_t arrayElement, Texture &texture, vk::ImageLayout layout = vk::ImageLayout::eUndefined, bool atActiveIndex = true);
     void setImageSampler(uint32_t setIdx, uint32_t bindingIdx, MultiBufferedResource<std::shared_ptr<Texture>> &textures, vk::ImageLayout layout = vk::ImageLayout::eUndefined);
     void setImageSampler(const std::string &name, MultiBufferedResource<std::shared_ptr<Texture>> &textures, vk::ImageLayout layout = vk::ImageLayout::eUndefined);
 
     void setStorageImage(uint32_t setIdx, uint32_t bindingIdx, Texture &texture, vk::ImageLayout layout = vk::ImageLayout::eUndefined, bool atActiveIndex = true);
+    void setStorageImageArray(uint32_t setIdx, uint32_t bindingIdx, uint32_t arrayElement, Texture &texture, vk::ImageLayout layout = vk::ImageLayout::eUndefined, bool atActiveIndex = true);
     void setStorageImage(const std::string &name, Texture &texture, vk::ImageLayout layout = vk::ImageLayout::eUndefined, bool atActiveIndex = true);
+    void setStorageImageArray(const std::string &name, uint32_t arrayElement, Texture &texture, vk::ImageLayout layout = vk::ImageLayout::eUndefined, bool atActiveIndex = true);
     void setStorageImage(uint32_t setIdx, uint32_t bindingIdx, MultiBufferedResource<std::shared_ptr<Texture>> &textures, vk::ImageLayout layout = vk::ImageLayout::eUndefined);
     void setStorageImage(const std::string &name, MultiBufferedResource<std::shared_ptr<Texture>> &textures, vk::ImageLayout layout = vk::ImageLayout::eUndefined);
 
@@ -187,6 +191,7 @@ private:
     void setResourceCount(size_t count, bool initiallyDirty = true) { m_isDirty = std::vector(count, initiallyDirty ? m_allDirtyMask : 0 /* allCleanMask */); }
 
     void updateDescriptorSetsImage(uint32_t setIdx, uint32_t bindingIdx, Texture &texture, vk::DescriptorType descriptorType, vk::ImageLayout layout = vk::ImageLayout::eUndefined, bool atActiveIndex = true);
+    void updateDescriptorSetsImageArray(uint32_t setIdx, uint32_t bindingIdx, uint32_t arrayElement, Texture &texture, vk::DescriptorType descriptorType, vk::ImageLayout layout = vk::ImageLayout::eUndefined, bool atActiveIndex = true);
     void updateDescriptorSetsImage(uint32_t setIdx, uint32_t bindingIdx, MultiBufferedResource<std::shared_ptr<Texture>> &textures, vk::DescriptorType descriptorType, vk::ImageLayout layout = vk::ImageLayout::eUndefined);
 
 protected:

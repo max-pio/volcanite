@@ -17,7 +17,8 @@ namespace vvv {
 
 
 RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore *signalBinarySemaphore) {
-    assert(m_usegmented_volume_info && m_urender_info && m_compressed_segmentation_volume && "CompressedSegmentationVolumeRenderer data missing!");
+    if(!(m_usegmented_volume_info && m_urender_info && m_compressed_segmentation_volume && m_csgv_db))
+        throw std::runtime_error("CompressedSegmentationVolumeRenderer data missing!");
 
     // we only want to render the next frame, if the previous frame finished execution
     if(m_mostRecentFrame.has_value()) {
@@ -31,7 +32,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         assert(!m_compressed_segmentation_volume->getBrickStarts()->empty() && !m_compressed_segmentation_volume->getEncoding()->empty() && "CompressedSegmentationVolume not initialized!");
         auto [encoding_upload_finished, _encoding_staging_buffer] = m_encoding_buffer->uploadWithStagingBuffer(*(m_compressed_segmentation_volume->getEncoding()), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
         auto [brickstarts_upload_finished, _brickstarts_staging_buffer] = m_brick_starts_buffer->uploadWithStagingBuffer(*(m_compressed_segmentation_volume->getBrickStarts()),  {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-        // we have a getDevice().waitIdle() at the end of this scope anyway, so we won't add those awaitables to any list
+
+        awaitBeforeExecution.push_back(encoding_upload_finished);
+        awaitBeforeExecution.push_back(brickstarts_upload_finished);
 
         // reset cache
         m_pass->resetCacheOnNextCall();
@@ -48,9 +51,57 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         // reset all accumulation buffers
         m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
 
-        // wait until everything is uploaded
+        // ToDo? is this required? wait until everything is uploaded
         getCtx()->getDevice().waitIdle();
         m_data_changed = false;
+    }
+
+    updateAttributeBuffers();
+    // if one of our materials changed, we update the whole buffer
+    if(std::find(m_gpu_material_changed.begin(), m_gpu_material_changed.end(), true) != m_gpu_material_changed.end()) {
+        std::vector<GPUSegmentedVolumeMaterial> gpu_mat(m_materials.size());
+        for (int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
+            // Discriminator
+            // (we do not need to upload the attribute 0 which is the csgv_id, e.g. the voxel value)
+            if (m_materials[m].getSafeDiscrAttribute() <= 0) {
+                gpu_mat[m].discrAttributeStart = LABEL_AS_ATTRIBUTE;
+            }
+            else if (m_attribute_start_position[m_materials[m].getSafeDiscrAttribute()] < 0) {
+                gpu_mat[m].discrAttributeStart = LABEL_AS_ATTRIBUTE;
+                // ToDo: this should not throw an exception. We should only allow to select the max. number of attributes in the GUI
+                throw std::runtime_error("GPU attribute buffer does not fit all selected attributes!");
+            } else {
+                gpu_mat[m].discrAttributeStart = static_cast<uint32_t>(m_attribute_start_position[m_materials[m].getSafeDiscrAttribute()]);
+                assert(gpu_mat[m].discrAttributeStart >= 0 &&
+                       gpu_mat[m].discrAttributeStart < (m_max_attribute_buffer_size / sizeof(float)) &&
+                       "invalid start index in GPU attribute buffer");
+            }
+            gpu_mat[m].discrIntervalMin = m_materials[m].getDiscrInterval().x;
+            gpu_mat[m].discrIntervalMax = m_materials[m].getDiscrInterval().y;
+
+            // Visualization attribute
+            // (we do not need to upload the attribute 0 which is the csgv_id, e.g. the voxel value)
+            if (m_materials[m].tfAttribute <= 0) {
+                gpu_mat[m].tfAttributeStart = LABEL_AS_ATTRIBUTE;
+            }
+            else if (m_attribute_start_position[m_materials[m].tfAttribute] < 0) {
+                gpu_mat[m].tfAttributeStart = LABEL_AS_ATTRIBUTE;
+                throw std::runtime_error("GPU attribute buffer does not fit all selected attributes!");
+            } else {
+                gpu_mat[m].tfAttributeStart = static_cast<uint32_t>(m_attribute_start_position[m_materials[m].tfAttribute]);
+                assert(gpu_mat[m].tfAttributeStart >= 0 &&
+                       gpu_mat[m].tfAttributeStart < (m_max_attribute_buffer_size / sizeof(float)) &&
+                       "invalid start index in GPU attribute buffer");
+            }
+            gpu_mat[m].tfIntervalMin = m_materials[m].tfMinMax.x;
+            gpu_mat[m].tfIntervalMax = m_materials[m].tfMinMax.y;
+
+            m_gpu_material_changed[m] = false;
+        }
+        // upload material buffer
+        auto [material_upload_finished, _material_upload_staging_buffer] = m_materials_buffer->uploadWithStagingBuffer(
+                gpu_mat.data(), sizeof(GPUSegmentedVolumeMaterial) * m_materials.size(), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        getCtx()->sync->hostWaitOnDevice({material_upload_finished}); // we have to wait here, otherwise the upload_staging buffer is freed immediately
     }
 
     // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts finished)
@@ -280,6 +331,8 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     }
     m_brick_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_brick_start_buffer", .byteSize = (bricks_in_volume + 1u)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_encoding_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_encoding_buffer", .byteSize = encoding_byte_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    m_attribute_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_attribute_buffer", .byteSize = m_max_attribute_buffer_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    m_materials_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_materials_buffer", .byteSize = sizeof(GPUSegmentedVolumeMaterial) * SEGMENTED_VOLUME_MATERIAL_COUNT, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
 
     m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = m_cache_capacity * (2u*2u*2u) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_free_stack_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_free_stack_buffer", .byteSize = (m_free_stack_capacity * (lods_in_volume - 1u) + (lods_in_volume + 1u)) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
@@ -306,6 +359,9 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     // GPU stats buffer
     m_gpu_stats_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_gpu_stats_buffer", .byteSize = sizeof(GPUStats), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
 
+    updateDeviceMemoryUsage();
+    Logger(INFO) << "Device memory after initialization: " << m_gui_device_mem_text;
+
     // Set camera to a nice start position
     auto camera = getCamera();
     camera->position_world_space = {-0.8, 0.6666, -0.8};
@@ -314,6 +370,11 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
 
     if(m_compressed_segmentation_volume)
         m_data_changed = true; // trigger re-upload to new buffers
+    for (int m = 0; m < m_gpu_material_changed.size(); m++)
+        m_gpu_material_changed[m] = true;
+    int attributeCount = m_csgv_db ? static_cast<int>(m_csgv_db->getAttributeCount()) : 1;
+    for (int a = 0; a < attributeCount; a++)
+        m_attribute_start_position.at(a) = -1;
 }
 
 void CompressedSegmentationVolumeRenderer::releaseResources() {
@@ -322,6 +383,8 @@ void CompressedSegmentationVolumeRenderer::releaseResources() {
     m_cache_info_buffer = nullptr;
     m_free_stack_buffer = nullptr;
     m_cache_buffer = nullptr;
+    m_attribute_buffer = nullptr;
+    m_materials_buffer = nullptr;
     m_encoding_buffer = nullptr;
     m_brick_starts_buffer = nullptr;
     m_detail_buffer = nullptr;
@@ -329,6 +392,8 @@ void CompressedSegmentationVolumeRenderer::releaseResources() {
     m_detail_requests_buffer = nullptr;
     m_detail_starts_staging.second = nullptr;
     m_detail_staging.second = nullptr;
+    for(auto& tf : m_materialTransferFunctions)
+        tf = nullptr;
     setCtx(nullptr);
 }
 
@@ -347,6 +412,7 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
         shader_defines.push_back("SEPARATE_DETAIL");
     }
+    shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
     // ToDo: does this work? if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if(getCtx()->getWsi())
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), shader_defines);
@@ -368,6 +434,8 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         m_pass->setStorageBuffer(0, 9, *m_detail_requests_buffer);
     }
     m_pass->setStorageBuffer(0, 16, *m_gpu_stats_buffer);
+    m_pass->setStorageBuffer(0, 17, *m_attribute_buffer);
+    m_pass->setStorageBuffer(0, 18, *m_materials_buffer);
     m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(), m_compressed_segmentation_volume->getLodCountPerBrick());
     // reset all camera hashes and frame counters
     m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
@@ -405,6 +473,14 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
         texture->ensureResources();
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
+    }
+
+    // write all transfer function samplers once
+    for(int m = 0; m < m_materials.size(); m++) {
+        if(m >= m_materialTransferFunctions.size() || !m_materialTransferFunctions[m])
+            updateSegmentedVolumeMaterial(m);
+        else
+            m_pass->setImageSamplerArray("s_transferFunctions", m, m_materialTransferFunctions[m]->texture(), vk::ImageLayout::eReadOnlyOptimal, false);
     }
 
     m_gui_resolution_text = "Render resolution: " + std::to_string(m_resolution.width) + "x" + std::to_string(m_resolution.height);
@@ -467,8 +543,11 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<glm::uvec2>("g_label_minmax", label_minmax);
         uint32_t empty_label = static_cast<uint32_t>(m_empty_label);
         m_urender_info->setUniform<uint32_t>("g_empty_label", empty_label);
-        m_urender_info->setUniform<float>("g_transferFunction_limits_min", 0);
-        m_urender_info->setUniform<float>("g_transferFunction_limits_max", 1000);
+        int max_active_material = -1;
+        for(int m = 0; m < m_materials.size(); m++)
+            if (m_materials[m].isActive())
+                max_active_material = m;
+        m_urender_info->setUniform<int32_t>("g_max_active_material", max_active_material);
         m_urender_info->setUniform<int32_t>("g_shadow_ray_enable", m_shadow_ray_enabled ? 1 : 0);
         m_urender_info->setUniform<float>("g_shadow_ao_ray_distr", m_shadow_ao_ray_distr);
         m_urender_info->setUniform<int32_t>("g_tonemap_enable", m_tonemap_enabled ? 1 : 0);
@@ -600,6 +679,10 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_usegmented_volume_info->setUniform<uint32_t>("g_free_stack_capacity", m_free_stack_capacity);
         m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
     }
+
+    // transfer functions and materials
+    {
+    }
 }
 
 void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
@@ -652,6 +735,9 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             },
             "Sub-Block");
 #endif
+    if(m_csgv_db) {
+        g->addTFSegmentedVolume(&m_materials, m_csgv_db->getAttributeNames(), m_csgv_db->getAttributeMinMax(), [this](int m) { updateSegmentedVolumeMaterial(m); }, "Materials");
+    }
     g->addInt(&m_empty_label, "Empty Label");
     g->addInt(&m_label_minmax.x, "Label ID Min. 2^", 0, 32, 1);
     g->addInt(&m_label_minmax.y, "Label ID Max. 2^", 0, 32, 1);
@@ -756,6 +842,102 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                              << static_cast<float>(bu.first) / 1073741824.f << "/"
                              << static_cast<float>(total) / 1073741824.f << " GB (used/avail/total)";
         m_gui_device_mem_text = ss.str();
+    }
+
+    void CompressedSegmentationVolumeRenderer::updateSegmentedVolumeMaterial(int m) {
+        constexpr int TF_WIDTH = 256;
+        if(m_mostRecentFrame.has_value())
+            getCtx()->sync->hostWaitOnDevice(m_mostRecentFrame->renderingComplete);
+        if (m_materialTransferFunctions.size() < m_materials.size())
+            m_materialTransferFunctions.resize(m_materials.size(), nullptr);
+        m_materialTransferFunctions[m] = m_materials[m].tf->rasterize(getCtx(), TF_WIDTH);
+        auto [tf1dAwait, tf1dStagingBuf] = m_materialTransferFunctions[m]->upload();
+
+        getCtx()->sync->hostWaitOnDevice({tf1dAwait});
+        m_pass->setImageSamplerArray("s_transferFunctions", m, m_materialTransferFunctions[m]->texture(), vk::ImageLayout::eReadOnlyOptimal, false);
+
+        // reset accumulation
+        m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+        // mark material dirty
+        m_gpu_material_changed[m] = true;
+    }
+
+    vvv::AwaitableList CompressedSegmentationVolumeRenderer::updateAttributeBuffers() {
+        // ToDo: this whole thing could be cleaned up. Encapsulate attribute / material / data buffers in another struct or class at least. And see the notes regarding the attribute upload below.
+        if(!m_csgv_db)
+            throw std::runtime_error("Missing csgv database at attribute buffer creation.");
+
+        // check which attributes should be present in GPU memory
+        std::vector<bool> attributeNeeded(m_attribute_start_position.size(), false);
+        for(int m = 0; m < m_materials.size(); m++) {
+            if(m_materials[m].discrAttribute > 0)
+                attributeNeeded[m_materials[m].discrAttribute] = true;
+            if(m_materials[m].tfAttribute > 0)
+                attributeNeeded[m_materials[m].tfAttribute] = true;
+        }
+
+        // check at which positions in the attribute buffer an element starts
+        bool nothingToDo = true;
+        int numberOfSlots = m_max_attribute_buffer_size / sizeof(float) / m_csgv_db->getLabelCount();
+        int requiredSlots = 0;
+        std::vector<int> possiblePositions(numberOfSlots, -1);
+        for(int a = 0; a < m_csgv_db->getAttributeCount(); a++) {
+            if(attributeNeeded[a]) {
+                requiredSlots++;
+
+                if(m_attribute_start_position[a] >= 0) {
+                    assert(possiblePositions.at(m_attribute_start_position[a] / m_csgv_db->getLabelCount()) < 0 && "two attributes were assigned to the same position in the attribute buffer");
+                    possiblePositions.at(m_attribute_start_position[a] / m_csgv_db->getLabelCount()) = a;
+                }
+                else {
+                    nothingToDo = false;
+                }
+            }
+            else
+                m_attribute_start_position[a] = -1;
+
+        }
+
+        if(nothingToDo)
+            return {};
+
+        assert(m_attribute_start_position[0] == -1 && "first attribute (csgv_id) should not be uploaded to the GPU");
+
+        if(requiredSlots > numberOfSlots)
+            throw::std::runtime_error("attribute buffer is not large enough with " + std::to_string(numberOfSlots) + " out of " + std::to_string(requiredSlots) + " required slots");
+
+        // store all attributes back to back
+        // ToDo: upload attributes independently from another instead of as one large buffer?
+        // ToDo: only upload the number of requried Slots (would need to re-pack attributes each frame) instead of all slots?
+        std::vector<float> attributes(numberOfSlots * m_csgv_db->getLabelCount());
+
+        // put attributes in available slots
+        for(int a = 0; a < m_csgv_db->getAttributeCount(); a++) {
+            if(attributeNeeded[a] && m_attribute_start_position[a] < 0) {
+                for(int p = 0; p < possiblePositions.size(); p++) {
+                    if(possiblePositions[p] < 0) {
+                        m_attribute_start_position[a] = static_cast<int>(p * m_csgv_db->getLabelCount());
+                        possiblePositions[p] = a;
+                        break;
+                    }
+                }
+                if(m_attribute_start_position[a] < 0)
+                    Logger(WARN) << "could not find an attribute slot for attribute " << m_csgv_db->getAttributeNames()[a] << " in " << numberOfSlots << " slots";
+            }
+            // copy attribute to buffer
+            if(m_attribute_start_position[a] >= 0) {
+                m_csgv_db->getAttribute(a, &attributes[m_attribute_start_position[a]], attributes.size() - m_attribute_start_position[a]);
+            }
+        }
+
+        // reset all accumulation buffers
+        m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+
+        auto [attr_upload_finished, _attr_staging_buffer] = m_attribute_buffer->uploadWithStagingBuffer(attributes.data(), attributes.size() * sizeof(float), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        getCtx()->sync->hostWaitOnDevice({attr_upload_finished});
+        // can't just return the awaitable as _attr_staging_buffer can not be freed yet
+        // return {attr_upload_finished};
+        return {};
     }
 
 } // namespace vvv

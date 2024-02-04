@@ -1,3 +1,4 @@
+#include "cpp_glsl_include/csgv_constants.h"
 
 // ToDo: control which buffers/images are read- and/or writeonly with defines
 
@@ -19,15 +20,15 @@ layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uint g_request_buffer_capacity; // the size of the request buffer
     uint g_detail_buffer_dirty; // 0 if we can read from the detail buffer, 1 if the detail buffer is dirty
 };
-layout(std430, set = 0, binding = 1) buffer restrict readonly brick_starts
+layout(std430, binding = 1) buffer restrict readonly brick_starts
 {
     uint g_brick_starts[];  // start points of each brick in g_encoding. Ends with dummy entry one after g_encoding
 };
-layout(std430, set = 0, binding = 2) buffer restrict readonly encoding
+layout(std430, binding = 2) buffer restrict readonly encoding
 {
     uint g_encoding[];      // encoding of all bricks where each brick contains all its LODs. we use it to check palttes
 };
-layout(std430, set = 0, binding = 3) buffer brick_cache_infos
+layout(std430, binding = 3) buffer brick_cache_infos
 {
 // for each block 4 entries:
 // req_inv_lod: <  lod_count is "req. inv. LoD and is visible"
@@ -46,7 +47,7 @@ layout(std430, set = 0, binding = 3) buffer brick_cache_infos
 #define BRICK_INFO_CACHE_INDEX 2
 #define BRICK_INFO_REQ_SLOT 3
 
-layout(std430, set = 0, binding = 4) buffer restrict assign_info
+layout(std430, binding = 4) buffer restrict assign_info
 {
 // for (g_lod_count-1) LoDs, 3 entries:
 // - new_blocks_start:    start of region in cache for new elements (written by provision and read by assign)
@@ -61,14 +62,14 @@ layout(std430, set = 0, binding = 4) buffer restrict assign_info
 #define ASSIGN_REQUESTED_BLOCKS 2
 #define ASSIGN_ELEMS_PER_LOD 3      // how many elements per LoD are in the assign_info_ssbo
 
-layout(std430, set = 0, binding = 5) buffer restrict free_block_stacks
+layout(std430, binding = 5) buffer restrict free_block_stacks
 {
 // (g_lod_count-1) stacks storing up to g_free_stack_capacity elements, followed by lod_count stack_top counters in reverse
 // [g_free_stack_capacity elements for L1, ... g_free_stack_capacity elements for L(N-1), L1_top, ... L(N-1)_top]
     uint g_free_block_stacks[];
 };
 
-layout(std430, set = 0, binding = 6) buffer brick_cache
+layout(std430, binding = 6) buffer brick_cache
 {
 // contains g_cache_capacity base elements made up by 2x2x2=8 uints.
 // the g_brick_info[].CACHE_INDEX points to a base element from which on it is decoded into N
@@ -78,21 +79,21 @@ layout(std430, set = 0, binding = 6) buffer brick_cache
 };
 
 #ifdef SEPARATE_DETAIL
-layout(std430, set = 0, binding = 7) buffer restrict readonly detail_starts
+layout(std430, binding = 7) buffer restrict readonly detail_starts
 {
     uint g_detail_starts[];  // start points of each detail level in g_detail. Ends with dummy entry one after g_detail
 };
-layout(std430, set = 0, binding = 8) buffer restrict readonly detail
+layout(std430, binding = 8) buffer restrict readonly detail
 {
     uint g_detail[];      // encoding of all bricks where each element contains only the finest LoD. we use it to check palettes
 };
-layout(std430, set = 0, binding = 9) buffer restrict detail_requests
+layout(std430, binding = 9) buffer restrict detail_requests
 {
     uint g_detail_requests[];  // contains 1D brick IDs for which the detail is requested from the CPU
 };
 #endif
 
-layout (std140, set = 0, binding = 10) uniform render_info {
+layout (std140, binding = 10) uniform render_info {
     mat4 g_model_to_world_space;
     mat4 g_world_to_model_space;
     mat3 g_world_to_model_space_dir;
@@ -108,9 +109,8 @@ layout (std140, set = 0, binding = 10) uniform render_info {
     vec4 g_background_color_a;
     vec4 g_background_color_b;
     uvec2 g_label_minmax;
+    int g_max_active_material;
     uint g_empty_label;
-    float g_transferFunction_limits_min;
-    float g_transferFunction_limits_max;
     float g_voxels_per_pixel_per_dist;
     float g_lod_bias;
     int g_tonemap_enable;
@@ -137,15 +137,15 @@ layout (std140, set = 0, binding = 10) uniform render_info {
     bool g_debug_step_count;
     uint g_swapchain_index;     // index of this frame in the multiframe swapchain buffer lists
 };
-//layout (set = 0, binding = 11, rgba8) uniform restrict image2D outColor;
+//layout (binding = 11, rgba8) uniform restrict image2D outColor;
 #define BACKGROUND_DEPTH 3.402823466e+38
-//layout (set = 0, binding = 12, rgba32f) uniform restrict image2D outDepth;
-layout (set = 0, binding = 13, rgba32f) uniform restrict readonly image2D feedbackIn;
-layout (set = 0, binding = 14, rgba32f) uniform restrict image2D feedbackOut;
-layout (set = 0, binding = 15, rgba8) uniform restrict writeonly image2D inpaintedOutColor;
+//layout (binding = 12, rgba32f) uniform restrict image2D outDepth;
+layout (binding = 13, rgba32f) uniform restrict readonly image2D feedbackIn;
+layout (binding = 14, rgba32f) uniform restrict image2D feedbackOut;
+layout (binding = 15, rgba8) uniform restrict writeonly image2D inpaintedOutColor;
 
 
-layout(std430, set = 0, binding = 16) buffer restrict writeonly gpu_stats
+layout(std430, binding = 16) buffer restrict writeonly gpu_stats
 {
     uint gpu_blocks_decoded[6];
     uint gpu_blocks_in_cache[6];
@@ -154,3 +154,14 @@ layout(std430, set = 0, binding = 16) buffer restrict writeonly gpu_stats
     uint gpu_bbox_hits;
 };
 
+layout(std430, binding = 17) buffer restrict readonly attributes
+{
+    float g_attributes[];      // multi-variate attributes, back to back in memory with [labelCount] elements per attribute
+};
+
+layout(std430, binding = 18) buffer restrict readonly materials
+{
+    GPUSegmentedVolumeMaterial g_materials[];
+};
+
+layout(binding = 19) uniform sampler1D s_transferFunctions[SEGMENTED_VOLUME_MATERIAL_COUNT];

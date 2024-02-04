@@ -14,7 +14,7 @@
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "vvv/volren/Volume.hpp"
-#include "volcanite/compression/CSGVMetaData.hpp"
+#include "volcanite/compression/CSGVDatabase.hpp"
 
 using namespace vvv;
 
@@ -85,29 +85,84 @@ int volcanite(int argc, char *argv[]) {
     // force_recompute logic in the handler for that reason? Or should we create two handlers for chunked / non-chunked?
 
     std::shared_ptr<vvv::CompressedSegmentationVolume> compressedSegmentationVolume;
+    std::shared_ptr<vvv::CSGVDatabase> csgvDatabase = std::make_shared<vvv::CSGVDatabase>();;
     // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
     if(args.performCompression()) {
         glm::uvec3 max_chunk_id = glm::uvec3(args.chunk_files[0], args.chunk_files[1], args.chunk_files[2]);
         if(!args.verbose)
             Logger(INFO) << "compressing segmentation volume " << args.input_file << (args.chunked ? " with max. chunks " + str(max_chunk_id) : "");
 
-//        CSGVMetaData msgv;
-//        msgv.importOrProcessVolume(args.input_file, args.chunked, max_chunk_id);
+        std::string complete_csgv_path;
+        bool use_temporary_output_file = args.compress_export_file.empty();
+        if(use_temporary_output_file) {
+            // construct a temporary .csgv output path if no output path was specified
+            // ToDo: try to use the location of the input file for temp csgv output files?
+            create_directory(std::filesystem::temp_directory_path() / "vvv");
+            //complete_csgv_path = (std::filesystem::temp_directory_path() / "vvv" / "tmp.csgv").string();
+            complete_csgv_path = (std::filesystem::temp_directory_path() / "vvv" / "tmp.csgv").string();
+            if (std::filesystem::exists(complete_csgv_path))
+                std::filesystem::remove(complete_csgv_path);
+        }
+        else {
+            complete_csgv_path = args.compress_export_file;
+        }
 
+        if(!args.label_remapping && !args.attribute_database.empty()) {
+            Logger(ERROR) << "Attribute database can not be used without label remapping. Aborting.";
+            return RET_INVALID_ARG;
+        }
+
+        // we open a precomputed csgv database for this volume if it exists or create it otherwise
+        std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> label_remapping = nullptr;
+        if(args.label_remapping) {
+            std::string database_path = complete_csgv_path.substr(0, complete_csgv_path.length() - 5) + "_csgv.db3";
+            MiniTimer t;
+            Logger(INFO) << "Initializing attribute database " << database_path;
+            csgvDatabase->importOrProcessChunkedVolume(args.input_file, database_path,
+                                                       args.attribute_database, args.attribute_table,
+                                                       args.attribute_label,
+                                                       args.chunked, max_chunk_id);
+            // obtain the label re-mapping from the database
+            label_remapping = csgvDatabase->getLabelRemapping();
+            if (args.verbose)
+                Logger(INFO) << "  finished in " << t.elapsed() << " seconds";
+        }
+
+        CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),
+                                                        .rANS_mode = args.rANS_mode,
+                                                        .label_remapping = label_remapping,
+                                                        .cpu_threads = args.threads,
+                                                        .use_detail_separation = args.stream_lod,
+                                                        .force_recompute = !args.chunked,
+                                                        .chunked_input_data = args.chunked,
+                                                        .max_file_index = max_chunk_id,
+                                                        .freq_subsampling = args.freq_subsampling,
+                                                        .verbose = args.verbose};
         compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
-                                                                                  args.compress_export_file,
-                                                                                  args.brick_size, args.rANS_mode,
-                                                                                  args.threads,
-                                                                                  args.stream_lod, !args.chunked,
-                                                                                  args.chunked, max_chunk_id,
-                                                                                  args.freq_subsampling, args.verbose);
-        if(args.verbose)
-            Logger(INFO) << compressedSegmentationVolume->decodingInfoString() << "\n\n";
+                                                                                             complete_csgv_path, cfg);
+
+        if(use_temporary_output_file) {
+            if (std::filesystem::exists(complete_csgv_path))
+                std::filesystem::remove(complete_csgv_path);
+        }
     }
-    // otherwise, we load a previously decompressed volume
+    // otherwise, we load a previously compressed volume
     else {
         compressedSegmentationVolume = std::make_shared<CompressedSegmentationVolume>();
         compressedSegmentationVolume->importFromFile(args.input_file, args.verbose);
+
+        // try to load a precomputed database
+        std::string database_path = args.input_file.substr(0, args.input_file.length() - 5) + "_csgv.db3";
+        if(std::filesystem::exists(database_path)) {
+            MiniTimer t;
+            csgvDatabase->importFromSqlite(database_path);
+            if (args.verbose)
+                Logger(INFO) << "Imported attribute database " << database_path << " in " << t.elapsed() << " seconds";
+        }
+        else {
+            csgvDatabase->createDummy(&(*compressedSegmentationVolume));
+            Logger(INFO) << "No attribute database " << database_path << " found. Using dummy database.";
+        }
     }
 
     if(args.performDecompression()) {
@@ -128,7 +183,7 @@ int volcanite(int argc, char *argv[]) {
         Logger(INFO) << "initializing Volcanite renderer";
 
         const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
-        renderer->setCompressedSegmentationVolume(compressedSegmentationVolume);
+        renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
 
         // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)
         if (!args.screenshot_output_file.empty()) {

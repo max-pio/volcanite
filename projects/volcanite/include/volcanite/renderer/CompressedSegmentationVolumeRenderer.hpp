@@ -13,6 +13,7 @@
 
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/renderer/PassCompSegVolRender.hpp"
+#include "volcanite/compression/CSGVDatabase.hpp"
 
 namespace vvv {
 
@@ -21,7 +22,21 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 public:
     CompressedSegmentationVolumeRenderer(bool release_version = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false),
                                                                          m_camHash(0ul), m_resolution(1920,1080), m_framesSinceCameraMove(0), m_frame(0u),
-                                                                         m_release_version(release_version) {}
+                                                                         m_release_version(release_version) {
+        // initialize the shading materials with something reasonable
+        for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
+            auto &mat = m_materials[m];
+            mat.discrAttribute = (m == 0) ? SegmentedVolumeMaterial::DISCR_ANY : SegmentedVolumeMaterial::DISCR_NONE;
+            mat.discrInterval = glm::vec2(0.f, 1.f);
+            mat.tfMinMax = glm::vec2(0.f, 1.f);
+            // we use opaque transfer functions
+            mat.tf->m_controlPointsOpacity.resize(4);
+            mat.tf->m_controlPointsOpacity[0] = 0.f;
+            mat.tf->m_controlPointsOpacity[1] = 1.f;
+            mat.tf->m_controlPointsOpacity[2] = 1.f;
+            mat.tf->m_controlPointsOpacity[3] = 1.f;
+        }
+    }
 
     ~CompressedSegmentationVolumeRenderer() { resetGPU(); m_compressed_segmentation_volume.reset(); }
 
@@ -92,7 +107,13 @@ public:
 
     void initGui(vvv::GuiInterface * gui) override;
 
-    void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> csgv) {
+    void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> csgv, std::shared_ptr<CSGVDatabase> db) {
+        if(!csgv)
+            throw std::runtime_error("CompressedSegmentationVolume must not be null");
+        if(!db)
+            throw std::runtime_error("CompressedSegmentationVolume database must not be null");
+
+
         if(csgv->getBrickCount().x < csgv->getLodCountPerBrick()) {
             Logger(WARN) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
                          ") in one dimension than there are brick level-of-details (" << csgv->getLodCountPerBrick() <<
@@ -100,30 +121,42 @@ public:
         }
         m_compressed_segmentation_volume = std::move(csgv);
         m_data_changed = true;
+
+        // when a database is provided, we use it for attribute visualization
+        m_csgv_db = std::move(db);
+        m_attribute_start_position.resize(m_csgv_db->getAttributeCount(), -1);
     }
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
 private:
-    // (gui) parameters
+    // (gui) parameters:
+    // transfer function
+    glm::ivec2 m_label_minmax = glm::ivec2(0, 32);
+    int m_empty_label = 0;
+    int m_selected_attribute_id = 0;
+    static constexpr uint32_t SEGMENTED_VOLUME_MATERIAL_COUNT = 8;
+    std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
+    // shading and post processing
     glm::vec4 m_background_color_a = glm::vec4(0.9f, 0.9f, 0.95f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
-    glm::ivec2 m_label_minmax = glm::ivec2(0, 32);
+    int m_subsampling = 2;
     bool m_tonemap_enabled = false;
     bool m_shadow_ray_enabled = true;
     float m_shadow_ao_ray_distr = 0.f;
     glm::vec2 m_ambient_occlusion_dist_strength = glm::vec2(15.f, 0.5f);
     glm::vec3 m_light_direction = glm::vec3(-1.f, 1.f, 0.1f);
     float m_light_intensity = 1.f;
+    // voxel traversal
     float m_step_size = 0.002f;
     int m_max_steps = 2048;
-    int m_subsampling = 2;
     glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
     bool m_subblock_enabled = false;
     glm::ivec3 m_subblock_size = glm::ivec3(128, 128, 128);
     glm::ivec3 m_subblock_start = glm::ivec3(0, 0, 0);
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
+    // debugging and dev options
     float m_lod_bias = 0.f;
     bool m_dda_traversal = true;
     bool m_show_normals = false;
@@ -136,14 +169,14 @@ private:
     bool m_clear_accum_every_frame = false;
     int m_accum_frames = 0;
     int m_max_decoding_lod = 6;
-    int m_empty_label = 0;
+    // utility
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text;
     std::optional<std::string> m_download_frame_to_image_file = {};
 
-
     void updateDeviceMemoryUsage();
-
+    void updateSegmentedVolumeMaterial(int m);
+    vvv::AwaitableList updateAttributeBuffers();
     void updateUniformDescriptorset();
 
     std::unique_ptr<PassCompSegVolRender> m_pass = nullptr;
@@ -153,10 +186,19 @@ private:
     std::shared_ptr<vvv::MultiBufferedResource<std::shared_ptr<Texture>>> m_inpaintedOutColor = nullptr; // this is the output texture and thus the only resource that we have to duplicate for each swapchain image
     std::shared_ptr<UniformReflected> m_urender_info = nullptr;
     std::shared_ptr<UniformReflected> m_usegmented_volume_info = nullptr;
+    
+    std::shared_ptr<CompressedSegmentationVolume> m_compressed_segmentation_volume = nullptr;
+    std::shared_ptr<CSGVDatabase> m_csgv_db = nullptr;
+    std::vector<bool> m_gpu_material_changed = std::vector<bool>(SEGMENTED_VOLUME_MATERIAL_COUNT, true);
+    std::vector<GPUSegmentedVolumeMaterial> m_gpu_materials{SEGMENTED_VOLUME_MATERIAL_COUNT};
 
-    std::shared_ptr<CompressedSegmentationVolume> m_compressed_segmentation_volume;
-    bool m_data_changed;
+    std::vector<std::shared_ptr<TransferFunction1D>> m_materialTransferFunctions{SEGMENTED_VOLUME_MATERIAL_COUNT, nullptr};
+    bool m_data_changed = false;
     std::shared_ptr<Buffer> m_encoding_buffer = nullptr;
+    const size_t m_max_attribute_buffer_size = ((64ul << 10) << 10);   // MB to store different floating point attributes back to back
+    std::vector<int> m_attribute_start_position = {-1};           // the start index in the attribute_buffer for each attribute
+    std::shared_ptr<Buffer> m_attribute_buffer = nullptr;       // stores attributes back to back
+    std::shared_ptr<Buffer> m_materials_buffer = nullptr;       // stores the material information
     std::shared_ptr<Buffer> m_brick_starts_buffer = nullptr;
     const size_t m_cache_capacity = 96000000ul;    // this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x sizeof(uint)=32 bytes large, so a capacity of 32000000 equals 1024MB
     const size_t m_free_stack_capacity = 262144ul;  // this many elements (one uint=4byte each) fit into the free stack of EACH LoD > 0. We need max. volume_size/brick_size/lod_width³ elements. a capacity of 262144 equals 1MB * (lod_count-1)

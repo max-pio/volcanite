@@ -69,14 +69,6 @@ uint get_inv_lod(ivec3 voxel) {
     return g_lod_count - 1u - clamp(uint(g_lod_bias + log2(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
 }
 
-bool isEmptySpace(ivec3 voxel) {
-    uvec3 brick = uvec3(voxel / g_brick_size);
-    uint brick_info_pos = brick_to_1D(brick, g_brick_count) * 4u;
-
-    // if the brick contains nothing visible, it is empty space
-    return g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > g_lod_count;  // marked "invisible" by request shader
-}
-
 /// returns true if the block is already decompressed, false otherwise
 bool get_volume_label(ivec3 voxel, out uint label) {
     assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label out of bounds!");
@@ -126,35 +118,36 @@ bool get_volume_label(ivec3 voxel, out uint label) {
     }
 }
 
-vec4 get_color(uint label) {
-    // ToDo: remove the hardcoded transfer functions
-    float v = float((4000u + 17u * label) % 4096u) / 4096.f;
-    // Cells
-    if(g_vol_dim.x == 1000u) {
-        //return vec4(colormap_inferno(v), 1.f);
-        if (label < 10)
-            return vec4(0.6f, 0.1f, 0.2f, 1.f);
-        else
-            return vec4(colormap_bluered(v), 1.f);
-    }
 
-    // Fiber
-    else if(g_vol_dim.x == 1579u)
-        return vec4(colormap_viridis(v).rgb, 1.f);
+bool isEmptySpace(ivec3 voxel) {
+    uvec3 brick = uvec3(voxel / g_brick_size);
+    uint brick_info_pos = brick_to_1D(brick, g_brick_count) * 4u;
 
-    // Cortex
-    else
-        return vec4(colormap_bluered(v), 1.f);
+    // if the brick contains nothing visible, it is empty space
+    return g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > g_lod_count;  // marked "invisible" by request shader
 }
 
-/// background is a tilted interpolation between two colors
-vec4 get_background_color(vec2 fragCoord) {
-    float bgWeight = (fragCoord.x*2.f + (1.f-fragCoord.y)) / 3.f;
-    bgWeight *= bgWeight;
-    vec4 bgColor = g_background_color_a * (1.f - bgWeight) + g_background_color_b * bgWeight;
-    bgColor.rgb *= bgColor.a;
-    return bgColor;
-}
+//vec4 get_color(uint label) {
+//    return texture(s_transferFunctions[0], (g_attributes[label] - g_materials[0].tfInterval.x) / (g_materials[0].tfInterval.y - g_materials[0].tfInterval.x));
+//    // ToDo: remove the hardcoded transfer functions
+//    float v = float((4000u + 17u * label) % 4096u) / 4096.f;
+//    // Cells
+//    if(g_vol_dim.x == 1000u) {
+//        //return vec4(colormap_inferno(v), 1.f);
+//        if (label < 10)
+//            return vec4(0.6f, 0.1f, 0.2f, 1.f);
+//        else
+//            return vec4(colormap_bluered(v), 1.f);
+//    }
+//
+//    // Fiber
+//    else if(g_vol_dim.x == 1579u)
+//        return vec4(colormap_viridis(v).rgb, 1.f);
+//
+//    // Cortex
+//    else
+//        return vec4(colormap_bluered(v), 1.f);
+//}
 
 
 void writePixel(ivec2 pixel, vec4 color, float depth) {
