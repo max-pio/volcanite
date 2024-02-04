@@ -28,6 +28,7 @@ public:
             auto &mat = m_materials[m];
             mat.discrAttribute = (m == 0) ? SegmentedVolumeMaterial::DISCR_ANY : SegmentedVolumeMaterial::DISCR_NONE;
             mat.discrInterval = glm::vec2(0.f, 1.f);
+            mat.tfAttribute = 0u;
             mat.tfMinMax = glm::vec2(0.f, 1.f);
             // we use opaque transfer functions
             mat.tf->m_controlPointsOpacity.resize(4);
@@ -125,6 +126,10 @@ public:
         // when a database is provided, we use it for attribute visualization
         m_csgv_db = std::move(db);
         m_attribute_start_position.resize(m_csgv_db->getAttributeCount(), -1);
+        // update transfer function limits
+        for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
+            m_materials[m].tfMinMax = m_csgv_db->getAttributeMinMax().at(m_materials[m].tfAttribute);
+        }
     }
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
