@@ -15,6 +15,16 @@ public:
             updateVectorColormap(m);
             if(e->onChanged)
                 e->onChanged(m);
+
+            // safeguard attribute IDs
+            if(e->materials->at(m).discrAttribute >= static_cast<int>(e->attributeNames.size())) {
+                Logger(WARN) << "discriminator attribute index " << e->materials->at(m).discrAttribute << " of material " << m << " references a non existing attribute. Resetting.";
+                e->materials->at(m).discrAttribute = 0;
+            }
+            if(e->materials->at(m).tfAttribute >= static_cast<int>(e->attributeNames.size())) {
+                Logger(WARN) << "attribute index of material " << m << " references a non existing attribute. Resetting.";
+                e->materials->at(m).tfAttribute = 0;
+            }
         }
 
         // Disable (-2), Any (-1), attributes (0..) for the visibility test of the material

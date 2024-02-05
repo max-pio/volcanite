@@ -189,7 +189,8 @@ int compression_synth(int argc, char *argv[]) {
 #ifdef RUN_APP
     // run the interactive Application
     const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>();
-    renderer->setCompressedSegmentationVolume(csgvol);
+    const auto csgv_db = std::make_shared<CSGVDatabase>();
+    renderer->setCompressedSegmentationVolume(csgvol, csgv_db);
     auto app = Application::create(appName, renderer);
 
     // execute app
