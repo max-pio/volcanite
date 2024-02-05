@@ -807,6 +807,9 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         if(!selected_file.result().empty())
             file = selected_file.result();
 
+        if(!file.ends_with(".vcfg"))
+            file.append(".vcfg");
+
         std::ofstream out(file);
         if(out.is_open()) {
             if (!writeParameters(out, VOLCANITE_VERSION))
