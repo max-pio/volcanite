@@ -127,27 +127,6 @@ bool isEmptySpace(ivec3 voxel) {
     return g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > g_lod_count;  // marked "invisible" by request shader
 }
 
-//vec4 get_color(uint label) {
-//    return texture(s_transferFunctions[0], (g_attributes[label] - g_materials[0].tfInterval.x) / (g_materials[0].tfInterval.y - g_materials[0].tfInterval.x));
-//    // ToDo: remove the hardcoded transfer functions
-//    float v = float((4000u + 17u * label) % 4096u) / 4096.f;
-//    // Cells
-//    if(g_vol_dim.x == 1000u) {
-//        //return vec4(colormap_inferno(v), 1.f);
-//        if (label < 10)
-//            return vec4(0.6f, 0.1f, 0.2f, 1.f);
-//        else
-//            return vec4(colormap_bluered(v), 1.f);
-//    }
-//
-//    // Fiber
-//    else if(g_vol_dim.x == 1579u)
-//        return vec4(colormap_viridis(v).rgb, 1.f);
-//
-//    // Cortex
-//    else
-//        return vec4(colormap_bluered(v), 1.f);
-//}
 
 
 void writePixel(ivec2 pixel, vec4 color, float depth) {
@@ -195,6 +174,8 @@ struct RayMarchState {
     vec3 normal;
     ivec3 stp;
     vec3 delta;
+    vec3 normal_isect;  // normal of the intersection point
+    float specular_diffuse;
 
     // ray marching
     int step;           // how many ray marching steps where done so far
@@ -227,6 +208,51 @@ void dda_init(inout RayMarchState state, const Ray ray) {
     state.stp = ivec3( ray.direction.x >= 0.0 ? 1.0 : -1.0, ray.direction.y >= 0.0 ? 1.0 : -1.0, ray.direction.z >= 0.0 ? 1.0 : -1.0);
     state.delta = abs(rdinv); // min(rdinv * state.stp, 1.0);//
     state.side_dist = abs((vec3(state.voxel) + max(state.stp, vec3(0.0)) - ray.origin) * state.delta);
+}
+
+float cook_torrance(RayMarchState state, Ray ray) {
+    //based on https://www.shadertoy.com/view/XsXXDB
+    const float roughness = 0.6f;
+    const float F0 = 0.8f;
+    //
+    vec3 view_direction = -ray.direction;
+    vec3 h = normalize(view_direction + g_light_direction);
+    float NdotL = clamp(dot(state.normal, g_light_direction), 0., 1.);
+    float NdotH = clamp(dot(state.normal, h), 0., 1.);
+    float NdotV = clamp(dot(state.normal, view_direction), 0., 1.);
+    float VdotH = clamp(dot(h, view_direction), 0., 1.);
+    float rsq = roughness * roughness;
+
+    // Geometric Attenuation
+    float NH2   = 2. * NdotH / VdotH;
+    float geo_b = (NH2 * NdotV);
+    float geo_c = (NH2 * NdotL);
+    float geo   = min(1., min(geo_b, geo_c));
+
+    // Roughness
+    // Beckmann distribution function
+    float r1 = 1. / (4. * rsq * pow(NdotH, 4.));
+    float r2 = (NdotH * NdotH - 1.) / (rsq * NdotH * NdotH);
+    float rough = r1 * exp(r2);
+
+    // Fresnel
+    float fres = pow(1.0 - VdotH, 5.);
+    fres *= (1.0 - F0);
+    fres += F0;
+
+    float spec = (NdotV * NdotL==0.) ? 0. : (fres * geo * rough) / (NdotV * NdotL);
+
+    return spec;
+}
+
+void calculate_shading(inout RayMarchState state, const Ray ray) {
+    if (g_cook_torrance_shading) {
+        float spec = cook_torrance(state, ray);
+        float diffuse = max(dot(state.normal, g_light_direction), 1.f - g_ao_dist_strength.y);
+        state.specular_diffuse =  (dot(state.normal, g_light_direction) * (1 - g_ratio_spec_diff) * spec + g_ratio_spec_diff * diffuse);
+    } else if (g_lambert_shading) {
+        state.specular_diffuse = max(dot(state.normal, g_light_direction), 1.f - g_ao_dist_strength.y);
+    }
 }
 
 void main() {
@@ -400,6 +426,9 @@ void main() {
             state.out_color = vec4(integer2colorlabel(brick_id, false), 1.f);
             break;
 #endif
+            // intersection found so the state.normal is the normal at the intersection point
+            state.normal_isect = state.normal;
+            calculate_shading(state, ray);
 
             // this is the only point for which we want to store our t value in the depth buffer (ToDo: at best only if the hit was decoded to the requested LoD)
             state.out_depth = state.t;
@@ -408,8 +437,16 @@ void main() {
             }
 
             if (g_dda_traversal && dot(state.normal, g_light_direction) < 0) {
+                // for self shadowing single bricks.
+                // same code as for a shadow hit!
                 state.out_color.rgb *= 1.f - g_ao_dist_strength.y;
                 state.ray_type = RT_SHADOW_HIT;
+                break;
+            }
+
+            // this is the only point for which we want to store our t value in the depth buffer (ToDo: at best only if the hit was decoded to the requested LoD)
+            state.out_depth = state.t;
+            if(g_shadow_ray_enable == 0) {
                 break;
             }
 
@@ -434,7 +471,6 @@ void main() {
                 ray.direction = normalize(ray.direction);
 
                 dda_init(state, ray);
-//                dda_step(state, ray); // performs one dda_step to avoid self shadowing.
 
             } else {
                 ray.origin = state.pos;
@@ -450,7 +486,13 @@ void main() {
 
     // if no shadowing occurs, we multiply the color with the light intensity
     if(g_shadow_ray_enable == 0 || state.ray_type == RT_SHADOW_RAY || state.ray_type == RT_AO_RAY)
-        state.out_color.rgb *= g_light_intensity;
+        if (g_lambert_shading || g_cook_torrance_shading) {
+            state.out_color.rgb = g_factor_ambient * state.out_color.rgb + state.out_color.rgb *
+            ((state.specular_diffuse < 1.f - g_ao_dist_strength.y) ?  1.f - g_ao_dist_strength.y : state.specular_diffuse);
+            state.out_color.rgb *= g_light_intensity;
+        } else {
+            state.out_color.rgb *= g_light_intensity;
+        }
 
     // perform alpha blending with background
     state.out_color.rgb = get_background_color(fragCoord).rgb * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;

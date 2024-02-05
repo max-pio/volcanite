@@ -553,6 +553,10 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<glm::vec4>("g_bboxMin", glm::vec4(m_bboxMin, 1.f));
         m_urender_info->setUniform<glm::vec4>("g_bboxMax", glm::vec4(m_bboxMax, 1.f));
         m_urender_info->setUniform<uint32_t>("g_dda_traversal", m_dda_traversal ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_lambert_shading", m_lambert_shading ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_cook_torrance_shading", m_cook_torrance_shading ? 1 : 0);
+        m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
+        m_urender_info->setUniform<float>("g_ratio_spec_diff", m_ratio_spec_diff);
         m_urender_info->setUniform<uint32_t>("g_blue_noise", m_blue_noise ? 1 : 0);
         m_urender_info->setUniform<float>("g_opacityThreshold",
                                           0.5); // TODO: we have this low opacity treshold to render opaque first hits
@@ -632,7 +636,11 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
                                 newCamHash);
         newCamHash = hashMemory(&m_step_size, sizeof(m_step_size), newCamHash);
         newCamHash = hashMemory(&m_dda_traversal, sizeof(m_dda_traversal), newCamHash);
+        newCamHash = hashMemory(&m_lambert_shading, sizeof(m_lambert_shading), newCamHash);
+        newCamHash = hashMemory(&m_cook_torrance_shading, sizeof(m_cook_torrance_shading), newCamHash);
         newCamHash = hashMemory(&m_show_normals, sizeof(m_show_normals), newCamHash);
+        newCamHash = hashMemory(&m_factor_ambient, sizeof(m_factor_ambient), newCamHash);
+        newCamHash = hashMemory(&m_ratio_spec_diff, sizeof(m_ratio_spec_diff), newCamHash);
         newCamHash = hashMemory(&m_tonemap_enabled, sizeof(m_tonemap_enabled), newCamHash);
         newCamHash = hashMemory(&m_shadow_ao_ray_distr, sizeof(m_shadow_ao_ray_distr), newCamHash);
         newCamHash = hashMemory(&m_max_decoding_lod, sizeof(m_max_decoding_lod), newCamHash);
@@ -727,6 +735,10 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
     dev->addBool(&m_blue_noise, "Blue Noise Shift");
     dev->addBool(&m_dda_traversal, "DDA Traversal");
+    dev->addBool(&m_cook_torrance_shading, "Cook-Torrance Shading");
+    dev->addBool(&m_lambert_shading, "Lambert Shading");
+    g->addFloat(&m_factor_ambient, "Factor ambient shading", 0.0f, 1.f, 0.05f, 2);
+    g->addFloat(&m_ratio_spec_diff, "Ratio spec<->diff shading", 0.0f, 1.0f, 0.05f, 2);
     dev->addBool(&m_tonemap_enabled, "Tone Mapping");
     g->addBool(&m_shadow_ray_enabled, "Shadow Ray Enabled");
     dev->addFloat(&m_shadow_ao_ray_distr, "Shadow / AO Ray Ratio", 0.f, 1.f, 0.1f, 1);

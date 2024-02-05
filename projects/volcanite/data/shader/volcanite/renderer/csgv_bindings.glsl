@@ -122,6 +122,10 @@ layout (std140, binding = 10) uniform render_info {
     int g_maxSteps;
     bool g_blue_noise;
     bool g_dda_traversal;
+    bool g_lambert_shading;
+    bool g_cook_torrance_shading;
+    float g_factor_ambient;
+    float g_ratio_spec_diff;
     vec4 g_bboxMin;
     vec4 g_bboxMax;
     float g_opacityThreshold;
