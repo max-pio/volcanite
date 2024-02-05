@@ -163,7 +163,7 @@ endif()
 # optional packages
 find_package(OpenMP)
 
-option(USE_TIFF_SUPPORT  "Includes the TIFF library for importing and exporting tiff files" ON)
+option(USE_TIFF_SUPPORT  "Includes the TIFF library for importing and exporting tiff files" OFF)
 if(USE_TIFF_SUPPORT)
     find_package(TIFF)
     if(NOT TIFF_FOUND)
