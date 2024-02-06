@@ -166,10 +166,18 @@ void GuiImgui::renderGui() {
                     auto e = GUI_CAST(be, glm::vec3);
                     auto value = gui_get(e);
                     float size = ImGui::GetFrameHeightWithSpacing() * 4 - ImGui::GetStyle().ItemSpacing.y * 2;
-                    bool changed = ImGui::gizmo3D("##gizmo1", value, size, imguiGizmo::modeDirPlane);
+                    bool changed = ImGui::gizmo3D(("##gizmo_" + std::to_string(e->id)).c_str(), value, size, imguiGizmo::modeDirPlane);
+                    ImGui::SameLine();
+                    quat q = {};
+                    vec3 l = -value;
+                    ImGui::gizmo3D(("##gizmo_vis_" + std::to_string(e->id)).c_str(), q, l, size);
+                    imguiGizmo::restoreDirectionColor();
+                    ImGui::SameLine();
+                    ImGui::Text("%.2f\n%.2f\n%.2f", value.x, value.y, value.z);
                     ImGui::SameLine(-0.0000001f); // should be 0 but it's buggy..
                     ImGui::LabelText(e->label.c_str(), "\n");
-                    gui_set(e, changed, value);
+                    gui_set(e, changed, glm::normalize(value));
+                    ImGui::Columns();   // colormap column layout
                     break;
                 }
                 case GuiVec4: {

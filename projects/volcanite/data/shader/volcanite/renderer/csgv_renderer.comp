@@ -169,6 +169,7 @@ void writePixel(ivec2 pixel, vec4 color, float depth) {
 
 // ToDo: we *may* want to introduce a random state here, init with g_frame and use last [returned rand vec3].z as next
 struct RayMarchState {
+    float rng;          // random number generator state
     //DDA traversal parameter
     vec3 side_dist;     // distance to the next cell in each dimension
     vec3 normal;
@@ -210,7 +211,7 @@ void dda_init(inout RayMarchState state, const Ray ray) {
     state.side_dist = abs((vec3(state.voxel) + max(state.stp, vec3(0.0)) - ray.origin) * state.delta);
 }
 
-float cook_torrance(RayMarchState state, Ray ray) {
+float cook_torrance(const RayMarchState state, const Ray ray) {
     //based on https://www.shadertoy.com/view/XsXXDB
     const float roughness = 0.6f;
     const float F0 = 0.8f;
@@ -248,10 +249,18 @@ float cook_torrance(RayMarchState state, Ray ray) {
 void calculate_shading(inout RayMarchState state, const Ray ray) {
     if (g_cook_torrance_shading) {
         float spec = cook_torrance(state, ray);
-        float diffuse = max(dot(state.normal, g_light_direction), 1.f - g_ao_dist_strength.y);
-        state.specular_diffuse =  (dot(state.normal, g_light_direction) * (1 - g_ratio_spec_diff) * spec + g_ratio_spec_diff * diffuse);
-    } else if (g_lambert_shading) {
-        state.specular_diffuse = max(dot(state.normal, g_light_direction), 1.f - g_ao_dist_strength.y);
+        state.specular_diffuse =  max(dot(state.normal, g_light_direction), 0.f) * ((1 - g_ratio_spec_diff) * spec + g_ratio_spec_diff); // multiply diffuse by 1 over PI?
+    }
+}
+
+vec3 brdf(const in RayMarchState state, const in vec3 dir_in, const in vec3 dir_out) {
+    if(g_cook_torrance_shading) {
+        const float specular = cook_torrance(state, dir_in, dir_out);
+        const float diffuse = 1.f;
+        return vec3((1.f - g_ratio_spec_diff) * specular + g_ratio_spec_diff * 1.f);
+    }
+    else {
+        return vec3(1.f);
     }
 }
 
@@ -264,6 +273,8 @@ void main() {
     if(isHelperLane(pixel, viewport_size))
         return;
 
+    // draw rectangles for each level-of-detail: if the volume fits into one of these rectangles it means that the
+    // corresponding LoD will be selected (depends on how many voxels of the finest LoD fit into one pixel)
     if(g_debug_lod) {
         for (uint lod = 0; lod < g_lod_count; lod++) {
             if (any(greaterThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) - 2u)))) {
@@ -295,49 +306,43 @@ void main() {
         return;
     }
     t_0 -= 0.0001f; // Epsilon
-    int max_steps = g_dda_traversal ? g_maxSteps : min(g_maxSteps, int((t_1 - t_0 + g_stepSize) / g_stepSize));
 
     // For debug views: only color every other pixel in the debug view to get some kind of "transparent" overlay effect
     // As we move this pixel around, the progressive accumulation averages this with the rendered colors.
     bool debug_view_visible = (pixel.x + pixel.y) % 3u != (g_frame % 3u); // < (viewport_size.x + viewport_size.y) / 2u);
 
-    // ToDo: DDA Traversal loop over empty bricks
+    // visualize model space coordinates
+    if(g_debug_model_space) {
+        vec3 pos = ray.origin + t_0 * ray.direction;
+        vec3 color = floor(pos) / g_physical_vol_dim;
+        vec3 borders = vec3(greaterThan(fract(pos), vec3(0.0f))) * vec3(lessThan(fract(pos - vec3(0.0001f)), vec3(0.2f)));
+        if(borders.x + borders.y + borders.z > 0.f)
+            color *= 1.f - 1.f / (t_0 / g_world_to_model_space_scaling * 64.f);
+        writePixel(pixel, vec4(color, 1.f), t_0);
+        return;
+    }
 
-    // ray marching loop
+    // the Ray Marching State contains all information required for ray marching
     RayMarchState state;
+    // ToDo: use a CPU randomly generated number instead of g_camera_still_frames to initialize the RNG?
+    state.rng = float(g_camera_still_frames);
     state.step = 0;
-    state.t = t_0 - (!g_dda_traversal && g_blue_noise ? fract(randomVec3(vec2(pixel), blueNoise32x32(pixel) * 1024.f + float(g_camera_still_frames) * 7.2348261f).x) * g_stepSize : 0.f);
-    state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
+    state.t = t_0;
+    state.pos = ray.origin + state.t * ray.direction;
     //state.voxel = ivec3(pos);
     state.ray_type = RT_VIEW_RAY;
     state.label = INVALID;
     state.out_color = vec4(0.f);
     state.out_depth = BACKGROUND_DEPTH;
 
-    // visualize model space coordinates
-    if(g_debug_model_space) {
-        vec3 color = floor(state.pos) / g_physical_vol_dim;
-        vec3 borders = vec3(greaterThan(fract(state.pos), vec3(0.0f))) * vec3(lessThan(fract(state.pos - vec3(0.0001f)), vec3(0.2f)));
-        if(borders.x + borders.y + borders.z > 0.f)
-            color *= 1.f - 1.f / (t_0 / g_world_to_model_space_scaling * 64.f);
-        writePixel(pixel, vec4(color, 1.f), state.t);
-        return;
-    }
-
-    state.voxel = ivec3(floor(state.pos + 0.)); // DDA traversal start voxel
+    // ray marching loop
+    state.voxel = ivec3(floor(state.pos)); // DDA traversal start voxel
     dda_init(state, ray);
-
-    for(; state.step < max_steps; state.step++) {
-        if (g_dda_traversal) {
-            dda_step(state, ray);
-        } else {
-            // ray marching
-            state.t += g_stepSize;
-            state.pos = ray.origin + state.t * ray.direction;
-            state.voxel = ivec3(floor(state.pos));  // floor is required so that -0.1f is not 0
-        }
+    for(; state.step < g_maxSteps; state.step++) {
+        dda_step(state, ray);
 
         // out of bounds and empty space check
+        // ToDo: better empty space skipping - skip the non-visible brick in ONE big dda step
         if(isEmptySpace(state.voxel)
             || any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
             || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
@@ -347,9 +352,9 @@ void main() {
         // sampling (read value at pos from previously decoded volume segments in brick cache) or return the corasest
         // LOD as a placeholder if not yet decoded, in which case the function will return false.
         if (!get_volume_label(state.voxel, state.label)) {
-            // return a negative depth to indicate that this sample should not be counted (= overwritten in next frame)
-            state.out_color = isLabelVisible(state.label) ? get_color(state.label) : get_background_color(fragCoord);
-            state.out_depth = -BACKGROUND_DEPTH;
+            // return an invalid depth to indicate that this sample should not be counted (= overwritten in next frame)
+            state.out_color = isLabelVisible(state.label) ? get_color(state.label) : vec4(0.f);
+            state.out_depth = INVALID_DEPTH;
             break;
         }
 
@@ -357,7 +362,7 @@ void main() {
         if(state.label == INVALID){
             state.out_color = vec4(1.f, 0.f, 1.f, 1.f);
             state.out_depth = 0.f;
-            assert(false, "get_volume_label returned INVALID. Possible corrupt data in brick cache.");
+            assert(!isCenterWorkItem(), "get_volume_label returned INVALID. Possible corrupt data in brick cache.");
             break;
         }
 #endif
@@ -381,101 +386,75 @@ void main() {
                 break;
             }
         }
-
-        if (g_debug_normals) {
+        else if (g_debug_normals) {
             state.out_color = vec4((state.normal + vec3(1.f)) * vec3(0.5f), 1.f);
             break;
         }
 
-        // when a shadow / AO ray hits something, we end the traversal
+        // when a shadow ray hits something, we end the traversal
         if(state.ray_type != RT_VIEW_RAY) {
-            // ambient occlusion
-            if(state.ray_type == RT_AO_RAY) {
-                // half the AO rays will hit the wall below the surface, so we only count half of them
-                // note that this is still not "valid". we need normals for cos attenuation. at best: just path trace
-                if(randomVec3(pixel, 1111.f + float(g_frame + state.step * 234)).y > 0.5f) {
-                    float distance = state.t / g_ao_dist_strength.x;
-                    state.out_color.rgb *= clamp(1.f - g_ao_dist_strength.y / (distance * distance), 0.f, 1.f);
-                    state.ray_type = RT_AO_HIT;
-                }
-            }
             // light source shadow
-            else if(state.ray_type == RT_SHADOW_RAY) {
-                state.out_color.rgb *= 1.f - g_ao_dist_strength.y;
+            if(state.ray_type == RT_SHADOW_RAY) {
+                state.out_color.rgb *= g_factor_ambient;
                 state.ray_type = RT_SHADOW_HIT;
             }
-
             break;
         }
+        // when a view ray hits something, we transform this ray into a shadow ray
+        // ToDo: rework this into a path-tracing like loop
+        else {
+//            // visualize visible brick id
+//            uvec3 brick = uvec3(state.voxel) / g_brick_size;
+//            uint brick_id = brick.x + brick.y * g_brick_count.x + brick.z * (g_brick_count.x * g_brick_count.y);
+//            state.out_color = vec4(integer2colorlabel(brick_id, false), 1.f);
+//            break;
 
-        // classification (assign color to label, opacity is always 1 on hit)
-        state.out_color = get_color(state.label);
-
-        // debug: lod vis
-        uint lod = get_inv_lod(state.voxel);
-        if (debug_view_visible && g_debug_lod && lod != INVALID) {
-            state.out_color.rgb = (state.out_color.rgb + 3.f * colormap_viridis(float(lod)/float(g_lod_count - 1u))) / 4.f;
-        }
-
-        // transform this ray into a shadow or ambient occlusion ray
-        {
-#if 0
-            // visualize visible brick id
-            uvec3 brick = uvec3(state.voxel) / g_brick_size;
-            uint brick_id = brick.x + brick.y * g_brick_count.x + brick.z * (g_brick_count.x * g_brick_count.y);
-            state.out_color = vec4(integer2colorlabel(brick_id, false), 1.f);
-            break;
-#endif
+            // VIEW_RAY TO SURFACE HIT
+            // classification (assign color to label, opacity is always 1 on hit)
+            state.out_color = get_color(state.label);
+            // debug: visualize level-of-detail with viridis colormap
+            uint lod = get_inv_lod(state.voxel);
+            if (debug_view_visible && g_debug_lod && lod != INVALID) {
+                state.out_color.rgb = (state.out_color.rgb + 3.f * colormap_viridis(float(lod)/float(g_lod_count - 1u))) / 4.f;
+            }
             // intersection found so the state.normal is the normal at the intersection point
             state.normal_isect = state.normal;
-            calculate_shading(state, ray);
-
-            // this is the only point for which we want to store our t value in the depth buffer (ToDo: at best only if the hit was decoded to the requested LoD)
+            // this is the only point for which we want to store our t value in the depth buffer
+            // ToDo: at best only if the hit was decoded to the requested LoD
             state.out_depth = state.t;
+
+            // this becomes a shadow ray occlusion ray now
+            // ray.direction = g_light_direction;  // basically next event estimation lol
+            if(nextRNG(fragCoord, state.rng).x < g_shadow_ao_ray_distr) {
+                ray.direction = sampleCosineWeightedHemisphere(nextRNG(fragCoord, state.rng).xy, state.normal);
+                //state.out_color /= pdfCosineWeightedHemisphere(ray.direction, state.normal);
+            }
+            else
+                ray.direction = g_light_direction;
+            state.ray_type = RT_SHADOW_RAY;
+
+            // geometry term
+            state.out_color.rgb *= max(dot(state.normal, ray.direction), 0.f);
+            // brdf
+            state.out_color.rgb *= brdf(state, ray) + g_factor_ambient;
+
+
             if(g_shadow_ray_enable == 0) {
                 break;
             }
 
-            if (g_dda_traversal && dot(state.normal, g_light_direction) < 0) {
-                // for self shadowing single bricks.
+            // check for self shadowing of the current voxel
+            if (dot(state.normal, ray.direction) < 0) {
                 // same code as for a shadow hit!
-                state.out_color.rgb *= 1.f - g_ao_dist_strength.y;
+                state.out_color.rgb *= g_factor_ambient;
                 state.ray_type = RT_SHADOW_HIT;
                 break;
             }
 
-            // this is the only point for which we want to store our t value in the depth buffer (ToDo: at best only if the hit was decoded to the requested LoD)
-            state.out_depth = state.t;
-            if(g_shadow_ray_enable == 0) {
-                break;
-            }
-
-            // this becomes a shadow ray / ambient occlusion ray now
-            if (randomVec3(pixel, 57.f + 2.f * float(g_frame + state.step)).x < g_shadow_ao_ray_distr) {
-                // no AO rays in interactive mode
-                if(g_camera_still_frames == 0)
-                    break;
-                // sample a random direction on the unit sphere
-                // ToDo: once we use DDA, we get normals for free and can use valid half-sphere cos importance sampling
-                ray.direction = normalize(randomSpherePoint(randomVec3(pixel, 1.f + float(g_frame + state.step))));
-                state.ray_type = RT_AO_RAY;
-            }
-            else {
-                // to light source
-                ray.direction = g_light_direction;
-                state.ray_type = RT_SHADOW_RAY;
-            }
-
-            if (g_dda_traversal) {
-                ray.origin = state.pos;
-                ray.direction = normalize(ray.direction);
-
-                dda_init(state, ray);
-
-            } else {
-                ray.origin = state.pos;
-                state.t = g_stepSize/2.f;
-            }
+            // re-init DDA traversal for the shadow ray
+            ray.origin = state.pos;
+            ray.direction = normalize(ray.direction);
+            dda_init(state, ray);
         }
     }
 
@@ -485,15 +464,12 @@ void main() {
     }
 
     // if no shadowing occurs, we multiply the color with the light intensity
-    if(g_shadow_ray_enable == 0 || state.ray_type == RT_SHADOW_RAY || state.ray_type == RT_AO_RAY)
-        if (g_lambert_shading || g_cook_torrance_shading) {
-            state.out_color.rgb = g_factor_ambient * state.out_color.rgb + state.out_color.rgb *
-            ((state.specular_diffuse < 1.f - g_ao_dist_strength.y) ?  1.f - g_ao_dist_strength.y : state.specular_diffuse);
-            state.out_color.rgb *= g_light_intensity;
-        } else {
-            state.out_color.rgb *= g_light_intensity;
-        }
+    // could be interpreted as a shadow ray hitting an environment map
+    if(g_shadow_ray_enable == 0 || state.ray_type == RT_SHADOW_RAY) {
+        state.out_color.rgb *= g_light_intensity;
+    }
 
+    // ToDo: the background should be added in the csgv_upsample_resolve shader
     // perform alpha blending with background
     state.out_color.rgb = get_background_color(fragCoord).rgb * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
 

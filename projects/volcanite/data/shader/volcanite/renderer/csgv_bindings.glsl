@@ -114,15 +114,12 @@ layout (std140, binding = 10) uniform render_info {
     int g_tonemap_enable;
     int g_shadow_ray_enable;
     float g_shadow_ao_ray_distr;
-    vec2 g_ao_dist_strength;
     vec3 g_light_direction;
     float g_light_intensity;
     int g_subsampling;
     float g_stepSize;
     int g_maxSteps;
     bool g_blue_noise;
-    bool g_dda_traversal;
-    bool g_lambert_shading;
     bool g_cook_torrance_shading;
     float g_factor_ambient;
     float g_ratio_spec_diff;
@@ -141,6 +138,7 @@ layout (std140, binding = 10) uniform render_info {
 };
 //layout (binding = 11, rgba8) uniform restrict image2D outColor;
 #define BACKGROUND_DEPTH 3.402823466e+38
+#define INVALID_DEPTH -3.402823466e+38
 //layout (binding = 12, rgba32f) uniform restrict image2D outDepth;
 layout (binding = 13, rgba32f) uniform restrict readonly image2D feedbackIn;
 layout (binding = 14, rgba32f) uniform restrict image2D feedbackOut;

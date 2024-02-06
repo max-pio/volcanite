@@ -11,8 +11,10 @@
     #define assertf(X, S, P) if(!(X)) debugPrintfEXT(S, P)
 #endif
 
-#define WRITE_DEPTH(X, D) imageStore(outDepth, X, D * 8.f).r
-#define READ_DEPTH(X) imageLoad(outDepth, X).r / 8.f
+#ifndef INV_PI
+    #define INV_PI 0.3183098861837907f
+#endif
+
 
 // Indexing and vector utils -------------------------------------------------------------------------------------------
 uint brick_to_1D(uvec3 brick_idx, uvec3 brick_dim) {

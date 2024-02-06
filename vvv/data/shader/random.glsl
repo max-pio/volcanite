@@ -1,4 +1,10 @@
 
+#ifndef INV_PI
+    #define INV_PI 0.3183098861837907f
+#endif
+
+// NOISE ---------------------------------------------------------------------------------------------------------------
+
 #define USE_PACKED_BLUE_NOISE
 
 // tilable 32x32 blue noise from Christoph Peters (http://momentsingraphics.de/BlueNoise.html)
@@ -110,6 +116,8 @@ float blueNoise32x32(ivec2 xy) {
 #endif
 }
 
+// RANDOM NUMBERS ------------------------------------------------------------------------------------------------------
+
 // https://stackoverflow.com/a/52207531/13565664
 vec3 hash(uvec3 x) {
     const uint hash_k = 1103515245U;
@@ -120,12 +128,47 @@ vec3 hash(uvec3 x) {
 }
 
 // xy from thread ID, feedback one of the result components to the next random query as seed
-vec3 randomVec3(vec2 xy, float seed) {
+vec3 randomVec3(const in vec2 xy, const in float seed) {
     return hash(uvec3(xy, seed));
 }
 
-// returns a random point on the unit sphere
-vec3 randomSpherePoint(vec3 rand) {
+// xy from thread ID, overwrites seed with the .z compontent of the returned RNG value.
+vec3 nextRNG(const in vec2 xy, inout float seed) {
+    vec3 r = hash(uvec3(xy * 1471.f, seed));
+    seed = r.z * float(0xffffffffU);
+    return r;
+}
+
+
+// SAMPLING ------------------------------------------------------------------------------------------------------------
+
+mat3 fromAxisAngle(vec3 axis, float angle) {
+    axis = normalize(axis);
+    float s = sin(angle);
+    float c = cos(angle);
+    float oc = 1.0 - c;
+
+    return mat3(
+    oc * axis.x * axis.x + c, oc * axis.x * axis.y - axis.z * s, oc * axis.z * axis.x + axis.y * s,
+    oc * axis.x * axis.y + axis.z * s, oc * axis.y * axis.y + c, oc * axis.y * axis.z - axis.x * s,
+    oc * axis.z * axis.x - axis.y * s, oc * axis.y * axis.z + axis.x * s, oc * axis.z * axis.z + c);
+}
+
+vec3 alignToNormalZUP(in vec3 s, in vec3 normal) {
+    // edge case at the epipoles
+    const vec3 up = vec3(0.0f, 0.0f, 1.0f);
+    if (dot(up, normal) > 0.999f)
+        return s;
+    if (dot(up, normal) < -0.999f)
+        return -s;
+
+    float angle = acos(dot(up, normal));
+    vec3 axis = cross(up, normal);
+    return s * fromAxisAngle(axis, angle);
+}
+
+// DEPRECATED: returns a random point on the unit sphere
+vec3 randomSpherePoint(const in vec3 rand) {
     float ang1 = rand.x * 2.f * PI; // [0..2*PI)
     float u = rand.y * 2.f - 1.f; // [-1..1), cos and acos(2v-1) cancel each other out, so we arrive at [-1..1)
     float u2 = u * u;
@@ -134,4 +177,27 @@ vec3 randomSpherePoint(vec3 rand) {
     float y = sqrt1MinusU2 * sin(ang1);
     float z = u;
     return vec3(x, y, z);
+}
+
+vec3 uniformSampleSphere(const in vec2 u) {
+    float h = 1.0 - 2.0 * u.x;
+    float r = sqrt(1.0 - h * h);
+    return vec3(r * cos(2.0 * PI * u.y), h, r * sin(2.0 * PI * u.y));
+}
+
+vec3 uniformSampleHemisphereVoxel(const in vec2 u, const in vec3 normal) {
+    vec3 dir = uniformSampleSphere(u);
+    // assuming that the normal is axis-oriented, we only have to alter the sign of dir's components
+    // this is the case for surface normals of voxels
+    return dir * sign(dot(normal, dir));
+}
+
+vec3 sampleCosineWeightedHemisphere(const in vec2 u, in vec3 normal) {
+    float theta = acos(sqrt(1 - u.x));
+    float phi = 2 * PI * u.y;
+    return normalize(alignToNormalZUP(vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta)), normal));
+}
+
+float pdfCosineWeightedHemisphere( const in vec3 dir, const in vec3 normal) {
+    return dot(dir, normal) * INV_PI;
 }

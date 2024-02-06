@@ -139,7 +139,6 @@ private:
     // materials
     static constexpr uint32_t SEGMENTED_VOLUME_MATERIAL_COUNT = 8;
     std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
-    bool m_lambert_shading = false;
     float m_factor_ambient = 0.1f;
     float m_ratio_spec_diff = 0.8f;
     bool m_cook_torrance_shading = false;

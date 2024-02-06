@@ -243,6 +243,7 @@ private:
             }
         }
 
+        Logger(ERROR) << "unkown member <" + memberName + "> in uniform block" << m_binding->name;
         throw std::runtime_error("unknown member <" + memberName + ">");
     }
 

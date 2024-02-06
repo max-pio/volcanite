@@ -543,7 +543,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<int32_t>("g_shadow_ray_enable", m_shadow_ray_enabled ? 1 : 0);
         m_urender_info->setUniform<float>("g_shadow_ao_ray_distr", m_shadow_ao_ray_distr);
         m_urender_info->setUniform<int32_t>("g_tonemap_enable", m_tonemap_enabled ? 1 : 0);
-        m_urender_info->setUniform<glm::vec2>("g_ao_dist_strength", m_ambient_occlusion_dist_strength);
         m_urender_info->setUniform<glm::vec3>("g_light_direction", m_light_direction);
         m_urender_info->setUniform<float>("g_light_intensity", m_light_intensity);
         m_urender_info->setUniform<float>("g_stepSize", m_step_size * scalingFactor);
@@ -552,8 +551,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         // bbox is the volume dimension in voxels centered around the origin (if no bbox reduction is applied)
         m_urender_info->setUniform<glm::vec4>("g_bboxMin", glm::vec4(m_bboxMin, 1.f));
         m_urender_info->setUniform<glm::vec4>("g_bboxMax", glm::vec4(m_bboxMax, 1.f));
-        m_urender_info->setUniform<uint32_t>("g_dda_traversal", m_dda_traversal ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_lambert_shading", m_lambert_shading ? 1 : 0);
         m_urender_info->setUniform<uint32_t>("g_cook_torrance_shading", m_cook_torrance_shading ? 1 : 0);
         m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
         m_urender_info->setUniform<float>("g_ratio_spec_diff", m_ratio_spec_diff);
@@ -636,7 +633,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
                                 newCamHash);
         newCamHash = hashMemory(&m_step_size, sizeof(m_step_size), newCamHash);
         newCamHash = hashMemory(&m_dda_traversal, sizeof(m_dda_traversal), newCamHash);
-        newCamHash = hashMemory(&m_lambert_shading, sizeof(m_lambert_shading), newCamHash);
         newCamHash = hashMemory(&m_cook_torrance_shading, sizeof(m_cook_torrance_shading), newCamHash);
         newCamHash = hashMemory(&m_show_normals, sizeof(m_show_normals), newCamHash);
         newCamHash = hashMemory(&m_factor_ambient, sizeof(m_factor_ambient), newCamHash);
@@ -736,7 +732,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     dev->addBool(&m_blue_noise, "Blue Noise Shift");
     dev->addBool(&m_dda_traversal, "DDA Traversal");
     dev->addBool(&m_cook_torrance_shading, "Cook-Torrance Shading");
-    dev->addBool(&m_lambert_shading, "Lambert Shading");
     g->addFloat(&m_factor_ambient, "Factor ambient shading", 0.0f, 1.f, 0.05f, 2);
     g->addFloat(&m_ratio_spec_diff, "Ratio spec<->diff shading", 0.0f, 1.0f, 0.05f, 2);
     dev->addBool(&m_tonemap_enabled, "Tone Mapping");
@@ -748,9 +743,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g->addBool([this](bool b) { getCtx()->getWsi()->setWindowResizable(b); }, [this]() { return getCtx()->getWsi()->isWindowResizable(); }, "Resizable Window");
     g->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
     g->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
-    g->addSeparator();
-    dev->addFloat(&m_ambient_occlusion_dist_strength.x, "Ambient Occlusion Distance", 1.f, 32.f, 1.f);
-    dev->addFloat(&m_ambient_occlusion_dist_strength.y, "Ambient Occlusion Strength", 0.f, 1.f, 0.1f);
     dev->addSeparator();
     dev->addLabel("Debug");
     dev->addInt(&m_max_decoding_lod, "Max. Decoding LoD", 0, 6, 1);
