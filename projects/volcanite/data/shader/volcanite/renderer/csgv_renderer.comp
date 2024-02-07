@@ -130,7 +130,7 @@ bool isEmptySpace(ivec3 voxel) {
 
 
 void writePixel(ivec2 pixel, vec4 color, float depth) {
-    // fill all pixels of this subsampling block in the first frame
+    // if subsamplign is enabled, we only render one pixel per [g_subsampling]^2 block
     ivec2 subpixel;
     for(subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
         for (subpixel.x = 0; subpixel.x < g_subsampling; subpixel.x++) {
@@ -159,15 +159,7 @@ void writePixel(ivec2 pixel, vec4 color, float depth) {
     }
 }
 
-// all ray marching happens in the same loop to minimize thread divergence but
-// a ray can have one of multiple ray types that dictate its behavior:
-#define RT_VIEW_RAY 0       // intiial state: march until we hit a visible surface
-#define RT_SHADOW_RAY 1     // a shadowing ray send out directly in light direction
-#define RT_AO_RAY 2         // an ambient occlusion ray send out
-#define RT_SHADOW_HIT 3     // a shadow ray that hit something
-#define RT_AO_HIT 4         // an ambient occlusion ray that hit something
-
-// ToDo: we *may* want to introduce a random state here, init with g_frame and use last [returned rand vec3].z as next
+// all ray marching happens in the same loop to minimize thread divergence
 struct RayMarchState {
     float rng;          // random number generator state
     //DDA traversal parameter
@@ -175,8 +167,6 @@ struct RayMarchState {
     vec3 normal;
     ivec3 stp;
     vec3 delta;
-    vec3 normal_isect;  // normal of the intersection point
-    float specular_diffuse;
 
     // ray marching
     int step;           // how many ray marching steps where done so far
@@ -184,10 +174,13 @@ struct RayMarchState {
     float t;            // ray distance
     vec3 pos;           // the position of the ray marcher
     ivec3 voxel;        // the current voxel in which pos is
-    int ray_type;       // the current type of the ray (see above)
     uint label;         // the label at the hit point
-    vec4 out_color;     // color to be written to the color buffer
-    float out_depth;    // depth to be written to the depth buffer. negative depth indicates an invalid hit.
+    float out_depth;    // depth to be written to the depth buffer. negative depth indicates an invalid hit
+
+    // path tracing
+    vec4 out_color;     // (radiance) color to be written to the color buffer
+    vec3 throughput;   // accumulated throughput (albedo/pi * 2pi * geometry term * brdf)
+    int path_length;    // number of path segments (= bounces), initialized with 0 for the view ray
 };
 
 
@@ -211,17 +204,17 @@ void dda_init(inout RayMarchState state, const Ray ray) {
     state.side_dist = abs((vec3(state.voxel) + max(state.stp, vec3(0.0)) - ray.origin) * state.delta);
 }
 
-float cook_torrance(const RayMarchState state, const Ray ray) {
-    //based on https://www.shadertoy.com/view/XsXXDB
+float cook_torrance(const RayMarchState state, const vec3 dir_in, const vec3 dir_out) {
+    // based on https://www.shadertoy.com/view/XsXXDB
+    // ToDo: we have to be careful with licenses! Shadertoy code is owned by the shader authors if not stated otherwise
     const float roughness = 0.6f;
     const float F0 = 0.8f;
     //
-    vec3 view_direction = -ray.direction;
-    vec3 h = normalize(view_direction + g_light_direction);
-    float NdotL = clamp(dot(state.normal, g_light_direction), 0., 1.);
+    vec3 h = normalize(dir_in + dir_out);
+    float NdotL = clamp(dot(state.normal, dir_out), 0., 1.);
     float NdotH = clamp(dot(state.normal, h), 0., 1.);
-    float NdotV = clamp(dot(state.normal, view_direction), 0., 1.);
-    float VdotH = clamp(dot(h, view_direction), 0., 1.);
+    float NdotV = clamp(dot(state.normal, dir_in), 0., 1.);
+    float VdotH = clamp(dot(h, dir_in), 0., 1.);
     float rsq = roughness * roughness;
 
     // Geometric Attenuation
@@ -246,21 +239,16 @@ float cook_torrance(const RayMarchState state, const Ray ray) {
     return spec;
 }
 
-void calculate_shading(inout RayMarchState state, const Ray ray) {
-    if (g_cook_torrance_shading) {
-        float spec = cook_torrance(state, ray);
-        state.specular_diffuse =  max(dot(state.normal, g_light_direction), 0.f) * ((1 - g_ratio_spec_diff) * spec + g_ratio_spec_diff); // multiply diffuse by 1 over PI?
-    }
-}
-
 vec3 brdf(const in RayMarchState state, const in vec3 dir_in, const in vec3 dir_out) {
     if(g_cook_torrance_shading) {
+        // mix between Lambert and Cook Torrance specular
         const float specular = cook_torrance(state, dir_in, dir_out);
         const float diffuse = 1.f;
-        return vec3((1.f - g_ratio_spec_diff) * specular + g_ratio_spec_diff * 1.f);
+        return vec3((1.f - g_ratio_spec_diff) * specular + g_ratio_spec_diff * INV_PI);
     }
     else {
-        return vec3(1.f);
+        // constant Lambert
+        return vec3(INV_PI);
     }
 }
 
@@ -325,13 +313,14 @@ void main() {
     // the Ray Marching State contains all information required for ray marching
     RayMarchState state;
     // ToDo: use a CPU randomly generated number instead of g_camera_still_frames to initialize the RNG?
-    state.rng = float(g_camera_still_frames);
+    state.rng = float(g_frame << 16);
     state.step = 0;
     state.t = t_0;
     state.pos = ray.origin + state.t * ray.direction;
-    //state.voxel = ivec3(pos);
-    state.ray_type = RT_VIEW_RAY;
+    //state.voxel = ivec3(floor(state.pos))
     state.label = INVALID;
+    state.path_length = 0;
+    state.throughput = vec3(1.f);
     state.out_color = vec4(0.f);
     state.out_depth = BACKGROUND_DEPTH;
 
@@ -341,6 +330,11 @@ void main() {
     for(; state.step < g_maxSteps; state.step++) {
         dda_step(state, ray);
 
+//        if(&& any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz))) || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
+//            state.ray_type = RT_NO_HIT;
+//            break;
+//        }
+
         // out of bounds and empty space check
         // ToDo: better empty space skipping - skip the non-visible brick in ONE big dda step
         if(isEmptySpace(state.voxel)
@@ -349,7 +343,7 @@ void main() {
             continue;
         }
 
-        // sampling (read value at pos from previously decoded volume segments in brick cache) or return the corasest
+        // sampling (read value at pos from previously decoded volume segments in brick cache) or return the coarsest
         // LOD as a placeholder if not yet decoded, in which case the function will return false.
         if (!get_volume_label(state.voxel, state.label)) {
             // return an invalid depth to indicate that this sample should not be counted (= overwritten in next frame)
@@ -391,17 +385,14 @@ void main() {
             break;
         }
 
-        // when a shadow ray hits something, we end the traversal
-        if(state.ray_type != RT_VIEW_RAY) {
-            // light source shadow
-            if(state.ray_type == RT_SHADOW_RAY) {
-                state.out_color.rgb *= g_factor_ambient;
-                state.ray_type = RT_SHADOW_HIT;
-            }
+        // RAY TERMINATION
+        // so far we only allow one single bounce
+        // ToDo: russian roulette based on throughput
+        if(state.path_length > 0) {
+            state.throughput = vec3(0.f);
             break;
         }
-        // when a view ray hits something, we transform this ray into a shadow ray
-        // ToDo: rework this into a path-tracing like loop
+        // VIEW_RAY TO SURFACE HIT
         else {
 //            // visualize visible brick id
 //            uvec3 brick = uvec3(state.voxel) / g_brick_size;
@@ -409,34 +400,56 @@ void main() {
 //            state.out_color = vec4(integer2colorlabel(brick_id, false), 1.f);
 //            break;
 
-            // VIEW_RAY TO SURFACE HIT
-            // classification (assign color to label, opacity is always 1 on hit)
-            state.out_color = get_color(state.label);
+            // classification determines the surface color (= suface albedo)
+            vec4 surface_albedo_opacity = get_color(state.label);
             // debug: visualize level-of-detail with viridis colormap
-            uint lod = get_inv_lod(state.voxel);
-            if (debug_view_visible && g_debug_lod && lod != INVALID) {
-                state.out_color.rgb = (state.out_color.rgb + 3.f * colormap_viridis(float(lod)/float(g_lod_count - 1u))) / 4.f;
+            if (debug_view_visible && g_debug_lod) {
+                uint lod = get_inv_lod(state.voxel);
+                if(lod != INVALID) {
+                    surface_albedo_opacity.rgb = (state.out_color.rgb + 3.f * colormap_viridis(float(lod)/float(g_lod_count - 1u))) / 4.f;
+                }
             }
-            // intersection found so the state.normal is the normal at the intersection point
-            state.normal_isect = state.normal;
-            // this is the only point for which we want to store our t value in the depth buffer
-            // ToDo: at best only if the hit was decoded to the requested LoD
-            state.out_depth = state.t;
 
-            // this becomes a shadow ray occlusion ray now
-            // ray.direction = g_light_direction;  // basically next event estimation lol
+            // the first surface hit is the only point for which we want to store our t value in the depth buffer
+            if(state.path_length == 0)
+                state.out_depth = state.t;
+            // opacity is always 1 on hit
+            state.out_color.a = 1.f;
+
+            // add emission to accumulated radiance
+            state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_factor_ambient;
+            state.throughput *= 1.f - g_factor_ambient;
+
+            // early ray termination
+            if(max(state.throughput.x, max(state.throughput.y, state.throughput.z)) < 0.05f) {
+                state.throughput = vec3(0.f);
+                break;
+            }
+
+            // sample a new direction
+            vec3 prev_direction = ray.direction;   // store previous direction for BRDF
+            // g_shadow_ao_ray_distr controls proportion of rays towards light source (not exactly next event estimation)
             if(nextRNG(fragCoord, state.rng).x < g_shadow_ao_ray_distr) {
+                // sample the cosine weighted positive hemisphere
                 ray.direction = sampleCosineWeightedHemisphere(nextRNG(fragCoord, state.rng).xy, state.normal);
-                //state.out_color /= pdfCosineWeightedHemisphere(ray.direction, state.normal);
+                state.throughput /= pdfCosineWeightedHemisphere(ray.direction, state.normal);
             }
-            else
+            else {
+                // directional light
                 ray.direction = g_light_direction;
-            state.ray_type = RT_SHADOW_RAY;
+                state.throughput *= 4.f;
+            }
+            ray.direction = normalize(ray.direction);
+            state.path_length++;
 
+
+            // update throughput
+            // surface albedo and Monte Carlo factor 2*PI
+            state.throughput *= surface_albedo_opacity.rgb;
             // geometry term
-            state.out_color.rgb *= max(dot(state.normal, ray.direction), 0.f);
+            state.throughput *= max(dot(state.normal, ray.direction), 0.f);
             // brdf
-            state.out_color.rgb *= brdf(state, ray) + g_factor_ambient;
+            state.throughput *= brdf(state, -prev_direction, ray.direction);
 
 
             if(g_shadow_ray_enable == 0) {
@@ -446,14 +459,12 @@ void main() {
             // check for self shadowing of the current voxel
             if (dot(state.normal, ray.direction) < 0) {
                 // same code as for a shadow hit!
-                state.out_color.rgb *= g_factor_ambient;
-                state.ray_type = RT_SHADOW_HIT;
+                state.throughput = vec3(0.f);
                 break;
             }
 
             // re-init DDA traversal for the shadow ray
             ray.origin = state.pos;
-            ray.direction = normalize(ray.direction);
             dda_init(state, ray);
         }
     }
@@ -463,11 +474,7 @@ void main() {
         atomicAdd(gpu_bbox_hits, 1u);
     }
 
-    // if no shadowing occurs, we multiply the color with the light intensity
-    // could be interpreted as a shadow ray hitting an environment map
-    if(g_shadow_ray_enable == 0 || state.ray_type == RT_SHADOW_RAY) {
-        state.out_color.rgb *= g_light_intensity;
-    }
+    state.out_color.rgb += state.throughput * vec3(g_light_intensity);
 
     // ToDo: the background should be added in the csgv_upsample_resolve shader
     // perform alpha blending with background
