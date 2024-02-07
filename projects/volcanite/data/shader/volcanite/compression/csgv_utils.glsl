@@ -68,10 +68,22 @@ bool isLabelVisible(uint label) {
 
 vec4 get_color(uint label) {
     int m = getMaterial(label);
+    // strange bug (occurs on my old AMD RX480 card):
+    // if the texture(..) call accesses a sampler from the array based on the variable m, the same sampler is selected
+    // for all threads in a warp. This may be a problem of (non)-uniform control flow:
+    // see https://www.khronos.org/opengl/wiki/Sampler_(GLSL)#Non-uniform_flow_control
+    // or  https://stackoverflow.com/questions/53734640/will-any-of-the-following-texture-lookups-cause-undefined-behavior-non-uniform
+    //
+    // This should not be an issue with GLSL version >= 4!
+    // Anyways, here's a strange fix by "forcing" non-uniform control flow:
+    if(m == 0)
+        return vec4(textureLod(s_transferFunctions[0], map(getAttribute(label, g_materials[0].tfAttributeStart), g_materials[0].tfIntervalMin, g_materials[0].tfIntervalMax, 0.f, 1.f), 0.f).rgb, 1.f);
+
 #ifndef NDEBUG
+    assertf(m >= 0 && m <= g_max_active_material, "material %i assigned to label is invalid", m);
     assert(!any(isnan(vec4(g_materials[m].discrIntervalMin,  g_materials[m].discrIntervalMax, g_materials[m].tfIntervalMin, g_materials[m].tfIntervalMax))), "NaN in shader attribute limits");
 #endif
-    return vec4(texture(s_transferFunctions[m], map(getAttribute(label, g_materials[m].tfAttributeStart), g_materials[m].tfIntervalMin, g_materials[m].tfIntervalMax, 0.f, 1.f)).rgb, 1.f);
+    return vec4(textureLod(s_transferFunctions[m], map(getAttribute(label, g_materials[m].tfAttributeStart), g_materials[m].tfIntervalMin, g_materials[m].tfIntervalMax, 0.f, 1.f), 0.f).rgb, 1.f);
 }
 
 // Background color ----------------------------------------------------------------------------------------------------
