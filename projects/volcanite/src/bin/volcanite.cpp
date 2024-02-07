@@ -191,8 +191,9 @@ int volcanite(int argc, char *argv[]) {
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
             renderEngine->acquireResources();
             tryImportRenderConfig(args, renderer);
-            // let the rendering converge for some frames
-            auto texture = renderEngine->renderFrames(60);
+            // let the rendering converge for some frames (if specified in the rendering config, we use that number)
+            int accumulation_frames = renderer->getTargetAccumulationFrames();
+            auto texture = renderEngine->renderFrames(accumulation_frames > 0 ? accumulation_frames : 60);
             if(texture == nullptr || export_texture(texture.get(), args.screenshot_output_file)) {
                 Logger(ERROR) << "internal rendering error";
                 return RET_RENDER_ERROR;

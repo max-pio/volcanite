@@ -134,6 +134,8 @@ public:
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
+    int getTargetAccumulationFrames() { return m_accum_frames; }
+
 private:
     // (gui) parameters:
     // materials
@@ -172,7 +174,7 @@ private:
     bool m_show_step_count = false;
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
-    int m_accum_frames = 0;
+    int m_accum_frames = 64;
     int m_max_decoding_lod = 6;
     // utility
     std::string m_gui_resolution_text;
