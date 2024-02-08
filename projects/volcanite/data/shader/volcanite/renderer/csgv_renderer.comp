@@ -208,7 +208,7 @@ void dda_init(inout RayMarchState state, const Ray ray) {
 float cook_torrance(const RayMarchState state, const vec3 dir_in, const vec3 dir_out) {
     // based on https://www.shadertoy.com/view/XsXXDB
     // ToDo: we have to be careful with licenses! Shadertoy code is owned by the shader authors if not stated otherwise
-    const float roughness = 0.6f;
+    const float roughness = 0.4f;
     const float F0 = 0.8f;
     //
     vec3 h = normalize(dir_in + dir_out);

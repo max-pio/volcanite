@@ -163,6 +163,11 @@ int volcanite(int argc, char *argv[]) {
             csgvDatabase->createDummy(&(*compressedSegmentationVolume));
             Logger(INFO) << "No attribute database " << database_path << " found. Using dummy database.";
         }
+
+        // if a config file exists next to the .csgv file, we use it to initialize the renderer
+        std::string config_path = args.input_file.substr(0, args.input_file.length() - 5) + ".vcfg";
+        if(std::filesystem::exists(config_path))
+            args.rendering_config_file = config_path;
     }
 
     if(args.performDecompression()) {
