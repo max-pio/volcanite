@@ -11,8 +11,14 @@
     #define assertf(X, S, P) if(!(X)) debugPrintfEXT(S, P)
 #endif
 
+#ifndef PI
+    #define PI 3.14159265359f
+#endif
 #ifndef INV_PI
     #define INV_PI 0.3183098861837907f
+#endif
+#ifndef TWO_PI
+    #define TWO_PI 6.28318530718f
 #endif
 
 

@@ -551,7 +551,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         // bbox is the volume dimension in voxels centered around the origin (if no bbox reduction is applied)
         m_urender_info->setUniform<glm::vec4>("g_bboxMin", glm::vec4(m_bboxMin, 1.f));
         m_urender_info->setUniform<glm::vec4>("g_bboxMax", glm::vec4(m_bboxMax, 1.f));
-        m_urender_info->setUniform<uint32_t>("g_cook_torrance_shading", m_cook_torrance_shading ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_local_shading_enable", m_cook_torrance_shading ? 1 : 0);
         m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
         m_urender_info->setUniform<float>("g_ratio_spec_diff", m_ratio_spec_diff);
         m_urender_info->setUniform<uint32_t>("g_blue_noise", m_blue_noise ? 1 : 0);

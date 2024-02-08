@@ -187,8 +187,8 @@ vec3 uniformSampleSphere(const in vec2 u) {
 
 vec3 uniformSampleHemisphereVoxel(const in vec2 u, const in vec3 normal) {
     vec3 dir = uniformSampleSphere(u);
-    // assuming that the normal is axis-oriented, we only have to alter the sign of dir's components
-    // this is the case for surface normals of voxels
+    // Assuming that the normal is axis-oriented, we only have to alter the sign of dir's components to project it into
+    // the positive hemisphere. This is the case for surface normals of voxels.
     return dir * sign(dot(normal, dir));
 }
 

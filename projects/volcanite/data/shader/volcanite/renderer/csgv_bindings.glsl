@@ -120,7 +120,7 @@ layout (std140, binding = 10) uniform render_info {
     float g_stepSize;
     int g_maxSteps;
     bool g_blue_noise;
-    bool g_cook_torrance_shading;
+    bool g_local_shading_enable;
     float g_factor_ambient;
     float g_ratio_spec_diff;
     vec4 g_bboxMin;
