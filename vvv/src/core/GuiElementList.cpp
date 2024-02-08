@@ -413,7 +413,6 @@ namespace vvv {
                         in >> cm.precomputedIdx;
                         int type;
                         in >> type;
-                        Logger(INFO) << type;
                         cm.type = static_cast<GuiTFSegmentedVolumeEntry::ColorMapType>(type);
                         e->widgetData = {};    // the GUI reinitialization triggers all updates
                     }
