@@ -183,6 +183,8 @@ struct RayMarchState {
     int path_length;    // number of path segments (= bounces), initialized with 0 for the view ray
 };
 
+#define SHADOW_RAY_PATH_LENGTH -1
+
 
 void dda_step(inout RayMarchState state, const Ray ray) {
 //    float next_t = min(state.side_dist.x, min(state.side_dist.y, state.side_dist.z));
@@ -315,7 +317,6 @@ void main() {
     RayMarchState state;
     // ToDo: use a CPU randomly generated number instead of g_camera_still_frames to initialize the RNG?
     state.rng = float(g_frame << 16);
-    state.step = 0;
     state.t = t_0;
     state.pos = ray.origin + state.t * ray.direction;
     //state.voxel = ivec3(floor(state.pos))
@@ -329,7 +330,7 @@ void main() {
     const int MAX_PATH_LENGTH = 4;
     state.voxel = ivec3(floor(state.pos)); // DDA traversal start voxel
     dda_init(state, ray);
-    for(; state.step < g_maxSteps; state.step++) {
+    for(state.step = 0; state.step < g_maxSteps; state.step++) {
         dda_step(state, ray);
 
 //        if(&& any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz))) || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
@@ -397,6 +398,12 @@ void main() {
 //            state.out_color = vec4(integer2colorlabel(brick_id, false), 1.f);
 //            break;
 
+            // break if this was a shadow ray
+            if(state.path_length == SHADOW_RAY_PATH_LENGTH) {
+                state.throughput = vec3(0.f);
+                break;
+            }
+
             // classification determines the surface color (= suface albedo)
             vec4 surface_albedo_opacity = get_color(state.label);
             // debug: visualize level-of-detail with viridis colormap
@@ -424,7 +431,7 @@ void main() {
 //            state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb;
 
             // early ray termination
-            if(max(state.throughput.x, max(state.throughput.y, state.throughput.z)) < 0.05f) {
+            if(max(state.throughput.x, max(state.throughput.y, state.throughput.z)) <= 0.f) {
                 state.throughput = vec3(0.f);
                 break;
             }
@@ -432,7 +439,8 @@ void main() {
             // store previous direction as the outgoing direction for the BRDF evaluation
             vec3 prev_direction = -ray.direction;
 
-            // sample a new direction
+            // advance the path: sample a new direction
+            state.path_length++;
             // g_shadow_ao_ray_distr controls the ratio between rays sampled in any direction and rays in light direction
             // this allows user control between direct and indirect illumination
             if(nextRNG(fragCoord, state.rng).x < g_shadow_ao_ray_distr) {
@@ -458,8 +466,8 @@ void main() {
                     state.throughput = vec3(0.f);
                     break;
                 }
-                // force an early ray termination
-                state.path_length = MAX_PATH_LENGTH - 1;
+                // mark this ray as a shadow ray
+                state.path_length = SHADOW_RAY_PATH_LENGTH;
             }
             ray.direction = normalize(ray.direction);
 
@@ -490,20 +498,20 @@ void main() {
             // re-init DDA traversal for the shadow ray
             ray.origin = state.pos;
             dda_init(state, ray);
-            state.path_length++;
         }
 
         // RAY TERMINATION
         if(state.path_length > MAX_PATH_LENGTH) {
+            state.throughput = vec3(0.f);
             break;
         }
         // Russian Roulette (only when this is not a ray to the light source / NEE)
-        if(state.path_length < MAX_PATH_LENGTH) {
-            float roulette_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
-            if (nextRNG(fragCoord, state.rng).x > roulette_probability) {
+        if(state.path_length != SHADOW_RAY_PATH_LENGTH && state.path_length < MAX_PATH_LENGTH) {
+            float survival_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
+            if (nextRNG(fragCoord, state.rng).x > survival_probability) {
                 break;
             }
-            state.throughput /= roulette_probability;
+            state.throughput /= survival_probability;
         }
     }
 
