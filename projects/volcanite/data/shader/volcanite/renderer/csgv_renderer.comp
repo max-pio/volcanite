@@ -327,7 +327,6 @@ void main() {
     state.out_depth = BACKGROUND_DEPTH;
 
     // ray marching loop
-    const int MAX_PATH_LENGTH = 4;
     state.voxel = ivec3(floor(state.pos)); // DDA traversal start voxel
     dda_init(state, ray);
     for(state.step = 0; state.step < g_maxSteps; state.step++) {
@@ -421,7 +420,7 @@ void main() {
             state.out_color.a = 1.f;
 
             // include ambient lighting factor - not physically based
-            // ToDo: this seems to not normalize correctly when we have multiple bounces, i.e. MAX_PATH_LENGTH > 1
+            // ToDo: this seems to not normalize correctly when we have multiple bounces, i.e. g_max_path_length > 1
             if(state.path_length == 0) {
                 state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_factor_ambient;
             }
@@ -501,12 +500,12 @@ void main() {
         }
 
         // RAY TERMINATION
-        if(state.path_length > MAX_PATH_LENGTH) {
+        if(state.path_length > g_max_path_length) {
             state.throughput = vec3(0.f);
             break;
         }
         // Russian Roulette (only when this is not a ray to the light source / NEE)
-        if(state.path_length != SHADOW_RAY_PATH_LENGTH && state.path_length < MAX_PATH_LENGTH) {
+        if(state.path_length != SHADOW_RAY_PATH_LENGTH && state.path_length < g_max_path_length) {
             float survival_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
             if (nextRNG(fragCoord, state.rng).x > survival_probability) {
                 break;

@@ -155,7 +155,7 @@ private:
     glm::vec3 m_light_direction = glm::vec3(-1.f, 1.f, 0.1f);
     float m_light_intensity = 1.f;
     // voxel traversal
-    float m_step_size = 0.002f;
+    int m_max_path_length = 4;
     int m_max_steps = 2048;
     glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
     bool m_subblock_enabled = false;

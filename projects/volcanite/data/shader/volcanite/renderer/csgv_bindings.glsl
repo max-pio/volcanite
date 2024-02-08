@@ -117,7 +117,7 @@ layout (std140, binding = 10) uniform render_info {
     vec3 g_light_direction;
     float g_light_intensity;
     int g_subsampling;
-    float g_stepSize;
+    int g_max_path_length;
     int g_maxSteps;
     bool g_blue_noise;
     bool g_local_shading_enable;

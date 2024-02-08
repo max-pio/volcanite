@@ -545,7 +545,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<int32_t>("g_tonemap_enable", m_tonemap_enabled ? 1 : 0);
         m_urender_info->setUniform<glm::vec3>("g_light_direction", m_light_direction);
         m_urender_info->setUniform<float>("g_light_intensity", m_light_intensity);
-        m_urender_info->setUniform<float>("g_stepSize", m_step_size * scalingFactor);
+        m_urender_info->setUniform<int32_t>("g_max_path_length", m_max_path_length);
         m_urender_info->setUniform<int32_t>("g_maxSteps", m_max_steps);
         m_urender_info->setUniform<int32_t>("g_subsampling", (1 << m_subsampling));
         // bbox is the volume dimension in voxels centered around the origin (if no bbox reduction is applied)
@@ -631,7 +631,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         newCamHash = hashMemory(&m_light_intensity, sizeof(m_light_intensity), newCamHash);
         newCamHash = hashMemory(&m_ambient_occlusion_dist_strength, sizeof(m_ambient_occlusion_dist_strength),
                                 newCamHash);
-        newCamHash = hashMemory(&m_step_size, sizeof(m_step_size), newCamHash);
+        newCamHash = hashMemory(&m_max_path_length, sizeof(m_max_path_length), newCamHash);
+        newCamHash = hashMemory(&m_max_steps, sizeof(m_max_path_length), newCamHash);
         newCamHash = hashMemory(&m_dda_traversal, sizeof(m_dda_traversal), newCamHash);
         newCamHash = hashMemory(&m_cook_torrance_shading, sizeof(m_cook_torrance_shading), newCamHash);
         newCamHash = hashMemory(&m_show_normals, sizeof(m_show_normals), newCamHash);
@@ -689,8 +690,8 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
     g->addColor(&m_background_color_a, "Background Color A");
     g->addColor(&m_background_color_b, "Background Color B");
-    g->addFloat(&m_step_size, "Step Size", 0.0005f, 0.01f, 0.0005f, 4);
-    dev->addInt(&m_max_steps, "Max Steps", 1, 2048, 1);
+    g->addInt(&m_max_path_length, "Max Path Length", 1, 32, 1);
+    dev->addInt(&m_max_steps, "Max Steps", 1, 4096, 1);
     g->addInt(&m_subsampling, "Subsampling Factor (2^n)", 0, 3, 1);
 //ToDo: addFloatRange2 to the GUIInterface
 #ifdef IMGUI
