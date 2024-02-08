@@ -414,7 +414,10 @@ void main() {
             state.out_color.a = 1.f;
 
             // include ambient lighting factor - not physically based
-            state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_factor_ambient;
+            // ToDo: this seems to not normalize correctly when we have multiple bounces, i.e. MAX_PATH_LENGTH > 1
+            if(state.path_length == 0) {
+                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_factor_ambient;
+            }
             state.throughput *= 1.f - g_factor_ambient;
 
             // emission
@@ -494,12 +497,14 @@ void main() {
         if(state.path_length > MAX_PATH_LENGTH) {
             break;
         }
-        // Russian Roulette (ToDo: only when this is not a ray to the light source / NEE!)
-//        float roulette_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
-//        if (nextRNG(fragCoord, state.rng).x > roulette_probability) {
-//            break;
-//        }
-//        state.throughput /= roulette_probability;
+        // Russian Roulette (only when this is not a ray to the light source / NEE)
+        if(state.path_length < MAX_PATH_LENGTH) {
+            float roulette_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
+            if (nextRNG(fragCoord, state.rng).x > roulette_probability) {
+                break;
+            }
+            state.throughput /= roulette_probability;
+        }
     }
 
     if(g_debug_step_count) {
