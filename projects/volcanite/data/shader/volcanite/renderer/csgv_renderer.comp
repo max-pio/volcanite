@@ -212,30 +212,30 @@ float cook_torrance(const RayMarchState state, const vec3 dir_in, const vec3 dir
     const float F0 = 0.8f;
     //
     vec3 h = normalize(dir_in + dir_out);
-    float NdotL = clamp(dot(state.normal, dir_out), 0., 1.);
-    float NdotH = clamp(dot(state.normal, h), 0., 1.);
-    float NdotV = clamp(dot(state.normal, dir_in), 0., 1.);
-    float VdotH = clamp(dot(h, dir_in), 0., 1.);
+    float NdotL = clamp(dot(state.normal, dir_out), 0.f, 1.f);
+    float NdotH = clamp(dot(state.normal, h), 0.f, 1.f);
+    float NdotV = clamp(dot(state.normal, dir_in), 0., 1.f);
+    float VdotH = clamp(dot(h, dir_in), 0.f, 1.f);
     float rsq = roughness * roughness;
 
     // Geometric Attenuation
-    float NH2   = 2. * NdotH / VdotH;
+    float NH2   = 2.f * NdotH / VdotH;
     float geo_b = (NH2 * NdotV);
     float geo_c = (NH2 * NdotL);
-    float geo   = min(1., min(geo_b, geo_c));
+    float geo   = min(1.f, min(geo_b, geo_c));
 
     // Roughness
     // Beckmann distribution function
-    float r1 = 1. / (4. * rsq * pow(NdotH, 4.));
-    float r2 = (NdotH * NdotH - 1.) / (rsq * NdotH * NdotH);
+    float r1 = 1.f / (4.f * PI * rsq * pow(NdotH, 4.f));
+    float r2 = (NdotH * NdotH - 1.f) / (rsq * NdotH * NdotH);
     float rough = r1 * exp(r2);
 
     // Fresnel
-    float fres = pow(1.0 - VdotH, 5.);
-    fres *= (1.0 - F0);
+    float fres = pow(1.f - VdotH, 5.f);
+    fres *= (1.f - F0);
     fres += F0;
 
-    float spec = (NdotV * NdotL==0.) ? 0. : (fres * geo * rough) / (NdotV * NdotL);
+    float spec = (NdotV * NdotL <= 0.f) ? 0.f : (fres * geo * rough) / (NdotV * NdotL);
 
     return spec;
 }
