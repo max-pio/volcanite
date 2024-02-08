@@ -6,8 +6,8 @@
 #ifdef IMGUI
 #include "imgui/imgui.h"
 #include "imgui/implot/implot.h"
-#include "imgui/imgui_impl_glfw.h"
-#include "imgui/imgui_impl_vulkan.h"
+#include "imgui/backends/imgui_impl_glfw.h"
+#include "imgui/backends/imgui_impl_vulkan.h"
 #endif
 
 // TODO(Reiner): make this configurable for triple buffering
@@ -1074,10 +1074,11 @@ void Application::initImGui() {
     ImPlot::CreateContext();
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     recreateSwapchainImGui();
 
-    ImGui::StyleColorsDark();
+    ImGui::StyleColorsLight();
 
     ImGui_ImplGlfw_InitForVulkan(m_window, true);
 

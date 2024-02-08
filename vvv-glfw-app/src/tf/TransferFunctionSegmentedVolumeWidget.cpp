@@ -1,7 +1,7 @@
 #include "vvvwindow/tf/TransferFunctionSegmentedVolumeWidget.hpp"
 
 #include <imgui/imgui.h>
-#include <imgui/imgui_impl_vulkan.h>
+#include <imgui/backends/imgui_impl_vulkan.h>
 
 void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
     int id = static_cast<int>(e->id);
@@ -24,7 +24,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
         bool materialChanged = false;
         bool colormapChanged = false;
 
-        ImGui::BeginChild(id++,  ImVec2(ImGui::GetWindowContentRegionWidth(), ImGui::GetFontSize() * 14.0f), true, ImGuiWindowFlags_MenuBar);
+        ImGui::BeginChild(id++,  ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize() * 14.0f), true, ImGuiWindowFlags_MenuBar);
 
         // Text field to give the material a name
         ImGui::PushID(id++);

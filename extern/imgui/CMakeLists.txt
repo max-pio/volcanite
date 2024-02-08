@@ -1,26 +1,27 @@
 cmake_minimum_required(VERSION 3.16)
-project(Imgui)
+project(Imgui VERSION 1.90.1)
+# DearImgui docking branch https://github.com/ocornut/imgui/releases/tag/v1.90.1-docking
 
 # library target that we can link / include in the parent directory
 add_library(imgui
     imconfig.h
     imgui.h
-    imgui_impl_glfw.h
-    imgui_impl_vulkan.h
     imgui_internal.h
-    imgui_stdlib.h
     imstb_rectpack.h
     imstb_textedit.h
     imstb_truetype.h
+	backends/imgui_impl_glfw.h
+	backends/imgui_impl_vulkan.h
+	misc/cpp/imgui_stdlib.h
 #
     imgui.cpp
     imgui_demo.cpp
     imgui_draw.cpp
-    imgui_impl_glfw.cpp
-    imgui_impl_vulkan.cpp
-    imgui_stdlib.cpp
     imgui_tables.cpp
     imgui_widgets.cpp
+	backends/imgui_impl_glfw.cpp
+	backends/imgui_impl_vulkan.cpp
+	misc/cpp/imgui_stdlib.cpp
 #
     imGuIZMO.quat/imGuIZMOquat.cpp
     imGuIZMO.quat/imGuIZMOquat.h
@@ -45,7 +46,7 @@ endif()
 # required packages
 find_package(Vulkan REQUIRED)
 
-target_compile_definitions(imgui PUBLIC -DIMGUI=1 -DVGIZMO_USES_GLM -DIMGUIZMO_IMGUI_FOLDER=./)
+target_compile_definitions(imgui PUBLIC -DIMGUI=1 -DIMGUI_DEFINE_MATH_OPERATORS -DVGIZMO_USES_GLM -DIMGUIZMO_IMGUI_FOLDER=./)
 target_include_directories(imgui PUBLIC ./)
 
 target_link_libraries(imgui PRIVATE ${GLFW_LIBRARIES} Vulkan::Vulkan glm::glm)

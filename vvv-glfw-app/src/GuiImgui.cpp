@@ -8,9 +8,9 @@
 
 #include "vvv/core/GpuContext.hpp"
 #include "imgui/imgui.h"
-#include "imgui/imgui_impl_glfw.h"
-#include "imgui/imgui_impl_vulkan.h"
-#include "imgui/imgui_stdlib.h"
+#include "imgui/backends/imgui_impl_glfw.h"
+#include "imgui/backends/imgui_impl_vulkan.h"
+#include "imgui/misc/cpp/imgui_stdlib.h"
 #include "imgui/imGuIZMO.quat/imGuIZMOquat.h"
 #include "imgui/implot/implot.h"
 #include <vvv/util/Paths.hpp>
@@ -41,13 +41,22 @@ void GuiImgui::renderGui() {
 #else
         io.Fonts->AddFontFromFileTTF(vvv::Paths::findDataPath("Quicksand-Medium.ttf").c_str(), m_defaultFontSize * m_gui_scaling);
 #endif
-        getCtx()->executeCommands(ImGui_ImplVulkan_CreateFontsTexture, {.hostWait = true});
-        ImGui_ImplVulkan_DestroyFontUploadObjects();
+        ImGui_ImplVulkan_CreateFontsTexture();
+
+        // update the scaling of the GUI if necessary
+        if(updateGuiScaling) {
+            ImGui::GetStyle().ScaleAllSizes(m_gui_scaling / m_current_gui_scaling);
+        }
+
     }
 
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+
+    // create a
+//    ImGui::DockSpace(ImGui::GetID("CentralDockSpace"));
+    ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
     // iterate over all windows
     for(const auto& window : m_windows) {
@@ -61,12 +70,7 @@ void GuiImgui::renderGui() {
         auto columns = window.second.getColumns();
         for(int c_id = 0; c_id < columns.size(); c_id++) {
             ImGuiWindowFlags window_flags = ImGuiWindowFlags_HorizontalScrollbar;
-            ImGui::BeginChild((window.second.getName() + std::to_string(c_id)).c_str(), ImVec2(ImGui::GetWindowContentRegionWidth() / columns.size(), 0), false, window_flags);
-
-            // update the scaling of the GUI if necessary
-            if(updateGuiScaling) {
-                ImGui::GetStyle().ScaleAllSizes(m_gui_scaling / m_current_gui_scaling);
-            }
+            ImGui::BeginChild((window.second.getName() + std::to_string(c_id)).c_str(), ImVec2(ImGui::GetContentRegionAvail().x / columns.size(), 0), false, window_flags);
 
             // iterate over GUI entries
             for (BaseGuiEntry *be : GuiInterface::getEntriesForColumn(columns[c_id])) {
