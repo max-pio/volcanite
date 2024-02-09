@@ -50,7 +50,7 @@ public:
      */
     virtual void releaseResources(){};
     virtual void releaseShaderResources(){};
-    virtual void releaseGui(){};
+    virtual void releaseGui(){ m_gui_interface = nullptr; };
     virtual void releaseSwapchain(){};
 
     virtual std::shared_ptr<Camera> getCamera() { return m_camera; }

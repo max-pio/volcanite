@@ -514,8 +514,6 @@ void CompressedSegmentationVolumeRenderer::resetGPU() {
     releaseSwapchain();
     releaseShaderResources();
     releaseResources();
-
-    //m_compressed_segmentation_volume = nullptr;
 }
 
 void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {

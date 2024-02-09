@@ -12,6 +12,11 @@
 
 namespace vvv {
 
+/** Helpfer function to remove the file extension from a file path, e.g. test.abc -> test */
+static std::string stripFileExtension(std::string path) {
+    return path.substr(0, path.find_last_of('.'));
+}
+
 struct VolcaniteArgs {
 
 private:

@@ -47,25 +47,17 @@ public:
         ctx->enableDeviceExtension("VK_EXT_memory_budget");
     }
 
-    /**
-     * Initializes Descriptorsets and calls pipeline initialization.
-     */
+    /** Initializes Descriptorsets and calls pipeline initialization. */
     void initResources(GpuContext *ctx) override;
     void releaseResources() override;
-    /**
-     * Initialize everything that depends on shader
-     */
+    /** Initialize everything that depends on shader */
     void initShaderResources() override;
     void releaseShaderResources() override;
-    /**
-     * Initializes command buffer, renderpass, images and framebuffers
-     */
+    /** Initializes command buffer, renderpass, images and framebuffers */
     void initSwapchainResources() override;
     void releaseSwapchain() override;
 
-    /**
-     * Releases all GPU states and resources but does not reset the segmentation volume.
-     */
+    /** Releases all GPU states and resources but does not reset the segmentation volume. */
     void resetGPU();
 
     void setRenderResolution(vk::Extent2D resolution) {
@@ -83,9 +75,7 @@ public:
         return m_resolution;
     }
 
-    /**
-    * We limit the render resolution to max. 4K (4096x2160) or Full-HD.
-    */
+    /** We limit the render resolution to max. 4K (4096x2160) or Full-HD. */
     void updateRenderResolutionFromWSI() {
         // ToDo: remove hardcoded render resolution. Move the WSI dependency to Application / HeadlessRendering or the Renderer class?
         const vk::Extent2D max_resolution = {4096u, 2160u};
@@ -107,6 +97,22 @@ public:
     }
 
     void initGui(vvv::GuiInterface * gui) override;
+    void releaseGui() override {
+        if(!m_gui_interface)
+            return;
+
+        // save rendering parameters on GUI shutdown if requested
+        if(!m_save_config_on_shutdown_path.empty()) {
+            std::ofstream out(m_save_config_on_shutdown_path);
+            if(out.is_open()) {
+                if (!writeParameters(out, VOLCANITE_VERSION))
+                    Logger(WARN) << "Could not export parameters to " << m_save_config_on_shutdown_path;
+                out.close();
+            }
+        }
+
+        m_gui_interface = nullptr;
+    }
 
     void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> csgv, std::shared_ptr<CSGVDatabase> db) {
         if(!csgv)
@@ -135,6 +141,8 @@ public:
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
     int getTargetAccumulationFrames() { return m_accum_frames; }
+    /** Will save the renderer state to the path when the renderer is shut down */
+    void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = path; }
 
 private:
     // (gui) parameters:
@@ -180,6 +188,7 @@ private:
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text;
     std::optional<std::string> m_download_frame_to_image_file = {};
+    std::string m_save_config_on_shutdown_path = {};
 
     void updateDeviceMemoryUsage();
     void updateSegmentedVolumeMaterial(int m);
@@ -193,7 +202,7 @@ private:
     std::shared_ptr<vvv::MultiBufferedResource<std::shared_ptr<Texture>>> m_inpaintedOutColor = nullptr; // this is the output texture and thus the only resource that we have to duplicate for each swapchain image
     std::shared_ptr<UniformReflected> m_urender_info = nullptr;
     std::shared_ptr<UniformReflected> m_usegmented_volume_info = nullptr;
-    
+
     std::shared_ptr<CompressedSegmentationVolume> m_compressed_segmentation_volume = nullptr;
     std::shared_ptr<CSGVDatabase> m_csgv_db = nullptr;
     std::vector<bool> m_gpu_material_changed = std::vector<bool>(SEGMENTED_VOLUME_MATERIAL_COUNT, true);

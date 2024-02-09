@@ -96,7 +96,7 @@ int volcanite(int argc, char *argv[]) {
         bool use_temporary_output_file = args.compress_export_file.empty();
         if(use_temporary_output_file) {
             // construct a temporary .csgv output path if no output path was specified
-            // ToDo: try to use the location of the input file for temp csgv output files?
+            // ToDo: try to use the location of the input file for temp csgv output files? Move this to the VolcaniteArgs.hpp?
             create_directory(std::filesystem::temp_directory_path() / "vvv");
             //complete_csgv_path = (std::filesystem::temp_directory_path() / "vvv" / "tmp.csgv").string();
             complete_csgv_path = (std::filesystem::temp_directory_path() / "vvv" / "tmp.csgv").string();
@@ -115,7 +115,7 @@ int volcanite(int argc, char *argv[]) {
         // we open a precomputed csgv database for this volume if it exists or create it otherwise
         std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> label_remapping = nullptr;
         if(args.label_remapping) {
-            std::string database_path = complete_csgv_path.substr(0, complete_csgv_path.length() - 5) + "_csgv.db3";
+            std::string database_path = stripFileExtension(complete_csgv_path) + "_csgv.db3";
             MiniTimer t;
             Logger(INFO) << "Initializing attribute database " << database_path;
             csgvDatabase->importOrProcessChunkedVolume(args.input_file, database_path,
@@ -152,7 +152,7 @@ int volcanite(int argc, char *argv[]) {
         compressedSegmentationVolume->importFromFile(args.input_file, args.verbose);
 
         // try to load a precomputed database
-        std::string database_path = args.input_file.substr(0, args.input_file.length() - 5) + "_csgv.db3";
+        std::string database_path = stripFileExtension(args.input_file) + "_csgv.db3";
         if(std::filesystem::exists(database_path)) {
             MiniTimer t;
             csgvDatabase->importFromSqlite(database_path);
@@ -165,7 +165,7 @@ int volcanite(int argc, char *argv[]) {
         }
 
         // if a config file exists next to the .csgv file, we use it to initialize the renderer
-        std::string config_path = args.input_file.substr(0, args.input_file.length() - 5) + ".vcfg";
+        std::string config_path = stripFileExtension(args.input_file) + ".vcfg";
         if(std::filesystem::exists(config_path))
             args.rendering_config_file = config_path;
     }
@@ -211,6 +211,12 @@ int volcanite(int argc, char *argv[]) {
         // only start the application if we are not in headless mode
 #ifndef HEADLESS
         if (!args.headless) {
+            // export the state of the renderer next to the csgv volume when the app is closed
+            if(!args.performCompression())
+                renderer->saveConfigOnShutdown(stripFileExtension(args.input_file) + ".vcfg");
+            else if(!args.compress_export_file.empty())
+                renderer->saveConfigOnShutdown(stripFileExtension(args.compress_export_file) + ".vcfg");
+
             bool vsync = true;  // ToDo: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
             auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
 //            app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
