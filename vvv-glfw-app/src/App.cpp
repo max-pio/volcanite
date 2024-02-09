@@ -1120,9 +1120,11 @@ void Application::shutdownImGui() {
 
 void Application::recreateSwapchainImGui() {
     vk::SurfaceCapabilitiesKHR surfaceCapabilities = getPhysicalDevice().getSurfaceCapabilitiesKHR(getSurface());
-    m_imgui.minImageCount = surfaceCapabilities.minImageCount;
-    if(m_imgui.initialized)
-        ImGui_ImplVulkan_SetMinImageCount(m_imgui.minImageCount);
+    if(m_imgui.minImageCount > surfaceCapabilities.minImageCount) {
+        m_imgui.minImageCount = surfaceCapabilities.minImageCount;
+        if (m_imgui.initialized)
+            ImGui_ImplVulkan_SetMinImageCount(m_imgui.minImageCount);
+    }
 }
 #endif
 
