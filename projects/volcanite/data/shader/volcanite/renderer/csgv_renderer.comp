@@ -228,7 +228,7 @@ float cook_torrance(const RayMarchState state, const vec3 dir_in, const vec3 dir
 
     // Roughness
     // Beckmann distribution function
-    float r1 = 1.f / (4.f * PI * rsq * pow(NdotH, 4.f));
+    float r1 = 1.f / (4.f * rsq * pow(NdotH, 4.f));
     float r2 = (NdotH * NdotH - 1.f) / (rsq * NdotH * NdotH);
     float rough = r1 * exp(r2);
 
@@ -406,7 +406,7 @@ void main() {
             // classification determines the surface color (= suface albedo)
             vec4 surface_albedo_opacity = get_color(state.label);
             // ToDo: albedos close to one oversature colors with many bounces. Add a GUI parameter to dim the albedo?
-            surface_albedo_opacity.rgb *= g_max_path_length > 1 ? 0.9f : 1.f;
+            surface_albedo_opacity.rgb *= g_max_path_length > 1 ? 1.f - (0.1 * g_shadow_ao_ray_distr) : 1.f;
             // debug: visualize level-of-detail with viridis colormap
             if (g_debug_lod) { // && debug_view_visible
                 uint lod = get_inv_lod(state.voxel);
