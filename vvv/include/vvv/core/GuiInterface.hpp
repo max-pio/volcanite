@@ -145,7 +145,7 @@ public:
     protected:
 
         std::vector<BaseGuiEntry *> m_entries{};
-        gui_id m_id_counter = 0;
+        gui_id m_id_counter = 1;
 
         // helper functions for adding gui elements that are used in the macros. decimals is unused for non-decimal elements.
         template <class T> gui_id add(T *v, const std::string &name, GuiType type, int decimals = 3);
