@@ -6,7 +6,7 @@
 void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
     int id = static_cast<int>(e->id);
 
-    ImGui::TextUnformatted((e->label + " " + std::to_string(e->materials->size())).c_str());
+//    ImGui::TextUnformatted((e->label + " " + std::to_string(e->materials->size())).c_str());
 
     if(e->attributeNames.empty() || e->attributeMinMax.empty())
         throw std::runtime_error("No attributes for segmented volume material editor specified");
@@ -24,6 +24,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
         bool materialChanged = false;
         bool colormapChanged = false;
 
+        // ToDo: collapsable child for materials
         ImGui::BeginChild(id++,  ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize() * 14.0f), true, ImGuiWindowFlags_MenuBar);
 
         // Text field to give the material a name

@@ -676,31 +676,30 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
 
 void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     Renderer::initGui(gui);
-    GuiInterface::GuiElementList* g = gui->get("Compressed Segmentation Volume Renderer");
-    GuiInterface::GuiElementList* dev;
-    if(m_release_version) {
-        // we create an invisible GUI window to export all parameter but keep them hidden from the user
-        dev = gui->get("Development");
-        gui->getWindow("Development")->setVisible(false);
-    } else {
-        dev = g;
-    }
+//    GuiInterface::GuiElementList* g = gui->get("Compressed Segmentation Volume Renderer");
+    GuiInterface::GuiElementList* g_data = gui->get("Data");
+    GuiInterface::GuiElementList* g_render = gui->get("Rendering");
+    GuiInterface::GuiElementList* g_mat = gui->get("Materials");
+    GuiInterface::GuiElementList* g_dev = gui->get("Development");
+    // we create an invisible GUI window to export all parameter but keep them hidden from the user
+    gui->getWindow("Development")->setVisible(!m_release_version);
 
-    g->addColor(&m_background_color_a, "Background Color A");
-    g->addColor(&m_background_color_b, "Background Color B");
-    g->addInt(&m_max_path_length, "Max Path Length", 1, 32, 1);
-    dev->addInt(&m_max_steps, "Max Steps", 1, 4096, 1);
-    g->addInt(&m_subsampling, "Subsampling Factor (2^n)", 0, 3, 1);
+
+    g_dev->addInt(&m_max_steps, "Max Steps", 1, 4096, 1);
+
+
+    // Global rendering config
+    g_render->addInt(&m_subsampling, "Subsampling Factor (2^n)", 0, 3, 1);
+    g_render->addColor(&m_background_color_a, "Background Color A");
+    g_render->addColor(&m_background_color_b, "Background Color B");
+
+    // Path Tracing / Rendering
+    g_render->addInt(&m_max_path_length, "Max Path Length", 1, 32, 1);
+
+
 //ToDo: addFloatRange2 to the GUIInterface
 #ifdef IMGUI
-    g->addCustomCode(
-            [this]() {
-                ImGui::DragFloatRange2("Splitting Plane X", &m_bboxMin.x, &m_bboxMax.x, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                ImGui::DragFloatRange2("Splitting Plane Y", &m_bboxMin.y, &m_bboxMax.y, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                ImGui::DragFloatRange2("Splitting Plane Z", &m_bboxMin.z, &m_bboxMax.z, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-            },
-            "Splitting Planes");
-    g->addCustomCode(
+    g_data->addCustomCode(
             [this]() {
                 auto old_voxel_size = m_voxel_size;
                 ImGui::InputFloat3("Voxel Size", &m_voxel_size.x);
@@ -710,8 +709,15 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                 }
             },
             "Voxel Size");
-    dev->addBool(&m_subblock_enabled, "Use Sub-Block");
-    dev->addCustomCode([this]() {
+    g_data->addCustomCode(
+            [this]() {
+                ImGui::DragFloatRange2("Splitting Plane X", &m_bboxMin.x, &m_bboxMax.x, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
+                ImGui::DragFloatRange2("Splitting Plane Y", &m_bboxMin.y, &m_bboxMax.y, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
+                ImGui::DragFloatRange2("Splitting Plane Z", &m_bboxMin.z, &m_bboxMax.z, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
+            },
+            "Splitting Planes");
+    g_dev->addBool(&m_subblock_enabled, "Use Sub-Block");
+    g_dev->addCustomCode([this]() {
         if(m_subblock_enabled) {
             auto old = m_subblock_size;
             ImGui::InputInt3("Sub-Block Size", &m_subblock_size.x);
@@ -722,48 +728,50 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             ImGui::InputInt3("Sub-Block Start", &m_subblock_start.x);
         }
     },
-    "Sub-Block");
+                         "Sub-Block");
 #endif
     if(m_csgv_db) {
-        g->addTFSegmentedVolume(&m_materials, m_csgv_db->getAttributeNames(), m_csgv_db->getAttributeMinMax(), [this](int m) { updateSegmentedVolumeMaterial(m); }, "Materials");
+        g_mat->addTFSegmentedVolume(&m_materials, m_csgv_db->getAttributeNames(), m_csgv_db->getAttributeMinMax(), [this](int m) { updateSegmentedVolumeMaterial(m); }, "Materials");
     }
-    dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
-    dev->addBool(&m_blue_noise, "Blue Noise Shift");
-    dev->addBool(&m_dda_traversal, "DDA Traversal");
-    dev->addBool(&m_cook_torrance_shading, "Cook-Torrance Shading");
-    g->addFloat(&m_factor_ambient, "Factor ambient shading", 0.0f, 1.f, 0.05f, 2);
-    g->addFloat(&m_ratio_spec_diff, "Ratio spec<->diff shading", 0.0f, 1.0f, 0.05f, 2);
-    dev->addBool(&m_tonemap_enabled, "Tone Mapping");
-    g->addBool(&m_shadow_ray_enabled, "Shadow Ray Enabled");
-    dev->addFloat(&m_shadow_ao_ray_distr, "Shadow / AO Ray Ratio", 0.f, 1.f, 0.1f, 1);
-    g->addDirection(&m_light_direction, "Light Direction");
-    dev->addFloat(&m_light_intensity, "Light Intensity", 0.f, 10.f, 0.02f, 2);
-    g->addSeparator();
-    g->addBool([this](bool b) { getCtx()->getWsi()->setWindowResizable(b); }, [this]() { return getCtx()->getWsi()->isWindowResizable(); }, "Resizable Window");
-    g->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
-    g->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
-    dev->addSeparator();
-    dev->addLabel("Debug");
-    dev->addInt(&m_max_decoding_lod, "Max. Decoding LoD", 0, 6, 1);
-    dev->addBool(&m_show_model_space, "Show Model Space");
-    dev->addBool(&m_show_brick_cache, "Show Brick Cache");
-    dev->addBool(&m_show_lod, "Show LOD Levels");
-    dev->addBool(&m_show_step_count, "Show Ray Step Count");
-    dev->addBool(&m_show_normals, "Show Normals");
-    dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
-    dev->addAction(
+    g_dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
+    g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
+    g_dev->addBool(&m_dda_traversal, "DDA Traversal");
+    g_render->addBool(&m_cook_torrance_shading, "Local Shading");
+    g_render->addFloat(&m_ratio_spec_diff, "Specular / Diffuse Shading Ratio", 0.0f, 1.0f, 0.05f, 2);
+    g_render->addFloat(&m_factor_ambient, "Ambient Shading", 0.0f, 1.f, 0.05f, 2);
+    g_dev->addBool(&m_tonemap_enabled, "Tone Mapping");
+    g_render->addBool(&m_shadow_ray_enabled, "Raycasting");
+    g_render->addFloat(&m_shadow_ao_ray_distr, "Direct Light / Pathtracing Ratio", 0.f, 1.f, 0.1f, 1);
+    g_render->addDirection(&m_light_direction, "Light Direction");
+    g_render->addFloat(&m_light_intensity, "Light Intensity", 0.f, 10.f, 0.02f, 2);
+
+    g_data->addSeparator();
+    g_data->addBool([this](bool b) { getCtx()->getWsi()->setWindowResizable(b); }, [this]() { return getCtx()->getWsi()->isWindowResizable(); }, "Resizable Window");
+    g_data->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
+    g_data->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
+
+    g_dev->addSeparator();
+    g_dev->addLabel("Debug");
+    g_dev->addInt(&m_max_decoding_lod, "Max. Decoding LoD", 0, 6, 1);
+    g_dev->addBool(&m_show_model_space, "Show Model Space");
+    g_dev->addBool(&m_show_brick_cache, "Show Brick Cache");
+    g_dev->addBool(&m_show_lod, "Show LOD Levels");
+    g_dev->addBool(&m_show_step_count, "Show Ray Step Count");
+    g_dev->addBool(&m_show_normals, "Show Normals");
+    g_dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
+    g_dev->addAction(
             [this]() {
                 if (m_pass)
                     m_pass->resetCacheOnNextCall();
             },
             "Hard Reset Brick Cache");
-    dev->addBool(&m_clear_cache_every_frame, "Clear Cache Every Frame");
-    dev->addBool(&m_clear_accum_every_frame, "Clear Accumulation Every Frame");
-    dev->addInt(&m_accum_frames, "Accumulation Frames");
-    dev->addSeparator();
-    g->addDynamicText(&m_gui_resolution_text);
-    g->addDynamicText(&m_gui_device_mem_text);
-    g->addAction([this]() {
+    g_dev->addBool(&m_clear_cache_every_frame, "Clear Cache Every Frame");
+    g_dev->addBool(&m_clear_accum_every_frame, "Clear Accumulation Every Frame");
+    g_dev->addInt(&m_accum_frames, "Accumulation Frames");
+    g_dev->addSeparator();
+    g_data->addDynamicText(&m_gui_resolution_text);
+    g_data->addDynamicText(&m_gui_device_mem_text);
+    g_data->addAction([this]() {
         if (!pfd::settings::available()) {
             Logger(WARN) << "Can not open file dialog for screenshot export. Using default file ./volcanite_output.png";
             m_download_frame_to_image_file = "./volcanite_output.png";
@@ -780,7 +788,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         }
     }, "Screenshot");
 
-    g->addAction([this]() {
+    g_data->addAction([this]() {
         std::string file;
         if (!pfd::settings::available()) {
             Logger(WARN) << "Can not open file dialog. Using default file ./parameters.vcfg";
@@ -800,7 +808,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             in.close();
         }
     }, "Import Parameters");
-    g->addAction([this]() {
+    g_data->addAction([this]() {
         std::string file;
         if (!pfd::settings::available()) {
             Logger(WARN) << "Can not open file dialog. Using default file ./parameters.vcfg";
