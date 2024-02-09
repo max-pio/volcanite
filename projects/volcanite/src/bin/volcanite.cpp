@@ -126,6 +126,8 @@ int volcanite(int argc, char *argv[]) {
             label_remapping = csgvDatabase->getLabelRemapping();
             if (args.verbose)
                 Logger(INFO) << "  finished in " << t.elapsed() << " seconds";
+        } else {
+            csgvDatabase->createDummy(&(*compressedSegmentationVolume));
         }
 
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),

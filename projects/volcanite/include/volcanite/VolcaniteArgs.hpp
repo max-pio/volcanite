@@ -120,7 +120,7 @@ public:
             ValueArg<uint32_t> bricksizeArg("b", "brick-size", "Compress with given brick size.", false, va.brick_size, &allowedBrickSize);
             cmd.add(bricksizeArg);
             // attribute arguments
-            SwitchArg noLabelRemappingArg("", "no-relabel", "Omit the voxel relabeling preprocessing step.", cmd);
+            SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
             ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath},{attribute table/view name},{name of the label column referenced by the volume}\".", false, "", "database,table,label", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal all development render parameters in GUI.", cmd);
@@ -203,8 +203,8 @@ public:
 
                 // attribute arguments (if we import a .csgv file, the attributes are already stored in a database along with it)
 #ifndef LIB_SQLITE3
-                if(!noLabelRemappingArg.getValue()) {
-                    throw ArgException(noLabelRemappingArg.longID() + " must be set as SQLite3 library is not available.", noLabelRemappingArg.longID());
+                if(labelRemappingArg.getValue()) {
+                    throw ArgException(noLabelRemappingArg.longID() + " must not be set as SQLite3 library is not available.", noLabelRemappingArg.longID());
                 }
                 if(!attributeArg.getValue().empty()) {
                     throw ArgException(attributeArg.longID() + " is not available as SQLite3 library is not available.", attributeArg.longID());
@@ -214,8 +214,9 @@ public:
                 va.attribute_table = "";
                 va.attribute_label = "";
 #else
-                va.label_remapping = !noLabelRemappingArg.getValue();
+                va.label_remapping = labelRemappingArg.getValue();
                 if(!attributeArg.getValue().empty()) {
+                    va.label_remapping = true;
                     const std::string attribute_info = attributeArg.getValue();
                     auto comma0 = attribute_info.find(',', 0);
                     auto comma1 = attribute_info.find(',', comma0 + 1);
