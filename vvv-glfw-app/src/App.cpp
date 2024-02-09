@@ -325,10 +325,19 @@ int Application::exec() {
         getDevice().waitIdle();
     }
 
-    // this ensures the window is immediately closed, but allows following code
+    // old: this destroyWindow() here ensures the window is immediately closed, but allows following code
     // to inspect vulkan state, e.g. download buffers etc, before all GPU state
     // is destroyed.
-    destroyWindow();
+    // ----
+    // Note from Max: this gives segfaults. Destroy the window at the end of releaseResources() instead
+    // When destroying the window here, glfwTerminate() sometimes gives a segfault / a corrupted double linked list
+    // within XCloseDisplay.
+    // Could be: https://github.com/KhronosGroup/Vulkan-LoaderAndValidationLayers/issues/1894
+    // http://www.xfree86.org/4.7.0/DRI11.html suggests that the (GL, but Vulkan here) can register a callback with Xlib.
+    // When the application calls XCloseDisplay, this callback is called and will segfault if the driver had already
+    // been unloaded, which could happen when the Vulkan instance is destroyed. Fix is to destroy the instance after
+    // cleaning up the display connection.
+//    destroyWindow();
 
     return 0;
 }
@@ -395,6 +404,9 @@ void Application::releaseResources() {
     // some GUI components may hold GPU resources, e.g. TransferFunction2D
     m_gui->removeAllWindows();
 
+#ifdef IMGUI
+    shutdownImGui();
+#endif
     destroyBlit();
     destroySwapChain();
     destroyQueues();
@@ -426,17 +438,9 @@ void Application::createWindow() {
 }
 
 void Application::destroyWindow() {
-#ifdef IMGUI
-    // we shutdown the GUI before the window gets destroyed
-    shutdownImGui();
-#endif
-
     if (m_window != nullptr) {
         glfwDestroyWindow(m_window);
         glfwTerminate(); // TODO(Reiner): when do we have to call `glfwTerminate`, inside or outside the if-conditional
-        // this glfwTerminate() sometimes gives me a segfault (on AMD)
-        // Could be: https://github.com/KhronosGroup/Vulkan-LoaderAndValidationLayers/issues/1894
-        // http://www.xfree86.org/4.7.0/DRI11.html suggests that the (GL, but Vulkan here) can register a callback with Xlib. When the application calls XCloseDisplay, this callback is called and will segfault if the driver had already been unloaded, which could happen when the Vulkan instance is destroyed. Fix is to destroy the instance after cleaning up the display connection.
         m_window = nullptr;
     }
 }
