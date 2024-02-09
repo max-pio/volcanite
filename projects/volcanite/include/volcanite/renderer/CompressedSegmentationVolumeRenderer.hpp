@@ -173,7 +173,6 @@ private:
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
     // debugging and dev options
     float m_lod_bias = 0.f;
-    bool m_dda_traversal = true;
     bool m_show_normals = false;
     bool m_blue_noise = true;
     bool m_show_model_space = false;
