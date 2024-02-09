@@ -37,9 +37,9 @@ public:
         return std::shared_ptr<Application>(new Application(appName, renderer, debugUtilities));
     }
 
-    // TODO: This feels really dangeours. we create a lot internal references to this thing. so we probably have cycles
-    // and should look into managing this more cleanly with weak pointers.
-    std::shared_ptr<const WindowingSystemIntegration> getWsi() const override { return shared_from_this(); }
+    // TODO: we used to return a std::shared_ptr<const WindowingSystemIntegration> here and return shared_from_this();
+    // but this was super unsafe as it would not work if the object is not yet a shared ptr (throwing std::bad_weak_ptr)
+    const WindowingSystemIntegration* getWsi() const override { return this; }
 
     /**
      * Acquire all GPU resources including instance, device and swapchain resources.

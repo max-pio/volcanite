@@ -212,7 +212,8 @@ public:
      *
      * @return `nullptr` if the context is not associated with a windowing system, for example if vulkan is only used for compute work
      */
-    virtual std::shared_ptr<const WindowingSystemIntegration> getWsi() const { return nullptr; }
+    virtual const WindowingSystemIntegration* getWsi() const { return nullptr; }
+//    virtual std::shared_ptr<const WindowingSystemIntegration> getWsi() const { return nullptr; }
 
     virtual bool hasDeviceExtension(char const *name) const = 0;
     virtual bool hasDeviceExtension(std::string name) const { return hasDeviceExtension(name.c_str()); }
