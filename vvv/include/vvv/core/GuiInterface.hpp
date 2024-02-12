@@ -70,7 +70,7 @@ namespace vvv {
  */
 class GuiInterface {
 protected:
-    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiAction, GuiLabel, GuiDynamicText, GuiSeparator, GuiTF1D, GuiTF2D, GuiTFSegmentedVolume, GuiCustomCode };
+    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiAction, GuiLabel, GuiDynamicText, GuiProgress, GuiSeparator, GuiTF1D, GuiTF2D, GuiTFSegmentedVolume, GuiCustomCode };
 
     // ------------------------------- GUI ENTRIES ------------------------------------ //
 public:
@@ -185,11 +185,12 @@ public:
 
         // special types and grouping
         virtual gui_id addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int)> onChanged = nullptr, const std::string& name = "");
-        virtual gui_id addAction(void (*callback)(), std::string name);
-        virtual gui_id addAction(std::function<void()> callback, std::string name);
-        virtual gui_id addCustomCode(std::function<void()> callback, std::string name);
+        virtual gui_id addAction(void (*callback)(), const std::string& name);
+        virtual gui_id addAction(std::function<void()> callback, const std::string& name);
+        virtual gui_id addCustomCode(std::function<void()> callback, const std::string& name);
         virtual gui_id addLabel(std::string name);
         virtual gui_id addDynamicText(std::string* text, std::string name = "");
+        virtual gui_id addProgress(std::function<float()> getter, const std::string &name = "") { return add<float>(nullptr, getter, name, GuiProgress); }
         virtual gui_id addSeparator();
 
         virtual bool writeParameters(std::ostream& out) const;

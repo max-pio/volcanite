@@ -777,7 +777,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dis->addColor(&m_background_color_a, "Background Color A");
     g_dis->addColor(&m_background_color_b, "Background Color B");
     g_dis->addInt(&m_accum_frames, "Accumulation Frames");
-    g_dis->addFloat([](float v){}, [this]() { return static_cast<float>(m_framesSinceCameraMove) / static_cast<float>(m_accum_frames) * 100.f; }, "Progress", 1);
+    g_dis->addProgress([this]() { return static_cast<float>(m_framesSinceCameraMove) / static_cast<float>(m_accum_frames); }, "Progress");
     g_dis->addInt(&m_subsampling, "Subsampling Resolution", 0, 3, 1);
     //
     g_dis->addSeparator();

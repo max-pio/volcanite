@@ -237,6 +237,18 @@ void GuiImgui::renderGui() {
                     ImGui::TextUnformatted(e->value->c_str());
                     break;
                 }
+                case GuiProgress: {
+                    auto e = GUI_CAST(be, float);
+                    if(be->label.empty()) {
+                        ImGui::ProgressBar(e->getter());
+                    }  else {
+                        // ImVec2(0.0f,0.0f) uses ItemWidth.
+                        ImGui::ProgressBar(e->getter(), ImVec2(0.0f, 0.0f));
+                        ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+                        ImGui::TextUnformatted(be->label.c_str());
+                    }
+                    break;
+                }
                 case GuiSeparator: {
                     ImGui::Separator();
                     break;
