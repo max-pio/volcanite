@@ -442,7 +442,7 @@ void main() {
             }
 
             // store previous direction as the outgoing direction for the BRDF evaluation
-            vec3 prev_direction = -ray.direction;
+            vec3 brdf_out_direction = -ray.direction;
 
             // advance the path: sample a new direction
             state.path_length++;
@@ -451,19 +451,19 @@ void main() {
             if(nextRNG(fragCoord, state.rng).x < g_shadow_pathtracing_ratio) {
                 if(g_local_shading_enable) {
                     // sample the cosine weighted positive hemisphere
-                    ray.direction = sampleCosineWeightedHemisphere(nextRNG(fragCoord, state.rng).xy, state.normal);
+                    ray.direction = sampleCosineWeightedHemisphereVoxel(nextRNG(fragCoord, state.rng).xy, state.normal);
                     state.throughput /= pdfCosineWeightedHemisphere(ray.direction, state.normal);
                 } else {
-                    ray.direction = uniformSampleHemisphereVoxel(nextRNG(fragCoord, state.rng).xy, state.normal);
-                    state.throughput *= TWO_PI;
+                    ray.direction = sampleUniformHemisphereVoxel(nextRNG(fragCoord, state.rng).xy, state.normal);
+                    state.throughput /= pdfUniformHemisphere(ray.direction, state.normal);
                 }
             }
             else {
                 // sample directly to  directional light
                 // ToDo: get the probabilities right so that this is real next event estimation?
                 ray.direction = g_light_direction;
-                // ToDo: is it right to treat this as the PDF of uniform hemisphere sampling? Feels right at least..
-                state.throughput *= TWO_PI;
+                // ToDo: is it right to treat this as the PDF of uniform hemisphere sampling? Looks okay at least..
+                state.throughput /= pdfUniformHemisphere(ray.direction, state.normal);
 
                 // check for self shadowing of the current voxel
                 if (g_global_illumination_enable > 0 && dot(state.normal, ray.direction) < 0) {
@@ -476,21 +476,13 @@ void main() {
             }
             ray.direction = normalize(ray.direction);
 
-#ifndef NDEBUG
-            assert(dot(state.normal, ray.direction) >= 0.f, "sampling a new ray direction from the *negative* hemisphere");
-            if(dot(state.normal, ray.direction) < 0.f) {
-                state.out_color.rgb = vec3(1.f, 0.f, 1.f);
-                break;
-            }
-#endif
-
-            // surface albedo and Monte Carlo factor 2*PI
+            // surface albedo
             state.throughput *= surface_albedo_opacity.rgb;
             if(g_local_shading_enable) {
                 // geometry term
                 state.throughput *= max(dot(state.normal, ray.direction), 0.f);
                 // brdf
-                state.throughput *= brdf(state, ray.direction, prev_direction);
+                state.throughput *= brdf(state, ray.direction, brdf_out_direction);
             } else {
                 state.throughput /= TWO_PI;
             }
@@ -499,6 +491,14 @@ void main() {
             if(g_global_illumination_enable == 0) {
                 break;
             }
+
+#ifndef NDEBUG
+            if(dot(state.normal, ray.direction) < 0.f && any(greaterThan(state.throughput, vec3(0.f)))) {
+                debugPrintfEXT("sampling a new ray direction from the *negative* hemisphere for pixel %v2i bounce %i, normal %v3f, dir %v3f, dot %f", pixel, state.path_length, state.normal, ray.direction, dot(state.normal, ray.direction));
+                state.out_color.rgb = vec3(1.f, 0.f, 1.f);
+                break;
+            }
+#endif
 
             // re-init DDA traversal for the shadow ray
             ray.origin = state.pos;

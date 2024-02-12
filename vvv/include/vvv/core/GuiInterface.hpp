@@ -267,9 +267,6 @@ protected:
                 Logger(WARN) << "Reading window parameters for " << tmp << " instead of expected " << m_name << ":";
                 return false;
             }
-            else {
-                Logger(DEBUG) << tmp;
-            }
             for(auto& c: m_columns) {
                 if(!c.readParameters(in))
                     return false;
