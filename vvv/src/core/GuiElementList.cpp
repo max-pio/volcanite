@@ -279,6 +279,7 @@ namespace vvv {
                 // some parameters do not need to be exported because they are 'constant'
                 case GuiAction:
                 case GuiLabel:
+                case GuiProgress:
                 case GuiSeparator:
                 case GuiCustomCode:
                     break;

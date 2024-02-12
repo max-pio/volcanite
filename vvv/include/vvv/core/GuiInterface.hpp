@@ -208,6 +208,7 @@ protected:
         std::vector<GuiElementList> m_columns;
         bool m_visible;
 
+
         constexpr static unsigned int MAX_GUI_COLUMN_COUNT = 8;     // we only allow this many columns per window
 
     public:
@@ -279,6 +280,9 @@ protected:
 
     std::unordered_map<std::string, GuiWindow> m_windows;
 
+
+    std::vector<std::pair<std::string, std::string>> m_docking_layout = {};
+
     // accessor function to the gui entries
     static std::vector<BaseGuiEntry*>& getEntriesForColumn(GuiElementList& l) { return l.m_entries; }
 
@@ -329,6 +333,16 @@ public:
                 return false;
         }
         return true;
+    }
+
+    /**
+     * Pass a list of std::pair objects where each pair contains the: 1. window to dock, and 2. docking location.\n
+     * A docking location can either be a name of another window or one of the placeholders "l", "r", "u", "d" for
+     * left, right, up, or down locations of the central window. Docking multiple windows to the same central window
+     * location results in them being placed next to/below each other at this location.
+     */
+    void setDockingLayout(std::vector<std::pair<std::string, std::string>> docking_layout) {
+        m_docking_layout = std::move(docking_layout);
     }
 
     /**

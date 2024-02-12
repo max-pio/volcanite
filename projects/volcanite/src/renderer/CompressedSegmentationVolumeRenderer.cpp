@@ -687,6 +687,12 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     GuiInterface::GuiElementList* g_dev = gui->get("Development");
     // we create an invisible GUI window to export all parameters but keep them hidden from the user
     gui->getWindow("Development")->setVisible(!m_release_version);
+    // specify a docking layout for the windows
+    gui->setDockingLayout({{"General", "d"},
+                           {"Rendering", "d"},
+                           {"Display", "d"},
+                           {"Materials", "r"},
+                           {"Development", "Materials"}});
 
     // General options
 //ToDo: addFloatRange2 to the GUIInterface
@@ -795,7 +801,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     // Path Tracing / Rendering
     g_render->addFloat(&m_factor_ambient, "Constant Color", 0.0f, 1.f, 0.05f, 2);
     g_render->addBool(&m_envmap_enabled, "Environment Map");
-    g_render->addFloat(&m_light_intensity, "Light Intensity", 0.f, 10.f, 0.02f, 2);
+    g_render->addFloat(&m_light_intensity, "Light Intensity", 0.f, 4.f, 0.05f, 2);
     g_render->addDirection(&m_light_direction, "Light Direction");
     g_render->addSeparator();
     g_render->addBool(&m_cook_torrance_shading, "Local Shading");
