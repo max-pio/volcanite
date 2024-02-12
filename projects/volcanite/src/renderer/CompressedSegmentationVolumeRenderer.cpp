@@ -419,7 +419,6 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     else
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, shader_defines);
     m_pass->allocateResources();
-    m_pass->resetCacheOnNextCall();
     m_urender_info = m_pass->getUniformSet("render_info");
     m_usegmented_volume_info = m_pass->getUniformSet("segmented_volume_info");
     m_pass->setStorageBuffer(0, 1, *m_brick_starts_buffer);
@@ -441,6 +440,7 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
     m_framesSinceCameraMove = 0;
     m_frame = 0u;
+//    m_pass->resetCacheOnNextCall();
 }
 
 void CompressedSegmentationVolumeRenderer::releaseShaderResources() {
@@ -488,8 +488,9 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
 
     // trigger a temporal accumulation flush
     m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
-    // trigger a cache reset
-    m_pass->resetCacheOnNextCall();
+    m_framesSinceCameraMove = 0;
+    m_frame = 0u;
+//    m_pass->resetCacheOnNextCall();
 }
 
 void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
