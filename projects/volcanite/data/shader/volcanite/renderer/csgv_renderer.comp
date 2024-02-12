@@ -12,6 +12,7 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #include "debug_colormaps.glsl"
 #include "morton.glsl"
 #include "random.glsl"
+#include "dummy_envmap.glsl"
 // Compressed Segmentation Volume specific: define array containing the encoding (input) as well as the decoding (output)
 #define CSGV_ENCODING_ARRAY g_encoding
 #define CSGV_DETAIL_ARRAY g_detail
@@ -278,7 +279,7 @@ void main() {
     }
 
     // Add a subpixel offset in [0, 1) to perform temporal anti-aliasing
-    vec2 subpixel_offset = randomVec3(vec2(pixel), 1347.f + float(g_camera_still_frames / (g_subsampling * g_subsampling))).xy;
+    vec2 subpixel_offset = hash(uvec3(pixel.x, pixel.y, 1347 + g_camera_still_frames / (g_subsampling * g_subsampling))).xy;
     vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(viewport_size);
 
     // create view ray in model space
@@ -293,7 +294,10 @@ void main() {
     ray_box_intersection(ray, bounding_box, t_0, t_1);
     // if we don't hit the data set, we can directly output the background
     if (t_0 >= t_1) {
-        writePixel(pixel, get_background_color(fragCoord), BACKGROUND_DEPTH);
+        if(g_debug_envmap)
+            writePixel(pixel, vec4(dummy_envmap(ray.direction), 1.f), BACKGROUND_DEPTH);
+        else
+            writePixel(pixel, get_background_color(fragCoord), BACKGROUND_DEPTH);
         return;
     }
     t_0 -= 0.0001f; // Epsilon
@@ -406,7 +410,7 @@ void main() {
             // classification determines the surface color (= suface albedo)
             vec4 surface_albedo_opacity = get_color(state.label);
             // ToDo: albedos close to one oversature colors with many bounces. Add a GUI parameter to dim the albedo?
-            surface_albedo_opacity.rgb *= g_max_path_length > 1 ? 1.f - (0.1 * g_shadow_ao_ray_distr) : 1.f;
+            surface_albedo_opacity.rgb *= g_max_path_length > 1 ? 1.f - (0.1 * g_shadow_pathtracing_ratio) : 1.f;
             // debug: visualize level-of-detail with viridis colormap
             if (g_debug_lod) { // && debug_view_visible
                 uint lod = get_inv_lod(state.voxel);
@@ -442,9 +446,9 @@ void main() {
 
             // advance the path: sample a new direction
             state.path_length++;
-            // g_shadow_ao_ray_distr controls the ratio between rays sampled in any direction and rays in light direction
+            // g_shadow_pathtracing_ratio controls the ratio between rays sampled in any direction and rays in light direction
             // this allows user control between direct and indirect illumination
-            if(nextRNG(fragCoord, state.rng).x < g_shadow_ao_ray_distr) {
+            if(nextRNG(fragCoord, state.rng).x < g_shadow_pathtracing_ratio) {
                 if(g_local_shading_enable) {
                     // sample the cosine weighted positive hemisphere
                     ray.direction = sampleCosineWeightedHemisphere(nextRNG(fragCoord, state.rng).xy, state.normal);
@@ -462,7 +466,7 @@ void main() {
                 state.throughput *= TWO_PI;
 
                 // check for self shadowing of the current voxel
-                if (g_shadow_ray_enable > 0 && dot(state.normal, ray.direction) < 0) {
+                if (g_global_illumination_enable > 0 && dot(state.normal, ray.direction) < 0) {
                     // same code as for a shadow hit!
                     state.throughput = vec3(0.f);
                     break;
@@ -492,7 +496,7 @@ void main() {
             }
 
             // if we do not trace any secondary rays, we can stop the traversal here
-            if(g_shadow_ray_enable == 0) {
+            if(g_global_illumination_enable == 0) {
                 break;
             }
 
@@ -521,11 +525,18 @@ void main() {
         atomicAdd(gpu_bbox_hits, 1u);
     }
 
-    state.out_color.rgb += state.throughput * vec3(g_light_intensity);
+    if(g_envmap_enable > 0)
+        state.out_color.rgb += state.throughput * vec3(g_light_intensity) * dummy_envmap(ray.direction);
+    else
+        state.out_color.rgb += state.throughput * vec3(g_light_intensity);
 
     // ToDo: the background should be added in the csgv_upsample_resolve shader
-    // perform alpha blending with background
-    state.out_color.rgb = get_background_color(fragCoord).rgb * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
+    // perform alpha blending with backgroun
+    if(g_debug_envmap)
+        state.out_color.rgb = dummy_envmap(ray.direction) * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
+    else
+        state.out_color.rgb = get_background_color(fragCoord).rgb * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
+
 
     // write to iamge
     writePixel(pixel, state.out_color, state.out_depth);

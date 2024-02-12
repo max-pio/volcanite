@@ -157,8 +157,9 @@ private:
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
     int m_subsampling = 2;
     bool m_tonemap_enabled = false;
-    bool m_shadow_ray_enabled = true;
-    float m_shadow_ao_ray_distr = 0.f;
+    bool m_global_illumination_enabled = true;
+    bool m_envmap_enabled = true;
+    float m_shadow_pathtracing_ratio = 0.f;
     glm::vec2 m_ambient_occlusion_dist_strength = glm::vec2(15.f, 0.5f);
     glm::vec3 m_light_direction = glm::vec3(-1.f, 1.f, 0.1f);
     float m_light_intensity = 1.f;
@@ -173,6 +174,7 @@ private:
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
     // debugging and dev options
     float m_lod_bias = 0.f;
+    bool m_show_envmap = false;
     bool m_show_normals = false;
     bool m_blue_noise = true;
     bool m_show_model_space = false;
@@ -181,7 +183,7 @@ private:
     bool m_show_step_count = false;
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
-    int m_accum_frames = 64;
+    int m_accum_frames = 512;
     int m_max_decoding_lod = 6;
     // utility
     std::string m_gui_resolution_text;

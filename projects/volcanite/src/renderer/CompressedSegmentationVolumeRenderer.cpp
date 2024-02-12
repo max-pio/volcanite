@@ -538,8 +538,9 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
             if (m_materials[m].isActive())
                 max_active_material = m;
         m_urender_info->setUniform<int32_t>("g_max_active_material", max_active_material);
-        m_urender_info->setUniform<int32_t>("g_shadow_ray_enable", m_shadow_ray_enabled ? 1 : 0);
-        m_urender_info->setUniform<float>("g_shadow_ao_ray_distr", m_shadow_ao_ray_distr);
+        m_urender_info->setUniform<int32_t>("g_global_illumination_enable", m_global_illumination_enabled ? 1 : 0);
+        m_urender_info->setUniform<int32_t>("g_envmap_enable", m_envmap_enabled ? 1 : 0);
+        m_urender_info->setUniform<float>("g_shadow_pathtracing_ratio", m_shadow_pathtracing_ratio);
         m_urender_info->setUniform<int32_t>("g_tonemap_enable", m_tonemap_enabled ? 1 : 0);
         m_urender_info->setUniform<glm::vec3>("g_light_direction", m_light_direction);
         m_urender_info->setUniform<float>("g_light_intensity", m_light_intensity);
@@ -566,6 +567,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<uint32_t>("g_debug_brick_cache", m_show_brick_cache ? 1 : 0);
         m_urender_info->setUniform<uint32_t>("g_debug_lod", m_show_lod ? 1 : 0);
         m_urender_info->setUniform<uint32_t>("g_debug_step_count", m_show_step_count ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_debug_envmap", m_show_envmap ? 1 : 0);
         m_urender_info->setUniform<uint32_t>("g_debug_normals", m_show_normals ? 1 : 0);
 
         // Transformation matrices:
@@ -624,7 +626,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         newCamHash = hashMemory(&m_show_step_count, sizeof(m_show_step_count), newCamHash);
         newCamHash = hashMemory(&m_background_color_a, sizeof(m_background_color_a), newCamHash);
         newCamHash = hashMemory(&m_background_color_b, sizeof(m_background_color_b), newCamHash);
-        newCamHash = hashMemory(&m_shadow_ray_enabled, sizeof(m_shadow_ray_enabled), newCamHash);
+        newCamHash = hashMemory(&m_global_illumination_enabled, sizeof(m_global_illumination_enabled), newCamHash);
+        newCamHash = hashMemory(&m_envmap_enabled, sizeof(m_envmap_enabled), newCamHash);
         newCamHash = hashMemory(&m_light_direction, sizeof(m_light_direction), newCamHash);
         newCamHash = hashMemory(&m_light_intensity, sizeof(m_light_intensity), newCamHash);
         newCamHash = hashMemory(&m_ambient_occlusion_dist_strength, sizeof(m_ambient_occlusion_dist_strength),
@@ -633,10 +636,11 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         newCamHash = hashMemory(&m_max_steps, sizeof(m_max_path_length), newCamHash);
         newCamHash = hashMemory(&m_cook_torrance_shading, sizeof(m_cook_torrance_shading), newCamHash);
         newCamHash = hashMemory(&m_show_normals, sizeof(m_show_normals), newCamHash);
+        newCamHash = hashMemory(&m_show_envmap, sizeof(m_show_envmap), newCamHash);
         newCamHash = hashMemory(&m_factor_ambient, sizeof(m_factor_ambient), newCamHash);
         newCamHash = hashMemory(&m_ratio_spec_diff, sizeof(m_ratio_spec_diff), newCamHash);
         newCamHash = hashMemory(&m_tonemap_enabled, sizeof(m_tonemap_enabled), newCamHash);
-        newCamHash = hashMemory(&m_shadow_ao_ray_distr, sizeof(m_shadow_ao_ray_distr), newCamHash);
+        newCamHash = hashMemory(&m_shadow_pathtracing_ratio, sizeof(m_shadow_pathtracing_ratio), newCamHash);
         newCamHash = hashMemory(&m_max_decoding_lod, sizeof(m_max_decoding_lod), newCamHash);
         newCamHash = hashMemory(&m_lod_bias, sizeof(m_lod_bias), newCamHash);
         newCamHash = hashMemory(&m_accum_frames, sizeof(m_accum_frames), newCamHash);
@@ -789,14 +793,15 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
     // Path Tracing / Rendering
     g_render->addFloat(&m_factor_ambient, "Constant Color", 0.0f, 1.f, 0.05f, 2);
+    g_render->addBool(&m_envmap_enabled, "Environment Map");
     g_render->addFloat(&m_light_intensity, "Light Intensity", 0.f, 10.f, 0.02f, 2);
     g_render->addDirection(&m_light_direction, "Light Direction");
     g_render->addSeparator();
     g_render->addBool(&m_cook_torrance_shading, "Local Shading");
     g_render->addFloat(&m_ratio_spec_diff, "Specular / Diffuse Shading Ratio", 0.0f, 1.0f, 0.05f, 2);
     g_render->addSeparator();
-    g_render->addBool(&m_shadow_ray_enabled, "Global Illumination");
-    g_render->addFloat(&m_shadow_ao_ray_distr, "Direct Light / Pathtracing Ratio", 0.f, 1.f, 0.1f, 1);
+    g_render->addBool(&m_global_illumination_enabled, "Global Illumination");
+    g_render->addFloat(&m_shadow_pathtracing_ratio, "Direct Light / Pathtracing Ratio", 0.f, 1.f, 0.1f, 1);
     g_render->addInt(&m_max_path_length, "Path Length", 1, 32, 1);
 
     // Development
@@ -811,6 +816,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addBool(&m_show_brick_cache, "Show Brick Cache");
     g_dev->addBool(&m_show_lod, "Show LOD Levels");
     g_dev->addBool(&m_show_step_count, "Show Ray Step Count");
+    g_dev->addBool(&m_show_envmap, "Show Environment Map");
     g_dev->addBool(&m_show_normals, "Show Normals");
     g_dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
     g_dev->addAction(
