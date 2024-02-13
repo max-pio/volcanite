@@ -1046,6 +1046,19 @@ void Application::updateCamera() {
 }
 
 #ifdef IMGUI
+
+void setImGuiStyle() {
+    // start with the light colors
+    ImGui::StyleColorsLight();
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 0.f;
+    style.FrameRounding = 0.f;
+    style.ScrollbarRounding = 0;
+
+    // progress bars / histograms should use calm colors as well
+    style.Colors[ImGuiCol_PlotHistogram] = style.Colors[ImGuiCol_Button];
+}
+
 void Application::initImGui() {
     auto device = getDevice();
 
@@ -1082,7 +1095,7 @@ void Application::initImGui() {
 
     recreateSwapchainImGui();
 
-    ImGui::StyleColorsLight();
+    setImGuiStyle();
 
     ImGui_ImplGlfw_InitForVulkan(m_window, true);
 

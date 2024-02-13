@@ -54,9 +54,97 @@ void GuiImgui::renderGui() {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    // create a
-//    ImGui::DockSpace(ImGui::GetID("CentralDockSpace"));
-    ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+    // WINDOW DOCKING
+    {
+        ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+
+        if (m_firstCall) {
+            ImGui::DockBuilderRemoveNode(dockspace_id);
+            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_PassthruCentralNode | ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
+
+            ImGuiID dock_id_down = 0u, dock_id_left = 0u, dock_id_up = 0u, dock_id_right = 0u;
+            ImGuiID dock_id_old;
+
+            // keep track of parents
+            std::unordered_map<std::string, ImGuiID> parents = {};
+
+            for(const auto& l : m_docking_layout) {
+                const std::string& window = l.first;
+                const std::string& loc = l.second;
+
+                if(!m_windows.contains(window)) {
+                    vvv::Logger(vvv::WARN) << "can not dock non-existing window " << window;
+                    continue;
+                }
+
+                if(m_windows.contains(loc)) {
+                    // Dock at an existing window
+                    if(parents.contains(loc)) {
+                        ImGui::DockBuilderDockWindow(window.c_str(), parents[loc]);
+                    } else {
+                        vvv::Logger(vvv::WARN) << "can not dock to windows that were not already docked elsewhere (can not dock " << window << " to " << loc << ")";
+                        // ToDo: would have to create a new docking node as parent for both window and loc
+                    }
+                }
+                else {
+                    // Dock down / left / up / right of the docking central node
+                    // Create a new split location of the central node if none exists yet.
+                    // Otherwise, append next to the existing windows.
+                    if (loc == "d") {
+                        if (dock_id_down == 0u) {
+                            dock_id_down = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.2f, nullptr, &dockspace_id);
+                            ImGui::DockBuilderDockWindow(window.c_str(), dock_id_down);
+                            parents[window] = dock_id_down;
+                        } else {
+                            dock_id_old = dock_id_down;
+                            dock_id_down = ImGui::DockBuilderSplitNode(dock_id_old, ImGuiDir_Right, 0.6f, nullptr, &dock_id_old);
+                            ImGui::DockBuilderDockWindow(window.c_str(), dock_id_down);
+                            parents[window] = dock_id_down;
+                        }
+                    } else if (loc == "l") {
+                        if (dock_id_left == 0u) {
+                            dock_id_left = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.2f, nullptr, &dockspace_id);
+                            ImGui::DockBuilderDockWindow(window.c_str(), dock_id_left);
+                            parents[window] = dock_id_left;
+                        } else {
+                            dock_id_old = dock_id_left;
+                            dock_id_left = ImGui::DockBuilderSplitNode(dock_id_old, ImGuiDir_Down, 0.6f, nullptr, &dock_id_old);
+                            ImGui::DockBuilderDockWindow(window.c_str(), dock_id_left);
+                            parents[window] = dock_id_left;
+                        }
+                    } else if (loc == "u") {
+                        if (dock_id_up == 0u) {
+                            dock_id_up = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Up, 0.2f, nullptr, &dockspace_id);
+                            ImGui::DockBuilderDockWindow(window.c_str(), dock_id_up);
+                            parents[window] = dock_id_up;
+                        } else {
+                            dock_id_old = dock_id_up;
+                            dock_id_up = ImGui::DockBuilderSplitNode(dock_id_old, ImGuiDir_Right, 0.6f, nullptr, &dock_id_old);
+                            ImGui::DockBuilderDockWindow(window.c_str(), dock_id_up);
+                            parents[window] = dock_id_up;
+                        }
+                    } else if (loc == "r") {
+                        if (dock_id_right == 0u) {
+                            dock_id_right = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Right, 0.2f, nullptr, &dockspace_id);
+                            ImGui::DockBuilderDockWindow(window.c_str(), dock_id_right);
+                            parents[window] = dock_id_right;
+                        } else {
+                            dock_id_old = dock_id_right;
+                            dock_id_right = ImGui::DockBuilderSplitNode(dock_id_old, ImGuiDir_Down, 0.6f, nullptr, &dock_id_old);
+                            ImGui::DockBuilderDockWindow(window.c_str(), dock_id_right);
+                            parents[window] = dock_id_right;
+                        }
+                    } else {
+                        vvv::Logger(vvv::WARN) << "Unkown window docking location " << loc;
+                        continue;
+                    }
+                }
+            }
+
+            ImGui::DockBuilderFinish(dockspace_id);
+        }
+    }
 
     // iterate over all windows
     for(const auto& window : m_windows) {
@@ -235,6 +323,18 @@ void GuiImgui::renderGui() {
                 case GuiDynamicText: {
                     auto e = GUI_CAST(be, std::string);
                     ImGui::TextUnformatted(e->value->c_str());
+                    break;
+                }
+                case GuiProgress: {
+                    auto e = GUI_CAST(be, float);
+                    if(be->label.empty()) {
+                        ImGui::ProgressBar(e->getter());
+                    }  else {
+                        // ImVec2(0.0f,0.0f) uses ItemWidth.
+                        ImGui::ProgressBar(e->getter(), ImVec2(0.0f, 0.0f));
+                        ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+                        ImGui::TextUnformatted(be->label.c_str());
+                    }
                     break;
                 }
                 case GuiSeparator: {

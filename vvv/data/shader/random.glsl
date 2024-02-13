@@ -2,6 +2,9 @@
 #ifndef INV_PI
     #define INV_PI 0.3183098861837907f
 #endif
+#ifndef INV_TWO_PI
+    #define INV_TWO_PI 0.15915494309
+#endif
 
 // NOISE ---------------------------------------------------------------------------------------------------------------
 
@@ -142,60 +145,32 @@ vec3 nextRNG(const in vec2 xy, inout float seed) {
 
 // SAMPLING ------------------------------------------------------------------------------------------------------------
 
-mat3 fromAxisAngle(vec3 axis, float angle) {
-    axis = normalize(axis);
-    float s = sin(angle);
-    float c = cos(angle);
-    float oc = 1.0 - c;
-
-    return mat3(
-    oc * axis.x * axis.x + c, oc * axis.x * axis.y - axis.z * s, oc * axis.z * axis.x + axis.y * s,
-    oc * axis.x * axis.y + axis.z * s, oc * axis.y * axis.y + c, oc * axis.y * axis.z - axis.x * s,
-    oc * axis.z * axis.x - axis.y * s, oc * axis.y * axis.z + axis.x * s, oc * axis.z * axis.z + c);
-}
-
-vec3 alignToNormalZUP(in vec3 s, in vec3 normal) {
-    // edge case at the epipoles
-    const vec3 up = vec3(0.0f, 0.0f, 1.0f);
-    if (dot(up, normal) > 0.999f)
-        return s;
-    if (dot(up, normal) < -0.999f)
-        return -s;
-
-    float angle = acos(dot(up, normal));
-    vec3 axis = cross(up, normal);
-    return s * fromAxisAngle(axis, angle);
-}
-
-// DEPRECATED: returns a random point on the unit sphere
-vec3 randomSpherePoint(const in vec3 rand) {
-    float ang1 = rand.x * 2.f * PI; // [0..2*PI)
-    float u = rand.y * 2.f - 1.f; // [-1..1), cos and acos(2v-1) cancel each other out, so we arrive at [-1..1)
-    float u2 = u * u;
-    float sqrt1MinusU2 = sqrt(1.0 - u2);
-    float x = sqrt1MinusU2 * cos(ang1);
-    float y = sqrt1MinusU2 * sin(ang1);
-    float z = u;
-    return vec3(x, y, z);
-}
-
 vec3 uniformSampleSphere(const in vec2 u) {
     float h = 1.0 - 2.0 * u.x;
     float r = sqrt(1.0 - h * h);
     return vec3(r * cos(2.0 * PI * u.y), h, r * sin(2.0 * PI * u.y));
 }
 
-vec3 uniformSampleHemisphereVoxel(const in vec2 u, const in vec3 normal) {
+vec3 sampleUniformHemisphereVoxel(const in vec2 u, const in vec3 normal) {
     vec3 dir = uniformSampleSphere(u);
     // Assuming that the normal is axis-oriented, we only have to alter the sign of dir's components to project it into
     // the positive hemisphere. This is the case for surface normals of voxels.
     return dir * sign(dot(normal, dir));
 }
 
-vec3 sampleCosineWeightedHemisphere(const in vec2 u, in vec3 normal) {
-    float theta = acos(sqrt(1 - u.x));
-    float phi = 2 * PI * u.y;
-    return normalize(alignToNormalZUP(vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta)), normal));
+float pdfUniformHemisphere(const in vec3 dir, const in vec3 normal) {
+    return INV_TWO_PI;
+}
+
+vec3 sampleCosineWeightedHemisphereVoxel(const in vec2 u, in vec3 normal) {
+    float r = sqrt(u.x);
+    float theta = 2.0 * PI * u.y;
+
+    // Assuming that the normal is axis-oriented, the vector (0, 1, 1) is always orthogonal
+    vec3  bitangent = normalize(cross(normal, vec3(0.0,1.0,1.0)));
+    vec3  tangent = cross(bitangent, normal);
+
+    return normalize(r * sin(theta) * bitangent + sqrt(1.0 - u.x) * normal + r * cos(theta) * tangent);
 }
 
 float pdfCosineWeightedHemisphere( const in vec3 dir, const in vec3 normal) {

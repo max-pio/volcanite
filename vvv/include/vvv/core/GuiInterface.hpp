@@ -70,7 +70,7 @@ namespace vvv {
  */
 class GuiInterface {
 protected:
-    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiAction, GuiLabel, GuiDynamicText, GuiSeparator, GuiTF1D, GuiTF2D, GuiTFSegmentedVolume, GuiCustomCode };
+    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiAction, GuiLabel, GuiDynamicText, GuiProgress, GuiSeparator, GuiTF1D, GuiTF2D, GuiTFSegmentedVolume, GuiCustomCode };
 
     // ------------------------------- GUI ENTRIES ------------------------------------ //
 public:
@@ -185,11 +185,12 @@ public:
 
         // special types and grouping
         virtual gui_id addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int)> onChanged = nullptr, const std::string& name = "");
-        virtual gui_id addAction(void (*callback)(), std::string name);
-        virtual gui_id addAction(std::function<void()> callback, std::string name);
-        virtual gui_id addCustomCode(std::function<void()> callback, std::string name);
+        virtual gui_id addAction(void (*callback)(), const std::string& name);
+        virtual gui_id addAction(std::function<void()> callback, const std::string& name);
+        virtual gui_id addCustomCode(std::function<void()> callback, const std::string& name);
         virtual gui_id addLabel(std::string name);
         virtual gui_id addDynamicText(std::string* text, std::string name = "");
+        virtual gui_id addProgress(std::function<float()> getter, const std::string &name = "") { return add<float>(nullptr, getter, name, GuiProgress); }
         virtual gui_id addSeparator();
 
         virtual bool writeParameters(std::ostream& out) const;
@@ -206,6 +207,7 @@ protected:
         std::string m_name;
         std::vector<GuiElementList> m_columns;
         bool m_visible;
+
 
         constexpr static unsigned int MAX_GUI_COLUMN_COUNT = 8;     // we only allow this many columns per window
 
@@ -266,9 +268,6 @@ protected:
                 Logger(WARN) << "Reading window parameters for " << tmp << " instead of expected " << m_name << ":";
                 return false;
             }
-            else {
-                Logger(DEBUG) << tmp;
-            }
             for(auto& c: m_columns) {
                 if(!c.readParameters(in))
                     return false;
@@ -280,6 +279,9 @@ protected:
     // --------------------------- GUI WINDOW CLASS END ------------------------------------- //
 
     std::unordered_map<std::string, GuiWindow> m_windows;
+
+
+    std::vector<std::pair<std::string, std::string>> m_docking_layout = {};
 
     // accessor function to the gui entries
     static std::vector<BaseGuiEntry*>& getEntriesForColumn(GuiElementList& l) { return l.m_entries; }
@@ -331,6 +333,16 @@ public:
                 return false;
         }
         return true;
+    }
+
+    /**
+     * Pass a list of std::pair objects where each pair contains the: 1. window to dock, and 2. docking location.\n
+     * A docking location can either be a name of another window or one of the placeholders "l", "r", "u", "d" for
+     * left, right, up, or down locations of the central window. Docking multiple windows to the same central window
+     * location results in them being placed next to/below each other at this location.
+     */
+    void setDockingLayout(std::vector<std::pair<std::string, std::string>> docking_layout) {
+        m_docking_layout = std::move(docking_layout);
     }
 
     /**

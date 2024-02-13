@@ -20,6 +20,9 @@
 #ifndef TWO_PI
     #define TWO_PI 6.28318530718f
 #endif
+#ifndef INV_TWO_PI
+    #define INV_TWO_PI 0.15915494309
+#endif
 
 
 // Indexing and vector utils -------------------------------------------------------------------------------------------

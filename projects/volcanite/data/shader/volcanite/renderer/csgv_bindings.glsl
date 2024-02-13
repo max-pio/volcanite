@@ -112,8 +112,9 @@ layout (std140, binding = 10) uniform render_info {
     float g_voxels_per_pixel_per_dist;
     float g_lod_bias;
     int g_tonemap_enable;
-    int g_shadow_ray_enable;
-    float g_shadow_ao_ray_distr;
+    int g_global_illumination_enable;
+    int g_envmap_enable;
+    float g_shadow_pathtracing_ratio;
     vec3 g_light_direction;
     float g_light_intensity;
     int g_subsampling;
@@ -129,6 +130,7 @@ layout (std140, binding = 10) uniform render_info {
     uint g_camera_still_frames;
     ivec2 g_subsampling_pixel;
     float g_random_seed;
+    bool g_debug_envmap;
     bool g_debug_normals;
     bool g_debug_model_space;
     bool g_debug_brick_cache;

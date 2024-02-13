@@ -71,7 +71,7 @@ namespace vvv {
         m_entries.push_back(entry);
         return entry->id;
     }
-    gui_id GuiInterface::GuiElementList::addAction(void (*callback)(), std::string name) {
+    gui_id GuiInterface::GuiElementList::addAction(void (*callback)(), const std::string& name) {
         auto entry = new GuiFuncEntry();
         entry->id = m_id_counter++;
         entry->type = GuiAction;
@@ -80,7 +80,7 @@ namespace vvv {
         m_entries.push_back(entry);
         return entry->id;
     }
-    gui_id GuiInterface::GuiElementList::addAction(std::function<void()> callback, std::string name) {
+    gui_id GuiInterface::GuiElementList::addAction(std::function<void()> callback, const std::string& name) {
         auto entry = new GuiFuncEntry();
         entry->id = m_id_counter++;
         entry->type = GuiAction;
@@ -89,7 +89,7 @@ namespace vvv {
         m_entries.push_back(entry);
         return entry->id;
     }
-    gui_id GuiInterface::GuiElementList::addCustomCode(std::function<void()> callback, std::string name) {
+    gui_id GuiInterface::GuiElementList::addCustomCode(std::function<void()> callback, const std::string& name) {
         auto entry = new GuiFuncEntry();
         entry->id = m_id_counter++;
         entry->type = GuiCustomCode;
@@ -233,6 +233,7 @@ namespace vvv {
                 // some parameters do not need to be exported because they are 'constant'
                 case GuiAction:
                 case GuiLabel:
+                case GuiProgress:
                 case GuiSeparator:
                 case GuiCustomCode:
                     break;
@@ -278,6 +279,7 @@ namespace vvv {
                 // some parameters do not need to be exported because they are 'constant'
                 case GuiAction:
                 case GuiLabel:
+                case GuiProgress:
                 case GuiSeparator:
                 case GuiCustomCode:
                     break;
