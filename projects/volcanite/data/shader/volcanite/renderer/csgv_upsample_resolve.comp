@@ -60,7 +60,7 @@ void main() {
         accum_color.rgb /= accum_color.a;
 
     // perform tonemapping and color space conversion
-    if(g_tonemap_enable > 0) {
+    if(g_tonemap_enable) {
 //        accum_color.rgb *= 2.4f; // increase exposure
         accum_color.rgb = tonemap_ACES(accum_color.rgb);
         accum_color.rgb = rgb2srgb(accum_color.rgb);

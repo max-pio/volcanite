@@ -242,6 +242,9 @@ public:
                 va.threads = threadsArg.getValue();
                 va.chunked = !chunkedArg.getValue().empty();
                 if(va.chunked) {
+                    if(va.compress_export_file.empty())
+                        throw ArgException("A csgv export path must be specified with " + compresspathArg.longID() + " when processing chunked volumes!");
+
                     std::string chunk_indices = chunkedArg.getValue();
                     std::stringstream ss(chunk_indices);
                     ss >> va.chunk_files[0];

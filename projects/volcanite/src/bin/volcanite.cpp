@@ -92,20 +92,35 @@ int volcanite(int argc, char *argv[]) {
         if(!args.verbose)
             Logger(INFO) << "compressing segmentation volume " << args.input_file << (args.chunked ? " with max. chunks " + str(max_chunk_id) : "");
 
-        std::string complete_csgv_path;
+        std::string complete_csgv_path = {};
         bool use_temporary_output_file = args.compress_export_file.empty();
+        // if no output file is specified, we try to export the .csgv file to the location of the input file
         if(use_temporary_output_file) {
-            // construct a temporary .csgv output path if no output path was specified
-            // ToDo: try to use the location of the input file for temp csgv output files? Move this to the VolcaniteArgs.hpp?
-            create_directory(std::filesystem::temp_directory_path() / "vvv");
-            //complete_csgv_path = (std::filesystem::temp_directory_path() / "vvv" / "tmp.csgv").string();
-            complete_csgv_path = (std::filesystem::temp_directory_path() / "vvv" / "tmp.csgv").string();
-            if (std::filesystem::exists(complete_csgv_path))
-                std::filesystem::remove(complete_csgv_path);
+            std::string potential_path = stripFileExtension(args.input_file) + ".csgv";
+            // this only works if the input path is not a formatted chunked input path,
+            if (!args.chunked && !std::filesystem::exists(potential_path)) {
+                std::ofstream file;
+                file.open(potential_path);
+                if (file.is_open()) {
+                    file.close();
+                    std::filesystem::remove(potential_path);
+                    complete_csgv_path = potential_path;
+                    use_temporary_output_file = false;
+                }
+            }
         }
         else {
             complete_csgv_path = args.compress_export_file;
         }
+
+        // otherwise, we just use a tmp file
+        if(use_temporary_output_file) {
+            create_directory(std::filesystem::temp_directory_path() / "volcanite");
+            complete_csgv_path = (std::filesystem::temp_directory_path() / "volcanite" / "tmp.csgv").string();
+            if (std::filesystem::exists(complete_csgv_path))
+                std::filesystem::remove(complete_csgv_path);
+        }
+
 
         if(!args.label_remapping && !args.attribute_database.empty()) {
             Logger(ERROR) << "Attribute database can not be used without label remapping. Aborting.";

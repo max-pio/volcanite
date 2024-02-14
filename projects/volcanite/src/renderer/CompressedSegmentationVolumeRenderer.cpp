@@ -539,10 +539,10 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
             if (m_materials[m].isActive())
                 max_active_material = m;
         m_urender_info->setUniform<int32_t>("g_max_active_material", max_active_material);
-        m_urender_info->setUniform<int32_t>("g_global_illumination_enable", m_global_illumination_enabled ? 1 : 0);
-        m_urender_info->setUniform<int32_t>("g_envmap_enable", m_envmap_enabled ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_global_illumination_enable", m_global_illumination_enabled ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_envmap_enable", m_envmap_enabled ? 1 : 0);
         m_urender_info->setUniform<float>("g_shadow_pathtracing_ratio", m_shadow_pathtracing_ratio);
-        m_urender_info->setUniform<int32_t>("g_tonemap_enable", m_tonemap_enabled ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_tonemap_enable", m_tonemap_enabled ? 1 : 0);
         m_urender_info->setUniform<glm::vec3>("g_light_direction", m_light_direction);
         m_urender_info->setUniform<float>("g_light_intensity", m_light_intensity);
         m_urender_info->setUniform<int32_t>("g_max_path_length", m_max_path_length);
@@ -554,7 +554,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<uint32_t>("g_local_shading_enable", m_cook_torrance_shading ? 1 : 0);
         m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
         m_urender_info->setUniform<float>("g_ratio_spec_diff", m_ratio_spec_diff);
-        m_urender_info->setUniform<uint32_t>("g_blue_noise", m_blue_noise ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? 1 : 0);
         m_urender_info->setUniform<float>("g_opacityThreshold",
                                           0.5); // TODO: we have this low opacity treshold to render opaque first hits
         m_urender_info->setUniform<glm::vec3>("g_camera_position_world_space", camera->position_world_space);

@@ -54,7 +54,7 @@ ivec2 pixelFromInvocationID() {
         return ivec2(gl_GlobalInvocationID.xy);
     else {
         // offset the subsampling pixel with some blue noise
-        int blueNoiseIdx = g_blue_noise ? int(blueNoise32x32(ivec2(gl_GlobalInvocationID.xy)) * float(g_subsampling * g_subsampling)) : 0;
+        int blueNoiseIdx = g_blue_noise_enable ? int(blueNoise32x32(ivec2(gl_GlobalInvocationID.xy)) * float(g_subsampling * g_subsampling)) : 0;
         return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + ivec2(mod(g_subsampling_pixel + morton2Di2p(blueNoiseIdx), ivec2(g_subsampling)));
     }
 }
@@ -448,7 +448,7 @@ void main() {
             state.path_length++;
             // g_shadow_pathtracing_ratio controls the ratio between rays sampled in any direction and rays in light direction
             // this allows user control between direct and indirect illumination
-            if(nextRNG(fragCoord, state.rng).x < g_shadow_pathtracing_ratio) {
+            if(g_global_illumination_enable && nextRNG(fragCoord, state.rng).x < g_shadow_pathtracing_ratio) {
                 if(g_local_shading_enable) {
                     // sample the cosine weighted positive hemisphere
                     ray.direction = sampleCosineWeightedHemisphereVoxel(nextRNG(fragCoord, state.rng).xy, state.normal);
@@ -466,7 +466,7 @@ void main() {
                 state.throughput /= pdfUniformHemisphere(ray.direction, state.normal);
 
                 // check for self shadowing of the current voxel
-                if (g_global_illumination_enable > 0 && dot(state.normal, ray.direction) < 0) {
+                if (g_global_illumination_enable && dot(state.normal, ray.direction) < 0) {
                     // same code as for a shadow hit!
                     state.throughput = vec3(0.f);
                     break;
@@ -488,7 +488,7 @@ void main() {
             }
 
             // if we do not trace any secondary rays, we can stop the traversal here
-            if(g_global_illumination_enable == 0) {
+            if(!g_global_illumination_enable) {
                 break;
             }
 
@@ -525,7 +525,7 @@ void main() {
         atomicAdd(gpu_bbox_hits, 1u);
     }
 
-    if(g_envmap_enable > 0)
+    if(g_envmap_enable)
         state.out_color.rgb += state.throughput * vec3(g_light_intensity) * dummy_envmap(ray.direction);
     else
         state.out_color.rgb += state.throughput * vec3(g_light_intensity);
