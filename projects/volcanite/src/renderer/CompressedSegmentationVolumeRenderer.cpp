@@ -634,7 +634,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         newCamHash = hashMemory(&m_ambient_occlusion_dist_strength, sizeof(m_ambient_occlusion_dist_strength),
                                 newCamHash);
         newCamHash = hashMemory(&m_max_path_length, sizeof(m_max_path_length), newCamHash);
-        newCamHash = hashMemory(&m_max_steps, sizeof(m_max_path_length), newCamHash);
+        newCamHash = hashMemory(&m_max_steps, sizeof(m_max_steps), newCamHash);
         newCamHash = hashMemory(&m_cook_torrance_shading, sizeof(m_cook_torrance_shading), newCamHash);
         newCamHash = hashMemory(&m_show_normals, sizeof(m_show_normals), newCamHash);
         newCamHash = hashMemory(&m_show_envmap, sizeof(m_show_envmap), newCamHash);
