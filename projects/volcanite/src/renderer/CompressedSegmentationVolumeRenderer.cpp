@@ -528,7 +528,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
 
     // size in world space: uniformly scaled so that the largest component is one
     float scalingFactor = glm::max(physical_voldim.x, glm::max(physical_voldim.y, physical_voldim.z));
-    glm::vec4 normalized_volume_size(physical_voldim / scalingFactor, 1.f);
+    glm::vec3 normalized_volume_size(physical_voldim / scalingFactor);
 
     // render info uniform
     {
@@ -583,8 +583,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
 //            world_to_model_space = glm::mat4(_world_to_model_space[0], _world_to_model_space[2], _world_to_model_space[1], _world_to_model_space[3]);
 //        }
 //        else
-        world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), glm::vec3(scalingFactor)),
-                                              glm::vec3(normalized_volume_size / 2.f));
+        world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), voldim / normalized_volume_size), normalized_volume_size / 2.f);
         m_urender_info->setUniform<glm::mat4x4>("g_model_to_world_space", glm::inverse(world_to_model_space));
         m_urender_info->setUniform<glm::mat4x4>("g_world_to_model_space", world_to_model_space);
         m_urender_info->setUniform<glm::mat3x3>("g_world_to_model_space_dir", glm::mat3(world_to_model_space));

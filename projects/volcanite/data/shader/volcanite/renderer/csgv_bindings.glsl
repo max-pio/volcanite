@@ -4,10 +4,10 @@
 
 layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uvec3 g_vol_dim;            // xyz dimension of the original volume
-    vec3 g_voxel_size;          // relative size of a single voxel
+    vec3 g_voxel_size;          // relative size of a single voxel (can be greater than 1 in any dim)
     ivec3 g_vol_translation;    // translates the volume by the given voxel count
     vec3 g_physical_vol_dim;    // physical volume size: g_vol_dim * g_voxel_size
-    vec3 g_normalized_volume_size;   // world space size of the volume (usually ~1m^3)
+    vec3 g_normalized_volume_size;   // world space size of the volume (usually ~1m^3 with the largest dim being 1)
     uint g_vol_max_label;       // maximum label in the segmented volume
     uint g_brick_size;          // power of 2 size along one axis of the bricks
     uvec3 g_brick_count;        // number of bricks in each xyz dimension for the encoded volume

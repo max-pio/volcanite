@@ -288,6 +288,7 @@ void main() {
     ray.direction = normalize(g_world_to_model_space_dir * ray.direction);
     // In world space, we hit a small cuboid (largest dimension is 1) centered around the origin.
     // We transform this to model space, where each voxel has unit size:
+    // ToDo: voxels having unit size in model space does not work with the voxel_size parameter, no?
     float t_0, t_1;
     AABB bounding_box = AABB((g_world_to_model_space * vec4((g_bboxMin.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz,
                              (g_world_to_model_space * vec4((g_bboxMax.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz);
@@ -309,7 +310,7 @@ void main() {
     // visualize model space coordinates
     if(g_debug_model_space) {
         vec3 pos = ray.origin + t_0 * ray.direction;
-        vec3 color = floor(pos) / g_physical_vol_dim;
+        vec3 color = floor(pos) / vec3(g_vol_dim);
         vec3 borders = vec3(greaterThan(fract(pos), vec3(0.0f))) * vec3(lessThan(fract(pos - vec3(0.0001f)), vec3(0.2f)));
         if(borders.x + borders.y + borders.z > 0.f)
             color *= 1.f - 1.f / (t_0 / g_world_to_model_space_scaling * 64.f);
