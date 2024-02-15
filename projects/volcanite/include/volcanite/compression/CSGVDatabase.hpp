@@ -1,12 +1,9 @@
 #pragma once
 
-#ifdef LIB_SQLITE3
-
 #include "vvv/volren/Volume.hpp"
 #include "vvv/util/space_filling_curves.hpp"
 
 #include "volcanite/compression/CompSegVolHandler.hpp"
-#include "SQLiteCpp/VariadicBind.h"
 
 #include <glm/glm.hpp>
 
@@ -15,9 +12,15 @@
 #include <utility>
 #include <vector>
 
-
-#include <SQLiteCpp/SQLiteCpp.h>
-#include <SQLiteCpp/VariadicBind.h>
+#ifdef LIB_SQLITE3
+    #include <SQLiteCpp/SQLiteCpp.h>
+    #include <SQLiteCpp/VariadicBind.h>
+    #include "SQLiteCpp/VariadicBind.h"
+#else
+namespace SQLite {
+    typedef char Database;
+}
+#endif
 
 namespace vvv {
 
@@ -35,6 +38,7 @@ private:
                                glm::uvec3 volume_dimension, glm::uvec3 chunk_dimension,
                                const std::string& attribute_database, const std::string& attribute_table,
                                const std::string& label_column) {
+#ifdef LIB_SQLITE3
         if(m_db) {
             Logger(WARN) << "closing existing csgv database " << m_db->getFilename() << " before creation";
             close();
@@ -192,6 +196,9 @@ private:
         // reimport database as read only
         importFromSqlite(sqlite_path);
         return true;
+#else
+        throw std::runtime_error("SQLite library not available");
+#endif
     }
 
 public:
@@ -211,7 +218,7 @@ public:
      */
     void createDummy(const CompressedSegmentationVolume* csgv) {
         m_db = nullptr;
-        //ToDo: could create a in-memory database if we need more dummy functionality
+        //ToDo: could create a in-memory database if we need more dummy functionality (if LIB_SQLITE3 is present)
         // m_db =  std::make_unique<SQLite::Database>(":memory:", SQLite::OPEN_MEMORY);
         m_label_count = ~0u;    // uint32 Max ToDo: find the maximum palette label within the csgv file
         m_attribute_names = {"csgv_id"};
@@ -238,6 +245,7 @@ public:
     }
 
     void importFromSqlite(const std::string& sqlite_path) {
+#ifdef LIB_SQLITE3
         m_db = std::make_unique<SQLite::Database>(sqlite_path, SQLite::OPEN_READONLY);
 
         // read label count, attribute names, and min/max values from columns
@@ -250,6 +258,9 @@ public:
             m_attribute_minmax.emplace_back(static_cast<float>(m_db->execAndGet("SELECT MIN(" + m_attribute_names.back() + ") FROM " + CSGV_ATTRIBUTE_TABLE).getDouble()),
                                             static_cast<float>(m_db->execAndGet("SELECT MAX(" + m_attribute_names.back() + ") FROM " + CSGV_ATTRIBUTE_TABLE).getDouble()));
         }
+#else
+        throw std::runtime_error("SQLite library not available");
+#endif
     }
 
     /** For a (possibly chunked) volume, the following preprocessing is carried out and exported to a new database:\n
@@ -260,6 +271,7 @@ public:
                                       const std::string& attribute_database, const std::string& attribute_table,
                                       const std::string& label_column,
                                       bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u)) {
+#ifdef LIB_SQLITE3
         std::shared_ptr<Volume<uint32_t>> volume = nullptr;
         std::unordered_set<uint32_t> label_set = {};    // hash set to speed up the {label already exists} check
         std::vector<uint32_t> index_to_label = {};
@@ -339,6 +351,9 @@ public:
         // create new SQLite database, export all data and then re-import as read only
         databaseExportAndOpen(sqlite_export_path, index_to_label, volume_dimension, chunk_dimension,
                               attribute_database, attribute_table, label_column);
+#else
+        throw std::runtime_error("SQLite library not available");
+#endif
     }
 
     /**
@@ -347,6 +362,7 @@ public:
      * (2) ordered along a Morton Z-Curve by their first appearance in the volume
      */
     [[nodiscard]] std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> getLabelRemapping() const {
+#ifdef LIB_SQLITE3
         if(!m_db)
             throw std::runtime_error("No CSGV sqlite database present.");
 
@@ -364,6 +380,9 @@ public:
             (*label_to_index)[query.getColumn(label_column)] = query.getColumn(id_column);
 
         return label_to_index;
+#else
+        throw std::runtime_error("SQLite library not available");
+#endif
     }
 
     size_t getAttributeCount() const {
@@ -389,6 +408,7 @@ public:
      * @return the number of written elements
      */
     size_t getAttribute(int attributeIndex, float* begin, size_t maxSize) {
+#ifdef LIB_SQLITE3
         if(!m_db)
             throw std::runtime_error("No CSGV sqlite database present.");
 
@@ -405,6 +425,9 @@ public:
         }
         assert((it == begin + m_label_count) && "Did not write expected number of attribute values");
         return (it - begin);
+#else
+        throw std::runtime_error("SQLite library not available");
+#endif
     }
 
 private:
@@ -416,5 +439,3 @@ private:
 
 
 } // namespace vvv
-
-#endif // ifdef LIB_SQLITE3
