@@ -149,9 +149,9 @@ private:
     // materials
     static constexpr uint32_t SEGMENTED_VOLUME_MATERIAL_COUNT = 8;
     std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
-    float m_factor_ambient = 0.1f;
-    float m_ratio_spec_diff = 0.8f;
-    bool m_cook_torrance_shading = false;
+    float m_factor_ambient = 0.0f;
+    float m_ratio_spec_diff = 0.7f;
+    bool m_cook_torrance_shading = true;
     // shading and post processing
     glm::vec4 m_background_color_a = glm::vec4(0.9f, 0.9f, 0.95f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
@@ -159,12 +159,12 @@ private:
     bool m_tonemap_enabled = false;
     bool m_global_illumination_enabled = true;
     bool m_envmap_enabled = true;
-    float m_shadow_pathtracing_ratio = 0.f;
+    float m_shadow_pathtracing_ratio = 1.0f;
     glm::vec2 m_ambient_occlusion_dist_strength = glm::vec2(15.f, 0.5f);
     glm::vec3 m_light_direction = glm::vec3(-1.f, 1.f, 0.1f);
     float m_light_intensity = 1.f;
     // voxel traversal
-    int m_max_path_length = 4;
+    int m_max_path_length = 32;
     int m_max_steps = 2048;
     glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
     bool m_subblock_enabled = false;
