@@ -128,10 +128,10 @@ void main() {
     }
 
     // we can refuse to deallocate elements if the cache is filled below 75%, but only if it does not have to switch LOD
-    const uint cache_top = (g_lod_count - 1u) * ASSIGN_ELEMS_PER_LOD;
-    if (!allocate && g_assign_info[cache_top] < g_cache_capacity / 4u * 3u) {
-        deallocate = false;
-    }
+//    const uint cache_top = (g_lod_count - 1u) * ASSIGN_ELEMS_PER_LOD;
+//    if (!allocate && g_assign_info[cache_top] < g_cache_capacity / 4u * 3u) {
+//        deallocate = false;
+//    }
 
     // if we switch the LoD, both allocate and deallocate have to be carried out
     if (deallocate) {

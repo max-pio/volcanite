@@ -70,14 +70,14 @@ uint get_inv_lod(ivec3 voxel) {
     return g_lod_count - 1u - clamp(uint(g_lod_bias + log2(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
 }
 
-/// returns true if the block is already decompressed, false otherwise
-bool get_volume_label(ivec3 voxel, out uint label) {
-    assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label out of bounds!");
+bool isValid(float depth) { return depth >= 0.f; }
 
-    if (any(lessThan(voxel, ivec3(0))) || any(greaterThanEqual(voxel, ivec3(g_vol_dim)))) {
-        label = 0u;
-        return true;
-    }
+/// returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
+uint get_volume_label(ivec3 voxel, inout float depth_valid) {
+    assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label out of bounds!");
+//    if (any(lessThan(voxel, ivec3(0))) || any(greaterThanEqual(voxel, ivec3(g_vol_dim)))) {
+//        return 0u;
+//    }
 
     uvec3 brick = uvec3(voxel) / g_brick_size;
     uvec3 brick_voxel = uvec3(voxel) - (brick * g_brick_size);
@@ -88,8 +88,9 @@ bool get_volume_label(ivec3 voxel, out uint label) {
     uint req_inv_lod = get_inv_lod(voxel);
 
     // tell the other shaders that we can see this brick if it's visibility state is "unknown"
+    // but only if this is a valid pixel sample. An invalid sample could be accessing bricks that are actually not visible.
     assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] <= g_lod_count, "we try to access a brick that's flagged as invisible");
-    if(req_inv_lod > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > req_inv_lod) {
+    if(isValid(depth_valid) && req_inv_lod > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > req_inv_lod) {
         // if the brick was not requested so far:
         if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= g_lod_count)
             g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
@@ -108,23 +109,28 @@ bool get_volume_label(ivec3 voxel, out uint label) {
     // or if the brick is not yet decoded
     if (req_inv_lod == 0u || cur_inv_lod >= g_lod_count) {
 
+        // if the brick was not decoded, anything we compute from now on is invalid
+        if(req_inv_lod > 0u && g_max_decoding_lod > 0u) {
 #ifdef SEPARATE_DETAIL
-        uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * (g_lod_count - 1u)];
+            uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * (g_lod_count - 1u)];
 #else
-        uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * g_lod_count];
+            uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * g_lod_count];
 #endif
 
-        // ToDo: this should be a random number from the random state
-        float rnd = hash(uvec3(gl_GlobalInvocationID.xy, g_frame)).r;
+            depth_valid = INVALID_DEPTH;
+            // ToDo: this should be a random number from the random state
+            float rnd = hash(uvec3(gl_GlobalInvocationID.xy, g_frame)).r;
+            return g_encoding[g_brick_starts[brick_id+1] - 1u - uint(rnd * rnd * float(palette_size))];
+        }
+
+        // return the first palette entry = coarsests compressed representation of the brick for inv_lod 0
         // we could alternatively perform a small linear search for the first *visible* label here
-        label = g_encoding[g_brick_starts[brick_id+1] - 1u - uint(rnd * rnd * float(palette_size))];
-        // return false if the brick is not yet decoded but should be
-        return req_inv_lod == 0u;
+        return g_encoding[g_brick_starts[brick_id+1] - 1u];
     }
     // read the voxel from the brick in the cache (with the currently decoded LOD)
     else {
-        label = readCSGVBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * 8u);
-        return true;
+        // ToDo: we do not change the depth_valid validity here even though we do NOT check if we request an LOD that differs from what is currently decoded for the brick
+        return readCSGVBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * 8u);
     }
 }
 
@@ -139,7 +145,7 @@ bool isEmptySpace(ivec3 voxel) {
 
 
 
-void writePixel(ivec2 pixel, vec4 color, float depth) {
+void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
     // if subsamplign is enabled, we only render one pixel per [g_subsampling]^2 block
     ivec2 subpixel;
     for(subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
@@ -151,7 +157,7 @@ void writePixel(ivec2 pixel, vec4 color, float depth) {
                     imageStore(feedbackOut, opix, vec4(0.f));
                 // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame (set .a=0)
                 else
-                    imageStore(feedbackOut, opix, vec4(color.rgb, depth < 0.f ? 0.f : 1.f));
+                    imageStore(feedbackOut, opix, vec4(color.rgb, isValid(depth_valid) ? 1.f :  0.f));
             }
             else {
                 vec4 prev_color = imageLoad(feedbackIn, opix);
@@ -159,7 +165,7 @@ void writePixel(ivec2 pixel, vec4 color, float depth) {
                 if (any(notEqual(opix, pixel)))
                     imageStore(feedbackOut, opix, prev_color);
                 // writing our pixel, but invalid new sample (from not yet decoded brick)
-                else if (depth < 0.f)
+                else if (!isValid(depth_valid))
                     imageStore(feedbackOut, opix, prev_color.a > 0.f ? prev_color : vec4(color.rgb, 0.f));
                 // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
                 else
@@ -185,7 +191,7 @@ struct RayMarchState {
     vec3 pos;           // the position of the ray marcher
     ivec3 voxel;        // the current voxel in which pos is
     uint label;         // the label at the hit point
-    float out_depth;    // depth to be written to the depth buffer. negative depth indicates an invalid hit
+    float depth_valid;    // depth to be written to the depth buffer. negative depth indicates an invalid hit
 
     // path tracing
     vec4 out_color;     // (radiance) color to be written to the color buffer
@@ -338,7 +344,7 @@ void main() {
     state.path_length = 0;
     state.throughput = vec3(1.f);
     state.out_color = vec4(0.f);
-    state.out_depth = BACKGROUND_DEPTH;
+    state.depth_valid = BACKGROUND_DEPTH;
 
     // ray marching loop
     state.voxel = ivec3(floor(state.pos)); // DDA traversal start voxel
@@ -357,44 +363,54 @@ void main() {
             break;
         }
 
-        // sampling (read value at pos from previously decoded volume segments in brick cache) or return the coarsest
-        // LOD as a placeholder if not yet decoded, in which case the function will return false.
-        if (!get_volume_label(state.voxel, state.label)) {
-            // return an invalid depth to indicate that this sample should not be counted (= overwritten in next frame)
-            state.out_depth = INVALID_DEPTH;
-            // only allow stepping one brick width further as we would request all later bricks
-            // ToDo: mark the state so that only the first brick is requested but we continue the traversal through palettes?
-            state.step = int(g_maxSteps - g_brick_size);
-//            state.out_color = isLabelVisible(state.label) ? get_color(state.label) : vec4(0.f);
-//            state.throughput = vec3(0.f);
-//            break;
-        }
+        // sampling (read value at pos from previously decoded volume segments in brick cache) or return a
+        // placeholder label if not yet decoded, in which case the depth_valid will be set to INVALID_DEPTH.
+        // An sample marked as invalid this way may not alter the framebuffer and skip certain cmoputation steps.
+        state.label = get_volume_label(state.voxel, state.depth_valid);
+//        if (!isValid(state.depth_valid)) {
+//            // only allow stepping one brick width further
+//            state.step = int(g_maxSteps - g_brick_size);
+//            state.step = int(g_maxSteps);
+////            state.out_color = isLabelVisible(state.label) ? get_color(state.label) : vec4(0.f);
+////            state.throughput = vec3(0.f);
+////            break;
+//        }
 
 #ifndef NDEBUG
         if(state.label == INVALID){
             state.out_color = vec4(1.f, 0.f, 1.f, 1.f);
-            state.out_depth = 0.f;
+            state.depth_valid = 0.f;
             assert(!isCenterWorkItem(), "get_volume_label returned INVALID. Possible corrupt data in brick cache.");
             break;
         }
 #endif
 
-        // continue traversal if this is not a valid hit
+        // continue traversal if this is not a visible label
         if (!isLabelVisible(state.label)) {
             continue;
         }
         else if(debug_view_visible && g_debug_brick_cache) {
             // trigger visibility update
-            uint tmp_label;
-            get_volume_label(state.voxel, tmp_label);
-            uvec3 brick = uvec3(state.pos.xyz * vec3(g_vol_dim)) / g_brick_size;
-            uint brick_id = brick_to_1D(brick, g_brick_count);
-            uint cache_start = g_brick_info[brick_id * 4u + BRICK_INFO_CACHE_INDEX];
-            if (cache_start == INVALID || g_brick_info[brick_id * 4u + BRICK_INFO_CUR_INV_LOD] >= g_lod_count) {
+            get_volume_label(state.voxel, state.depth_valid);
+
+            uvec3 brick = uvec3(state.voxel) / g_brick_size;
+            uvec3 brick_voxel = uvec3(state.voxel) - (brick * g_brick_size);
+            uint brick_info_pos = brick_to_1D(brick, g_brick_count) * 4u;
+
+            uint cache_start = g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX];
+            if (cache_start == INVALID || g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] >= g_lod_count) {
                 state.out_color = vec4(1.f, 0.f, 0.f, 1.f);
                 continue;
+            } else if (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < g_lod_count) { // should always be true here
+                uint lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
+                state.out_color.rgb = colormap_viridis(float(lod - 1u)/float(g_lod_count - 2u));
+                if(lod == 0u)
+                    state.out_color.rgb = vec3(1.f, 0.f, 0.f);
+                state.out_color.a = 1.f;
+                state.throughput = vec3(0.f);
             } else {
-                state.out_color = vec4(0.f, 1.f, 0.2f, 1.f);
+                state.out_color = (state.out_color + 3.f * vec4(0.f, 1.f, 0.2f, 1.f)) / 4.f;
+                state.throughput = vec3(0.f);
                 break;
             }
         }
@@ -434,7 +450,7 @@ void main() {
             // the first surface hit is the only point for which we want to store our t value in the depth buffer
             // but if we previously stored an INVALID_DEPTH (< 0) at any point, we don't want to overwrite that
             if(state.path_length == 0)
-                state.out_depth = min(state.out_depth, state.t);
+                state.depth_valid = min(state.depth_valid, state.t);
             // opacity is always 1 on hit
             state.out_color.a = 1.f;
 
@@ -558,5 +574,5 @@ void main() {
 
 
     // write to image
-    writePixel(pixel, state.out_color, state.out_depth);
+    writePixel(pixel, state.out_color, state.depth_valid);
 }
