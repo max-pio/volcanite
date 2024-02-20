@@ -3,14 +3,16 @@
 
 #include <vulkan/vulkan.hpp>
 
+#ifdef LIB_VTK
+#include <vtkDataArrayRange.h>
+#include <vtkIntArray.h>
 #include <vtkSmartPointer.h>
 #include <vtkXMLImageDataReader.h>
 #include <vtkImageData.h>
 #include <vtkCellData.h>
-#include <vtkIntArray.h>
+#endif
 
 #include <cmath>
-#include <vtkDataArrayRange.h>
 
 namespace vvv {
 
