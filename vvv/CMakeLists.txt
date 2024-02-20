@@ -197,12 +197,21 @@ target_compile_definitions(libvvv PUBLIC -DGLM_FORCE_DEPTH_ZERO_TO_ONE -DLIB_VVV
 target_link_libraries(libvvv PUBLIC Vulkan::Vulkan glm::glm)
 
 # link optional libraries
-if(OpenMP_CXX_FOUND)
+if (OpenMP_CXX_FOUND)
     target_link_libraries(libvvv PUBLIC OpenMP::OpenMP_CXX)
-endif()
+endif ()
 if (HDF5_FOUND)
     target_link_libraries(libvvv PRIVATE HighFive)
     target_compile_definitions(libvvv PUBLIC -DLIB_HIGHFIVE)
+endif ()
+# vtk linking and module initialization
+if (VTK_FOUND)
+    target_link_libraries(libvvv PRIVATE ${VTK_LIBRARIES})
+    vtk_module_autoinit(
+            TARGETS libvvv
+            MODULES ${VTK_LIBRARIES}
+    )
+    target_compile_definitions(libvvv PUBLIC -DLIB_VTK)
 endif ()
 if (SQLite3_FOUND)
     target_link_libraries(libvvv PUBLIC SQLiteCpp SQLite::SQLite3) # pthread dl

@@ -22,7 +22,7 @@ sudo apt install build-essential cmake libglfw3-dev libglm-dev libtclap-dev -y
 ```
 4. Optional: Install optional packages:
 ```
-sudo apt install libhdf5-dev libtiff-dev libpugixml-dev libsqlite3-dev -y
+sudo apt install libhdf5-dev libvtk9-dev libtiff-dev libpugixml-dev libsqlite3-dev -y
 ```
 5. Build the project. Run in project root directory:
 ```
@@ -47,7 +47,7 @@ If your IDE supports generating build files, you can directly open the `CMakeLis
 ```
 6. Optional: Install optional packages:
 ```
-.\vcpkg install hdf5 tiff sqlite3 --triplet=x64-windows
+.\vcpkg install hdf5 vtk tiff sqlite3 --triplet=x64-windows
 ```
 7. Build the project. Choose one of the following, depending on your development environment:
 
@@ -151,7 +151,7 @@ sudo apt install build-essential cmake libglm-dev libtclap-dev -y
 ```
 H4. Optional: Install optional packages:
 ```
-sudo apt install libhdf5-dev libtiff-dev libpugixml-dev libsqlite3-dev -y
+sudo apt install libhdf5-dev libvtk9-dev libtiff-dev libpugixml-dev libsqlite3-dev -y
 ```
 H5. Build the project with the `HEADLESS` option set. Run in project root directory:
 ```
@@ -184,13 +184,14 @@ If you have questions about certain parts in the implementation, feel free to co
 | GLFW                | 3.3.6        | windowing for GLFW application       | `libglfw3-dev`                                                          |
 | TCLAP               | 1.2.5        | parse command line arguments         | `libtclap-dev`                                                          |
 
-| Optional Dependency | Min. Version  | Usage                                   | Ubuntu / Debian package name |
-|---------------------|:--------------|-----------------------------------------|------------------------------|
-| HDF5                | 1.10.7        | read .hdf5 segmentation volumes         | `libhdf5-dev`                |
-| SQLite              | 3.37.2        | read/write sqlite label attribute files | `libsqlite3-dev`             |
-| TIFF                | 4.3.0         | read TIFF volumes                       | `libtiff-dev`                |
-| PugiXML             | 1.12.1        |  parse XML data                         | `libpugixml-dev`             |
-| OpenMP              | 4.5           | CPU parallelization                     | included in compiler         |
+| Optional Dependency | Min. Version | Usage                                   | Ubuntu / Debian package name  |
+|---------------------|:-------------|-----------------------------------------|-------------------------------|
+| HDF5                | 1.10.7       | read .hdf5 segmentation volumes         | `libhdf5-dev`                 |
+| VTK                 | 9.1.0        | read .vti segmentation volumes          | `libvtk9-dev`                 |
+| SQLite              | 3.37.2       | read/write sqlite label attribute files | `libsqlite3-dev`              |
+| TIFF                | 4.3.0        | read TIFF volumes                       | `libtiff-dev`                 |
+| PugiXML             | 1.12.1       | parse XML data                          | `libpugixml-dev`              |
+| OpenMP              | 4.5          | CPU parallelization                     | included in compiler          |
 
 
 ### Development Tools

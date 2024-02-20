@@ -1,21 +1,26 @@
 #include <vvv/volren/Volume.hpp>
-
-#include <vulkan/vulkan.hpp>
 #include <vvv/util/Logger.hpp>
 
+#include <vulkan/vulkan.hpp>
+
+#include <vtkSmartPointer.h>
+#include <vtkXMLImageDataReader.h>
+#include <vtkImageData.h>
+#include <vtkCellData.h>
+#include <vtkIntArray.h>
+
 #include <cmath>
+#include <vtkDataArrayRange.h>
 
 namespace vvv {
 
 uint32_t swapEndian(uint32_t v) {
     uint32_t b0,b1,b2,b3;
     uint32_t res;
-
     b0 = (v & 0x000000ff) << 24u;
     b1 = (v & 0x0000ff00) << 8u;
     b2 = (v & 0x00ff0000) >> 8u;
     b3 = (v & 0xff000000) >> 24u;
-
     return b0 | b1 | b2 | b3;
 }
 
@@ -31,7 +36,7 @@ std::string readParameterFromHeader(std::string line, std::string parameter) {
     return s;
 }
 
-template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::string url, std::string formatLabel, vk::Format gpuFormat) {
+template <typename T> std::shared_ptr<Volume<T>> load_nastja_volume_from_vti(std::string url, std::string formatLabel, vk::Format gpuFormat) {
     std::ifstream file(url, std::ios_base::in | std::ios_base::binary);
     if (!file.is_open()) {
         std::ostringstream err;
@@ -77,7 +82,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::strin
     // second line contains the ImageData header
     if (!std::getline(file, line)) { file.close(); throw std::runtime_error("unexpected end of file in " + url); }
     if (6 != std::sscanf(line.c_str(), "<ImageData WholeExtent=\"0 %lu 0 %lu 0 %lu\" Origin=\"0 0 0\" Spacing=\"%f %f %f\">", &img_width, &img_height, &img_depth,
-                                                                                                                                     &physical_size_x, &physical_size_y, &physical_size_z)) {
+                         &physical_size_x, &physical_size_y, &physical_size_z)) {
         file.close(); throw std::runtime_error("Could not read <ImageData ..> header from second line in .vti file " + url);
     }
 
@@ -85,7 +90,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::strin
     if (!std::getline(file, line)) { file.close(); throw std::runtime_error("unexpected end of file in " + url); }
     if (!std::getline(file, line)) { file.close(); throw std::runtime_error("unexpected end of file in " + url); }
     if(readParameterFromHeader(line, "type") != formatLabel || readParameterFromHeader(line, "format") != "appended" || readParameterFromHeader(line, "offset") != "0"
-        || readParameterFromHeader(line, "NumberOfComponents") != "1") {
+       || readParameterFromHeader(line, "NumberOfComponents") != "1") {
         file.close(); throw std::runtime_error("Invalid DataArray header, expected type " + formatLabel + ", format appended, offset 0, and NumberOfComponents 1 in line 4 of .vti file " + url);
     }
 
@@ -138,6 +143,71 @@ template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::strin
 
     file.close();
     return std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, img_width, img_height, img_depth, gpuFormat, payload);
+}
+
+
+template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::string url, std::string formatLabel, vk::Format gpuFormat) {
+#ifdef LIB_VTK
+    vtkSmartPointer<vtkXMLImageDataReader> reader = vtkSmartPointer<vtkXMLImageDataReader>::New();
+    reader->SetFileName(url.c_str());
+    reader->Update();
+
+    vtkSmartPointer<vtkImageData> vti_image = reader->GetOutput();
+    vtkSmartPointer<vtkCellData>  vti_cell = vti_image->GetCellData();
+    vtkSmartPointer<vtkDataArray> vti_data = vti_cell->GetArray(0);
+
+    int expected_vtk_type = -1;
+    if(formatLabel == "UInt8")
+        expected_vtk_type = VTK_UNSIGNED_CHAR;
+    else if(formatLabel == "UInt16")
+        expected_vtk_type = VTK_UNSIGNED_SHORT;
+    else if(formatLabel == "UInt32")
+        expected_vtk_type = VTK_UNSIGNED_INT;
+    else if(formatLabel == "UInt64")
+        expected_vtk_type = VTK_UNSIGNED_LONG;
+    else
+        throw std::runtime_error("Data type " + formatLabel + " not yet supported for .vti import");
+    // ToDo: add more VTK_ types
+
+    if(vti_data->GetDataType() != expected_vtk_type) {
+        throw std::runtime_error("Expected .vti data type " + formatLabel + " (vtkType " + std::to_string(expected_vtk_type) + ") but got vtkType " + std::to_string(vti_data->GetDataType()));
+    }
+
+    int img_dims[3];
+    vti_image->GetDimensions(img_dims);
+    for (int & img_dim : img_dims) img_dim = img_dim - 1;
+
+    // copy the data
+    // ToDo: can we do this faster? e.g. using strict typing, accessors etc. https://www.kitware.com/c11-for-range-support-in-vtk/
+    std::vector<T> payload(img_dims[0] * img_dims[1] * img_dims[2]);
+    const auto range = vtk::DataArrayValueRange<1>(vti_data);
+    std::copy(range.cbegin(), range.cend(), payload.begin());
+
+    // ToDo: Actually, the physical size would be a property in the vti data!
+    float max_dim = static_cast<float>(std::max(img_dims[0], std::max(img_dims[1], img_dims[2])));
+    float physical_size_x = static_cast<float>(img_dims[0]) / max_dim;
+    float physical_size_y = static_cast<float>(img_dims[1]) / max_dim;
+    float physical_size_z = static_cast<float>(img_dims[2]) / max_dim;
+
+    if (physical_size_x <= 0.f || physical_size_y <= 0.f || physical_size_z <= 0.f || !std::isfinite(physical_size_x) || !std::isfinite(physical_size_y)|| !std::isfinite(physical_size_z)) {
+        throw std::invalid_argument("invalid .vti physical volume size");
+    }
+
+    return std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, img_dims[0], img_dims[1], img_dims[2], gpuFormat, payload);
+#else
+    Logger(WARN) << "VTK library not found. Using hardcoded vti import, expecting file layout:\n";
+    Logger(WARN) << "<VTKFile type=\"ImageData\" version=\"0.1\" byte_order=\"LittleEndian\" header_type=\"UInt64\">";
+    Logger(WARN) << "<ImageData WholeExtent=\"0 [WIDTH] 0 [HEIGHT] 0 [DEPTH]\" Origin=\"0 0 0\" Spacing=\"1.000000e+00 1.000000e+00 1.000000e+00\">";
+    Logger(WARN) << "<CellData Scalars=\"[...]\">";
+    Logger(WARN) << "<DataArray type=\"UInt32\" Name=\"[...]\" format=\"appended\" offset=\"0\" NumberOfComponents=\"1\"/>";
+    Logger(WARN) << "</CellData>";
+    Logger(WARN) << "</ImageData>";
+    Logger(WARN) << "<AppendedData encoding=\"raw\">";
+    Logger(WARN) << "[[[RAW ARRAY INPUT]]]";
+    Logger(WARN) << "</AppendedData>";
+    Logger(WARN) << "</VTKFile>";
+    return load_nastja_volume_from_vti<T>(url, formatLabel, gpuFormat);
+#endif
 }
 
 template <> std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_vti(std::string path, bool allowCast) {

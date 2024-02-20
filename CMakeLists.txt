@@ -95,6 +95,18 @@ if (USE_HDF5_SUPPORT)
     endif ()
 endif ()
 
+
+# add vtk library to load vti volume/image files
+option(USE_VTK_SUPPORT  "Includes the vtk library for importing and exporting .vti files" ON)
+if (USE_VTK_SUPPORT)
+    find_package(VTK COMPONENTS CommonCore IOXML)
+    if (VTK_FOUND)
+        # ...
+    else ()
+        message(WARNING "USE_VTK_SUPPORT was set but vtk library could not be found!")
+    endif ()
+endif ()
+
 # add extern SQLiteCpp library if libsqlite3-dev is installed
 # we can not do this in the volcanite project cmake as extern/SQLiteCpp cannot be added as a subdirectory from there
 option(USE_SQLite3 "Includes the SQLite3 library for importing and exporting .sqlite files" ON)
