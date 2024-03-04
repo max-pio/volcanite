@@ -101,6 +101,8 @@ void HeadlessRendering::acquireResources() {
     m_renderer->initResources(this);
     m_renderer->initShaderResources();
     m_renderer->initSwapchainResources();
+
+    m_renderer->initGui(this->getGui());
 }
 
 void HeadlessRendering::createQueues() {

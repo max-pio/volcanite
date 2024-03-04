@@ -226,6 +226,7 @@ int volcanite(int argc, char *argv[]) {
         }
 
         // only start the application if we are not in headless mode
+        // ToDo: the #ifndef HEADLESS must be moved above the screenshot file rendering path, right? HEADLESS CMake option implies that we do not have any rendering/Vulkan capability
 #ifndef HEADLESS
         if (!args.headless) {
             // export the state of the renderer next to the csgv volume when the app is closed

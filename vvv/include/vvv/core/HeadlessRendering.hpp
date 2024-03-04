@@ -12,11 +12,17 @@
 
 namespace vvv {
 
+class DummyGuiInterface : public vvv::GuiInterface {
+public:
+    explicit DummyGuiInterface() {};
+    void updateGui() override {}
+};
+
 class HeadlessRendering : public vvv::DefaultGpuContext, public std::enable_shared_from_this<HeadlessRendering> {
 private:
     HeadlessRendering(std::string appName, std::shared_ptr<vvv::Renderer> renderer, std::shared_ptr<vvv::DebugUtilities> debugUtilities)
             : DefaultGpuContext({.debugUtilities = std::move(debugUtilities), .appName = std::move(appName)}),
-            m_renderer(std::move(renderer)), m_pendingRecreation(false)
+            m_renderer(std::move(renderer)), m_pendingRecreation(false), m_gui(std::make_unique<DummyGuiInterface>())
     {
         // choose a camera controller for the renderer
         m_renderer->setCamera(std::make_shared<vvv::Camera>(false));
@@ -56,8 +62,12 @@ public:
 
     vvv::Camera *getCamera() const { return m_renderer->getCamera().get(); }
 
-    ~HeadlessRendering() { releaseResources(); }
+    ~HeadlessRendering() { releaseResources(); m_gui = nullptr; }
 
+    /**
+     * @return an GuiInterface to which GUI controlled properties can be added in a sequential manner.
+     */
+    vvv::GuiInterface *getGui() const { return m_gui.get(); }
 
 private:
 
@@ -72,6 +82,8 @@ private:
 
     std::shared_ptr<vvv::Renderer> m_renderer;
     bool m_pendingRecreation;
+
+    std::unique_ptr<DummyGuiInterface> m_gui = nullptr;
 
     struct {
         vk::Queue graphics = nullptr;

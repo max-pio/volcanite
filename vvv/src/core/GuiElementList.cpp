@@ -417,6 +417,9 @@ namespace vvv {
                         in >> type;
                         cm.type = static_cast<GuiTFSegmentedVolumeEntry::ColorMapType>(type);
                         e->widgetData = {};    // the GUI reinitialization triggers all updates
+
+                        // @ToDo we can not rely on the Widget in Headless mode as it does not exist there. We have to move the updateVectorTF somewhere else, maybe here
+                        Logger(WARN) << "Importing Segmented Volume Transfer Functions does not work in headless mode because of missing colormap re-vectorization.";
                     }
                     break;
                 }

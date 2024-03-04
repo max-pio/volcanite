@@ -788,7 +788,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     //
     g_dis->addSeparator();
     g_dis->addDynamicText(&m_gui_resolution_text);
-    g_dis->addBool([this](bool b) { getCtx()->getWsi()->setWindowResizable(b); }, [this]() { return getCtx()->getWsi()->isWindowResizable(); }, "Resizable Window");
+    g_dis->addBool([this](bool b) { if(getCtx()->getWsi()) getCtx()->getWsi()->setWindowResizable(b); }, [this]() { return getCtx()->getWsi() != nullptr && getCtx()->getWsi()->isWindowResizable(); }, "Resizable Window");
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
 
