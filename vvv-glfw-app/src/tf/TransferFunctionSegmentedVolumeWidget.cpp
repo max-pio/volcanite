@@ -154,10 +154,10 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                 case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFPrecomputed:
                     ImGui::PushID(id++);
                     ImGui::NextColumn();
-                    if (ImGui::BeginCombo("", availableColormaps[d.precomputedIdx].c_str())) {
-                        for (int i = 0; i < availableColormaps.size(); i++) {
+                    if (ImGui::BeginCombo("",GuiInterface::GuiTFSegmentedVolumeEntry::getAvailableColormaps()[d.precomputedIdx].c_str())) {
+                        for (int i = 0; i < GuiInterface::GuiTFSegmentedVolumeEntry::getAvailableColormaps().size(); i++) {
                             const bool is_selected = i == d.precomputedIdx;
-                            if (ImGui::Selectable(availableColormaps[i].c_str(), is_selected)) {
+                            if (ImGui::Selectable(GuiInterface::GuiTFSegmentedVolumeEntry::getAvailableColormaps()[i].c_str(), is_selected)) {
                                 d.precomputedIdx = i;
                                 colormapChanged = true;
                             }
@@ -175,7 +175,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
             ImGui::Columns(); // colormap column layout
             if (colormapChanged) {
                 materialChanged = true;
-                updateVectorColormap(m);
+                 e->updateVectorColormap(m);
             }
             // draw the colormap
             {
@@ -204,58 +204,6 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
             e->onChanged(m);
     }
 }
-
-void vvv::GuiTFSegmentedVolumeData::updateVectorColormap(int material) {
-    SegmentedVolumeMaterial& mat = (*e->materials)[material];
-    GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapConfig& d = e->colormapConfig[material];
-
-    // transfer functions are currently fully opaque
-    if(mat.tf->m_controlPointsOpacity.size() != 4) {
-        mat.tf->m_controlPointsOpacity.resize(4);
-        mat.tf->m_controlPointsOpacity[0] = 0.f;
-        mat.tf->m_controlPointsOpacity[1] = 1.f;
-        mat.tf->m_controlPointsOpacity[2] = 1.f;
-        mat.tf->m_controlPointsOpacity[3] = 1.f;
-    }
-    switch(d.type) {
-        case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFSolidColor:
-            if(mat.tf->m_controlPointsRgb.size() != 8) {
-                mat.tf->m_controlPointsRgb.resize(8);
-            }
-            mat.tf->m_controlPointsRgb[0] = 0.f;
-            mat.tf->m_controlPointsRgb[1] = d.color[0].r;
-            mat.tf->m_controlPointsRgb[2] = d.color[0].g;
-            mat.tf->m_controlPointsRgb[3] = d.color[0].b;
-            mat.tf->m_controlPointsRgb[4] = 1.f;
-            mat.tf->m_controlPointsRgb[5] = d.color[0].r;
-            mat.tf->m_controlPointsRgb[6] = d.color[0].g;
-            mat.tf->m_controlPointsRgb[7] = d.color[0].b;
-            break;
-        case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFDivergent:
-            if(mat.tf->m_controlPointsRgb.size() != 12) {
-                mat.tf->m_controlPointsRgb.resize(12);
-            }
-            mat.tf->m_controlPointsRgb[0] = 0.f;
-            mat.tf->m_controlPointsRgb[1] = d.color[0].r;
-            mat.tf->m_controlPointsRgb[2] = d.color[0].g;
-            mat.tf->m_controlPointsRgb[3] = d.color[0].b;
-            mat.tf->m_controlPointsRgb[4] = 0.5f;
-            mat.tf->m_controlPointsRgb[5] = 1.f;
-            mat.tf->m_controlPointsRgb[6] = 1.f;
-            mat.tf->m_controlPointsRgb[7] = 1.f;
-            mat.tf->m_controlPointsRgb[8] = 1.f;
-            mat.tf->m_controlPointsRgb[9] = d.color[1].r;
-            mat.tf->m_controlPointsRgb[10] = d.color[1].g;
-            mat.tf->m_controlPointsRgb[11] = d.color[1].b;
-            break;
-        case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFPrecomputed:
-            mat.tf->m_controlPointsRgb = colormaps::colormaps.at(availableColormaps[d.precomputedIdx]);
-            break;
-        default:
-            Logger(WARN) << "unknown segmentation volume transfer function colormap " << d.type;
-    }
-}
-
 
 void vvv::renderGuiTFSegmentedVolume(GuiInterface::GuiTFSegmentedVolumeEntry& entry, GpuContextPtr ctx) {
     if (!entry.widgetData.has_value())

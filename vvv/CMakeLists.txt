@@ -84,6 +84,7 @@ set(VVV_SOURCES
         src/core/Buffer.cpp
         src/core/Camera.cpp
         src/core/DefaultGpuContext.cpp
+        src/core/GuiInterface.cpp
         src/core/GuiElementList.cpp
         src/core/GpuContext.cpp
         src/core/HeadlessRendering.cpp

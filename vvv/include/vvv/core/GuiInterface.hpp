@@ -115,7 +115,7 @@ public:
     };
 
     struct GuiTFSegmentedVolumeEntry : BaseGuiEntry {
-        std::vector<SegmentedVolumeMaterial> *materials;
+        std::vector<SegmentedVolumeMaterial> *materials = {};
         std::function<void(int)> onChanged = {};
         std::vector<std::string> attributeNames = {};
         std::vector<glm::vec2> attributeMinMax = {};
@@ -130,6 +130,13 @@ public:
         std::vector<ColorMapConfig> colormapConfig = {};
         // additional widget data
         std::any widgetData = {};   // ToDo: any is not nice
+
+    private:
+        static std::vector<std::string> availableColormaps;
+    public:
+        void initialize();
+        void updateVectorColormap(int material);
+        static const std::vector<std::string>& getAvailableColormaps();
     };
 
     struct GuiComboEntry : BaseGuiEntry {

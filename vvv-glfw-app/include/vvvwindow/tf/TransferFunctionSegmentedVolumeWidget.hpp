@@ -7,25 +7,7 @@ namespace vvv {
 class GuiTFSegmentedVolumeData {
 public:
     explicit GuiTFSegmentedVolumeData(GuiInterface::GuiTFSegmentedVolumeEntry &entry) : e(&entry) {
-        int viridsLocation = static_cast<int>(std::find(availableColormaps.begin(), availableColormaps.end(), "viridis") - availableColormaps.begin());
-        for(int m = 0; m < e->materials->size(); m++) {
-            // initialize all colormaps with viridis
-            if(e->colormapConfig[m].precomputedIdx < 0)
-                e->colormapConfig[m].precomputedIdx = viridsLocation < availableColormaps.size() ? viridsLocation : 0;
-            updateVectorColormap(m);
-            if(e->onChanged)
-                e->onChanged(m);
-
-            // safeguard attribute IDs
-            if(e->materials->at(m).discrAttribute >= static_cast<int>(e->attributeNames.size())) {
-                Logger(WARN) << "discriminator attribute index " << e->materials->at(m).discrAttribute << " of material " << m << " references a non existing attribute. Resetting.";
-                e->materials->at(m).discrAttribute = 0;
-            }
-            if(e->materials->at(m).tfAttribute >= static_cast<int>(e->attributeNames.size())) {
-                Logger(WARN) << "attribute index of material " << m << " references a non existing attribute. Resetting.";
-                e->materials->at(m).tfAttribute = 0;
-            }
-        }
+        e->initialize();
 
         // Disable (-2), Any (-1), attributes (0..) for the visibility test of the material
         discriminatorNames.clear();
@@ -38,15 +20,6 @@ public:
     void renderGui(GpuContextPtr ctx);
 
 private:
-    static std::vector<std::string> makeAvailableColormaps() {
-        std::vector<std::string> v;
-        v.reserve(colormaps::good_colormaps.size());
-        for(const auto& m : colormaps::good_colormaps)
-            v.push_back(m.first);
-        return v;
-    }
-
-    const std::vector<std::string> availableColormaps = makeAvailableColormaps();
     std::vector<std::string> discriminatorNames;
 
     GuiInterface::GuiTFSegmentedVolumeEntry* e;
