@@ -317,27 +317,85 @@ public:
 
                     // process chunk: iterate over all voxels in morton order, add them to the existing_labels set and
                     // the index_to_label vector if they did not occur before.
+#if 1
                     {
-                        // iterate over all chunk voxels in morton order
-                        size_t i = 0ul;
-                        glm::uvec3 voxel(0ul);
+                        const size_t last_i = sfc::Morton3D::p2i(cur_chunk_dim);
+                        const int NUM_THREADS = 8;
+                        size_t voxels_per_thread = (32ul * 32ul * 32ul);
+                        // parallel processing will only have a benefit if we can run at least 4 threads in parallel
+                        if(last_i < 4ul * voxels_per_thread) {
+                            voxels_per_thread = last_i;
+                            //NUM_THREADS = 1;
+                        }
 
-                        // ToDo: parallelize with OpenMP?
-                        do {
-                            if(glm::all(glm::lessThan(voxel, cur_chunk_dim))) {
-                                uint32_t label = volume->getElement(voxel);
-                                if (!label_set.contains(label)) {
-                                    index_to_label.push_back(label);
-                                    label_set.insert(label);
+                        // iterate over all voxels in the volume to create a list of unique labels
+                        // we first store the labels in a thread-private _index_to_label and gather them later in the global map
+                        std::vector<uint32_t> _index_to_label[NUM_THREADS];
+                        std::unordered_set<uint32_t> _label_set[NUM_THREADS];
+
+                        for(auto& v: _index_to_label)
+                            v.reserve(voxels_per_thread);
+                        for(size_t i = 0; i < last_i; i += (NUM_THREADS * voxels_per_thread)) {
+                            // process the next NUM_THREADS * voxels_per_thread count voxels in parallel
+                            #pragma omp parallel num_threads(NUM_THREADS) default(none) shared(i, voxels_per_thread, cur_chunk_dim, volume, label_set, _index_to_label, _label_set)
+                            {
+                                unsigned int thread_id = omp_get_thread_num();
+                                _index_to_label[thread_id].clear();
+                                _label_set[thread_id].clear();
+
+                                for(size_t n = i + thread_id * voxels_per_thread; n < i + (thread_id + 1) * voxels_per_thread; n++) {
+                                    glm::uvec3 voxel = sfc::Morton3D::i2p(n);
+                                    if (glm::all(glm::lessThan(voxel, cur_chunk_dim))) {
+                                        uint32_t label = volume->getElement(voxel);
+                                        if (!_label_set[thread_id].contains(label) && !label_set.contains(label)) {
+                                            _index_to_label[thread_id].push_back(label);
+                                            // we can not add the label to the global label set here, because it may create duplicate entries
+                                            _label_set[thread_id].insert(label);
+                                        }
+                                    }
                                 }
                             }
-                            i++;
-                            voxel = sfc::Morton3D::i2p(i);
-                        } while(glm::any(glm::lessThan(voxel, cur_chunk_dim)));
+
+                            // gather all thread-private label sets into the global map
+                            for(int thread_id = 0; thread_id < NUM_THREADS; thread_id++) {
+                                for(const auto& label : _index_to_label[thread_id]) {
+                                    if (!label_set.contains(label)) {
+                                        index_to_label.push_back(label);
+                                        label_set.insert(label);
+                                    }
+                                }
+                            }
+
+
+                            if(i % (last_i / 100) == 0u)
+                                Logger(INFO, true) << " re-labelling map computation " << static_cast<int>(static_cast<float>(i)/static_cast<float>(last_i) * 100.f) << "%";
+                        }
 
                         if(index_to_label.size() != label_set.size())
                             throw std::runtime_error("existing_labels set does not match index_to_label size in volume label occurrence processing");
                     }
+#else
+                {
+                    // ToDo: parallelize with OpenMP?
+                    const size_t last_i = sfc::Morton3D::p2i(cur_chunk_dim);
+                    for(size_t i = 0; i < last_i; i++) {
+                        glm::uvec3 voxel = sfc::Morton3D::i2p(i);
+                        if(glm::all(glm::lessThan(voxel, cur_chunk_dim))) {
+                            uint32_t label = volume->getElement(voxel);
+                            if (!label_set.contains(label)) {
+                                index_to_label.push_back(label);
+                                label_set.insert(label);
+                            }
+                        }
+
+                        if(i % (last_i / 100) == 0u)
+                            Logger(INFO, true) << " re-labelling map computation " << static_cast<int>(static_cast<float>(i)/static_cast<float>(last_i) * 100.f) << "%";
+                    }
+
+                    if(index_to_label.size() != label_set.size())
+                        throw std::runtime_error("existing_labels set does not match index_to_label size in volume label occurrence processing");
+                }
+#endif
             }
 
             chunk_index1D++;
@@ -346,7 +404,7 @@ public:
         if(chunk_dimensions_vary)
             Logger(WARN) << "  chunk dimensions vary and can differ from expected dimension " << str(chunk_dimension);
 
-        Logger(DEBUG) << "  computed label remapping in " << t.elapsed() << " seconds";
+        Logger(DEBUG) << "  computed label remapping in " << t.elapsed() << " seconds with " << index_to_label.size() << " unique labels";
 
         // create new SQLite database, export all data and then re-import as read only
         databaseExportAndOpen(sqlite_export_path, index_to_label, volume_dimension, chunk_dimension,
