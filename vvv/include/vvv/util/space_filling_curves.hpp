@@ -25,7 +25,8 @@ public:
  */
 class Morton2D {
 public:
-    static uint32_t p2i(glm::uvec3 p) { return (Part1By1(p.y) << 1) + Part1By1(p.x); }
+    // @ToDo add asserts to check limits as for the 3D case!
+    static uint32_t p2i(glm::uvec2 p) { return (Part1By1(p.y) << 1) + Part1By1(p.x); }
 
     static glm::uvec2 i2p(uint32_t i) { return glm::uvec2(Compact1By1(i >> 0), Compact1By1(i >> 1)); }
 
@@ -53,11 +54,29 @@ private:
 
 /**
  * https://fgiesen.wordpress.com/2009/12/13/decoding-morton-codes/
+ * with adaptions for 64 bit
  */
 class Morton3D {
 public:
-    static uint32_t p2i(glm::uvec3 p) { return (Part1By2(p.z) << 2) + (Part1By2(p.y) << 1) + Part1By2(p.x); }
-    static glm::uvec3 i2p(uint32_t i) { return glm::uvec3(Compact1By2(i >> 0), Compact1By2(i >> 1), Compact1By2(i >> 2)); }
+    // the 64 bit variants can work with up to 10 bits per positional component
+    static uint32_t p2i(glm::uvec3 p) {
+        assert(glm::all(glm::lessThanEqual(p, glm::uvec3(1023u))) && "32 Bit Morton code processing only works for dimensions up to (1023, 1023, 1023) (10 bit per component)");
+        return (Part1By2(p.z) << 2) + (Part1By2(p.y) << 1) + Part1By2(p.x);
+    }
+    static glm::uvec3 i2p(uint32_t i) {
+        assert(i < 1073741823 && "32 Bit Morton code processing only works for dimensions up to (1023, 1023, 1023) (10 bit per component)");
+        return glm::uvec3(Compact1By2(i >> 0), Compact1By2(i >> 1), Compact1By2(i >> 2));
+    }
+
+    // the 64 bit variants can work with up to 20 bits per positional component
+    static uint64_t p2i_64(glm::uvec3 p) {
+        assert(glm::all(glm::lessThanEqual(p, glm::uvec3(2097151u))) && "64 Bit Morton code processing only works for dimensions up to (2097151, 2097151, 2097151) (21 bit per component)");
+        return (Part1By2_64(p.z) << 2) + (Part1By2_64(p.y) << 1) + Part1By2_64(p.x);
+    }
+    static glm::uvec3 i2p_64(uint64_t i) {
+        assert(i < 9223372036854775807ul && "64 Bit Morton code processing only works for dimensions up to (2097151, 2097151, 2097151) (21 bit per component)");
+        return glm::uvec3(Compact1By2_64(i >> 0), Compact1By2_64(i >> 1), Compact1By2_64(i >> 2));
+    }
 
 private:
     // "Insert" two 0 bits after each of the 10 low bits of x
@@ -79,6 +98,29 @@ private:
         x = (x ^ (x >> 16)) & 0x000003ff; // x = ---- ---- ---- ---- ---- --98 7654 3210
         return x;
     }
+
+    // "Insert" two 0 bits after each of the 20 low bits of x
+    static uint64_t Part1By2_64(uint64_t x) {
+        x &= 0x1fffff;                          // take 20 bit pairs
+        x = (x | x << 32) & 0x1f00000000ffff;   // 16 bits
+        x = (x | x << 16) & 0x1f0000ff0000ff;   // 8 bits
+        x = (x | x << 8) & 0x100f00f00f00f00f;  // ...
+        x = (x | x << 4) & 0x10c30c30c30c30c3;
+        x = (x | x << 2) & 0x1249249249249249;
+        return x;
+    }
+
+    // Inverse of Part1By1 - "delete" all odd-indexed bits
+    static uint64_t Compact1By2_64(uint64_t x) {
+        x &= 0x1249249249249249;
+        x = (x ^ (x >> 2)) & 0x10c30c30c30c30c3;
+        x = (x ^ (x >> 4)) & 0x100f00f00f00f00f;
+        x = (x ^ (x >> 8)) & 0x1f0000ff0000ff;
+        x = (x ^ (x >> 16)) & 0x1f00000000ffff;
+        x = (x ^ (x >> 32)) & 0x1fffff;
+        return x;
+    }
+
 };
 
 } // namespace sfc
