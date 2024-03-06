@@ -434,9 +434,10 @@ public:
             MiniTimer t;
             size_t voxel_count = volume->dim_x * volume->dim_y * volume->dim_z;
             auto voxels = volume->data().data();
+            assert(voxel_count < volume->data().size() && "volume does not contain enough voxels");
             #pragma omp parallel for num_threads(cpu_threads) default(none) shared(voxels, voxel_count, label_remapping)
             for(size_t i = 0; i < voxel_count; i++) {
-                assert(label_remapping->contains(voxels.at(i)) && "label remapping does not contain voxel label");
+                assert(label_remapping->contains(voxels[i]) && "label remapping does not contain voxel label");
                 voxels[i] = (*label_remapping)[voxels[i]];
             }
             Logger(DEBUG) << "Remapping in " << t.elapsed() << " seconds";
