@@ -319,7 +319,7 @@ public:
                     // the index_to_label vector if they did not occur before.
 #if 1
                     {
-                        const size_t last_i = sfc::Morton3D::p2i(cur_chunk_dim);
+                        const uint64_t last_i = sfc::Morton3D::p2i_64(cur_chunk_dim);
                         const int NUM_THREADS = 8;
                         size_t voxels_per_thread = (32ul * 32ul * 32ul);
                         // parallel processing will only have a benefit if we can run at least 4 threads in parallel
@@ -343,8 +343,8 @@ public:
                                 _index_to_label[thread_id].clear();
                                 _label_set[thread_id].clear();
 
-                                for(size_t n = i + thread_id * voxels_per_thread; n < i + (thread_id + 1) * voxels_per_thread; n++) {
-                                    glm::uvec3 voxel = sfc::Morton3D::i2p(n);
+                                for(uint64_t n = i + thread_id * voxels_per_thread; n < i + (thread_id + 1) * voxels_per_thread; n++) {
+                                    glm::uvec3 voxel = sfc::Morton3D::i2p_64(n);
                                     if (glm::all(glm::lessThan(voxel, cur_chunk_dim))) {
                                         uint32_t label = volume->getElement(voxel);
                                         if (!_label_set[thread_id].contains(label) && !label_set.contains(label)) {
@@ -377,9 +377,9 @@ public:
 #else
                 {
                     // ToDo: parallelize with OpenMP?
-                    const size_t last_i = sfc::Morton3D::p2i(cur_chunk_dim);
-                    for(size_t i = 0; i < last_i; i++) {
-                        glm::uvec3 voxel = sfc::Morton3D::i2p(i);
+                    const uint64_t last_i = sfc::Morton3D::p2i_64(cur_chunk_dim);
+                    for(uint64_t i = 0; i < last_i; i++) {
+                        glm::uvec3 voxel = sfc::Morton3D::i2p_64(i);
                         if(glm::all(glm::lessThan(voxel, cur_chunk_dim))) {
                             uint32_t label = volume->getElement(voxel);
                             if (!label_set.contains(label)) {
