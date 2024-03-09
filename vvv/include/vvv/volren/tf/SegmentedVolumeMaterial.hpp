@@ -15,6 +15,7 @@ public:
     int tfAttribute = 0;
     std::shared_ptr<VectorTransferFunction> tf = std::make_shared<vvv::VectorTransferFunction>(colormaps::grayscale);
     glm::vec2 tfMinMax = {0.f, 1.f};
+    float opacity = 1.f;
 
     bool isActive() { return discrAttribute > DISCR_NONE; }
 

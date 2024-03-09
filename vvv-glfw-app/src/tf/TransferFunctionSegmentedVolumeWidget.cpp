@@ -194,6 +194,10 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                                              ImGui::GetColorU32(ImVec4(color.r, color.g, color.b, 1)));
                 }
             }
+            // opacity slider
+            ImGui::PushID(id++);
+            materialChanged = ImGui::SliderFloat("Opacity", &mat.opacity, 0.f, 1.f);
+            ImGui::PopID();
         }
 
 

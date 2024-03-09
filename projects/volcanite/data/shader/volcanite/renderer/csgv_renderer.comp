@@ -178,7 +178,7 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
 // all ray marching happens in the same loop to minimize thread divergence
 struct RayMarchState {
     float rng;          // random number generator state
-    //DDA traversal parameter
+    // DDA traversal parameter
     vec3 side_dist;     // distance to the next cell in each dimension
     vec3 normal;
     ivec3 stp;
@@ -205,11 +205,11 @@ struct RayMarchState {
 void dda_step(inout RayMarchState state, const Ray ray) {
 //    float next_t = min(state.side_dist.x, min(state.side_dist.y, state.side_dist.z));
     vec3 mask = vec3(lessThanEqual(state.side_dist.xyz, min(state.side_dist.yzx, state.side_dist.zxy)));
-    state.t = dot(mask, state.side_dist);// + state.t_0;
+    state.t = dot(mask, state.side_dist);
     state.side_dist += state.delta * mask;
     state.voxel += state.stp * ivec3(mask);
     state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
-    state.normal = -mask * state.stp;
+    state.normal = -mask * state.stp;   // is normalized per definition
 }
 
 void dda_init(inout RayMarchState state, const Ray ray) {
@@ -420,9 +420,22 @@ void main() {
             break;
         }
 
+        vec4 surface_albedo_opacity = get_color(state.label);
 
+        // ENTER SEMI-TRANSPARENT VOLUME
+        if (surface_albedo_opacity.a < 1.f) {
+            // find distance the ray will travel in the next step
+            float next_t = dot(vec3(lessThanEqual(state.side_dist.xyz, min(state.side_dist.yzx, state.side_dist.zxy))), state.side_dist);
+            // compute transmittance of homogeneous voluem segment
+            vec3 transmittance = exp(-surface_albedo_opacity.a * abs(next_t - state.t) * (1.f - surface_albedo_opacity.rgb));
+            // update opacity (computed over inverse opacity = transmittance)
+            state.out_color.a = max(state.out_color.a, 1.f - ((1.f - state.out_color.a) * (transmittance.r + transmittance.g + transmittance.b)/3.f));
+            // add volume emission
+            state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * (1.f - transmittance);
+            state.throughput *= transmittance;
+        }
         // VIEW_RAY TO SURFACE HIT
-        {
+        else {
 //            // visualize visible brick id
 //            uvec3 brick = uvec3(state.voxel) / g_brick_size;
 //            uint brick_id = brick.x + brick.y * g_brick_count.x + brick.z * (g_brick_count.x * g_brick_count.y);
@@ -436,7 +449,6 @@ void main() {
             }
 
             // classification determines the surface color (= suface albedo)
-            vec4 surface_albedo_opacity = get_color(state.label);
             // ToDo: albedos close to one oversature colors with many bounces. Add a GUI parameter to dim the albedo?
             surface_albedo_opacity.rgb *= g_max_path_length > 1 ? 1.f - (0.1 * g_shadow_pathtracing_ratio) : 1.f;
             // debug: visualize level-of-detail with viridis colormap
@@ -495,7 +507,7 @@ void main() {
                 // ToDo: get the probabilities right so that this is real next event estimation?
                 ray.direction = g_light_direction;
                 // ToDo: is it right to treat this as the PDF of uniform hemisphere sampling? Looks okay at least..
-                state.throughput /= pdfUniformHemisphere(ray.direction, state.normal);
+                state.throughput /= pdfUniformHemisphere(ray.direction, state.normal);  // 1/(2*PI)
 
                 // check for self shadowing of the current voxel
                 if (g_global_illumination_enable && dot(state.normal, ray.direction) < 0) {
@@ -532,6 +544,15 @@ void main() {
             }
 #endif
 
+            // Russian Roulette (only when this is not a ray to the light source / NEE)
+            if(state.path_length != SHADOW_RAY_PATH_LENGTH && state.path_length < g_max_path_length) {
+                float survival_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
+                if (nextRNG(fragCoord, state.rng).x > survival_probability) {
+                    break;
+                }
+                state.throughput /= survival_probability;
+            }
+
             // re-init DDA traversal for the shadow ray
             ray.origin = state.pos;
             dda_init(state, ray);
@@ -542,17 +563,9 @@ void main() {
             state.throughput = vec3(0.f);
             break;
         }
-        // Russian Roulette (only when this is not a ray to the light source / NEE)
-        if(state.path_length != SHADOW_RAY_PATH_LENGTH && state.path_length < g_max_path_length) {
-            float survival_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
-            if (nextRNG(fragCoord, state.rng).x > survival_probability) {
-                break;
-            }
-            state.throughput /= survival_probability;
-        }
     }
     // we did not find any light source
-    if(state.step >= g_maxSteps)
+    if(state.step >= g_maxSteps || state.path_length == 0)
         state.throughput = vec3(0.f);
 
     if(g_debug_step_count) {

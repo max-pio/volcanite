@@ -28,6 +28,7 @@ struct GPUSegmentedVolumeMaterial {
     uint tfAttributeStart;          // start attribute read location in g_attributes
     float tfIntervalMin;            // attribute min / max values mapped to the TF interval [0, 1]
     float tfIntervalMax;            // attribute min / max values mapped to the TF interval [0, 1]
+    float opacity;                  // opacity of the material, for < 1 is a semi-transparent volume, for >= 1 is a surface
 };
 
 #endif // CSGV_CONSTANTS_HPP
