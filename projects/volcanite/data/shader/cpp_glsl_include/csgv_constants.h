@@ -1,6 +1,11 @@
 #ifndef CSGV_CONSTANTS_HPP
 #define CSGV_CONSTANTS_HPP
 
+#ifdef GL_core_profile
+#define CSGV_UINT uint
+#else
+#define CSGV_UINT uint32_t
+#endif
 
 // We use this header because we can in include it for compile time CompressedSegmentationVolume constants in the CPU encoding/decoding C++ classes as well as in the GLSL shaders for GPU decoding.
 
@@ -22,10 +27,10 @@
 #define LABEL_AS_ATTRIBUTE 0xFFFFFFFFu
 
 struct GPUSegmentedVolumeMaterial {
-    uint discrAttributeStart;       // start attribute read location in g_attributes. a value < 0 means to use the label directly (csgv_id)
+    CSGV_UINT discrAttributeStart;       // start attribute read location in g_attributes. a value < 0 means to use the label directly (csgv_id)
     float discrIntervalMin;         // discrAttribute values within this interval [min, max) assign the label to this material
     float discrIntervalMax;         // discrAttribute values within this interval [min, max) assign the label to this material
-    uint tfAttributeStart;          // start attribute read location in g_attributes
+    CSGV_UINT tfAttributeStart;          // start attribute read location in g_attributes
     float tfIntervalMin;            // attribute min / max values mapped to the TF interval [0, 1]
     float tfIntervalMax;            // attribute min / max values mapped to the TF interval [0, 1]
     float opacity;                  // opacity of the material, for < 1 is a semi-transparent volume, for >= 1 is a surface
