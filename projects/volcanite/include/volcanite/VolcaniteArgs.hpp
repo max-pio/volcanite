@@ -121,7 +121,7 @@ public:
             cmd.add(bricksizeArg);
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
-            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath},{attribute table/view name},{name of the label column referenced by the volume}\".", false, "", "database,table,label", cmd);
+            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{name of the label column referenced by the volume}]]\".", false, "", "database[,table[,label]]", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal all development render parameters in GUI.", cmd);
             ValueArg<uint32_t> cachesizeArg("", "cache-size", "Size in MB to allocate for GPU renderer brick cache.", false, va.cache_size_MB, "size", cmd);
@@ -220,15 +220,18 @@ public:
                     const std::string attribute_info = attributeArg.getValue();
                     auto comma0 = attribute_info.find(',', 0);
                     auto comma1 = attribute_info.find(',', comma0 + 1);
-                    if(comma0 == std::string::npos || comma1 == std::string::npos || attribute_info.find(',', comma1 + 1) != std::string::npos)
-                        throw ArgException(attributeArg.longID() + " must contain exactly three comma separated arguments.", attributeArg.longID());
 
                     va.attribute_database = attribute_info.substr(0, comma0);
-                    va.attribute_table = attribute_info.substr(comma0+1, (comma1 - comma0-1));
-                    va.attribute_label = attribute_info.substr(comma1+1);
+                    if(comma0 != std::string::npos)
+                        va.attribute_table = attribute_info.substr(comma0+1, (comma1 - comma0-1));
+                    else
+                        va.attribute_table = "";
 
-                    if(va.attribute_database.empty() || va.attribute_table.empty() || va.attribute_label.empty())
-                        throw ArgException(attributeArg.longID() + " database, table, and label must all be provided.", attributeArg.longID());
+                    if(comma1 != std::string::npos)
+                        va.attribute_label = attribute_info.substr(comma1+1);
+                    else
+                        va.attribute_label = "";
+
                     if(!std::filesystem::exists(va.attribute_database))
                         throw ArgException(attributeArg.longID() + " attribute database file does not exists or can not be accessed.", attributeArg.longID());
                 }

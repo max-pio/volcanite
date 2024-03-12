@@ -36,8 +36,8 @@ private:
      */
     bool databaseExportAndOpen(const std::string& sqlite_path, const std::vector<uint32_t>& index_to_label,
                                glm::uvec3 volume_dimension, glm::uvec3 chunk_dimension,
-                               const std::string& attribute_database, const std::string& attribute_table,
-                               const std::string& label_column) {
+                               const std::string& attribute_database, std::string attribute_table,
+                               std::string label_column) {
 #ifdef LIB_SQLITE3
         if(m_db) {
             Logger(WARN) << "closing existing csgv database " << m_db->getFilename() << " before creation";
@@ -83,15 +83,30 @@ private:
             }
             // Add attributes from existing database
             else {
-                if (attribute_table.empty() || label_column.empty())
-                    throw std::runtime_error(
-                            "When providing an attribute database you must also provide its attribute table and label column name");
-
                 // ToDo: allow attribute_database to be a csv filepath and import from csv instead
                 if(attribute_database.ends_with(".csv"))
                     throw std::runtime_error("Importing attributes from CSV files is not yet supported!");
 
+
                 db.exec("ATTACH DATABASE '" + attribute_database + "' AS attr_db");
+
+                // if not attribute table or label column was specified, we use the first table and its primary key
+                if (attribute_table.empty() || label_column.empty()) {
+
+                    if(attribute_table.empty()) {
+                        attribute_table = db.execAndGet("SELECT name FROM attr_db.sqlite_master WHERE type='table'").getString();
+                        if(attribute_table.empty())
+                            throw std::runtime_error("Could not find any table to use in attribute database. Provide attribute table and label column name with the attribute database.");
+                    }
+
+                    SQLite::Statement pk_query(db, "SELECT l.name FROM pragma_table_info('" + attribute_table + "','attr_db') as l WHERE l.pk = 1");
+                    if(!pk_query.executeStep()) {
+                        throw std::runtime_error("Could not find any primary key in table '" + attribute_table + "'. Provide attribute table and label column name with the attribute database.");
+                    }
+                    label_column = pk_query.getColumn(0).getString();
+                    Logger(DEBUG) << "  using attribute table '" << attribute_table << "' with primary key label column '" << label_column << "'";
+                }
+
                 // 0. check if the provide label column only contains unique elements
                 {
                     SQLite::Statement check_duplicates(db,
