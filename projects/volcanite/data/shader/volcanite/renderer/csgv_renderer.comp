@@ -191,7 +191,8 @@ struct RayMarchState {
     vec3 pos;           // the position of the ray marcher
     ivec3 voxel;        // the current voxel in which pos is
     uint label;         // the label at the hit point
-    float depth_valid;    // depth to be written to the depth buffer. negative depth indicates an invalid hit
+    uint last_label;    // the label of the previous hit point
+    float depth_valid;  // depth to be written to the depth buffer. negative depth indicates an invalid hit
 
     // path tracing
     vec4 out_color;     // (radiance) color to be written to the color buffer
@@ -223,7 +224,7 @@ void dda_init(inout RayMarchState state, const Ray ray) {
 }
 
 // ToDo: Use GGX?
-float cook_torrance(const RayMarchState state, const vec3 dir_in, const vec3 dir_out) {
+float cook_torrance(const in RayMarchState state, const in vec3 dir_in, const in vec3 dir_out) {
     // based on https://www.shadertoy.com/view/XsXXDB
     // ToDo: we have to be careful with licenses! Shadertoy code is owned by the shader authors if not stated otherwise
     const float roughness = 0.4f;
@@ -341,6 +342,7 @@ void main() {
     state.pos = ray.origin + state.t * ray.direction;
     //state.voxel = ivec3(floor(state.pos))
     state.label = INVALID;
+    state.last_label = INVALID;
     state.path_length = 0;
     state.throughput = vec3(1.f);
     state.out_color = vec4(0.f);
@@ -366,6 +368,7 @@ void main() {
         // sampling (read value at pos from previously decoded volume segments in brick cache) or return a
         // placeholder label if not yet decoded, in which case the depth_valid will be set to INVALID_DEPTH.
         // An sample marked as invalid this way may not alter the framebuffer and skip certain cmoputation steps.
+        state.last_label = state.label;
         state.label = get_volume_label(state.voxel, state.depth_valid);
 //        if (!isValid(state.depth_valid)) {
 //            // only allow stepping one brick width further
@@ -423,7 +426,24 @@ void main() {
         vec4 surface_albedo_opacity = get_color(state.label);
 
         // ENTER SEMI-TRANSPARENT VOLUME
+        // ToDo: SEMI-TRANSPARENT is broken! how would it look like in a path tracer?
         if (surface_albedo_opacity.a < 1.f) {
+            if(state.last_label != state.label) {
+                // add the contribution of a semi-transparent surface (local shading only)
+                if(g_local_shading_enable) {
+                    //if(dot(state.normal, -ray.direction) > 0.f)
+                    state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * surface_albedo_opacity.a * brdf(state, g_light_direction, -ray.direction) * TWO_PI * max(dot(state.normal, g_light_direction), 0.f) * g_light_intensity;
+                }
+                else {
+                    state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * surface_albedo_opacity.a;
+                }
+
+                // throughput is reduced by the opacity of the surface
+                state.throughput *= 1.f - surface_albedo_opacity.a;
+                // update pixel alpha
+                state.out_color.a = max(state.out_color.a, surface_albedo_opacity.a);
+            }
+
             // find distance the ray will travel in the next step
             float next_t = dot(vec3(lessThanEqual(state.side_dist.xyz, min(state.side_dist.yzx, state.side_dist.zxy))), state.side_dist);
             // compute transmittance of homogeneous voluem segment
