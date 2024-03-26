@@ -494,9 +494,10 @@ void main() {
             state.throughput *= 1.f - g_factor_ambient;
 
             // emission
-//            if(emissive_material)
+//            bool emissive_material = state.label == 3643u;
+//            if(emissive_material) {
 //                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb;
-//                state.throughput = vec3(0.f);
+//                //state.throughput = vec3(0.f);
 //            }
 
             // early ray termination
@@ -568,6 +569,7 @@ void main() {
             if(state.path_length != SHADOW_RAY_PATH_LENGTH && state.path_length < g_max_path_length) {
                 float survival_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
                 if (nextRNG(fragCoord, state.rng).x > survival_probability) {
+                    state.throughput = vec3(0.f);
                     break;
                 }
                 state.throughput /= survival_probability;
