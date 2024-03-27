@@ -155,9 +155,9 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
                 // writing other pixel: initialize with 0
                 if (any(notEqual(opix, pixel)))
                     imageStore(feedbackOut, opix, vec4(0.f));
-                // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame (set .a=0)
+                // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame (set .a < 0)
                 else
-                    imageStore(feedbackOut, opix, vec4(color.rgb, isValid(depth_valid) ? 1.f :  0.f));
+                    imageStore(feedbackOut, opix, vec4(color.rgb, isValid(depth_valid) ? 1.f :  -1.f));
             }
             else {
                 vec4 prev_color = imageLoad(feedbackIn, opix);
@@ -166,7 +166,7 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
                     imageStore(feedbackOut, opix, prev_color);
                 // writing our pixel, but invalid new sample (from not yet decoded brick)
                 else if (!isValid(depth_valid))
-                    imageStore(feedbackOut, opix, prev_color.a > 0.f ? prev_color : vec4(color.rgb, 0.f));
+                    imageStore(feedbackOut, opix, prev_color.a > 0.f ? prev_color : vec4(color.rgb, -1.f));
                 // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
                 else
                     imageStore(feedbackOut, opix, vec4(color.rgb, 1.f) + (prev_color.a > 0.f ? prev_color : vec4(0.f)));
@@ -322,6 +322,9 @@ void main() {
     // For debug views: only color every other pixel in the debug view to get some kind of "transparent" overlay effect
     // As we move this pixel around, the progressive accumulation averages this with the rendered colors.
     bool debug_view_visible = (pixel.x + pixel.y) % 3u != (g_frame % 3u); // < (viewport_size.x + viewport_size.y) / 2u);
+
+//    writePixel(pixel, vec4(colormap_viridis(float(g_camera_still_frames)/float(g_subsampling * g_subsampling)), 1.f), BACKGROUND_DEPTH);
+//    return;
 
     // visualize model space coordinates
     if(g_debug_model_space) {

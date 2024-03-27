@@ -35,22 +35,31 @@ void main() {
         return;
 
     // rgb stores radiance sum, alpha stores number of samples
-    vec4 accum_color;
+    vec4 accum_color = vec4(0.f);
 
     // after enough frames have passed, the block size is one <=> each pixel has a valid sample
     if(current_block_size == 1) {
         accum_color = imageLoad(feedbackOut, pixel);
+        // account for "invalid" samples of undecoded regions being marked with a negative number
+        accum_color.a = abs(accum_color.a);
     }
     // otherwise, we compute the average color of the whole block
     else {
-        accum_color = vec4(0.f);
         // compute an average of all pixels in this
         ivec2 block_pixel;
         for(block_pixel.y = pixel.y; block_pixel.y < pixel.y + current_block_size; block_pixel.y++) {
             for(block_pixel.x = pixel.x; block_pixel.x < pixel.x + current_block_size; block_pixel.x++) {
                 // if no sample is set for the pixel yet, we assume that the color is 0
-                if(!isHelperLane(block_pixel, viewport_size))
-                    accum_color += imageLoad(feedbackOut, block_pixel);
+                if(!isHelperLane(block_pixel, viewport_size)) {
+                    // weight the pixel colors by sample counts
+                    vec4 rgb_samples = imageLoad(feedbackOut, block_pixel);
+                    // we take the abs because invalid samples are marked with a sample count < 0 (usually -1)
+                    if(abs(rgb_samples.a) > 0.f) {
+                        accum_color.rgb += rgb_samples.rgb / abs(rgb_samples.a);
+                        // store correct sample count
+                        accum_color.a += 1.f;
+                    }
+                }
             }
         }
     }
