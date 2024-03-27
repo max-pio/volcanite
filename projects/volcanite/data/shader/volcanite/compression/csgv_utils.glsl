@@ -75,8 +75,7 @@ bool isLabelVisible(uint label) {
     // old: return label != g_empty_label && label >= g_label_minmax.x && label <= g_label_minmax.y;
 }
 
-vec4 get_color(uint label) {
-    int m = getMaterial(label);
+vec4 getColor(uint label, int material) {
     // strange bug (occurs on my old AMD RX480 card):
     // if the texture(..) call accesses a sampler from the array based on the variable m, the same sampler is selected
     // for all threads in a warp. This may be a problem of (non)-uniform control flow:
@@ -85,14 +84,14 @@ vec4 get_color(uint label) {
     //
     // This should not be an issue with GLSL version >= 4!
     // Anyways, here's a strange fix by "forcing" non-uniform control flow:
-    if(m == 0)
+    if(material == 0)
         return vec4(textureLod(s_transferFunctions[0], map(getAttribute(label, g_materials[0].tfAttributeStart), g_materials[0].tfIntervalMin, g_materials[0].tfIntervalMax, 0.f, 1.f), 0.f).rgb, g_materials[0].opacity);
 
 #ifndef NDEBUG
-    assertf(m >= 0 && m <= g_max_active_material, "material %i assigned to label is invalid", m);
-    assert(!any(isnan(vec4(g_materials[m].discrIntervalMin,  g_materials[m].discrIntervalMax, g_materials[m].tfIntervalMin, g_materials[m].tfIntervalMax))), "NaN in shader attribute limits");
+    assertf(material >= 0 && material <= g_max_active_material, "material %i assigned to label is invalid", material);
+    assert(!any(isnan(vec4(g_materials[material].discrIntervalMin,  g_materials[material].discrIntervalMax, g_materials[material].tfIntervalMin, g_materials[material].tfIntervalMax))), "NaN in shader attribute limits");
 #endif
-    return vec4(textureLod(s_transferFunctions[m], map(getAttribute(label, g_materials[m].tfAttributeStart), g_materials[m].tfIntervalMin, g_materials[m].tfIntervalMax, 0.f, 1.f), 0.f).rgb, g_materials[m].opacity);
+    return vec4(textureLod(s_transferFunctions[material], map(getAttribute(label, g_materials[material].tfAttributeStart), g_materials[material].tfIntervalMin, g_materials[material].tfIntervalMax, 0.f, 1.f), 0.f).rgb, g_materials[material].opacity);
 }
 
 // Background color ----------------------------------------------------------------------------------------------------

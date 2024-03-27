@@ -96,6 +96,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             gpu_mat[m].tfIntervalMin = m_materials[m].tfMinMax.x;
             gpu_mat[m].tfIntervalMax = m_materials[m].tfMinMax.y;
             gpu_mat[m].opacity = m_materials[m].opacity;
+            gpu_mat[m].emission = m_materials[m].emission;
 
             m_gpu_material_changed[m] = false;
         }
