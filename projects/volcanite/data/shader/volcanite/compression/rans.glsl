@@ -26,7 +26,7 @@ void _RansDecAdvanceSymbol(inout uint r, inout uint byte_index, uint sym_start, 
         do {
             // read the next byte from our uint32 array
             uint shift = 8 * (idx % 4);
-            // ToDo: bitfieldExtract
+            // ToDo: use bitfieldExtract instead of manual bit selection
 #ifdef SEPARATE_DETAIL
             uint byte = (detail ? (CSGV_DETAIL_ARRAY[idx / 4] >> shift) : (CSGV_ENCODING_ARRAY[idx / 4] >> shift)) & 0xFFu;
 #else

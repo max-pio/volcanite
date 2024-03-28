@@ -225,14 +225,14 @@ private:
     std::shared_ptr<Buffer> m_assign_info_buffer = nullptr; // (lod_count - 1) * 3 * uint assign infos for the LoDs + 1 * uint atomic top-index for the cache buffer
 
     // detail management
-    const uint32_t m_max_detail_requests_per_frame = 64u; // how many brick_ids can be requested for detail upload per frame (affects the request buffer size)
+    const uint32_t m_max_detail_requests_per_frame = 512u; // how many brick_ids can be requested for detail upload per frame (affects the request buffer size)
     std::shared_ptr<Buffer> m_detail_requests_buffer = nullptr;
     std::vector<uint32_t> m_last_requested_brick_ids = {};
     bool m_detail_update_required = false;
     std::vector<uint32_t> m_constructed_detail_starts = {};
     std::shared_ptr<Buffer> m_detail_starts_buffer = nullptr;
     std::pair<std::shared_ptr<vvv::Awaitable>, std::shared_ptr<Buffer>> m_detail_starts_staging = {nullptr, nullptr};
-    const size_t m_max_detail_byte_size = ((8ul << 10) << 10); // first number = MB
+    const size_t m_max_detail_byte_size = ((512ul << 10) << 10); // first number = MB
     uint32_t m_detail_capacity = 0u; // how many uints fit into the GPU detail buffer
     std::vector<uint32_t> m_constructed_detail = {};
     std::shared_ptr<Buffer> m_detail_buffer = nullptr;
