@@ -154,6 +154,8 @@ int volcanite(int argc, char *argv[]) {
                                                         .chunked_input_data = args.chunked,
                                                         .max_file_index = max_chunk_id,
                                                         .freq_subsampling = args.freq_subsampling,
+                                                        .run_tests = args.run_tests,
+                                                        .export_stats = args.export_stats,
                                                         .verbose = args.verbose};
         compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
                                                                                              complete_csgv_path, cfg);

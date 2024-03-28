@@ -69,6 +69,10 @@ public:
     CompressedSegmentationVolume::RANSMode rANS_mode = CompressedSegmentationVolume::RANSMode::DOUBLE_TABLE_RANS;
     uint32_t freq_subsampling = 8;     // n^3 factor for subsampling bricks for frequency table computation with rANS
 
+    bool run_tests = false;
+    bool export_stats = false;
+
+
     static std::string getHelpString() {
         std::stringstream ss;
         ss << "EXAMPLES:" << std::endl;
@@ -119,6 +123,9 @@ public:
             ValuesConstraint<uint32_t> allowedBrickSize({8u, 16u, 32u, 64u, 128u});
             ValueArg<uint32_t> bricksizeArg("b", "brick-size", "Compress with given brick size.", false, va.brick_size, &allowedBrickSize);
             cmd.add(bricksizeArg);
+            SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
+            SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
+
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
             ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath},{attribute table/view name},{name of the label column referenced by the volume}\".", false, "", "database,table,label", cmd);
@@ -277,6 +284,8 @@ public:
                                     inputpathArg.longID());
                     }
                 }
+                va.run_tests = testArg.getValue();
+                va.export_stats = statsArg.getValue();
             }
 
             return va;

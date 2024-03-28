@@ -468,6 +468,8 @@ public:
         bool chunked_input_data = false;
         glm::uvec3 max_file_index = glm::uvec3(0u);
         uint32_t freq_subsampling = 8u;
+        bool run_tests = false;
+        bool export_stats = false;
         bool verbose = true;
         std::string* latex_table_out_entry = nullptr;
     };
@@ -484,7 +486,7 @@ public:
         if(cfg.freq_subsampling == 0u)
             throw std::runtime_error("Frequency subsampling must be at least 1 (= no subsampling)!");
         if(cfg.use_detail_separation)
-            Logger(WARN) << "Using detail separation is not recommended at compression stage and will be removed later";
+            Logger(WARN) << "Using detail separation is not recommended at compression stage and may be removed later";
 
         std::shared_ptr<Volume<uint32_t>> volume = nullptr;
         glm::ivec3 volume_dim(0);
@@ -519,26 +521,27 @@ public:
         csgv->setCPUThreadCount(cpu_threads);
         // check if we can load a precomputed compressed segmentation volume
         if (!cfg.force_recompute && csgv->importFromFile(csgv_path, false)) {
-#ifdef RUN_TEST
-            if (!chunked_input_data || glm::all(glm::equal(max_file_index, glm::uvec3(0, 0, 0)))) {
-                loadSegmentationVolumeFile(complete_csgv_path, volume, cfg.label_remapping, cpu_threads);
-                volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
-                Logger(INFO) << complete_csgv_path + " loaded with dim " << str(volume_dim);
-                if (!csgv->test(volume->data(), volume_dim)) {
-                    return nullptr;
+            if (cfg.run_tests) {
+                if (!cfg.chunked_input_data) {
+                    loadSegmentationVolumeFile(volume_input_path, volume, cfg.label_remapping, cpu_threads);
+                    volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
+                    Logger(INFO) << volume_input_path + " loaded with dim " << str(volume_dim);
+                    if (!csgv->test(volume->data(), volume_dim)) {
+                        return nullptr;
+                    }
+                } else {
+                    Logger(WARN)
+                            << "Testing not supported for pre-computed chunked data sets. Use force_recompute=true to do a full compression with a test per chunk.";
                 }
-            } else {
-                Logger(WARN) << "Testing not supported for pre-computed chunked data sets. Use force_recompute=true to do a full compression with a test per chunk.";
             }
-#endif
 
-#ifdef EXPORT_STATS
-            Logger(DEBUG, true) << "export brick statistics...";
-            std::string stats_path = complete_csgv_path;
-            stats_path = stats_path.substr(0, stats_path.length() - 5) + "_brickstats.csv";
-            csv_export(csgv->gatherBrickStatistics(), stats_path);
-            Logger(DEBUG) << "export brick statistics to " << stats_path + " done";
-#endif
+            if(cfg.export_stats) {
+                Logger(DEBUG, true) << "export brick statistics...";
+                std::string stats_path = csgv_path;
+                stats_path = stats_path.substr(0, stats_path.length() - 5) + "_brickstats.csv";
+                csv_export(csgv->gatherBrickStatistics(), stats_path);
+                Logger(DEBUG) << "export brick statistics to " << stats_path + " done";
+            }
             Logger(INFO) << "Imported previously compressed file " << csgv_path << ". Skipping compression.";
             return csgv;
         }
@@ -669,11 +672,11 @@ public:
                             Logger(WARN) << "overwriting file " << chunk_output_path;
                             std::filesystem::remove(chunk_output_path);
                         }
-#ifdef RUN_TEST
-                        if (!csgv->test(volume->data(), volume_dim)) {
+
+                        if (cfg.run_tests && !csgv->test(volume->data(), volume_dim)) {
                             return nullptr;
                         }
-#endif
+
                         csgv->exportToFile(chunk_output_path);
                     } else {
                         if (cfg.verbose) {
@@ -681,27 +684,26 @@ public:
                         } else {
                             Logger(INFO) << " reusing existing csgv file " << chunk_output_path;
                         }
-#ifdef RUN_TEST
-                        if (!volume) {
-                            loadSegmentationVolumeFile(chunk_input_path, volume, cfg.label_remapping, cpu_threads);
-                            volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
-                            Logger(INFO) << chunk_input_path + " loaded with dim " << str(volume_dim);
+
+                        if(cfg.run_tests) {
+                            if (!volume) {
+                                loadSegmentationVolumeFile(chunk_input_path, volume, cfg.label_remapping, cpu_threads);
+                                volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
+                                Logger(INFO) << chunk_input_path + " loaded with dim " << str(volume_dim);
+                            }
+                            if (!csgv->test(volume->data(), volume_dim)) {
+                                return nullptr;
+                            }
                         }
-                        if (!csgv->test(volume->data(), volume_dim)) {
-                            return nullptr;
-                        }
-#endif
                     }
 
-#ifdef EXPORT_STATS
-                    Logger(DEBUG, true) << "export brick statistics...";
-                    std::string stats_path = csgv->getCSGVFileName(path);
-                    //  csgv->exportBrickOperationsToCSV(stats_path.substr(0, stats_path.length() - 4) + "_example_brick.csv",
-                    //  (csgv->getBrickCount().x * csgv->getBrickCount().y * csgv->getBrickCount().z) / 2);
-                    stats_path = stats_path.substr(0, stats_path.length() - 4) + "_brickstats.csv";
-                    csv_export(csgv->gatherBrickStatistics(), stats_path);
-                    Logger(DEBUG) << "export brick statistics to " << stats_path + " done";
-#endif
+                    if(cfg.export_stats) {
+                        Logger(DEBUG, true) << "export brick statistics...";
+                        std::string stats_path = csgv_path;
+                        stats_path = stats_path.substr(0, stats_path.length() - 4) + "_brickstats.csv";
+                        csv_export(csgv->gatherBrickStatistics(), stats_path);
+                        Logger(DEBUG) << "export brick statistics to " << stats_path + " done";
+                    }
                 }
             }
         }
