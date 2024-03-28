@@ -206,6 +206,12 @@ int volcanite(int argc, char *argv[]) {
         Logger(INFO) << "--------------------------------------------------- ";
         Logger(INFO) << "initializing Volcanite renderer";
 
+        // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
+        if(args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
+            Logger(DEBUG) << "separating detail level encoding for streaming";
+            compressedSegmentationVolume->separateDetail();
+        }
+
         const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
 
