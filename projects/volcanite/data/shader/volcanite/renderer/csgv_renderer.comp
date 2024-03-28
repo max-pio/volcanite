@@ -497,11 +497,7 @@ void main() {
 
             // emission
             if(g_materials[material].emission > 0.f) {
-                if(state.path_length == 0u)
-                    state.out_color.rgb = state.throughput * surface_albedo_opacity.rgb;
-                else
-                    state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_materials[material].emission;
-                state.throughput = vec3(0.f);
+                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_materials[material].emission;
             }
 
             // early ray termination
