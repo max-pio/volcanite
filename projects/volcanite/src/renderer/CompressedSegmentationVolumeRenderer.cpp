@@ -316,7 +316,7 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
         if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
             size_t optimal_detail_size = m_compressed_segmentation_volume->getDetail()->size();
             // we can't fit the complete detail buffer onto the GPU
-#define ALWAYS_STREAM_DETAIL
+//#define ALWAYS_STREAM_DETAIL
 #ifdef ALWAYS_STREAM_DETAIL
             if(true) {
 #else
