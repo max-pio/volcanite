@@ -279,6 +279,9 @@ float CompressedSegmentationVolume::separateDetail() {
     if(m_rANS_mode != DOUBLE_TABLE_RANS)
         throw std::runtime_error("Detail separation can only be used in combination with rANS in double table mode!");
 
+    Logger(INFO) << "BEFORE SEP:";
+    printBrickInfo({9,9,9});
+
     const size_t max_brick_index = m_brick_starts.size() - 1;
 
     // First, we construct the detail_starts buffer. We do a simple sequential pass.
@@ -329,6 +332,10 @@ float CompressedSegmentationVolume::separateDetail() {
     m_brick_starts[max_brick_index] = m_brick_starts[max_brick_index] - m_detail_starts[max_brick_index] - max_brick_index;
 
     m_separate_detail = true;
+
+    Logger(INFO) << "AFTER SEP:";
+    printBrickInfo({9,9,9});
+
     // return the ratio of detail encoding size to total encoding size
     return (static_cast<float>(m_detail_starts[max_brick_index]) / static_cast<float>(m_brick_starts[max_brick_index] + m_detail_starts[max_brick_index]));
 }
@@ -595,6 +602,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     m_brick_starts.resize(brickCount.x * brickCount.y * brickCount.z + 1, INVALID);
 
     // detail buffers can only be filled with a subsequent call to separateDetail()
+    m_separate_detail = false;
     m_detail_encoding.clear();
     m_detail_starts.clear();
 
@@ -908,6 +916,9 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
             Logger(ERROR) << "Unable to open import file " << path << ". Skipping.";
         return false;
     }
+
+    clear();
+
     // check header and version
     char magic_header[9];
     char _version[5];
@@ -972,8 +983,16 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     glm::uvec3 brickCount = getBrickCount();
     if(verbose)
         Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim) << " voxels and " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z)
-                      << " bricks for brick size " << m_brick_size << "^3";
-    return true;
+                      << " bricks for brick size " << m_brick_size << "^3" << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
+
+    Logger(DEBUG, true) << "verifying..";
+    if(!verifyCompression()) {
+        Logger(DEBUG) << "verifying: FAILURE";
+        return false;
+    } else {
+        Logger(DEBUG) << "verifying: ok";
+        return true;
+    }
 }
 
 // STATISTICS ________________________________________________________
