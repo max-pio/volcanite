@@ -57,7 +57,7 @@ void main() {
     uint palette_start = g_brick_starts[brick_id + 1u] - 1u;
     // read total palette size from brick header
 #ifdef SEPARATE_DETAIL
-    uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * (g_lod_count - 1u)];
+    uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * g_lod_count - 1u];
 #else
     uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * g_lod_count];
 #endif
