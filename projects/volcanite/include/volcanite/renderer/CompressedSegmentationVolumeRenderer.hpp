@@ -143,6 +143,7 @@ public:
     int getTargetAccumulationFrames() { return m_accum_frames; }
     /** Will save the renderer state to the path when the renderer is shut down */
     void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = path; }
+    void setCacheSizeMB(size_t mb) { m_cache_capacity = (mb * 1024 * 1024) / (2*2*2 * sizeof(uint32_t)); }
 
 private:
     // (gui) parameters:
@@ -150,15 +151,15 @@ private:
     static constexpr uint32_t SEGMENTED_VOLUME_MATERIAL_COUNT = 8;
     std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
     float m_factor_ambient = 0.0f;
-    float m_ratio_spec_diff = 0.7f;
+    float m_ratio_spec_diff = 1.0f;
     bool m_cook_torrance_shading = true;
     // shading and post processing
     glm::vec4 m_background_color_a = glm::vec4(0.9f, 0.9f, 0.95f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
-    int m_subsampling = 2;
+    int m_subsampling = 1;
     bool m_tonemap_enabled = false;
-    bool m_global_illumination_enabled = true;
-    bool m_envmap_enabled = true;
+    bool m_global_illumination_enabled = false;
+    bool m_envmap_enabled = false;
     float m_shadow_pathtracing_ratio = 1.0f;
     glm::vec2 m_ambient_occlusion_dist_strength = glm::vec2(15.f, 0.5f);
     glm::vec3 m_light_direction = glm::vec3(-1.f, 1.f, 0.1f);
@@ -183,8 +184,8 @@ private:
     bool m_show_step_count = false;
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
-    int m_accum_frames = 512;
-    int m_max_decoding_lod = 6;
+    int m_accum_frames = 16;
+    int m_max_decoding_lod = 3;
     // utility
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text;
@@ -217,7 +218,7 @@ private:
     std::shared_ptr<Buffer> m_attribute_buffer = nullptr;       // stores attributes back to back
     std::shared_ptr<Buffer> m_materials_buffer = nullptr;       // stores the material information
     std::shared_ptr<Buffer> m_brick_starts_buffer = nullptr;
-    const size_t m_cache_capacity = 96000000ul;    // this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x sizeof(uint)=32 bytes large, so a capacity of 32000000 equals 1024MB
+    size_t m_cache_capacity = 33554432ul;    // this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x sizeof(uint)=32 bytes large, so a capacity of 32000000 equals 1024MB
     const size_t m_free_stack_capacity = 262144ul;  // this many elements (one uint=4byte each) fit into the free stack of EACH LoD > 0. We need max. volume_size/brick_size/lod_width³ elements. a capacity of 262144 equals 1MB * (lod_count-1)
     std::shared_ptr<Buffer> m_cache_info_buffer = nullptr;
     std::shared_ptr<Buffer> m_cache_buffer = nullptr;       // cache_capacity * 2x2x2 uints

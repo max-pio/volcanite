@@ -168,7 +168,11 @@ int volcanite(int argc, char *argv[]) {
     // otherwise, we load a previously compressed volume
     else {
         compressedSegmentationVolume = std::make_shared<CompressedSegmentationVolume>();
-        compressedSegmentationVolume->importFromFile(args.input_file, args.verbose);
+        if(!compressedSegmentationVolume->importFromFile(args.input_file, args.verbose)) {
+            Logger(ERROR) << "could load Compressed Segmentation Volume. Aborting.";
+            return RET_COMPR_ERROR;
+        }
+
 
         // try to load a precomputed database
         std::string database_path = stripFileExtension(args.input_file) + "_csgv.db3";
@@ -214,6 +218,7 @@ int volcanite(int argc, char *argv[]) {
 
         const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
+        renderer->setCacheSizeMB(args.cache_size_MB);
 
         // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)
         if (!args.screenshot_output_file.empty()) {
