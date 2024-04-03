@@ -537,10 +537,11 @@ public:
                 for (brick.x = 0u; brick.x < brick_count.x; brick.x++) {
 
                     std::stringstream error;
-                    uint32_t start = m_brick_starts[brick_to_1D(brick, getBrickCount())];
+                    uint32_t brick1D = brick_to_1D(brick, getBrickCount());
+                    uint32_t start = m_brick_starts[brick1D];
 
                     // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
-                    long encoding_length = static_cast<long>(m_brick_starts[brick_to_1D(brick, getBrickCount()) + 1]) - static_cast<long>(start);
+                    long encoding_length = static_cast<long>(m_brick_starts[brick1D + 1]) - static_cast<long>(start);
                     if(encoding_length < static_cast<long>(header_size + 1u + 1u))
                         error << " brick encoding is shorter than minimum (header size + 1 encoding + 1 palette)=" << (header_size+2) <<" but is " << encoding_length << "\n";
 
@@ -581,8 +582,16 @@ public:
                         error << "  palette size and encoding of first (L-1) levels are longer than the total brick encoding\n";
                     }
 
-//                    ToDo: CHECK DETAIL ENCODING SIZE BEING >= 1 ENTRY
 //                    ToDo: CHECK FOR POTENTIAL 32 BIT OVERFLOW ERRORS ON GPU: (entry_starts*8 + brick_start) !?!?
+
+                    // check detail encoding having at least 1 entry
+                    if(isUsingSeparateDetail()) {
+                        long detail_encoding_length = static_cast<long>(m_detail_starts[brick1D + 1u]) -
+                                                      static_cast<long>(m_detail_starts[brick1D]);
+                        if (detail_encoding_length < 1l) {
+                            error << " brick detail encoding is missing with length " << detail_encoding_length << "\n";
+                        }
+                    }
 
                     // print error message
                     if(!error.str().empty()) {

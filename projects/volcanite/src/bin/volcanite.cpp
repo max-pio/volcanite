@@ -169,7 +169,7 @@ int volcanite(int argc, char *argv[]) {
     else {
         compressedSegmentationVolume = std::make_shared<CompressedSegmentationVolume>();
         if(!compressedSegmentationVolume->importFromFile(args.input_file, args.verbose)) {
-            Logger(ERROR) << "could load Compressed Segmentation Volume. Aborting.";
+            Logger(ERROR) << "could not load Compressed Segmentation Volume. Aborting.";
             return RET_COMPR_ERROR;
         }
 
