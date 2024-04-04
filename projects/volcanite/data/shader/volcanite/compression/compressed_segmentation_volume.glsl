@@ -84,7 +84,7 @@ struct CSGVReadState {
 uint _readNextLodOperationFromEncoding(uint brick_start, inout CSGVReadState state) {
     #ifdef USE_RANS
         // detail separation will be handled in the advance step of the rANS decoder
-        return rans_itr_nextSymbol(state.rans_state, state.idxE, state.rans_tab_offset);
+        return rans_itr_nextSymbol(state.rans_state, brick_start, state.idxE, state.rans_tab_offset);
     #else
         // detail separation is only used in combination with RANS so we don't have to consider it here
         return _unpack4BitFromEncoding(brick_start, state.idxE++);
@@ -142,6 +142,10 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
                                   const uvec3 valid_brick_size, const uint start_at_inv_lod, const uint inv_lod,
                                   const uint decoded_brick_start_idx) {
 
+//    // safe mode test: do not decompress anything, instead fill the voxels with dummy values in [0, 256)
+//    fillCSGVBrick(decoded_brick_start_idx, inv_lod, (encoding_start_index / 7) % 256);
+//    return;
+
     // refine up to the LOD that was requested, starting with decoding of start_at_inv_lod
     // the starting position of the current LOD in the encoding array, measured in elements of entry_t. Taken from first brick header entries
     uint local_lod_i;   // the local index of this element within the lod block of the coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
@@ -153,8 +157,8 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
     readState.idxE = CSGV_ENCODING_ARRAY[beginE + start_at_inv_lod];  // offset of current 4 bit entry to read
     readState.rans_tab_offset = 0u;
 #ifdef USE_RANS
-    readState.idxE = (encoding_start_index + readState.idxE / 8u) * 4u;
-    rans_itr_initDecoding(readState.rans_state, readState.idxE);
+    readState.idxE = (readState.idxE / 8u) * 4u;
+    rans_itr_initDecoding(readState.rans_state, beginE, readState.idxE);
 #endif
 
     uint output_size = (1u << inv_lod); // the resolution of voxel in each dimension of the output brick = for this LoD. On the finest LoD this is g_brick_size
@@ -175,13 +179,14 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
             readState.rans_tab_offset = 17u;        // we now read from the detail freq. table (which is ofset by 17)
             #ifdef SEPARATE_DETAIL
                 beginE = detail_start_index;        // beginE now refers to another buffer (detail) and has to be changed
-                readState.idxE = beginE * 4;
-                // we initialize the rANS state from the detail array
-                detail_rans_itr_initDecoding(readState.rans_state, readState.idxE);
+                readState.idxE = 0u;
+                // Initialize the rANS state from the detail array
+                detail_rans_itr_initDecoding(readState.rans_state, beginE, readState.idxE);
             #else
-                // Detail rANS encoding starts at new uint. We reinit the rANS decoder from the normal encoding array.
-                readState.idxE = (encoding_start_index + CSGV_ENCODING_ARRAY[beginE + lod] / 8u) * 4u;
-                rans_itr_initDecoding(readState.rans_state, readState.idxE);
+                // Detail rANS encoding starts at new uint
+                readState.idxE = (CSGV_ENCODING_ARRAY[beginE + lod] / 8u) * 4u;
+                // Reinit the rANS decoder from the normal encoding array.
+                rans_itr_initDecoding(readState.rans_state, beginE, readState.idxE);
             #endif
         }
 #endif

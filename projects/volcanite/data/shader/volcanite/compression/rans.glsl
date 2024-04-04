@@ -1,6 +1,8 @@
 #ifndef RANS_GLSL
 #define RANS_GLSL
 
+#include "csgv_utils.glsl"
+
 #define RANS_PROB_BITS 14
 #define RANS_BYTE_L (1u << 23)  // lower bound of our normalization interval
 
@@ -13,7 +15,7 @@ uint _RansDecGet(uint rans_state) {
 }
 
 
-void _RansDecAdvanceSymbol(inout uint r, inout uint byte_index, uint sym_start, uint sym_freq, bool detail) {
+void _RansDecAdvanceSymbol(inout uint r, in uint brick_start, inout uint byte_index, uint sym_start, uint sym_freq, bool detail) {
     const uint mask = (1u << RANS_PROB_BITS) - 1u;
 
     // s, x = D(x)
@@ -28,9 +30,9 @@ void _RansDecAdvanceSymbol(inout uint r, inout uint byte_index, uint sym_start, 
             uint shift = 8 * (idx % 4);
             // ToDo: use bitfieldExtract instead of manual bit selection
 #ifdef SEPARATE_DETAIL
-            uint byte = (detail ? (CSGV_DETAIL_ARRAY[idx / 4] >> shift) : (CSGV_ENCODING_ARRAY[idx / 4] >> shift)) & 0xFFu;
+            uint byte = (detail ? (CSGV_DETAIL_ARRAY[brick_start + idx / 4] >> shift) : (CSGV_ENCODING_ARRAY[brick_start + idx / 4] >> shift)) & 0xFFu;
 #else
-            uint byte = (CSGV_ENCODING_ARRAY[idx / 4] >> shift) & 0xFFu;
+            uint byte = (CSGV_ENCODING_ARRAY[brick_start + idx / 4] >> shift) & 0xFFu;
 #endif
             x = (x << 8) | byte;
             idx++;
@@ -39,29 +41,31 @@ void _RansDecAdvanceSymbol(inout uint r, inout uint byte_index, uint sym_start, 
     }
 
     r = x;
+
+    assert(((byte_index / 4) + brick_start) >= brick_start, "Buffer index overflow in rANS");
 }
 
-void rans_itr_initDecoding(inout uint rans_state, inout uint byte_index) {
-    rans_state = CSGV_ENCODING_ARRAY[byte_index/4];
+void rans_itr_initDecoding(inout uint rans_state, in uint brick_start, inout uint byte_index) {
+    rans_state = CSGV_ENCODING_ARRAY[brick_start + byte_index/4];
     byte_index += 4;
 }
 
-uint rans_itr_nextSymbol(inout uint rans_state, inout uint byte_index, uint freq_table_offset) {
+uint rans_itr_nextSymbol(inout uint rans_state, in uint brick_start, inout uint byte_index, uint freq_table_offset) {
     uint cumulative = _RansDecGet(rans_state);
     uint s;
     for(s=freq_table_offset; s < (freq_table_offset + 16); s++) {
         if(_RANS_STATS[s+1].z > cumulative)
         break;
     }
-    _RansDecAdvanceSymbol(rans_state, byte_index, _RANS_STATS[s].x, _RANS_STATS[s].y, freq_table_offset > 0u);
+    _RansDecAdvanceSymbol(rans_state, brick_start, byte_index, _RANS_STATS[s].x, _RANS_STATS[s].y, freq_table_offset > 0u);
     return s - freq_table_offset;
 }
 
 #ifdef SEPARATE_DETAIL
-void detail_rans_itr_initDecoding(inout uint rans_state, inout uint byte_index) {
+void detail_rans_itr_initDecoding(inout uint rans_state, in uint brick_start, inout uint byte_index) {
     // only when using detail separation (which is always used in combination with double table rANS), we have
     // to initialize the rANS decoder for the finest LOD on the detail encoding array
-    rans_state = CSGV_DETAIL_ARRAY[byte_index/4];
+    rans_state = CSGV_DETAIL_ARRAY[brick_start + byte_index/4];
     byte_index += 4;
 }
 #endif
