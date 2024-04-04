@@ -528,6 +528,7 @@ public:
         bool is_ok = true;
         glm::uvec3 brick;
         glm::uvec3 brick_count = getBrickCount();
+        size_t last_brick = brick_count.x * brick_count.y * brick_count.z - 1ul;
         uint32_t lod_count = getLodCountPerBrick();
         uint32_t header_size = lod_count * 2 + (isUsingDetailFreq() ? 0 : 1);
         uint32_t header_start_lods = lod_count - (isUsingDetailFreq() ? 1 : 0);
@@ -582,14 +583,30 @@ public:
                         error << "  palette size and encoding of first (L-1) levels are longer than the total brick encoding\n";
                     }
 
-//                    ToDo: CHECK FOR POTENTIAL 32 BIT OVERFLOW ERRORS ON GPU: (entry_starts*8 + brick_start) !?!?
-
                     // check detail encoding having at least 1 entry
                     if(isUsingSeparateDetail()) {
                         long detail_encoding_length = static_cast<long>(m_detail_starts[brick1D + 1u]) -
                                                       static_cast<long>(m_detail_starts[brick1D]);
                         if (detail_encoding_length < 1l) {
-                            error << " brick detail encoding is missing with length " << detail_encoding_length << "\n";
+                            error << "  brick detail encoding is missing with length " << detail_encoding_length << "\n";
+                        }
+                    }
+
+                    // ToDo: alter the rans.glsl shaders to handle bigger indices
+                    // check for 32 Bit overflow if bytes are indexed in the buffers
+                    if(glm::all(glm::equal(brick, brick_count - glm::uvec3(1)))) {
+                        if (static_cast<size_t>(m_brick_starts[brick1D + 1u]) * 4ul > (~0u)) {
+                            error << "  encoding contains more bytes ("
+                                  << (static_cast<size_t>(m_brick_starts[brick1D + 1u]) * 4ul)
+                                  << ") than 32 bit can index (" << (~0u) << ")\n";
+                        }
+
+                        if (isUsingSeparateDetail()) {
+                            if (static_cast<size_t>(m_detail_starts[brick1D + 1u]) * 4ul > (~0u)) {
+                                error << "  detail encoding contains more bytes ("
+                                      << (static_cast<size_t>(m_detail_starts[brick1D + 1u]) * 4ul)
+                                        << ") than 32 bit can index (" << (~0u) << ")\n";
+                            }
                         }
                     }
 
