@@ -986,11 +986,12 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
                       << " bricks for brick size " << m_brick_size << "^3" << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
 
     Logger(DEBUG, true) << "verifying..";
+    MiniTimer verifyTimer;
     if(!verifyCompression()) {
-        Logger(DEBUG) << "verifying: FAILURE";
+        Logger(DEBUG) << "verifying: FAILURE (" << verifyTimer.elapsed() << "s)";
         return false;
     } else {
-        Logger(DEBUG) << "verifying: ok";
+        Logger(DEBUG) << "verifying: ok (" << verifyTimer.elapsed() << "s)";
         return true;
     }
 }

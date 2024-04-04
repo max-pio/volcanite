@@ -526,24 +526,28 @@ public:
             throw std::runtime_error("Segmentation volume is not yet compressed!");
 
         bool is_ok = true;
-        glm::uvec3 brick;
         glm::uvec3 brick_count = getBrickCount();
         size_t last_brick = brick_count.x * brick_count.y * brick_count.z - 1ul;
         uint32_t lod_count = getLodCountPerBrick();
         uint32_t header_size = lod_count * 2 + (isUsingDetailFreq() ? 0 : 1);
         uint32_t header_start_lods = lod_count - (isUsingDetailFreq() ? 1 : 0);
 
-        for(brick.z = 0u; brick.z < brick_count.z; brick.z++) {
-            for (brick.y = 0u; brick.y < brick_count.y; brick.y++) {
-                for (brick.x = 0u; brick.x < brick_count.x; brick.x++) {
+        #pragma omp parallel for collapse(3) default(none) shared(is_ok, brick_count, header_size, header_start_lods, lod_count, m_brick_starts, m_encoding, m_detail_starts, m_detail_encoding)
+        for(uint32_t z = 0u; z < brick_count.z; z++) {
+            for (uint32_t y = 0u; y < brick_count.y; y++) {
+                for (uint32_t x = 0u; x < brick_count.x; x++) {
 
+                    if(!is_ok)
+                        continue;
+
+                    glm::uvec3 brick(x, y, z);
                     std::stringstream error;
                     uint32_t brick1D = brick_to_1D(brick, getBrickCount());
                     uint32_t start = m_brick_starts[brick1D];
 
                     // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
                     long encoding_length = static_cast<long>(m_brick_starts[brick1D + 1]) - static_cast<long>(start);
-                    if(encoding_length < static_cast<long>(header_size + 1u + 1u))
+                    if(encoding_length < header_size + 1u + 1u)
                         error << " brick encoding is shorter than minimum (header size + 1 encoding + 1 palette)=" << (header_size+2) <<" but is " << encoding_length << "\n";
 
                     // check first header entry being header_size * 8
@@ -592,42 +596,41 @@ public:
                         }
                     }
 
-                    // ToDo: alter the rans.glsl shaders to handle bigger indices
                     // check for 32 Bit overflow if bytes are indexed in the buffers
-                    if(glm::all(glm::equal(brick, brick_count - glm::uvec3(1)))) {
-                        if (static_cast<size_t>(m_brick_starts[brick1D + 1u]) * 4ul > (~0u)) {
-                            error << "  encoding contains more bytes ("
-                                  << (static_cast<size_t>(m_brick_starts[brick1D + 1u]) * 4ul)
-                                  << ") than 32 bit can index (" << (~0u) << ")\n";
+                    // if(glm::all(glm::equal(brick, brick_count - glm::uvec3(1))))
+                    {
+//                        size_t encoding_bytes = static_cast<size_t>((m_brick_starts[brick1D + 1u] - m_brick_starts[brick1D])
+//                                                                   - palette_size - header_size) * 4ul;
+
+                        if (static_cast<size_t>(m_brick_starts[brick1D + 1u])> (~0u)) {
+                            error << "  encoding contains more 32 bit entries ("
+                                  << (static_cast<size_t>(m_brick_starts[brick1D + 1u]))
+                                  << ") than 32 bit indices can index (" << (~0u) << ")\n";
                         }
 
                         if (isUsingSeparateDetail()) {
-                            if (static_cast<size_t>(m_detail_starts[brick1D + 1u]) * 4ul > (~0u)) {
-                                error << "  detail encoding contains more bytes ("
-                                      << (static_cast<size_t>(m_detail_starts[brick1D + 1u]) * 4ul)
-                                        << ") than 32 bit can index (" << (~0u) << ")\n";
+                            if (static_cast<size_t>(m_detail_starts[brick1D + 1u]) > (~0u)) {
+                                error << "  detail encoding contains more 32 bit entries ("
+                                      << (static_cast<size_t>(m_detail_starts[brick1D + 1u]))
+                                        << ") than 32 bit indices can index (" << (~0u) << ")\n";
                             }
                         }
                     }
 
                     // print error message
                     if(!error.str().empty()) {
-//                        #pragma omp critical
+                        #pragma omp critical
                         {
-                            Logger(ERROR) << "Found errors for brick:\n" << error.str();
-                            printBrickInfo(brick, ERROR);
+                            if(is_ok) {
+                                Logger(ERROR) << "Found errors for brick " << str(brick) << ":\n" << error.str() << "---";
+                                printBrickInfo(brick, ERROR);
+                                is_ok = false;
+                            }
                         }
-                        is_ok = false;
                     }
 
-                    if(!is_ok)
-                        break;
                 }
-                if(!is_ok)
-                    break;
             }
-            if(!is_ok)
-                break;
         }
         return is_ok;
     }
