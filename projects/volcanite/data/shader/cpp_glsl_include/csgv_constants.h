@@ -27,13 +27,14 @@
 #define LABEL_AS_ATTRIBUTE 0xFFFFFFFFu
 
 struct GPUSegmentedVolumeMaterial {
-    CSGV_UINT discrAttributeStart;       // start attribute read location in g_attributes. a value < 0 means to use the label directly (csgv_id)
+    CSGV_UINT discrAttributeStart;  // start attribute read location in g_attributes. a value < 0 means to use the label directly (csgv_id)
     float discrIntervalMin;         // discrAttribute values within this interval [min, max) assign the label to this material
     float discrIntervalMax;         // discrAttribute values within this interval [min, max) assign the label to this material
-    CSGV_UINT tfAttributeStart;          // start attribute read location in g_attributes
+    CSGV_UINT tfAttributeStart;     // start attribute read location in g_attributes
     float tfIntervalMin;            // attribute min / max values mapped to the TF interval [0, 1]
     float tfIntervalMax;            // attribute min / max values mapped to the TF interval [0, 1]
     float opacity;                  // opacity of the material, for < 1 is a semi-transparent volume, for >= 1 is a surface
+    float emission;                 // how emissive the material is
 };
 
 #endif // CSGV_CONSTANTS_HPP

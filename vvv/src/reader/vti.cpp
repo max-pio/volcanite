@@ -10,6 +10,7 @@
 #include <vtkXMLImageDataReader.h>
 #include <vtkImageData.h>
 #include <vtkCellData.h>
+#include <vtkXMLParser.h>
 #endif
 
 #include <cmath>
@@ -151,12 +152,19 @@ template <typename T> std::shared_ptr<Volume<T>> load_nastja_volume_from_vti(std
 template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::string url, std::string formatLabel, vk::Format gpuFormat) {
 #ifdef LIB_VTK
     vtkSmartPointer<vtkXMLImageDataReader> reader = vtkSmartPointer<vtkXMLImageDataReader>::New();
+    if(!reader->CanReadFile(url.c_str()))
+        throw std::runtime_error("XML image data reader can not read file " + url);
+
     reader->SetFileName(url.c_str());
     reader->Update();
 
     vtkSmartPointer<vtkImageData> vti_image = reader->GetOutput();
     vtkSmartPointer<vtkCellData>  vti_cell = vti_image->GetCellData();
+    if(!vti_cell)
+        throw std::runtime_error("could not load cell data from vti file");
     vtkSmartPointer<vtkDataArray> vti_data = vti_cell->GetArray(0);
+    if(!vti_data)
+        throw std::runtime_error("could not load cell data array from vti file");
 
     int expected_vtk_type = -1;
     if(formatLabel == "UInt8")

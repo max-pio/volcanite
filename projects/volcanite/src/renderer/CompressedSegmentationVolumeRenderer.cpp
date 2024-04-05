@@ -96,6 +96,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             gpu_mat[m].tfIntervalMin = m_materials[m].tfMinMax.x;
             gpu_mat[m].tfIntervalMax = m_materials[m].tfMinMax.y;
             gpu_mat[m].opacity = m_materials[m].opacity;
+            gpu_mat[m].emission = m_materials[m].emission;
 
             m_gpu_material_changed[m] = false;
         }
@@ -114,16 +115,17 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         try {
             m_mostRecentFrame->texture->writeFile(m_download_frame_to_image_file.value());
         }
-        catch(std::runtime_error e) {
+        catch(const std::runtime_error& e) {
             Logger(ERROR) << "image export error: " << e.what();
         }
         m_download_frame_to_image_file = {};
     }
 
     // we have to know if the detail buffer is still in an uploading state. If yes, we don't do anything else with the detail buffer
-    bool detail_buffer_dirty = !m_compressed_segmentation_volume->isUsingSeparateDetail()
-                               || (m_detail_starts_staging.first != nullptr && !getCtx()->sync->isAwaitableResolved(m_detail_starts_staging.first))
-                               || (m_detail_staging.first != nullptr && !getCtx()->sync->isAwaitableResolved(m_detail_staging.first));
+    // if streaming the detail buffer is disabled, we set the flag to true to avoid any usage of the detail resources.
+    bool detail_buffer_dirty = !m_compressed_segmentation_volume->isUsingSeparateDetail() ||
+                                (  (m_detail_starts_staging.first != nullptr && !getCtx()->sync->isAwaitableResolved(m_detail_starts_staging.first))
+                                || (m_detail_staging.first != nullptr && !getCtx()->sync->isAwaitableResolved(m_detail_staging.first)) );
     // download the next request buffer
     std::vector<uint32_t> requested_ids(m_max_detail_requests_per_frame + 2u, INVALID);
     uint32_t requested_id_count = 0u;
@@ -137,7 +139,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             requested_id_count = requested_ids[m_max_detail_requests_per_frame] > m_max_detail_requests_per_frame ? m_max_detail_requests_per_frame : requested_ids[m_max_detail_requests_per_frame];
         }
         // reset the atomic counter
-        const uint32_t zeroes[2] = {0u, 0u};
+        static const uint32_t zeroes[2] = {0u, 0u};
         m_detail_requests_buffer->upload(m_max_detail_requests_per_frame * sizeof(uint32_t), &zeroes, 2 * sizeof(uint32_t));
 
         // one element after, we store the current cache usage as number of used 2x2x2 elements
@@ -179,7 +181,6 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         if(!detail_buffer_dirty && m_detail_update_required && m_constructed_detail_starts.back() > 0u) {
             m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
             m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(m_constructed_detail.data(), m_constructed_detail_starts.back() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-//            Logger(INFO) << "upload " << m_constructed_detail_starts.back() << " elements";
         }
     }
 
@@ -315,10 +316,15 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
         if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
             size_t optimal_detail_size = m_compressed_segmentation_volume->getDetail()->size();
             // we can't fit the complete detail buffer onto the GPU
-            if(m_max_detail_byte_size / sizeof(uint32_t) < optimal_detail_size || true) {      // disable automatic full upload for testing
+//#define ALWAYS_STREAM_DETAIL
+#ifdef ALWAYS_STREAM_DETAIL
+            if(true) {
+#else
+            if(m_max_detail_byte_size / sizeof(uint32_t) < optimal_detail_size) {
+#endif
                 m_detail_capacity = m_max_detail_byte_size / sizeof(uint32_t);
             }
-            // we can fit the compelte detial buffer onto the GPU
+            // we can fit the complete detail buffer onto the GPU
             else {
                 m_detail_capacity = optimal_detail_size;
                 detail_buffer_fits_whole_detail = true;
@@ -326,9 +332,20 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
             m_constructed_detail_starts.resize(bricks_in_volume + 1u, 0u);
             m_constructed_detail.resize(m_detail_capacity, 0u);
         }
+
+        // check limits of physical device (GPU)
+        size_t maxGPUBufferSize = getCtx()->getPhysicalDevice().getProperties().limits.maxStorageBufferRange;
+        if (encoding_byte_size > maxGPUBufferSize) {
+            throw std::runtime_error("Base encoding buffer size exceeds max. GPU buffer range (" + std::to_string(encoding_byte_size) + " > " +
+                                     std::to_string(maxGPUBufferSize) + ")");
+        }
+        if(m_max_detail_byte_size > maxGPUBufferSize) {
+            throw std::runtime_error("Detail encoding buffer size exceeds max. GPU buffer range (" + std::to_string(m_max_detail_byte_size) + " > " +
+                                     std::to_string(maxGPUBufferSize) + ")");
+        }
     }
     else {
-        assert(false && "we would like to know the Compressed Segmentation Volume size before we allocate any memory");
+        throw std::runtime_error("Currently, a Compressed Segmentation Volume must be passed before rendering to allocate correct GPU buffer sizes.");
     }
     m_brick_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_brick_start_buffer", .byteSize = (bricks_in_volume + 1u)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_encoding_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_encoding_buffer", .byteSize = encoding_byte_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
@@ -346,12 +363,19 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
         m_detail_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_buffer", .byteSize = m_detail_capacity * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
 
         if(detail_buffer_fits_whole_detail) {
-            Logger(WARN) << "GPU detail buffer fits the whole detail level. Performing full upload, effectively disabling detail streaming. Consider setting use_detail to false for better performance!";
+            Logger(WARN) << "GPU detail buffer fits the whole detail level. Performing full upload, effectively disabling detail streaming. Consider to not use detail streaming for better performance!";
             m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(m_compressed_segmentation_volume->getDetail()->data(), m_compressed_segmentation_volume->getDetail()->size() * sizeof(uint32_t));
             m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_compressed_segmentation_volume->getDetailStarts()->data(),
                                                                                       m_compressed_segmentation_volume->getDetailStarts()->size() * sizeof(uint32_t));
             m_constructed_detail_starts = *m_compressed_segmentation_volume->getDetailStarts(); // just to be sure: we tell the CPU side that every brick is uploaded
             getCtx()->sync->hostWaitOnDevice({m_detail_staging.first, m_detail_starts_staging.first});
+            m_detail_staging = {nullptr, nullptr};
+            m_detail_starts_staging = {nullptr, nullptr};
+        }
+        else {
+            // initialize detail starts buffer on the GPU with zeros (no detail is uploaded initially)
+            m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+            getCtx()->sync->hostWaitOnDevice({m_detail_starts_staging.first});
             m_detail_staging = {nullptr, nullptr};
             m_detail_starts_staging = {nullptr, nullptr};
         }
@@ -712,6 +736,8 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                 ImGui::DragFloatRange2("Splitting Plane X", &m_bboxMin.x, &m_bboxMax.x, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
                 ImGui::DragFloatRange2("Splitting Plane Y", &m_bboxMin.y, &m_bboxMax.y, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
                 ImGui::DragFloatRange2("Splitting Plane Z", &m_bboxMin.z, &m_bboxMax.z, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
+                m_bboxMin = glm::clamp(m_bboxMin, glm::vec3(0.f), glm::vec3(1.f));
+                m_bboxMax = glm::clamp(m_bboxMax, m_bboxMin, glm::vec3(1.f));
             },
             "Splitting Planes");
 #endif

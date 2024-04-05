@@ -57,7 +57,7 @@ void main() {
     uint palette_start = g_brick_starts[brick_id + 1u] - 1u;
     // read total palette size from brick header
 #ifdef SEPARATE_DETAIL
-    uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * (g_lod_count - 1u)];
+    uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * g_lod_count - 1u];
 #else
     uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * g_lod_count];
 #endif
@@ -90,7 +90,8 @@ void main() {
 
 #ifdef SEPARATE_DETAIL
     // if the detail for this brick is not available and it is currently not decoded, we can only decode it with the base levels
-    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == (g_lod_count - 1u)     // we request the finest LoD
+    // in this case, we request the detail level of the brick to be decoded
+    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == (g_lod_count - 1u)  // we request the finest LoD
     && g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != (g_lod_count - 1u)  // we are not already decoded up to the finest LoD
     && (g_detail_buffer_dirty == 1u || (g_detail_starts[brick_id + 1u] - g_detail_starts[brick_id]) == 0u)) {       // but the detail is not available
 
