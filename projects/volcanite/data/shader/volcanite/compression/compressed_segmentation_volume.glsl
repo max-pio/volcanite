@@ -216,10 +216,6 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
 
             // get the next operation and apply it
             uint operation = _readNextLodOperationFromEncoding(beginE, readState);
-//            if(lod == 0u)
-//                operation = PALETTE_ADV | STOP_BIT;
-//            else
-//                operation = PARENT | STOP_BIT;
 
             uint operation_lsb = operation & 7u; // extract least significant 3 bits with 0111
             if (operation_lsb == PARENT)

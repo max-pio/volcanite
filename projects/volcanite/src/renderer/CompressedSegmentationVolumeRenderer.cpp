@@ -332,9 +332,20 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
             m_constructed_detail_starts.resize(bricks_in_volume + 1u, 0u);
             m_constructed_detail.resize(m_detail_capacity, 0u);
         }
+
+        // check limits of physical device (GPU)
+        size_t maxGPUBufferSize = getCtx()->getPhysicalDevice().getProperties().limits.maxStorageBufferRange;
+        if (encoding_byte_size > maxGPUBufferSize) {
+            throw std::runtime_error("Base encoding buffer size exceeds max. GPU buffer range (" + std::to_string(encoding_byte_size) + " > " +
+                                     std::to_string(maxGPUBufferSize) + ")");
+        }
+        if(m_max_detail_byte_size > maxGPUBufferSize) {
+            throw std::runtime_error("Detail encoding buffer size exceeds max. GPU buffer range (" + std::to_string(m_max_detail_byte_size) + " > " +
+                                     std::to_string(maxGPUBufferSize) + ")");
+        }
     }
     else {
-        assert(false && "we would like to know the Compressed Segmentation Volume size before we allocate any memory");
+        throw std::runtime_error("Currently, a Compressed Segmentation Volume must be passed before rendering to allocate correct GPU buffer sizes.");
     }
     m_brick_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_brick_start_buffer", .byteSize = (bricks_in_volume + 1u)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_encoding_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_encoding_buffer", .byteSize = encoding_byte_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
@@ -362,10 +373,9 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
             m_detail_starts_staging = {nullptr, nullptr};
         }
         else {
-            // initialize detail buffer on the GPU with zeros
+            // initialize detail starts buffer on the GPU with zeros (no detail is uploaded initially)
             m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-            m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(m_constructed_detail.data(), m_constructed_detail_starts.back() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-            getCtx()->sync->hostWaitOnDevice({m_detail_staging.first, m_detail_starts_staging.first});
+            getCtx()->sync->hostWaitOnDevice({m_detail_starts_staging.first});
             m_detail_staging = {nullptr, nullptr};
             m_detail_starts_staging = {nullptr, nullptr};
         }
