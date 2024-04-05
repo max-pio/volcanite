@@ -529,8 +529,8 @@ public:
         glm::uvec3 brick_count = getBrickCount();
         size_t last_brick = brick_count.x * brick_count.y * brick_count.z - 1ul;
         uint32_t lod_count = getLodCountPerBrick();
-        uint32_t header_size = lod_count * 2 + (isUsingDetailFreq() ? 0 : 1);
-        uint32_t header_start_lods = lod_count - (isUsingDetailFreq() ? 1 : 0);
+        uint32_t header_size = lod_count * 2 + (isUsingSeparateDetail() ? 0 : 1);
+        uint32_t header_start_lods = lod_count - (isUsingSeparateDetail() ? 1 : 0);
 
         #pragma omp parallel for collapse(3) default(none) shared(is_ok, brick_count, header_size, header_start_lods, lod_count, m_brick_starts, m_encoding, m_detail_starts, m_detail_encoding)
         for(uint32_t z = 0u; z < brick_count.z; z++) {
@@ -571,7 +571,7 @@ public:
                     if(m_encoding[start + header_start_lods] != 0u)
                         error << "  first palette start must be 0 but is " << m_encoding[start + header_start_lods];
                     if(m_encoding[start + header_start_lods + 1u] != 1u)
-                        error << "  second palette start must be 0 but is " << m_encoding[start + header_start_lods + 1u];
+                        error << "  second palette start must be 1 but is " << m_encoding[start + header_start_lods + 1u];
 
                     // check palette starts being in ascending order
                     for(int l = 2u; l <= lod_count + 1; l++) {
@@ -581,8 +581,13 @@ public:
                         }
                     }
 
-                    // check palette size + encoding start of last LoD being shorter than the brick encoding
                     uint32_t palette_size = m_encoding[start + header_size - 1u];
+                    // check palette size not being zero
+                    if(palette_size == 0u) {
+                        error << "  palette size is zero\n";
+                    }
+
+                    // check palette size + encoding start of last LoD being shorter than the brick encoding
                     if(palette_size + m_encoding[start + header_start_lods]/8u > encoding_length) {
                         error << "  palette size and encoding of first (L-1) levels are longer than the total brick encoding\n";
                     }
@@ -602,7 +607,7 @@ public:
 //                        size_t encoding_bytes = static_cast<size_t>((m_brick_starts[brick1D + 1u] - m_brick_starts[brick1D])
 //                                                                   - palette_size - header_size) * 4ul;
 
-                        if (static_cast<size_t>(m_brick_starts[brick1D + 1u])> (~0u)) {
+                        if (static_cast<size_t>(m_brick_starts[brick1D + 1u]) > (~0u)) {
                             error << "  encoding contains more 32 bit entries ("
                                   << (static_cast<size_t>(m_brick_starts[brick1D + 1u]))
                                   << ") than 32 bit indices can index (" << (~0u) << ")\n";
