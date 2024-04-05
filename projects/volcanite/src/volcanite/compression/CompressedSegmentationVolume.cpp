@@ -279,9 +279,6 @@ float CompressedSegmentationVolume::separateDetail() {
     if(m_rANS_mode != DOUBLE_TABLE_RANS)
         throw std::runtime_error("Detail separation can only be used in combination with rANS in double table mode!");
 
-    Logger(INFO) << "BEFORE SEP:";
-    printBrickInfo({9,9,9});
-
     const size_t max_brick_index = m_brick_starts.size() - 1;
 
     // First, we construct the detail_starts buffer. We do a simple sequential pass.
@@ -332,9 +329,6 @@ float CompressedSegmentationVolume::separateDetail() {
     m_brick_starts[max_brick_index] = m_brick_starts[max_brick_index] - m_detail_starts[max_brick_index] - max_brick_index;
 
     m_separate_detail = true;
-
-    Logger(INFO) << "AFTER SEP:";
-    printBrickInfo({9,9,9});
 
     // return the ratio of detail encoding size to total encoding size
     return (static_cast<float>(m_detail_starts[max_brick_index]) / static_cast<float>(m_brick_starts[max_brick_index] + m_detail_starts[max_brick_index]));
