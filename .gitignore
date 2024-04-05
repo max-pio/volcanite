@@ -27,3 +27,4 @@ compile_commands.json
 /imgui.ini
 /volcanite
 /vulkan_pipeline_cache.data
+/projects/volcanite/python/data/*
