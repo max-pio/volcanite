@@ -242,7 +242,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             // 2. for ALL bricks: compute prefix sum of sizes, assuming an added 0 size if brick is not requested. Store in m_detail_starts
             uint32_t next_requested_id = 0u;
             uint32_t total_detail_size = 0u;
-            std::vector<uint32_t> *detail_starts = m_compressed_segmentation_volume->getDetailStarts();
+            const std::vector<uint32_t> *detail_starts = m_compressed_segmentation_volume->getDetailStarts();
             for (int i = 0; i < m_constructed_detail_starts.size(); i++) {
                 m_constructed_detail_starts[i] = total_detail_size;
 
@@ -256,7 +256,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
                 }
             }
             // 3. in parallel: copy all detail encodings to the m_detail_encoding
-            std::vector<uint32_t> *detail = m_compressed_segmentation_volume->getDetail();
+            const std::vector<uint32_t> *detail = m_compressed_segmentation_volume->getDetail();
             #pragma omp parallel for default(none) shared(requested_id_count, requested_ids, m_constructed_detail_starts, m_constructed_detail, detail_starts, detail)
             for (int i = 0; i < requested_id_count; i++) {
                 uint32_t brick_id = requested_ids[i];

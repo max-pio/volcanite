@@ -142,7 +142,7 @@ int volcanite(int argc, char *argv[]) {
             if (args.verbose)
                 Logger(INFO) << "  finished in " << t.elapsed() << " seconds";
         } else {
-            csgvDatabase->createDummy(&(*compressedSegmentationVolume));
+            csgvDatabase->createDummy();
         }
 
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),
@@ -183,7 +183,7 @@ int volcanite(int argc, char *argv[]) {
                 Logger(INFO) << "Imported attribute database " << database_path << " in " << t.elapsed() << " seconds";
         }
         else {
-            csgvDatabase->createDummy(&(*compressedSegmentationVolume));
+            csgvDatabase->createDummy();
             Logger(INFO) << "No attribute database " << database_path << " found. Using dummy database.";
         }
 

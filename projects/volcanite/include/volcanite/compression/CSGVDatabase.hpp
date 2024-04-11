@@ -216,11 +216,11 @@ public:
      * attribute name "csgv_id". This way it can be used in the csgv renderer which will implicitly map this single
      * attribute to the voxel labels from the csgv volume.
      */
-    void createDummy(const CompressedSegmentationVolume* csgv) {
+    void createDummy() {
         m_db = nullptr;
         //ToDo: could create a in-memory database if we need more dummy functionality (if LIB_SQLITE3 is present)
         // m_db =  std::make_unique<SQLite::Database>(":memory:", SQLite::OPEN_MEMORY);
-        m_label_count = ~0u;    // uint32 Max ToDo: find the maximum palette label within the csgv file
+        m_label_count = ~0u;    // uint32 Max ToDo: find the maximum palette label within a volume input file
         m_attribute_names = {"csgv_id"};
         m_attribute_minmax = {glm::vec2(0.f, static_cast<float>(m_label_count))};
     }
