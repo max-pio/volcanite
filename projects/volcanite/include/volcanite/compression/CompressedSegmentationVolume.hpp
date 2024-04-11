@@ -628,7 +628,7 @@ public:
                         {
                             if(is_ok) {
                                 Logger(ERROR) << "Found errors for brick " << str(brick) << ":\n" << error.str() << "---";
-                                printBrickInfo(brick, ERROR);
+                                printBrickInfo(brick, vvv::loglevel(ERROR));
                                 is_ok = false;
                             }
                         }

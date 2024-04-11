@@ -23,6 +23,8 @@ public:
     float orbital_radius;
     //! The position of the camera in world space
     glm::vec3 position_world_space;
+    //! The position of the look at point in world space
+    glm::vec3 position_look_at_world_space;
     //! The rotation of the camera around the global y-axis in radians
     float rotation_y;
     //! The rotation of the camera around the local x-axis in radians. Without
@@ -46,7 +48,7 @@ public:
     float orthogonal_scale;
 
     Camera(bool is_orbital = false) : orbital(is_orbital), rotation_x(0), rotation_y(0), rotation_x_0(0), rotation_y_0(0), near(0.05f), far(1.0e3f), vertical_fov(0.33f * std::numbers::pi),
-                                      speed(2.0f), position_world_space(0, 0, 5), rotate_camera(false), camera_mode(Mode::Perspective), orthogonal_scale(5.f) {
+                                      speed(2.0f), position_world_space(0, 0, 5), position_look_at_world_space(0, 0, 0), rotate_camera(false), camera_mode(Mode::Perspective), orthogonal_scale(5.f) {
         reset();
     }
 
