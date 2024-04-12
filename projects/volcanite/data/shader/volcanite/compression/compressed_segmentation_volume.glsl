@@ -2,12 +2,6 @@
 #define COMPRESSED_SEGMENTATION_VOLUME_GLSL
 
 // compile time parameters:
-#ifndef CSGV_ENCODING_ARRAY
- #define CSGV_ENCODING_ARRAY g_encoding
-#endif
-#ifndef CSGV_DETAIL_ARRAY
-    #define CSGV_DETAIL_ARRAY g_detail
-#endif
 #ifndef CSGV_DECODING_ARRAY
  #define CSGV_DECODING_ARRAY g_decoding
 #endif
@@ -15,6 +9,7 @@
 // 4 bit operations:
 #include "cpp_glsl_include/csgv_constants.h"
 
+#include "csgv_utils.glsl"
 #include "morton.glsl"
 #ifdef USE_RANS
     #include "rans.glsl"
@@ -122,24 +117,8 @@ void fillCSGVBrick(const uint decoded_brick_start_idx, const uint inv_lod, const
     }
 }
 
-// adds the offset to the 64 bit address represented in an uvec2
-uvec2 bufferAddressAdd(uvec2 address, uint offset) {
-    uint carry;
-    address.x = uaddCarry(address.x, offset, carry);
-    address.y += carry;
-    return address;
-}
 
-// substracts the offset from the 64 bit address represented in an uvec2
-uvec2 bufferAddressSub(uvec2 address, uint offset) {
-    uint borrow;
-    address.x = usubBorrow(g_encoding_buffer_address.x, offset, borrow);
-    address.y -= borrow;
-    return address;
-}
-
-
-// decompresses the encoding of the brick from the CSGV_ENCODING_ARRAY array starting at encoding_start_index and ending at
+// decompresses the encoding of the brick from the encoding array starting at encoding_start_index and ending at
 // encoding_end_index to the shard memory brick up to thegiven inverse LOD level.
 // the output brick decoding decoded_brick_start_index is used
 // if start_at_inv_lod == 0, it is assumed that the output brick cache is set to INVALID at all entries
@@ -164,11 +143,10 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
     CSGVReadState readState;    // read and changed in the _readNextLodOperationFromEncoding function
 
     // reference to the uint buffer containing this bricks encoding
-    // ToDo: this would be the place to select different buffers if the complete encoding is > 4 GB, e.g. based on the brick_id
-    EncodingRef brick_encoding = EncodingRef(bufferAddressAdd(g_encoding_buffer_address, encoding_start_index * 4));
+    // ToDo: this would be the place to select different buffers if the complete encoding is > 4 GB, e.g. based on the brick_id. Or rather pass it as an argument to the whole function.
+    EncodingRef brick_encoding = getBrickEncodingRef(encoding_start_index);
     EncodingRef brick_palette = brick_encoding;
 
-    //    readState.idxE = CSGV_ENCODING_ARRAY[beginE + start_at_inv_lod];  // offset of current 4 bit entry to read
     readState.idxE = brick_encoding.buf[start_at_inv_lod];  // offset of current 4 bit entry to read
     readState.rans_tab_offset = 0u;
 #ifdef USE_RANS
@@ -191,13 +169,12 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
 #ifdef USE_RANS_DOUBLE_TABLE
         // RANS_DOUBLE_TABLE is also always set whenever we use detail separation.
         if(lod == g_lod_count - 1u) {
-            readState.rans_tab_offset = 17u;        // we now read from the detail freq. table (which is ofset by 17)
+            readState.rans_tab_offset = 17u;        // we now read from the detail freq. table (which is offset by 17)
             #ifdef SEPARATE_DETAIL
-                brick_encoding = EncodingRef(bufferAddressAdd(g_detail_buffer_address, detail_start_index * 4));
+                brick_encoding = getBrickDetailEncodingRef(detail_start_index);
                 readState.idxE = 0u;
             #else
                 // Detail rANS encoding starts at new uint
-                // ToDo: just move the buffer address pointer and set idxE to zero, unifies with above separate detail case
                 readState.idxE = (brick_encoding.buf[lod] / 8u) * 4u;
             #endif
             rans_itr_initDecoding(readState.rans_state, brick_encoding, readState.idxE);
@@ -240,14 +217,14 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
             else if (operation_lsb == NEIGHBOR_Z)
                 CSGV_DECODING_ARRAY[out_i] = _valueOfNeighbor(_enumBrickPos(i), local_lod_i, lod_width, 2, decoded_brick_start_idx);
             else if (operation_lsb == PALETTE_ADV) {   // read palette entry and advance palette pointer to the next entry
-                CSGV_DECODING_ARRAY[out_i] = brick_encoding.buf[paletteE--];
+                CSGV_DECODING_ARRAY[out_i] = brick_palette.buf[paletteE--];
             }
             else if (operation_lsb == PALETTE_LAST) { // reuse the last palette entry
-                CSGV_DECODING_ARRAY[out_i] = brick_encoding.buf[paletteE+1];
+                CSGV_DECODING_ARRAY[out_i] = brick_palette.buf[paletteE+1];
             }
             else if (operation_lsb == PALETTE_D) {
                 uint palette_delta = _readNextLodOperationFromEncoding(brick_encoding, readState) + 2u;
-                CSGV_DECODING_ARRAY[out_i] = brick_encoding.buf[paletteE + palette_delta];
+                CSGV_DECODING_ARRAY[out_i] = brick_palette.buf[paletteE + palette_delta];
             }
 
             // stop traversal: fill all other parts of the brick with this value
