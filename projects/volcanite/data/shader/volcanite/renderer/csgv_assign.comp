@@ -94,22 +94,12 @@ void main() {
     // see if we have a valid index in the cache
     if(cache_idx != INVALID) {
         uvec3 valid_brick_size = clamp(g_vol_dim.xyz - brick * g_brick_size, uvec3(0u), uvec3(g_brick_size));
-#if 1
+#if 0
     #ifdef SEPARATE_DETAIL
             assert(!(inv_lod == g_lod_count - 1U && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_id] == g_detail_starts[brick_id+1])), "detail not available but the provision shader told us it is");
-            resetCSGVBrick(cache_idx * 8u, inv_lod);
-            decompressCSGVBrick(g_brick_starts[brick_id], g_brick_starts[brick_id+1], g_detail_starts[brick_id], g_detail_starts[brick_id+1], valid_brick_size, 0u, inv_lod, cache_idx * 8u);
-    //        if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == g_lod_count - 1u && detail_available) {
-    //            inv_lod = g_lod_count - 1u;
-    //            uint detail_id_start = ..
-    //            uint detail_id_end = ..
-    //            decompressCSGVBrick(g_detail_starts[detail_id_start], g_detail_starts[detail_id_end], valid_brick_size, inv_lod - 1u, inv_lod, cache_idx * 8u);
-    //        }
-
-    #else
-            resetCSGVBrick(cache_idx * 8u, inv_lod);
-            decompressCSGVBrick(g_brick_starts[brick_id], g_brick_starts[brick_id+1], valid_brick_size, 0u, inv_lod, cache_idx * 8u);
     #endif
+            resetCSGVBrick(cache_idx * 8u, inv_lod);
+            decompressCSGVBrick(brick_id, g_brick_starts[brick_id+1] - g_brick_starts[brick_id], valid_brick_size, 0u, inv_lod, cache_idx * 8u);
 #else
         fillCSGVBrick(cache_idx * 8u, inv_lod, brick_id + 1337u);
 #endif
