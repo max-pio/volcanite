@@ -25,7 +25,7 @@ layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uint g_request_buffer_capacity; // the size of the request buffer
     uint g_detail_buffer_dirty;     // 0 if we can read from the detail buffer, 1 if the detail buffer is dirty
     uvec2 g_encoding_buffer_address;// we store the 64 bit device addresses as uvec2 for protability and
-    uvec2 g_detail_buffer_address;  // missing support / bugs in spirv reflect returning a size of 0
+    uvec2 g_detail_buffer_address;  //   missing support / bugs in spirv reflect returning a size of 0 for pointers
 };
 
 
