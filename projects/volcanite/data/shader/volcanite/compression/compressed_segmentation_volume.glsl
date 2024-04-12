@@ -154,7 +154,11 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
     uint beginE = encoding_start_index;
 
     CSGVReadState readState;    // read and changed in the _readNextLodOperationFromEncoding function
-    readState.idxE = CSGV_ENCODING_ARRAY[beginE + start_at_inv_lod];  // offset of current 4 bit entry to read
+
+    // First usage of the buffer device address features:
+    EncodingRef encoding = EncodingRef(uvec2(g_encoding_buffer_address.x + beginE * 4, g_encoding_buffer_address.y));
+    //    readState.idxE = CSGV_ENCODING_ARRAY[beginE + start_at_inv_lod];  // offset of current 4 bit entry to read
+    readState.idxE = encoding.buf[start_at_inv_lod];  // offset of current 4 bit entry to read
     readState.rans_tab_offset = 0u;
 #ifdef USE_RANS
     readState.idxE = (readState.idxE / 8u) * 4u;

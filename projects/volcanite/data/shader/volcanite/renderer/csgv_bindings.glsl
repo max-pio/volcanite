@@ -2,6 +2,11 @@
 
 // ToDo: control which buffers/images are read- and/or writeonly with defines
 
+layout(std430, buffer_reference, buffer_reference_align = 4) readonly buffer EncodingRef
+{
+    uint buf[];
+};
+
 layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uvec3 g_vol_dim;            // xyz dimension of the original volume
     vec3 g_voxel_size;          // relative size of a single voxel (can be greater than 1 in any dim)
@@ -14,16 +19,21 @@ layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uint g_lod_count;           // number of lod levels per brick
     uint g_frame;               // current frame of the rendering
 //
-    uint g_max_decoding_lod;    // max. inv LOD that we would decode, even if a finer LOD is requested
-    uint g_cache_capacity;      // number of 2x2x2 blocks that can be held in cache at the same time
-    uint g_free_stack_capacity; // number of max. stack elements in each LoD of the free_block_stack
+    uint g_max_decoding_lod;        // max. inv LOD that we would decode, even if a finer LOD is requested
+    uint g_cache_capacity;          // number of 2x2x2 blocks that can be held in cache at the same time
+    uint g_free_stack_capacity;     // number of max. stack elements in each LoD of the free_block_stack
     uint g_request_buffer_capacity; // the size of the request buffer
-    uint g_detail_buffer_dirty; // 0 if we can read from the detail buffer, 1 if the detail buffer is dirty
+    uint g_detail_buffer_dirty;     // 0 if we can read from the detail buffer, 1 if the detail buffer is dirty
+    uvec2 g_encoding_buffer_address;// we store the 64 bit device addresses as uvec2 for protability and
+    uvec2 g_detail_buffer_address;  // missing support / bugs in spirv reflect returning a size of 0
 };
+
+
 layout(std430, binding = 1) buffer restrict readonly brick_starts
 {
     uint g_brick_starts[];  // start points of each brick in g_encoding. Ends with dummy entry one after g_encoding
 };
+
 layout(std430, binding = 2) buffer restrict readonly encoding
 {
     uint g_encoding[];      // encoding of all bricks where each brick contains all its LODs. we use it to check palttes
@@ -138,6 +148,7 @@ layout (std140, binding = 10) uniform render_info {
     bool g_debug_step_count;
     uint g_swapchain_index;     // index of this frame in the multiframe swapchain buffer lists
 };
+
 //layout (binding = 11, rgba8) uniform restrict image2D outColor;
 #define BACKGROUND_DEPTH 3.402823466e+38
 #define INVALID_DEPTH -3.402823466e+38
