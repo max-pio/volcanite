@@ -125,7 +125,7 @@ void fillCSGVBrick(const uint decoded_brick_start_idx, const uint inv_lod, const
 // adds the offset to the 64 bit address represented in an uvec2
 uvec2 bufferAddressAdd(uvec2 address, uint offset) {
     uint carry;
-    address.x = uaddCarry(g_encoding_buffer_address.x, offset, carry);
+    address.x = uaddCarry(address.x, offset, carry);
     address.y += carry;
     return address;
 }
@@ -160,7 +160,7 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
     // the starting position of the current LOD in the encoding array, measured in elements of entry_t. Taken from first brick header entries
     uint local_lod_i;   // the local index of this element within the lod block of the coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
     // the palette starts at the end of the encoding block
-    uint paletteE = encoding_end_index - 1u;
+    uint paletteE = encoding_end_index - encoding_start_index - 1u;
     CSGVReadState readState;    // read and changed in the _readNextLodOperationFromEncoding function
 
     // reference to the uint buffer containing this bricks encoding
@@ -195,15 +195,12 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
             #ifdef SEPARATE_DETAIL
                 brick_encoding = EncodingRef(bufferAddressAdd(g_detail_buffer_address, detail_start_index * 4));
                 readState.idxE = 0u;
-                // Initialize the rANS state from the detail array
-                rans_itr_initDecoding(readState.rans_state, brick_encoding, readState.idxE);
             #else
                 // Detail rANS encoding starts at new uint
                 // ToDo: just move the buffer address pointer and set idxE to zero, unifies with above separate detail case
                 readState.idxE = (brick_encoding.buf[lod] / 8u) * 4u;
-                // Reinit the rANS decoder from the normal encoding array.
-                rans_itr_initDecoding(readState.rans_state, brick_encoding, readState.idxE);
             #endif
+            rans_itr_initDecoding(readState.rans_state, brick_encoding, readState.idxE);
         }
 #endif
 
@@ -243,14 +240,14 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
             else if (operation_lsb == NEIGHBOR_Z)
                 CSGV_DECODING_ARRAY[out_i] = _valueOfNeighbor(_enumBrickPos(i), local_lod_i, lod_width, 2, decoded_brick_start_idx);
             else if (operation_lsb == PALETTE_ADV) {   // read palette entry and advance palette pointer to the next entry
-                CSGV_DECODING_ARRAY[out_i] = CSGV_ENCODING_ARRAY[paletteE--];
+                CSGV_DECODING_ARRAY[out_i] = brick_encoding.buf[paletteE--];
             }
             else if (operation_lsb == PALETTE_LAST) { // reuse the last palette entry
-                CSGV_DECODING_ARRAY[out_i] = CSGV_ENCODING_ARRAY[paletteE+1];
+                CSGV_DECODING_ARRAY[out_i] = brick_encoding.buf[paletteE+1];
             }
             else if (operation_lsb == PALETTE_D) {
                 uint palette_delta = _readNextLodOperationFromEncoding(brick_encoding, readState) + 2u;
-                CSGV_DECODING_ARRAY[out_i] = CSGV_ENCODING_ARRAY[paletteE + palette_delta];
+                CSGV_DECODING_ARRAY[out_i] = brick_encoding.buf[paletteE + palette_delta];
             }
 
             // stop traversal: fill all other parts of the brick with this value
