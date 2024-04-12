@@ -11,8 +11,6 @@ layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 // includes
 #include "util.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
-#define CSGV_ENCODING_ARRAY g_encoding
-#define CSGV_DETAIL_ARRAY g_detail
 #define CSGV_DECODING_ARRAY g_cache
 #include "volcanite/compression/compressed_segmentation_volume.glsl"
 
@@ -94,7 +92,7 @@ void main() {
     // see if we have a valid index in the cache
     if(cache_idx != INVALID) {
         uvec3 valid_brick_size = clamp(g_vol_dim.xyz - brick * g_brick_size, uvec3(0u), uvec3(g_brick_size));
-#if 0
+#if 1
     #ifdef SEPARATE_DETAIL
             assert(!(inv_lod == g_lod_count - 1U && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_id] == g_detail_starts[brick_id+1])), "detail not available but the provision shader told us it is");
     #endif
