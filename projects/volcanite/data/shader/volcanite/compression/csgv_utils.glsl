@@ -30,6 +30,38 @@ uint brick_to_1D(uvec3 brick_idx, uvec3 brick_dim) {
     return brick_idx.x + brick_dim.x * (brick_idx.y + brick_dim.y * brick_idx.z);
 }
 
+// adds the element offset (one unit = 4 byte) to the 64 bit address represented in an uvec2
+uvec2 bufferAddressAdd(uvec2 address, uint uint_elem_offset) {
+    uint carry;
+    // the offset is measured in uints but we have to add 4 byte per uint. To prevent uint overflow, we repeat the op:
+    address.x = uaddCarry(address.x, uint_elem_offset, carry); address.y += carry;
+    address.x = uaddCarry(address.x, uint_elem_offset, carry); address.y += carry;
+    address.x = uaddCarry(address.x, uint_elem_offset, carry); address.y += carry;
+    address.x = uaddCarry(address.x, uint_elem_offset, carry); address.y += carry;
+    return address;
+}
+
+// substracts the element offset (one unit = 4 byte) from the 64 bit address represented in an uvec2
+uvec2 bufferAddressSub(uvec2 address, uint uint_elem_offset) {
+    uint borrow;
+    address.x = usubBorrow(address.x, uint_elem_offset, borrow); address.y -= borrow;
+    address.x = usubBorrow(address.x, uint_elem_offset, borrow); address.y -= borrow;
+    address.x = usubBorrow(address.x, uint_elem_offset, borrow); address.y -= borrow;
+    address.x = usubBorrow(address.x, uint_elem_offset, borrow); address.y -= borrow;
+    return address;
+}
+
+EncodingRef getBrickEncodingRef(uint brick_id) {
+    return EncodingRef(bufferAddressAdd(g_encoding_buffer_address, g_brick_starts[brick_id]));
+}
+
+#ifdef SEPARATE_DETAIL
+EncodingRef getBrickDetailEncodingRef(uint brick_id) {
+    return EncodingRef(bufferAddressAdd(g_detail_buffer_address, g_detail_starts[brick_id]));
+}
+#endif
+
+
 int maxComponent(vec3 v) {
     if (v.x < v.y) {
         if (v.x < v.z) {

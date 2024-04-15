@@ -1,6 +1,7 @@
 #version 460
-#extension GL_GOOGLE_include_directive : enable
+#extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
 
 layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
@@ -10,8 +11,6 @@ layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 // includes
 #include "util.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
-#define CSGV_ENCODING_ARRAY g_encoding
-#define CSGV_DETAIL_ARRAY g_detail
 #define CSGV_DECODING_ARRAY g_cache
 #include "volcanite/compression/compressed_segmentation_volume.glsl"
 
@@ -96,19 +95,9 @@ void main() {
 #if 1
     #ifdef SEPARATE_DETAIL
             assert(!(inv_lod == g_lod_count - 1U && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_id] == g_detail_starts[brick_id+1])), "detail not available but the provision shader told us it is");
-            resetCSGVBrick(cache_idx * 8u, inv_lod);
-            decompressCSGVBrick(g_brick_starts[brick_id], g_brick_starts[brick_id+1], g_detail_starts[brick_id], g_detail_starts[brick_id+1], valid_brick_size, 0u, inv_lod, cache_idx * 8u);
-    //        if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == g_lod_count - 1u && detail_available) {
-    //            inv_lod = g_lod_count - 1u;
-    //            uint detail_id_start = ..
-    //            uint detail_id_end = ..
-    //            decompressCSGVBrick(g_detail_starts[detail_id_start], g_detail_starts[detail_id_end], valid_brick_size, inv_lod - 1u, inv_lod, cache_idx * 8u);
-    //        }
-
-    #else
-            resetCSGVBrick(cache_idx * 8u, inv_lod);
-            decompressCSGVBrick(g_brick_starts[brick_id], g_brick_starts[brick_id+1], valid_brick_size, 0u, inv_lod, cache_idx * 8u);
     #endif
+            resetCSGVBrick(cache_idx * 8u, inv_lod);
+            decompressCSGVBrick(brick_id, g_brick_starts[brick_id+1] - g_brick_starts[brick_id], valid_brick_size, 0u, inv_lod, cache_idx * 8u);
 #else
         fillCSGVBrick(cache_idx * 8u, inv_lod, brick_id + 1337u);
 #endif

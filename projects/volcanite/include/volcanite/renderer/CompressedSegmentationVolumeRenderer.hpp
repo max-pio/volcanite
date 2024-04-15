@@ -45,6 +45,7 @@ public:
 
     void configureExtensionsAndLayersAndFeatures(GpuContextRwPtr ctx) override {
         ctx->enableDeviceExtension("VK_EXT_memory_budget");
+        ctx->physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
     }
 
     /** Initializes Descriptorsets and calls pipeline initialization. */
@@ -219,6 +220,7 @@ private:
     std::vector<std::shared_ptr<TransferFunction1D>> m_materialTransferFunctions{SEGMENTED_VOLUME_MATERIAL_COUNT, nullptr};
     bool m_data_changed = false;
     std::shared_ptr<Buffer> m_encoding_buffer = nullptr;
+    glm::uvec2 m_encoding_buffer_address = {};
     const size_t m_max_attribute_buffer_size = ((64ul << 10) << 10);   // MB to store different floating point attributes back to back
     std::vector<int> m_attribute_start_position = {-1};           // the start index in the attribute_buffer for each attribute
     std::shared_ptr<Buffer> m_attribute_buffer = nullptr;       // stores attributes back to back
@@ -243,6 +245,7 @@ private:
     uint32_t m_detail_capacity = 0u; // how many uints fit into the GPU detail buffer
     std::vector<uint32_t> m_constructed_detail = {};
     std::shared_ptr<Buffer> m_detail_buffer = nullptr;
+    glm::uvec2 m_detail_buffer_address = {};
     std::pair<std::shared_ptr<vvv::Awaitable>, std::shared_ptr<Buffer>> m_detail_staging = {nullptr, nullptr};
     size_t m_camHash_at_last_cache_reset = 0u;
 

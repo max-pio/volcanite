@@ -15,7 +15,15 @@ void Buffer::createBuffer(vk::BufferUsageFlags bufferUsage, vk::MemoryPropertyFl
     vk::MemoryRequirements memoryRequirements = device.getBufferMemoryRequirements(m_buffer);
     uint32_t memoryTypeIndex = getMemoryType(*m_ctx, memoryRequirements.memoryTypeBits, memoryUsage);
 
-    m_bufferMemory = device.allocateMemory(vk::MemoryAllocateInfo(memoryRequirements.size, memoryTypeIndex));
+    // create the memory with the device address bit if required
+    bool enable_device_address = (bufferUsage & (vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eShaderDeviceAddressEXT | vk::BufferUsageFlagBits::eShaderDeviceAddressKHR)) != vk::BufferUsageFlags();
+    if(enable_device_address) {
+        vk::MemoryAllocateFlagsInfo flags_info(vk::MemoryAllocateFlagBits::eDeviceAddress);
+        m_bufferMemory = device.allocateMemory(vk::MemoryAllocateInfo(memoryRequirements.size, memoryTypeIndex, &flags_info));
+    }
+    else {
+        m_bufferMemory = device.allocateMemory(vk::MemoryAllocateInfo(memoryRequirements.size, memoryTypeIndex));
+    }
     device.bindBufferMemory(m_buffer, m_bufferMemory, 0);
 
     if (!label.empty()) {
@@ -25,6 +33,12 @@ void Buffer::createBuffer(vk::BufferUsageFlags bufferUsage, vk::MemoryPropertyFl
 
     descriptor = vk::DescriptorBufferInfo(m_buffer, 0, m_byteSize);
 
+}
+
+vk::DeviceAddress Buffer::getDeviceAddress() const {
+    vk::BufferDeviceAddressInfo address_info;
+    address_info.buffer = m_buffer;
+    return getCtx()->getDevice().getBufferAddress(address_info);
 }
 
 std::vector<uint8_t> Buffer::download() const {

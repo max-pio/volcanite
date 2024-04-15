@@ -239,6 +239,7 @@ public:
 
     virtual vk::PhysicalDeviceFeatures &physicalDeviceFeatures() = 0;
     virtual vk::PhysicalDeviceVulkan12Features &physicalDeviceFeaturesV12() = 0;
+    virtual vk::PhysicalDeviceVulkan13Features &physicalDeviceFeaturesV13() = 0;
     virtual void physicalDeviceAddExtensionFeatures(void* featuresKhr) = 0;
 
 protected:

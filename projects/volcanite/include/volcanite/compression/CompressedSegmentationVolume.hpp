@@ -253,22 +253,22 @@ public:
         return testLOD(volume, volume_dim);
     }
 
-    std::vector<uint32_t>* getEncoding() {
+    const std::vector<uint32_t>* getEncoding() const {
         if(m_encoding.empty())
             throw std::runtime_error("Volume must be compressed first! Call compress() or import a CSGV from a file!");
         return &m_encoding;
     }
-    std::vector<uint32_t>* getBrickStarts() {
+    const std::vector<uint32_t>* getBrickStarts() const {
         if(m_encoding.empty())
             throw std::runtime_error("Volume must be compressed first! Call compress() or import a CSGV from a file!");
         return &m_brick_starts;
     }
-    std::vector<uint32_t>* getDetail() {
+    const std::vector<uint32_t>* getDetail() const {
         if(!m_separate_detail)
             throw std::runtime_error("Detail separation must be performed before accessing detail buffers! Call separateDetail()!");
         return &m_detail_encoding;
     }
-    std::vector<uint32_t>* getDetailStarts() {
+    const std::vector<uint32_t>* getDetailStarts() const {
         if(!m_separate_detail)
             throw std::runtime_error("Detail separation must be performed before accessing detail buffers! Call separateDetail()!");
         return &m_detail_starts;
@@ -276,7 +276,11 @@ public:
     glm::uvec3 getVolumeDim() const { return m_volume_dim; }
     glm::uint32_t getBrickSize() const { return m_brick_size; }
     uint32_t getLodCountPerBrick() const { return static_cast<uint32_t>(log2(m_brick_size)) + 1; }
-    glm::uvec3 getBrickCount() const { return (m_volume_dim - glm::uvec3(1)) / m_brick_size + 1u; }
+    glm::uvec3 getBrickCount() const {
+        if(m_brick_size <= 0u)
+            throw std::runtime_error("Brick Size is 0");
+        return (m_volume_dim - glm::uvec3(1)) / m_brick_size + 1u;
+    }
     static inline uint32_t brick_to_1D(glm::uvec3 brick_pos, glm::uvec3 brick_count) {
         return sfc::Cartesian::p2i(brick_pos, brick_count);
     }
@@ -345,7 +349,7 @@ public:
         return filepath.substr(0, filepath.rfind('.')) + "_bs" + std::to_string(brick_size) + rANS_str + (separate_detail ? "_ds" : "") + filetype;
     }
     std::string getCSGVFileName(const std::string& filepath, const std::string filetype= ".csgv") { return getCSGVFileName(filepath, m_brick_size, m_rANS_mode, m_separate_detail, filetype); }
-    bool importFromFile(const std::string& path, bool verbose = true, bool verify = true);
+    bool importFromFile(const std::string& path, bool verbose = true);
     void exportToFile(const std::string& path, bool verbose = true);
 
     void clear() {
@@ -401,11 +405,11 @@ public:
     /**
      * Time needed for the full compression pass (without the freq. pre-pass) in seconds.
      */
-    float getLastTotalEncodingSeconds() { return m_last_total_encoding_seconds; }
+    float getLastTotalEncodingSeconds() const { return m_last_total_encoding_seconds; }
     /**
      * Time needed for the frequency pre-pass in seconds.
      */
-    float getLastTotalFreqPrepassSeconds() { return m_last_total_freq_prepass_seconds; }
+    float getLastTotalFreqPrepassSeconds() const { return m_last_total_freq_prepass_seconds; }
 
     ///////////////////////////////////////////////////////////////////
     ///                   rANS frequency tables                     ///
@@ -464,7 +468,7 @@ public:
         return ss.str();
     }
 
-    void printBrickInfo(glm::uvec3 brick, loglevel log_level = INFO) {
+    void printBrickInfo(glm::uvec3 brick, loglevel log_level = INFO) const {
         if(m_encoding.empty())
             throw std::runtime_error("Segmentation volume is not yet compressed!");
 
@@ -504,7 +508,7 @@ public:
                     ss << ",";
                 p++;
             }
-            ss << " | LoD Palette Start: ";
+            ss << " | LoD Palette Size: ";
             for(int i = 0; i < getLodCountPerBrick() + 1; i++) {
                 ss << std::to_string(m_encoding[p]);
                 if(i < getLodCountPerBrick())
@@ -521,126 +525,7 @@ public:
     }
 
     /** A quick way of checking some invariants of CSGV representations to verify the compressed volume. */
-    bool verifyCompression() {
-        if(m_encoding.empty())
-            throw std::runtime_error("Segmentation volume is not yet compressed!");
-
-        bool is_ok = true;
-        glm::uvec3 brick_count = getBrickCount();
-        size_t last_brick = brick_count.x * brick_count.y * brick_count.z - 1ul;
-        uint32_t lod_count = getLodCountPerBrick();
-        uint32_t header_size = lod_count * 2 + (isUsingSeparateDetail() ? 0 : 1);
-        uint32_t header_start_lods = lod_count - (isUsingSeparateDetail() ? 1 : 0);
-
-        #pragma omp parallel for collapse(3) default(none) shared(is_ok, brick_count, header_size, header_start_lods, lod_count, m_brick_starts, m_encoding, m_detail_starts, m_detail_encoding)
-        for(uint32_t z = 0u; z < brick_count.z; z++) {
-            for (uint32_t y = 0u; y < brick_count.y; y++) {
-                for (uint32_t x = 0u; x < brick_count.x; x++) {
-
-                    if(!is_ok)
-                        continue;
-
-                    glm::uvec3 brick(x, y, z);
-                    std::stringstream error;
-                    uint32_t brick1D = brick_to_1D(brick, getBrickCount());
-                    uint32_t start = m_brick_starts[brick1D];
-
-                    // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
-                    long encoding_length = static_cast<long>(m_brick_starts[brick1D + 1]) - static_cast<long>(start);
-                    if(encoding_length < header_size + 1u + 1u)
-                        error << " brick encoding is shorter than minimum (header size + 1 encoding + 1 palette)=" << (header_size+2) <<" but is " << encoding_length << "\n";
-
-                    // check first header entry being header_size * 8
-                    if(m_encoding[start] != header_size * 8u)
-                        error << "  first encoding starts 4bit must be header*8=" << (header_size * 8u) << " but is "  << m_encoding[start] << "\n";
-
-                    // check encoding starts being in ascending order
-                    // note: the header count the number of entries, except the last entry when using double table rANS
-                    // for which this entry refers to the raw 4 bit index at which the detail encoding starts AFTER packing the earlier LoDs
-                    for(int l = 1; l < header_start_lods - (isUsingDetailFreq() ? 1 : 0); l++) {
-                        long distance = static_cast<long>(m_encoding[start + l]) - static_cast<long>(m_encoding[start + l - 1]);
-                        if(distance < 0l) {
-                            error << "  encoding starts are not in ascending order (distance " << distance << " for LoD " << l << ")\n";
-                            break;
-                        }
-                        else if(distance > m_brick_size * m_brick_size * m_brick_size) {
-                            error << "  encoding starts between LoDs are too far away\n";
-                            break;
-                        }
-                    }
-
-                    // check palette start of first LoD being 0 and second LoD being 1
-                    if(m_encoding[start + header_start_lods] != 0u)
-                        error << "  first palette start must be 0 but is " << m_encoding[start + header_start_lods];
-                    if(m_encoding[start + header_start_lods + 1u] != 1u)
-                        error << "  second palette start must be 1 but is " << m_encoding[start + header_start_lods + 1u];
-
-                    // check palette starts being in ascending order
-                    for(int l = 2u; l <= lod_count + 1; l++) {
-                        if(m_encoding[start + header_start_lods + l] < m_encoding[start + header_start_lods + l - 1]) {
-                            error << "  palette starts are not in ascending order\n";
-                            break;
-                        }
-                    }
-
-                    uint32_t palette_size = m_encoding[start + header_size - 1u];
-                    // check palette size not being zero
-                    if(palette_size == 0u) {
-                        error << "  palette size is zero\n";
-                    }
-
-                    // check palette size + encoding start of last LoD being shorter than the brick encoding
-                    if(palette_size + m_encoding[start + header_start_lods]/8u > encoding_length) {
-                        error << "  palette size and encoding of first (L-1) levels are longer than the total brick encoding\n";
-                    }
-
-                    // check detail encoding having at least 1 entry
-                    if(isUsingSeparateDetail()) {
-                        long detail_encoding_length = static_cast<long>(m_detail_starts[brick1D + 1u]) -
-                                                      static_cast<long>(m_detail_starts[brick1D]);
-                        if (detail_encoding_length < 1l) {
-                            error << "  brick detail encoding is missing with length " << detail_encoding_length << "\n";
-                        }
-                    }
-
-                    // check for 32 Bit overflow if bytes are indexed in the buffers
-                    // if(glm::all(glm::equal(brick, brick_count - glm::uvec3(1))))
-                    {
-//                        size_t encoding_bytes = static_cast<size_t>((m_brick_starts[brick1D + 1u] - m_brick_starts[brick1D])
-//                                                                   - palette_size - header_size) * 4ul;
-
-                        if (static_cast<size_t>(m_brick_starts[brick1D + 1u]) > (~0u)) {
-                            error << "  encoding contains more 32 bit entries ("
-                                  << (static_cast<size_t>(m_brick_starts[brick1D + 1u]))
-                                  << ") than 32 bit indices can index (" << (~0u) << ")\n";
-                        }
-
-                        if (isUsingSeparateDetail()) {
-                            if (static_cast<size_t>(m_detail_starts[brick1D + 1u]) > (~0u)) {
-                                error << "  detail encoding contains more 32 bit entries ("
-                                      << (static_cast<size_t>(m_detail_starts[brick1D + 1u]))
-                                        << ") than 32 bit indices can index (" << (~0u) << ")\n";
-                            }
-                        }
-                    }
-
-                    // print error message
-                    if(!error.str().empty()) {
-                        #pragma omp critical
-                        {
-                            if(is_ok) {
-                                Logger(ERROR) << "Found errors for brick " << str(brick) << ":\n" << error.str() << "---";
-                                printBrickInfo(brick, WARN);
-                                is_ok = false;
-                            }
-                        }
-                    }
-
-                }
-            }
-        }
-        return is_ok;
-    }
+    [[nodiscard]] bool verifyCompression() const;
 
 private:
     uint32_t m_cpu_threads;                     // number of CPU threads to parallelize computations

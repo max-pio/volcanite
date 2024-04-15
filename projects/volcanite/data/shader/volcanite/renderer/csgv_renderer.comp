@@ -1,6 +1,7 @@
 #version 460
-#extension GL_GOOGLE_include_directive : enable
+#extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
 
 layout (local_size_x = 8, local_size_y = 8) in;
 
@@ -109,23 +110,26 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
     // or if the brick is not yet decoded
     if (req_inv_lod == 0u || cur_inv_lod >= g_lod_count) {
 
+        EncodingRef encoding_address = getBrickEncodingRef(brick_id);
+        uint encoding_size = g_brick_starts[brick_id+1] - g_brick_starts[brick_id];
+
         // if the brick was not decoded, anything we compute from now on is invalid
         if(req_inv_lod > 0u && g_max_decoding_lod > 0u) {
 #ifdef SEPARATE_DETAIL
-            uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * (g_lod_count - 1u)];
+            uint palette_size = encoding_address.buf[2u * (g_lod_count - 1u)];
 #else
-            uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * g_lod_count];
+            uint palette_size =  encoding_address.buf[2u * g_lod_count];
 #endif
 
             depth_valid = INVALID_DEPTH;
             // ToDo: this should be a random number from the random state
             float rnd = hash(uvec3(gl_GlobalInvocationID.xy, g_frame)).r;
-            return g_encoding[g_brick_starts[brick_id+1] - 1u - uint(rnd * rnd * float(palette_size))];
+            return  encoding_address.buf[encoding_size - 1u - uint(rnd * rnd * float(palette_size))];
         }
 
         // return the first palette entry = coarsests compressed representation of the brick for inv_lod 0
         // we could alternatively perform a small linear search for the first *visible* label here
-        return g_encoding[g_brick_starts[brick_id+1] - 1u];
+        return  encoding_address.buf[encoding_size - 1u];
     }
     // read the voxel from the brick in the cache (with the currently decoded LOD)
     else {

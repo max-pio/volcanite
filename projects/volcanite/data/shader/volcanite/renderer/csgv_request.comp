@@ -1,6 +1,7 @@
 #version 460
-#extension GL_GOOGLE_include_directive : enable
+#extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
 
 layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
@@ -54,17 +55,19 @@ void main() {
     //        return;
 
     bool potentially_visible = false;
-    uint palette_start = g_brick_starts[brick_id + 1u] - 1u;
+
+    uint brick_encoding_length = g_brick_starts[brick_id + 1u] - g_brick_starts[brick_id];
+    EncodingRef brick_address = getBrickEncodingRef(brick_id);
     // read total palette size from brick header
 #ifdef SEPARATE_DETAIL
-    uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * g_lod_count - 1u];
+    uint palette_size = brick_address.buf[2u * g_lod_count - 1u];
 #else
-    uint palette_size = g_encoding[g_brick_starts[brick_id] + 2u * g_lod_count];
+    uint palette_size = brick_address.buf[2u * g_lod_count];
 #endif
     assert(palette_size > 0u, "palette size 0 should not be possible");
     // check all entries in the palette if anything is visible (> 0)
-    for (uint i = 0; i < palette_size; i++) {
-        if (isLabelVisible(g_encoding[palette_start - i])) {
+    for (uint i = 1; i <= palette_size; i++) {
+        if (isLabelVisible(brick_address.buf[brick_encoding_length - i])) {
             potentially_visible = true;
             break;
         }
