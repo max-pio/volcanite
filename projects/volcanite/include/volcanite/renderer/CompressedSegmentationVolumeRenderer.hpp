@@ -150,7 +150,7 @@ private:
     // materials
     static constexpr uint32_t SEGMENTED_VOLUME_MATERIAL_COUNT = 8;
     std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
-    float m_factor_ambient = 0.0f;
+    float m_factor_ambient = 0.4f;
     float m_ratio_spec_diff = 1.0f;
     bool m_cook_torrance_shading = true;
     // shading and post processing
@@ -185,7 +185,7 @@ private:
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
     int m_accum_frames = 16;
-    int m_max_decoding_lod = 3;
+    int m_max_decoding_lod = 6;
     // utility
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text;
