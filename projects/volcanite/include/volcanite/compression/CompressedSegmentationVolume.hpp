@@ -345,7 +345,7 @@ public:
         return filepath.substr(0, filepath.rfind('.')) + "_bs" + std::to_string(brick_size) + rANS_str + (separate_detail ? "_ds" : "") + filetype;
     }
     std::string getCSGVFileName(const std::string& filepath, const std::string filetype= ".csgv") { return getCSGVFileName(filepath, m_brick_size, m_rANS_mode, m_separate_detail, filetype); }
-    bool importFromFile(const std::string& path, bool verbose = true);
+    bool importFromFile(const std::string& path, bool verbose = true, bool verify = true);
     void exportToFile(const std::string& path, bool verbose = true);
 
     void clear() {
@@ -504,7 +504,7 @@ public:
                     ss << ",";
                 p++;
             }
-            ss << " | LoD Palette Size: ";
+            ss << " | LoD Palette Start: ";
             for(int i = 0; i < getLodCountPerBrick() + 1; i++) {
                 ss << std::to_string(m_encoding[p]);
                 if(i < getLodCountPerBrick())
@@ -555,10 +555,12 @@ public:
                         error << "  first encoding starts 4bit must be header*8=" << (header_size * 8u) << " but is "  << m_encoding[start] << "\n";
 
                     // check encoding starts being in ascending order
-                    for(int l = 1; l < header_start_lods; l++) {
+                    // note: the header count the number of entries, except the last entry when using double table rANS
+                    // for which this entry refers to the raw 4 bit index at which the detail encoding starts AFTER packing the earlier LoDs
+                    for(int l = 1; l < header_start_lods - (isUsingDetailFreq() ? 1 : 0); l++) {
                         long distance = static_cast<long>(m_encoding[start + l]) - static_cast<long>(m_encoding[start + l - 1]);
                         if(distance < 0l) {
-                            error << "  encoding starts are not in ascending order\n" << l << " " << distance;
+                            error << "  encoding starts are not in ascending order (distance " << distance << " for LoD " << l << ")\n";
                             break;
                         }
                         else if(distance > m_brick_size * m_brick_size * m_brick_size) {

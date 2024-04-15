@@ -171,14 +171,14 @@ int compression_synth(int argc, char *argv[]) {
             for(int i = 0; i < 16; i++) {
                 if (code_frequencies[i] == 0ul) {
                     changed = true;
-                    code_frequencies[i] = 1ul;
+                    code_frequencies[i] = 2ul;
                 }
                 if(rANS_mode == vvv::CompressedSegmentationVolume::DOUBLE_TABLE_RANS && code_frequencies[i+16] == 0ul) {
                     changed = true;
-                    code_frequencies[i+16] = 1ul;                }
+                    code_frequencies[i+16] = 2ul;                }
             }
             if (changed)
-                Logger(WARN) << " set zero frequency to 1 to avoid missing symbols because of frequency pass subsampling.";
+                Logger(WARN) << " set zero frequency to 2 to avoid missing symbols because of frequency pass subsampling.";
         }
     }
     csgvol->setCompressionOptions64(brick_dim, rANS_mode, code_frequencies, code_frequencies + 16);

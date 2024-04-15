@@ -139,7 +139,7 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
     out[0] = out_i;                 // LoD start position
     out[header_size - 1] = 0u; // palette start position (from back)
     uint32_t muligrid_lod_start = multigrid.size() - 1;
-    if (multigrid[muligrid_lod_start].constant_subregion) {             //isHomogeneousBrick(volume, volume_dim, glm::uvec3(0u), {brick_size, brick_size, brick_size})) {
+    if (multigrid[muligrid_lod_start].constant_subregion) {             //isHomogeneousBrick(volume, volume_dim, glm::uvec3(0u), {brick_size, brick_size, brick_size})) {Z
         write4Bit(out, 0u, out_i++, PALETTE_ADV | STOP_BIT);
     }
     else {
@@ -236,6 +236,7 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
 
         if(m_rANS_mode == DOUBLE_TABLE_RANS) {
             // pack all previous levels via rANS encoding if we're at the second last LoD (last LoD of non-detail encoding)
+            // NOTE: the old out_i and header starts count in number of elements. the following out_i counts in 4bit
             if (current_inv_lod == lod_count - 2u) {
                 out_i = m_rans.packRANS(out, out[0], out_i);
                 // the detail encoding has to start at a new 32bit element (which is guaranteed by our rANS output)
@@ -903,7 +904,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
         Logger(DEBUG) << "Exported Compressed Segmentation Volume to " << path;
 }
 
-bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool verbose) {
+bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool verbose, bool verify) {
     std::ifstream fin(path, std::ios::in | std::ios::binary);
     if (!fin.is_open()) {
         if(verbose)
@@ -979,14 +980,16 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
         Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim) << " voxels and " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z)
                       << " bricks for brick size " << m_brick_size << "^3" << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
 
-    Logger(DEBUG, true) << "verifying..";
-    MiniTimer verifyTimer;
-    if(!verifyCompression()) {
-        Logger(DEBUG) << "verifying: FAILURE (" << verifyTimer.elapsed() << "s)";
-        return false;
-    } else {
-        Logger(DEBUG) << "verifying: ok (" << verifyTimer.elapsed() << "s)";
-        return true;
+    if(verify) {
+        Logger(DEBUG, true) << "verifying..";
+        MiniTimer verifyTimer;
+        if (!verifyCompression()) {
+            Logger(DEBUG) << "verifying: FAILURE (" << verifyTimer.elapsed() << "s)";
+            return false;
+        } else {
+            Logger(DEBUG) << "verifying: ok (" << verifyTimer.elapsed() << "s)";
+            return true;
+        }
     }
 }
 
