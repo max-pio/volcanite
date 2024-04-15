@@ -253,30 +253,30 @@ public:
         return testLOD(volume, volume_dim);
     }
 
-    const std::vector<uint32_t>* getEncoding() const {
+    [[nodiscard]] const std::vector<uint32_t>* getEncoding() const {
         if(m_encoding.empty())
             throw std::runtime_error("Volume must be compressed first! Call compress() or import a CSGV from a file!");
         return &m_encoding;
     }
-    const std::vector<uint32_t>* getBrickStarts() const {
+    [[nodiscard]] const std::vector<uint32_t>* getBrickStarts() const {
         if(m_encoding.empty())
             throw std::runtime_error("Volume must be compressed first! Call compress() or import a CSGV from a file!");
         return &m_brick_starts;
     }
-    const std::vector<uint32_t>* getDetail() const {
+    [[nodiscard]] const std::vector<uint32_t>* getDetail() const {
         if(!m_separate_detail)
             throw std::runtime_error("Detail separation must be performed before accessing detail buffers! Call separateDetail()!");
         return &m_detail_encoding;
     }
-    const std::vector<uint32_t>* getDetailStarts() const {
+    [[nodiscard]] const std::vector<uint32_t>* getDetailStarts() const {
         if(!m_separate_detail)
             throw std::runtime_error("Detail separation must be performed before accessing detail buffers! Call separateDetail()!");
         return &m_detail_starts;
     }
-    glm::uvec3 getVolumeDim() const { return m_volume_dim; }
-    glm::uint32_t getBrickSize() const { return m_brick_size; }
-    uint32_t getLodCountPerBrick() const { return static_cast<uint32_t>(log2(m_brick_size)) + 1; }
-    glm::uvec3 getBrickCount() const {
+    [[nodiscard]] glm::uvec3 getVolumeDim() const { return m_volume_dim; }
+    [[nodiscard]] glm::uint32_t getBrickSize() const { return m_brick_size; }
+    [[nodiscard]] uint32_t getLodCountPerBrick() const { return static_cast<uint32_t>(log2(m_brick_size)) + 1; }
+    [[nodiscard]] glm::uvec3 getBrickCount() const {
         if(m_brick_size <= 0u)
             throw std::runtime_error("Brick Size is 0");
         return (m_volume_dim - glm::uvec3(1)) / m_brick_size + 1u;
@@ -285,9 +285,9 @@ public:
         return sfc::Cartesian::p2i(brick_pos, brick_count);
     }
 
-    bool isUsingRANS() const { return m_rANS_mode == SINGLE_TABLE_RANS || m_rANS_mode == DOUBLE_TABLE_RANS; }
-    bool isUsingDetailFreq() const { return m_rANS_mode == DOUBLE_TABLE_RANS; }
-    bool isUsingSeparateDetail() const { return m_separate_detail; }
+    [[nodiscard]] bool isUsingRANS() const { return m_rANS_mode == SINGLE_TABLE_RANS || m_rANS_mode == DOUBLE_TABLE_RANS; }
+    [[nodiscard]] bool isUsingDetailFreq() const { return m_rANS_mode == DOUBLE_TABLE_RANS; }
+    [[nodiscard]] bool isUsingSeparateDetail() const { return m_separate_detail; }
 
     /**
      * Sets the options for the compression step. If using rANS, a frequency table as a uint32_t[16] array must be given for the base.
@@ -349,7 +349,7 @@ public:
         return filepath.substr(0, filepath.rfind('.')) + "_bs" + std::to_string(brick_size) + rANS_str + (separate_detail ? "_ds" : "") + filetype;
     }
     std::string getCSGVFileName(const std::string& filepath, const std::string filetype= ".csgv") { return getCSGVFileName(filepath, m_brick_size, m_rANS_mode, m_separate_detail, filetype); }
-    bool importFromFile(const std::string& path, bool verbose = true);
+    bool importFromFile(const std::string& path, bool verbose = true, bool verify = true);
     void exportToFile(const std::string& path, bool verbose = true);
 
     void clear() {
@@ -362,7 +362,7 @@ public:
         m_separate_detail = false;
     }
 
-    float getCompressedSizeInGB() {
+    float getCompressedSizeInGB() const {
         return static_cast<float>(m_encoding.size() + m_brick_starts.size() + m_detail_encoding.size() + m_detail_starts.size()) / 1000.f / 1000.f / 1000.f;
     }
 
@@ -371,7 +371,7 @@ public:
                static_cast<float>(m_volume_dim.x * m_volume_dim.y * m_volume_dim.z * sizeof(uint32_t)) * 100.f;
     }
 
-    std::string decodingInfoString() {
+    std::string decodingInfoString() const {
         double brick_starts_memory = static_cast<double>(m_brick_starts.size() * sizeof(uint32_t)) / 1000. / 1000.;
         double encoding_memory = static_cast<double>(m_encoding.size() * sizeof(uint32_t)) / 1000. / 1000.;
         double detail_starts_memory = static_cast<double>(m_detail_starts.size() * sizeof(uint32_t)) / 1000. / 1000.;
@@ -389,10 +389,10 @@ public:
     ///////////////////////////////////////////////////////////////////
     ///                 statistics and evaluation                   ///
     ///////////////////////////////////////////////////////////////////
-    std::vector<std::map<std::string, float>> gatherBrickStatistics() const;
+    [[nodiscard]] std::vector<std::map<std::string, float>> gatherBrickStatistics() const;
 
-    void exportAllBrickOperations(const std::string path) const;
-    void exportBrickOperationsToCSV(std::string path, uint32_t brick_idx) const;
+    void exportAllBrickOperations(const std::string& path) const;
+    void exportBrickOperationsToCSV(const std::string& path, uint32_t brick_idx) const;
 
     static std::vector<glm::uvec4> createBrickPosBuffer(uint32_t brick_size) {
         uint32_t total = brick_size * brick_size * brick_size;
@@ -436,7 +436,7 @@ public:
         return normalizeCodeFrequencies(f);
     }
 
-    std::vector<uint32_t> getCurrentFrequencyTable() {
+    [[nodiscard]] std::vector<uint32_t> getCurrentFrequencyTable() const {
         if(!isUsingRANS())
             throw std::runtime_error("Can't get a frequency table from a Compressed Segmentation Volume that's not using rANS!");
         std::vector<uint32_t> freq(16);
@@ -444,7 +444,7 @@ public:
         return freq;
     }
 
-    std::vector<uint32_t> getCurrentDetailFrequencyTable() {
+    [[nodiscard]] const std::vector<uint32_t> getCurrentDetailFrequencyTable() const {
         if(!isUsingDetailFreq())
             throw std::runtime_error("Can't get a detail frequency table from a Compressed Segmentation Volume that's not using rANS in double table mode.");
         std::vector<uint32_t> freq(16);
@@ -452,7 +452,7 @@ public:
         return freq;
     }
 
-    std::string getGLSLSymbolArrayStringRANS() {
+    [[nodiscard]] std::string getGLSLSymbolArrayStringRANS() const {
         std::stringstream ss;
         ss << "uvec3[34](";
         ss << m_rans.getGLSLSymbolArrayString();
@@ -525,7 +525,7 @@ public:
     }
 
     /** A quick way of checking some invariants of CSGV representations to verify the compressed volume. */
-    [[nodiscard]] bool verifyCompression() const;
+    bool verifyCompression() const;
 
 private:
     uint32_t m_cpu_threads;                     // number of CPU threads to parallelize computations

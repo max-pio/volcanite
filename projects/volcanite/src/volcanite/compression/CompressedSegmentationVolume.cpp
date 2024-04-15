@@ -355,7 +355,7 @@ float CompressedSegmentationVolume::separateDetail() {
                         continue;
 
                     glm::uvec3 brick(x, y, z);
-                    std::stringstream error;
+                    std::stringstream error = {};
                     uint32_t brick1D = brick_to_1D(brick, getBrickCount());
                     uint32_t start = m_brick_starts[brick1D];
 
@@ -444,7 +444,8 @@ float CompressedSegmentationVolume::separateDetail() {
                         {
                             if(is_ok) {
                                 Logger(ERROR) << "Found errors for brick " << str(brick) << ":\n" << error.str() << "---";
-                                printBrickInfo(brick, WARN);
+                                // ToDo: loglevel ERROR does not work on windows. this workaround outputs to INFO in that case (ERROR is defined as 0 in windows.h)
+                                printBrickInfo(brick, vvv::loglevel(ERROR));
                                 is_ok = false;
                             }
                         }
@@ -1112,6 +1113,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
             return true;
         }
     }
+    return true;
 }
 
 // STATISTICS ________________________________________________________
@@ -1301,7 +1303,7 @@ std::vector<std::map<std::string, float>> CompressedSegmentationVolume::gatherBr
     return statistics;
 }
 
-void CompressedSegmentationVolume::exportAllBrickOperations(const std::string path) const {
+void CompressedSegmentationVolume::exportAllBrickOperations(const std::string& path) const {
     if(m_encoding.empty() || m_separate_detail)
         throw std::runtime_error("Compress the volume without detail separation first before exporting brick operations!");
 
@@ -1389,7 +1391,7 @@ void CompressedSegmentationVolume::exportAllBrickOperations(const std::string pa
      */
 }
 
-void CompressedSegmentationVolume::exportBrickOperationsToCSV(const std::string path, uint32_t brick_idx) const {
+void CompressedSegmentationVolume::exportBrickOperationsToCSV(const std::string& path, uint32_t brick_idx) const {
     if(m_encoding.empty() || m_rANS_mode != NO_RANS || m_separate_detail)
         throw std::runtime_error("Compress the volume without rANS encoding and without detail separation first before exporting brick codes!");
     uint32_t lod_count = getLodCountPerBrick();

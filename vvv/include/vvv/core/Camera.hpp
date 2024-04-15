@@ -23,6 +23,8 @@ public:
     float orbital_radius;
     //! The position of the camera in world space
     glm::vec3 position_world_space;
+    //! The position of the look at point in world space
+    glm::vec3 position_look_at_world_space;
     //! The rotation of the camera around the global y-axis in radians
     float rotation_y;
     //! The rotation of the camera around the local x-axis in radians. Without
@@ -46,7 +48,7 @@ public:
     float orthogonal_scale;
 
     Camera(bool is_orbital = false) : orbital(is_orbital), rotation_x(0), rotation_y(0), rotation_x_0(0), rotation_y_0(0), near(0.05f), far(1.0e3f), vertical_fov(0.33f * std::numbers::pi),
-                                      speed(2.0f), position_world_space(0, 0, 5), rotate_camera(false), camera_mode(Mode::Perspective), orthogonal_scale(5.f) {
+                                      speed(2.0f), position_world_space(0, 0, 5), position_look_at_world_space(0, 0, 0), rotate_camera(false), camera_mode(Mode::Perspective), orthogonal_scale(5.f) {
         reset();
     }
 
@@ -76,6 +78,7 @@ public:
         orbital_radius = 2.f;
         speed = 2.0f;
         position_world_space = glm::vec3(0, 0, 2);
+        position_look_at_world_space = glm::vec3(0.f);
         rotate_camera = false;
         camera_mode = Mode::Perspective;
         orthogonal_scale = 5.0f;
@@ -97,11 +100,13 @@ public:
     void writeTo(std::ostream& out, bool human_readable=false) {
         if(human_readable) {
             out << "position: " << position_world_space.x << " " << position_world_space.y << " " << position_world_space.z << std::endl;
+            out << "lookat: " << position_look_at_world_space.x << " " << position_look_at_world_space.y << " " << position_look_at_world_space.z << std::endl;
             out << "rotation: " << rotation_x << " " << rotation_y << std::endl;
         } else {
             out.write(reinterpret_cast<char *>(&rotation_x), sizeof(rotation_x));
             out.write(reinterpret_cast<char *>(&rotation_y), sizeof(rotation_y));
             out.write(reinterpret_cast<char *>(&position_world_space), sizeof(position_world_space));
+            out.write(reinterpret_cast<char *>(&position_look_at_world_space), sizeof(position_look_at_world_space));
         }
     }
     void readFrom(std::istream& in, bool human_readable=false) {
@@ -111,6 +116,10 @@ public:
             in >> position_world_space.x;
             in >> position_world_space.y;
             in >> position_world_space.z;
+            in >> tmp; // *lookat*
+            in >> position_look_at_world_space.x;
+            in >> position_look_at_world_space.y;
+            in >> position_look_at_world_space.z;
             in >> tmp; // "rotation:"
             in >> rotation_x;
             in >> rotation_y;
@@ -118,6 +127,7 @@ public:
             in.read(reinterpret_cast<char *>(&rotation_x), sizeof(rotation_x));
             in.read(reinterpret_cast<char *>(&rotation_y), sizeof(rotation_y));
             in.read(reinterpret_cast<char *>(&position_world_space), sizeof(position_world_space));
+            in.read(reinterpret_cast<char *>(&position_look_at_world_space), sizeof(position_look_at_world_space));
         }
     }
 

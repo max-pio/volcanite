@@ -3,15 +3,8 @@
 #include <utility>
 
 glm::mat4 vvv::Camera::get_world_to_view_space() const {
-    if(orbital) {
-        glm::vec3 up = glm::normalize(glm::vec3(position_world_space.z, 0.f, -position_world_space.x)); // project on xz plane, orthogonal
-        return glm::lookAt(position_world_space, glm::vec3(0.f), glm::cross(glm::normalize(position_world_space), up));
-    } else {
-        glm::mat4 translate = glm::translate(-position_world_space);
-        glm::mat4 rotY = glm::rotate(rotation_y, glm::vec3(0, 1, 0));
-        glm::mat4 rotX = glm::rotate(rotation_x, glm::vec3(1, 0, 0));
-        return rotX * rotY * translate;
-    }
+    glm::vec3 up = glm::normalize(glm::vec3(position_world_space.z - position_look_at_world_space.z, 0.f, position_look_at_world_space.x - position_world_space.x)); // project on xz plane, orthogonal
+    return glm::lookAt(position_world_space, position_look_at_world_space, glm::cross(glm::normalize(position_world_space - position_look_at_world_space), up));
 }
 
 glm::mat4 vvv::Camera::get_view_to_projection_space(float aspect_ratio) const {
