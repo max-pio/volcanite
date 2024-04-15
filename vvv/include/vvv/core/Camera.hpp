@@ -78,6 +78,7 @@ public:
         orbital_radius = 2.f;
         speed = 2.0f;
         position_world_space = glm::vec3(0, 0, 2);
+        position_look_at_world_space = glm::vec3(0.f);
         rotate_camera = false;
         camera_mode = Mode::Perspective;
         orthogonal_scale = 5.0f;
@@ -99,11 +100,13 @@ public:
     void writeTo(std::ostream& out, bool human_readable=false) {
         if(human_readable) {
             out << "position: " << position_world_space.x << " " << position_world_space.y << " " << position_world_space.z << std::endl;
+            out << "lookat: " << position_look_at_world_space.x << " " << position_look_at_world_space.y << " " << position_look_at_world_space.z << std::endl;
             out << "rotation: " << rotation_x << " " << rotation_y << std::endl;
         } else {
             out.write(reinterpret_cast<char *>(&rotation_x), sizeof(rotation_x));
             out.write(reinterpret_cast<char *>(&rotation_y), sizeof(rotation_y));
             out.write(reinterpret_cast<char *>(&position_world_space), sizeof(position_world_space));
+            out.write(reinterpret_cast<char *>(&position_look_at_world_space), sizeof(position_look_at_world_space));
         }
     }
     void readFrom(std::istream& in, bool human_readable=false) {
@@ -113,6 +116,10 @@ public:
             in >> position_world_space.x;
             in >> position_world_space.y;
             in >> position_world_space.z;
+            in >> tmp; // *lookat*
+            in >> position_look_at_world_space.x;
+            in >> position_look_at_world_space.y;
+            in >> position_look_at_world_space.z;
             in >> tmp; // "rotation:"
             in >> rotation_x;
             in >> rotation_y;
@@ -120,6 +127,7 @@ public:
             in.read(reinterpret_cast<char *>(&rotation_x), sizeof(rotation_x));
             in.read(reinterpret_cast<char *>(&rotation_y), sizeof(rotation_y));
             in.read(reinterpret_cast<char *>(&position_world_space), sizeof(position_world_space));
+            in.read(reinterpret_cast<char *>(&position_look_at_world_space), sizeof(position_look_at_world_space));
         }
     }
 

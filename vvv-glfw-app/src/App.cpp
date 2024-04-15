@@ -971,21 +971,29 @@ void Application::updateCamera() {
 
     // look at movement
     float forward = 0.0f, right = 0.0f, vertical = 0.0f;
-    forward += (glfwGetKey(m_window, GLFW_KEY_E) == GLFW_PRESS) ? step : 0.0f;
-    forward -= (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) ? step : 0.0f;
+    forward += (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
+    forward -= (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
     right += (glfwGetKey(m_window, GLFW_KEY_D) == GLFW_PRESS) ? step : 0.0f;
     right -= (glfwGetKey(m_window, GLFW_KEY_A) == GLFW_PRESS) ? step : 0.0f;
-    vertical += (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
-    vertical -= (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
+    vertical += (glfwGetKey(m_window, GLFW_KEY_E) == GLFW_PRESS) ? step : 0.0f;
+    vertical -= (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) ? step : 0.0f;
 
-    //transform the look at offset in world space
-    glm::vec4 look_at_offset = glm::inverse(camera->get_world_to_view_space()) * glm::vec4(right, vertical, forward, 0);
+    // transform the look at offset in world space: move with WASD in the xz plane, move the plane up and down with QE
+    glm::vec4 look_at_offset = glm::inverse(camera->get_world_to_view_space()) * glm::vec4(right, 0.f, forward, 0);
+    look_at_offset.y = vertical;
+    glm::vec3 old_position_look_at = camera->position_look_at_world_space;
     camera->position_look_at_world_space += glm::vec3(look_at_offset);
 
-    // clamp the values s.t. the look at point never leaves the cube
-    camera->position_look_at_world_space.x = glm::clamp(camera->position_look_at_world_space.x, -1.f, 1.f);
-    camera->position_look_at_world_space.y = glm::clamp(camera->position_look_at_world_space.y, -1.f, 1.f);
-    camera->position_look_at_world_space.z = glm::clamp(camera->position_look_at_world_space.z, -1.f, 1.f);
+    // clamp the values s.t. the look at point never leaves the unit cube
+#if 0
+    if(glm::any(glm::lessThan(camera->position_look_at_world_space, glm::vec3(-0.5f))) || glm::any(glm::greaterThan(camera->position_look_at_world_space, glm::vec3(0.5f)))) {
+        camera->position_look_at_world_space = old_position_look_at;
+    }
+#else
+    camera->position_look_at_world_space.x = glm::clamp(camera->position_look_at_world_space.x, -0.5f, 0.5f);
+    camera->position_look_at_world_space.y = glm::clamp(camera->position_look_at_world_space.y, -0.5f, 0.5f);
+    camera->position_look_at_world_space.z = glm::clamp(camera->position_look_at_world_space.z, -0.5f, 0.5f);
+#endif
 
     
     double mouse_position_double[2];
@@ -1022,7 +1030,7 @@ void Application::updateCamera() {
 
     camera->orbital_radius -= (scrollWheelDelta / 10.f) * final_speed * camera->orbital_radius;
     camera->orbital_radius = glm::max(0.001f, camera->orbital_radius);
-    camera->position_world_space = glm::vec3(
+    camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
             camera->orbital_radius * cos(camera->rotation_y) * cos(camera->rotation_x),
             camera->orbital_radius * sin(camera->rotation_x),
             camera->orbital_radius * sin(camera->rotation_y) * cos(camera->rotation_x));
