@@ -17,7 +17,7 @@ to be computed as needed.
  */
 class Camera {
 public:
-    //! If true, this is an orbital (rotate with mouse + scrollwheel) camera instead of WASDQE + Mouse rotation
+    //! If true, this is an orbital (rotate with mouse + scrollwheel) camera instead of the first person controls
     bool orbital;
     //! The distance of the camera to (0,0,0) if in orbital mode
     float orbital_radius;
@@ -52,7 +52,6 @@ public:
         reset();
     }
 
-
     //! Constructs the world to view space transform for the given camera
     glm::mat4 get_world_to_view_space() const;
 
@@ -71,17 +70,39 @@ public:
     }
 
     void reset() {
-        rotation_x = 0.f;
-        rotation_y = 0.f;
-        rotation_x_0 = 0.f;
-        rotation_y_0 = 0.f;
-        orbital_radius = 2.f;
-        speed = 2.0f;
-        position_world_space = glm::vec3(0, 0, 2);
-        position_look_at_world_space = glm::vec3(0.f);
-        rotate_camera = false;
-        camera_mode = Mode::Perspective;
-        orthogonal_scale = 5.0f;
+        std::cout << rotation_x << " " << rotation_y << " " << orbital_radius << std::endl;
+        if(orbital) {
+            rotation_x = 0.5f;
+            rotation_y = 4.0f;
+            rotation_x_0 = 0.f;
+            rotation_y_0 = 0.f;
+            orbital_radius = 1.5f;
+            speed = 2.0f;
+            position_world_space = position_look_at_world_space + glm::vec3(
+                    orbital_radius * cos(rotation_y) * cos(rotation_x),
+                    orbital_radius * sin(rotation_x),
+                    orbital_radius * sin(rotation_y) * cos(rotation_x));
+            position_look_at_world_space = glm::vec3(0.f);
+            rotate_camera = false;
+            camera_mode = Mode::Perspective;
+            orthogonal_scale = 5.0f;
+        }
+        else {
+            rotation_x = 0.6f;
+            rotation_y = 2.25;
+//        rotation_x = 0.f;
+//        rotation_y = 0.f;
+            rotation_x_0 = 0.f;
+            rotation_y_0 = 0.f;
+            orbital_radius = 1.f;
+            speed = 2.0f;
+            position_world_space = {-0.8, 0.6666, -0.8};
+//        position_world_space = glm::vec3(0, 0, 2);
+            position_look_at_world_space = glm::vec3(0.f);
+            rotate_camera = false;
+            camera_mode = Mode::Perspective;
+            orthogonal_scale = 5.0f;
+        }
     }
 
     static inline float getAspectRatio(const vk::Extent2D extent) { return ((float)extent.width) / ((float)extent.height); }
@@ -99,10 +120,12 @@ public:
 
     void writeTo(std::ostream& out, bool human_readable=false) {
         if(human_readable) {
+            out << "orbital: " << (orbital ? 1 : 0);
             out << "position: " << position_world_space.x << " " << position_world_space.y << " " << position_world_space.z << std::endl;
             out << "lookat: " << position_look_at_world_space.x << " " << position_look_at_world_space.y << " " << position_look_at_world_space.z << std::endl;
             out << "rotation: " << rotation_x << " " << rotation_y << std::endl;
         } else {
+            out.write(reinterpret_cast<char *>(&orbital), sizeof(orbital));
             out.write(reinterpret_cast<char *>(&rotation_x), sizeof(rotation_x));
             out.write(reinterpret_cast<char *>(&rotation_y), sizeof(rotation_y));
             out.write(reinterpret_cast<char *>(&position_world_space), sizeof(position_world_space));
@@ -112,6 +135,8 @@ public:
     void readFrom(std::istream& in, bool human_readable=false) {
         if(human_readable) {
             std::string tmp;
+            in >> tmp; // "orbital:"
+            in >> orbital;
             in >> tmp; // "position:"
             in >> position_world_space.x;
             in >> position_world_space.y;
@@ -124,6 +149,7 @@ public:
             in >> rotation_x;
             in >> rotation_y;
         } else {
+            in.read(reinterpret_cast<char *>(&orbital), sizeof(orbital));
             in.read(reinterpret_cast<char *>(&rotation_x), sizeof(rotation_x));
             in.read(reinterpret_cast<char *>(&rotation_y), sizeof(rotation_y));
             in.read(reinterpret_cast<char *>(&position_world_space), sizeof(position_world_space));

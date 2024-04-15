@@ -390,10 +390,7 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     Logger(INFO) << "Device memory after initialization: " << m_gui_device_mem_text;
 
     // Set camera to a nice start position
-    auto camera = getCamera();
-    camera->position_world_space = {-0.8, 0.6666, -0.8};
-    camera->rotation_x = 0.6;
-    camera->rotation_y = 2.25;
+    getCamera().reset();
 
     if(m_compressed_segmentation_volume)
         m_data_changed = true; // trigger re-upload to new buffers
@@ -856,6 +853,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addBool(&m_show_envmap, "Show Environment Map");
     g_dev->addBool(&m_show_normals, "Show Normals");
     g_dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
+    g_dev->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
     g_dev->addAction(
             [this]() {
                 if (m_pass)

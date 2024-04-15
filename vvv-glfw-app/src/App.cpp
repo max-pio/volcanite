@@ -969,33 +969,6 @@ void Application::updateCamera() {
     final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) ? 0.1f : 1.0f;
     float step = time_delta * final_speed;
 
-    // look at movement
-    float forward = 0.0f, right = 0.0f, vertical = 0.0f;
-    forward += (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
-    forward -= (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
-    right += (glfwGetKey(m_window, GLFW_KEY_D) == GLFW_PRESS) ? step : 0.0f;
-    right -= (glfwGetKey(m_window, GLFW_KEY_A) == GLFW_PRESS) ? step : 0.0f;
-    vertical += (glfwGetKey(m_window, GLFW_KEY_E) == GLFW_PRESS) ? step : 0.0f;
-    vertical -= (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) ? step : 0.0f;
-
-    // transform the look at offset in world space: move with WASD in the xz plane, move the plane up and down with QE
-    glm::vec4 look_at_offset = glm::inverse(camera->get_world_to_view_space()) * glm::vec4(right, 0.f, forward, 0);
-    look_at_offset.y = vertical;
-    glm::vec3 old_position_look_at = camera->position_look_at_world_space;
-    camera->position_look_at_world_space += glm::vec3(look_at_offset);
-
-    // clamp the values s.t. the look at point never leaves the unit cube
-#if 0
-    if(glm::any(glm::lessThan(camera->position_look_at_world_space, glm::vec3(-0.5f))) || glm::any(glm::greaterThan(camera->position_look_at_world_space, glm::vec3(0.5f)))) {
-        camera->position_look_at_world_space = old_position_look_at;
-    }
-#else
-    camera->position_look_at_world_space.x = glm::clamp(camera->position_look_at_world_space.x, -0.5f, 0.5f);
-    camera->position_look_at_world_space.y = glm::clamp(camera->position_look_at_world_space.y, -0.5f, 0.5f);
-    camera->position_look_at_world_space.z = glm::clamp(camera->position_look_at_world_space.z, -0.5f, 0.5f);
-#endif
-
-    
     double mouse_position_double[2];
     glfwGetCursorPos(m_window, &mouse_position_double[0], &mouse_position_double[1]);
     float mouse_position[2] = {(float)mouse_position_double[0], (float)mouse_position_double[1]};
@@ -1022,24 +995,78 @@ void Application::updateCamera() {
     }
 
     // orbital movement
-    if (captureKeyboard && !camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_R)) {
-        camera->rotation_y += 0.01f;
+    if(camera->orbital) {
+        // look at movement
+        float forward = 0.0f, right = 0.0f, vertical = 0.0f;
+        forward += (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
+        forward -= (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
+        right += (glfwGetKey(m_window, GLFW_KEY_D) == GLFW_PRESS) ? step : 0.0f;
+        right -= (glfwGetKey(m_window, GLFW_KEY_A) == GLFW_PRESS) ? step : 0.0f;
+        vertical += (glfwGetKey(m_window, GLFW_KEY_E) == GLFW_PRESS) ? step : 0.0f;
+        vertical -= (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) ? step : 0.0f;
+
+        // transform the look at offset in world space: move with WASD in the xz plane, move the plane up and down with QE
+        glm::vec4 look_at_offset = glm::inverse(camera->get_world_to_view_space()) * glm::vec4(right, 0.f, forward, 0);
+        look_at_offset.y = vertical;
+        glm::vec3 old_position_look_at = camera->position_look_at_world_space;
+        camera->position_look_at_world_space += glm::vec3(look_at_offset);
+
+        // clamp the values s.t. the look at point never leaves the unit cube
+#if 0
+        if(glm::any(glm::lessThan(camera->position_look_at_world_space, glm::vec3(-0.5f))) || glm::any(glm::greaterThan(camera->position_look_at_world_space, glm::vec3(0.5f)))) {
+        camera->position_look_at_world_space = old_position_look_at;
     }
-    constexpr float pi_eps = std::numbers::pi / 2.f - 0.001f;
-    camera->rotation_x = glm::clamp(camera->rotation_x, -pi_eps, pi_eps);
+#else
+        camera->position_look_at_world_space.x = glm::clamp(camera->position_look_at_world_space.x, -0.5f, 0.5f);
+        camera->position_look_at_world_space.y = glm::clamp(camera->position_look_at_world_space.y, -0.5f, 0.5f);
+        camera->position_look_at_world_space.z = glm::clamp(camera->position_look_at_world_space.z, -0.5f, 0.5f);
+#endif
 
-    camera->orbital_radius -= (scrollWheelDelta / 10.f) * final_speed * camera->orbital_radius;
-    camera->orbital_radius = glm::max(0.001f, camera->orbital_radius);
-    camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
-            camera->orbital_radius * cos(camera->rotation_y) * cos(camera->rotation_x),
-            camera->orbital_radius * sin(camera->rotation_x),
-            camera->orbital_radius * sin(camera->rotation_y) * cos(camera->rotation_x));
+        if (captureKeyboard && !camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_R)) {
+            camera->rotation_y += 0.01f;
+        }
+        constexpr float pi_eps = std::numbers::pi / 2.f - 0.001f;
+        camera->rotation_x = glm::clamp(camera->rotation_x, -pi_eps, pi_eps);
 
-    if (forward != 0.f || right != 0.f || vertical != 0.f || scrollWheelDelta != 0.f || camera->rotate_camera) {
-        camera->onCameraUpdate();
+        camera->orbital_radius -= (scrollWheelDelta / 10.f) * final_speed * camera->orbital_radius;
+        camera->orbital_radius = glm::max(0.001f, camera->orbital_radius);
+        camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
+                camera->orbital_radius * cos(camera->rotation_y) * cos(camera->rotation_x),
+                camera->orbital_radius * sin(camera->rotation_x),
+                camera->orbital_radius * sin(camera->rotation_y) * cos(camera->rotation_x));
+
+        if (forward != 0.f || right != 0.f || vertical != 0.f || scrollWheelDelta != 0.f || camera->rotate_camera) {
+            camera->onCameraUpdate();
+        }
     }
+    else {
+        // Modify the speed
+        float final_speed = camera->speed * 0.5f;
+        final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 2.0f : 1.0f;
+        final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) ? 0.1f : 1.0f;
+        float step = time_delta * final_speed;
+        // Determine camera movement
+        float forward = 0.0f, right = 0.0f, vertical = 0.0f;
+        if (captureKeyboard) {
+            forward += (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
+            forward -= (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
+            right += (glfwGetKey(m_window, GLFW_KEY_D) == GLFW_PRESS) ? step : 0.0f;
+            right -= (glfwGetKey(m_window, GLFW_KEY_A) == GLFW_PRESS) ? step : 0.0f;
+            vertical += (glfwGetKey(m_window, GLFW_KEY_E) == GLFW_PRESS) ? step : 0.0f;
+            vertical -= (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) ? step : 0.0f;
+        }
+        // Implement camera movement
+        float cos_y = cosf(camera->rotation_y), sin_y = sinf(camera->rotation_y);
+        camera->position_world_space[0] +=  sin_y * forward;
+        camera->position_world_space[0] +=  cos_y * right;
+        camera->position_world_space[2] += -cos_y * forward;
+        camera->position_world_space[2] +=  sin_y * right;
+        camera->position_world_space[1] +=  vertical;
 
-
+        if (forward != 0.0f || right != 0.0f || vertical != 0.0f || camera->rotate_camera) {
+            camera->onCameraUpdate();
+        }
+    }
 }
 
 #ifdef IMGUI
