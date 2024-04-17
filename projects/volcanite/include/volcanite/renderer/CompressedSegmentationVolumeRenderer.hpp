@@ -137,9 +137,6 @@ public:
         for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
             if(m_materials[m].discrAttribute >= 0) {
                 m_materials[m].discrInterval = m_csgv_db->getAttributeMinMax().at(m_materials[m].discrAttribute);
-                // most
-                if(m_materials[m].discrInterval.y > m_materials[m].discrInterval.x)
-                    m_materials[m].discrInterval.x++;
             }
             m_materials[m].tfMinMax = m_csgv_db->getAttributeMinMax().at(m_materials[m].tfAttribute);
         }

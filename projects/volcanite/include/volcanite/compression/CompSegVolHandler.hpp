@@ -469,7 +469,7 @@ public:
         glm::uvec3 max_file_index = glm::uvec3(0u);
         uint32_t freq_subsampling = 8u;
         bool run_tests = false;
-        bool export_stats = false;
+        bool export_stats_per_chunk = false;
         bool verbose = true;
         std::string* latex_table_out_entry = nullptr;
     };
@@ -533,14 +533,6 @@ public:
                     Logger(WARN)
                             << "Testing not supported for pre-computed chunked data sets. Use force_recompute=true to do a full compression with a test per chunk.";
                 }
-            }
-
-            if(cfg.export_stats) {
-                Logger(DEBUG, true) << "export brick statistics...";
-                std::string stats_path = csgv_path;
-                stats_path = stats_path.substr(0, stats_path.length() - 5) + "_brickstats.csv";
-                csv_export(csgv->gatherBrickStatistics(), stats_path);
-                Logger(DEBUG) << "export brick statistics to " << stats_path + " done";
             }
             Logger(INFO) << "Imported previously compressed file " << csgv_path << ". Skipping compression.";
             return csgv;
@@ -697,10 +689,9 @@ public:
                         }
                     }
 
-                    if(cfg.export_stats) {
+                    if(cfg.export_stats_per_chunk) {
                         Logger(DEBUG, true) << "export brick statistics...";
-                        std::string stats_path = csgv_path;
-                        stats_path = stats_path.substr(0, stats_path.length() - 4) + "_brickstats.csv";
+                        std::string stats_path = csgv_path.substr(0, csgv_path.find_last_of('.'))+ "_brickstats.csv";
                         csv_export(csgv->gatherBrickStatistics(), stats_path);
                         Logger(DEBUG) << "export brick statistics to " << stats_path + " done";
                     }
