@@ -120,7 +120,7 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
     glm::uvec3 volume_pos, brick_pos;
 
     const uint32_t lod_count = getLodCountPerBrick();
-    const uint32_t header_size = 2u * lod_count + 1u;
+    const uint32_t header_size = getHeaderSize();
     uint32_t out_i = header_size * 8u;  // write head position in out, counted as number of encoded 4 bit elements
 
     // we need to keep track of the current brick status from coarsest to finest level to determine the right operations
@@ -273,7 +273,7 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
 }
 
 float CompressedSegmentationVolume::separateDetail() {
-    if(!m_detail_encoding.empty())
+    if(!m_detail_encoding.empty() || m_separate_detail)
         throw std::runtime_error("Detail separation was already performed!");
     if(m_encoding.empty())
         throw std::runtime_error("Segmentation volume is not yet compressed! Call compress() before performing detail separation.");
@@ -285,12 +285,12 @@ float CompressedSegmentationVolume::separateDetail() {
     // First, we construct the detail_starts buffer. We do a simple sequential pass.
     uint32_t currentDetailStart = 0u;
     const uint32_t lod_count = getLodCountPerBrick();
-    const uint32_t header_size = 2u * lod_count + 1u;
+    const uint32_t header_size = getHeaderSize();
     m_detail_starts.resize(max_brick_index + 1);
     for(size_t i = 0; i < max_brick_index; i++) {
         m_detail_starts[i] = currentDetailStart;
-        // brick detail size: brick encoding size                       - palette size                                     - detail LOD start
-        currentDetailStart += (m_brick_starts[i+1] - m_brick_starts[i]) - m_encoding[m_brick_starts[i] + header_size - 1u] - m_encoding[m_brick_starts[i] + lod_count - 1u] / 8;
+        // brick detail size: brick encoding size                       - palette size                                                - detail LOD start
+        currentDetailStart += (m_brick_starts[i+1] - m_brick_starts[i]) - m_encoding[m_brick_starts[i] + getPaletteSizeHeaderIndex()] - m_encoding[m_brick_starts[i] + lod_count - 1u] / 8;
     }
     m_detail_starts[max_brick_index] = currentDetailStart;
     m_detail_encoding.resize(currentDetailStart);
@@ -303,7 +303,7 @@ float CompressedSegmentationVolume::separateDetail() {
     for(size_t i = 0; i < max_brick_index; i++) {
         // we are only allowed to read from m_brick_starts[i], m_brick_starts[i+1] is undefined!
         uint32_t* base_encoding_start = base_encoding.data() + m_brick_starts[i] - m_detail_starts[i] - i;  // output position of this brick in the base encoding output array
-        size_t palette_size = m_encoding[m_brick_starts[i] + header_size - 1u];
+        size_t palette_size = m_encoding[m_brick_starts[i] + getPaletteSizeHeaderIndex()];
         size_t detail_encoding_size = m_detail_starts[i+1] - m_detail_starts[i];
         size_t base_encoding_size = m_encoding[m_brick_starts[i] + lod_count - 1] / 8 - header_size;        // length of the operation of base levels only
         uint32_t* encode_begin = m_encoding.data() + m_brick_starts[i];
@@ -343,7 +343,7 @@ float CompressedSegmentationVolume::separateDetail() {
         glm::uvec3 brick_count = getBrickCount();
         size_t last_brick = brick_count.x * brick_count.y * brick_count.z - 1ul;
         uint32_t lod_count = getLodCountPerBrick();
-        uint32_t header_size = lod_count * 2 + (isUsingSeparateDetail() ? 0 : 1);
+        uint32_t header_size = getHeaderSize();
         uint32_t header_start_lods = lod_count - (isUsingSeparateDetail() ? 1 : 0);
 
         #pragma omp parallel for collapse(3) default(none) shared(is_ok, brick_count, header_size, header_start_lods, lod_count, m_brick_starts, m_encoding, m_detail_starts, m_detail_encoding)
@@ -397,7 +397,7 @@ float CompressedSegmentationVolume::separateDetail() {
                         }
                     }
 
-                    uint32_t palette_size = m_encoding[start + header_size - 1u];
+                    uint32_t palette_size = m_encoding[start + getPaletteSizeHeaderIndex()];
                     // check palette size not being zero
                     if(palette_size == 0u) {
                         error << "  palette size is zero\n";
@@ -775,6 +775,13 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
                               m_encoding.begin() + old_encoding_size + encoded_element_count_prefix_sum[thread_id]);
                 }
 
+                // update the maximum palette size
+                for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
+                    if (encoded_element_count[thread_id] > 0u && encodedBrick[thread_id][getPaletteSizeHeaderIndex()] > m_max_brick_palette_count) {
+                        m_max_brick_palette_count = encodedBrick[thread_id][getPaletteSizeHeaderIndex()];
+                    }
+                }
+
                 // output a progress update
                 if(verbose) {
                     bricks_since_last_update += m_cpu_threads;
@@ -980,14 +987,15 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
 
     // write header: 8 chars CMPSGVOL + 4 chars version number
     const char *magic_header = "CMPSGVOL";
-    const char *version = "0011";
+    const char *version = "0012";
     /* VERSION HISTORY
      * 0001: initial version
      * 0002: adds booleans if RLE and rANS are used, as well as frequency tables for rANS
      * 0003: allows separating the detail buffer
      * 0004: remove RLE flag
-     * 0010: paper release version without detail separation (not included here)
+     * 0010: paper release version
      * 0011: use rANS_mode instead of use_rANS, allow detail separation only with DOUBLE_TABLE_RANS
+     * 0012: store max. brick palette size
      */
     file.write(magic_header, 8);
     file.write(version, 4);
@@ -995,6 +1003,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
     file.write(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
     file.write(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
     file.write(reinterpret_cast<char *>(&m_rANS_mode), sizeof(RANSMode)); // since 0011
+    file.write(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t)); // since 012
     if(m_rANS_mode != NO_RANS) {  // since 0002
         auto freq_table = m_rans.getFrequencyArray();
         for(int i = 0; i < 16; i++)
@@ -1047,7 +1056,15 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     }
     fin.read(reinterpret_cast<char *>(_version), 4);
     _version[4] = '\0';
-    if (std::string(_version) != "0011") {
+    int _numeric_version = std::stoi(std::string(_version));
+
+    // backwards compatibility code:
+    if (std::string(_version) == "0011") {
+        Logger(WARN) << "Reading deprecated csgv file version " << _version << ". May lead to reduced rendering performance.";
+        // set max palette size to the theoretical maximum
+        m_max_brick_palette_count = ~0u;
+    }
+    else if (std::string(_version) != "0012") {
         Logger(ERROR) << "Import does not support version " << _version << " of Compressed Segmentation Volume file " << path << ". Skipping.";
         return false;
     }
@@ -1056,6 +1073,8 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     fin.read(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
     fin.read(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
     fin.read(reinterpret_cast<char *>(&m_rANS_mode), sizeof(RANSMode));
+    if (_numeric_version >= 12)
+        fin.read(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t));
     if(m_rANS_mode != NO_RANS) {
         uint32_t freq_table[16];
         for(int i = 0; i < 16; i++)
@@ -1117,16 +1136,10 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
 }
 
 // STATISTICS ________________________________________________________
-static const char* operation_names[] = {"PARENT", "NEIGHBORX", "NEIGHBORY", "NEIGHBORZ", "PALETTE_D", "PALETTE_ADV", "PALETTE_LAST", "RLE",
-                                   "sPARENT", "sNEIGHBORX", "sNEIGHBORY", "sNEIGHBORZ", "sPALETTE_D", "sPALETTE_ADV", "sPALETTE_LAST", "MOVE_BACK"};
+static const char* operation_names[] = {"PARENT", "NEIGHBORX", "NEIGHBORY", "NEIGHBORZ", "PALETTE_D", "PALETTE_ADV", "PALETTE_LAST", "__unused__",
+                                   "sPARENT", "sNEIGHBORX", "sNEIGHBORY", "sNEIGHBORZ", "sPALETTE_D", "sPALETTE_ADV", "sPALETTE_LAST", "s__unused__"};
 
-/**
- * We "simulate a decompression" of this brick to gather statistics of its operations, palette, etc.
- * @param statistics
- * @param beginE
- * @param endE
- * @param valid_brick_size
- */
+/** We "simulate a decompression" of this brick to gather statistics of its operations, palette, etc. */
 void CompressedSegmentationVolume::getBrickStatistics(std::map<std::string, float> &statistics, uint32_t brick_idx, glm::uvec3 valid_brick_size) const {
     uint32_t beginE = m_brick_starts[brick_idx];
     uint32_t paletteE = m_brick_starts[brick_idx + 1u];
@@ -1138,11 +1151,11 @@ void CompressedSegmentationVolume::getBrickStatistics(std::map<std::string, floa
         statistics[name] = 0.f;
 
     for(uint32_t i = 0; i < lod_count; i++) {
-        statistics["encoding_lod_" + std::to_string(i) + "_4bit_size"] = 0.f;   // number of 4bit encodings in lod
+        statistics["operation_count_lod_" + std::to_string(i)] = 0.f;           // number of 4bit encodings in lod
         statistics["palette_lod_" + std::to_string(i) + "_size"] = 0.f;         // size of palette (ideally == unique_ids_lod_*)
         statistics["unique_ids_lod_" + std::to_string(i)] = 0.f;                // number of "new" IDs in this lod for this brick
     }
-    statistics["encoding_4bit_size"] = 0.f;                                     // total number of 4bit encoding entries
+    statistics["operation_count"] = 0.f;                                        // total number of 4bit encoding entries
     statistics["palette_size"] = 0.f;                                           // total palette size
     statistics["unique_ids"] = 0.f;                                             // total number of unique ids in this brick (in the original volume)
     statistics["rle_4bit_reduction"] = 0.f;                                     // how many 4 bit operations were saved by using RLE
@@ -1210,7 +1223,7 @@ void CompressedSegmentationVolume::getBrickStatistics(std::map<std::string, floa
 
             // get the next operation and apply it (either progress in the current RLE or read the next entry)
             uint32_t operation = readNextLodOperation(beginE, readState);
-            statistics["encoding_lod_" + std::to_string(lod) + "_4bit_size"] += 1.f;
+            statistics["operation_count_lod_" + std::to_string(lod)] += 1.f;
             statistics[operation_names[operation]] += 1.f;
 
             uint32_t operation_lsb = operation & 7u; // extract least significant 3 bits
@@ -1261,7 +1274,7 @@ void CompressedSegmentationVolume::getBrickStatistics(std::map<std::string, floa
     }
 
     for(uint32_t i = 0; i < lod_count; i++) {
-        statistics["encoding_4bit_size"] += statistics["encoding_lod_" + std::to_string(i) + "_4bit_size"];
+        statistics["operation_count"] += statistics["operation_count_lod_" + std::to_string(i)];
         statistics["palette_size"] += statistics["palette_lod_" + std::to_string(i) + "_size"];
     }
     statistics["unique_ids"] = static_cast<float>(unique_values_in_brick.size());

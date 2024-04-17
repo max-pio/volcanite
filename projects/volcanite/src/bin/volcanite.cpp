@@ -155,7 +155,7 @@ int volcanite(int argc, char *argv[]) {
                                                         .max_file_index = max_chunk_id,
                                                         .freq_subsampling = args.freq_subsampling,
                                                         .run_tests = args.run_tests,
-                                                        .export_stats = args.export_stats,
+                                                        .export_stats_per_chunk = args.export_stats && args.chunked,
                                                         .verbose = args.verbose};
         compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
                                                                                              complete_csgv_path, cfg);
@@ -193,15 +193,22 @@ int volcanite(int argc, char *argv[]) {
             args.rendering_config_file = config_path;
     }
 
+    if (compressedSegmentationVolume == nullptr) {
+        Logger(ERROR) << "could not create or load Compressed Segmentation Volume. Aborting.";
+        return RET_COMPR_ERROR;
+    }
+
     if(args.performDecompression()) {
         // ToDo add decompression
         Logger(ERROR) << "decompression not yet supported";
         return RET_NOT_SUPPORTED;
     }
 
-    if (compressedSegmentationVolume == nullptr) {
-        Logger(ERROR) << "could not create or load Compressed Segmentation Volume. Aborting.";
-        return RET_COMPR_ERROR;
+    if(args.export_stats) {
+        Logger(INFO, true) << "export brick statistics...";
+        std::string stats_path = stripFileExtension(args.input_file) + "_brickstats.csv";
+        csv_export(compressedSegmentationVolume->gatherBrickStatistics(), stats_path);
+        Logger(INFO) << "export brick statistics to " << stats_path + " done";
     }
 
     // we only need the rendering part for screenshots or the interactive app
@@ -215,6 +222,10 @@ int volcanite(int argc, char *argv[]) {
             Logger(DEBUG) << "separating detail level encoding for streaming";
             compressedSegmentationVolume->separateDetail();
         }
+
+        // if the attribute database is a dummy, we update the min/max attribute values for the volume labels
+        if(csgvDatabase->isDummy())
+            csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
 
         const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);

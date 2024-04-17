@@ -168,7 +168,7 @@ private:
                     // remove trailing ', '
                     std::string create_table_str = create_table_ss.str();
                     std::string insert_str = insert_ss.str();
-                    if (attr_col_names.size() > 0) {
+                    if (!attr_col_names.empty()) {
                         create_table_str.pop_back();
                         create_table_str.pop_back();
                         insert_str.pop_back();
@@ -240,6 +240,27 @@ public:
         m_attribute_minmax = {glm::vec2(0.f, static_cast<float>(m_label_count))};
     }
 
+    bool isDummy() { return !m_attribute_names.empty() && m_db == nullptr; }
+
+    /** Updates the min / max values of the csgv_id dummy attribute, i.e. the volume labels, from the given volume. **/
+    void updateDummyMinMax(const CompressedSegmentationVolume& csgv) {
+        uint32_t min_id = ~0u;
+        uint32_t max_id = 0u;
+        size_t brick_count = csgv.getBrickCount().x * csgv.getBrickCount().y * csgv.getBrickCount().z;
+
+        #pragma omp parallel for default(none) shared(csgv, brick_count) reduction(min : min_id) reduction(max : max_id)
+        for (size_t brick_id = 0; brick_id < brick_count; brick_id++) {
+            for (const uint32_t& l : csgv.getBrickReversePalette(brick_id)) {
+                if (l < min_id)
+                    min_id = l;
+                if (l > max_id)
+                    max_id = l;
+            }
+        }
+        m_attribute_minmax.at(0) = {static_cast<float>(min_id),  static_cast<float>(max_id)};
+    }
+
+
     /** If a precomputed CSGV database exists already, it is openend.
      *  If not, the given (possibly chunked) volume at input_path is preprocessed and the result is stored in a new database.
      *  In that case, either all three or none of the attribute_* parameters must be provided.
@@ -280,7 +301,6 @@ public:
 
     /** For a (possibly chunked) volume, the following preprocessing is carried out and exported to a new database:\n
      * 1. total number of voxels in the volume and the size of the (0,0,0) chunk\n
-     * 2.
      */
     void processVolumeAndCreateSqlite(const std::string& sqlite_export_path, const std::string& volume_input_path,
                                       const std::string& attribute_database, const std::string& attribute_table,
@@ -332,7 +352,6 @@ public:
 
                     // process chunk: iterate over all voxels in morton order, add them to the existing_labels set and
                     // the index_to_label vector if they did not occur before.
-#if 1
                     {
                         const uint64_t last_i = sfc::Morton3D::p2i_64(cur_chunk_dim);
                         const int NUM_THREADS = 8;
@@ -389,28 +408,6 @@ public:
                         if(index_to_label.size() != label_set.size())
                             throw std::runtime_error("existing_labels set does not match index_to_label size in volume label occurrence processing");
                     }
-#else
-                {
-                    // ToDo: parallelize with OpenMP?
-                    const uint64_t last_i = sfc::Morton3D::p2i_64(cur_chunk_dim);
-                    for(uint64_t i = 0; i < last_i; i++) {
-                        glm::uvec3 voxel = sfc::Morton3D::i2p_64(i);
-                        if(glm::all(glm::lessThan(voxel, cur_chunk_dim))) {
-                            uint32_t label = volume->getElement(voxel);
-                            if (!label_set.contains(label)) {
-                                index_to_label.push_back(label);
-                                label_set.insert(label);
-                            }
-                        }
-
-                        if(i % (last_i / 100) == 0u)
-                            Logger(INFO, true) << " re-labelling map computation " << static_cast<int>(static_cast<float>(i)/static_cast<float>(last_i) * 100.f) << "%";
-                    }
-
-                    if(index_to_label.size() != label_set.size())
-                        throw std::runtime_error("existing_labels set does not match index_to_label size in volume label occurrence processing");
-                }
-#endif
             }
 
             chunk_index1D++;

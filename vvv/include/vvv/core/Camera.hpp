@@ -70,7 +70,6 @@ public:
     }
 
     void reset() {
-        std::cout << rotation_x << " " << rotation_y << " " << orbital_radius << std::endl;
         if(orbital) {
             rotation_x = 0.5f;
             rotation_y = 4.0f;

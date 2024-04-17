@@ -157,6 +157,7 @@ public:
 #endif
             va.decompress_export_file = expandPath(decompresspathArg.getValue());
             va.compress_export_file = expandPath(compresspathArg.getValue());
+            va.export_stats = statsArg.getValue();
             // rendering arguments
             va.rendering_config_file = expandPath(renderconfigArg.getValue());
             va.screenshot_output_file = expandPath(imageArg.getValue());
@@ -289,7 +290,6 @@ public:
                     }
                 }
                 va.run_tests = testArg.getValue();
-                va.export_stats = statsArg.getValue();
             }
 
             return va;
