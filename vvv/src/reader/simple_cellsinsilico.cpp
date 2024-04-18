@@ -1,3 +1,4 @@
+#include <utility>
 #include <vvv/volren/Volume.hpp>
 
 #include <vulkan/vulkan.hpp>
@@ -6,6 +7,8 @@
 #include <cmath>
 #include <iostream>
 
+
+// TODO: this is not a special "cellsinsilico" NRRD. rename it to simple_nrrd or something similar.
 
 namespace vvv {
 
@@ -285,6 +288,9 @@ template <typename T> std::shared_ptr<Volume<T>> load_simple_cellsinsilico_with_
     //    }
 }
 
+template <> std::shared_ptr<Volume<uint64_t>> Volume<uint64_t>::load_simple_cellsinsilico(std::string path, bool allowCast) {
+    return allowCast ? load_simple_cellsinsilico_with_cast_<uint64_t>(path, "uint64", vk::Format::eR64Uint) : load_simple_cellsinsilico_<uint64_t>(path, "uint64", 64, vk::Format::eR64Uint);
+}
 template <> std::shared_ptr<Volume<uint32_t>> Volume<uint32_t>::load_simple_cellsinsilico(std::string path, bool allowCast) {
     return allowCast ? load_simple_cellsinsilico_with_cast_<uint32_t>(path, "uint32", vk::Format::eR32Uint) : load_simple_cellsinsilico_<uint32_t>(path, "uint32", 32, vk::Format::eR32Uint);
 }
@@ -296,23 +302,32 @@ template <> std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_simple_cellsi
 }
 
 
-template <> void Volume<uint32_t>::write_simple_cellsinsilico(std::string path) {
-    std::ofstream nrrd(path, std::ios_base::out | std::ios_base::binary);
+template <typename T>
+void write_simple_cellsinsilico_(std::string url, const Volume<T>* volume, std::string formatLabel) {
+    if(volume == nullptr || volume->size() == 0)
+        throw std::runtime_error("volume is empty or does not exist");
+
+    std::ofstream nrrd(url, std::ios_base::out | std::ios_base::binary);
     if (!nrrd.is_open()) {
         std::ostringstream err;
-        err << "unable to open cellsinsilico NRRD file at: " << path << "\n";
+        err << "unable to open cellsinsilico NRRD file at: " << url << "\n";
         Logger(ERROR) << err.str();
         throw std::runtime_error(err.str());
     }
 
-    // read header
-    std::string line = std::to_string(dim_x) + " " + std::to_string(dim_y) + " " + std::to_string(dim_z);
+    // write header
+    std::string line = std::to_string(volume->dim_x) + " " + std::to_string(volume->dim_y) + " " + std::to_string(volume->dim_z);
     nrrd << line << std::endl;
-    nrrd << "uint32" << std::endl;
-    // read binary data inline
-    nrrd.write(reinterpret_cast<char *>(m_payload.data()), m_payload.size() * sizeof(uint32_t));
+    nrrd << formatLabel << std::endl;
+    // write binary data inline
+    nrrd.write(volume->getRawData_const(), volume->memorySize());
 
     nrrd.close();
 }
+
+template <> void Volume<uint8_t>::write_simple_cellsinsilico(std::string url) { write_simple_cellsinsilico_(std::move(url), this, "uint8"); }
+template <> void Volume<uint16_t>::write_simple_cellsinsilico(std::string url) { write_simple_cellsinsilico_(std::move(url), this, "uint16"); }
+template <> void Volume<uint32_t>::write_simple_cellsinsilico(std::string url) { write_simple_cellsinsilico_(std::move(url), this, "uint32"); }
+template <> void Volume<uint64_t>::write_simple_cellsinsilico(std::string url) { write_simple_cellsinsilico_(std::move(url), this, "uint64"); }
 
 } // namespace vvv
