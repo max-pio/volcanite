@@ -5,6 +5,7 @@
 #include <omp.h>
 #include <map>
 #include <thread>
+#include <span>
 
 #include "VolumeCompressionBase.hpp"
 #include "csgv_constants.h" // in data/shader/cpp_glsl_include
@@ -179,7 +180,7 @@ public:
     enum RANSMode {NO_RANS=0, SINGLE_TABLE_RANS=1, DOUBLE_TABLE_RANS=2};
 
     explicit CompressedSegmentationVolume() : VolumeCompressionBase(), m_brick_size(0u), m_encoding(), m_brick_starts(), m_detail_encoding(), m_detail_starts(), m_volume_dim(-1),
-                                                    m_rANS_mode(NO_RANS), m_separate_detail(false), m_cpu_threads(std::thread::hardware_concurrency()) {}
+                                                    m_rANS_mode(NO_RANS), m_separate_detail(false), m_cpu_threads(std::thread::hardware_concurrency()), m_max_brick_palette_count(0) {}
 
     /**
      * Specifies the number of CPU threads to parallelize CPU computations.
@@ -273,6 +274,28 @@ public:
             throw std::runtime_error("Detail separation must be performed before accessing detail buffers! Call separateDetail()!");
         return &m_detail_starts;
     }
+
+    /** Return the full brick encoding consisting of header, operation encoding, and palette. **/
+    const std::span<const uint32_t> getBrickEncoding(uint32_t brick_id) const {
+        if(brick_id >= m_brick_starts.size() - 1)
+            throw std::runtime_error("Trying to access out of bounds brick_id " + std::to_string(brick_id));
+        return std::span<const uint32_t>{m_encoding.data() + m_brick_starts[brick_id], m_brick_starts[brick_id + 1] - m_brick_starts[brick_id]};
+    }
+
+    uint32_t getPaletteSize(uint32_t brick_id) const {
+        if(brick_id >= m_brick_starts.size() - 1)
+            throw std::runtime_error("Trying to access out of bounds brick_id " + std::to_string(brick_id));
+        return getBrickEncoding(brick_id)[getPaletteSizeHeaderIndex()];
+    }
+
+    /** Returns memory region containing the right-to-left palette of the brick. **/
+    std::span<const uint32_t> getBrickReversePalette(uint32_t brick_id) const {
+        if(brick_id >= m_brick_starts.size() - 1)
+            throw std::runtime_error("Trying to access out of bounds brick_id " + std::to_string(brick_id));
+        uint32_t palette_size = getPaletteSize(brick_id);
+        return std::span<const uint32_t>{m_encoding.data() + m_brick_starts[brick_id + 1] - palette_size, palette_size};
+    }
+
     [[nodiscard]] glm::uvec3 getVolumeDim() const { return m_volume_dim; }
     [[nodiscard]] glm::uint32_t getBrickSize() const { return m_brick_size; }
     [[nodiscard]] uint32_t getLodCountPerBrick() const { return static_cast<uint32_t>(log2(m_brick_size)) + 1; }
@@ -288,6 +311,13 @@ public:
     [[nodiscard]] bool isUsingRANS() const { return m_rANS_mode == SINGLE_TABLE_RANS || m_rANS_mode == DOUBLE_TABLE_RANS; }
     [[nodiscard]] bool isUsingDetailFreq() const { return m_rANS_mode == DOUBLE_TABLE_RANS; }
     [[nodiscard]] bool isUsingSeparateDetail() const { return m_separate_detail; }
+
+    /** returns the maximum number of uint32 palette entries that any brick in the volume contains. **/
+    uint32_t getMaxBrickPaletteCount() const { return m_max_brick_palette_count; };
+    /** returns the size of the header at the beginning of each brick measured in uint32 entries. **/
+    uint32_t getHeaderSize() const { return getLodCountPerBrick() * 2 + (isUsingSeparateDetail() ? 0 : 1); }
+    /** returns the index of the uint32_t element in the brick encoding / header that stores the palette size. **/
+    uint32_t getPaletteSizeHeaderIndex() const { return getHeaderSize() - 1u; }
 
     /**
      * Sets the options for the compression step. If using rANS, a frequency table as a uint32_t[16] array must be given for the base.
@@ -381,7 +411,8 @@ public:
         ss << "start buffer (base  " << brick_starts_memory << "MB + detail " << detail_starts_memory
            << "MB) + encoding buffer (base " << encoding_memory << "MB + detail " << detail_memory << "MB) = "
            << (brick_starts_memory + encoding_memory + detail_starts_memory + detail_memory) << "MB / " << volume_memory
-           << "MB original size (" << (static_cast<double>(brick_starts_memory + encoding_memory + detail_starts_memory + detail_memory)/volume_memory*100.f) << "%) " << str(m_volume_dim) << " voxels.";
+           << "MB original size (" << (static_cast<double>(brick_starts_memory + encoding_memory + detail_starts_memory + detail_memory)/volume_memory*100.f) << "%) " << str(m_volume_dim) << " voxels."
+           << " max. brick palette size " << m_max_brick_palette_count << ".";
         return ss.str();
     }
 
@@ -528,19 +559,20 @@ public:
     bool verifyCompression() const;
 
 private:
-    uint32_t m_cpu_threads;                     // number of CPU threads to parallelize computations
+    uint32_t m_cpu_threads;                     /// number of CPU threads to parallelize computations
 
     uint32_t m_brick_size;
     glm::uvec3 m_volume_dim;
-    std::vector<uint32_t> m_encoding;           // contains all compressed entries for all bricks and each brick is capable of reconstructing all LODs, except the finest one!
-    std::vector<uint32_t> m_brick_starts;       // points to indices in m_encoding
-    std::vector<uint32_t> m_detail_encoding;    // contains the finest LoD
-    std::vector<uint32_t> m_detail_starts;      // points to indices m_detail_encoding
+    std::vector<uint32_t> m_encoding;           /// contains all compressed entries for all bricks and each brick is capable of reconstructing all LODs, except the finest one!
+    std::vector<uint32_t> m_brick_starts;       /// points to indices in m_encoding
+    std::vector<uint32_t> m_detail_encoding;    /// contains the finest LoD
+    std::vector<uint32_t> m_detail_starts;      /// points to indices m_detail_encoding
 
     RANS m_rans;
     RANS m_detail_rans;
     RANSMode m_rANS_mode;
     bool m_separate_detail;
+    uint32_t m_max_brick_palette_count;         /// the max. palette length of any brick as a number of label entries
 
     // timings [s] of the last compression run (without freq. pre-pass) and the frequency pre-pass
     float m_last_total_encoding_seconds = 0.f;
