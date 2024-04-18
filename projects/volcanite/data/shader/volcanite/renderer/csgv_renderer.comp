@@ -149,31 +149,41 @@ bool isEmptySpace(ivec3 voxel) {
 
 
 
-void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
+void writePixel(ivec2 pixel, vec4 color, float depth_valid, uvec2 g_buffer_packed) {
     // if subsamplign is enabled, we only render one pixel per [g_subsampling]^2 block
     ivec2 subpixel;
     for(subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
         for (subpixel.x = 0; subpixel.x < g_subsampling; subpixel.x++) {
             ivec2 opix = (pixel/g_subsampling)*g_subsampling + subpixel;
             if (g_camera_still_frames == 0u) {
-                // writing other pixel: initialize with 0
-                if (any(notEqual(opix, pixel)))
+                // writing other pixel: initialize with 0 and invalid G-Buffer
+                if (any(notEqual(opix, pixel))) {
                     imageStore(feedbackOut, opix, vec4(0.f));
+                    imageStore(gBuffer, opix, uvec4(invalidGBufferRG8(), 0u, 0u));
+                }
                 // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame (set .a < 0)
-                else
+                else {
                     imageStore(feedbackOut, opix, vec4(color.rgb, isValid(depth_valid) ? 1.f :  -1.f));
+                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
+                }
             }
             else {
                 vec4 prev_color = imageLoad(feedbackIn, opix);
                 // writing other pixel: just copy from previous to current frame
-                if (any(notEqual(opix, pixel)))
+                if (any(notEqual(opix, pixel))) {
                     imageStore(feedbackOut, opix, prev_color);
+                    // gBuffer remains unchanged
+                }
                 // writing our pixel, but invalid new sample (from not yet decoded brick)
-                else if (!isValid(depth_valid))
+                else if (!isValid(depth_valid)) {
                     imageStore(feedbackOut, opix, prev_color.a > 0.f ? prev_color : vec4(color.rgb, -1.f));
+                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
+                }
                 // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
-                else
+                else {
                     imageStore(feedbackOut, opix, vec4(color.rgb, 1.f) + (prev_color.a > 0.f ? prev_color : vec4(0.f)));
+                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
+                }
             }
         }
     }
@@ -202,6 +212,9 @@ struct RayMarchState {
     vec4 out_color;     // (radiance) color to be written to the color buffer
     vec3 throughput;   // accumulated throughput (albedo/pi * 2pi * geometry term * brdf)
     int path_length;    // number of path segments (= bounces), initialized with 0 for the view ray
+
+    // G-Buffer from first hit point
+    uvec2 packedGBuffer;
 };
 
 #define SHADOW_RAY_PATH_LENGTH -1
@@ -291,7 +304,7 @@ void main() {
         for (uint lod = 0; lod < g_lod_count; lod++) {
             if (any(greaterThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) - 2u)))) {
                 if (all(lessThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) + 2u)))) {
-                    writePixel(pixel, vec4(colormap_viridis(float(g_lod_count - 1u - lod)/float(g_lod_count - 1u)), 1.f), BACKGROUND_DEPTH);
+                    writePixel(pixel, vec4(colormap_viridis(float(g_lod_count - 1u - lod)/float(g_lod_count - 1u)), 1.f), BACKGROUND_DEPTH, invalidGBufferRG8());
                     return;
                 }
             }
@@ -316,9 +329,9 @@ void main() {
     // if we don't hit the data set, we can directly output the background
     if (t_0 >= t_1) {
         if(g_debug_envmap)
-            writePixel(pixel, vec4(dummy_envmap(ray.direction), 1.f), BACKGROUND_DEPTH);
+            writePixel(pixel, vec4(dummy_envmap(ray.direction), 1.f), BACKGROUND_DEPTH, invalidGBufferRG8());
         else
-            writePixel(pixel, get_background_color(fragCoord), BACKGROUND_DEPTH);
+            writePixel(pixel, get_background_color(fragCoord), BACKGROUND_DEPTH, invalidGBufferRG8());
         return;
     }
     t_0 -= 0.0001f; // Epsilon
@@ -337,7 +350,7 @@ void main() {
         vec3 borders = vec3(greaterThan(fract(pos), vec3(0.0f))) * vec3(lessThan(fract(pos - vec3(0.0001f)), vec3(0.2f)));
         if(borders.x + borders.y + borders.z > 0.f)
             color *= 1.f - 1.f / (t_0 / g_world_to_model_space_scaling * 64.f);
-        writePixel(pixel, vec4(color, 1.f), t_0);
+        writePixel(pixel, vec4(color, 1.f), t_0, invalidGBufferRG8());
         return;
     }
 
@@ -354,6 +367,8 @@ void main() {
     state.throughput = vec3(1.f);
     state.out_color = vec4(0.f);
     state.depth_valid = BACKGROUND_DEPTH;
+    state.normal = vec3(0.f);
+    state.packedGBuffer = invalidGBufferRG8();
 
     // ray marching loop
     state.voxel = ivec3(floor(state.pos)); // DDA traversal start voxel
@@ -485,10 +500,13 @@ void main() {
                 }
             }
 
-            // the first surface hit is the only point for which we want to store our t value in the depth buffer
-            // but if we previously stored an INVALID_DEPTH (< 0) at any point, we don't want to overwrite that
-            if(state.path_length == 0)
+            // The first surface hit is the only point for which we want to store our t value in the depth buffer
+            // but if we previously stored an INVALID_DEPTH (< 0) at any point, we don't want to overwrite that.
+            // We also store G-Buffer data here
+            if (state.path_length == 0) {
                 state.depth_valid = min(state.depth_valid, state.t);
+                state.packedGBuffer = packGBufferRG8(state.label, state.normal, (state.t - t_0) / (t_1 - t_0));
+            }
             // opacity is always 1 on hit
             state.out_color.a = 1.f;
 
@@ -591,8 +609,9 @@ void main() {
         }
     }
     // we did not find any light source
-    if(state.step >= g_maxSteps || state.path_length == 0)
+    if(state.step >= g_maxSteps || state.path_length == 0) {
         state.throughput = vec3(0.f);
+    }
 
     if(g_debug_step_count) {
         atomicAdd(gpu_raymarch_samples, state.step);
@@ -613,5 +632,6 @@ void main() {
 
 
     // write to image
-    writePixel(pixel, state.out_color, state.depth_valid);
+//    writePixel(pixel, state.out_color, state.depth_valid, );
+    writePixel(pixel, state.out_color, state.depth_valid, state.packedGBuffer);
 }

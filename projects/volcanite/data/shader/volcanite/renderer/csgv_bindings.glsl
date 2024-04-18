@@ -155,6 +155,7 @@ layout (std140, binding = 10) uniform render_info {
 //layout (binding = 12, rgba32f) uniform restrict image2D outDepth;
 layout (binding = 13, rgba32f) uniform restrict readonly image2D feedbackIn;
 layout (binding = 14, rgba32f) uniform restrict image2D feedbackOut;
+layout (binding = 20, rg8ui) uniform restrict uimage2D gBuffer;
 layout (binding = 15, rgba8) uniform restrict writeonly image2D inpaintedOutColor;
 
 

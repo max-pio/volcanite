@@ -201,12 +201,12 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             Logger(INFO) << "decoded " << std::fixed << std::setprecision(3) << static_cast<double>(decoded_bytes_in_frame) / 1000. / 1000. << " MB";
     }
 
-    //m_pass->setStorageImage("outDepth", *m_outDepth);
-    //m_pass->setStorageImage("outColor", *m_outColor);
     m_pass->setStorageImage("inpaintedOutColor", *m_inpaintedOutColor);
     // feedback texture ping pong for the inpainting shader
     m_pass->setStorageImage("feedbackIn", *m_feedback_tex[m_frame % 2u]);
     m_pass->setStorageImage("feedbackOut", *m_feedback_tex[1u - (m_frame % 2u)]);
+    // 16 bit packed gBuffer texture storing
+    m_pass->setStorageImage("gBuffer", *m_gBuffer_tex);
 
 
     std::vector<std::shared_ptr<Awaitable>> renderAwaitableList = {};
@@ -491,6 +491,12 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
     }
+    m_gBuffer_tex = m_pass->reflectTexture("gBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    {
+        m_gBuffer_tex->ensureResources();
+        const auto layoutTransformDone = m_gBuffer_tex->setImageLayout(vk::ImageLayout::eGeneral,vk::PipelineStageFlagBits::eAllCommands);
+        reinitDone.push_back(layoutTransformDone);
+    }
     m_inpaintedOutColor = m_pass->reflectTextures(
         "inpaintedOutColor", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8B8A8Unorm, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     for (auto& texture : *m_inpaintedOutColor){
@@ -522,14 +528,12 @@ void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
         m_mostRecentFrame->texture = nullptr;
         m_mostRecentFrame->renderingComplete = {};
     }
-    if (m_outColor)
-        m_outColor = nullptr;
-    if(m_outDepth)
-        m_outDepth = nullptr;
     if(m_feedback_tex[0])
         m_feedback_tex[0] = nullptr;
     if(m_feedback_tex[1])
         m_feedback_tex[1] = nullptr;
+    if(m_gBuffer_tex)
+        m_gBuffer_tex = nullptr;
     if (m_inpaintedOutColor)
         m_inpaintedOutColor.reset();// = nullptr;
 }

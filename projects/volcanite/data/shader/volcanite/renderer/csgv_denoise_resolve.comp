@@ -7,6 +7,7 @@ layout (local_size_x = 8, local_size_y = 8) in;
 
 #include "csgv_bindings.glsl"
 #include "util.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
 
 vec3 rgb2srgb(vec3 x) {
     return pow(x, vec3(2.2f));
@@ -36,9 +37,6 @@ void main() {
     if(isHelperLane(pixel, viewport_size))
         return;
 
-    // rgb stores radiance sum, alpha stores number of samples
-    vec4 accum_color = vec4(0.f);
-
 
     // read the HDR radiance that was accumulated for this pixel so far
     vec4 pixel_color = imageLoad(feedbackOut, pixel);
@@ -48,13 +46,31 @@ void main() {
     //   - a positive value indicates that these samples are valid and will not be overwritten until the camera moves.
     pixel_color.a = abs(pixel_color.a);
 
-    // a simple bilateral filter for denoising
+    // unpack the G-Buffer for the pixel
+    float normalized_depth;
+    vec3 normal;
+    uint label_hash;
+    uvec2 g_buffer_packed = imageLoad(gBuffer, pixel).rg;
+    if(unpackGBufferRG8(g_buffer_packed, label_hash, normal, normalized_depth)) {
+        if(pixel.x + pixel.y > (viewport_size.x + viewport_size.y) / 2)
+            pixel_color.rgb = abs(normal);
+        else
+            pixel_color.rgb = vec3(float(normalized_depth));
+
+        pixel_color.a = 1.f;
+    }
+
+
+    // rgb stores radiance sum, alpha stores number of samples
     vec4 accum_color = pixel_color;
-    {
+
+    // a simple bilateral filter for denoising
+    if (false) {
+        accum_color = vec4(0.f);
         // compute an average of all pixels in this
-        int kernel_size = 3;
+        const int kernel_size = 1;    // kernel_size 1 => 3x3 pixel kernel
         ivec2 block_pixel;
-        for(block_pixel.y = pixel.x - kernel_size; block_pixel.y < pixel.y + kernel_size; block_pixel.y++) {
+        for(block_pixel.y = pixel.y - kernel_size; block_pixel.y < pixel.y + kernel_size; block_pixel.y++) {
             for(block_pixel.x = pixel.x - kernel_size; block_pixel.x < pixel.x + kernel_size; block_pixel.x++) {
 
                 if(any(lessThan(block_pixel, ivec2(0))) || any(greaterThanEqual(block_pixel, viewport_size)))
@@ -66,6 +82,9 @@ void main() {
                 if(abs(rgb_samples.a) > 0.f) {
                     // accumulate samples
                     // ..
+
+                    accum_color.rgb += rgb_samples.rgb;
+                    accum_color.a += abs(rgb_samples.a);
                 }
             }
         }

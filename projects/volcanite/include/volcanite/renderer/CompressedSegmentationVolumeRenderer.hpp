@@ -203,8 +203,7 @@ private:
 
     std::unique_ptr<PassCompSegVolRender> m_pass = nullptr;
     std::shared_ptr<Texture> m_feedback_tex[2] = {nullptr, nullptr};
-    std::shared_ptr<Texture> m_outDepth = nullptr;
-    std::shared_ptr<Texture> m_outColor = nullptr;
+    std::shared_ptr<Texture> m_gBuffer_tex = nullptr;
     std::shared_ptr<vvv::MultiBufferedResource<std::shared_ptr<Texture>>> m_inpaintedOutColor = nullptr; // this is the output texture and thus the only resource that we have to duplicate for each swapchain image
     std::shared_ptr<UniformReflected> m_urender_info = nullptr;
     std::shared_ptr<UniformReflected> m_usegmented_volume_info = nullptr;
