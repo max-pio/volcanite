@@ -82,6 +82,10 @@ uint32_t CompressedSegmentationVolume::valueOfNeighbor(const MultiGridNode* grid
     }
 }
 
+uint32_t encodingIndexOfNeighbor(const uint32_t index, const int neighbor_i) {
+    throw std::runtime_error("not implemented");
+}
+
 uint32_t CompressedSegmentationVolume::valueOfNeighbor(const uint32_t* brick, const glm::uvec3 &brick_pos, const uint32_t child_index, const uint32_t lod_width, const uint32_t brick_size,
                                         const int neighbor_i) {
     assert(lod_width > 0);
@@ -132,6 +136,12 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
     // construct the multigrid on this brick that we want to represent in this encoding
     std::vector<MultiGridNode> multigrid;
     constructMultiGrid(multigrid, volume, volume_dim, start, brick_size);
+
+#if 0
+    // do not store any stop bits
+    for(MultiGridNode& node : multigrid)
+        node.constant_subregion = false;
+#endif
 
     // we start with the coarsest LOD, which is always a PALETTE_ADV of the max occuring value in the whole brick
     // we handle this here because it allows us to skip some special handling (for example checking if the palette is empty) in the following loop
@@ -215,7 +225,12 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
                 operation |= PALETTE_LAST;
             else {
                 // reuse the n-X palette value where 0 < X < 17
+#if 0
+                // do not use any palette delta entries
+                uint32_t palette_delta = 9999u;
+#else
                 uint32_t palette_delta = static_cast<uint32_t>(std::find(palette.rbegin(), palette.rend(), value) - palette.rbegin());
+#endif
                 if(palette_delta < 17u && palette_delta < palette.size()) {
                     assert(palette.at(palette.size() - palette_delta - 1u) == value && "Palette value does not fit!");
                     assert(palette_delta > 0u && "the palette delta 0 should've been caught by the palette_last value!");
@@ -335,129 +350,129 @@ float CompressedSegmentationVolume::separateDetail() {
     return (static_cast<float>(m_detail_starts[max_brick_index]) / static_cast<float>(m_brick_starts[max_brick_index] + m_detail_starts[max_brick_index]));
 }
 
-    bool CompressedSegmentationVolume::verifyCompression() const {
-        if(m_encoding.empty())
-            throw std::runtime_error("Segmentation volume is not yet compressed!");
+bool CompressedSegmentationVolume::verifyCompression() const {
+    if(m_encoding.empty())
+        throw std::runtime_error("Segmentation volume is not yet compressed!");
 
-        bool is_ok = true;
-        glm::uvec3 brick_count = getBrickCount();
-        size_t last_brick = brick_count.x * brick_count.y * brick_count.z - 1ul;
-        uint32_t lod_count = getLodCountPerBrick();
-        uint32_t header_size = getHeaderSize();
-        uint32_t header_start_lods = lod_count - (isUsingSeparateDetail() ? 1 : 0);
+    bool is_ok = true;
+    glm::uvec3 brick_count = getBrickCount();
+    size_t last_brick = brick_count.x * brick_count.y * brick_count.z - 1ul;
+    uint32_t lod_count = getLodCountPerBrick();
+    uint32_t header_size = getHeaderSize();
+    uint32_t header_start_lods = lod_count - (isUsingSeparateDetail() ? 1 : 0);
 
-        #pragma omp parallel for collapse(3) default(none) shared(is_ok, brick_count, header_size, header_start_lods, lod_count, m_brick_starts, m_encoding, m_detail_starts, m_detail_encoding)
-        for(uint32_t z = 0u; z < brick_count.z; z++) {
-            for (uint32_t y = 0u; y < brick_count.y; y++) {
-                for (uint32_t x = 0u; x < brick_count.x; x++) {
+    #pragma omp parallel for collapse(3) default(none) shared(is_ok, brick_count, header_size, header_start_lods, lod_count, m_brick_starts, m_encoding, m_detail_starts, m_detail_encoding)
+    for(uint32_t z = 0u; z < brick_count.z; z++) {
+        for (uint32_t y = 0u; y < brick_count.y; y++) {
+            for (uint32_t x = 0u; x < brick_count.x; x++) {
 
-                    if(!is_ok)
-                        continue;
+                if(!is_ok)
+                    continue;
 
-                    glm::uvec3 brick(x, y, z);
-                    std::stringstream error = {};
-                    uint32_t brick1D = brick_to_1D(brick, getBrickCount());
-                    uint32_t start = m_brick_starts[brick1D];
+                glm::uvec3 brick(x, y, z);
+                std::stringstream error = {};
+                uint32_t brick1D = brick_to_1D(brick, getBrickCount());
+                uint32_t start = m_brick_starts[brick1D];
 
-                    // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
-                    long encoding_length = static_cast<long>(m_brick_starts[brick1D + 1]) - static_cast<long>(start);
-                    if(encoding_length < header_size + 1u + 1u)
-                        error << " brick encoding is shorter than minimum (header size + 1 encoding + 1 palette)=" << (header_size+2) <<" but is " << encoding_length << "\n";
+                // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
+                long encoding_length = static_cast<long>(m_brick_starts[brick1D + 1]) - static_cast<long>(start);
+                if(encoding_length < header_size + 1u + 1u)
+                    error << " brick encoding is shorter than minimum (header size + 1 encoding + 1 palette)=" << (header_size+2) <<" but is " << encoding_length << "\n";
 
-                    // check first header entry being header_size * 8
-                    if(m_encoding[start] != header_size * 8u)
-                        error << "  first encoding starts 4bit must be header*8=" << (header_size * 8u) << " but is "  << m_encoding[start] << "\n";
+                // check first header entry being header_size * 8
+                if(m_encoding[start] != header_size * 8u)
+                    error << "  first encoding starts 4bit must be header*8=" << (header_size * 8u) << " but is "  << m_encoding[start] << "\n";
 
-                    // check encoding starts being in ascending order
-                    // note: the header count the number of entries, except the last entry when using double table rANS
-                    // for which this entry refers to the raw 4 bit index at which the detail encoding starts AFTER packing the earlier LoDs
-                    for(int l = 1; l < header_start_lods - (isUsingDetailFreq() ? 1 : 0); l++) {
-                        long distance = static_cast<long>(m_encoding[start + l]) - static_cast<long>(m_encoding[start + l - 1]);
-                        if(distance < 0l) {
-                            error << "  encoding starts are not in ascending order (distance " << distance << " for LoD " << l << ")\n";
-                            break;
-                        }
-                        else if(distance > m_brick_size * m_brick_size * m_brick_size) {
-                            error << "  encoding starts between LoDs are too far away\n";
-                            break;
-                        }
+                // check encoding starts being in ascending order
+                // note: the header count the number of entries, except the last entry when using double table rANS
+                // for which this entry refers to the raw 4 bit index at which the detail encoding starts AFTER packing the earlier LoDs
+                for(int l = 1; l < header_start_lods - (isUsingDetailFreq() ? 1 : 0); l++) {
+                    long distance = static_cast<long>(m_encoding[start + l]) - static_cast<long>(m_encoding[start + l - 1]);
+                    if(distance < 0l) {
+                        error << "  encoding starts are not in ascending order (distance " << distance << " for LoD " << l << ")\n";
+                        break;
                     }
-
-                    // check palette start of first LoD being 0 and second LoD being 1
-                    if(m_encoding[start + header_start_lods] != 0u)
-                        error << "  first palette start must be 0 but is " << m_encoding[start + header_start_lods];
-                    if(m_encoding[start + header_start_lods + 1u] != 1u)
-                        error << "  second palette start must be 1 but is " << m_encoding[start + header_start_lods + 1u];
-
-                    // check palette starts being in ascending order
-                    for(int l = 2u; l <= lod_count + 1; l++) {
-                        if(m_encoding[start + header_start_lods + l] < m_encoding[start + header_start_lods + l - 1]) {
-                            error << "  palette starts are not in ascending order\n";
-                            break;
-                        }
+                    else if(distance > m_brick_size * m_brick_size * m_brick_size) {
+                        error << "  encoding starts between LoDs are too far away\n";
+                        break;
                     }
+                }
 
-                    uint32_t palette_size = m_encoding[start + getPaletteSizeHeaderIndex()];
-                    // check palette size not being zero
-                    if(palette_size == 0u) {
-                        error << "  palette size is zero\n";
+                // check palette start of first LoD being 0 and second LoD being 1
+                if(m_encoding[start + header_start_lods] != 0u)
+                    error << "  first palette start must be 0 but is " << m_encoding[start + header_start_lods];
+                if(m_encoding[start + header_start_lods + 1u] != 1u)
+                    error << "  second palette start must be 1 but is " << m_encoding[start + header_start_lods + 1u];
+
+                // check palette starts being in ascending order
+                for(int l = 2u; l <= lod_count + 1; l++) {
+                    if(m_encoding[start + header_start_lods + l] < m_encoding[start + header_start_lods + l - 1]) {
+                        error << "  palette starts are not in ascending order\n";
+                        break;
                     }
+                }
 
-                    // check palette size + encoding start of last LoD being shorter than the brick encoding
-                    if(palette_size + m_encoding[start + header_start_lods]/8u > encoding_length) {
-                        error << "  palette size and encoding of first (L-1) levels are longer than the total brick encoding\n";
+                uint32_t palette_size = m_encoding[start + getPaletteSizeHeaderIndex()];
+                // check palette size not being zero
+                if(palette_size == 0u) {
+                    error << "  palette size is zero\n";
+                }
+
+                // check palette size + encoding start of last LoD being shorter than the brick encoding
+                if(palette_size + m_encoding[start + header_start_lods]/8u > encoding_length) {
+                    error << "  palette size and encoding of first (L-1) levels are longer than the total brick encoding\n";
+                }
+
+                // check detail encoding having at least 1 entry
+                if(isUsingSeparateDetail()) {
+                    long detail_encoding_length = static_cast<long>(m_detail_starts[brick1D + 1u]) -
+                                                  static_cast<long>(m_detail_starts[brick1D]);
+                    if (detail_encoding_length < 1l) {
+                        error << "  brick detail encoding is missing with length " << detail_encoding_length << "\n";
                     }
+                }
 
-                    // check detail encoding having at least 1 entry
-                    if(isUsingSeparateDetail()) {
-                        long detail_encoding_length = static_cast<long>(m_detail_starts[brick1D + 1u]) -
-                                                      static_cast<long>(m_detail_starts[brick1D]);
-                        if (detail_encoding_length < 1l) {
-                            error << "  brick detail encoding is missing with length " << detail_encoding_length << "\n";
-                        }
-                    }
-
-                    // check for 32 Bit overflow if bytes are indexed in the buffers
-                    // if(glm::all(glm::equal(brick, brick_count - glm::uvec3(1))))
-                    {
+                // check for 32 Bit overflow if bytes are indexed in the buffers
+                // if(glm::all(glm::equal(brick, brick_count - glm::uvec3(1))))
+                {
 //                        size_t encoding_bytes = static_cast<size_t>((m_brick_starts[brick1D + 1u] - m_brick_starts[brick1D])
 //                                                                   - palette_size - header_size) * 4ul;
 
-                        if (static_cast<size_t>(m_brick_starts[brick1D + 1u]) > (~0u)) {
-                            error << "  encoding contains more 32 bit entries ("
-                                  << (static_cast<size_t>(m_brick_starts[brick1D + 1u]))
+                    if (static_cast<size_t>(m_brick_starts[brick1D + 1u]) > (~0u)) {
+                        error << "  encoding contains more 32 bit entries ("
+                              << (static_cast<size_t>(m_brick_starts[brick1D + 1u]))
+                              << ") than 32 bit indices can index (" << (~0u) << ")\n";
+                    }
+
+                    if (isUsingSeparateDetail()) {
+                        if (static_cast<size_t>(m_detail_starts[brick1D + 1u]) > (~0u)) {
+                            error << "  detail encoding contains more 32 bit entries ("
+                                  << (static_cast<size_t>(m_detail_starts[brick1D + 1u]))
                                   << ") than 32 bit indices can index (" << (~0u) << ")\n";
                         }
-
-                        if (isUsingSeparateDetail()) {
-                            if (static_cast<size_t>(m_detail_starts[brick1D + 1u]) > (~0u)) {
-                                error << "  detail encoding contains more 32 bit entries ("
-                                      << (static_cast<size_t>(m_detail_starts[brick1D + 1u]))
-                                      << ") than 32 bit indices can index (" << (~0u) << ")\n";
-                            }
-                        }
                     }
-
-                    // print error message
-                    if(!error.str().empty()) {
-                        #pragma omp critical
-                        {
-                            if(is_ok) {
-                                Logger(ERROR) << "Found errors for brick " << str(brick) << ":\n" << error.str() << "---";
-                                // ToDo: loglevel ERROR does not work on windows. this workaround outputs to INFO in that case (ERROR is defined as 0 in windows.h)
-                                printBrickInfo(brick, vvv::loglevel(ERROR));
-                                is_ok = false;
-                            }
-                        }
-                    }
-
                 }
+
+                // print error message
+                if(!error.str().empty()) {
+                    #pragma omp critical
+                    {
+                        if(is_ok) {
+                            Logger(ERROR) << "Found errors for brick " << str(brick) << ":\n" << error.str() << "---";
+                            // ToDo: loglevel ERROR does not work on windows. this workaround outputs to INFO in that case (ERROR is defined as 0 in windows.h)
+                            printBrickInfo(brick, vvv::loglevel(ERROR));
+                            is_ok = false;
+                        }
+                    }
+                }
+
             }
         }
-        return is_ok;
     }
+    return is_ok;
+}
 
-    void CompressedSegmentationVolume::decodeBrick(uint32_t brick_idx, uint32_t brick_size, uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const {
+void CompressedSegmentationVolume::decodeBrick(uint32_t brick_idx, uint32_t brick_size, uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const {
     // the palette starts at the end of the encoding block
     uint32_t beginE = m_brick_starts[brick_idx];
     uint32_t paletteE = m_brick_starts[brick_idx + 1u] - 1u;
@@ -563,6 +578,191 @@ float CompressedSegmentationVolume::separateDetail() {
         lod_width /= 2;
     }
 }
+
+void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint32_t brick_size, uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const {
+    assert(m_rANS_mode == NO_RANS && "parallel decode does not work using rANS");
+    // ToDo: support detail separation to parallelDecodeBrick
+    assert(!m_separate_detail && "detail separation not yet supported in parallelDecodeBrick");
+
+    // the palette starts at the end of the encoding block
+    uint32_t beginE = m_brick_starts[brick_idx];
+    uint32_t paletteE = m_brick_starts[brick_idx + 1u] - 1u;
+
+    // first: read the header (= LOD start positions)
+    uint32_t lod_count = getLodCountPerBrick();
+
+    // refine up to the LOD that was requested
+    uint32_t child_index;   // index of all children with the same coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
+
+    ReadState readState = {.idxE=m_encoding[beginE], .in_detail_lod=false};
+    if(m_rANS_mode != NO_RANS) {
+        readState.idxE = (beginE + readState.idxE / 8) * 4;
+        m_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_encoding.data());
+    }
+
+    uint32_t index_step = brick_size * brick_size * brick_size;
+    uint32_t lod_width = brick_size;
+    uint32_t parent_value;
+
+    // first, set the whole brick to INVALID, so we know later which elements and LOD blocks were already processed
+    #pragma omp parallel for default(none) shared(brick_size, output_brick)
+    for (uint32_t i = 0; i < brick_size * brick_size * brick_size; i++)
+        output_brick[i] = INVALID;
+
+
+    int finished_lod = -1;
+
+    const uint32_t* brick_encoding = m_encoding.data() + beginE;
+    // operation offset for all threads
+    uint32_t read_offset = m_encoding[beginE];
+    uint32_t max_read_offset = read_offset + 4 * ((m_brick_starts[brick_idx + 1u] - m_brick_starts[brick_idx]) - getPaletteSize(brick_idx) - getHeaderSize());
+    // palette offset for all threads
+    uint32_t palette_offset = 0;
+
+    #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(read_offset, max_read_offset, brick_encoding, output_brick)
+    {
+        while (read_offset < max_read_offset){
+
+            // obtain the next read position for all threads
+            uint32_t read_pos = read_offset + omp_get_thread_num();
+            // barrier because of race condition for read_offset afterward
+            #pragma omp barrier
+
+            uint32_t operation = (read_pos < max_read_offset) ? read4Bit(brick_encoding, 0u, read_pos) : INVALID;
+            uint32_t voxel_index = INVALID;  // ...
+
+            if (read_pos < max_read_offset) {
+
+                // wait until all voxels from the previous LoD were processed (all constant regions from stop bits are marked)
+                // check if we are not in a region marked constant
+                {
+                    uint32_t operation_lsb = operation & 7u; // extract least significant 3 bits
+
+                    // ToDo: equal to (operation < 4u)
+                    while(operation_lsb != PALETTE_LAST && operation_lsb != PALETTE_ADV && operation_lsb != PALETTE_D) {
+
+                        // find the read position for the next operation along the chain
+                        if (operation_lsb == PARENT)
+                            read_pos = (read_pos % 8) / 8; // ToDo: compute real parent index
+                        else if (operation_lsb == NEIGHBOR_X)
+                            read_pos = encodingIndexOfNeighbor(0, 0);
+                        else if (operation_lsb == NEIGHBOR_Y)
+                            read_pos = encodingIndexOfNeighbor(0, 1);
+                        else if (operation_lsb == NEIGHBOR_Z)
+                            read_pos = encodingIndexOfNeighbor(0, 2);
+
+                        operation_lsb = read4Bit(brick_encoding, 0u, read_pos) & 7u;
+                    }
+
+                    // at this point, the operation accesses the palette
+                    uint32_t palette_index = INVALID; // palette_index_of_read_pos(read_pos);
+
+                    if (operation_lsb == PALETTE_ADV) {
+                        output_brick[voxel_index] = brick_encoding[palette_index];
+                    }
+                    else if (operation_lsb == PALETTE_LAST) {
+                        output_brick[voxel_index] = brick_encoding[palette_index + 1];
+                    }
+                    else if (operation_lsb == PALETTE_D) {
+                        uint32_t palette_delta = read4Bit(brick_encoding, 0u, read_pos + 1) + 2u;
+                        output_brick[voxel_index] = brick_encoding[palette_index + palette_delta];
+                    }
+
+                    // fill all other parts of the brick with this value
+                    if ((operation & STOP_BIT) > 0u) {
+                        // iterate over all output_voxels and set their stop bit
+                    }
+
+                    #pragma omp atomic
+                    read_offset++;
+                }
+            }
+        }
+    }
+
+
+    for (int lod = 0; lod <= inv_lod; lod++) {
+        // check if we ran into the detail layer and change the readState accordingly
+        if(m_rANS_mode == DOUBLE_TABLE_RANS && lod == lod_count-1) {
+            readState.in_detail_lod = true;
+            if(m_separate_detail) {
+                beginE = m_detail_starts[brick_idx]; // beginE now refers to another buffer (detail) and has to be changed
+                readState.idxE = beginE * 4;
+                m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_detail_encoding.data());
+            }
+            else {
+                // Read the lod start from the brick header to start reading at the right encoding buffer index.
+                // We have to start at a fully padded uint32, because we switch the rANS decoder.
+                readState.idxE = (beginE + m_encoding[beginE + lod] / 8) * 4;
+                m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_encoding.data());
+            }
+        }
+
+        assert((isUsingRANS() || (beginE + readState.idxE/8 < paletteE)) && "read pointer runs over palette pointer");
+        assert(index_step > 0 && "decoding with invalid index step");
+
+        for (uint32_t i = 0; i < brick_size * brick_size * brick_size; i += index_step) {
+            // if a grid node is completely outside the volume (i.e. it's first element is not within the volume) we skip it as it won't have any entries in the encoding
+            if (glm::any(glm::greaterThanEqual(enumBrickPos(i, brick_size), valid_brick_size)))
+                continue;
+
+            // every 8th element (we span 2*2*2=8 elements of the coarse LOD above), we fetch the new parent
+            child_index = (i % (index_step * 8)) / index_step;
+            if (lod > 0 && i % (index_step * 8) == 0) {
+
+                // if this subtree is already filled (because in a previous LOD we had a PARENT_STOP for this area), the last element of this block is set and we can skip it
+                if (output_brick[i + (index_step * 7)] != INVALID) {
+                    i += (index_step * 7);
+                    continue;
+                }
+
+                parent_value = output_brick[i];
+                assert(parent_value != INVALID && "parent element in brick was not set in previous LOD!");
+            }
+
+            // get the next operation and apply it (either progress in the current RLE or read the next entry)
+            uint32_t operation = readNextLodOperation(beginE, readState);
+
+            uint32_t operation_lsb = operation & 7u; // extract least significant 3 bits
+            if (operation_lsb == PARENT)
+                output_brick[i] = parent_value;
+            else if (operation_lsb == NEIGHBOR_X)
+                output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i, brick_size), child_index, lod_width, brick_size, 0);
+            else if (operation_lsb == NEIGHBOR_Y)
+                output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i, brick_size), child_index, lod_width, brick_size, 1);
+            else if (operation_lsb == NEIGHBOR_Z)
+                output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i, brick_size), child_index, lod_width, brick_size, 2);
+            else if (operation_lsb == PALETTE_ADV) { // read palette entry and advance palette pointer to the next entry
+                output_brick[i] = m_encoding[paletteE--];
+            }
+            else if (operation_lsb == PALETTE_LAST) {
+                output_brick[i] = m_encoding[paletteE + 1];
+            }
+            else if (operation_lsb == PALETTE_D) {
+                uint32_t palette_delta = readNextLodOperation(beginE, readState) + 2u;
+                output_brick[i] = m_encoding[paletteE + palette_delta];
+            }
+            else
+                assert(false && "unrecognized compression operation");
+
+            // stop traversal: fill all other parts of the brick with this value
+            if ((operation & STOP_BIT) > 0u) {
+                // fill the whole subtree with the parent value
+                for (uint32_t n = i; n < i + index_step; n++) {
+                    output_brick[n] = output_brick[i];
+                }
+            }
+
+            assert(output_brick[i] != INVALID && "Set output element brick to forbidden magic value INVALID!");
+        }
+
+        // move to the next LOD block with half the block width and an eight of the index_step respectively
+        index_step /= 8;
+        lod_width /= 2;
+    }
+}
+
+
 
 void CompressedSegmentationVolume::decodeBrickWithDebugEncoding(uint32_t brick_idx, uint32_t brick_size, uint32_t* output_brick, uint32_t* output_encoding,
                                                  std::vector<glm::uvec4>* output_palette, glm::uvec3 valid_brick_size, int inv_lod) const {

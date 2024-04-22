@@ -157,14 +157,23 @@ public:
     float separateDetail();
 
     /**
-     * Encoding is the complete encoding of the data set.
-     * The brick_idx is used to read the begin and endpoint of the encoding from the brick_starts buffer.
-     * Output is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements, but output values for elements
-     * outside the volume dimension are undefined.
-     *
+     * Decompresses a single brick.
+     * @param brick_idx is used to read the begin and endpoint of the encoding from the brick_starts buffer.
+     * @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
+     * @param valid_brick_size is used to clamp used voxels for border bricks. Values outside are undefined.
      * @param inv_lod the LOD until which to decompress, or rather, the decompression iterations. 0 is the coarsest and log2(brick_size) is the original / finest level.
      */
     void decodeBrick(uint32_t brick_idx, uint32_t brick_size, uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const;
+
+
+    /**
+     * Decompresses a single brick in parallel.
+     * @param brick_idx is used to read the begin and endpoint of the encoding from the brick_starts buffer.
+     * @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
+     * @param valid_brick_size is used to clamp used voxels for border bricks. Values outside are undefined.
+     * @param inv_lod the LOD until which to decompress, or rather, the decompression iterations. 0 is the coarsest and log2(brick_size) is the original / finest level.
+     */
+    void parallelDecodeBrick(uint32_t brick_idx, uint32_t brick_size, uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const;
 
     // helper method to gather statistics for one single brick
     /**
