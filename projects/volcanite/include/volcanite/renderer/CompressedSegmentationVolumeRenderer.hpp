@@ -26,10 +26,10 @@ public:
         // initialize the shading materials with something reasonable
         for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
             auto &mat = m_materials[m];
-            mat.discrAttribute = (m == 0) ? SegmentedVolumeMaterial::DISCR_ANY : SegmentedVolumeMaterial::DISCR_NONE;
-            mat.discrInterval = glm::vec2(0.f, 1.f);
+            mat.discrAttribute = (m == 0) ? 0 : SegmentedVolumeMaterial::DISCR_NONE;
+            mat.discrInterval = glm::vec2(1.f, 1000000.f);
             mat.tfAttribute = 0u;
-            mat.tfMinMax = glm::vec2(0.f, 1.f);
+            mat.tfMinMax = glm::vec2(0.f, 1000000.f);
             // we use opaque transfer functions
             mat.tf->m_controlPointsOpacity.resize(4);
             mat.tf->m_controlPointsOpacity[0] = 0.f;
@@ -45,6 +45,7 @@ public:
 
     void configureExtensionsAndLayersAndFeatures(GpuContextRwPtr ctx) override {
         ctx->enableDeviceExtension("VK_EXT_memory_budget");
+        ctx->physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
     }
 
     /** Initializes Descriptorsets and calls pipeline initialization. */
@@ -134,6 +135,12 @@ public:
         m_attribute_start_position.resize(m_csgv_db->getAttributeCount(), -1);
         // update transfer function limits
         for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
+            if(m_materials[m].discrAttribute >= 0) {
+                m_materials[m].discrInterval = m_csgv_db->getAttributeMinMax().at(m_materials[m].discrAttribute);
+                // most
+                if(m_materials[m].discrInterval.y > m_materials[m].discrInterval.x)
+                    m_materials[m].discrInterval.x++;
+            }
             m_materials[m].tfMinMax = m_csgv_db->getAttributeMinMax().at(m_materials[m].tfAttribute);
         }
     }
@@ -150,7 +157,7 @@ private:
     // materials
     static constexpr uint32_t SEGMENTED_VOLUME_MATERIAL_COUNT = 8;
     std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
-    float m_factor_ambient = 0.0f;
+    float m_factor_ambient = 0.4f;
     float m_ratio_spec_diff = 1.0f;
     bool m_cook_torrance_shading = true;
     // shading and post processing
@@ -185,7 +192,7 @@ private:
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
     int m_accum_frames = 16;
-    int m_max_decoding_lod = 3;
+    int m_max_decoding_lod = 6;
     // utility
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text;
@@ -213,6 +220,7 @@ private:
     std::vector<std::shared_ptr<TransferFunction1D>> m_materialTransferFunctions{SEGMENTED_VOLUME_MATERIAL_COUNT, nullptr};
     bool m_data_changed = false;
     std::shared_ptr<Buffer> m_encoding_buffer = nullptr;
+    glm::uvec2 m_encoding_buffer_address = {};
     const size_t m_max_attribute_buffer_size = ((64ul << 10) << 10);   // MB to store different floating point attributes back to back
     std::vector<int> m_attribute_start_position = {-1};           // the start index in the attribute_buffer for each attribute
     std::shared_ptr<Buffer> m_attribute_buffer = nullptr;       // stores attributes back to back
@@ -237,6 +245,7 @@ private:
     uint32_t m_detail_capacity = 0u; // how many uints fit into the GPU detail buffer
     std::vector<uint32_t> m_constructed_detail = {};
     std::shared_ptr<Buffer> m_detail_buffer = nullptr;
+    glm::uvec2 m_detail_buffer_address = {};
     std::pair<std::shared_ptr<vvv::Awaitable>, std::shared_ptr<Buffer>> m_detail_staging = {nullptr, nullptr};
     size_t m_camHash_at_last_cache_reset = 0u;
 

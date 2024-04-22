@@ -44,7 +44,7 @@ public:
     void recomputeFrequencyTables(const uint32_t * frequency_array = nullptr);
     void recomputeFrequencyTables(std::vector<uint8_t> &in_bytes);
 
-    void copyCurrentFrequencyTableTo(uint32_t * frequency_array) {
+    void copyCurrentFrequencyTableTo(uint32_t * frequency_array) const {
         assert(has_frequency_tables && "can't copy frequency table because it doesn't exist");
         assert(frequency_array && "invalid pointer to write buffer for frequency array");
         for(int i = 0; i < 16; i++)
@@ -86,7 +86,7 @@ public:
     /**
      * @return an array string "uvec3[17](uvec3(..), ..)" with 17 elements where each element < 16 is (dsys.start, dsyms.freq, stats.cum_freq) and element 16 is (0, 0, stats.cum_freq[16]).
      */
-    std::string getGLSLSymbolArrayString() {
+    std::string getGLSLSymbolArrayString() const {
         // output our frequency tables:
         std::stringstream ss;
         // added in CompressedSegmentationVolume: ss << "uvec3[17](";

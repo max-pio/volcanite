@@ -45,7 +45,7 @@ public:
     void enableDeviceExtension(std::string ext) override { m_builder.deviceExtensions.push_back(ext); }
     vk::PhysicalDeviceFeatures &physicalDeviceFeatures() override { return m_builder.deviceFeatures2.features; }
     vk::PhysicalDeviceVulkan12Features &physicalDeviceFeaturesV12() override { return m_builder.deviceFeaturesV12; }
-    vk::PhysicalDeviceVulkan13Features &physicalDeviceFeaturesV13() { return m_builder.deviceFeaturesV13; }
+    vk::PhysicalDeviceVulkan13Features &physicalDeviceFeaturesV13() override { return m_builder.deviceFeaturesV13; }
 
     /** Lots of extensions require you to enable features on some <...FeaturesKHR> struct. You can enable these features
      * by passing them to this function. Make sure to keep the pointer valid until after the context is created.

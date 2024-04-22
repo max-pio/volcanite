@@ -58,12 +58,10 @@ namespace vvv {
     }
 
     void GuiInterface::GuiTFSegmentedVolumeEntry::initialize() {
-        int viridsLocation = static_cast<int>(std::find(getAvailableColormaps().begin(), getAvailableColormaps().end(), "viridis") - getAvailableColormaps().begin());
         for(int m = 0; m < materials->size(); m++) {
-            // initialize all colormaps with viridis if they are not initialized yet
+            // initialize all colormaps with a good default map if they are not initialized yet
             if (colormapConfig[m].precomputedIdx < 0)
-                colormapConfig[m].precomputedIdx =
-                        viridsLocation < getAvailableColormaps().size() ? viridsLocation : 0;
+                colormapConfig[m].precomputedIdx = getDefaultColorMapIdx();
             updateVectorColormap(m);
             if (onChanged)
                 onChanged(m);

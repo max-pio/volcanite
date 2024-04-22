@@ -14,6 +14,10 @@ struct Buffer {
 
     Buffer(GpuContextPtr ctx, const BufferSettings& settings) : m_ctx(ctx), m_byteSize(settings.byteSize), m_label(settings.label) { createBuffer(settings.usage, settings.memoryUsage, settings.label); }
 
+    vk::DeviceAddress getDeviceAddress() const;
+    /// splits the 64 bit buffer device address into two 32 bit uint components. For usage with GL_EXT_buffer_reference_uvec2
+    static void deviceAddressUvec2(vk::DeviceAddress address, uint32_t xy[2]) { xy[0] = static_cast<uint32_t>(address); xy[1] = static_cast<uint32_t>(address >> 32); }
+
     [[nodiscard]] std::vector<uint8_t> download() const;
     void download(void *dest, size_t byteSize) const;
     void download(void *dest, size_t deviceOffset, size_t byteSize) const;

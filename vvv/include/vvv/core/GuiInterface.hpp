@@ -124,7 +124,7 @@ public:
         enum ColorMapType { SVTFSolidColor = 0, SVTFDivergent, SVTFPrecomputed, SVTFPNGimport};
         struct ColorMapConfig {
             ColorMapType type = SVTFPrecomputed;
-            int precomputedIdx = 0;
+            int precomputedIdx = getDefaultColorMapIdx();
             glm::vec3 color[2] = {glm::vec3(00.2298f,0.2987f,0.7537f), glm::vec3(0.7057f,0.01556f,0.1502f)};
         };
         std::vector<ColorMapConfig> colormapConfig = {};
@@ -133,6 +133,12 @@ public:
 
     private:
         static std::vector<std::string> availableColormaps;
+        static int getDefaultColorMapIdx() {
+            const std::vector<std::string>& c = getAvailableColormaps();
+            int l = static_cast<int>(std::find(c.begin(), c.end(), "coolwarm") - c.begin());
+            return l < getAvailableColormaps().size() ? l : 0;
+        }
+
     public:
         void initialize();
         void updateVectorColormap(int material);

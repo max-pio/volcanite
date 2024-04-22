@@ -179,7 +179,6 @@ uint32_t RANS::packRANS(uint32_t* in_packed, uint32_t start4bit, uint32_t end4bi
     int number_of_elements = static_cast<int>(end4bit - start4bit); // measured in 4 bit elements
 
     // rANS encode --------------------------------------------------------------
-    vvv::MiniTimer timer;
     RansState rans;
     RansEncInit(&rans);
     uint8_t *ptr = out_buf + out_max_size;         // *end* of output buffer

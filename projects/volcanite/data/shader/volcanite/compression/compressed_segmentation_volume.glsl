@@ -2,12 +2,6 @@
 #define COMPRESSED_SEGMENTATION_VOLUME_GLSL
 
 // compile time parameters:
-#ifndef CSGV_ENCODING_ARRAY
- #define CSGV_ENCODING_ARRAY g_encoding
-#endif
-#ifndef CSGV_DETAIL_ARRAY
-    #define CSGV_DETAIL_ARRAY g_detail
-#endif
 #ifndef CSGV_DECODING_ARRAY
  #define CSGV_DECODING_ARRAY g_decoding
 #endif
@@ -15,6 +9,7 @@
 // 4 bit operations:
 #include "cpp_glsl_include/csgv_constants.h"
 
+#include "csgv_utils.glsl"
 #include "morton.glsl"
 #ifdef USE_RANS
     #include "rans.glsl"
@@ -64,16 +59,9 @@ const ivec3 neighbor[8][3] = {  {ivec3(-1, 0, 0), ivec3(0, -1, 0), ivec3(0, 0, -
                                 {ivec3(-1, 0, 0), ivec3(0,  1, 0), ivec3(0, 0,  1)},
                                 {ivec3( 1, 0, 0), ivec3(0,  1, 0), ivec3(0, 0,  1)}};
 
-uint _unpack4BitFromEncoding(uint start, uint entry_id) {
-    return bitfieldExtract(CSGV_ENCODING_ARRAY[start + entry_id/8], 28 - int(entry_id % 8u) * 4, 4);
+uint _unpack4BitFromEncoding(EncodingRef brick_start, uint entry_id) {
+    return bitfieldExtract(brick_start.buf[entry_id/8], 28 - int(entry_id % 8u) * 4, 4);
 }
-
-#ifdef SEPARATE_DETAIL
-uint _unpack4BitFromDetail(uint start, uint entry_id) {
-    return bitfieldExtract(CSGV_DETAIL_ARRAY[start + entry_id/8], 28 - int(entry_id % 8u) * 4, 4);
-}
-#endif
-
 
 struct CSGVReadState {
     uint idxE;
@@ -81,7 +69,7 @@ struct CSGVReadState {
     uint rans_tab_offset;   // 0u if using the normal table, 17u if using the detail LOD table
 };
 
-uint _readNextLodOperationFromEncoding(uint brick_start, inout CSGVReadState state) {
+uint _readNextLodOperationFromEncoding(EncodingRef brick_start, inout CSGVReadState state) {
     #ifdef USE_RANS
         // detail separation will be handled in the advance step of the rANS decoder
         return rans_itr_nextSymbol(state.rans_state, brick_start, state.idxE, state.rans_tab_offset);
@@ -129,16 +117,13 @@ void fillCSGVBrick(const uint decoded_brick_start_idx, const uint inv_lod, const
     }
 }
 
-// decompresses the encoding of the brick from the CSGV_ENCODING_ARRAY array starting at encoding_start_index and ending at
-// encoding_end_index to the shard memory brick up to thegiven inverse LOD level.
-// the output brick decoding decoded_brick_start_index is used
+
+// decompresses the encoding of the brick from the encoding array to the memory brick up to the given inverse LOD level.
+// the output brick decoding decoded_brick_start_index is used.
 // if start_at_inv_lod == 0, it is assumed that the output brick cache is set to INVALID at all entries
 // if start_at_inv_lod > 0, it is assumed that the output brick cache is fully decoded up to (start_at_inv_lod-1)
 // start_at_inv_Lod must not be the finest possible LoD
-void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_end_index,
-#ifdef SEPARATE_DETAIL
-                                  const uint detail_start_index, const uint detail_end_index,
-#endif
+void decompressCSGVBrick(const uint brick_id, const uint brick_encoding_length,
                                   const uvec3 valid_brick_size, const uint start_at_inv_lod, const uint inv_lod,
                                   const uint decoded_brick_start_idx) {
 
@@ -150,15 +135,19 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
     // the starting position of the current LOD in the encoding array, measured in elements of entry_t. Taken from first brick header entries
     uint local_lod_i;   // the local index of this element within the lod block of the coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
     // the palette starts at the end of the encoding block
-    uint paletteE = encoding_end_index - 1u;
-    uint beginE = encoding_start_index;
-
+    uint paletteE = brick_encoding_length - 1u;
     CSGVReadState readState;    // read and changed in the _readNextLodOperationFromEncoding function
-    readState.idxE = CSGV_ENCODING_ARRAY[beginE + start_at_inv_lod];  // offset of current 4 bit entry to read
+
+    // reference to the uint buffer containing this bricks encoding
+    // ToDo: this would be the place to select different buffers if the complete encoding is > 4 GB, e.g. based on the brick_id. Or rather pass it as an argument to the whole function.
+    EncodingRef brick_encoding = getBrickEncodingRef(brick_id);
+    EncodingRef brick_palette = brick_encoding;
+
+    readState.idxE = brick_encoding.buf[start_at_inv_lod];  // offset of current 4 bit entry to read
     readState.rans_tab_offset = 0u;
 #ifdef USE_RANS
     readState.idxE = (readState.idxE / 8u) * 4u;
-    rans_itr_initDecoding(readState.rans_state, beginE, readState.idxE);
+    rans_itr_initDecoding(readState.rans_state, brick_encoding, readState.idxE);
 #endif
 
     uint output_size = (1u << inv_lod); // the resolution of voxel in each dimension of the output brick = for this LoD. On the finest LoD this is g_brick_size
@@ -176,18 +165,15 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
 #ifdef USE_RANS_DOUBLE_TABLE
         // RANS_DOUBLE_TABLE is also always set whenever we use detail separation.
         if(lod == g_lod_count - 1u) {
-            readState.rans_tab_offset = 17u;        // we now read from the detail freq. table (which is ofset by 17)
+            readState.rans_tab_offset = 17u;        // we now read from the detail freq. table (which is offset by 17)
             #ifdef SEPARATE_DETAIL
-                beginE = detail_start_index;        // beginE now refers to another buffer (detail) and has to be changed
+                brick_encoding = getBrickDetailEncodingRef(brick_id);
                 readState.idxE = 0u;
-                // Initialize the rANS state from the detail array
-                detail_rans_itr_initDecoding(readState.rans_state, beginE, readState.idxE);
             #else
                 // Detail rANS encoding starts at new uint
-                readState.idxE = (CSGV_ENCODING_ARRAY[beginE + lod] / 8u) * 4u;
-                // Reinit the rANS decoder from the normal encoding array.
-                rans_itr_initDecoding(readState.rans_state, beginE, readState.idxE);
+                readState.idxE = (brick_encoding.buf[lod] / 8u) * 4u;
             #endif
+            rans_itr_initDecoding(readState.rans_state, brick_encoding, readState.idxE);
         }
 #endif
 
@@ -215,7 +201,7 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
             }
 
             // get the next operation and apply it
-            uint operation = _readNextLodOperationFromEncoding(beginE, readState);
+            uint operation = _readNextLodOperationFromEncoding(brick_encoding, readState);
 
             uint operation_lsb = operation & 7u; // extract least significant 3 bits with 0111
             if (operation_lsb == PARENT)
@@ -227,14 +213,14 @@ void decompressCSGVBrick(const uint encoding_start_index, const uint encoding_en
             else if (operation_lsb == NEIGHBOR_Z)
                 CSGV_DECODING_ARRAY[out_i] = _valueOfNeighbor(_enumBrickPos(i), local_lod_i, lod_width, 2, decoded_brick_start_idx);
             else if (operation_lsb == PALETTE_ADV) {   // read palette entry and advance palette pointer to the next entry
-                CSGV_DECODING_ARRAY[out_i] = CSGV_ENCODING_ARRAY[paletteE--];
+                CSGV_DECODING_ARRAY[out_i] = brick_palette.buf[paletteE--];
             }
             else if (operation_lsb == PALETTE_LAST) { // reuse the last palette entry
-                CSGV_DECODING_ARRAY[out_i] = CSGV_ENCODING_ARRAY[paletteE+1];
+                CSGV_DECODING_ARRAY[out_i] = brick_palette.buf[paletteE+1];
             }
             else if (operation_lsb == PALETTE_D) {
-                uint palette_delta = _readNextLodOperationFromEncoding(beginE, readState) + 2u;
-                CSGV_DECODING_ARRAY[out_i] = CSGV_ENCODING_ARRAY[paletteE + palette_delta];
+                uint palette_delta = _readNextLodOperationFromEncoding(brick_encoding, readState) + 2u;
+                CSGV_DECODING_ARRAY[out_i] = brick_palette.buf[paletteE + palette_delta];
             }
 
             // stop traversal: fill all other parts of the brick with this value

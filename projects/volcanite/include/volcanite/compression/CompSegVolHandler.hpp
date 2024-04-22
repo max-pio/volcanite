@@ -312,7 +312,7 @@ private:
 
         std::shared_ptr<CompressedSegmentationVolume> dt = std::make_shared<vvv::CompressedSegmentationVolume>();
         dt->setCPUThreadCount(cpu_threads);
-        bool reimport_success = dt->importFromFile(complete_csgv_path, false);
+        bool reimport_success = dt->importFromFile(complete_csgv_path, false, true);
         if(!reimport_success)
             throw std::runtime_error("Error re-importing exported merged Compressed Segmentation Volume!");
         return dt;
@@ -491,7 +491,7 @@ public:
         std::shared_ptr<Volume<uint32_t>> volume = nullptr;
         glm::ivec3 volume_dim(0);
 
-        const bool create_log_file = true;
+        const bool create_log_file = false;
         const bool create_operation_freq_file = cfg.chunked_input_data;
         double total_freq_prepass_seconds = 0.f;
         double total_encoding_seconds = 0.f;
@@ -512,7 +512,7 @@ public:
 
         if(cfg.verbose) {
             Logger(INFO) << "Compressing " << volume_input_path <<
-                         (cfg.chunked_input_data ? " with chunk indices" + str(cfg.max_file_index) : "") << " to " << csgv_path <<
+                         (cfg.chunked_input_data ? " with chunk indices " + str(cfg.max_file_index) : "") << " to " << csgv_path <<
                          " [b=" << cfg.brick_dim << ", s=" << cfg.rANS_mode << "]" << (cfg.use_detail_separation ? " with lod separation" : "");
 
         }
@@ -772,6 +772,9 @@ public:
             if (std::filesystem::exists(s))
                 std::filesystem::remove(s);
             s = csgv_path.substr(0, csgv_path.length() - 5) + "_detail.tmp";
+            if (std::filesystem::exists(s))
+                std::filesystem::remove(s);
+            s = CompressedSegmentationVolume::getCSGVFileName(csgv_path, cfg.brick_dim, cfg.rANS_mode, false, ".cfrq");
             if (std::filesystem::exists(s))
                 std::filesystem::remove(s);
         }

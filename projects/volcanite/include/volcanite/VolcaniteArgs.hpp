@@ -8,6 +8,7 @@
 #include "portable-file-dialogs.h"
 
 #include "vvv/util/Logger.hpp"
+// ToDo: Split the rANS-Mode etc into a separate Header / forward decl
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
 namespace vvv {
@@ -211,7 +212,7 @@ public:
                 // attribute arguments (if we import a .csgv file, the attributes are already stored in a database along with it)
 #ifndef LIB_SQLITE3
                 if(labelRemappingArg.getValue()) {
-                    throw ArgException(noLabelRemappingArg.longID() + " must not be set as SQLite3 library is not available.", noLabelRemappingArg.longID());
+                    throw ArgException(labelRemappingArg.longID() + " must not be set as SQLite3 library is not available.", labelRemappingArg.longID());
                 }
                 if(!attributeArg.getValue().empty()) {
                     throw ArgException(attributeArg.longID() + " is not available as SQLite3 library is not available.", attributeArg.longID());
