@@ -772,12 +772,46 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         if(!selected_file.result().empty())
             file = selected_file.result().at(0);
 
+
+        // Save old values first to reload in case of failure
+        std::filesystem::path path_backup_config = vvv::Paths::getTempFileWithName("tmp_render_config_params.vcfg");
+
+        if(std::filesystem::exists(path_backup_config))
+            std::filesystem::remove(path_backup_config);
+
+        std::ofstream out(path_backup_config);
+        if(out.is_open()) {
+            writeParameters(out, VOLCANITE_VERSION);
+        } else {
+            Logger(WARN) << "Could not save backup config to " << path_backup_config;
+        }
+        out.close();
+
+        // Try to load selected config file
+        // Load backup config in case of failure
         std::ifstream in(file);
         if(in.is_open()) {
-            if (!readParameters(in, VOLCANITE_VERSION))
-                Logger(WARN) << "Could not import parameters from " << file;
+            if (!readParameters(in, VOLCANITE_VERSION)) {
+                Logger(WARN) << "Could not import config from " << file;
+
+                std::ifstream backup_in(path_backup_config);
+                if (!readParameters(backup_in, VOLCANITE_VERSION)) {
+                    Logger(ERROR) << "Could not import backup parameters from " << path_backup_config;
+                } else {
+                    Logger(DEBUG) << "Imported backup config from " << path_backup_config;
+                }
+                backup_in.close();
+            }
+            else {
+                Logger(DEBUG) << "Imported rendering config from " << file;
+            }
             in.close();
         }
+        else {
+            Logger(WARN) << "Could not import parameters from " << file;
+        }
+
+
     }, "Import Parameters");
     g_gen->addAction([this]() {
         std::string file;
