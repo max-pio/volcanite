@@ -583,6 +583,9 @@ private:
     bool m_separate_detail;
     uint32_t m_max_brick_palette_count;         /// the max. palette length of any brick as a number of label entries
 
+    bool m_use_stop_bit = false;
+    bool m_use_palette_delta = false;
+
     // timings [s] of the last compression run (without freq. pre-pass) and the frequency pre-pass
     float m_last_total_encoding_seconds = 0.f;
     float m_last_total_freq_prepass_seconds = 0.f;

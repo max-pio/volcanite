@@ -137,11 +137,11 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
     std::vector<MultiGridNode> multigrid;
     constructMultiGrid(multigrid, volume, volume_dim, start, brick_size);
 
-#if 0
-    // do not store any stop bits
-    for(MultiGridNode& node : multigrid)
-        node.constant_subregion = false;
-#endif
+    // if requested: do not store any stop bits
+    if(!m_use_stop_bit) {
+        for (MultiGridNode &node: multigrid)
+            node.constant_subregion = false;
+    }
 
     // we start with the coarsest LOD, which is always a PALETTE_ADV of the max occuring value in the whole brick
     // we handle this here because it allows us to skip some special handling (for example checking if the palette is empty) in the following loop
@@ -231,7 +231,7 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
 #else
                 uint32_t palette_delta = static_cast<uint32_t>(std::find(palette.rbegin(), palette.rend(), value) - palette.rbegin());
 #endif
-                if(palette_delta < 17u && palette_delta < palette.size()) {
+                if(m_use_palette_delta && palette_delta < 17u && palette_delta < palette.size()) {
                     assert(palette.at(palette.size() - palette_delta - 1u) == value && "Palette value does not fit!");
                     assert(palette_delta > 0u && "the palette delta 0 should've been caught by the palette_last value!");
                     write4Bit(out, 0u, out_i++, operation | PALETTE_D);
@@ -581,7 +581,7 @@ void CompressedSegmentationVolume::decodeBrick(uint32_t brick_idx, uint32_t bric
 
 void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint32_t brick_size, uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const {
     assert(m_rANS_mode == NO_RANS && "parallel decode does not work using rANS");
-    // ToDo: support detail separation to parallelDecodeBrick
+    // ToDo: support detail separation, stop bits, and palette delta operations in parallelDecodeBrick
     assert(!m_separate_detail && "detail separation not yet supported in parallelDecodeBrick");
 
     // the palette starts at the end of the encoding block
@@ -664,13 +664,15 @@ void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint3
                         output_brick[voxel_index] = brick_encoding[palette_index + 1];
                     }
                     else if (operation_lsb == PALETTE_D) {
-                        uint32_t palette_delta = read4Bit(brick_encoding, 0u, read_pos + 1) + 2u;
-                        output_brick[voxel_index] = brick_encoding[palette_index + palette_delta];
+//                        uint32_t palette_delta = read4Bit(brick_encoding, 0u, read_pos + 1) + 2u;
+//                        output_brick[voxel_index] = brick_encoding[palette_index + palette_delta];
+                        assert(false && "palette delta operation not yet supported in parallel decode");
                     }
 
                     // fill all other parts of the brick with this value
                     if ((operation & STOP_BIT) > 0u) {
                         // iterate over all output_voxels and set their stop bit
+                        assert(false && "stop bit not yet supported in parallel decode");
                     }
 
                     #pragma omp atomic
@@ -909,6 +911,11 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
         Logger(DEBUG) << " running with " << m_cpu_threads << " threads on " << std::thread::hardware_concurrency() << " CPU cores";
         Logger(DEBUG) << " brick count: " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z) << " with brick size " << m_brick_size << "^3";
     }
+    if(!m_use_palette_delta)
+        Logger(WARN) << " palette delta operation disabled!";
+    if(!m_use_stop_bit)
+        Logger(WARN) << " stop bit disabled!";
+
     m_encoding.clear();
     size_t reserved_size = static_cast<size_t>(volume_dim.x) * volume_dim.y * volume_dim.z / 12ul / 4ul; // assume that we have a compression rate below 1/12
     if(reserved_size > UINT32_MAX) {
@@ -1652,6 +1659,12 @@ void CompressedSegmentationVolume::freqEncodeBrick(const std::vector<uint32_t>& 
     std::vector<MultiGridNode> multigrid;
     constructMultiGrid(multigrid, volume, volume_dim, start, brick_size);
 
+    // if requested: do not store any stop bits
+    if(!m_use_stop_bit) {
+        for (MultiGridNode &node: multigrid)
+            node.constant_subregion = false;
+    }
+
     // we start with the coarsest LOD, which is always a PALETTE_ADV of the max occuring value in the whole brick
     // we handle this here because it allows us to skip some special handling (for example checking if the palette is empty) in the following loop
     // in theory, we could start with a finer level here too and skip the first levels (= Carsten's original idea)
@@ -1720,7 +1733,7 @@ void CompressedSegmentationVolume::freqEncodeBrick(const std::vector<uint32_t>& 
             else {
                 // reuse the n-X palette value where 0 < X < 17
                 uint32_t palette_delta = static_cast<uint32_t>(std::find(palette.rbegin(), palette.rend(), value) - palette.rbegin());
-                if(palette_delta < 17u && palette_delta < palette.size()) {
+                if(m_use_palette_delta && palette_delta < 17u && palette_delta < palette.size()) {
                     assert(palette.at(palette.size() - palette_delta - 1u) == value && "Palette value does not fit!");
                     assert(palette_delta > 0u && "the palette delta 0 should've been caught by the palette_last value!");
                     if(detail_freq && (current_inv_lod == lod_count - 1u))
