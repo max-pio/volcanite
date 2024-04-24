@@ -619,6 +619,8 @@ void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint3
     // palette offset for all threads
     uint32_t palette_offset = 0;
 
+    // m_cpu_threads many threads go through the Morton indexing order from front to back. The threads work on the next
+    // following items in parallel. read_offset is the index of the first thread 0.
     #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(read_offset, max_read_offset, brick_encoding, output_brick)
     {
         while (read_offset < max_read_offset){
