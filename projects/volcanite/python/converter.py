@@ -100,6 +100,19 @@ def enc_slice_png(labels):
 
 if __name__ == '__main__':
 
+    path = "/home/max/data/cellsinsilico/Big01/000_longer/outdir/nrrd_uint32/cells_frame065_500x500x500.raw"
+    volume = read_from_NRRD(path)
+    volume = volume[:128,:128,:128]
+    
+    with open("/home/max/data/cellsinsilico/Big01/000_longer/outdir/nrrd_uint32/cells_frame065_128x128x128.raw", "wb") as file:
+        # write header
+        file.write((str(volume.shape[0]) + " " + str(volume.shape[1]) + " " + str(volume.shape[2]) + "\n").encode('utf8'))
+        file.write(("uint32\n").encode('utf8'))
+        # write binary
+        volume.astype("uint32").tofile(file)
+    exit(0)
+    
+
     path = ""
     if len(sys.argv) > 1:
         path = sys.argv[1]

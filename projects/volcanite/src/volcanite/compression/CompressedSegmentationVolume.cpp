@@ -120,7 +120,6 @@ uint32_t CompressedSegmentationVolume::valueOfNeighbor(const uint32_t* brick, co
 //       header_size*8 ᒧ                always zero ᒧ  ∟ .. one  ∟ palette size
 uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out, const glm::uvec3 start, uint32_t brick_size, const glm::uvec3 volume_dim) {
     std::vector<uint32_t> palette;
-    palette.reserve(32);
     glm::uvec3 volume_pos, brick_pos;
 
     const uint32_t lod_count = getLodCountPerBrick();
@@ -579,194 +578,135 @@ void CompressedSegmentationVolume::decodeBrick(uint32_t brick_idx, uint32_t bric
     }
 }
 
-void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint32_t brick_size, uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const {
+void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx,  uint32_t* output_brick, glm::uvec3 valid_brick_size, int target_inv_lod) const {
     assert(m_rANS_mode == NO_RANS && "parallel decode does not work using rANS");
     // ToDo: support detail separation, stop bits, and palette delta operations in parallelDecodeBrick
     assert(!m_separate_detail && "detail separation not yet supported in parallelDecodeBrick");
+    assert(!m_use_palette_delta && !m_use_stop_bit && "stop bit and palette delta operation not yet supported in parallelDecodebrick");
+    assert(target_inv_lod < getLodCountPerBrick() && "not enough LoDs in a brick to process target inv. LoD");
+    assert(glm::all(glm::equal(valid_brick_size, glm::uvec3(m_brick_size))) && "partially occupied bricks are not allowed");
 
-    // the palette starts at the end of the encoding block
-    uint32_t beginE = m_brick_starts[brick_idx];
-    uint32_t paletteE = m_brick_starts[brick_idx + 1u] - 1u;
-
-    // first: read the header (= LOD start positions)
-    uint32_t lod_count = getLodCountPerBrick();
-
-    // refine up to the LOD that was requested
-    uint32_t child_index;   // index of all children with the same coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
-
-    ReadState readState = {.idxE=m_encoding[beginE], .in_detail_lod=false};
-    if(m_rANS_mode != NO_RANS) {
-        readState.idxE = (beginE + readState.idxE / 8) * 4;
-        m_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_encoding.data());
-    }
-
-    uint32_t index_step = brick_size * brick_size * brick_size;
-    uint32_t lod_width = brick_size;
-    uint32_t parent_value;
+    const uint32_t brick_encoding_length = m_brick_starts[brick_idx + 1u] - m_brick_starts[brick_idx];
+    const uint32_t *brick_encoding = m_encoding.data() + m_brick_starts[brick_idx];
 
     // first, set the whole brick to INVALID, so we know later which elements and LOD blocks were already processed
-    #pragma omp parallel for default(none) shared(brick_size, output_brick)
-    for (uint32_t i = 0; i < brick_size * brick_size * brick_size; i++)
+    #pragma omp parallel for default(none) shared(m_brick_size, output_brick)
+    for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i++)
         output_brick[i] = INVALID;
 
+    // construct the palette mapping as a prefix sum:
+    // ToDo: this could be a hash map [operation index]->[palette index], precomputed for the brick
+    std::vector<uint32_t> palette_prefix_index(getMaxOperationsInBrick());
+    {
+        uint32_t prefix = 0u;
+        for (uint32_t i = 0; i < getMaxOperationsInBrick(); i++) {
+            uint32_t operation_lsb = (read4Bit(brick_encoding, 0u, brick_encoding[0] + i) & 7u);
+            if(operation_lsb == PALETTE_ADV)
+                prefix++;
+              palette_prefix_index[i] = prefix - 1u;
+//            if(operation_lsb != PALETTE_ADV && operation_lsb != PALETTE_LAST)
+//                palette_prefix_index[i] = INVALID;
+        }
+        assert(prefix == getPaletteSize(brick_idx) && "palette prefix sum error");
+    }
 
-    int finished_lod = -1;
+    // ToDo: remove dependent variables, reduce register load
 
-    const uint32_t* brick_encoding = m_encoding.data() + beginE;
-    // operation offset for all threads
-    uint32_t read_offset = m_encoding[beginE];
-    uint32_t max_read_offset = read_offset + 4 * ((m_brick_starts[brick_idx + 1u] - m_brick_starts[brick_idx]) - getPaletteSize(brick_idx) - getHeaderSize());
-    // palette offset for all threads
-    uint32_t palette_offset = 0;
+    uint32_t output_i_offset = 0u;    // at which output position the current m_cpu_threads many threads start the computation
+    uint32_t output_voxel_count = 1u << (3u * target_inv_lod);
+    uint32_t target_brick_size = 1u << target_inv_lod;
+
+    // output array is filled in an á-trous manner. A target_brick_size < m_brick_size will leave gaps in the output brick.
+    uint32_t output_index_step = (m_brick_size / target_brick_size) * (m_brick_size / target_brick_size) * (m_brick_size / target_brick_size);
 
     // m_cpu_threads many threads go through the Morton indexing order from front to back. The threads work on the next
     // following items in parallel. read_offset is the index of the first thread 0.
-    #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(read_offset, max_read_offset, brick_encoding, output_brick)
+    //
+    // Of course, we could directly parallelize over the number of output voxels in a for loop here, but:
+    // on a GPU m_cpu_threads should be equal to the number of threads in a warp allowing us to do vulkan subgroup optimizations
+    #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(output_i_offset, output_index_step, output_voxel_count, target_inv_lod, brick_encoding, output_brick, target_brick_size, palette_prefix_index, brick_encoding_length)
     {
-        while (read_offset < max_read_offset){
+        uint32_t output_i = omp_get_thread_num();
 
-            // obtain the next read position for all threads
-            uint32_t read_pos = read_offset + omp_get_thread_num();
-            // barrier because of race condition for read_offset afterward
-            #pragma omp barrier
+//        while (output_i_offset < output_voxel_count) {
+        while (output_i < output_voxel_count) {
 
-            uint32_t operation = (read_pos < max_read_offset) ? read4Bit(brick_encoding, 0u, read_pos) : INVALID;
-            uint32_t voxel_index = INVALID;  // ...
+            // Start by reading the operations in the target inverse LoD's encoding:
+            uint32_t inv_lod = target_inv_lod;
+            // operation index within in the current inv. LoD, starting at the target LoD
+            uint32_t inv_lod_op_i = output_i; //output_i_offset + omp_get_thread_num();
+            // corresponding voxel position within the inv. LoD
+            glm::uvec3 inv_lod_voxel = enumBrickPos(inv_lod_op_i, target_brick_size);
 
-            if (read_pos < max_read_offset) {
+            // obtain encoding operation read index (4 bit)
+            uint32_t enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
+            uint32_t operation = read4Bit(brick_encoding, 0u, enc_operation_index);
 
-                // wait until all voxels from the previous LoD were processed (all constant regions from stop bits are marked)
-                // check if we are not in a region marked constant
-                {
-                    uint32_t operation_lsb = operation & 7u; // extract least significant 3 bits
-
-                    // ToDo: equal to (operation < 4u)
-                    while(operation_lsb != PALETTE_LAST && operation_lsb != PALETTE_ADV && operation_lsb != PALETTE_D) {
-
-                        // find the read position for the next operation along the chain
-                        if (operation_lsb == PARENT)
-                            read_pos = (read_pos % 8) / 8; // ToDo: compute real parent index
-                        else if (operation_lsb == NEIGHBOR_X)
-                            read_pos = encodingIndexOfNeighbor(0, 0);
-                        else if (operation_lsb == NEIGHBOR_Y)
-                            read_pos = encodingIndexOfNeighbor(0, 1);
-                        else if (operation_lsb == NEIGHBOR_Z)
-                            read_pos = encodingIndexOfNeighbor(0, 2);
-
-                        operation_lsb = read4Bit(brick_encoding, 0u, read_pos) & 7u;
-                    }
-
-                    // at this point, the operation accesses the palette
-                    uint32_t palette_index = INVALID; // palette_index_of_read_pos(read_pos);
-
-                    if (operation_lsb == PALETTE_ADV) {
-                        output_brick[voxel_index] = brick_encoding[palette_index];
-                    }
-                    else if (operation_lsb == PALETTE_LAST) {
-                        output_brick[voxel_index] = brick_encoding[palette_index + 1];
-                    }
-                    else if (operation_lsb == PALETTE_D) {
-//                        uint32_t palette_delta = read4Bit(brick_encoding, 0u, read_pos + 1) + 2u;
-//                        output_brick[voxel_index] = brick_encoding[palette_index + palette_delta];
-                        assert(false && "palette delta operation not yet supported in parallel decode");
-                    }
-
-                    // fill all other parts of the brick with this value
-                    if ((operation & STOP_BIT) > 0u) {
-                        // iterate over all output_voxels and set their stop bit
-                        assert(false && "stop bit not yet supported in parallel decode");
-                    }
-
-                    #pragma omp atomic
-                    read_offset++;
-                }
-            }
-        }
-    }
-
-
-    for (int lod = 0; lod <= inv_lod; lod++) {
-        // check if we ran into the detail layer and change the readState accordingly
-        if(m_rANS_mode == DOUBLE_TABLE_RANS && lod == lod_count-1) {
-            readState.in_detail_lod = true;
-            if(m_separate_detail) {
-                beginE = m_detail_starts[brick_idx]; // beginE now refers to another buffer (detail) and has to be changed
-                readState.idxE = beginE * 4;
-                m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_detail_encoding.data());
-            }
-            else {
-                // Read the lod start from the brick header to start reading at the right encoding buffer index.
-                // We have to start at a fully padded uint32, because we switch the rANS decoder.
-                readState.idxE = (beginE + m_encoding[beginE + lod] / 8) * 4;
-                m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_encoding.data());
-            }
-        }
-
-        assert((isUsingRANS() || (beginE + readState.idxE/8 < paletteE)) && "read pointer runs over palette pointer");
-        assert(index_step > 0 && "decoding with invalid index step");
-
-        for (uint32_t i = 0; i < brick_size * brick_size * brick_size; i += index_step) {
-            // if a grid node is completely outside the volume (i.e. it's first element is not within the volume) we skip it as it won't have any entries in the encoding
-            if (glm::any(glm::greaterThanEqual(enumBrickPos(i, brick_size), valid_brick_size)))
-                continue;
-
-            // every 8th element (we span 2*2*2=8 elements of the coarse LOD above), we fetch the new parent
-            child_index = (i % (index_step * 8)) / index_step;
-            if (lod > 0 && i % (index_step * 8) == 0) {
-
-                // if this subtree is already filled (because in a previous LOD we had a PARENT_STOP for this area), the last element of this block is set and we can skip it
-                if (output_brick[i + (index_step * 7)] != INVALID) {
-                    i += (index_step * 7);
-                    continue;
-                }
-
-                parent_value = output_brick[i];
-                assert(parent_value != INVALID && "parent element in brick was not set in previous LOD!");
-            }
-
-            // get the next operation and apply it (either progress in the current RLE or read the next entry)
-            uint32_t operation = readNextLodOperation(beginE, readState);
-
-            uint32_t operation_lsb = operation & 7u; // extract least significant 3 bits
-            if (operation_lsb == PARENT)
-                output_brick[i] = parent_value;
-            else if (operation_lsb == NEIGHBOR_X)
-                output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i, brick_size), child_index, lod_width, brick_size, 0);
-            else if (operation_lsb == NEIGHBOR_Y)
-                output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i, brick_size), child_index, lod_width, brick_size, 1);
-            else if (operation_lsb == NEIGHBOR_Z)
-                output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i, brick_size), child_index, lod_width, brick_size, 2);
-            else if (operation_lsb == PALETTE_ADV) { // read palette entry and advance palette pointer to the next entry
-                output_brick[i] = m_encoding[paletteE--];
-            }
-            else if (operation_lsb == PALETTE_LAST) {
-                output_brick[i] = m_encoding[paletteE + 1];
-            }
-            else if (operation_lsb == PALETTE_D) {
-                uint32_t palette_delta = readNextLodOperation(beginE, readState) + 2u;
-                output_brick[i] = m_encoding[paletteE + palette_delta];
-            }
-            else
-                assert(false && "unrecognized compression operation");
-
-            // stop traversal: fill all other parts of the brick with this value
+            // ToDo: handle stop bits
             if ((operation & STOP_BIT) > 0u) {
-                // fill the whole subtree with the parent value
-                for (uint32_t n = i; n < i + index_step; n++) {
-                    output_brick[n] = output_brick[i];
-                }
+                throw std::runtime_error("stop bit not yet supported in parallel decode");
             }
 
-            assert(output_brick[i] != INVALID && "Set output element brick to forbidden magic value INVALID!");
-        }
+            // wait until all voxels from the previous LoD were processed (all constant regions from stop bits are marked)
+            // check if we are not in a region marked constant
+            {
+                uint32_t operation_lsb = operation & 7u; // extract least significant 3 bits
 
-        // move to the next LOD block with half the block width and an eight of the index_step respectively
-        index_step /= 8;
-        lod_width /= 2;
+                // equal to (operation_lsb != PALETTE_LAST && operation_lsb != PALETTE_ADV && operation_lsb != PALETTE_D)
+                while (operation_lsb < 4u) {
+                    // find the read position for the next operation along the chain
+                    if (operation_lsb == PARENT) {
+                        // read from the parent in the next iteration
+                        inv_lod--;
+                        inv_lod_op_i /= 8u;
+                        inv_lod_voxel = enumBrickPos(inv_lod_op_i, target_brick_size);
+                    }
+                    // operation_lsb is NEIGHBOR_X, NEIGHBOR_Y, or NEIGHBOR_Z:
+                    else {
+                        // read from a neighbor in the next iteration
+                        uint32_t neighbor_index = operation_lsb - NEIGHBOR_X; // X: 0, Y: 1, Z: 2
+                        uint32_t child_index = inv_lod_op_i % 8u;
+
+                        inv_lod_voxel += neighbor[child_index][neighbor_index];
+                        inv_lod_op_i = indexOfBrickPos(inv_lod_voxel);
+
+                        // ToDo: remove this! for neighbors with later indices, we have to copy from its parent instead
+                        if (glm::any(glm::greaterThan(neighbor[child_index][neighbor_index], glm::ivec3(0)))) {
+                            inv_lod--;
+                            inv_lod_op_i /= 8u;
+                            inv_lod_voxel = enumBrickPos(inv_lod_op_i, target_brick_size);
+                        }
+                    }
+
+                    // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
+                    enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
+                    operation_lsb = read4Bit(brick_encoding, 0u, enc_operation_index) & 7u;
+                }
+
+                // at this point, the operation accesses the palette:
+                // write the resulting palette entry
+                // we do not care if this is a PALETTE_LAST or PALETTE_ADV operation as the index is already precomputed in the palette_prefix_index
+                uint32_t palette_index = palette_prefix_index.at(enc_operation_index - brick_encoding[0]);
+                assert(palette_index != INVALID && "obtained wrong palette index");
+
+//                // the actual palette index may be offset depending on the operation
+//                if (operation_lsb == PALETTE_LAST) {
+//                    // not required as it is already included in the palette prefix sum:
+//                    // palette_index++;
+//                } else if (operation_lsb == PALETTE_D) {
+//                    throw std::runtime_error("palette delta operation not yet supported in parallel decode");
+//                }
+
+                // Write to the index in the output array. The output array's positions are in Morton order.
+                // But if target_inv_lod < brick_lod_count, there are gaps between the entries.
+                output_brick[output_index_step * output_i] = brick_encoding[brick_encoding_length - 1u - palette_index];
+            }
+
+//            #pragma omp barrier
+            output_i += m_cpu_threads;
+        }
     }
 }
-
-
 
 void CompressedSegmentationVolume::decodeBrickWithDebugEncoding(uint32_t brick_idx, uint32_t brick_size, uint32_t* output_brick, uint32_t* output_encoding,
                                                  std::vector<glm::uvec4>* output_palette, glm::uvec3 valid_brick_size, int inv_lod) const {
@@ -944,7 +884,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     uint32_t encoded_element_count[m_cpu_threads];
     uint32_t encoded_element_count_prefix_sum[m_cpu_threads];
     for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
-        encodedBrick[thread_id].resize(max_encoded_brick_count_32bit / 2u);     // we assume that the worst case compression rate is 50%
+        encodedBrick[thread_id].resize(max_encoded_brick_count_32bit);     // we assume that the worst case compression rate is 100%
         encoded_element_count[thread_id] = 0u;
         encoded_element_count_prefix_sum[thread_id] = 0u;
     }
@@ -1032,8 +972,12 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
 
 void CompressedSegmentationVolume::decompressLOD(int target_lod, std::vector<uint32_t>& out) const {
 
+#if 1
+    parallelDecompressLOD(target_lod, out);
+#else
+
     const glm::uvec3 brickCount = getBrickCount();
-    int inv_lod = static_cast<int>(log2(m_brick_size)) - target_lod;
+    int inv_lod = getLodCountPerBrick() - 1u - target_lod;
     assert(inv_lod >= 0);
 
     // this would run in parallel on the GPU later!
@@ -1068,7 +1012,43 @@ void CompressedSegmentationVolume::decompressLOD(int target_lod, std::vector<uin
             }
         }
     }
+#endif
 }
+
+
+void CompressedSegmentationVolume::parallelDecompressLOD(int target_lod, std::vector<uint32_t>& out) const {
+        const glm::uvec3 brickCount = getBrickCount();
+        uint32_t inv_lod = getLodCountPerBrick() - 1u - target_lod;
+        assert(inv_lod >= 0);
+
+        glm::uvec3 brick_pos;
+#ifndef NO_BRICK_DECODE_INDEX_REMAP
+        std::vector<uint32_t> brick_cache(m_brick_size * m_brick_size * m_brick_size);  // brick output in morton order
+#endif
+
+        // we iterate over all bricks and decompress brick voxels in parallel
+        for (brick_pos.z = 0; brick_pos.z < brickCount.z; brick_pos.z++) {
+            for (brick_pos.y = 0; brick_pos.y < brickCount.y; brick_pos.y++) {
+                for (brick_pos.x = 0; brick_pos.x < brickCount.x; brick_pos.x++) {
+                    size_t brick_idx = brick_to_1D(brick_pos, brickCount);
+#ifndef NO_BRICK_DECODE_INDEX_REMAP
+                    // decode brick with threads parallelizing over the output voxels
+                    parallelDecodeBrick(brick_idx, brick_cache.data(), glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u), glm::uvec3(m_brick_size)), inv_lod);
+                    // fill output array with decoded brick entries
+                    for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i++) {
+                        glm::uvec3 out_pos = brick_pos * m_brick_size + enumBrickPos(i, m_brick_size);
+                        if (glm::all(glm::lessThan(out_pos, m_volume_dim))) {
+                            out[pos2idx(out_pos, m_volume_dim)] = brick_cache[i];
+                        }
+                    }
+#else
+                    parallelDecodeBrick(brick_idx, &(out[pos2idx(brick_pos * m_brick_size, m_volume_dim)]), glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u), glm::uvec3(m_brick_size)), inv_lod);
+#endif
+                }
+            }
+        }
+    }
+
 
 void CompressedSegmentationVolume::decompressBrickTo(uint32_t* out, glm::uvec3 brick_pos, int inverse_lod, uint32_t* out_encoding_debug, std::vector<glm::uvec4>* out_palette_debug) const {
     const glm::uvec3 brickCount = getBrickCount();

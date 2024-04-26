@@ -171,9 +171,9 @@ public:
      * @param brick_idx is used to read the begin and endpoint of the encoding from the brick_starts buffer.
      * @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
      * @param valid_brick_size is used to clamp used voxels for border bricks. Values outside are undefined.
-     * @param inv_lod the LOD until which to decompress, or rather, the decompression iterations. 0 is the coarsest and log2(brick_size) is the original / finest level.
+     * @param target_inv_lod the LOD until which to decompress. 0 is the coarsest and log2(brick_size) is the original / finest level.
      */
-    void parallelDecodeBrick(uint32_t brick_idx, uint32_t brick_size, uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const;
+    void parallelDecodeBrick(uint32_t brick_idx, uint32_t* output_brick, glm::uvec3 valid_brick_size, int target_inv_lod) const;
 
     // helper method to gather statistics for one single brick
     /**
@@ -223,10 +223,11 @@ public:
     void compress(const std::vector<uint32_t>& volume, glm::uvec3 volume_dim, bool verbose) override;
 
 
-    /**
-     * Decompresses the full volume up to a certain LoD into the vector out.
-     */
+    /** Decompresses the full volume up to a certain LoD into the vector out. */
     void decompressLOD(int target_lod, std::vector<uint32_t>& out) const;
+
+    /** Decompresses the full volume up to a certain LoD into the vector out, parallelizing over the output voxels in the bricks. */
+    void parallelDecompressLOD(int target_lod, std::vector<uint32_t>& out) const;
 
     std::shared_ptr<std::vector<uint32_t>> decompress() override {
         std::shared_ptr<std::vector<uint32_t>> out = std::make_shared<std::vector<uint32_t>>();
@@ -256,7 +257,7 @@ public:
      */
     bool test(const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, bool compress_first=false) override {
         if(!VolumeCompressionBase::test(volume, volume_dim, compress_first)) {
-            Logger(ERROR) << "skipping LODs...";
+            Logger(ERROR) << "skipping coarser levels of detail...";
             Logger(INFO) << "-------------------------------------------------------------";
             return false;
         }
@@ -306,8 +307,8 @@ public:
     }
 
     [[nodiscard]] glm::uvec3 getVolumeDim() const { return m_volume_dim; }
-    [[nodiscard]] glm::uint32_t getBrickSize() const { return m_brick_size; }
-    [[nodiscard]] uint32_t getLodCountPerBrick() const { return static_cast<uint32_t>(log2(m_brick_size)) + 1; }
+    [[nodiscard]] uint32_t getBrickSize() const { return m_brick_size; }
+    inline uint32_t getLodCountPerBrick() const { return static_cast<uint32_t>(log2(m_brick_size)) + 1; }
     [[nodiscard]] glm::uvec3 getBrickCount() const {
         if(m_brick_size <= 0u)
             throw std::runtime_error("Brick Size is 0");
@@ -317,16 +318,32 @@ public:
         return sfc::Cartesian::p2i(brick_pos, brick_count);
     }
 
+    // parallel decode:
+    /** Returns the number of operations stored in a brick (one per output voxel) when no stop bits are used. */
+    inline uint32_t getMaxOperationsInBrick() const {
+        return getMaxOperationsUpToInvLoD(getLodCountPerBrick() - 1u);
+    }
+    /** Returns the number of operations in a brick (one per output voxel) when no stop bits are used up to inv. LoD */
+    inline uint32_t getMaxOperationsUpToInvLoD(uint32_t inv_lod) const {
+        // ignoring stop bits:
+        // a brick contains 1 operation for the coarsest LoD, 2*2*2=8 for the next LoD, 4*4*4=64 for the next loD, ...
+        // For the first N inverse LoDs this results in a total number of operations of
+        //     SUM_0^N (2^n)^3  = 1/7 (8^(i+1) - 1)
+        return ((1u << 3u*(inv_lod+1u)) - 1u)/7u;
+    }
+
+
+
     [[nodiscard]] bool isUsingRANS() const { return m_rANS_mode == SINGLE_TABLE_RANS || m_rANS_mode == DOUBLE_TABLE_RANS; }
     [[nodiscard]] bool isUsingDetailFreq() const { return m_rANS_mode == DOUBLE_TABLE_RANS; }
     [[nodiscard]] bool isUsingSeparateDetail() const { return m_separate_detail; }
 
     /** returns the maximum number of uint32 palette entries that any brick in the volume contains. **/
-    uint32_t getMaxBrickPaletteCount() const { return m_max_brick_palette_count; };
+    [[nodiscard]] uint32_t getMaxBrickPaletteCount() const { return m_max_brick_palette_count; };
     /** returns the size of the header at the beginning of each brick measured in uint32 entries. **/
-    uint32_t getHeaderSize() const { return getLodCountPerBrick() * 2 + (isUsingSeparateDetail() ? 0 : 1); }
+    [[nodiscard]] uint32_t getHeaderSize() const { return getLodCountPerBrick() * 2 + (isUsingSeparateDetail() ? 0 : 1); }
     /** returns the index of the uint32_t element in the brick encoding / header that stores the palette size. **/
-    uint32_t getPaletteSizeHeaderIndex() const { return getHeaderSize() - 1u; }
+    [[nodiscard]] uint32_t getPaletteSizeHeaderIndex() const { return getHeaderSize() - 1u; }
 
     /**
      * Sets the options for the compression step. If using rANS, a frequency table as a uint32_t[16] array must be given for the base.
