@@ -1509,11 +1509,16 @@ void CompressedSegmentationVolume::exportAllBrickOperations(const std::string& p
     if(m_encoding.empty() || m_separate_detail)
         throw std::runtime_error("Compress the volume without detail separation first before exporting brick operations!");
 
+    // brick starts writes two uint32 numbers per brick:
+    // [s] first operation of the brick in fout [d] index at which the detail LoD starts
+    //
+    // fout writes a back to back list of the operations of all bricks.
 
-    std::ofstream fout(path + ".raw", std::ios::out | std::ios::binary);
+
+    std::ofstream fout(path + "_op.raw", std::ios::out | std::ios::binary);
     if(!fout.is_open())
         throw std::runtime_error("Could not open file " + path + ".raw");
-    std::ofstream bs_out(path + "_starts.raw", std::ios::out | std::ios::binary);
+    std::ofstream bs_out(path + "_op_starts.raw", std::ios::out | std::ios::binary);
     if(!bs_out.is_open())
         throw std::runtime_error("Could not open file " + path + "_starts.raw");
 
@@ -1526,7 +1531,12 @@ void CompressedSegmentationVolume::exportAllBrickOperations(const std::string& p
             uint32_t start4bit = m_encoding[m_brick_starts[brick_idx]]; // first entry of header is the lod start in number of 4 bit entries
             uint32_t end4bit = (m_brick_starts[brick_idx + 1] - m_brick_starts[brick_idx] - m_encoding[m_brick_starts[brick_idx] + 2u * lod_count]) * 8; // (total brick size - palette size) * 8
 
+            // write the index at which this brick starts in the encoding array
             bs_out.write(reinterpret_cast<char *>(&top_pointer), sizeof(uint32_t));
+
+            // write at which index (0 indexed from brick start) the detail level encoding starts that does not contain stop bits
+            uint32_t base_lod_operation_count = m_encoding[m_brick_starts[brick_idx] + getLodCountPerBrick() - 1] - start4bit;
+            bs_out.write(reinterpret_cast<char * >(&base_lod_operation_count), sizeof(uint32_t));
 
             for (uint32_t i = start4bit; i < end4bit; i++) {
                 uint32_t operation = read4Bit(m_encoding, beginE, i);
@@ -1541,6 +1551,10 @@ void CompressedSegmentationVolume::exportAllBrickOperations(const std::string& p
 
             bs_out.write(reinterpret_cast<char *>(&top_pointer), sizeof(uint32_t));
 
+            // write at which uint32 index (0 indexed from brick start) the detail level encoding starts that does not contain stop bits
+            uint32_t base_lod_operation_count = m_encoding[m_brick_starts[brick_idx] + getLodCountPerBrick() - 1] / 8u - start32bit;
+            bs_out.write(reinterpret_cast<char * >(&base_lod_operation_count), sizeof(uint32_t));
+
             for (uint32_t i = start32bit; i < end32bit; i++) {
                 uint32_t operations = m_encoding[i];
                 fout.write(reinterpret_cast<char *>(&operations), sizeof(uint32_t));
@@ -1548,12 +1562,15 @@ void CompressedSegmentationVolume::exportAllBrickOperations(const std::string& p
             }
         }
     }
-    // write one dummy entry at the end to denote the end of the last brick
+    // write one dummy entry at the end to denote the end of the last brick with a detail start size of 0
+    bs_out.write(reinterpret_cast<char *>(&top_pointer), sizeof(uint32_t));
+    top_pointer = 0u;
     bs_out.write(reinterpret_cast<char *>(&top_pointer), sizeof(uint32_t));
 
     fout.close();
     bs_out.close();
 
+    Logger(INFO) << "exported csgv operations to " << path << "_op.raw";
     /*
     // IMPORT:
     std::ifstream raw_in(path + ".raw", std::ios::in | std::ios::binary);
