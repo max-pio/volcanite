@@ -109,7 +109,7 @@ struct Shader {
 
     // TODO(Reiner): call this in the destructor
     void destroyModule(vk::Device device) {
-        if (m_shaderModule != static_cast<typeof m_shaderModule>(nullptr)) {
+        if (m_shaderModule != static_cast<decltype(m_shaderModule)>(nullptr)) {
             device.destroy(m_shaderModule);
             m_shaderModule = nullptr;
         }
