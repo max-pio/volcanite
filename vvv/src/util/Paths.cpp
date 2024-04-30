@@ -3,15 +3,16 @@
 #include <vvv/util/Logger.hpp>
 #include <optional>
 
-#include <unistd.h>
-
 #ifdef _WIN64
 #include <Windows.h>
 #include <array>
+#include <process.h>
 
 // Windows.h defines ERROR as a number. This would break the Logger(ERROR) call completely, so it is undefined here
 #undef ERROR
 
+#else
+#include <unistd.h>
 #endif
 
 namespace vvv {
@@ -132,8 +133,11 @@ std::vector<std::filesystem::path> Paths::getShaderDirectories(){
 
 std::filesystem::path Paths::getTempFileWithName(const std::string& name) {
     create_directory(std::filesystem::temp_directory_path() / "vvv");
-
+#ifdef _WIN32
+    return std::filesystem::temp_directory_path() / "vvv" / (std::to_string(_getpid()) + "_" + name);
+#else
     return std::filesystem::temp_directory_path() / "vvv" / (std::to_string(getpid()) + "_" + name);
+#endif
 }
 
 std::filesystem::path Paths::getTempFileForDataPath(const std::filesystem::path& dataPath) {

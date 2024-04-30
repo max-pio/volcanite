@@ -250,10 +250,17 @@ std::filesystem::path Shader::compileGlslShader(const GlslShaderRequest& request
     std::string cmd_output;
     char read_buffer[1024];
 
-    FILE *cmd_stream = popen(cmd.str().c_str(), "r");
+#ifdef _WIN32
+    FILE *cmd_stream = _popen(cmd.str().c_str(), "r");
+    while (fgets(read_buffer, sizeof(read_buffer), cmd_stream))
+        cmd_output += read_buffer;
+    int cmd_ret = _pclose(cmd_stream);
+#else
+    FILE* cmd_stream = popen(cmd.str().c_str(), "r");
     while (fgets(read_buffer, sizeof(read_buffer), cmd_stream))
         cmd_output += read_buffer;
     int cmd_ret = pclose(cmd_stream);
+#endif
 
     if (cmd_ret != 0) {
         throw ShaderCompileError(request, spirv_path, cmd_ret, cmd_output, cmd.str());
