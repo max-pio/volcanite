@@ -181,7 +181,7 @@ int compression_synth(int argc, char *argv[]) {
                 Logger(WARN) << " set zero frequency to 2 to avoid missing symbols because of frequency pass subsampling.";
         }
     }
-    csgvol->setCompressionOptions64(brick_dim, rANS_mode, code_frequencies, code_frequencies + 16);
+    csgvol->setCompressionOptions64(brick_dim, rANS_mode, false, code_frequencies, code_frequencies + 16);
     if (use_detail_separation)
         csgvol->separateDetail();
     csgvol->compress(volume->data(), volume_dim, true);

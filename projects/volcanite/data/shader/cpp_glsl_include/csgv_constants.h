@@ -5,6 +5,9 @@
 #define CSGV_UINT uint
 #else
 #define CSGV_UINT uint32_t
+namespace vvv {
+    enum RANSMode {NO_RANS=0, SINGLE_TABLE_RANS=1, DOUBLE_TABLE_RANS=2};
+}
 #endif
 
 // We use this header because we can in include it for compile time CompressedSegmentationVolume constants in the CPU encoding/decoding C++ classes as well as in the GLSL shaders for GPU decoding.

@@ -31,7 +31,7 @@ int export_texture(Texture* tex, const std::string export_file_path) {
         Logger(INFO) << "Exporting render output to " << export_file_path;
         tex->writeFile(export_file_path);
     }
-    catch(std::runtime_error e) {
+    catch(const std::runtime_error& e) {
         Logger(ERROR) << "Render export error: " << e.what();
         return RET_RENDER_ERROR;
     }
@@ -147,6 +147,7 @@ int volcanite(int argc, char *argv[]) {
 
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),
                                                         .rANS_mode = args.rANS_mode,
+                                                        .parallel_decoding = args.parallel_decoding,
                                                         .label_remapping = label_remapping,
                                                         .cpu_threads = args.threads,
                                                         .use_detail_separation = args.stream_lod,
