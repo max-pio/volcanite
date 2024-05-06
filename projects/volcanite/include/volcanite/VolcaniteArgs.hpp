@@ -69,7 +69,6 @@ public:
     uint32_t brick_size = 32;
     CompressedSegmentationVolume::RANSMode rANS_mode = CompressedSegmentationVolume::RANSMode::DOUBLE_TABLE_RANS;
     uint32_t freq_subsampling = 8;      // n^3 factor for subsampling bricks for frequency table computation with rANS
-    bool parallel_decoding = false;     // use in-brick parallelism for decompression and encode accordingly
 
     bool run_tests = false;
     bool export_stats = false;
@@ -127,7 +126,6 @@ public:
             cmd.add(bricksizeArg);
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
-            SwitchArg parallelDecodeArg("p", "parallel-decode", "Use in-brick parallelism for decompression and encode accordingly.", cmd);
 
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
@@ -160,7 +158,6 @@ public:
             va.decompress_export_file = expandPath(decompresspathArg.getValue());
             va.compress_export_file = expandPath(compresspathArg.getValue());
             va.export_stats = statsArg.getValue();
-            va.parallel_decoding = parallelDecodeArg.getValue();
             // rendering arguments
             va.rendering_config_file = expandPath(renderconfigArg.getValue());
             va.screenshot_output_file = expandPath(imageArg.getValue());

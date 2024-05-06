@@ -22,7 +22,6 @@ set(VOLCANITE_SOURCES
         src/volcanite/compression/bitpack.cpp
         src/volcanite/compression/CompressedSegmentationVolume.cpp
         src/volcanite/compression/CompressedSegmentationVolumeStats.cpp
-        src/volcanite/compression/CompressedSegmentationVolumeParallel.cpp
         src/volcanite/compression/rans.cpp
         src/PassCompression.cpp
         src/renderer/CompressedSegmentationVolumeRenderer.cpp

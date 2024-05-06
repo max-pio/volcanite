@@ -568,8 +568,6 @@ void CompressedSegmentationVolume::decodeBrick(uint32_t brick_idx, uint32_t* out
 void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume, const glm::uvec3 volume_dim, bool verbose) {
     if(m_brick_size == 0u)
         throw std::runtime_error("Compression parameters are not initialized!");
-    if(m_parallel_decode && volume_dim.x % m_brick_size + volume_dim.y % m_brick_size + volume_dim.y % m_brick_size != 0u)
-        throw std::runtime_error("Volume size must be evenly dividable by brick size for in-brick parallelism!");
 
     m_volume_dim = volume_dim;
     glm::uvec3 brickCount = getBrickCount();
@@ -620,10 +618,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
                     encoded_element_count[thread_id] = 0u;
                     if (brick.x + thread_id < brickCount.x) {
                         // compress the current brick
-                        if(m_parallel_decode)
-                            encoded_element_count[thread_id] = encodeBrickForParallelDecode(volume, encodedBrick[thread_id], glm::uvec3(brick.x + thread_id, brick.y, brick.z) * m_brick_size, m_volume_dim);
-                        else
-                            encoded_element_count[thread_id] = encodeBrick(volume, encodedBrick[thread_id], glm::uvec3(brick.x + thread_id, brick.y, brick.z) * m_brick_size, m_volume_dim);
+                        encoded_element_count[thread_id] = encodeBrick(volume, encodedBrick[thread_id], glm::uvec3(brick.x + thread_id, brick.y, brick.z) * m_brick_size, m_volume_dim);
                     }
                 }
 
@@ -743,16 +738,9 @@ void CompressedSegmentationVolume::decompressBrickTo(uint32_t* out, glm::uvec3 b
                                                 glm::uvec3(m_brick_size)), inverse_lod);
     }
     else {
-        if(m_parallel_decode) {
-            parallelDecodeBrick(brick_idx, out,
-                        glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u), glm::uvec3(m_brick_size)),
-                        inverse_lod);
-        }
-        else {
             decodeBrick(brick_idx, out,
                         glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u), glm::uvec3(m_brick_size)),
                         inverse_lod);
-        }
     }
 }
 
@@ -778,10 +766,7 @@ bool CompressedSegmentationVolume::testLOD(const std::vector<uint32_t> &volume, 
     for (uint32_t width = 2; width <= m_brick_size; width *= 2) {
         timer.restart();
         Logger(INFO, true) << "Decode LOD " << lod << " with block width " << width;
-        if(m_parallel_decode)
-            parallelDecompressLOD(lod, out);
-        else
-            decompressLOD(lod, out);
+        decompressLOD(lod, out);
         Logger(INFO) << "Decode LOD " << lod << " with block width " << width << " in " << timer.elapsed() << "s done. Test:";
         if (volume.size() != out.size()) {
             Logger(ERROR) << "Compressed in and out sizes don't match";
@@ -1169,17 +1154,10 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
                 {
                     unsigned int thread_id = omp_get_thread_num();
                     if (brick.x + thread_id*subsampling_factor < brickCount.x) {
-                        // compress the current brick
-                        if(m_parallel_decode) {
-                            freqEncodeBrick(volume, brick_freq[thread_id],
-                                            glm::uvec3(brick.x + thread_id * subsampling_factor, brick.y, brick.z) *
-                                            m_brick_size, m_volume_dim, detail_freq);
-                        }
-                        else {
-                            freqEncodeBrickForParallelDecode(volume, brick_freq[thread_id],
-                                            glm::uvec3(brick.x + thread_id * subsampling_factor, brick.y, brick.z) *
-                                            m_brick_size, m_volume_dim, detail_freq);
-                        }
+                        // dummy compress the current brick
+                        freqEncodeBrick(volume, brick_freq[thread_id],
+                                        glm::uvec3(brick.x + thread_id * subsampling_factor, brick.y, brick.z) *
+                                        m_brick_size, m_volume_dim, detail_freq);
                     }
                 }
 
