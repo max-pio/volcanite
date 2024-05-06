@@ -134,9 +134,11 @@ private:
                 auto brick_count = dt_line[chunk_index.x].getBrickCount();
                 auto brick_starts = dt_line[chunk_index.x].getBrickStarts();
                 auto detail_starts = use_detail_separation ? dt_line[chunk_index.x].getDetailStarts() : nullptr;
-                uint32_t first_brick_index = CompressedSegmentationVolume::brick_to_1D(glm::uvec3(0u, brick_index.y, brick_index.z), brick_count);
+                uint32_t first_brick_index = CompressedSegmentationVolume::brick_pos2idx(
+                        glm::uvec3(0u, brick_index.y, brick_index.z), brick_count);
                 uint32_t first_brick_start = brick_starts->at(first_brick_index);
-                uint32_t last_brick_index = 1u + CompressedSegmentationVolume::brick_to_1D(glm::uvec3(brick_count.x - 1u, brick_index.y, brick_index.z), brick_count);
+                uint32_t last_brick_index = 1u + CompressedSegmentationVolume::brick_pos2idx(
+                        glm::uvec3(brick_count.x - 1u, brick_index.y, brick_index.z), brick_count);
                 uint32_t last_brick_end = brick_starts->at(last_brick_index);
 
                 uint32_t first_detail_start = use_detail_separation ? detail_starts->at(first_brick_index) : 0;

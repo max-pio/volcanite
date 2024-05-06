@@ -34,24 +34,14 @@ void printBrick(const std::vector<uint32_t> &brick, uint32_t brick_size, int z_s
     }
 }
 
-uint32_t CompressedSegmentationVolume::readNextLodOperation(size_t start32bit, ReadState &state) const {
-    // decide if we read from the detail array or from the "normal" buffer
-    const std::vector<uint32_t>* read_from;
-    const RANS* rans;
-    if(state.in_detail_lod) {
-        read_from = m_separate_detail ? &m_detail_encoding : &m_encoding;
-        rans = &m_detail_rans;
-    }
-    else {
-        read_from = &m_encoding;
-        rans = &m_rans;
-    }
-
+uint32_t CompressedSegmentationVolume::readNextLodOperationFromEncoding(const uint32_t* brick_encoding, ReadState &state) const {
     // read the next symbol
     if (m_rANS_mode == NO_RANS)
-        return read4Bit(*read_from, start32bit, state.idxE++);
-    else
-        return rans->itr_nextSymbol(state.rans_state, state.idxE, read_from->data());
+        return read4Bit(brick_encoding, 0u, state.idxE++);
+    else {
+        const RANS* rans = state.in_detail_lod ? &m_detail_rans : &m_rans;
+        return rans->itr_nextSymbol(state.rans_state, state.idxE, brick_encoding);
+    }
 }
 
 uint32_t encodingIndexOfNeighbor(const uint32_t index, const int neighbor_i) {
@@ -76,11 +66,12 @@ uint32_t CompressedSegmentationVolume::valueOfNeighbor(const MultiGridNode* grid
     // we have to look up the parent element.
     else if (glm::any(glm::greaterThan(neighbor[child_index][neighbor_i], glm::ivec3(0)))) {
         // technically, this computes the index on a wrong level of detail (if not in the finest one), but because Z-order is self-including, it works
-        return parent_grid[pos2idx( glm::ivec3(brick_pos/2u) + neighbor[child_index][neighbor_i], glm::uvec3(lod_dim/2))].label;
+        return parent_grid[voxel_pos2idx(glm::ivec3(brick_pos / 2u) + neighbor[child_index][neighbor_i],
+                                         glm::uvec3(lod_dim / 2))].label;
     }
     // otherwise, lookup the neighbor
     else {
-        return grid[pos2idx(neighbor_pos, glm::uvec3(lod_dim))].label;
+        return grid[voxel_pos2idx(neighbor_pos, glm::uvec3(lod_dim))].label;
     }
 }
 
@@ -182,25 +173,28 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
                 // if this subtree is already filled (because in a previous LOD we set a PARENT_STOP for this area), the last element of this block is set, and we can skip it
                 // note that this will also happen if this grid node lies completely outside the volume because some parent would've been set to PARENT_STOP earlier
                 // our parent spanned 8 elements of this finer current level, so we need to look at the element 7 indices further
-                if (multigrid[parent_multigrid_lod_start + pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].constant_subregion) {
+                if (multigrid[parent_multigrid_lod_start +
+                        voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].constant_subregion) {
                     parent_counter = 0;
                     i += (lod_width * lod_width * lod_width * 7);
                     continue;
                 }
 
                 parent_counter = 0;
-                parent_value = multigrid[parent_multigrid_lod_start + pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].label;
+                parent_value = multigrid[parent_multigrid_lod_start +
+                        voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].label;
                 assert(parent_value != INVALID && "parent element in brick was not set in previous LOD!");
             }
             parent_counter++;
 
-            value = multigrid[muligrid_lod_start + pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].label;
+            value = multigrid[muligrid_lod_start + voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].label;
             assert(value != INVALID && "Original volume mustn't contain the INVALID magic value!");
 
             uint32_t operation = 0u;
             // if the whole subtree from here has this parent_value, we can set a stop sign and fill the whole brick area of the subtree
             // note that grid nodes outside the volume are by definition also homogeneous
-            if (lod_width >= 1 && multigrid[muligrid_lod_start + pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].constant_subregion) {
+            if (lod_width >= 1 && multigrid[muligrid_lod_start +
+                    voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].constant_subregion) {
                 operation = STOP_BIT;
             }
             // determine operation for the next entry
@@ -274,75 +268,79 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
 }
 
 float CompressedSegmentationVolume::separateDetail() {
-    if(!m_detail_encoding.empty() || m_separate_detail)
-        throw std::runtime_error("Detail separation was already performed!");
-    if(m_encoding.empty())
-        throw std::runtime_error("Segmentation volume is not yet compressed! Call compress() before performing detail separation.");
-    if(m_rANS_mode != DOUBLE_TABLE_RANS)
-        throw std::runtime_error("Detail separation can only be used in combination with rANS in double table mode!");
-
-    const size_t max_brick_index = m_brick_starts.size() - 1;
-
-    // First, we construct the detail_starts buffer. We do a simple sequential pass.
-    uint32_t currentDetailStart = 0u;
-    const uint32_t lod_count = getLodCountPerBrick();
-    const uint32_t header_size = getHeaderSize();
-    m_detail_starts.resize(max_brick_index + 1);
-    for(size_t i = 0; i < max_brick_index; i++) {
-        m_detail_starts[i] = currentDetailStart;
-        // brick detail size: brick encoding size                       - palette size                                                - detail LOD start
-        currentDetailStart += (m_brick_starts[i+1] - m_brick_starts[i]) - m_encoding[m_brick_starts[i] + getPaletteSizeHeaderIndex()] - m_encoding[m_brick_starts[i] + lod_count - 1u] / 8;
-    }
-    m_detail_starts[max_brick_index] = currentDetailStart;
-    m_detail_encoding.resize(currentDetailStart);
-
-    // Move all detail encodings to detail buffer, all base encodings to new base buffer, and update brick starts buffer
-    std::vector<uint32_t> base_encoding;
-    // the base encoding levels are smaller because they don't store the detail encoding and a header that is one element shorter than before
-    base_encoding.resize(m_encoding.size() - currentDetailStart - max_brick_index, 0u);
-    #pragma omp parallel for num_threads(m_cpu_threads) default(none) shared(max_brick_index, base_encoding, header_size, lod_count, m_detail_encoding)
-    for(size_t i = 0; i < max_brick_index; i++) {
-        // we are only allowed to read from m_brick_starts[i], m_brick_starts[i+1] is undefined!
-        uint32_t* base_encoding_start = base_encoding.data() + m_brick_starts[i] - m_detail_starts[i] - i;  // output position of this brick in the base encoding output array
-        size_t palette_size = m_encoding[m_brick_starts[i] + getPaletteSizeHeaderIndex()];
-        size_t detail_encoding_size = m_detail_starts[i+1] - m_detail_starts[i];
-        size_t base_encoding_size = m_encoding[m_brick_starts[i] + lod_count - 1] / 8 - header_size;        // length of the operation of base levels only
-        uint32_t* encode_begin = m_encoding.data() + m_brick_starts[i];
-
-        // copy the detail encoding to the detail buffer
-        memcpy(m_detail_encoding.data() + m_detail_starts[i], encode_begin + header_size + base_encoding_size, detail_encoding_size * sizeof(uint32_t));
-
-        // copy the first part of the header (LOD starts from 0 to L-2 without the detail level), to the base encoding buffer.
-        // the header is missing one element (start pos. of the detail layer) now, so we have to adjust the lod start entries.
-        memcpy(base_encoding_start, encode_begin, (lod_count - 1u) * sizeof(uint32_t));
-        for(int l = 0; l < (lod_count - 1u); l++)
-            base_encoding_start[l] -= 8u;
-        // move the palette part of the encoding header one element to the front (because the encoding_start entry for the detail buffer is now missing in between)
-        memcpy(base_encoding_start + (lod_count - 1u), encode_begin + lod_count, (lod_count + 1u) * sizeof(uint32_t));
-        // copy the base encoding
-        memcpy(base_encoding_start + (header_size - 1u), encode_begin + header_size, base_encoding_size * sizeof(uint32_t));
-        // copy the palette
-        memcpy(base_encoding_start + (header_size - 1u) + base_encoding_size, encode_begin + header_size + base_encoding_size + detail_encoding_size, palette_size * sizeof(uint32_t));
-
-        // the new brick starts entry moved to the front. Again, subtract i because each brick header is missing one element compared to before.
-        m_brick_starts[i] = m_brick_starts[i] - m_detail_starts[i] - i;
-    }
-    m_encoding = std::move(base_encoding);
-    m_brick_starts[max_brick_index] = m_brick_starts[max_brick_index] - m_detail_starts[max_brick_index] - max_brick_index;
-
-    m_separate_detail = true;
-
-    // return the ratio of detail encoding size to total encoding size
-    return (static_cast<float>(m_detail_starts[max_brick_index]) / static_cast<float>(m_brick_starts[max_brick_index] + m_detail_starts[max_brick_index]));
+    throw std::runtime_error("method not yet adapted for split encodings");
+//
+//    if(!m_detail_encoding.empty() || m_separate_detail)
+//        throw std::runtime_error("Detail separation was already performed!");
+//    if(m_encodings.empty())
+//        throw std::runtime_error("Segmentation volume is not yet compressed! Call compress() before performing detail separation.");
+//    if(m_rANS_mode != DOUBLE_TABLE_RANS)
+//        throw std::runtime_error("Detail separation can only be used in combination with rANS in double table mode!");
+//
+//    const size_t max_brick_index = m_brick_starts.size() - 1;
+//
+//    // First, we construct the detail_starts buffer. We do a simple sequential pass.
+//    uint32_t currentDetailStart = 0u;
+//    const uint32_t lod_count = getLodCountPerBrick();
+//    const uint32_t header_size = getHeaderSize();
+//    m_detail_starts.resize(max_brick_index + 1);
+//    for(size_t i = 0; i < max_brick_index; i++) {
+//        m_detail_starts[i] = currentDetailStart;
+//        // brick detail size: brick encoding size                       - palette size                                                - detail LOD start
+//        currentDetailStart += (m_brick_starts[i+1] - m_brick_starts[i]) - m_encoding[m_brick_starts[i] + getPaletteSizeHeaderIndex()] - m_encoding[m_brick_starts[i] + lod_count - 1u] / 8;
+//    }
+//    m_detail_starts[max_brick_index] = currentDetailStart;
+//    m_detail_encoding.resize(currentDetailStart);
+//
+//    // Move all detail encodings to detail buffer, all base encodings to new base buffer, and update brick starts buffer
+//    std::vector<uint32_t> base_encoding;
+//    // the base encoding levels are smaller because they don't store the detail encoding and a header that is one element shorter than before
+//    base_encoding.resize(m_encoding.size() - currentDetailStart - max_brick_index, 0u);
+//    #pragma omp parallel for num_threads(m_cpu_threads) default(none) shared(max_brick_index, base_encoding, header_size, lod_count, m_detail_encoding)
+//    for(size_t i = 0; i < max_brick_index; i++) {
+//        // we are only allowed to read from m_brick_starts[i], m_brick_starts[i+1] is undefined!
+//        uint32_t* base_encoding_start = base_encoding.data() + m_brick_starts[i] - m_detail_starts[i] - i;  // output position of this brick in the base encoding output array
+//        size_t palette_size = m_encoding[m_brick_starts[i] + getPaletteSizeHeaderIndex()];
+//        size_t detail_encoding_size = m_detail_starts[i+1] - m_detail_starts[i];
+//        size_t base_encoding_size = m_encoding[m_brick_starts[i] + lod_count - 1] / 8 - header_size;        // length of the operation of base levels only
+//        uint32_t* encode_begin = m_encoding.data() + m_brick_starts[i];
+//
+//        // copy the detail encoding to the detail buffer
+//        memcpy(m_detail_encoding.data() + m_detail_starts[i], encode_begin + header_size + base_encoding_size, detail_encoding_size * sizeof(uint32_t));
+//
+//        // copy the first part of the header (LOD starts from 0 to L-2 without the detail level), to the base encoding buffer.
+//        // the header is missing one element (start pos. of the detail layer) now, so we have to adjust the lod start entries.
+//        memcpy(base_encoding_start, encode_begin, (lod_count - 1u) * sizeof(uint32_t));
+//        for(int l = 0; l < (lod_count - 1u); l++)
+//            base_encoding_start[l] -= 8u;
+//        // move the palette part of the encoding header one element to the front (because the encoding_start entry for the detail buffer is now missing in between)
+//        memcpy(base_encoding_start + (lod_count - 1u), encode_begin + lod_count, (lod_count + 1u) * sizeof(uint32_t));
+//        // copy the base encoding
+//        memcpy(base_encoding_start + (header_size - 1u), encode_begin + header_size, base_encoding_size * sizeof(uint32_t));
+//        // copy the palette
+//        memcpy(base_encoding_start + (header_size - 1u) + base_encoding_size, encode_begin + header_size + base_encoding_size + detail_encoding_size, palette_size * sizeof(uint32_t));
+//
+//        // the new brick starts entry moved to the front. Again, subtract i because each brick header is missing one element compared to before.
+//        m_brick_starts[i] = m_brick_starts[i] - m_detail_starts[i] - i;
+//    }
+//    m_encoding = std::move(base_encoding);
+//    m_brick_starts[max_brick_index] = m_brick_starts[max_brick_index] - m_detail_starts[max_brick_index] - max_brick_index;
+//
+//    m_separate_detail = true;
+//
+//    // return the ratio of detail encoding size to total encoding size
+//    return (static_cast<float>(m_detail_starts[max_brick_index]) / static_cast<float>(m_brick_starts[max_brick_index] + m_detail_starts[max_brick_index]));
 }
 
 bool CompressedSegmentationVolume::verifyCompression() const {
-    if(m_encoding.empty())
+    throw std::runtime_error("method not yet adapted for split encodings");
+
+    if(m_encodings.empty())
         throw std::runtime_error("Segmentation volume is not yet compressed!");
 
     bool is_ok = true;
     glm::uvec3 brick_count = getBrickCount();
-    size_t last_brick = brick_count.x * brick_count.y * brick_count.z - 1ul;
+    size_t last_brick = getBrickIndexCount() - 1ul;
     uint32_t lod_count = getLodCountPerBrick();
     uint32_t header_size = getHeaderSize();
     uint32_t header_start_lods = lod_count - (isUsingSeparateDetail() ? 1 : 0);
@@ -357,8 +355,8 @@ bool CompressedSegmentationVolume::verifyCompression() const {
 
                 glm::uvec3 brick(x, y, z);
                 std::stringstream error = {};
-                uint32_t brick1D = brick_to_1D(brick, getBrickCount());
-                uint32_t start = m_brick_starts[brick1D];
+                uint32_t brick1D = brick_pos2idx(brick, getBrickCount());
+                uint32_t start = getBrickStart(brick1D);
 
                 // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
                 long encoding_length = static_cast<long>(m_brick_starts[brick1D + 1]) - static_cast<long>(start);
@@ -366,14 +364,15 @@ bool CompressedSegmentationVolume::verifyCompression() const {
                     error << " brick encoding is shorter than minimum (header size + 1 encoding + 1 palette)=" << (header_size+2) <<" but is " << encoding_length << "\n";
 
                 // check first header entry being header_size * 8
-                if(m_encoding[start] != header_size * 8u)
-                    error << "  first encoding starts 4bit must be header*8=" << (header_size * 8u) << " but is "  << m_encoding[start] << "\n";
+                const uint32_t* brick_encoding = getEncodingBuffer(brick1D)->data();
+                if(brick_encoding[start] != header_size * 8u)
+                    error << "  first encoding starts 4bit must be header*8=" << (header_size * 8u) << " but is "  << brick_encoding[start] << "\n";
 
                 // check encoding starts being in ascending order
                 // note: the header count the number of entries, except the last entry when using double table rANS
                 // for which this entry refers to the raw 4 bit index at which the detail encoding starts AFTER packing the earlier LoDs
                 for(int l = 1; l < header_start_lods - (isUsingDetailFreq() ? 1 : 0); l++) {
-                    long distance = static_cast<long>(m_encoding[start + l]) - static_cast<long>(m_encoding[start + l - 1]);
+                    long distance = static_cast<long>(brick_encoding[start + l]) - static_cast<long>(brick_encoding[start + l - 1]);
                     if(distance < 0l) {
                         error << "  encoding starts are not in ascending order (distance " << distance << " for LoD " << l << ")\n";
                         break;
@@ -385,27 +384,27 @@ bool CompressedSegmentationVolume::verifyCompression() const {
                 }
 
                 // check palette start of first LoD being 0 and second LoD being 1
-                if(m_encoding[start + header_start_lods] != 0u)
-                    error << "  first palette start must be 0 but is " << m_encoding[start + header_start_lods];
-                if(m_encoding[start + header_start_lods + 1u] != 1u)
-                    error << "  second palette start must be 1 but is " << m_encoding[start + header_start_lods + 1u];
+                if(brick_encoding[start + header_start_lods] != 0u)
+                    error << "  first palette start must be 0 but is " << brick_encoding[start + header_start_lods];
+                if(brick_encoding[start + header_start_lods + 1u] != 1u)
+                    error << "  second palette start must be 1 but is " << brick_encoding[start + header_start_lods + 1u];
 
                 // check palette starts being in ascending order
                 for(int l = 2u; l <= lod_count + 1; l++) {
-                    if(m_encoding[start + header_start_lods + l] < m_encoding[start + header_start_lods + l - 1]) {
+                    if(brick_encoding[start + header_start_lods + l] < brick_encoding[start + header_start_lods + l - 1]) {
                         error << "  palette starts are not in ascending order\n";
                         break;
                     }
                 }
 
-                uint32_t palette_size = m_encoding[start + getPaletteSizeHeaderIndex()];
+                uint32_t palette_size = brick_encoding[start + getPaletteSizeHeaderIndex()];
                 // check palette size not being zero
                 if(palette_size == 0u) {
                     error << "  palette size is zero\n";
                 }
 
                 // check palette size + encoding start of last LoD being shorter than the brick encoding
-                if(palette_size + m_encoding[start + header_start_lods]/8u > encoding_length) {
+                if(palette_size + brick_encoding[start + header_start_lods]/8u > encoding_length) {
                     error << "  palette size and encoding of first (L-1) levels are longer than the total brick encoding\n";
                 }
 
@@ -459,25 +458,24 @@ bool CompressedSegmentationVolume::verifyCompression() const {
 }
 
 void CompressedSegmentationVolume::decodeBrick(uint32_t brick_idx, uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const {
+    const uint32_t* brick_encoding = getBrickEncodingSpan(brick_idx).data();
     // the palette starts at the end of the encoding block
-    uint32_t beginE = m_brick_starts[brick_idx];
-    uint32_t paletteE = m_brick_starts[brick_idx + 1u] - 1u;
+    uint32_t paletteE = getBrickEncodingSpan(brick_idx).size() - 1u;
+    const uint32_t* brick_palette = brick_encoding;
 
-    // first: read the header (= LOD start positions)
+    // first: read the header (= first header entry is the start positions of the inv. LoD 0)
     uint32_t lod_count = getLodCountPerBrick();
-
-    // refine up to the LOD that was requested
-    uint32_t child_index;   // index of all children with the same coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
-
-    ReadState readState = {.idxE=m_encoding[beginE], .in_detail_lod=false};
+    ReadState readState = {.idxE=brick_encoding[0], .in_detail_lod=false};
     if(m_rANS_mode != NO_RANS) {
-        readState.idxE = (beginE + readState.idxE / 8) * 4;
-        m_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_encoding.data());
+        // idxE counts in bytes for rANS state instead of number of 4 bit entries
+        readState.idxE = (readState.idxE / 8) * 4;
+        m_rans.itr_initDecoding(readState.rans_state, readState.idxE, brick_encoding);
     }
 
     uint32_t index_step = m_brick_size * m_brick_size * m_brick_size;
     uint32_t lod_width = m_brick_size;
     uint32_t parent_value;
+    uint32_t child_index;   // index of all children with the same coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
 
     // first, set the whole brick to INVALID, so we know later which elements and LOD blocks were already processed
     for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i++)
@@ -489,20 +487,18 @@ void CompressedSegmentationVolume::decodeBrick(uint32_t brick_idx, uint32_t* out
         if(m_rANS_mode == DOUBLE_TABLE_RANS && lod == lod_count-1) {
             readState.in_detail_lod = true;
             if(m_separate_detail) {
-                beginE = m_detail_starts[brick_idx]; // beginE now refers to another buffer (detail) and has to be changed
-                readState.idxE = beginE * 4;
-                m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_detail_encoding.data());
+                // we now read from the separated detail encoding buffer
+                brick_encoding = m_detail_encoding.data() + m_detail_starts[brick_idx];
+                readState.idxE = 0u;
+                m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, brick_encoding);
             }
             else {
                 // Read the lod start from the brick header to start reading at the right encoding buffer index.
                 // We have to start at a fully padded uint32, because we switch the rANS decoder.
-                readState.idxE = (beginE + m_encoding[beginE + lod] / 8) * 4;
-                m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_encoding.data());
+                readState.idxE = (brick_encoding[lod] / 8) * 4;
+                m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, brick_encoding);
             }
         }
-
-        assert((isUsingRANS() || (beginE + readState.idxE/8 < paletteE)) && "read pointer runs over palette pointer");
-        assert(index_step > 0 && "decoding with invalid index step");
 
         for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i += index_step) {
             // if a grid node is completely outside the volume (i.e. it's first element is not within the volume) we skip it as it won't have any entries in the encoding
@@ -524,7 +520,7 @@ void CompressedSegmentationVolume::decodeBrick(uint32_t brick_idx, uint32_t* out
             }
 
             // get the next operation and apply it (either progress in the current RLE or read the next entry)
-            uint32_t operation = readNextLodOperation(beginE, readState);
+            uint32_t operation = readNextLodOperationFromEncoding(brick_encoding, readState);
 
             uint32_t operation_lsb = operation & 7u; // extract least significant 3 bits
             if (operation_lsb == PARENT)
@@ -536,14 +532,14 @@ void CompressedSegmentationVolume::decodeBrick(uint32_t brick_idx, uint32_t* out
             else if (operation_lsb == NEIGHBOR_Z)
                 output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i, m_brick_size), child_index, lod_width, m_brick_size, 2);
             else if (operation_lsb == PALETTE_ADV) { // read palette entry and advance palette pointer to the next entry
-                output_brick[i] = m_encoding[paletteE--];
+                output_brick[i] = brick_palette[paletteE--];
             }
             else if (operation_lsb == PALETTE_LAST) {
-                output_brick[i] = m_encoding[paletteE + 1];
+                output_brick[i] = brick_palette[paletteE + 1];
             }
             else if (operation_lsb == PALETTE_D) {
-                uint32_t palette_delta = readNextLodOperation(beginE, readState) + 2u;
-                output_brick[i] = m_encoding[paletteE + palette_delta];
+                uint32_t palette_delta = readNextLodOperationFromEncoding(brick_encoding, readState) + 2u;
+                output_brick[i] = brick_palette[paletteE + palette_delta];
             }
             else
                 assert(false && "unrecognized compression operation");
@@ -573,17 +569,25 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     glm::uvec3 brickCount = getBrickCount();
     if(verbose) {
         Logger(DEBUG) << " running with " << m_cpu_threads << " threads on " << std::thread::hardware_concurrency() << " CPU cores";
-        Logger(DEBUG) << " brick count: " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z) << " with brick size " << m_brick_size << "^3";
+        Logger(DEBUG) << " brick count: " << str(brickCount) << " = " << getBrickIndexCount() << " with brick size " << m_brick_size << "^3";
     }
 
-    m_encoding.clear();
-    size_t reserved_size = static_cast<size_t>(volume_dim.x) * volume_dim.y * volume_dim.z / 12ul / 4ul; // assume that we have a compression rate below 1/12
+    // m_encodings contains > 0 vectors storing the brick encoding. For any brick with 1D index i, the corresponding
+    // encoding vector index in m_encodings is obtained through (i / m_brick_idx_to_enc_vector).
+    // m_brick_idx_to_enc_vector is set to UINT32_MAX initially and reduced during the compression aiming to store
+    // m_enc_vector_limit many uint32_t entries in the first encoding vector.
+    m_encodings.clear();
+    size_t reserved_size = std::min(static_cast<size_t>(m_enc_vector_limit), static_cast<size_t>(volume_dim.x) * volume_dim.y * volume_dim.z / 12ul / 4ul); // assume that we have a compression rate below 1/12
     if(reserved_size > UINT32_MAX) {
         Logger(WARN) << "Volume is large, potentially creating a Compressed Segmentation Volume that does not fit into 32bit address!";
         reserved_size = UINT32_MAX;
     }
-    m_encoding.reserve(reserved_size);
-    m_brick_starts.resize(brickCount.x * brickCount.y * brickCount.z + 1, INVALID);
+    // Start with one encoding vector. Once it is filled up to the target size m_enc_vector_limit,
+    // m_brick_idx_to_enc_vector is updated to start a new encoding vector for the next brick index.
+    m_encodings.emplace_back();
+    m_encodings[0].reserve(reserved_size);
+    uint32_t brick_index_count = getBrickIndexCount();
+    m_brick_starts.resize(brick_index_count + 1, INVALID);
 
     // detail buffers can only be filled with a subsequent call to separateDetail()
     m_separate_detail = false;
@@ -594,96 +598,118 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
         Logger(INFO, true) << " Progress 0.0%";
     MiniTimer progressTimer;
     MiniTimer totalTimer;
-    int bricks_since_last_update = 0;
+    uint32_t bricks_since_last_update = 0;
 
     // compute the next m_cpu_threads brick encodings in parallel
-    const uint32_t max_encoded_brick_count_32bit = m_brick_size * m_brick_size * m_brick_size;
+    // we assume that the worst case compression rate is 100% and allocate encoding buffers accordingly
+    const uint32_t encoded_brick_buffer_size = m_brick_size * m_brick_size * m_brick_size;
     std::vector<uint32_t> encodedBrick[m_cpu_threads];
     uint32_t encoded_element_count[m_cpu_threads];
     uint32_t encoded_element_count_prefix_sum[m_cpu_threads];
     for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
-        encodedBrick[thread_id].resize(max_encoded_brick_count_32bit);     // we assume that the worst case compression rate is 100%
+        encodedBrick[thread_id].resize(encoded_brick_buffer_size);
         encoded_element_count[thread_id] = 0u;
         encoded_element_count_prefix_sum[thread_id] = 0u;
     }
 
-    glm::uvec3 brick;
-    for (brick.z = 0u; brick.z < brickCount.z; brick.z++) {
-        for (brick.y = 0u; brick.y < brickCount.y; brick.y++) {
-            for (brick.x = 0u; brick.x < brickCount.x; brick.x += m_cpu_threads) {
+    // compress one brick after another (but m_cpu_threads of them in parallel) in brick_index order
+    for(uint32_t brick_index = 0u; brick_index < brick_index_count; brick_index += m_cpu_threads) {
 
-                #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(brick, brickCount, volume, encodedBrick, encoded_element_count)
-                {
-                    unsigned int thread_id = omp_get_thread_num();
-                    encoded_element_count[thread_id] = 0u;
-                    if (brick.x + thread_id < brickCount.x) {
-                        // compress the current brick
-                        encoded_element_count[thread_id] = encodeBrick(volume, encodedBrick[thread_id], glm::uvec3(brick.x + thread_id, brick.y, brick.z) * m_brick_size, m_volume_dim);
-                    }
-                }
-
-                // a prefix sum of the element counts tells us the local offsets. We also check how many new elements we need in total.
-                for (int thread_id = 1; thread_id < m_cpu_threads; thread_id++)
-                    encoded_element_count_prefix_sum[thread_id] = encoded_element_count_prefix_sum[thread_id - 1] + encoded_element_count[thread_id - 1];
-                size_t old_encoding_size = m_encoding.size();
-                size_t new_encoding_size = old_encoding_size + encoded_element_count_prefix_sum[m_cpu_threads - 1] + encoded_element_count[m_cpu_threads - 1];
-                m_encoding.resize(new_encoding_size);
-
-                // append the results
-                #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(brick, brickCount, encoded_element_count, encoded_element_count_prefix_sum, encodedBrick, old_encoding_size)
-                for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
-                    if (encoded_element_count[thread_id] == 0u)
-                        continue;
-                    // store the start index of the brick within the encoding array
-                    m_brick_starts[pos2idx(glm::uvec3(brick.x + thread_id, brick.y, brick.z), brickCount)] = static_cast<uint32_t>(old_encoding_size + encoded_element_count_prefix_sum[thread_id]);
-                    // copy the encoded brick to the encoding array. std::copy can be slightly faster than memcpy.
-                    // memcpy(m_encoding.data() + old_encoding_size + encoded_element_count_prefix_sum[thread_id], encodedBrick[thread_id].data(), encoded_element_count[thread_id] * sizeof(uint32_t));
-                    std::copy(encodedBrick[thread_id].begin(), encodedBrick[thread_id].begin() +  encoded_element_count[thread_id],
-                              m_encoding.begin() + old_encoding_size + encoded_element_count_prefix_sum[thread_id]);
-                }
-
-                // update the maximum palette size
-                for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
-                    if (encoded_element_count[thread_id] > 0u && encodedBrick[thread_id][getPaletteSizeHeaderIndex()] > m_max_brick_palette_count) {
-                        m_max_brick_palette_count = encodedBrick[thread_id][getPaletteSizeHeaderIndex()];
-                    }
-                }
-
-                // output a progress update
-                if(verbose) {
-                    bricks_since_last_update += m_cpu_threads;
-                    constexpr const double PROGRESS_UPDATE_INTERVAL = 2.;
-                    if (progressTimer.elapsed() >= PROGRESS_UPDATE_INTERVAL) {
-                        float bricks_per_second = static_cast<float>(bricks_since_last_update) / progressTimer.elapsed();
-                        uint32_t last_brick_index = pos2idx(glm::uvec3(glm::min(brick.x + m_cpu_threads - 1, brickCount.x - 1u), brick.y, brick.z), brickCount);
-                        float remaining_seconds = static_cast<float>(brickCount.x * brickCount.y * brickCount.z - last_brick_index) / bricks_per_second;
-                        std::stringstream stream;
-                        stream << " Progress " << std::fixed << std::setprecision(1) << static_cast<float>(last_brick_index) / static_cast<float>(brickCount.x * brickCount.y * brickCount.z) * 100.f << "%"
-                               << " (" << std::setprecision(2) << (bricks_per_second * m_brick_size * m_brick_size * m_brick_size / 1000000.f)
-                               << " million voxels/second), remaining: " << static_cast<int>(remaining_seconds / 60.f) << "m" << (static_cast<int>(remaining_seconds) % 60) << "s";
-                        Logger(INFO, true) << stream.str();
-                        progressTimer.restart();
-                        bricks_since_last_update = 0;
-                    }
-                }
-
-                // Our brickStarts-Array stores start positions as indices within the uint32_t encoding array.
-                // If there are more than 2^32 uints in there, we can't store the start position.
-                // We have different ways of handling this:
-                // - add a "fromBrickIdx" and "toBrickIdx" to separate detail and perform the detail separation from time to time while compressing this volume
-                // - use 64bit brick start entries
-                if(m_encoding.size() > UINT32_MAX)
-                    throw std::runtime_error("Compressed Segmentation Volume size exceeds 32 bit address space!");
+        #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(brick_index, brick_index_count, brickCount, volume, encodedBrick, encoded_element_count)
+        {
+            unsigned int thread_id = omp_get_thread_num();
+            encoded_element_count[thread_id] = 0u;
+            if (brick_index + thread_id < brick_index_count) {
+                glm::uvec3 brick = brick_idx2pos(brick_index + thread_id, brickCount);
+                // compress the current brick
+                encoded_element_count[thread_id] = encodeBrick(volume, encodedBrick[thread_id], brick * m_brick_size, m_volume_dim);
             }
         }
+
+        // an exclusive prefix sum of the element counts tells us the local offsets in the encoding buffer.
+        // encoded_element_count_prefix_sum[0] is always 0. We also count how many new elements we need in total.
+        for (int thread_id = 1; thread_id < m_cpu_threads; thread_id++) {
+                encoded_element_count_prefix_sum[thread_id] = encoded_element_count_prefix_sum[thread_id - 1]
+                                                              + encoded_element_count[thread_id - 1];
+        }
+        size_t old_encoding_size = m_encodings.back().size();
+        size_t new_encoding_size = old_encoding_size + encoded_element_count_prefix_sum[m_cpu_threads - 1] + encoded_element_count[m_cpu_threads - 1];
+
+        // check if we have to start splitting the encoding vectors here
+        if(new_encoding_size > m_enc_vector_limit) {
+            // We can not reduce m_brick_idx_to_enc_vector further if it was already used for splitting encoding vectors.
+            // Otherwise, the old split may become invalid.
+            if(m_encodings.size() == 1) {
+                m_brick_idx_to_enc_vector = brick_index;
+                m_encodings.emplace_back();
+                m_encodings.back().reserve(reserved_size);
+                old_encoding_size = 0ul;
+                new_encoding_size = encoded_element_count_prefix_sum[m_cpu_threads - 1] + encoded_element_count[m_cpu_threads - 1];
+            } else {
+                Logger(WARN) << "Brick index to encoding vector mapping is underestimating sizes.";
+            }
+        }
+
+        // append the results
+        m_encodings.back().resize(new_encoding_size);
+        #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(brick_index, brickCount, encoded_element_count, encoded_element_count_prefix_sum, encodedBrick, old_encoding_size)
+        for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
+            if (encoded_element_count[thread_id] == 0u)
+                continue;
+
+            // store the start index of the brick within the encoding array
+            m_brick_starts[brick_index + thread_id] = static_cast<uint32_t>(old_encoding_size + encoded_element_count_prefix_sum[thread_id]);
+            // copy the encoded brick to the current encoding array. std::copy is sometimes slightly faster than memcpy.
+            std::copy(encodedBrick[thread_id].begin(), encodedBrick[thread_id].begin() +  encoded_element_count[thread_id],
+                      m_encodings.back().begin() + old_encoding_size + encoded_element_count_prefix_sum[thread_id]);
+        }
+
+        // The first brick start of an encoding array is zero per default. Instead of zero, we store the total size of
+        // the previous split encoding vector. This way, brick_starts[i + 1] - brick_starts[i] still yields the size of
+        // the encoding of the last brick i in the previous split encoding.
+        // Note that we have to handle the special case of brick_starts[j] = 0 for any brick at the start of a split
+        // vector. An easy check for this case is brick_starts[j] > brick_starts[j+1].
+        if(m_encodings.size() > 1 && old_encoding_size == 0ul) {
+            m_brick_starts[brick_index] = static_cast<uint32_t>(m_encodings[m_encodings.size() - 2].size());
+        }
+
+        // update the maximum palette size
+        for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
+            if (encoded_element_count[thread_id] > 0u && encodedBrick[thread_id][getPaletteSizeHeaderIndex()] > m_max_brick_palette_count) {
+                m_max_brick_palette_count = encodedBrick[thread_id][getPaletteSizeHeaderIndex()];
+            }
+        }
+
+        // output a progress update
+        if(verbose) {
+            bricks_since_last_update += m_cpu_threads;
+            constexpr const double PROGRESS_UPDATE_INTERVAL = 2.;
+            if (progressTimer.elapsed() >= PROGRESS_UPDATE_INTERVAL) {
+                float bricks_per_second = static_cast<float>(bricks_since_last_update / progressTimer.elapsed());
+                uint32_t last_brick_index = glm::min(brick_index + m_cpu_threads - 1, brick_index_count);
+                float remaining_seconds = static_cast<float>(brick_index_count - last_brick_index) / bricks_per_second;
+                std::stringstream stream;
+                stream << " Progress " << std::fixed << std::setprecision(1) << static_cast<float>(last_brick_index) / static_cast<float>(brick_index_count) * 100.f << "%"
+                       << " (" << std::setprecision(2) << (bricks_per_second * static_cast<float>(m_brick_size * m_brick_size * m_brick_size) / 1000000.f)
+                       << " million voxels/second), remaining: " << static_cast<int>(remaining_seconds / 60.f) << "m" << (static_cast<int>(remaining_seconds) % 60) << "s";
+                Logger(INFO, true) << stream.str();
+                progressTimer.restart();
+                bricks_since_last_update = 0;
+            }
+        }
+
+        // Our brickStarts-Array stores start positions as indices within the uint32_t encoding array.
+        // If there are more than 2^32 uints in there, we can't store the start position.
+        // Set a lower m_enc_vector_limit value to split the encoding into more, smaller arrays.
+        if(m_encodings.back().size() > UINT32_MAX)
+            throw std::runtime_error("Compressed Segmentation Volume size exceeds 32 bit address space!");
     }
 
     // one last dummy entry to be able to query an "end" index for the last brick
-    m_brick_starts[brickCount.x * brickCount.y * brickCount.z] = static_cast<uint32_t>(m_encoding.size());
+    m_brick_starts[brick_index_count] = static_cast<uint32_t>(m_encodings.back().size());
 
-    float total_seconds = totalTimer.elapsed();
-    m_last_total_encoding_seconds = total_seconds;
-    Logger(INFO) << " Progress 100% in " << std::fixed << std::setprecision(3) << total_seconds << "s (" << (static_cast<float>(volume.size()) / total_seconds / 1000000.f) << " million voxels/second) " << decodingInfoString();
+    m_last_total_encoding_seconds = static_cast<float>(totalTimer.elapsed());
+    Logger(INFO) << " Progress 100% in " << std::fixed << std::setprecision(3) << m_last_total_encoding_seconds << "s (" << (static_cast<float>(volume.size()) / m_last_total_encoding_seconds / 1000000.f) << " million voxels/second) " << decodingInfoString();
 }
 
 //#define NO_BRICK_DECODE_INDEX_REMAP
@@ -708,7 +734,7 @@ void CompressedSegmentationVolume::decompressLOD(int target_lod, std::vector<uin
         brick_pos.z = z; // we need that for omp...
         for (brick_pos.y = 0; brick_pos.y < brickCount.y; brick_pos.y++) {
             for (brick_pos.x = 0; brick_pos.x < brickCount.x; brick_pos.x++) {
-                size_t brick_idx = brick_to_1D(brick_pos, brickCount);
+                size_t brick_idx = brick_pos2idx(brick_pos, brickCount);
 #ifndef NO_BRICK_DECODE_INDEX_REMAP
                 // decode brick
                 decodeBrick(brick_idx, brick_cache[thread_id].data(), glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u), glm::uvec3(m_brick_size)), inv_lod);
@@ -716,7 +742,7 @@ void CompressedSegmentationVolume::decompressLOD(int target_lod, std::vector<uin
                 for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i++) {
                     glm::uvec3 out_pos = brick_pos * m_brick_size + enumBrickPos(i, m_brick_size);
                     if (glm::all(glm::lessThan(out_pos, m_volume_dim))) {
-                        out[pos2idx(out_pos, m_volume_dim)] = brick_cache[thread_id][i];
+                        out[voxel_pos2idx(out_pos, m_volume_dim)] = brick_cache[thread_id][i];
                     }
                 }
 #else
@@ -729,7 +755,7 @@ void CompressedSegmentationVolume::decompressLOD(int target_lod, std::vector<uin
 
 void CompressedSegmentationVolume::decompressBrickTo(uint32_t* out, glm::uvec3 brick_pos, int inverse_lod, uint32_t* out_encoding_debug, std::vector<glm::uvec4>* out_palette_debug) const {
     const glm::uvec3 brickCount = getBrickCount();
-    size_t brick_idx = brick_to_1D(brick_pos, brickCount);
+    size_t brick_idx = brick_pos2idx(brick_pos, brickCount);
     // decode brick
     if(out_encoding_debug) {
         // parallel decode is not supporting the output encoding
@@ -798,15 +824,16 @@ bool CompressedSegmentationVolume::testLOD(const std::vector<uint32_t> &volume, 
                                 if(glm::any(glm::greaterThanEqual(brick * m_brick_size + pos_in_brick * width, volume_dim)))
                                     continue;
 
-                                uint32_t i = pos2idx(brick * m_brick_size + pos_in_brick * width, volume_dim);
-                                uint32_t expected_value = multigrid[multigrid_lod_start + pos2idx(pos_in_brick, glm::uvec3(m_brick_size/width))].label;
+                                uint32_t i = voxel_pos2idx(brick * m_brick_size + pos_in_brick * width, volume_dim);
+                                uint32_t expected_value = multigrid[multigrid_lod_start +
+                                        voxel_pos2idx(pos_in_brick, glm::uvec3(m_brick_size / width))].label;
 
                                 if (expected_value != out[i]) {
                                     #pragma omp critical
                                     {
                                         error_count++;
                                         if (error_count <= max_error_lines)
-                                            Logger(ERROR) << "error at " << str(idx2pos(i, volume_dim)) << " in " << volume[i] << " != out " << out[i] << " multigrid lod start " << multigrid_lod_start;
+                                            Logger(ERROR) << "error at " << str(voxel_idx2pos(i, volume_dim)) << " in " << volume[i] << " != out " << out[i] << " multigrid lod start " << multigrid_lod_start;
                                         else if (error_count == max_error_lines + 1)
                                             Logger(ERROR) << "[...] skipping additional errors";
                                     }
@@ -838,7 +865,7 @@ bool CompressedSegmentationVolume::testLOD(const std::vector<uint32_t> &volume, 
 }
 
 void CompressedSegmentationVolume::exportToFile(const std::string &path, bool verbose) {
-    if (m_brick_starts.empty() || m_encoding.empty()) {
+    if (m_brick_starts.empty() || m_encodings.empty()) {
         Logger(ERROR) << "Compression was not yet computed. Call compress(..) first. Skipping.";
         return;
     }
@@ -989,10 +1016,11 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     if(verbose && !fin.eof())
         Logger(WARN) << "Unexpected end of file during Compressed Segmentation Volume import!";
     fin.close();
-    glm::uvec3 brickCount = getBrickCount();
     if(verbose)
-        Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim) << " voxels and " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z)
-                      << " bricks for brick size " << m_brick_size << "^3" << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
+        Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim)
+        << " voxels and " << str(getBrickCount()) << " = " << getBrickIndexCount()
+                      << " bricks for brick size " << m_brick_size << "^3"
+                      << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
 
     if(verify) {
         Logger(DEBUG, true) << "verifying..";
@@ -1063,21 +1091,24 @@ void CompressedSegmentationVolume::freqEncodeBrick(const std::vector<uint32_t>& 
                 // if this subtree is already filled (because in a previous LOD we set a PARENT_STOP for this area), the last element of this block is set and we can skip it
                 // note that this will also happen if this LOD block lies completely outside the volume because some parent would've been set to PARENT_STOP earlier
                 // our parent spanned 8 elements of this finer current level, so we need to look at the element 7 indices further
-                if (multigrid[parent_multigrid_lod_start + pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].constant_subregion) { //tmpBrick[i + (lod_width * lod_width * lod_width * 7)] != INVALID) {
+                if (multigrid[parent_multigrid_lod_start +
+                        voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].constant_subregion) { //tmpBrick[i + (lod_width * lod_width * lod_width * 7)] != INVALID) {
                     i += (lod_width * lod_width * lod_width * 7);
                     continue;
                 }
-                parent_value = multigrid[parent_multigrid_lod_start + pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].label; //tmpBrick[i];
+                parent_value = multigrid[parent_multigrid_lod_start +
+                        voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].label; //tmpBrick[i];
                 assert(parent_value != INVALID && "parent element in brick was not set in previous LOD!");
             }
 
-            value = multigrid[muligrid_lod_start + pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].label;
+            value = multigrid[muligrid_lod_start + voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].label;
             assert(value != INVALID && "Original volume mustn't contain the INVALID magic value!");
 
             uint32_t operation = 0u;
             // if the whole subtree from here has this parent_value, we can set a stop sign and fill the whole brick area of the subtree
             // note that grid nodes outside the volume are by definition also homogeneous
-            if (lod_width >= 1 && multigrid[muligrid_lod_start + pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].constant_subregion) { //lod_width > 1 && isHomogeneousBrick(volume, volume_dim, volume_pos, {lod_width, lod_width, lod_width})) {
+            if (lod_width >= 1 && multigrid[muligrid_lod_start +
+                    voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].constant_subregion) { //lod_width > 1 && isHomogeneousBrick(volume, volume_dim, volume_pos, {lod_width, lod_width, lod_width})) {
                 operation = STOP_BIT;
             }
             // determine operation for the next entry
@@ -1127,7 +1158,7 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
     glm::uvec3 brickCount = getBrickCount();
     if(verbose) {
         Logger(INFO) << " running with " << m_cpu_threads << " threads on " << std::thread::hardware_concurrency() << " CPU cores";
-        Logger(INFO) << " brick count: " << str(brickCount) << " = " << (brickCount.x * brickCount.y * brickCount.z) << " with brick size " << m_brick_size << "^3";
+        Logger(INFO) << " brick count: " << str(brickCount) << " = " << getBrickIndexCount() << " with brick size " << m_brick_size << "^3";
     }
 
     Logger(INFO, true) << " Prepass Progress 0.0%";
@@ -1167,7 +1198,7 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
                 if (progressTimer.elapsed() >= PROGRESS_UPDATE_INTERVAL) {
                     float bricks_per_second = static_cast<float>(bricks_since_last_update / progressTimer.elapsed());
                     std::stringstream stream;
-                    stream << " Prepass Progress " << std::fixed << std::setprecision(1) << static_cast<float>(brick_idx) / static_cast<float>(brickCount.x * brickCount.y * brickCount.z / subsampling_factor / subsampling_factor / subsampling_factor) * 100.f << "%"
+                    stream << " Prepass Progress " << std::fixed << std::setprecision(1) << static_cast<float>(brick_idx) / static_cast<float>(getBrickIndexCount()/ subsampling_factor / subsampling_factor / subsampling_factor) * 100.f << "%"
                            << " (" << std::setprecision(2) << (bricks_per_second * m_brick_size * m_brick_size * m_brick_size / 1000000.f)
                            << " million voxels/second)";
                     Logger(INFO, true) << stream.str();

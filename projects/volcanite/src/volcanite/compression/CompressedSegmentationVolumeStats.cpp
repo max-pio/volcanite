@@ -14,7 +14,7 @@ namespace vvv {
             throw std::runtime_error("Segmentation volume is not yet compressed!");
 
         std::stringstream ss;
-        uint32_t start = m_brick_starts[brick_to_1D(brick, getBrickCount())];
+        uint32_t start = m_brick_starts[brick_pos2idx(brick, getBrickCount())];
         uint32_t p = start;
         ss << "Brick " << str(brick) << " " << getLodCountPerBrick() << "xLoD [Header @" << p << "] LoD Starts: ";
         if(isUsingSeparateDetail()) {
@@ -34,7 +34,7 @@ namespace vvv {
             for(int i = 0; i < std::min(8u, m_encoding[start + getLodCountPerBrick() - 2]); i++) {
                 ss << m_encoding[p++] << ",";
             }
-            start =  m_detail_starts[brick_to_1D(brick, getBrickCount())];
+            start =  m_detail_starts[brick_pos2idx(brick, getBrickCount())];
             p = start;
             ss << ".. [Detail @" << p << "] ";
             for(int i = 0; i < std::min(8u, m_detail_encoding[start]); i++) {
@@ -373,7 +373,7 @@ namespace vvv {
             brick_pos.z = z; // we need that for omp...
             for (brick_pos.y = 0; brick_pos.y < brickCount.y; brick_pos.y++) {
                 for (brick_pos.x = 0; brick_pos.x < brickCount.x; brick_pos.x++) {
-                    size_t brick_idx = brick_to_1D(brick_pos, brickCount);
+                    size_t brick_idx = brick_pos2idx(brick_pos, brickCount);
                     // decode brick
                     getBrickStatistics(statistics[brick_idx], brick_idx, glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u), glm::uvec3(m_brick_size)));
                     // add some extra values to statistics
