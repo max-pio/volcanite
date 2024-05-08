@@ -88,6 +88,7 @@ public:
                             }
                         }
                         // find most frequent label in child elements and check if they're constant
+                        // ToDo: could be sped up with https://towardsdatascience.com/countless-3d-vectorized-2x-downsampling-of-labeled-volume-images-using-python-and-numpy-59d686c2f75
                         uint32_t max_ocurrences = 0u;
                         uint32_t max_label = 0xFFFFFFFF;
                         bool constant = true;
