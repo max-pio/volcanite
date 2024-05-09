@@ -38,7 +38,7 @@ int csgv_brick_viewer(int argc, char *argv[]) {
     // Perform the encoding
     // we try to load a previously exported Compressed Segmentation Volume for this file if possible, and export the compression otherwise
     // @ToDo does this have to have rANS mode set to NO_RANS?
-    if(!compression->importFromFile(CompressedSegmentationVolume::getCSGVFileName(path, brick_dim, vvv::CompressedSegmentationVolume::NO_RANS, false))) {
+    if(!compression->importFromFile(CompressedSegmentationVolume::getCSGVFileName(path, brick_dim, vvv::NO_RANS, false))) {
         Logger(ERROR) << "Compressed Segmentation Volume file does not yet exist!";
         return 0;
     }

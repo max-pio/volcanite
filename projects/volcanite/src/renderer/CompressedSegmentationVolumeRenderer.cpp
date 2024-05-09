@@ -29,8 +29,11 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         // wait until all previous frames are processed
         getCtx()->getDevice().waitIdle();
 
-        assert(!m_compressed_segmentation_volume->getBrickStarts()->empty() && !m_compressed_segmentation_volume->getEncoding()->empty() && "CompressedSegmentationVolume not initialized!");
-        auto [encoding_upload_finished, _encoding_staging_buffer] = m_encoding_buffer->uploadWithStagingBuffer(*(m_compressed_segmentation_volume->getEncoding()), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        assert(!m_compressed_segmentation_volume->getBrickStarts()->empty() && !m_compressed_segmentation_volume->getEncodings()->empty() && "CompressedSegmentationVolume not initialized!");
+        // ToDo: adapt renderer for split encodings
+        if(m_compressed_segmentation_volume->getEncodings()->size() != 1)
+            throw std::runtime_error("CompressedSegmentationVolume must not contain split encodings.");
+        auto [encoding_upload_finished, _encoding_staging_buffer] = m_encoding_buffer->uploadWithStagingBuffer(*(m_compressed_segmentation_volume->getEncodingBuffer(0)), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
         auto [brickstarts_upload_finished, _brickstarts_staging_buffer] = m_brick_starts_buffer->uploadWithStagingBuffer(*(m_compressed_segmentation_volume->getBrickStarts()),  {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
 
         awaitBeforeExecution.push_back(encoding_upload_finished);
@@ -307,7 +310,9 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     if(m_compressed_segmentation_volume) {
         auto brick_count = m_compressed_segmentation_volume->getBrickCount();
         bricks_in_volume = brick_count.x * brick_count.y * brick_count.z;
-        encoding_byte_size = m_compressed_segmentation_volume->getEncoding()->size() * sizeof(uint32_t);
+        // ToDo: adapt renderer for split encodings
+        for(const auto& split_encoding : *m_compressed_segmentation_volume->getEncodings())
+            encoding_byte_size += split_encoding.size() * sizeof(uint32_t);
         lods_in_volume = m_compressed_segmentation_volume->getLodCountPerBrick();
 
         if(m_compressed_segmentation_volume->isUsingSeparateDetail() && !m_compressed_segmentation_volume->isUsingDetailFreq())

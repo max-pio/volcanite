@@ -19,8 +19,10 @@ RendererOutput CompressedSegmentationVolumeBrickViewer::renderNextFrame(Awaitabl
         // wait until all previous frames are processed
         getCtx()->getDevice().waitIdle();
 
-        assert(!m_compressed_segmentation_volume->getBrickStarts()->empty() && !m_compressed_segmentation_volume->getEncoding()->empty() && "CompressedSegmentationVolume not initialized!");
-        m_encoding_buffer->upload(*(m_compressed_segmentation_volume->getEncoding()));
+        assert(!m_compressed_segmentation_volume->getBrickStarts()->empty() && !m_compressed_segmentation_volume->getEncodings()->empty() && "CompressedSegmentationVolume not initialized!");
+        if(m_compressed_segmentation_volume->getEncodings()->size() != 1)
+            throw std::runtime_error("CompressedSegmentationVolume must not contain split encodings for Volume Brick Viewer.");
+        m_encoding_buffer->upload(*(m_compressed_segmentation_volume->getEncodingBuffer(0)));
         m_brick_starts_buffer->upload(*(m_compressed_segmentation_volume->getBrickStarts()));
 
         // wait until everything is uploaded
@@ -28,7 +30,7 @@ RendererOutput CompressedSegmentationVolumeBrickViewer::renderNextFrame(Awaitabl
         m_data_changed = false;
     }
     // decompress all LODs of the given brick and add
-    if(!m_compressed_segmentation_volume->getEncoding()->empty() && glm::any(glm::notEqual(m_current_decoded_brick, m_brick_id))) {
+    if(!m_compressed_segmentation_volume->getEncodings()->empty() && glm::any(glm::notEqual(m_current_decoded_brick, m_brick_id))) {
         uint32_t brick_size = m_compressed_segmentation_volume->getBrickSize();
         int lod_count = static_cast<int>(log2(brick_size) + 1);
         std::vector<uint32_t> tmp(2 * lod_count * brick_size * brick_size * brick_size, 0xFFFFFFFF);

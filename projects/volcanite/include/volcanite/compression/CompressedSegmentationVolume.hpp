@@ -460,8 +460,8 @@ public:
             ss << "\n-------------\nSplit encoding buffers (" << m_encodings.size() << "):";
             uint32_t brick_index_count = getBrickCount().x * getBrickCount().y * getBrickCount().z;
             for (int i = 0; i < m_encodings.size(); i++) {
-                ss << "\n  " << static_cast<double>(m_encodings[i].size() * sizeof(uint32_t)) / 1000. / 1000. << "MB bricks [";
-                ss << (m_enc_vector_limit * i) << " - " << std::min(m_enc_vector_limit * (i+1), brick_index_count) << "]";
+                ss << "\n  " << static_cast<double>(m_encodings[i].size() * sizeof(uint32_t)) / 1000. / 1000. << "MB, bricks [";
+                ss << (m_brick_idx_to_enc_vector * i) << " - " << std::min(m_brick_idx_to_enc_vector * (i+1), brick_index_count) << "]";
             }
         }
         return ss.str();
@@ -556,8 +556,8 @@ private:
     uint32_t m_brick_size;                          /// brick size of each dimension in voxels, must be power of 2
     glm::uvec3 m_volume_dim;                        /// xyz dimensions of the original volume in voxels
     std::vector<std::vector<uint32_t>> m_encodings; /// contains all encodings for all bricks split up by brick id into several vectors
-    const uint32_t m_enc_vector_limit = 536870912u; /// targeted max. number of uint32 elements per encoding vector
-    uint32_t m_brick_idx_to_enc_vector = ~0u;       /// dividing 1D brick idx by this value maps to split encoding vector index
+    const uint32_t m_enc_vector_limit = 28000u;//536870912u; /// targeted max. number of uint32 elements per encoding vector (536870912u -> 2 GB)
+    uint32_t m_brick_idx_to_enc_vector = ~0u;       /// dividing 1D brick idx by this value maps to split encoding vector index. Must be a multiple of m_cpu_threads.
     std::vector<uint32_t> m_brick_starts;           /// points to indices in m_encoding
     std::vector<uint32_t> m_detail_encoding;        /// contains the finest LoDs of all bricks if detail separation is enabled
     std::vector<uint32_t> m_detail_starts;          /// points to indices m_detail_encoding
