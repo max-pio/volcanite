@@ -333,8 +333,6 @@ float CompressedSegmentationVolume::separateDetail() {
 }
 
 bool CompressedSegmentationVolume::verifyCompression() const {
-    throw std::runtime_error("method not yet adapted for split encodings");
-
     if(m_encodings.empty())
         throw std::runtime_error("Segmentation volume is not yet compressed!");
 
@@ -356,23 +354,22 @@ bool CompressedSegmentationVolume::verifyCompression() const {
                 glm::uvec3 brick(x, y, z);
                 std::stringstream error = {};
                 uint32_t brick1D = brick_pos2idx(brick, getBrickCount());
-                uint32_t start = getBrickStart(brick1D);
 
                 // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
-                long encoding_length = getBrickEncodingLength(brick1D);
-                if(encoding_length < header_size + 1u + 1u)
-                    error << " brick encoding is shorter than minimum (header size + 1 encoding + 1 palette)=" << (header_size+2) <<" but is " << encoding_length << "\n";
+                uint32_t brick_encoding_length = getBrickEncodingLength(brick1D);
+                if(brick_encoding_length < header_size + 1u + 1u)
+                    error << " brick encoding is shorter than minimum (header size + 1 encoding + 1 palette)=" << (header_size+2) <<" but is " << brick_encoding_length << "\n";
 
                 // check first header entry being header_size * 8
-                const uint32_t* brick_encoding = getEncodingBuffer(brick1D)->data();
-                if(brick_encoding[start] != header_size * 8u)
-                    error << "  first encoding starts 4bit must be header*8=" << (header_size * 8u) << " but is "  << brick_encoding[start] << "\n";
+                const uint32_t* brick_encoding = getBrickEncoding(brick1D);
+                if(brick_encoding[0] != header_size * 8u)
+                    error << "  first encoding starts 4bit must be header*8=" << (header_size * 8u) << " but is "  << brick_encoding[0] << "\n";
 
                 // check encoding starts being in ascending order
                 // note: the header count the number of entries, except the last entry when using double table rANS
                 // for which this entry refers to the raw 4 bit index at which the detail encoding starts AFTER packing the earlier LoDs
                 for(int l = 1; l < header_start_lods - (isUsingDetailFreq() ? 1 : 0); l++) {
-                    long distance = static_cast<long>(brick_encoding[start + l]) - static_cast<long>(brick_encoding[start + l - 1]);
+                    long distance = static_cast<long>(brick_encoding[l]) - static_cast<long>(brick_encoding[l - 1]);
                     if(distance < 0l) {
                         error << "  encoding starts are not in ascending order (distance " << distance << " for LoD " << l << ")\n";
                         break;
@@ -384,27 +381,27 @@ bool CompressedSegmentationVolume::verifyCompression() const {
                 }
 
                 // check palette start of first LoD being 0 and second LoD being 1
-                if(brick_encoding[start + header_start_lods] != 0u)
-                    error << "  first palette start must be 0 but is " << brick_encoding[start + header_start_lods];
-                if(brick_encoding[start + header_start_lods + 1u] != 1u)
-                    error << "  second palette start must be 1 but is " << brick_encoding[start + header_start_lods + 1u];
+                if(brick_encoding[header_start_lods] != 0u)
+                    error << "  first palette start must be 0 but is " << brick_encoding[header_start_lods];
+                if(brick_encoding[header_start_lods + 1u] != 1u)
+                    error << "  second palette start must be 1 but is " << brick_encoding[header_start_lods + 1u];
 
                 // check palette starts being in ascending order
                 for(int l = 2u; l <= lod_count + 1; l++) {
-                    if(brick_encoding[start + header_start_lods + l] < brick_encoding[start + header_start_lods + l - 1]) {
+                    if(brick_encoding[header_start_lods + l] < brick_encoding[header_start_lods + l - 1]) {
                         error << "  palette starts are not in ascending order\n";
                         break;
                     }
                 }
 
-                uint32_t palette_size = brick_encoding[start + getPaletteSizeHeaderIndex()];
+                uint32_t palette_size = brick_encoding[getPaletteSizeHeaderIndex()];
                 // check palette size not being zero
                 if(palette_size == 0u) {
                     error << "  palette size is zero\n";
                 }
 
                 // check palette size + encoding start of last LoD being shorter than the brick encoding
-                if(palette_size + brick_encoding[start + header_start_lods]/8u > encoding_length) {
+                if(palette_size + brick_encoding[header_start_lods]/8u > brick_encoding_length) {
                     error << "  palette size and encoding of first (L-1) levels are longer than the total brick encoding\n";
                 }
 
@@ -876,180 +873,194 @@ bool CompressedSegmentationVolume::testLOD(const std::vector<uint32_t> &volume, 
 }
 
 void CompressedSegmentationVolume::exportToFile(const std::string &path, bool verbose) {
-    return;
-    throw std::runtime_error("method not yet adapted for split encodings");
+    if (m_encodings.empty()) {
+        Logger(ERROR) << "Compression was not yet computed. Call compress(..) first. Skipping.";
+        return;
+    }
+    if (std::filesystem::exists(path)) {
+        Logger(WARN) << "File " << path << " already exist. Skipping.";
+        return;
+    }
+    try {
+        // ToDo: if the path is only one file in root it has no parent_path() which causes an invalid argument
+        std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    } catch(const std::filesystem::filesystem_error& e) {
+        throw std::runtime_error("Filesystem error: could not create parent directories for path " + std::filesystem::path(path).string());
+    }
+    std::ofstream file(path, std::ios_base::out | std::ios::binary);
+    if (!file.is_open()) {
+        Logger(ERROR) << "Unable to open export file " << path << ". Skipping.";
+        return;
+    }
 
-//    if (m_brick_starts.empty() || m_encodings.empty()) {
-//        Logger(ERROR) << "Compression was not yet computed. Call compress(..) first. Skipping.";
-//        return;
-//    }
-//    if (std::filesystem::exists(path)) {
-//        Logger(WARN) << "File " << path << " already exist. Skipping.";
-//        return;
-//    }
-//    try {
-//        // ToDo: if the path is only one file in root it has no parent_path() which causes an invalid argument
-//        std::filesystem::create_directories(std::filesystem::path(path).parent_path());
-//    } catch(const std::filesystem::filesystem_error& e) {
-//        throw std::runtime_error("Filesystem error: could not create parent directories for path " + std::filesystem::path(path).string());
-//    }
-//    std::ofstream file(path, std::ios_base::out | std::ios::binary);
-//    if (!file.is_open()) {
-//        Logger(ERROR) << "Unable to open export file " << path << ". Skipping.";
-//        return;
-//    }
-//
-//    // write header: 8 chars CMPSGVOL + 4 chars version number
-//    const char *magic_header = "CMPSGVOL";
-//    const char *version = "0012";
-//    /* VERSION HISTORY
-//     * 0001: initial version
-//     * 0002: adds booleans if RLE and rANS are used, as well as frequency tables for rANS
-//     * 0003: allows separating the detail buffer
-//     * 0004: remove RLE flag
-//     * 0010: paper release version
-//     * 0011: use rANS_mode instead of use_rANS, allow detail separation only with DOUBLE_TABLE_RANS
-//     * 0012: store max. brick palette size
-//     */
-//    file.write(magic_header, 8);
-//    file.write(version, 4);
-//    // write general info
-//    file.write(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
-//    file.write(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
-//    file.write(reinterpret_cast<char *>(&m_rANS_mode), sizeof(RANSMode)); // since 0011
-//    file.write(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t)); // since 012
-//    if(m_rANS_mode != NO_RANS) {  // since 0002
-//        auto freq_table = m_rans.getFrequencyArray();
-//        for(int i = 0; i < 16; i++)
-//            file.write(reinterpret_cast<char *>(&freq_table[i]), sizeof(uint32_t));
-//    }
-//    if(m_rANS_mode == DOUBLE_TABLE_RANS) {
-//        auto freq_table = m_detail_rans.getFrequencyArray();
-//        for(int i = 0; i < 16; i++)
-//            file.write(reinterpret_cast<char *>(&freq_table[i]), sizeof(uint32_t));
-//    }
-//    // write brick starts buffer and encoding
-//    size_t size = m_brick_starts.size();
-//    file.write(reinterpret_cast<char *>(&size), sizeof(size_t));
-//    file.write(reinterpret_cast<char *>(&m_brick_starts[0]), static_cast<long>(size * sizeof(m_brick_starts[0])));
-//    size = m_encoding.size();
-//    file.write(reinterpret_cast<char *>(&size), sizeof(size_t));
-//    file.write(reinterpret_cast<char *>(&m_encoding[0]), static_cast<long>(size * sizeof(m_encoding[0])));
-//    file.write(reinterpret_cast<char *>(&m_separate_detail), sizeof(bool)); // since 0003
-//    if(m_separate_detail) { // since 0003
-//        size = m_detail_starts.size(); // same as brickstarts
-//        file.write(reinterpret_cast<char *>(&size), sizeof(size_t));
-//        file.write(reinterpret_cast<char *>(&m_detail_starts[0]), static_cast<long>(size * sizeof(m_detail_starts[0])));
-//        size = m_detail_encoding.size();
-//        file.write(reinterpret_cast<char *>(&size), sizeof(size_t));
-//        file.write(reinterpret_cast<char *>(&m_detail_encoding[0]), static_cast<long>(size * sizeof(m_detail_encoding[0])));
-//    }
-//    file.close();
-//    if(verbose)
-//        Logger(DEBUG) << "Exported Compressed Segmentation Volume to " << path;
+    // write header: 8 chars CMPSGVOL + 4 chars version number
+    const char *magic_header = "CMPSGVOL";
+    const char *version = "0013";
+    /* VERSION HISTORY
+     * 0001: initial version
+     * 0002: adds booleans if RLE and rANS are used, as well as frequency tables for rANS
+     * 0003: allows separating the detail buffer
+     * 0004: remove RLE flag
+     * 0010: paper release version
+     * 0011: use rANS_mode instead of use_rANS, allow detail separation only with DOUBLE_TABLE_RANS
+     * 0012: store max. brick palette size
+     * 0013: split encoding buffers
+     */
+    file.write(magic_header, 8);
+    file.write(version, 4);
+    // write general info
+    file.write(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
+    file.write(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
+    file.write(reinterpret_cast<char *>(&m_rANS_mode), sizeof(RANSMode)); // since 0011
+    file.write(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t)); // since 012
+    if(m_rANS_mode != NO_RANS) {  // since 0002
+        auto freq_table = m_rans.getFrequencyArray();
+        for(int i = 0; i < 16; i++)
+            file.write(reinterpret_cast<char *>(&freq_table[i]), sizeof(uint32_t));
+    }
+    if(m_rANS_mode == DOUBLE_TABLE_RANS) {
+        auto freq_table = m_detail_rans.getFrequencyArray();
+        for(int i = 0; i < 16; i++)
+            file.write(reinterpret_cast<char *>(&freq_table[i]), sizeof(uint32_t));
+    }
+    // write brick starts buffer
+    size_t size = m_brick_starts.size();
+    file.write(reinterpret_cast<char *>(&size), sizeof(size_t));
+    file.write(reinterpret_cast<char *>(&m_brick_starts[0]), static_cast<long>(size * sizeof(m_brick_starts[0])));
+    // write number of split encoding buffers, all split encodings, and index to split array mapping
+    size = m_encodings.size();
+    file.write(reinterpret_cast<char *>(&size), sizeof(size_t));  // since 0013
+    for(const auto& enc : m_encodings) {  // since 0013
+        size = enc.size();
+        file.write(reinterpret_cast<char *>(&size), sizeof(size_t));
+        file.write(reinterpret_cast<const char *>(&enc[0]), static_cast<long>(size * sizeof(enc[0])));
+    }
+    file.write(reinterpret_cast<char *>(&m_brick_idx_to_enc_vector), sizeof(uint32_t)); // since 0013
+    file.write(reinterpret_cast<char *>(&m_separate_detail), sizeof(bool)); // since 0003
+    if(m_separate_detail) { // since 0003
+        size = m_detail_starts.size(); // same as brickstarts
+        file.write(reinterpret_cast<char *>(&size), sizeof(size_t));
+        file.write(reinterpret_cast<char *>(&m_detail_starts[0]), static_cast<long>(size * sizeof(m_detail_starts[0])));
+        size = m_detail_encoding.size();
+        file.write(reinterpret_cast<char *>(&size), sizeof(size_t));
+        file.write(reinterpret_cast<char *>(&m_detail_encoding[0]), static_cast<long>(size * sizeof(m_detail_encoding[0])));
+    }
+    file.close();
+    if(verbose)
+        Logger(DEBUG) << "Exported Compressed Segmentation Volume to " << path;
 }
 
 bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool verbose, bool verify) {
-    throw std::runtime_error("method not yet adapted for split encodings");
+    std::ifstream fin(path, std::ios::in | std::ios::binary);
+    if (!fin.is_open()) {
+        if(verbose)
+            Logger(ERROR) << "Unable to open import file " << path << ". Skipping.";
+        return false;
+    }
 
-//    std::ifstream fin(path, std::ios::in | std::ios::binary);
-//    if (!fin.is_open()) {
-//        if(verbose)
-//            Logger(ERROR) << "Unable to open import file " << path << ". Skipping.";
-//        return false;
-//    }
-//
-//    clear();
-//
-//    // check header and version
-//    char magic_header[9];
-//    char _version[5];
-//    fin.read(reinterpret_cast<char *>(magic_header), 8);
-//    magic_header[8] = '\0';
-//    if (std::string(magic_header) != "CMPSGVOL") {
-//        Logger(ERROR) << "File " << path << " is not a Compressed Segmentation Volume export. Missing header CMPSGVOL (is " << magic_header << "). Skipping.";
-//        return false;
-//    }
-//    fin.read(reinterpret_cast<char *>(_version), 4);
-//    _version[4] = '\0';
-//    int _numeric_version = std::stoi(std::string(_version));
-//
-//    // backwards compatibility code:
-//    if (std::string(_version) == "0011") {
-//        Logger(WARN) << "Reading deprecated csgv file version " << _version << ". May lead to reduced rendering performance.";
-//        // set max palette size to the theoretical maximum
-//        m_max_brick_palette_count = ~0u;
-//    }
-//    else if (std::string(_version) != "0012") {
-//        Logger(ERROR) << "Import does not support version " << _version << " of Compressed Segmentation Volume file " << path << ". Skipping.";
-//        return false;
-//    }
-//
-//    // read the general data set info
-//    fin.read(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
-//    fin.read(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
-//    fin.read(reinterpret_cast<char *>(&m_rANS_mode), sizeof(RANSMode));
-//    if (_numeric_version >= 12)
-//        fin.read(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t));
-//    if(m_rANS_mode != NO_RANS) {
-//        uint32_t freq_table[16];
-//        for(int i = 0; i < 16; i++)
-//            fin.read(reinterpret_cast<char *>(&freq_table[i]), sizeof(uint32_t));
-//        m_rans.recomputeFrequencyTables(freq_table);
-//    }
-//    if(m_rANS_mode == DOUBLE_TABLE_RANS) {
-//        uint32_t freq_table[16];
-//        for(int i = 0; i < 16; i++)
-//            fin.read(reinterpret_cast<char *>(&freq_table[i]), sizeof(uint32_t));
-//        m_detail_rans.recomputeFrequencyTables(freq_table);
-//    }
-//    // read the data directly to our members
-//    size_t size;
-//    fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
-//    m_brick_starts.resize(size);
-//    fin.read(reinterpret_cast<char *>(&m_brick_starts[0]), static_cast<long>(size * sizeof(uint32_t)));
-//    fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
-//    m_encoding.resize(size);
-//    fin.read(reinterpret_cast<char *>(&m_encoding[0]), static_cast<long>(size * sizeof(uint32_t)));
-//    fin.read(reinterpret_cast<char *>(&m_separate_detail), sizeof(bool));
-//    if (m_separate_detail) {
-//        fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
-//        m_detail_starts.resize(size);
-//        if(m_detail_starts.size() != m_brick_starts.size())
-//            throw std::runtime_error("error importing file: brickstarts and detailstarts buffers must have equal size");
-//        fin.read(reinterpret_cast<char *>(&m_detail_starts[0]), static_cast<long>(size * sizeof(uint32_t)));
-//        fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
-//        m_detail_encoding.resize(size);
-//        fin.read(reinterpret_cast<char *>(&m_detail_encoding[0]), static_cast<long>(size * sizeof(uint32_t)));
-//    }
-//    else {
-//        m_detail_starts.clear();
-//        m_detail_encoding.clear();
-//    }
-//
-//    char single_byte;
-//    fin.read(&single_byte, 1);
-//    if(verbose && !fin.eof())
-//        Logger(WARN) << "Unexpected end of file during Compressed Segmentation Volume import!";
-//    fin.close();
-//    if(verbose)
-//        Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim)
-//        << " voxels and " << str(getBrickCount()) << " = " << getBrickIndexCount()
-//                      << " bricks for brick size " << m_brick_size << "^3"
-//                      << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
-//
-//    if(verify) {
-//        Logger(DEBUG, true) << "verifying..";
-//        MiniTimer verifyTimer;
-//        if (!verifyCompression()) {
-//            Logger(DEBUG) << "verifying: FAILURE (" << verifyTimer.elapsed() << "s)";
-//            return false;
-//        } else {
-//            Logger(DEBUG) << "verifying: ok (" << verifyTimer.elapsed() << "s)";
-//            return true;
-//        }
-//    }
-//    return true;
+    clear();
+
+    // check header and version
+    char magic_header[9];
+    char _version[5];
+    fin.read(reinterpret_cast<char *>(magic_header), 8);
+    magic_header[8] = '\0';
+    if (std::string(magic_header) != "CMPSGVOL") {
+        Logger(ERROR) << "File " << path << " is not a Compressed Segmentation Volume export. Missing header CMPSGVOL (is " << magic_header << "). Skipping.";
+        return false;
+    }
+    fin.read(reinterpret_cast<char *>(_version), 4);
+    _version[4] = '\0';
+    int _numeric_version = std::stoi(std::string(_version));
+
+    // backwards compatibility code:
+    if (std::string(_version) == "0011") {
+        Logger(WARN) << "Reading deprecated csgv file version " << _version << ". May lead to reduced rendering performance.";
+    } else if (std::string(_version) == "0012" && std::string(_version) != "0013") {
+        Logger(ERROR) << "Import does not support version " << _version << " of Compressed Segmentation Volume file " << path << ". Skipping.";
+        return false;
+    }
+
+    // read the general data set info
+    fin.read(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
+    fin.read(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
+    fin.read(reinterpret_cast<char *>(&m_rANS_mode), sizeof(RANSMode));
+    if (_numeric_version >= 12)
+        fin.read(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t));
+    else
+        m_max_brick_palette_count = ~0u;
+    if(m_rANS_mode != NO_RANS) {
+        uint32_t freq_table[16];
+        for(int i = 0; i < 16; i++)
+            fin.read(reinterpret_cast<char *>(&freq_table[i]), sizeof(uint32_t));
+        m_rans.recomputeFrequencyTables(freq_table);
+    }
+    if(m_rANS_mode == DOUBLE_TABLE_RANS) {
+        uint32_t freq_table[16];
+        for(int i = 0; i < 16; i++)
+            fin.read(reinterpret_cast<char *>(&freq_table[i]), sizeof(uint32_t));
+        m_detail_rans.recomputeFrequencyTables(freq_table);
+    }
+    // read the data directly to our members
+    size_t size;
+    fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
+    m_brick_starts.resize(size);
+    fin.read(reinterpret_cast<char *>(&m_brick_starts[0]), static_cast<long>(size * sizeof(uint32_t)));
+    // read split encoding count
+    if(_numeric_version >= 13)
+        fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
+    else
+        size = 1;
+    m_encodings.resize(size);
+    // read all single split encoding arrays
+    for(int i = 0; i < m_encodings.size(); i++) {
+        fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
+        m_encodings[i].resize(size);
+        fin.read(reinterpret_cast<char *>(&m_encodings[i][0]), static_cast<long>(size * sizeof(uint32_t)));
+    }
+    if(_numeric_version >= 13)
+        fin.read(reinterpret_cast<char *>(&m_brick_idx_to_enc_vector), sizeof(uint32_t));
+    else
+        m_brick_idx_to_enc_vector = ~0u;
+    fin.read(reinterpret_cast<char *>(&m_separate_detail), sizeof(bool));
+    if (m_separate_detail) {
+        fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
+        m_detail_starts.resize(size);
+        if(m_detail_starts.size() != m_brick_starts.size())
+            throw std::runtime_error("error importing file: brickstarts and detailstarts buffers must have equal size");
+        fin.read(reinterpret_cast<char *>(&m_detail_starts[0]), static_cast<long>(size * sizeof(uint32_t)));
+        fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
+        m_detail_encoding.resize(size);
+        fin.read(reinterpret_cast<char *>(&m_detail_encoding[0]), static_cast<long>(size * sizeof(uint32_t)));
+    }
+    else {
+        m_detail_starts.clear();
+        m_detail_encoding.clear();
+    }
+
+    char single_byte;
+    fin.read(&single_byte, 1);
+    if(verbose && !fin.eof())
+        Logger(WARN) << "Unexpected end of file during Compressed Segmentation Volume import!";
+    fin.close();
+    if(verbose)
+        Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim)
+        << " voxels and " << str(getBrickCount()) << " = " << getBrickIndexCount()
+                      << " bricks for brick size " << m_brick_size << "^3"
+                      << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
+
+    if(verify) {
+        Logger(DEBUG, true) << "verifying..";
+        MiniTimer verifyTimer;
+        if (!verifyCompression()) {
+            Logger(DEBUG) << "verifying: FAILURE (" << verifyTimer.elapsed() << "s)";
+            return false;
+        } else {
+            Logger(DEBUG) << "verifying: ok (" << verifyTimer.elapsed() << "s)";
+            return true;
+        }
+    }
+    return true;
 }
 
 
