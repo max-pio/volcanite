@@ -8,36 +8,40 @@ layout(std430, buffer_reference, buffer_reference_align = 4) readonly buffer Enc
 };
 
 layout(std140, set=0, binding=0) uniform segmented_volume_info {
-    uvec3 g_vol_dim;            // xyz dimension of the original volume
-    vec3 g_voxel_size;          // relative size of a single voxel (can be greater than 1 in any dim)
-    ivec3 g_vol_translation;    // translates the volume by the given voxel count
-    vec3 g_physical_vol_dim;    // physical volume size: g_vol_dim * g_voxel_size
-    vec3 g_normalized_volume_size;   // world space size of the volume (usually ~1m^3 with the largest dim being 1)
-    uint g_vol_max_label;       // maximum label in the segmented volume
-    uint g_brick_size;          // power of 2 size along one axis of the bricks
-    uvec3 g_brick_count;        // number of bricks in each xyz dimension for the encoded volume
-    uint g_lod_count;           // number of lod levels per brick
-    uint g_frame;               // current frame of the rendering
+    uvec3 g_vol_dim;                // xyz dimension of the original volume
+    vec3 g_voxel_size;              // relative size of a single voxel (can be greater than 1 in any dim)
+    ivec3 g_vol_translation;        // translates the volume by the given voxel count
+    vec3 g_physical_vol_dim;        // physical volume size: g_vol_dim * g_voxel_size
+    vec3 g_normalized_volume_size;  // world space size of the volume (usually ~1m^3 with the largest dim being 1)
+    uint g_vol_max_label;           // maximum label in the segmented volume
+    uint g_brick_size;              // power of 2 size along one axis of the bricks
+    uvec3 g_brick_count;            // number of bricks in each xyz dimension for the encoded volume
+    uint g_lod_count;               // number of lod levels per brick
+    uint g_frame;                   // current frame of the rendering
 //
     uint g_max_decoding_lod;        // max. inv LOD that we would decode, even if a finer LOD is requested
     uint g_cache_capacity;          // number of 2x2x2 blocks that can be held in cache at the same time
     uint g_free_stack_capacity;     // number of max. stack elements in each LoD of the free_block_stack
     uint g_request_buffer_capacity; // the size of the request buffer
     uint g_detail_buffer_dirty;     // 0 if we can read from the detail buffer, 1 if the detail buffer is dirty
-    uvec2 g_encoding_buffer_address;// we store the 64 bit device addresses as uvec2 for protability and
-    uvec2 g_detail_buffer_address;  //   missing support / bugs in spirv reflect returning a size of 0 for pointers
+    uint g_brick_idx_to_enc_vector; // dividing the brick index by this number yields its encoding vector index
+    uvec2 g_detail_buffer_address;  // ToDo: split detail encodings as well
 };
 
 
 layout(std430, binding = 1) buffer restrict readonly brick_starts
 {
-    uint g_brick_starts[];  // start points of each brick in g_encoding. Ends with dummy entry one after g_encoding
+    uint g_brick_starts[];  // start points of each brick in its resepctive array in g_encoding_buffer_addresses.
 };
 
-layout(std430, binding = 2) buffer restrict readonly encoding
+layout(std430, binding = 2) buffer restrict readonly encoding_buffer_addresses
 {
-    uint g_encoding[];      // encoding of all bricks where each brick contains all its LODs. we use it to check palttes
+// Encoding buffer addresses of all bricks where each brick contains all its LODs, except the finest one if detail
+// separation is enabled. The full palette is always included in the encoding arrays. We store the list of 64 bit device
+// addresses as uvec2 for protability. Dividing a 1D brick index by g_brick_idx_to_enc_vector yields its encoding array.
+    uvec2 g_encoding_buffer_addresses[];
 };
+
 layout(std430, binding = 3) buffer brick_cache_infos
 {
 // for each block 4 entries:

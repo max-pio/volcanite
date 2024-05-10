@@ -97,7 +97,7 @@ void main() {
             assert(!(inv_lod == g_lod_count - 1U && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_id] == g_detail_starts[brick_id+1])), "detail not available but the provision shader told us it is");
     #endif
             resetCSGVBrick(cache_idx * 8u, inv_lod);
-            decompressCSGVBrick(brick_id, g_brick_starts[brick_id+1] - g_brick_starts[brick_id], valid_brick_size, 0u, inv_lod, cache_idx * 8u);
+            decompressCSGVBrick(brick_id, getBrickEncodingLength(brick_id), valid_brick_size, 0u, inv_lod, cache_idx * 8u);
 #else
         fillCSGVBrick(cache_idx * 8u, inv_lod, brick_id + 1337u);
 #endif

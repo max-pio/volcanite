@@ -274,7 +274,7 @@ public:
     }
 
     /** @return the size of the bricks encoding in number of uint32 elements.*/
-    [[nodiscard]] uint32_t getBrickEncodingSize(uint32_t brick_id) const {
+    [[nodiscard]] uint32_t getBrickEncodingLength(uint32_t brick_id) const {
         return getBrickEnd(brick_id) - getBrickStart(brick_id);
     }
     /** @return a pointer ot a continuous uint32 memory region containing this brick's encoding.*/
@@ -320,6 +320,9 @@ public:
         glm::uvec3 brickCount = getBrickCount();
         return brickCount.x * brickCount.y * brickCount.z;
     }
+    /** Dividing any 1D brick index by the constant brickIdxToEncVector value, maps the brick index to its split encoding
+     * array index. */
+    [[nodiscard]] uint32_t getBrickIdxToEncVectorMapping() const { return m_brick_idx_to_enc_vector; }
 
     static inline uint32_t brick_pos2idx(glm::uvec3 brick_pos, glm::uvec3 brick_count) {
         return sfc::Cartesian::p2i(brick_pos, brick_count);
@@ -461,7 +464,7 @@ public:
             uint32_t brick_index_count = getBrickCount().x * getBrickCount().y * getBrickCount().z;
             for (int i = 0; i < m_encodings.size(); i++) {
                 ss << "\n  " << static_cast<double>(m_encodings[i].size() * sizeof(uint32_t)) / 1000. / 1000. << "MB, bricks [";
-                ss << (m_brick_idx_to_enc_vector * i) << " - " << std::min(m_brick_idx_to_enc_vector * (i+1), brick_index_count) << "]";
+                ss << (m_brick_idx_to_enc_vector * i) << " - " << std::min(m_brick_idx_to_enc_vector * (i+1) - 1, brick_index_count) << "]";
             }
         }
         return ss.str();
@@ -556,7 +559,7 @@ private:
     uint32_t m_brick_size;                          /// brick size of each dimension in voxels, must be power of 2
     glm::uvec3 m_volume_dim;                        /// xyz dimensions of the original volume in voxels
     std::vector<std::vector<uint32_t>> m_encodings; /// contains all encodings for all bricks split up by brick id into several vectors
-    const uint32_t m_enc_vector_limit = 28000u;//536870912u; /// targeted max. number of uint32 elements per encoding vector (536870912u -> 2 GB)
+    const uint32_t m_enc_vector_limit = 28000u; /// targeted max. number of uint32 elements per encoding vector (536870912u -> 2 GB)
     uint32_t m_brick_idx_to_enc_vector = ~0u;       /// dividing 1D brick idx by this value maps to split encoding vector index. Must be a multiple of m_cpu_threads.
     std::vector<uint32_t> m_brick_starts;           /// points to indices in m_encoding
     std::vector<uint32_t> m_detail_encoding;        /// contains the finest LoDs of all bricks if detail separation is enabled

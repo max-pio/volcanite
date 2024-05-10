@@ -359,7 +359,7 @@ bool CompressedSegmentationVolume::verifyCompression() const {
                 uint32_t start = getBrickStart(brick1D);
 
                 // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
-                long encoding_length = getBrickEncodingSize(brick1D);
+                long encoding_length = getBrickEncodingLength(brick1D);
                 if(encoding_length < header_size + 1u + 1u)
                     error << " brick encoding is shorter than minimum (header size + 1 encoding + 1 palette)=" << (header_size+2) <<" but is " << encoding_length << "\n";
 
@@ -876,6 +876,7 @@ bool CompressedSegmentationVolume::testLOD(const std::vector<uint32_t> &volume, 
 }
 
 void CompressedSegmentationVolume::exportToFile(const std::string &path, bool verbose) {
+    return;
     throw std::runtime_error("method not yet adapted for split encodings");
 
 //    if (m_brick_starts.empty() || m_encodings.empty()) {
