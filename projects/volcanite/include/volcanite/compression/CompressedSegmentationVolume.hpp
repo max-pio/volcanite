@@ -332,6 +332,7 @@ public:
     }
 
 
+    [[nodiscard]] RANSMode getRANSMode() const { return m_rANS_mode; }
     [[nodiscard]] bool isUsingRANS() const { return m_rANS_mode == SINGLE_TABLE_RANS || m_rANS_mode == DOUBLE_TABLE_RANS; }
     [[nodiscard]] bool isUsingDetailFreq() const { return m_rANS_mode == DOUBLE_TABLE_RANS; }
     [[nodiscard]] bool isUsingSeparateDetail() const { return m_separate_detail; }
