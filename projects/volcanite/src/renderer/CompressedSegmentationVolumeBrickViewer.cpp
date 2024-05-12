@@ -22,7 +22,7 @@ RendererOutput CompressedSegmentationVolumeBrickViewer::renderNextFrame(Awaitabl
         assert(!m_compressed_segmentation_volume->getBrickStarts()->empty() && !m_compressed_segmentation_volume->getEncodings()->empty() && "CompressedSegmentationVolume not initialized!");
         if(m_compressed_segmentation_volume->getEncodings()->size() != 1)
             throw std::runtime_error("CompressedSegmentationVolume must not contain split encodings for Volume Brick Viewer.");
-        m_encoding_buffer->upload(*(m_compressed_segmentation_volume->getEncodingBuffer(0)));
+        m_encoding_buffer->upload(m_compressed_segmentation_volume->getEncodings()->at(0));
         m_brick_starts_buffer->upload(*(m_compressed_segmentation_volume->getBrickStarts()));
 
         // wait until everything is uploaded

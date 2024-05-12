@@ -343,7 +343,7 @@ bool CompressedSegmentationVolume::verifyCompression() const {
     uint32_t header_size = getHeaderSize();
     uint32_t header_start_lods = lod_count - (isUsingSeparateDetail() ? 1 : 0);
 
-    #pragma omp parallel for collapse(3) default(none) shared(is_ok, brick_count, header_size, header_start_lods, lod_count, m_brick_starts, m_encodings, m_detail_starts, m_detail_encoding)
+//    #pragma omp parallel for collapse(3) default(none) shared(is_ok, brick_count, header_size, header_start_lods, lod_count, m_brick_starts, m_encodings, m_detail_starts, m_detail_encoding)
     for(uint32_t z = 0u; z < brick_count.z; z++) {
         for (uint32_t y = 0u; y < brick_count.y; y++) {
             for (uint32_t x = 0u; x < brick_count.x; x++) {
@@ -353,12 +353,12 @@ bool CompressedSegmentationVolume::verifyCompression() const {
 
                 glm::uvec3 brick(x, y, z);
                 std::stringstream error = {};
-                uint32_t brick1D = brick_pos2idx(brick, getBrickCount());
+                uint32_t brick1D = brick_pos2idx(brick, brick_count);
 
                 // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
                 uint32_t brick_encoding_length = getBrickEncodingLength(brick1D);
                 if(brick_encoding_length < header_size + 1u + 1u)
-                    error << " brick encoding is shorter than minimum (header size + 1 encoding + 1 palette)=" << (header_size+2) <<" but is " << brick_encoding_length << "\n";
+                    error << " brick encoding is shorter than minimum. (header size + 1 encoding + 1 palette)=" << (header_size+2) <<" but is " << brick_encoding_length << "\n";
 
                 // check first header entry being header_size * 8
                 const uint32_t* brick_encoding = getBrickEncoding(brick1D);
@@ -574,7 +574,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     // m_brick_idx_to_enc_vector is set to UINT32_MAX initially and reduced during the compression aiming to store
     // m_enc_vector_limit many uint32_t entries in the first encoding vector.
     m_encodings.clear();
-    size_t reserved_size = std::min(static_cast<size_t>(m_enc_vector_limit), static_cast<size_t>(volume_dim.x) * volume_dim.y * volume_dim.z / 12ul / 4ul); // assume that we have a compression rate below 1/12
+    size_t reserved_size = std::min(static_cast<size_t>(m_target_uints_per_split_encoding), static_cast<size_t>(volume_dim.x) * volume_dim.y * volume_dim.z / 12ul / 4ul); // assume that we have a compression rate below 1/12
     if(reserved_size > UINT32_MAX) {
         Logger(WARN) << "Volume is large, potentially creating a Compressed Segmentation Volume that does not fit into 32bit address!";
         reserved_size = UINT32_MAX;
@@ -612,7 +612,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     // compress one brick after another (but m_cpu_threads of them in parallel) in brick_index order
     for(uint32_t brick_index = 0u; brick_index < brick_index_count; brick_index += m_cpu_threads) {
 
-        #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(brick_index, brick_index_count, brickCount, volume, encodedBrick, encoded_element_count)
+        #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(brick_index, brickCount, brick_index_count, volume, encodedBrick, encoded_element_count)
         {
             unsigned int thread_id = omp_get_thread_num();
             encoded_element_count[thread_id] = 0u;
@@ -640,12 +640,16 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
             old_encoding_size = 0ul;
             new_encoding_size = encoded_element_count_prefix_sum[m_cpu_threads - 1] + encoded_element_count[m_cpu_threads - 1];
         }
-        // Check if the initial split must happen here (when the uint32_t element count exceeds m_enc_vector_limit)
-        else if(new_encoding_size > m_enc_vector_limit) {
+        // Check if the initial split must happen here (when the uint32_t element count exceeds m_target_uints_per_split_encoding)
+        else if(new_encoding_size > m_target_uints_per_split_encoding) {
+            if(brick_index == 0u) {
+                Logger(WARN) << "Requested split encoding size is too small. Using minimal size.";
+            }
             // We can not reduce m_brick_idx_to_enc_vector further if it was already used for splitting encoding vectors.
             // Otherwise, the old split may become invalid.
-            if(m_encodings.size() == 1) {
-                m_brick_idx_to_enc_vector = brick_index;    // multiple of m_cpu_threads
+            else if(m_encodings.size() == 1) {
+                // To make things easier, we always split at an index that is a multiple of m_cpu_threads
+                m_brick_idx_to_enc_vector = brick_index;
                 uint32_t split_encoding_count = (brick_index_count - 1u) / m_brick_idx_to_enc_vector + 1u;
                 m_encodings.emplace_back();
                 m_encodings.back().reserve(reserved_size);
@@ -658,7 +662,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
 
         // append the results
         m_encodings.back().resize(new_encoding_size);
-        #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(brick_index, brickCount, encoded_element_count, encoded_element_count_prefix_sum, encodedBrick, old_encoding_size)
+        #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(brick_index, encoded_element_count, encoded_element_count_prefix_sum, encodedBrick, old_encoding_size)
         for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
             if (encoded_element_count[thread_id] == 0u)
                 continue;
@@ -908,6 +912,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
      */
     file.write(magic_header, 8);
     file.write(version, 4);
+
     // write general info
     file.write(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
     file.write(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
@@ -923,6 +928,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
         for(int i = 0; i < 16; i++)
             file.write(reinterpret_cast<char *>(&freq_table[i]), sizeof(uint32_t));
     }
+
     // write brick starts buffer
     size_t size = m_brick_starts.size();
     file.write(reinterpret_cast<char *>(&size), sizeof(size_t));
@@ -936,6 +942,8 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
         file.write(reinterpret_cast<const char *>(&enc[0]), static_cast<long>(size * sizeof(enc[0])));
     }
     file.write(reinterpret_cast<char *>(&m_brick_idx_to_enc_vector), sizeof(uint32_t)); // since 0013
+
+    // write detail encoding if it is separated
     file.write(reinterpret_cast<char *>(&m_separate_detail), sizeof(bool)); // since 0003
     if(m_separate_detail) { // since 0003
         size = m_detail_starts.size(); // same as brickstarts
@@ -959,6 +967,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     }
 
     clear();
+    m_label = path;
 
     // check header and version
     char magic_header[9];
@@ -1016,6 +1025,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     for(int i = 0; i < m_encodings.size(); i++) {
         fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
         m_encodings[i].resize(size);
+        Logger(INFO) << size;
         fin.read(reinterpret_cast<char *>(&m_encodings[i][0]), static_cast<long>(size * sizeof(uint32_t)));
     }
     if(_numeric_version >= 13)

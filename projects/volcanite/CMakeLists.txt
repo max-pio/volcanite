@@ -3,6 +3,7 @@ project(volcanite VERSION 0.2.0 DESCRIPTION "Volcanite Renderers" LANGUAGES CXX)
 
 # set all sources and headers
 set(VOLCANITE_HEADERS
+        include/volcanite/CSGVPathUtils.hpp
         include/volcanite/VolcaniteArgs.hpp
         include/volcanite/StratifiedPixelSequence.hpp
         include/volcanite/compression/bitpack.hpp

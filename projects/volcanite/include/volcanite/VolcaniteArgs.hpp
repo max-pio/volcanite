@@ -13,24 +13,7 @@
 
 namespace vvv {
 
-/** Helpfer function to remove the file extension from a file path, e.g. test.abc -> test */
-static std::string stripFileExtension(std::string path) {
-    return path.substr(0, path.find_last_of('.'));
-}
-
 struct VolcaniteArgs {
-
-private:
-    static std::string expandPath(std::string path) {
-        if(path.empty())
-            return "";
-        if(path.find('~') != std::string::npos)
-            Logger(WARN) << "tilde-expansion is a bash specific feature. Use explicit home directory instead of '~' in " << path;
-        // make path absolute and normalize
-        std::filesystem::path absolute = std::filesystem::path(path);
-        std::filesystem::path canonicalPath = std::filesystem::absolute(std::filesystem::weakly_canonical(absolute));
-        return canonicalPath.make_preferred().string();
-    }
 
 public:
     enum Mode {

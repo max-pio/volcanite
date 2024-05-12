@@ -304,7 +304,8 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     m_split_encoding_buffer_addresses.resize(split_encoding_count);
     m_split_encoding_buffer_addresses_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_split_encoding_buffer_addresses_buffer", .byteSize = split_encoding_count * 2 * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     for(int i = 0; i < split_encoding_count; i++) {
-        size_t encoding_byte_size = m_compressed_segmentation_volume->getEncodingBuffer(0)->size() * sizeof(uint32_t);
+        size_t encoding_byte_size =
+                m_compressed_segmentation_volume->getEncodings()->at(i).size() * sizeof(uint32_t);
         m_split_encoding_buffers[i] = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_encoding_buffer_" + std::to_string(i), .byteSize = encoding_byte_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
         Buffer::deviceAddressUvec2(m_split_encoding_buffers[i]->getDeviceAddress(), &m_split_encoding_buffer_addresses[i].x);
     }

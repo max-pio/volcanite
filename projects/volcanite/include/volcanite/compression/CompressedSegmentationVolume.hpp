@@ -233,8 +233,8 @@ public:
             throw std::runtime_error("Volume must be compressed first! Call compress() or import a CSGV from a file!");
         return &m_encodings;
     }
-    /** @return encoding array for the given 1D brick idx. */
-    [[nodiscard]] const std::vector<uint32_t>* getEncodingBuffer(uint32_t brick_id) const {
+    /** @return encoding array that contains the encoding of the given 1D brick index.. */
+    [[nodiscard]] const std::vector<uint32_t>* getEncodingBufferForBrickIdx(uint32_t brick_id) const {
         if(m_encodings.empty())
             throw std::runtime_error("Volume must be compressed first! Call compress() or import a CSGV from a file!");
         return &m_encodings.at(brick_id / m_brick_idx_to_enc_vector);
@@ -282,7 +282,8 @@ public:
         if(brick_id >= m_brick_starts.size() - 1)
             throw std::runtime_error("Trying to access out of bounds brick_id " + std::to_string(brick_id));
 
-        return getEncodingBuffer(brick_id)->data() + getBrickStart(brick_id);
+        assert(getBrickStart(brick_id) + getBrickEncodingLength(brick_id) <= getEncodingBufferForBrickIdx(brick_id)->size() && "invalid brick encoding memory region");
+        return getEncodingBufferForBrickIdx(brick_id)->data() + getBrickStart(brick_id);
     }
 
     /** @return the full brick encoding consisting of header, operation encoding, and palette as an std::span.**/
@@ -291,7 +292,7 @@ public:
             throw std::runtime_error("Trying to access out of bounds brick_id " + std::to_string(brick_id));
 
         uint32_t brick_start = getBrickStart(brick_id);
-        return std::span<const uint32_t>{getEncodingBuffer(brick_id)->data() + brick_start, m_brick_starts[brick_id + 1] - brick_start};
+        return std::span<const uint32_t>{getEncodingBufferForBrickIdx(brick_id)->data() + brick_start, m_brick_starts[brick_id + 1] - brick_start};
     }
 
     uint32_t getPaletteSize(uint32_t brick_id) const {
@@ -305,7 +306,8 @@ public:
         if(brick_id >= m_brick_starts.size() - 1)
             throw std::runtime_error("Trying to access out of bounds brick_id " + std::to_string(brick_id));
         uint32_t palette_size = getPaletteSize(brick_id);
-        return std::span<const uint32_t>{getEncodingBuffer(brick_id)->data() + m_brick_starts[brick_id + 1] - palette_size, palette_size};
+        return std::span<const uint32_t>{
+                getEncodingBufferForBrickIdx(brick_id)->data() + m_brick_starts[brick_id + 1] - palette_size, palette_size};
     }
 
     [[nodiscard]] glm::uvec3 getVolumeDim() const { return m_volume_dim; }
@@ -419,6 +421,8 @@ public:
     std::string getCSGVFileName(const std::string& filepath, const std::string filetype= ".csgv") { return getCSGVFileName(filepath, m_brick_size, m_rANS_mode, m_separate_detail, filetype); }
     bool importFromFile(const std::string& path, bool verbose = true, bool verify = true);
     void exportToFile(const std::string& path, bool verbose = true);
+
+    const std::string& getLabel() { return m_label; }
 
     void clear() {
         m_volume_dim = glm::uvec3(0u);
@@ -560,8 +564,8 @@ private:
     uint32_t m_brick_size;                          /// brick size of each dimension in voxels, must be power of 2
     glm::uvec3 m_volume_dim;                        /// xyz dimensions of the original volume in voxels
     std::vector<std::vector<uint32_t>> m_encodings; /// contains all encodings for all bricks split up by brick id into several vectors
-    const uint32_t m_enc_vector_limit = 28000u; /// targeted max. number of uint32 elements per encoding vector (536870912u -> 2 GB)
-    uint32_t m_brick_idx_to_enc_vector = ~0u;       /// dividing 1D brick idx by this value maps to split encoding vector index. Must be a multiple of m_cpu_threads.
+    const uint32_t m_target_uints_per_split_encoding = 536870912u;//28000u; /// targeted max. number of uint32 elements per encoding vector (536870912u -> 2 GB)
+    uint32_t m_brick_idx_to_enc_vector = ~0u;       /// dividing 1D brick idx by this value maps to split encoding vector index.
     std::vector<uint32_t> m_brick_starts;           /// points to indices in m_encoding
     std::vector<uint32_t> m_detail_encoding;        /// contains the finest LoDs of all bricks if detail separation is enabled
     std::vector<uint32_t> m_detail_starts;          /// points to indices m_detail_encoding
@@ -575,6 +579,7 @@ private:
     // timings [s] of the last compression run (without freq. pre-pass) and the frequency pre-pass
     float m_last_total_encoding_seconds = 0.f;
     float m_last_total_freq_prepass_seconds = 0.f;
+    std::string m_label = "";
 };
 
 } // namespace vvv

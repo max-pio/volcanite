@@ -1,18 +1,18 @@
 #pragma once
 
+#include <chrono>
 #include <string>
+#include <thread>
 #include <unordered_set>
 
 #include "vvv/util/csv_utils.hpp"
 #include "vvv/util/Logger.hpp"
-#include <vvv/util/Paths.hpp>
+#include "vvv/util/Paths.hpp"
+#include "vvv/volren/Volume.hpp"
 
 #include "csgv_constants.h"
-#include "vvv/volren/Volume.hpp"
-#include "CSGVChunkMerger.hpp"
-
-#include <chrono>
-#include <thread>
+#include "volcanite/CSGVPathUtils.hpp"
+#include "volcanite/compression/CSGVChunkMerger.hpp"
 
 #define RELABEL_IDS_FROM_CSV_SUFFIX "_relabel.csv"
 
@@ -104,40 +104,6 @@ public:
 
         nrrd.close();
         return true;
-    }
-
-
-    static std::string formatChunkPath(const std::string& formatted_path, int x, int y, int z) {
-        std::string path = formatted_path;
-        if (path.find_first_of("{}") != std::string::npos)
-            path.replace(path.find_first_of("{}"), 2, std::to_string(x));
-        if (path.find_first_of("{}") != std::string::npos)
-            path.replace(path.find_first_of("{}"), 2, std::to_string(y));
-        if (path.find_first_of("{}") != std::string::npos)
-            path.replace(path.find_first_of("{}"), 2, std::to_string(z));
-        return path;
-    }
-
-    static std::string combinedPath(const std::string& formatted_path, glm::ivec3 max_file_index) {
-        if (glm::all(glm::equal(max_file_index, glm::ivec3(0, 0, 0)))) {
-            std::string path = formatted_path;
-            if (path.find_first_of("{}") != std::string::npos)
-                path.replace(path.find_first_of("{}"), 2, "0");
-            if (path.find_first_of("{}") != std::string::npos)
-                path.replace(path.find_first_of("{}"), 2, "0");
-            if (path.find_first_of("{}") != std::string::npos)
-                path.replace(path.find_first_of("{}"), 2, "0");
-            return path;
-        } else {
-            std::string path = formatted_path;
-            if (path.find_first_of("{}") != std::string::npos)
-                path.replace(path.find_first_of("{}"), 2, "0-" + std::to_string(max_file_index.x));
-            if (path.find_first_of("{}") != std::string::npos)
-                path.replace(path.find_first_of("{}"), 2, "0-" + std::to_string(max_file_index.y));
-            if (path.find_first_of("{}") != std::string::npos)
-                path.replace(path.find_first_of("{}"), 2, "0-" + std::to_string(max_file_index.z));
-            return path;
-        }
     }
 
     static void loadSegmentationVolumeFile(std::string path, std::shared_ptr<Volume<uint32_t>>& volume,
@@ -375,7 +341,8 @@ public:
                             Logger(INFO) << "Running Encoding  --------------------------------------------";
                         }
 
-                        // do the actual compression
+                        // perform the actual compression
+                        csgv->clear();
                         csgv->setCompressionOptions64(cfg.brick_dim, cfg.rANS_mode, code_frequencies.data(), detail_code_frequencies.data());
                         csgv->compress(volume->data(), volume_dim, cfg.verbose);
                         // ToDo: remove detail separation at this point. It should only be a method of the csgv volume after creation as it is only needed for rendering on certain systems.
@@ -428,9 +395,12 @@ public:
         << "including file IO: " << total_encoding_import_export_timer.elapsed() << "s.";
         if (cfg.chunked_input_data && glm::any(glm::greaterThan(cfg.max_file_index, glm::uvec3(0)))) {
             CSGVChunkMerger merger;
-            csgv = merger.mergeCompressedSegmentationVolumeChunksFromFiles(csgv_path, chunk_output_path_template, cfg.max_file_index, cpu_threads);
+            csgv = merger.mergeCompressedSegmentationVolumeChunksFromFiles(csgv_path, chunk_output_path_template, cfg.max_file_index);
+            if(!csgv)
+                return nullptr;
             if(cfg.use_detail_separation)
                 csgv->separateDetail();
+            csgv->setCPUThreadCount(cpu_threads);
         }
 
         // ToDo: should we remove the functionality to create a latex table entry for scientific writing?
