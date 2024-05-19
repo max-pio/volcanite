@@ -6,24 +6,7 @@ The only way of visualizing python data (e.g. from numpy arrays) with Volcanite 
 Voxel byte arrays are in little endian C-order meaning that the X dimension of the array is contiguous in memory.
 For a numpy array, the first index of the volume's shape is denoting the Z dimension of the volume.
 
-The following example code exports a numpy array `volume` to a simple Volcanite raw format:
-
-```python
-import numpy as np
-
-def export_to_vraw(volume, path_prefix):
-    with open(path_prefix + ".vraw", "wb") as file:
-        # write header: two \n terminated utf8 lines as:
-        # [VOXEL_DIMENSION_X] [VOXEL_DIMENSION_Y] [VOXEL_DIMENSION_Z]\n
-        # uint32\n
-        file.write(
-            (str(volume.shape[2]) + " " + str(volume.shape[1]) + " " + str(volume.shape[0]) + "\n").encode('utf8'))
-        file.write("uint32\n".encode('utf8'))
-        # write binary array (C-order, 4 byte per unsigned uint voxel)
-        np.ascontiguousarray(volume.astype('uint32')).tofile(file)
-```
-
-To export a volume to an NRRD file, use the following code:
+To export a numpy segmentation volume `volume` to an NRRD file, use the following code:
 
 ```python
 import numpy as np
@@ -42,6 +25,37 @@ def export_to_nrrd(volume, path_prefix):
         file.write("\n".encode('utf8'))
         # write binary payload in c-order
         np.ascontiguousarray(volume.astype('uint32')).tofile(file)
+```
+
+The following example code exports a volume to a simple Volcanite raw format:
+
+```python
+import numpy as np
+
+def export_to_vraw(volume, path_prefix):
+    with open(path_prefix + ".vraw", "wb") as file:
+        # write header: two \n terminated utf8 lines as:
+        # [VOXEL_DIMENSION_X] [VOXEL_DIMENSION_Y] [VOXEL_DIMENSION_Z]\n
+        # uint32\n
+        file.write(
+            (str(volume.shape[2]) + " " + str(volume.shape[1]) + " " + str(volume.shape[0]) + "\n").encode('utf8'))
+        file.write("uint32\n".encode('utf8'))
+        # write binary array (C-order, 4 byte per unsigned uint voxel)
+        np.ascontiguousarray(volume.astype('uint32')).tofile(file)
+```
+
+Import files of this format with:
+
+```python
+def read_from_vraw(vraw_path):
+    with open(vraw_path, "rb") as file:
+        # read header
+        shape_str = file.readline()[:-1].decode('utf8').split()
+        type = file.readline()[:-1].decode('utf8')
+        # read binary payload
+        volume = np.fromfile(file, dtype=type)
+        volume = volume.reshape([int(shape_str[2]), int(shape_str[1]), int(shape_str[0])])
+    return volume
 ```
 
 To split a large volume into smaller chunk files, use the following code.
