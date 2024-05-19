@@ -585,11 +585,15 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     m_encodings[0].reserve(reserved_size);
     uint32_t brick_index_count = getBrickIndexCount();
     m_brick_starts.resize(brick_index_count + 1, INVALID);
+    // reset brick to split encoding vector mapping, and max. palette entry count
+    m_brick_idx_to_enc_vector = ~0u;
+    m_max_brick_palette_count = 0u;
 
     // detail buffers can only be filled with a subsequent call to separateDetail()
     m_separate_detail = false;
     m_detail_encoding.clear();
     m_detail_starts.clear();
+
 
     if(verbose)
         Logger(INFO, true) << " Progress 0.0%";

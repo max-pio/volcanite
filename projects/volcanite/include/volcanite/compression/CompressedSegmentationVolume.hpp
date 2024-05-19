@@ -432,6 +432,8 @@ public:
         m_detail_encoding.clear();
         m_detail_starts.clear();
         m_separate_detail = false;
+        m_brick_idx_to_enc_vector = ~0u;
+        m_max_brick_palette_count = 0u;
     }
 
     size_t getCompressedSizeInBytes() const {
