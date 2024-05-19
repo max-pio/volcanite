@@ -437,33 +437,33 @@ public:
         }
 
         // remove all temporary files created during the compression
-        if (cfg.chunked_input_data && glm::any(glm::greaterThan(cfg.max_file_index, glm::uvec3(0)))) {
-            for (int z = 0; z <= cfg.max_file_index.z; z++) {
-                for (int y = 0; y <= cfg.max_file_index.y; y++) {
-                    for (int x = 0; x <= cfg.max_file_index.x; x++) {
-                        std::string chunk_output_path = formatChunkPath(chunk_output_path_template, x, y, z);
-                        if (std::filesystem::exists(chunk_output_path))
-                            std::filesystem::remove(chunk_output_path);
-                    }
-                }
-            }
-            std::string s;
-            s = csgv_path.substr(0, csgv_path.length() - 5) + "_brickstarts.tmp";
-            if (std::filesystem::exists(s))
-                std::filesystem::remove(s);
-            s = csgv_path.substr(0, csgv_path.length() - 5) + "_detailstarts.tmp";
-            if (std::filesystem::exists(s))
-                std::filesystem::remove(s);
-            s = csgv_path.substr(0, csgv_path.length() - 5) + "_encoding.tmp";
-            if (std::filesystem::exists(s))
-                std::filesystem::remove(s);
-            s = csgv_path.substr(0, csgv_path.length() - 5) + "_detail.tmp";
-            if (std::filesystem::exists(s))
-                std::filesystem::remove(s);
-            s = CompressedSegmentationVolume::getCSGVFileName(csgv_path, cfg.brick_dim, cfg.rANS_mode, false, ".cfrq");
-            if (std::filesystem::exists(s))
-                std::filesystem::remove(s);
-        }
+//        if (cfg.chunked_input_data && glm::any(glm::greaterThan(cfg.max_file_index, glm::uvec3(0)))) {
+//            for (int z = 0; z <= cfg.max_file_index.z; z++) {
+//                for (int y = 0; y <= cfg.max_file_index.y; y++) {
+//                    for (int x = 0; x <= cfg.max_file_index.x; x++) {
+//                        std::string chunk_output_path = formatChunkPath(chunk_output_path_template, x, y, z);
+//                        if (std::filesystem::exists(chunk_output_path))
+//                            std::filesystem::remove(chunk_output_path);
+//                    }
+//                }
+//            }
+//            std::string s;
+//            s = csgv_path.substr(0, csgv_path.length() - 5) + "_brickstarts.tmp";
+//            if (std::filesystem::exists(s))
+//                std::filesystem::remove(s);
+//            s = csgv_path.substr(0, csgv_path.length() - 5) + "_detailstarts.tmp";
+//            if (std::filesystem::exists(s))
+//                std::filesystem::remove(s);
+//            s = csgv_path.substr(0, csgv_path.length() - 5) + "_encoding.tmp";
+//            if (std::filesystem::exists(s))
+//                std::filesystem::remove(s);
+//            s = csgv_path.substr(0, csgv_path.length() - 5) + "_detail.tmp";
+//            if (std::filesystem::exists(s))
+//                std::filesystem::remove(s);
+//            s = CompressedSegmentationVolume::getCSGVFileName(csgv_path, cfg.brick_dim, cfg.rANS_mode, false, ".cfrq");
+//            if (std::filesystem::exists(s))
+//                std::filesystem::remove(s);
+//        }
 
         return csgv;
     }

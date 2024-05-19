@@ -40,7 +40,6 @@ private:
         // return encoding start address and length in uint entries
         *encoding = chunks[chunk_idx].getBrickEncoding(brick_idx_in_chunk);
         *encoding_length = chunks[chunk_idx].getBrickEncodingLength(brick_idx_in_chunk);
-        Logger(INFO) << str(output_brick) << " in " << chunks[chunk_idx].getLabel() << " " << str(brick_in_chunk);
     }
 
 public:
@@ -159,7 +158,7 @@ public:
         }
 
         // 3. iterate over all output brick indices
-        // a) get encoding memory area of brick from corresponding input chunk csgv
+        // a) get encoding memory area of brick from its corresponding input chunk csgv
         // b) determine brick_idx_to_enc_vector / start new split encoding arrays in output file
         // c) write brick encoding to encoding tmp file
         // d) write brick start within current output encoding array to brickstarts tmp file
