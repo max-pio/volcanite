@@ -63,8 +63,7 @@ public:
                                                                                                           glm::ivec3 max_input_csgv_index) {
         // ToDo: make target_uints_per_split_encoding a parameter for merging or obtain it from the first input chunk?
         // target a size of ~1GB per split encoding vector
-        uint32_t target_uints_per_split_encoding = 536870912u;
-//        uint32_t target_uints_per_split_encoding = 280000u;
+        uint32_t target_uints_per_split_encoding = 268435456u;
 
         Logger(INFO, true) << "Merging Compressed Segmentation Volume chunk files 0%";
 
