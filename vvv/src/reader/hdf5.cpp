@@ -31,7 +31,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_volume_from_hdf5(std::stri
     dataset.read(volume->data().data());
     return volume;
 #else
-    throw std::runtime_error("HighFIVE / HDF5 libraries not found! Can not load .hdf5 volume file!");
+    throw std::runtime_error("HighFIVE / HDF5 libraries not found! Cannot load .hdf5 volume file!");
     return nullptr;
 #endif
 }

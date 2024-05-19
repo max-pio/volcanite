@@ -167,7 +167,7 @@ public:
 
                 // Open a file dialog to choose a file
                 auto selected_file = pfd::open_file("Open Segmentation Volume", pfd::path::home(),
-                                                    { "Segmentation Volumes (.csgv .vti .hdf5 .raw)", "*.csgv *.vti *.hdf5 *.raw", "All Files", "*" });
+                                                    { "Segmentation Volumes (.csgv .vti .hdf5 .h5 .raw .vraw .nrrd .nhdr)", "*.csgv *.vti *.hdf5 *.h5 *.raw *.vraw *.nrrd *.nhdr", "All Files", "*" });
                 if(selected_file.result().empty()) {
                     throw ArgException("No input file was provided", inputpathArg.longID());
                 }
@@ -185,8 +185,11 @@ public:
             }
             // .. or if we compress a volume
             else {
-                if(!(input_file.ends_with(".vti") || input_file.ends_with(".raw") || input_file.ends_with(".hdf5"))) {
-                    throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.raw})", inputpathArg.longID());
+                if(!(input_file.ends_with(".vti")
+                    || input_file.ends_with(".raw") || input_file.ends_with(".vraw")
+                    || input_file.ends_with(".hdf5") || input_file.ends_with(".h5")
+                    || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {
+                    throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.h5|.raw|.vraw|.nrrd|.nhdr})", inputpathArg.longID());
                 }
 
                 if(!va.decompress_export_file.empty()) {

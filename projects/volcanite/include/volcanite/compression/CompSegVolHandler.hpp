@@ -19,28 +19,21 @@
 namespace vvv {
 
 
-// Easy to use managing class for obtaining Compressed Segmentation Volumes (CSGV).
-// The static createCompressedSegmentationVolume() method can be used to obtain a CSGV with the given parameters for a .hdf5 or .raw data set.
-// If force_recompute is false, it will load a previously computed compression from the same location if possible.
-// The overall time to compress a data set is mostly the time to load the original volume from the hard drive, especially in the case of compressed hdf5 files and chunked data.
-//
-// File names:
-// The file names of the CSGV to store to or load from the hard drive are deterministically inferred from the original volume file name and the compression parameters.
-// That way, any once compressed volume can be identified and potentially loaded from the hard drive if it is requested at another time.
-//
-// Chunked data:
-// For large data sets that are split into multiple chunks of data, a formatted path with three {} placeholders and a maximum file index can be passed.
-// The handler then tries to load all chunk files from (0,0,0) to the maximum index (inclusive) where all 'inner' chunks must have a volume dimension which is a
-// multiple of the brick size. Each of these chunks is compressed and exported independently.
-// Afterward, a merging step is carried out to create a single CSGV containing the whole data set.
-// A data set that is not split into chunks can be seen as a data set that consists of only one chunk (0,0,0).
-// For example, "vol_x{}_y{}_z{}" with a maximum index (3,1,4) will compress and merge all chunks [vol_x0_y0_z0, vol_x1_y0_z0, ... vol_x3_y1_z4] into one CSGV.
-//
-// Operation Frequencies:
-// If rANS encoding is applied when compressing, a quick pre-pass for obtaining operation frequency tables is performed.
-// The resulting tables are saved to a "*.csgv_freq" file to be loaded later.
-
-
+/** Easy to use managing class for obtaining Compressed Segmentation Volumes (CSGV).
+* The createCompressedSegmentationVolume() method can be used to obtain a CSGV with the given parameters, e.g. for a .hdf5 or .nrrd data set.
+* If force_recompute is false, it will load a previously computed compression from the same location if possible.
+* The overall time to compress a data set is mostly the time to load the original volume from the hard drive, especially in the case of compressed hdf5 files.
+* \n\n
+* Chunked data:\n
+* For large data sets that are split into multiple chunks of data, a formatted path with three {} placeholders and a maximum file index can be passed.
+* The handler then tries to load all chunk files from (0,0,0) to the maximum index (inclusive) where all 'inner' chunks must have a volume dimension which is a
+* multiple of the brick size. Each of these chunks is compressed and exported independently.
+* Afterward, a merging step is carried out to create a single CSGV containing the whole data set.
+* A data set that is not split into chunks can be seen as a data set that consists of only one chunk (0,0,0).
+* For example, "vol_x{}_y{}_z{}" with a maximum index (3,1,4) will compress and merge all chunks [vol_x0_y0_z0, vol_x1_y0_z0, ... vol_x3_y1_z4] into one CSGV.
+* \n\n
+* Operation Frequencies:\n
+* If rANS encoding is applied when compressing, a quick pre-pass for obtaining operation frequency tables is performed.*/
 class CompSegVolHandler {
 
 public:
@@ -109,18 +102,25 @@ public:
     static void loadSegmentationVolumeFile(std::string path, std::shared_ptr<Volume<uint32_t>>& volume,
                                            const std::shared_ptr<std::unordered_map<uint32_t, uint32_t>>& label_remapping = nullptr,
                                            uint32_t cpu_threads = std::thread::hardware_concurrency()) {
-        if (path.ends_with(".raw"))
-            volume = Volume<uint32_t>::load_simple_cellsinsilico(path);
+        if (path.ends_with(".vraw") || path.ends_with(".raw")) {
+            // ToDo: volcanite raw files should not end with .raw
+            if(path.ends_with(".raw"))
+                Logger(WARN) << "trying to open .raw file " << path << " as Volcanite raw (.vraw).";
+            volume = Volume<uint32_t>::load_volcanite_raw(path);
+        }
         else if (path.ends_with(".hdf5"))
             volume = Volume<uint32_t>::load_hdf5(path);
         else if (path.ends_with(".vti"))
             volume = Volume<uint32_t>::load_vti(path);
+        else if (path.ends_with(".nrrd") || path.ends_with(".nhdr"))
+            volume = Volume<uint32_t>::load_nrrd(path);
         else {
             std::string _msg = "Segmentation volume filetype of " + path + " not supported!";
             throw std::runtime_error(_msg.c_str());
         }
 
-        // remap all voxels to other values
+        // Remap all voxels to other labels. This usually happens because we computed a mapping in the attribute
+        // database so that voxels are numbered in Z-order.
         if(label_remapping) {
             MiniTimer t;
             size_t voxel_count = volume->dim_x * volume->dim_y * volume->dim_z;
@@ -130,7 +130,7 @@ public:
                 assert(label_remapping->contains(voxels[i]) && "label remapping does not contain voxel label");
                 voxels[i] = (*label_remapping)[voxels[i]];
             }
-            Logger(DEBUG) << "Remapping in " << t.elapsed() << " seconds";
+            Logger(DEBUG) << "Label remapping in " << t.elapsed() << " seconds";
         }
 
 #ifdef RELABEL_IDS_FROM_CSV_SUFFIX
@@ -160,7 +160,7 @@ public:
         bool run_tests = false;
         bool export_stats_per_chunk = false;
         bool verbose = true;
-        std::string* latex_table_out_entry = nullptr;
+        std::string* latex_table_out_entry = nullptr;   // ToDo: remove latex_table_out_entry
     };
 
     static std::shared_ptr<CompressedSegmentationVolume> createCompressedSegmentationVolume(const std::string& volume_input_path,
@@ -437,33 +437,33 @@ public:
         }
 
         // remove all temporary files created during the compression
-//        if (cfg.chunked_input_data && glm::any(glm::greaterThan(cfg.max_file_index, glm::uvec3(0)))) {
-//            for (int z = 0; z <= cfg.max_file_index.z; z++) {
-//                for (int y = 0; y <= cfg.max_file_index.y; y++) {
-//                    for (int x = 0; x <= cfg.max_file_index.x; x++) {
-//                        std::string chunk_output_path = formatChunkPath(chunk_output_path_template, x, y, z);
-//                        if (std::filesystem::exists(chunk_output_path))
-//                            std::filesystem::remove(chunk_output_path);
-//                    }
-//                }
-//            }
-//            std::string s;
-//            s = csgv_path.substr(0, csgv_path.length() - 5) + "_brickstarts.tmp";
-//            if (std::filesystem::exists(s))
-//                std::filesystem::remove(s);
-//            s = csgv_path.substr(0, csgv_path.length() - 5) + "_detailstarts.tmp";
-//            if (std::filesystem::exists(s))
-//                std::filesystem::remove(s);
-//            s = csgv_path.substr(0, csgv_path.length() - 5) + "_encoding.tmp";
-//            if (std::filesystem::exists(s))
-//                std::filesystem::remove(s);
-//            s = csgv_path.substr(0, csgv_path.length() - 5) + "_detail.tmp";
-//            if (std::filesystem::exists(s))
-//                std::filesystem::remove(s);
-//            s = CompressedSegmentationVolume::getCSGVFileName(csgv_path, cfg.brick_dim, cfg.rANS_mode, false, ".cfrq");
-//            if (std::filesystem::exists(s))
-//                std::filesystem::remove(s);
-//        }
+        if (cfg.chunked_input_data && glm::any(glm::greaterThan(cfg.max_file_index, glm::uvec3(0)))) {
+            for (int z = 0; z <= cfg.max_file_index.z; z++) {
+                for (int y = 0; y <= cfg.max_file_index.y; y++) {
+                    for (int x = 0; x <= cfg.max_file_index.x; x++) {
+                        std::string chunk_output_path = formatChunkPath(chunk_output_path_template, x, y, z);
+                        if (std::filesystem::exists(chunk_output_path))
+                            std::filesystem::remove(chunk_output_path);
+                    }
+                }
+            }
+            std::string s;
+            s = csgv_path.substr(0, csgv_path.length() - 5) + "_brickstarts.tmp";
+            if (std::filesystem::exists(s))
+                std::filesystem::remove(s);
+            s = csgv_path.substr(0, csgv_path.length() - 5) + "_detailstarts.tmp";
+            if (std::filesystem::exists(s))
+                std::filesystem::remove(s);
+            s = csgv_path.substr(0, csgv_path.length() - 5) + "_encoding.tmp";
+            if (std::filesystem::exists(s))
+                std::filesystem::remove(s);
+            s = csgv_path.substr(0, csgv_path.length() - 5) + "_detail.tmp";
+            if (std::filesystem::exists(s))
+                std::filesystem::remove(s);
+            s = CompressedSegmentationVolume::getCSGVFileName(csgv_path, cfg.brick_dim, cfg.rANS_mode, false, ".cfrq");
+            if (std::filesystem::exists(s))
+                std::filesystem::remove(s);
+        }
 
         return csgv;
     }

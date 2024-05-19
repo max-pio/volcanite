@@ -151,7 +151,7 @@ int volcanite(int argc, char *argv[]) {
                                                         .label_remapping = label_remapping,
                                                         .cpu_threads = args.threads,
                                                         .use_detail_separation = args.stream_lod,
-                                                        .force_recompute = true,//!args.chunked,
+                                                        .force_recompute = !args.chunked,
                                                         .chunked_input_data = args.chunked,
                                                         .max_file_index = max_chunk_id,
                                                         .freq_subsampling = args.freq_subsampling,

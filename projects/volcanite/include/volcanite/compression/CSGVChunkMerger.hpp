@@ -245,8 +245,6 @@ public:
             encoding_file.write(reinterpret_cast<const char *>(&encoding_size), sizeof(size_t));
         }
 
-        Logger(INFO) << "encoding size " << encoding_size;
-
         // 4. free memory of all CSGV chunks
         delete[] chunks;
         chunks = nullptr;

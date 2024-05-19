@@ -1029,7 +1029,6 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     for(int i = 0; i < m_encodings.size(); i++) {
         fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
         m_encodings[i].resize(size);
-        Logger(INFO) << size;
         fin.read(reinterpret_cast<char *>(&m_encodings[i][0]), static_cast<long>(size * sizeof(uint32_t)));
     }
     if(_numeric_version >= 13)

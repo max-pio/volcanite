@@ -29,7 +29,7 @@ int csgv_brick_viewer(int argc, char *argv[]) {
     Application::logLibraryAvailabilty();
 
     // Load a data set and encode it as a CompressedSegmentationVolume
-    std::shared_ptr<Volume<uint32_t>> volume = Volume<uint32_t>::load_simple_cellsinsilico(path);
+    std::shared_ptr<Volume<uint32_t>> volume = Volume<uint32_t>::load_volcanite_raw(path);
     glm::ivec3 volume_dim(volume->dim_x, volume->dim_y, volume->dim_z);
     Logger(INFO) << path + " loaded with dim " << str(volume_dim);
 
