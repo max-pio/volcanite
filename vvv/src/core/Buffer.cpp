@@ -84,7 +84,7 @@ void Buffer::uploadWithStagingBuffer(vk::CommandBuffer commandBuffer, const Buff
     assert(byteSize <= m_byteSize);
     staging.upload(rawData, byteSize);
 
-    commandBuffer.copyBuffer(staging.getBuffer(), m_buffer, vk::BufferCopy(0, dstOffset, m_byteSize));
+    commandBuffer.copyBuffer(staging.getBuffer(), m_buffer, vk::BufferCopy(0, dstOffset, byteSize));
 }
 
 std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> Buffer::uploadWithStagingBuffer(const void * const rawData, size_t byteSize, const detail::OpenGLStyleSubmitOptions opts) const {
