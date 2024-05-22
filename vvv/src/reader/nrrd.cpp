@@ -22,12 +22,14 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
         throw std::runtime_error(err.str());
     }
 
-    // TODO(Max): read fields with key/value pairs from nrrd file
     // read dimension
-    uint64_t img_width = 0;
-    uint64_t img_height = 0;
-    uint64_t img_depth = 0;
+    int img_width = 0;
+    int img_height = 0;
+    int img_depth = 0;
     uint16_t bits_per_sample = 0;
+    double spacing_width = 1.;
+    double spacing_height = 1.;
+    double spacing_depth = 1.;
 
     std::optional<std::string> detachedPayload;
 
@@ -104,18 +106,20 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
         } else if (fieldName == "data file") {
             detachedPayload = fieldValue;
         } else if (fieldName == "sizes") {
-            // TODO(Reiner): check for end of line
             std::istringstream sizes(fieldValue);
             sizes >> img_width >> img_height >> img_depth;
+        } else if (fieldName == "spacings") {
+            std::istringstream spacings(fieldValue);
+            spacings >> spacing_width >> spacing_height >> spacing_depth;
         } else {
             std::cout << "ignoring unknown NRRD header field: " << fieldName << std::endl;
         }
     }
 
-    float max_dim = static_cast<float>(std::max(img_width, std::max(img_height, img_depth)));
-    float physical_size_x = img_width / max_dim;
-    float physical_size_y = img_height / max_dim;
-    float physical_size_z = img_depth / max_dim;
+    float max_dim = static_cast<float>(std::max(img_width * spacing_width, std::max(img_height * spacing_height, img_depth * spacing_depth)));
+    float physical_size_x = static_cast<float>(img_width * spacing_width / max_dim);
+    float physical_size_y = static_cast<float>(img_height * spacing_height / max_dim);
+    float physical_size_z = static_cast<float>(img_depth * spacing_depth / max_dim);
 
     if (!is_valid_physical_size(physical_size_x) || !is_valid_physical_size(physical_size_y) || !is_valid_physical_size(physical_size_z)) {
         nrrd.close();
@@ -159,7 +163,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
     }
 
     // read binary data inline
-    nrrd.read(reinterpret_cast<char *>(payload.data()), byte_size);
+    nrrd.read(reinterpret_cast<char *>(payload.data()), static_cast<long>(byte_size));
 
     if (!nrrd) {
         nrrd.close();
@@ -188,6 +192,9 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::strin
     uint32_t payloadComponentSize;
     float minVal = std::numeric_limits<float>::max();
     float maxVal = std::numeric_limits<float>::min();
+    double spacing_width = 1.;
+    double spacing_height = 1.;
+    double spacing_depth = 1.;
 
     std::optional<std::string> detachedPayload;
 
@@ -278,15 +285,18 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::strin
             // TODO: check for end of line
             std::istringstream sizes(fieldValue);
             sizes >> img_width >> img_height >> img_depth;
+        } else if (fieldName == "spacings") {
+            std::istringstream spacings(fieldValue);
+            spacings >> spacing_width >> spacing_height >> spacing_depth;
         } else {
             std::cout << "ignoring unknown NRRD header field: " << fieldName << std::endl;
         }
     }
 
-    float max_dim = static_cast<float>(std::max(img_width, std::max(img_height, img_depth)));
-    float physical_size_x = img_width / max_dim;
-    float physical_size_y = img_height / max_dim;
-    float physical_size_z = img_depth / max_dim;
+    float max_dim = static_cast<float>(std::max(img_width * spacing_width, std::max(img_height * spacing_height, img_depth * spacing_depth)));
+    float physical_size_x = static_cast<float>(img_width * spacing_width / max_dim);
+    float physical_size_y = static_cast<float>(img_height * spacing_height / max_dim);
+    float physical_size_z = static_cast<float>(img_depth * spacing_depth / max_dim);
 
     if (!is_valid_physical_size(physical_size_x) || !is_valid_physical_size(physical_size_y) || !is_valid_physical_size(physical_size_z)) {
         nrrd.close();
