@@ -84,13 +84,16 @@ public:
             // keep track of maximum pallette entry count over all chunks
             max_brick_palette_count = glm::max(max_brick_palette_count, chunks[c].getMaxBrickPaletteCount());
 
+            if(chunks[c].isUsingSeparateDetail()) {
+                Logger(ERROR) << "Detail separation can only be applied AFTER merging Compressed Segmentation Volumes. Import CSGV chunks must not use detail separation.";
+                return nullptr;
+            }
             if(c == 0) {
                 // store parameters of chunks
                 chunk_dimension = chunks[0].getVolumeDim();
                 brick_size = chunks[0].getBrickSize();
                 if(chunk_dimension.x % brick_size != 0 || chunk_dimension.x % brick_size != 0 || chunk_dimension.x % brick_size != 0) {
-                    Logger(ERROR)
-                            << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunk dimension must be multiple of brick size.";
+                    Logger(ERROR) << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunk dimension must be multiple of brick size.";
                     return nullptr;
                 }
                 bricks_in_chunk = chunk_dimension / brick_size;
@@ -132,7 +135,6 @@ public:
         if(total_brick_count > (1ul << 32) - 1ul) {
             Logger(ERROR)
                     << "Merging Compressed Segmentation Volume chunk files failed. Brick count exceeds 32 bit range. Use a larger brick size.";
-            delete[] chunks;
             return nullptr;
         }
         Logger(INFO, true) << "Merging Compressed Segmentation Volume chunk files 0% (chunk import for " << str(complete_volume_dim) << " volume complete)";
@@ -286,6 +288,7 @@ public:
                 for (int i = 0; i < 16; i++)
                     file.write(reinterpret_cast<char *>(&complete_detail_frequency_table[i]), sizeof(uint32_t));
             }
+            file.write(reinterpret_cast<char *>(&brick_idx_to_enc_vector), sizeof(uint32_t)); // since 0013
 
             // write brick starts buffer
             size_t complete_brickstarts_size = total_brick_count + 1;
@@ -314,7 +317,6 @@ public:
             file.write(reinterpret_cast<char *>(&split_encoding_count), sizeof(size_t));
             file << encoding_file_in.rdbuf();
             encoding_file_in.close();
-            file.write(reinterpret_cast<char *>(&brick_idx_to_enc_vector), sizeof(uint32_t)); // since 0013
 
             // we never use detail separation here
             bool use_detail_separation = false;

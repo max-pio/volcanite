@@ -215,7 +215,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         // ToDo: m_detail_update_required = check if current and previous detail indices changed
         // ToDo: use remaining space in g_detail to store the perviously requested bricks (move to right)? would need one dummy element in between to make the detail_starts[i+1]-[i] size query possible
         //      can we use a ring buffer for that?
+        // ToDo: do all the CPU work in another thread so not to block rendering
 
+        MiniTimer detail_construction_timer;
         m_detail_update_required = false;
         // check if any id is new
         #pragma omp parallel for default(none) shared(requested_id_count, requested_ids, m_constructed_detail_starts, m_detail_update_required)
@@ -234,27 +236,34 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             // 2. for ALL bricks: compute prefix sum of sizes, assuming an added 0 size if brick is not requested. Store in m_detail_starts
             uint32_t next_requested_id = 0u;
             uint32_t total_detail_size = 0u;
-            const std::vector<uint32_t> *detail_starts = m_compressed_segmentation_volume->getDetailStarts();
             for (int i = 0; i < m_constructed_detail_starts.size(); i++) {
                 m_constructed_detail_starts[i] = total_detail_size;
 
                 // if this id is requested, we reserve some memory for it (as long as there's enough space in the detail array left)
                 if (next_requested_id < requested_id_count && i == requested_ids[next_requested_id]) {
-                    uint32_t brick_detail_size = (*detail_starts)[i + 1] - (*detail_starts)[i];
+                    uint32_t brick_detail_size = m_compressed_segmentation_volume->getBrickDetailEncodingLength(i);
                     if ((total_detail_size + brick_detail_size) <= m_detail_capacity) {
                         total_detail_size += brick_detail_size;
-                        next_requested_id++;
+//                        next_requested_id++;
                     }
+                    // even if the previous brick did not fit, we can try the next ones
+                    next_requested_id++;
                 }
             }
             // 3. in parallel: copy all detail encodings to the m_detail_encoding
-            const std::vector<uint32_t> *detail = m_compressed_segmentation_volume->getDetail();
-            #pragma omp parallel for default(none) shared(requested_id_count, requested_ids, m_constructed_detail_starts, m_constructed_detail, detail_starts, detail)
+            #pragma omp parallel for default(none) shared(requested_id_count, requested_ids, m_constructed_detail_starts, m_constructed_detail)
             for (int i = 0; i < requested_id_count; i++) {
                 uint32_t brick_id = requested_ids[i];
-                uint32_t start = (*detail_starts)[brick_id];
-                uint32_t end = (*detail_starts)[brick_id + 1];
-                memcpy(m_constructed_detail.data() + m_constructed_detail_starts[brick_id], detail->data() + start, (end - start) * sizeof(uint32_t));
+                uint32_t reserved_size = m_constructed_detail_starts[brick_id+1] - m_constructed_detail_starts[brick_id];
+                // if we reserved space for this brick id, copy it
+                if(reserved_size > 0) {
+                    const uint32_t *detail_encoding = m_compressed_segmentation_volume->getBrickDetailEncoding(brick_id);
+                    uint32_t detail_length = m_compressed_segmentation_volume->getBrickDetailEncodingLength(brick_id);
+                    if(reserved_size != detail_length)
+                        Logger(ERROR) << reserved_size << " vs " << detail_length << " for brick " << brick_id;
+                    assert(reserved_size == detail_length && "did not reserve fitting detail encoding area for brick.");
+                    memcpy(m_constructed_detail.data() + m_constructed_detail_starts[brick_id], detail_encoding, reserved_size * sizeof(uint32_t));
+                }
             }
 
 #if 0
@@ -267,6 +276,8 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
                 Logger(INFO) << ss.str();
             }
 #endif
+
+            Logger(DEBUG) << " CPU detail construction in " << detail_construction_timer.elapsed() * 1000.f << " ms.";
         }
     }
 
@@ -286,7 +297,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 }
 
 void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
-    if(!m_compressed_segmentation_volume || m_compressed_segmentation_volume->getEncodings()->empty())
+    if(!m_compressed_segmentation_volume || m_compressed_segmentation_volume->getAllEncodings()->empty())
         throw std::runtime_error("CompressedSegmentationVolume not initialized!");
     if(m_compressed_segmentation_volume->isUsingSeparateDetail() && !m_compressed_segmentation_volume->isUsingDetailFreq())
         throw std::runtime_error("Renderer only supports detail separation when rANS is in double table mode.");
@@ -299,13 +310,13 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
 
     // create (base) split encoding buffers
     m_brick_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_brick_start_buffer", .byteSize = (bricks_in_volume + 1u)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
-    size_t split_encoding_count = m_compressed_segmentation_volume->getEncodings()->size();
+    size_t split_encoding_count = m_compressed_segmentation_volume->getAllEncodings()->size();
     m_split_encoding_buffers.resize(split_encoding_count);
     m_split_encoding_buffer_addresses.resize(split_encoding_count);
     m_split_encoding_buffer_addresses_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_split_encoding_buffer_addresses_buffer", .byteSize = split_encoding_count * 2 * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     for(int i = 0; i < split_encoding_count; i++) {
         size_t encoding_byte_size =
-                m_compressed_segmentation_volume->getEncodings()->at(i).size() * sizeof(uint32_t);
+                m_compressed_segmentation_volume->getAllEncodings()->at(i).size() * sizeof(uint32_t);
         m_split_encoding_buffers[i] = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_encoding_buffer_" + std::to_string(i), .byteSize = encoding_byte_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
         Buffer::deviceAddressUvec2(m_split_encoding_buffers[i]->getDeviceAddress(), &m_split_encoding_buffer_addresses[i].x);
     }
@@ -317,11 +328,10 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     // create detail encoding buffers
     m_detail_capacity = 0u; // measured in number of uints
     if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
-        // ToDo: support detail separation
-        throw std::runtime_error("Renderer with split encodings does not yet support detail seeparation");
-
         bool detail_buffer_fits_whole_detail = false;
-        size_t complete_detail_size = m_compressed_segmentation_volume->getDetail()->size();
+        size_t complete_detail_size = 0;
+        for(const auto& d : *m_compressed_segmentation_volume->getAllDetails())
+            complete_detail_size += d.size();
 //#define ALWAYS_STREAM_DETAIL
 #ifdef ALWAYS_STREAM_DETAIL
         if(true) {
@@ -346,21 +356,29 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
         m_constructed_detail.resize(m_detail_capacity, 0u);
         if(detail_buffer_fits_whole_detail) {
             Logger(WARN) << "GPU detail buffer fits the whole detail level. Performing full upload, effectively disabling detail streaming. Consider to not use detail streaming for better performance!";
-            m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(m_compressed_segmentation_volume->getDetail()->data(), m_compressed_segmentation_volume->getDetail()->size() * sizeof(uint32_t));
-            m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_compressed_segmentation_volume->getDetailStarts()->data(),
-                                                                                      m_compressed_segmentation_volume->getDetailStarts()->size() * sizeof(uint32_t));
-            m_constructed_detail_starts = *m_compressed_segmentation_volume->getDetailStarts(); // just to be sure: we tell the CPU side that every brick is uploaded
-            getCtx()->sync->hostWaitOnDevice({m_detail_staging.first, m_detail_starts_staging.first});
-            m_detail_staging = {nullptr, nullptr};
-            m_detail_starts_staging = {nullptr, nullptr};
+
+            size_t offset = 0ul;
+            size_t brick_id = 0ul;
+            for(int i = 0; i < m_compressed_segmentation_volume->getAllDetails()->size(); i++) {
+                const std::vector<uint32_t>& detail_encoding = m_compressed_segmentation_volume->getAllDetails()->at(i);
+                // upload next single detail encoding buffer into offset memory region to form a back-to-back buffer
+                m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(detail_encoding.data(),
+                                                                            detail_encoding.size() * sizeof(uint32_t),
+                                                                            offset * sizeof(uint32_t));
+                // construct detail starts into continuous detail encoding array
+                while(brick_id < bricks_in_volume && brick_id / m_compressed_segmentation_volume->getBrickIdxToEncVectorMapping() == i) {
+                    m_constructed_detail_starts[brick_id + 1] = m_constructed_detail_starts[brick_id] + m_compressed_segmentation_volume->getBrickDetailEncodingLength(brick_id);
+                    brick_id++;
+                }
+                offset += detail_encoding.size();
+                getCtx()->sync->hostWaitOnDevice({m_detail_staging.first});
+            }
         }
-        else {
-            // initialize detail starts buffer on the GPU with zeros (no detail is uploaded initially)
-            m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-            getCtx()->sync->hostWaitOnDevice({m_detail_starts_staging.first});
-            m_detail_staging = {nullptr, nullptr};
-            m_detail_starts_staging = {nullptr, nullptr};
-        }
+        // upload initial detail starts buffer (all zeros if no detail is uploaded initially)
+        m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        getCtx()->sync->hostWaitOnDevice({m_detail_starts_staging.first});
+        m_detail_staging = {nullptr, nullptr};
+        m_detail_starts_staging = {nullptr, nullptr};
     }
 
     // GPU statistics buffer
@@ -382,7 +400,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     std::vector<std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>>> _encoding_upload;
     for(int i = 0; i < split_encoding_count; i++) {
         _encoding_upload.emplace_back(
-                m_split_encoding_buffers[i]->uploadWithStagingBuffer(m_compressed_segmentation_volume->getEncodings()->at(i),
+                m_split_encoding_buffers[i]->uploadWithStagingBuffer(m_compressed_segmentation_volume->getAllEncodings()->at(i),
                                                            {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()}));
         awaitBeforeExecution.push_back(_encoding_upload[i].first);
     }

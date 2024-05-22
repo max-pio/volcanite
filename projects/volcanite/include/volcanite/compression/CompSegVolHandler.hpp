@@ -195,8 +195,8 @@ public:
         // Compressing a chunked file can take a long time. We export all independently compressed chunks first, given
         // this file name template (creates a path like my/path/tmp_x{}_y{}_z{}_bs64_rANS2.csgv for example):
         std::string chunk_output_path_template = csgv_path.substr(0, csgv_path.length() - 5) + "_x{}_y{}_z{}.csgv";
-        std::string chunk_output_path_template_no_separation = CompressedSegmentationVolume::getCSGVFileName(chunk_output_path_template, cfg.brick_dim, cfg.rANS_mode, false);
-        chunk_output_path_template = CompressedSegmentationVolume::getCSGVFileName(chunk_output_path_template, cfg.brick_dim, cfg.rANS_mode, cfg.use_detail_separation);
+        // we never separate the detail level in single chunk files.
+        chunk_output_path_template = CompressedSegmentationVolume::getCSGVFileName(chunk_output_path_template, cfg.brick_dim, cfg.rANS_mode, false);
 
 
         if(cfg.verbose) {
@@ -325,14 +325,6 @@ public:
 
                     bool recompute = cfg.force_recompute || (cfg.max_file_index.x + cfg.max_file_index.y + cfg.max_file_index.z == 0u)      // if this is just one chunk, we also have to recompute at this point
                                      || !csgv->importFromFile(chunk_output_path, false);
-                    // special case: we can load a volume without detail separation and THEN separate the detail (ToDo: this piece of code is a crime against humanity)
-                    if(recompute && !cfg.force_recompute && (cfg.max_file_index.x + cfg.max_file_index.y + cfg.max_file_index.z != 0u) && cfg.use_detail_separation) {
-                        // try to load the volume without detail separation
-                        recompute = !csgv->importFromFile(formatChunkPath(chunk_output_path_template_no_separation, x, y, z), false);
-                        // .. and separate detail on success
-                        if(!recompute)
-                            csgv->separateDetail();
-                    }
                     if (recompute) {
                         loadSegmentationVolumeFile(chunk_input_path, volume, cfg.label_remapping, cpu_threads);
                         volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
@@ -345,10 +337,6 @@ public:
                         csgv->clear();
                         csgv->setCompressionOptions64(cfg.brick_dim, cfg.rANS_mode, code_frequencies.data(), detail_code_frequencies.data());
                         csgv->compress(volume->data(), volume_dim, cfg.verbose);
-                        // ToDo: remove detail separation at this point. It should only be a method of the csgv volume after creation as it is only needed for rendering on certain systems.
-                        if(cfg.use_detail_separation) {
-                            csgv->separateDetail();
-                        }
                         total_encoding_seconds += csgv->getLastTotalEncodingSeconds();
                         if (std::filesystem::exists(chunk_output_path)) {
                             Logger(WARN) << "overwriting file " << chunk_output_path;
@@ -398,8 +386,6 @@ public:
             csgv = merger.mergeCompressedSegmentationVolumeChunksFromFiles(csgv_path, chunk_output_path_template, cfg.max_file_index);
             if(!csgv)
                 return nullptr;
-            if(cfg.use_detail_separation)
-                csgv->separateDetail();
             csgv->setCPUThreadCount(cpu_threads);
         }
 
@@ -463,6 +449,11 @@ public:
             s = CompressedSegmentationVolume::getCSGVFileName(csgv_path, cfg.brick_dim, cfg.rANS_mode, false, ".cfrq");
             if (std::filesystem::exists(s))
                 std::filesystem::remove(s);
+        }
+
+        // ToDo: remove detail separation at this point. It should only be a method of the csgv volume after creation as it is only needed for rendering on certain systems.
+        if(cfg.use_detail_separation) {
+            csgv->separateDetail();
         }
 
         return csgv;

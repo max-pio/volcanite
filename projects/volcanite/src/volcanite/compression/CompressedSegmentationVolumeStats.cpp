@@ -10,61 +10,65 @@
 namespace vvv {
 
     void CompressedSegmentationVolume::printBrickInfo(glm::uvec3 brick, loglevel log_level) const {
-        throw std::runtime_error("method not yet adapted for split encodings");
-//
-//        if(m_encodings.empty())
-//            throw std::runtime_error("Segmentation volume is not yet compressed!");
-//
-//        std::stringstream ss;
-//        uint32_t start = m_brick_starts[brick_pos2idx(brick, getBrickCount())];
-//        uint32_t p = start;
-//        ss << "Brick " << str(brick) << " " << getLodCountPerBrick() << "xLoD [Header @" << p << "] LoD Starts: ";
-//        if(isUsingSeparateDetail()) {
-//            for(int i = 0; i < getLodCountPerBrick() - 1; i++) {
-//                ss << std::to_string(m_encoding[p++]);
-//                if(i < getLodCountPerBrick() - 2)
-//                    ss << ",";
-//            }
-//            ss << " | LoD Palette Start: ";
-//            for(int i = 0; i < getLodCountPerBrick() + 1; i++) {
-//                ss << std::to_string(m_encoding[p++]);
-//                if(i < getLodCountPerBrick())
-//                    ss << ",";
-//            }
-//            ss << " (header size " << (p - start) << ") ";
-//            ss << " [Encoding @" << p << "] ";
-//            for(int i = 0; i < std::min(8u, m_encoding[start + getLodCountPerBrick() - 2]); i++) {
-//                ss << m_encoding[p++] << ",";
-//            }
-//            start =  m_detail_starts[brick_pos2idx(brick, getBrickCount())];
-//            p = start;
-//            ss << ".. [Detail @" << p << "] ";
-//            for(int i = 0; i < std::min(8u, m_detail_encoding[start]); i++) {
-//                ss << m_detail_encoding[p++] << ",";
-//            }
-//            ss << "..";
-//        }
-//        else {
-//            for(int i = 0; i < getLodCountPerBrick(); i++) {
-//                ss << std::to_string(m_encoding[p]);
-//                if(i < getLodCountPerBrick() - 1)
-//                    ss << ",";
-//                p++;
-//            }
-//            ss << " | LoD Palette Size: ";
-//            for(int i = 0; i < getLodCountPerBrick() + 1; i++) {
-//                ss << std::to_string(m_encoding[p]);
-//                if(i < getLodCountPerBrick())
-//                    ss << ",";
-//                p++;
-//            }
-//            ss << " (header size " << (p - start) << ") ";
-//            ss << " [Encoding @" << p << "] ";
-//            for(int i = 0; i < std::min(8u, m_encoding[start + getLodCountPerBrick() - 2]); i++) {
-//                ss << m_encoding[p++] << ",";
-//            }
-//        }
-//        Logger(log_level) << ss.str();
+        if(m_encodings.empty())
+            throw std::runtime_error("Segmentation volume is not yet compressed!");
+
+        uint32_t brick_id = brick_pos2idx(brick, getBrickCount());
+        const uint32_t* encoding = getBrickEncoding(brick_id);
+
+        uint32_t start = getBrickStart(brick_id);
+        uint32_t p = 0;
+        std::stringstream ss;
+        ss << "Brick [enc. " << brick_id / m_brick_idx_to_enc_vector << "] " <<  str(brick) << " "
+            << getLodCountPerBrick() << "xLoD [Header @" << start << "] LoD Starts: ";
+
+        if(isUsingSeparateDetail()) {
+            for(int i = 0; i < getLodCountPerBrick() - 1; i++) {
+                ss << std::to_string(encoding[p++]);
+                if(i < getLodCountPerBrick() - 2)
+                    ss << ",";
+            }
+            ss << " | LoD Palette Start: ";
+            for(int i = 0; i < getLodCountPerBrick() + 1; i++) {
+                ss << std::to_string(encoding[p++]);
+                if(i < getLodCountPerBrick())
+                    ss << ",";
+            }
+            ss << " (header size " << p << ") ";
+            ss << " [Encoding @" << (start + p) << "] ";
+            for(int i = 0; i < std::min(8u, encoding[getLodCountPerBrick() - 2]); i++) {
+                ss << encoding[p++] << ",";
+            }
+            start = getBrickDetailStart(brick_id);
+            encoding = getBrickDetailEncoding(brick_id);
+            p = 0;
+            ss << ".. [Detail @" << start << "] ";
+            for(int i = 0; i < std::min(8u, getBrickDetailEncodingLength(brick_id)); i++) {
+                ss << encoding[p++] << ",";
+            }
+            ss << "..";
+        }
+        else {
+            for(int i = 0; i < getLodCountPerBrick(); i++) {
+                ss << std::to_string(encoding[p]);
+                if(i < getLodCountPerBrick() - 1)
+                    ss << ",";
+                p++;
+            }
+            ss << " | LoD Palette Size: ";
+            for(int i = 0; i < getLodCountPerBrick() + 1; i++) {
+                ss << std::to_string(encoding[p]);
+                if(i < getLodCountPerBrick())
+                    ss << ",";
+                p++;
+            }
+            ss << " (header size " << p << ") ";
+            ss << " [Encoding @" << (p + start) << "] ";
+            for(int i = 0; i < std::min(8u, encoding[getLodCountPerBrick() - 2]); i++) {
+                ss << encoding[p++] << ",";
+            }
+        }
+        Logger(log_level) << ss.str();
     }
 
     void CompressedSegmentationVolume::decodeBrickWithDebugEncoding(uint32_t brick_idx, uint32_t* output_brick, uint32_t* output_encoding,
