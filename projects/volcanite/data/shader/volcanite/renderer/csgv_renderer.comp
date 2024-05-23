@@ -134,7 +134,11 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
     // read the voxel from the brick in the cache (with the currently decoded LOD)
     else {
         // ToDo: we do not change the depth_valid validity here even though we do NOT check if we request an LOD that differs from what is currently decoded for the brick
+#ifdef PALETTE_CACHE
+        return readCSGVPaletteBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * 8u, brick_idx);
+#else
         return readCSGVBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * 8u);
+#endif
     }
 }
 
