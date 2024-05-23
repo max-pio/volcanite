@@ -55,8 +55,8 @@ void main() {
         assertf(g_assign_info[cache_top] <= g_cache_capacity, "cache counter is over capacity!", g_assign_info[cache_top]);
     }
 
-    uint brick_id = brick_to_1D(brick, g_brick_count);
-    uint brick_info_pos = brick_id * 4u;
+    uint brick_idx = brick_pos2idx(brick, g_brick_count);
+    uint brick_info_pos = brick_idx * 4u;
     assert(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < g_lod_count)), "brick CUR_INV_LOD or INDEX are corrupted");
 
 
@@ -94,12 +94,12 @@ void main() {
         uvec3 valid_brick_size = clamp(g_vol_dim.xyz - brick * g_brick_size, uvec3(0u), uvec3(g_brick_size));
 #if 1
     #ifdef SEPARATE_DETAIL
-            assert(!(inv_lod == g_lod_count - 1U && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_id] == g_detail_starts[brick_id+1])), "detail not available but the provision shader told us it is");
+            assert(!(inv_lod == g_lod_count - 1U && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_idx] == g_detail_starts[brick_idx+1])), "detail not available but the provision shader told us it is");
     #endif
             resetCSGVBrick(cache_idx * 8u, inv_lod);
-            decompressCSGVBrick(brick_id, getBrickEncodingLength(brick_id), valid_brick_size, 0u, inv_lod, cache_idx * 8u);
+            decompressCSGVBrick(brick_idx, getBrickEncodingLength(brick_idx), valid_brick_size, 0u, inv_lod, cache_idx * 8u);
 #else
-        fillCSGVBrick(cache_idx * 8u, inv_lod, brick_id + 1337u);
+        fillCSGVBrick(cache_idx * 8u, inv_lod, brick_idx + 1337u);
 #endif
         g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = inv_lod;
     }

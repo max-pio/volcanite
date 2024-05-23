@@ -82,8 +82,8 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
 
     uvec3 brick = uvec3(voxel) / g_brick_size;
     uvec3 brick_voxel = uvec3(voxel) - (brick * g_brick_size);
-    uint brick_id = brick_to_1D(brick, g_brick_count);
-    uint brick_info_pos = brick_id * 4u;
+    uint brick_idx = brick_pos2idx(brick, g_brick_count);
+    uint brick_info_pos = brick_idx * 4u;
 
     // compute optimal LOD for the center of this brick
     uint req_inv_lod = get_inv_lod(voxel);
@@ -110,8 +110,8 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
     // or if the brick is not yet decoded
     if (req_inv_lod == 0u || cur_inv_lod >= g_lod_count) {
 
-        EncodingRef encoding_address = getBrickEncodingRef(brick_id);
-        uint encoding_size = getBrickEncodingLength(brick_id);
+        EncodingRef encoding_address = getBrickEncodingRef(brick_idx);
+        uint encoding_size = getBrickEncodingLength(brick_idx);
 
         // if the brick was not decoded, anything we compute from now on is invalid
         if(req_inv_lod > 0u && g_max_decoding_lod > 0u) {
@@ -141,7 +141,7 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
 
 bool isEmptySpace(ivec3 voxel) {
     uvec3 brick = uvec3(voxel / g_brick_size);
-    uint brick_info_pos = brick_to_1D(brick, g_brick_count) * 4u;
+    uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
 
     // if the brick contains nothing visible, it is empty space
     return g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > g_lod_count;  // marked "invisible" by request shader
@@ -405,7 +405,7 @@ void main() {
 
             uvec3 brick = uvec3(state.voxel) / g_brick_size;
             uvec3 brick_voxel = uvec3(state.voxel) - (brick * g_brick_size);
-            uint brick_info_pos = brick_to_1D(brick, g_brick_count) * 4u;
+            uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
 
             uint cache_start = g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX];
             if (cache_start == INVALID || g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] >= g_lod_count) {
@@ -467,8 +467,8 @@ void main() {
         else {
 //            // visualize visible brick id
 //            uvec3 brick = uvec3(state.voxel) / g_brick_size;
-//            uint brick_id = brick.x + brick.y * g_brick_count.x + brick.z * (g_brick_count.x * g_brick_count.y);
-//            state.out_color = vec4(integer2colorlabel(brick_id, false), 1.f);
+//            uint brick_idx = brick_pos2idx(brick, g_brick_count);
+//            state.out_color = vec4(integer2colorlabel(brick_idx, false), 1.f);
 //            break;
 
             // break if this was a shadow ray

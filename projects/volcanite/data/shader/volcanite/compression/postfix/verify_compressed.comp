@@ -43,8 +43,8 @@ void main() {
     }
 
     ivec3 volume_size = imageSize(IMAGE_volume);
-    int sequence_i = g_indices[brick_to_1D(brick_idx, brick_dim, frame)].x;
-    int order_variant = g_indices[brick_to_1D(brick_idx, brick_dim, frame)].y;
+    int sequence_i = g_indices[brick_pos2idx(brick_idx, brick_dim, frame)].x;
+    int order_variant = g_indices[brick_pos2idx(brick_idx, brick_dim, frame)].y;
     ivec3 voxel_start = brick_idx * brick_size;
 
     uint val;
@@ -90,7 +90,7 @@ void main() {
 
 //
 //
-//    int brick_idx_1D_no_frame = brick_to_1D(brick_idx, brick_dim, 0);
+//    int brick_idx_1D_no_frame = brick_pos2idx(brick_idx, brick_dim, 0);
 //    if (isHelperLane(brick_idx, brick_dim)) {
 //        return;
 //    }
@@ -136,7 +136,7 @@ void main() {
 //
 //    // update the index buffer
 //    // we only store the LENGTH so far. on the CPU this is converted to the correct start location in the sequence buffer
-//    int brick_idx_1D = brick_to_1D(brick_idx, brick_dim, frame);
+//    int brick_idx_1D = brick_pos2idx(brick_idx, brick_dim, frame);
 //    g_indices[brick_idx_1D].x = sequence_i - sequence_start;
 //    g_indices[brick_idx_1D].y = 0; // we can store additional info here.
 }

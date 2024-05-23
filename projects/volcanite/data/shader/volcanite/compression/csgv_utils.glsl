@@ -26,8 +26,8 @@
 
 
 // Indexing and vector utils -------------------------------------------------------------------------------------------
-uint brick_to_1D(uvec3 brick_idx, uvec3 brick_dim) {
-    return brick_idx.x + brick_dim.x * (brick_idx.y + brick_dim.y * brick_idx.z);
+uint brick_pos2idx(uvec3 brick_idx, uvec3 brick_count) {
+    return brick_idx.x + brick_count.x * (brick_idx.y + brick_count.y * brick_idx.z);
 }
 
 // adds the element offset (one unit = 4 byte) to the 64 bit address represented in an uvec2
@@ -52,28 +52,28 @@ uvec2 bufferAddressSub(uvec2 address, uint uint_elem_offset) {
 }
 
 
-uint getBrickStart(uint brick_id) {
-    if(g_brick_starts[brick_id] > g_brick_starts[brick_id + 1u])
+uint getBrickStart(uint brick_idx) {
+    if(g_brick_starts[brick_idx] > g_brick_starts[brick_idx + 1u])
         return 0u;
     else
-        return g_brick_starts[brick_id];
+        return g_brick_starts[brick_idx];
 }
 
-uint getBrickEnd(uint brick_id) {
-    return g_brick_starts[brick_id + 1u];
+uint getBrickEnd(uint brick_idx) {
+    return g_brick_starts[brick_idx + 1u];
 }
 
-uint getBrickEncodingLength(uint brick_id) {
-    return getBrickEnd(brick_id) - getBrickStart(brick_id);
+uint getBrickEncodingLength(uint brick_idx) {
+    return getBrickEnd(brick_idx) - getBrickStart(brick_idx);
 }
 
-EncodingRef getBrickEncodingRef(uint brick_id) {
-    return EncodingRef(bufferAddressAdd(g_encoding_buffer_addresses[brick_id / g_brick_idx_to_enc_vector], getBrickStart(brick_id)));
+EncodingRef getBrickEncodingRef(uint brick_idx) {
+    return EncodingRef(bufferAddressAdd(g_encoding_buffer_addresses[brick_idx / g_brick_idx_to_enc_vector], getBrickStart(brick_idx)));
 }
 
 #ifdef SEPARATE_DETAIL
-EncodingRef getBrickDetailEncodingRef(uint brick_id) {
-    return EncodingRef(bufferAddressAdd(g_detail_buffer_address, g_detail_starts[brick_id]));
+EncodingRef getBrickDetailEncodingRef(uint brick_idx) {
+    return EncodingRef(bufferAddressAdd(g_detail_buffer_address, g_detail_starts[brick_idx]));
 }
 #endif
 

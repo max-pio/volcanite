@@ -17,11 +17,11 @@ def read_brick_starts(path):
         operation_starts = operation_starts.reshape((-1, 2))
     return operation_starts
 
-def plot_operations(brick_id):
-    begin = starts[brick_id][0]
-    end = starts[brick_id+1][0]
+def plot_operations(brick_idx):
+    begin = starts[brick_idx][0]
+    end = starts[brick_idx+1][0]
     stream = ops[begin:end].astype('float32')
-    detail_count = starts[brick_id][1]
+    detail_count = starts[brick_idx][1]
 
     # mark the base level encodings
     for i in range(detail_count):
@@ -50,7 +50,7 @@ def plot_operations(brick_id):
     stream = np.pad(stream, (0, elem_pad), constant_values=(np.nan, np.nan))
     stream = stream.reshape(next_square, next_square)
 
-    plt.title("Operations of Brick " + str(brick_id))
+    plt.title("Operations of Brick " + str(brick_idx))
     plt.imshow(stream, cmap=stacked_cmap)
     plt.show()
 

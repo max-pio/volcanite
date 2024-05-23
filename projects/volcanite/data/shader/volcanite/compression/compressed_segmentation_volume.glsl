@@ -123,7 +123,7 @@ void fillCSGVBrick(const uint decoded_brick_start_idx, const uint inv_lod, const
 // if start_at_inv_lod == 0, it is assumed that the output brick cache is set to INVALID at all entries
 // if start_at_inv_lod > 0, it is assumed that the output brick cache is fully decoded up to (start_at_inv_lod-1)
 // start_at_inv_Lod must not be the finest possible LoD
-void decompressCSGVBrick(const uint brick_id, const uint brick_encoding_length,
+void decompressCSGVBrick(const uint brick_idx, const uint brick_encoding_length,
                                   const uvec3 valid_brick_size, const uint start_at_inv_lod, const uint inv_lod,
                                   const uint decoded_brick_start_idx) {
 
@@ -139,8 +139,8 @@ void decompressCSGVBrick(const uint brick_id, const uint brick_encoding_length,
     CSGVReadState readState;    // read and changed in the _readNextLodOperationFromEncoding function
 
     // reference to the uint buffer containing this bricks encoding
-    // ToDo: this would be the place to select different buffers if the complete encoding is > 4 GB, e.g. based on the brick_id. Or rather pass it as an argument to the whole function.
-    EncodingRef brick_encoding = getBrickEncodingRef(brick_id);
+    // ToDo: this would be the place to select different buffers if the complete encoding is > 4 GB, e.g. based on the brick_idx. Or rather pass it as an argument to the whole function.
+    EncodingRef brick_encoding = getBrickEncodingRef(brick_idx);
     EncodingRef brick_palette = brick_encoding;
 
     readState.idxE = brick_encoding.buf[start_at_inv_lod];  // offset of current 4 bit entry to read
@@ -167,7 +167,7 @@ void decompressCSGVBrick(const uint brick_id, const uint brick_encoding_length,
         if(lod == g_lod_count - 1u) {
             readState.rans_tab_offset = 17u;        // we now read from the detail freq. table (which is offset by 17)
             #ifdef SEPARATE_DETAIL
-                brick_encoding = getBrickDetailEncodingRef(brick_id);
+                brick_encoding = getBrickDetailEncodingRef(brick_idx);
                 readState.idxE = 0u;
             #else
                 // Detail rANS encoding starts at new uint

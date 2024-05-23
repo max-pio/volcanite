@@ -253,16 +253,16 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             // 3. in parallel: copy all detail encodings to the m_detail_encoding
             #pragma omp parallel for default(none) shared(requested_id_count, requested_ids, m_constructed_detail_starts, m_constructed_detail)
             for (int i = 0; i < requested_id_count; i++) {
-                uint32_t brick_id = requested_ids[i];
-                uint32_t reserved_size = m_constructed_detail_starts[brick_id+1] - m_constructed_detail_starts[brick_id];
+                uint32_t brick_idx = requested_ids[i];
+                uint32_t reserved_size = m_constructed_detail_starts[brick_idx+1] - m_constructed_detail_starts[brick_idx];
                 // if we reserved space for this brick id, copy it
                 if(reserved_size > 0) {
-                    const uint32_t *detail_encoding = m_compressed_segmentation_volume->getBrickDetailEncoding(brick_id);
-                    uint32_t detail_length = m_compressed_segmentation_volume->getBrickDetailEncodingLength(brick_id);
+                    const uint32_t *detail_encoding = m_compressed_segmentation_volume->getBrickDetailEncoding(brick_idx);
+                    uint32_t detail_length = m_compressed_segmentation_volume->getBrickDetailEncodingLength(brick_idx);
                     if(reserved_size != detail_length)
-                        Logger(ERROR) << reserved_size << " vs " << detail_length << " for brick " << brick_id;
+                        Logger(ERROR) << reserved_size << " vs " << detail_length << " for brick " << brick_idx;
                     assert(reserved_size == detail_length && "did not reserve fitting detail encoding area for brick.");
-                    memcpy(m_constructed_detail.data() + m_constructed_detail_starts[brick_id], detail_encoding, reserved_size * sizeof(uint32_t));
+                    memcpy(m_constructed_detail.data() + m_constructed_detail_starts[brick_idx], detail_encoding, reserved_size * sizeof(uint32_t));
                 }
             }
 
@@ -358,7 +358,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
             Logger(WARN) << "GPU detail buffer fits the whole detail level. Performing full upload, effectively disabling detail streaming. Consider to not use detail streaming for better performance!";
 
             size_t offset = 0ul;
-            size_t brick_id = 0ul;
+            size_t brick_idx = 0ul;
             for(int i = 0; i < m_compressed_segmentation_volume->getAllDetails()->size(); i++) {
                 const std::vector<uint32_t>& detail_encoding = m_compressed_segmentation_volume->getAllDetails()->at(i);
                 // upload next single detail encoding buffer into offset memory region to form a back-to-back buffer
@@ -366,9 +366,9 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
                                                                             detail_encoding.size() * sizeof(uint32_t),
                                                                             offset * sizeof(uint32_t));
                 // construct detail starts into continuous detail encoding array
-                while(brick_id < bricks_in_volume && brick_id / m_compressed_segmentation_volume->getBrickIdxToEncVectorMapping() == i) {
-                    m_constructed_detail_starts[brick_id + 1] = m_constructed_detail_starts[brick_id] + m_compressed_segmentation_volume->getBrickDetailEncodingLength(brick_id);
-                    brick_id++;
+                while(brick_idx < bricks_in_volume && brick_idx / m_compressed_segmentation_volume->getBrickIdxToEncVectorMapping() == i) {
+                    m_constructed_detail_starts[brick_idx + 1] = m_constructed_detail_starts[brick_idx] + m_compressed_segmentation_volume->getBrickDetailEncodingLength(brick_idx);
+                    brick_idx++;
                 }
                 offset += detail_encoding.size();
                 getCtx()->sync->hostWaitOnDevice({m_detail_staging.first});

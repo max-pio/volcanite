@@ -247,11 +247,11 @@ public:
     void updateDummyMinMax(const CompressedSegmentationVolume& csgv) {
         uint32_t min_id = ~0u;
         uint32_t max_id = 0u;
-        size_t brick_count = csgv.getBrickCount().x * csgv.getBrickCount().y * csgv.getBrickCount().z;
+        size_t brick_idx_count = csgv.getBrickIndexCount();
 
-        #pragma omp parallel for default(none) shared(csgv, brick_count) reduction(min : min_id) reduction(max : max_id)
-        for (size_t brick_id = 0; brick_id < brick_count; brick_id++) {
-            for (const uint32_t& l : csgv.getBrickReversePalette(brick_id)) {
+        #pragma omp parallel for default(none) shared(csgv, brick_idx_count) reduction(min : min_id) reduction(max : max_id)
+        for (size_t brick_idx = 0; brick_idx < brick_idx_count; brick_idx++) {
+            for (const uint32_t& l : csgv.getBrickReversePalette(brick_idx)) {
                 if (l < min_id)
                     min_id = l;
                 if (l > max_id)

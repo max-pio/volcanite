@@ -13,13 +13,13 @@ namespace vvv {
         if(m_encodings.empty())
             throw std::runtime_error("Segmentation volume is not yet compressed!");
 
-        uint32_t brick_id = brick_pos2idx(brick, getBrickCount());
-        const uint32_t* encoding = getBrickEncoding(brick_id);
+        uint32_t brick_idx = brick_pos2idx(brick, getBrickCount());
+        const uint32_t* encoding = getBrickEncoding(brick_idx);
 
-        uint32_t start = getBrickStart(brick_id);
+        uint32_t start = getBrickStart(brick_idx);
         uint32_t p = 0;
         std::stringstream ss;
-        ss << "Brick [enc. " << brick_id / m_brick_idx_to_enc_vector << "] " <<  str(brick) << " "
+        ss << "Brick [enc. " << brick_idx / m_brick_idx_to_enc_vector << "] " <<  str(brick) << " "
             << getLodCountPerBrick() << "xLoD [Header @" << start << "] LoD Starts: ";
 
         if(isUsingSeparateDetail()) {
@@ -39,11 +39,11 @@ namespace vvv {
             for(int i = 0; i < std::min(8u, encoding[getLodCountPerBrick() - 2]); i++) {
                 ss << encoding[p++] << ",";
             }
-            start = getBrickDetailStart(brick_id);
-            encoding = getBrickDetailEncoding(brick_id);
+            start = getBrickDetailStart(brick_idx);
+            encoding = getBrickDetailEncoding(brick_idx);
             p = 0;
             ss << ".. [Detail @" << start << "] ";
-            for(int i = 0; i < std::min(8u, getBrickDetailEncodingLength(brick_id)); i++) {
+            for(int i = 0; i < std::min(8u, getBrickDetailEncodingLength(brick_idx)); i++) {
                 ss << encoding[p++] << ",";
             }
             ss << "..";

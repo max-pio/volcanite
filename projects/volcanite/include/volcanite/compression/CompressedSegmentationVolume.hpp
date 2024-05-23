@@ -110,61 +110,61 @@ private:
     }
 
     /** @return encoding array that contains the encoding of the given 1D brick index. */
-    [[nodiscard]] const std::vector<uint32_t>* getEncodingBufferForBrickIdx(uint32_t brick_id) const {
+    [[nodiscard]] const std::vector<uint32_t>* getEncodingBufferForBrickIdx(uint32_t brick_idx) const {
         if(m_encodings.empty())
             throw std::runtime_error("Volume must be compressed first! Call compress() or import a CSGV from a file!");
-        return &m_encodings.at(brick_id / m_brick_idx_to_enc_vector);
+        return &m_encodings.at(brick_idx / m_brick_idx_to_enc_vector);
     }
-    /** @return the start uint32_t index of this brick brick_id within the array returned by getEncodingBufferForBrickIdx(brick_id). */
-    [[nodiscard]] uint32_t getBrickStart(uint32_t brick_id) const {
+    /** @return the start uint32_t index of this brick brick_idx within the array returned by getEncodingBufferForBrickIdx(brick_idx). */
+    [[nodiscard]] uint32_t getBrickStart(uint32_t brick_idx) const {
         if(m_encodings.empty())
             throw std::runtime_error("Volume must be compressed first! Call compress() or import a CSGV from a file!");
-        assert(brick_id < getBrickIndexCount() && "out of bounds brick_id");
+        assert(brick_idx < getBrickIndexCount() && "out of bounds brick_idx");
         // Check if this is the first brick in a later split encoding array. In that case the brick start stores the
         // size of the previous encoding array instead of the actual start index 0.
-        if(m_brick_starts[brick_id] > m_brick_starts[brick_id + 1u])
+        if(m_brick_starts[brick_idx] > m_brick_starts[brick_idx + 1u])
             return 0u;
         else
-            return m_brick_starts[brick_id];
+            return m_brick_starts[brick_idx];
     }
-    /** @return the last uint32_t index of this brick brick_id within the array returned by getEncodingBufferForBrickIdx(brick_id). */
-    [[nodiscard]] uint32_t getBrickEnd(uint32_t brick_id) const {
+    /** @return the last uint32_t index of this brick brick_idx within the array returned by getEncodingBufferForBrickIdx(brick_idx). */
+    [[nodiscard]] uint32_t getBrickEnd(uint32_t brick_idx) const {
         if(m_encodings.empty())
             throw std::runtime_error("Volume must be compressed first! Call compress() or import a CSGV from a file!");
-        assert(brick_id < getBrickIndexCount() && "out of bounds brick_id");
-        return m_brick_starts[brick_id + 1u];
+        assert(brick_idx < getBrickIndexCount() && "out of bounds brick_idx");
+        return m_brick_starts[brick_idx + 1u];
     }
 
     /** @return detail encoding array that contains the separated detail encoding of the given 1D brick index. */
-    [[nodiscard]] const std::vector<uint32_t>* getDetailEncodingBufferForBrickIdx(uint32_t brick_id) const {
+    [[nodiscard]] const std::vector<uint32_t>* getDetailEncodingBufferForBrickIdx(uint32_t brick_idx) const {
         if(m_encodings.empty())
             throw std::runtime_error("Volume must be compressed first! Call compress() or import a CSGV from a file!");
         if(!m_separate_detail)
             throw std::runtime_error("Detail buffers not separated! Call separateDetail() first.");
-        return &m_detail_encoding.at(brick_id / m_brick_idx_to_enc_vector);
+        return &m_detail_encoding.at(brick_idx / m_brick_idx_to_enc_vector);
     }
-    /** @return the start uint32_t index of this brick brick_id within the array returned by getEncodingBufferForBrickIdx(brick_id). */
-    [[nodiscard]] uint32_t getBrickDetailStart(uint32_t brick_id) const {
+    /** @return the start uint32_t index of this brick brick_idx within the array returned by getEncodingBufferForBrickIdx(brick_idx). */
+    [[nodiscard]] uint32_t getBrickDetailStart(uint32_t brick_idx) const {
         if(m_encodings.empty())
             throw std::runtime_error("Volume must be compressed first! Call compress() or import a CSGV from a file!");
         if(!m_separate_detail)
             throw std::runtime_error("Detail buffers not separated! Call separateDetail() first.");
-        assert(brick_id < getBrickIndexCount() && "out of bounds brick_id");
+        assert(brick_idx < getBrickIndexCount() && "out of bounds brick_idx");
         // Check if this is the first brick in a later split encoding array. In that case the brick start stores the
         // size of the previous encoding array instead of the actual start index 0.
-        if(m_detail_starts[brick_id] > m_detail_starts[brick_id + 1u])
+        if(m_detail_starts[brick_idx] > m_detail_starts[brick_idx + 1u])
             return 0u;
         else
-            return m_detail_starts[brick_id];
+            return m_detail_starts[brick_idx];
     }
-    /** @return the last uint32_t index of this brick brick_id within the array returned by getDetailEncodingBufferForBrickIdx(brick_id). */
-    [[nodiscard]] uint32_t getBrickDetailEnd(uint32_t brick_id) const {
+    /** @return the last uint32_t index of this brick brick_idx within the array returned by getDetailEncodingBufferForBrickIdx(brick_idx). */
+    [[nodiscard]] uint32_t getBrickDetailEnd(uint32_t brick_idx) const {
         if(m_encodings.empty())
             throw std::runtime_error("Volume must be compressed first! Call compress() or import a CSGV from a file!");
         if(!m_separate_detail)
             throw std::runtime_error("Detail buffers not separated! Call separateDetail() first.");
-        assert(brick_id < getBrickIndexCount() && "out of bounds brick_id");
-        return m_detail_starts[brick_id + 1u];
+        assert(brick_idx < getBrickIndexCount() && "out of bounds brick_idx");
+        return m_detail_starts[brick_idx + 1u];
     }
 
     /** Returns the current value in the brick at the neighbor_i neighbor position of brick_pos at the decoding stage at the given lod_width.
@@ -322,50 +322,50 @@ public:
 
     // ACCESSING SINGLE BRICKS: ----------------------------------------------------------------------------------------
     /** @return the size of the bricks encoding in number of uint32 elements.*/
-    [[nodiscard]] uint32_t getBrickEncodingLength(uint32_t brick_id) const {
-        return getBrickEnd(brick_id) - getBrickStart(brick_id);
+    [[nodiscard]] uint32_t getBrickEncodingLength(uint32_t brick_idx) const {
+        return getBrickEnd(brick_idx) - getBrickStart(brick_idx);
     }
     /** @return a pointer ot a continuous uint32 memory region containing this brick's encoding.*/
-    [[nodiscard]] const uint32_t* getBrickEncoding(uint32_t brick_id) const {
-        if(brick_id >= m_brick_starts.size() - 1)
-            throw std::runtime_error("Trying to access out of bounds brick_id " + std::to_string(brick_id));
+    [[nodiscard]] const uint32_t* getBrickEncoding(uint32_t brick_idx) const {
+        if(brick_idx >= m_brick_starts.size() - 1)
+            throw std::runtime_error("Trying to access out of bounds brick_idx " + std::to_string(brick_idx));
 
-        assert(getBrickStart(brick_id) + getBrickEncodingLength(brick_id) <= getEncodingBufferForBrickIdx(brick_id)->size() && "invalid brick encoding memory region");
-        return getEncodingBufferForBrickIdx(brick_id)->data() + getBrickStart(brick_id);
+        assert(getBrickStart(brick_idx) + getBrickEncodingLength(brick_idx) <= getEncodingBufferForBrickIdx(brick_idx)->size() && "invalid brick encoding memory region");
+        return getEncodingBufferForBrickIdx(brick_idx)->data() + getBrickStart(brick_idx);
     }
     /** @return the full brick encoding consisting of header, operation encoding, and palette as an std::span.**/
-    [[nodiscard]] std::span<const uint32_t> getBrickEncodingSpan(uint32_t brick_id) const {
-        if(brick_id >= m_brick_starts.size() - 1)
-            throw std::runtime_error("Trying to access out of bounds brick_id " + std::to_string(brick_id));
+    [[nodiscard]] std::span<const uint32_t> getBrickEncodingSpan(uint32_t brick_idx) const {
+        if(brick_idx >= m_brick_starts.size() - 1)
+            throw std::runtime_error("Trying to access out of bounds brick_idx " + std::to_string(brick_idx));
 
-        uint32_t brick_start = getBrickStart(brick_id);
-        return std::span<const uint32_t>{getEncodingBufferForBrickIdx(brick_id)->data() + brick_start, m_brick_starts[brick_id + 1] - brick_start};
+        uint32_t brick_start = getBrickStart(brick_idx);
+        return std::span<const uint32_t>{getEncodingBufferForBrickIdx(brick_idx)->data() + brick_start, m_brick_starts[brick_idx + 1] - brick_start};
     }
     /** @return the size of the bricks detail encoding in number of uint32 elements.*/
-    [[nodiscard]] uint32_t getBrickDetailEncodingLength(uint32_t brick_id) const {
-        return getBrickDetailEnd(brick_id) - getBrickDetailStart(brick_id);
+    [[nodiscard]] uint32_t getBrickDetailEncodingLength(uint32_t brick_idx) const {
+        return getBrickDetailEnd(brick_idx) - getBrickDetailStart(brick_idx);
     }
     /** @return a pointer ot a continuous uint32 memory region containing this brick's detail level encoding.*/
-    [[nodiscard]] const uint32_t* getBrickDetailEncoding(uint32_t brick_id) const {
-        if(brick_id >= m_brick_starts.size() - 1)
-            throw std::runtime_error("Trying to access out of bounds brick_id " + std::to_string(brick_id));
+    [[nodiscard]] const uint32_t* getBrickDetailEncoding(uint32_t brick_idx) const {
+        if(brick_idx >= m_brick_starts.size() - 1)
+            throw std::runtime_error("Trying to access out of bounds brick_idx " + std::to_string(brick_idx));
 
-        assert(getBrickDetailStart(brick_id) + getBrickDetailEncodingLength(brick_id) <= getDetailEncodingBufferForBrickIdx(brick_id)->size() && "invalid brick detail encoding memory region");
-        return getDetailEncodingBufferForBrickIdx(brick_id)->data() + getBrickDetailStart(brick_id);
+        assert(getBrickDetailStart(brick_idx) + getBrickDetailEncodingLength(brick_idx) <= getDetailEncodingBufferForBrickIdx(brick_idx)->size() && "invalid brick detail encoding memory region");
+        return getDetailEncodingBufferForBrickIdx(brick_idx)->data() + getBrickDetailStart(brick_idx);
     }
     /** @return the number of elements in the reverse palette of the brick. */
-    uint32_t getPaletteSize(uint32_t brick_id) const {
-        if(brick_id >= m_brick_starts.size() - 1)
-            throw std::runtime_error("Trying to access out of bounds brick_id " + std::to_string(brick_id));
-        return getBrickEncoding(brick_id)[getPaletteSizeHeaderIndex()];
+    uint32_t getPaletteSize(uint32_t brick_idx) const {
+        if(brick_idx >= m_brick_starts.size() - 1)
+            throw std::runtime_error("Trying to access out of bounds brick_idx " + std::to_string(brick_idx));
+        return getBrickEncoding(brick_idx)[getPaletteSizeHeaderIndex()];
     }
     /** Returns the memory region containing the reverse palette of the brick. */
-    [[nodiscard]] std::span<const uint32_t> getBrickReversePalette(uint32_t brick_id) const {
-        if(brick_id >= m_brick_starts.size() - 1)
-            throw std::runtime_error("Trying to access out of bounds brick_id " + std::to_string(brick_id));
-        uint32_t palette_size = getPaletteSize(brick_id);
+    [[nodiscard]] std::span<const uint32_t> getBrickReversePalette(uint32_t brick_idx) const {
+        if(brick_idx >= m_brick_starts.size() - 1)
+            throw std::runtime_error("Trying to access out of bounds brick_idx " + std::to_string(brick_idx));
+        uint32_t palette_size = getPaletteSize(brick_idx);
         return std::span<const uint32_t>{
-                getEncodingBufferForBrickIdx(brick_id)->data() + m_brick_starts[brick_id + 1] - palette_size, palette_size};
+                getEncodingBufferForBrickIdx(brick_idx)->data() + m_brick_starts[brick_idx + 1] - palette_size, palette_size};
     }
 
     [[nodiscard]] glm::uvec3 getVolumeDim() const { return m_volume_dim; }
