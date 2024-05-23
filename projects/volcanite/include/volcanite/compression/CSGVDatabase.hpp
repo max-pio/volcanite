@@ -3,6 +3,7 @@
 #include "vvv/volren/Volume.hpp"
 #include "vvv/util/space_filling_curves.hpp"
 
+#include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/compression/CompSegVolHandler.hpp"
 
 #include <glm/glm.hpp>
@@ -322,10 +323,10 @@ public:
             chunk_index = sfc::Morton3D::i2p(chunk_index1D);
             if(glm::all(glm::lessThanEqual(chunk_index, max_file_index))) {
                     // create file input path for this single chunk
-                    std::string chunk_input_path = chunked_input_data ? CompSegVolHandler::formatChunkPath(volume_input_path,
-                                                                                                           static_cast<int>(chunk_index.x),
-                                                                                                           static_cast<int>(chunk_index.y),
-                                                                                                           static_cast<int>(chunk_index.z))
+                    std::string chunk_input_path = chunked_input_data ? formatChunkPath(volume_input_path,
+                                                                                        static_cast<int>(chunk_index.x),
+                                                                                        static_cast<int>(chunk_index.y),
+                                                                                        static_cast<int>(chunk_index.z))
                                                                       : volume_input_path;
                     // load chunk volume
                     Logger(DEBUG, true) << "  label preprocessing " << chunk_input_path << " "

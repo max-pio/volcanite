@@ -56,7 +56,7 @@ void main() {
 
     bool potentially_visible = false;
 
-    uint brick_encoding_length = g_brick_starts[brick_id + 1u] - g_brick_starts[brick_id];
+    uint brick_encoding_length = getBrickEncodingLength(brick_id);
     EncodingRef brick_address = getBrickEncodingRef(brick_id);
     // read total palette size from brick header
 #ifdef SEPARATE_DETAIL

@@ -13,24 +13,7 @@
 
 namespace vvv {
 
-/** Helpfer function to remove the file extension from a file path, e.g. test.abc -> test */
-static std::string stripFileExtension(std::string path) {
-    return path.substr(0, path.find_last_of('.'));
-}
-
 struct VolcaniteArgs {
-
-private:
-    static std::string expandPath(std::string path) {
-        if(path.empty())
-            return "";
-        if(path.find('~') != std::string::npos)
-            Logger(WARN) << "tilde-expansion is a bash specific feature. Use explicit home directory instead of '~' in " << path;
-        // make path absolute and normalize
-        std::filesystem::path absolute = std::filesystem::path(path);
-        std::filesystem::path canonicalPath = std::filesystem::absolute(std::filesystem::weakly_canonical(absolute));
-        return canonicalPath.make_preferred().string();
-    }
 
 public:
     enum Mode {
@@ -67,7 +50,7 @@ public:
     std::string decompress_export_file; // !empty = perform decompression to file       both can be set!
     std::string segmented_volume_file;
     uint32_t brick_size = 32;
-    CompressedSegmentationVolume::RANSMode rANS_mode = CompressedSegmentationVolume::RANSMode::DOUBLE_TABLE_RANS;
+    RANSMode rANS_mode = RANSMode::DOUBLE_TABLE_RANS;
     uint32_t freq_subsampling = 8;      // n^3 factor for subsampling bricks for frequency table computation with rANS
 
     bool run_tests = false;
@@ -184,7 +167,7 @@ public:
 
                 // Open a file dialog to choose a file
                 auto selected_file = pfd::open_file("Open Segmentation Volume", pfd::path::home(),
-                                                    { "Segmentation Volumes (.csgv .vti .hdf5 .raw)", "*.csgv *.vti *.hdf5 *.raw", "All Files", "*" });
+                                                    { "Segmentation Volumes (.csgv .vti .hdf5 .h5 .raw .vraw .nrrd .nhdr)", "*.csgv *.vti *.hdf5 *.h5 *.raw *.vraw *.nrrd *.nhdr", "All Files", "*" });
                 if(selected_file.result().empty()) {
                     throw ArgException("No input file was provided", inputpathArg.longID());
                 }
@@ -202,8 +185,11 @@ public:
             }
             // .. or if we compress a volume
             else {
-                if(!(input_file.ends_with(".vti") || input_file.ends_with(".raw") || input_file.ends_with(".hdf5"))) {
-                    throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.raw})", inputpathArg.longID());
+                if(!(input_file.ends_with(".vti")
+                    || input_file.ends_with(".raw") || input_file.ends_with(".vraw")
+                    || input_file.ends_with(".hdf5") || input_file.ends_with(".h5")
+                    || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {
+                    throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.h5|.raw|.vraw|.nrrd|.nhdr})", inputpathArg.longID());
                 }
 
                 if(!va.decompress_export_file.empty()) {
@@ -248,7 +234,7 @@ public:
 
                 // compression arguments
                 va.brick_size = bricksizeArg.getValue();
-                const CompressedSegmentationVolume::RANSMode _strengths[] = {CompressedSegmentationVolume::NO_RANS, CompressedSegmentationVolume::SINGLE_TABLE_RANS, CompressedSegmentationVolume::DOUBLE_TABLE_RANS};
+                const RANSMode _strengths[] = {NO_RANS, SINGLE_TABLE_RANS, DOUBLE_TABLE_RANS};
                 va.rANS_mode = _strengths[strengthArg.getValue()];
                 va.freq_subsampling = subsamplingArg.getValue();
                 va.threads = threadsArg.getValue();

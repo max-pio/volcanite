@@ -186,7 +186,7 @@ void vvv::PassCompression::init(std::string path, int brick_size) {
 
     // TODO: gather information about the data set to compress
     m_volume_frames = frames_of_dataset(path);
-    auto volume = Volume<uint16_t>::load_simple_cellsinsilico(frame_path(path, 0));
+    auto volume = Volume<uint16_t>::load_volcanite_raw(frame_path(path, 0));
     m_volume_dim.x = volume->dim_x;
     m_volume_dim.y = volume->dim_y;
     m_volume_dim.z = volume->dim_z;
@@ -265,7 +265,7 @@ vvv::AwaitableHandle vvv::PassCompression::execute(vvv::AwaitableList awaitBefor
 
         // load the next frame as volume
         std::string path_for_current_frame = frame_path(m_path, frame);
-        auto volume = Volume<uint16_t>::load_simple_cellsinsilico(path_for_current_frame);
+        auto volume = Volume<uint16_t>::load_volcanite_raw(path_for_current_frame);
 
         // update / upload shader data
         auto [volUploadFinished, _stagingBuffer] = m_gpu.vol_img->upload(volume->data());
@@ -446,7 +446,7 @@ vvv::AwaitableHandle vvv::PassCompression::verify(vvv::AwaitableList awaitBefore
 
         // load the next frame as volume
         std::string path_for_current_frame = frame_path(m_path, frame);
-        auto volume = Volume<uint16_t>::load_simple_cellsinsilico(path_for_current_frame);
+        auto volume = Volume<uint16_t>::load_volcanite_raw(path_for_current_frame);
 
         // update / upload shader data
         auto [volUploadFinished, _stagingBuffer] = m_gpu.vol_img->upload(volume->data());

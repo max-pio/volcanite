@@ -326,7 +326,7 @@ int Application::exec() {
         getDevice().waitIdle();
     }
 
-    // old: this destroyWindow() here ensures the window is immediately closed, but allows following code
+    // ToDo: old: this destroyWindow() here ensures the window is immediately closed, but allows following code
     // to inspect vulkan state, e.g. download buffers etc, before all GPU state
     // is destroyed.
     // ----
@@ -338,7 +338,7 @@ int Application::exec() {
     // When the application calls XCloseDisplay, this callback is called and will segfault if the driver had already
     // been unloaded, which could happen when the Vulkan instance is destroyed. Fix is to destroy the instance after
     // cleaning up the display connection.
-//    destroyWindow();
+    // destroyWindow();
 
     return 0;
 }

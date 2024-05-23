@@ -3,6 +3,7 @@ project(volcanite VERSION 0.2.0 DESCRIPTION "Volcanite Renderers" LANGUAGES CXX)
 
 # set all sources and headers
 set(VOLCANITE_HEADERS
+        include/volcanite/CSGVPathUtils.hpp
         include/volcanite/VolcaniteArgs.hpp
         include/volcanite/StratifiedPixelSequence.hpp
         include/volcanite/compression/bitpack.hpp
@@ -10,6 +11,7 @@ set(VOLCANITE_HEADERS
         data/shader/cpp_glsl_include/csgv_constants.h
         include/volcanite/compression/CompressedSegmentationVolume.hpp
         include/volcanite/compression/CompSegVolHandler.hpp
+        include/volcanite/compression/CSGVChunkMerger.hpp
         include/volcanite/compression/CSGVDatabase.hpp
         include/volcanite/compression/rans.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp

@@ -51,8 +51,24 @@ uvec2 bufferAddressSub(uvec2 address, uint uint_elem_offset) {
     return address;
 }
 
+
+uint getBrickStart(uint brick_id) {
+    if(g_brick_starts[brick_id] > g_brick_starts[brick_id + 1u])
+        return 0u;
+    else
+        return g_brick_starts[brick_id];
+}
+
+uint getBrickEnd(uint brick_id) {
+    return g_brick_starts[brick_id + 1u];
+}
+
+uint getBrickEncodingLength(uint brick_id) {
+    return getBrickEnd(brick_id) - getBrickStart(brick_id);
+}
+
 EncodingRef getBrickEncodingRef(uint brick_id) {
-    return EncodingRef(bufferAddressAdd(g_encoding_buffer_address, g_brick_starts[brick_id]));
+    return EncodingRef(bufferAddressAdd(g_encoding_buffer_addresses[brick_id / g_brick_idx_to_enc_vector], getBrickStart(brick_id)));
 }
 
 #ifdef SEPARATE_DETAIL

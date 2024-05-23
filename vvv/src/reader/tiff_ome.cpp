@@ -23,7 +23,7 @@
 bool is_valid_physical_size(float v) { return v > 0.f && std::isfinite(v); }
 #endif
 
-template<> std::shared_ptr<vvv::Volume<uint16_t>> vvv::Volume<uint16_t>::load_ome_tiff(std::string url) {
+template<> std::shared_ptr<vvv::Volume<uint32_t>> vvv::Volume<uint32_t>::load_ome_tiff(std::string url) {
 #if defined(LIB_TIFF) && defined(LIB_PUGIXLM)
     TIFF *tif = TIFFOpen(url.c_str(), "r");
 
@@ -53,12 +53,12 @@ template<> std::shared_ptr<vvv::Volume<uint16_t>> vvv::Volume<uint16_t>::load_om
     TIFF_FIELD(tif, TIFFTAG_PAGENUMBER, &pagenumber, &pagecount);
     TIFF_FIELD(tif, TIFFTAG_IMAGEDESCRIPTION, &image_description);
 
-    if (bits_per_sample != 16) {
+    if (bits_per_sample != 32) {
         TIFFClose(tif);
-        throw std::invalid_argument("expected precision of 16bit per sample");
+        throw std::invalid_argument("expected precision of 32 bit per sample");
     }
 
-    // thats a 8GiB volume for 8bit samples, 16GiB for 16bit samples
+    // thats a 32GiB volume for 32bit samples
     const uint64_t MAX_ALLOWED_VOXELS = 2048ul * 2048 * 2048;
     const uint64_t voxel_count = img_width * img_height * pagecount;
 
@@ -89,9 +89,9 @@ template<> std::shared_ptr<vvv::Volume<uint16_t>> vvv::Volume<uint16_t>::load_om
     physical_size_z = pixels_metadata.attribute("PhysicalSizeZ").as_float();
     const auto pixel_type = pixels_metadata.attribute("Type").as_string();
 
-    if (0 != strcmp("uint16", pixel_type)) {
+    if (0 != strcmp("uint32", pixel_type)) {
         TIFFClose(tif);
-        throw std::invalid_argument("expected uint16 samples");
+        throw std::invalid_argument("expected uint32 samples");
     }
 
     if (!is_valid_physical_size(physical_size_x) || !is_valid_physical_size(physical_size_y) || !is_valid_physical_size(physical_size_z)) {
@@ -100,14 +100,14 @@ template<> std::shared_ptr<vvv::Volume<uint16_t>> vvv::Volume<uint16_t>::load_om
     }
 
     // Check if using _TIFFmalloc(voxel_count) would provide any benefits
-    std::vector<uint16_t> payload(voxel_count); // new char[voxel_count * (bits_per_sample / 8)];
+    std::vector<uint32_t> payload(voxel_count); // new char[voxel_count * (bits_per_sample / 8)];
 
     tdata_t buf;
     const auto stripsize = TIFFStripSize(tif);
     const auto stripcount = TIFFNumberOfStrips(tif);
     buf = _TIFFmalloc(stripsize);
     int dircount = 0;
-    const auto directroysize = sizeof(uint16_t) * img_width * img_height;
+    const auto directroysize = sizeof(uint32_t) * img_width * img_height;
     assert(directroysize == (stripsize * stripcount));
 
     do {
@@ -125,7 +125,7 @@ template<> std::shared_ptr<vvv::Volume<uint16_t>> vvv::Volume<uint16_t>::load_om
 
     TIFFClose(tif);
 
-    return std::make_shared<Volume>(physical_size_x, physical_size_y, physical_size_z, img_width, img_height, pagecount, vk::Format::eR16Unorm, payload);
+    return std::make_shared<Volume>(physical_size_x, physical_size_y, physical_size_z, img_width, img_height, pagecount, vk::Format::eR32Uint, payload);
 #else
     throw std::runtime_error("TIFF or PUGIXML libraries not found! Can not load TIFF volume file!");
     return nullptr;

@@ -9,6 +9,7 @@
     #include "vvvwindow/entrypoint.hpp"
 #endif
 
+#include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/VolcaniteArgs.hpp"
 #include "volcanite/compression/CompSegVolHandler.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"

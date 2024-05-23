@@ -142,6 +142,10 @@ public:
         }
     }
 
+    /** Creates and populates all GPU buffers for the currently set compressed segmentation volume data set.
+     * Blocks until all buffer acquisitions and uploads are finished. */
+    void initDataSetGPUBuffers();
+
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
     int getTargetAccumulationFrames() { return m_accum_frames; }
@@ -216,8 +220,9 @@ private:
 
     std::vector<std::shared_ptr<TransferFunction1D>> m_materialTransferFunctions{SEGMENTED_VOLUME_MATERIAL_COUNT, nullptr};
     bool m_data_changed = false;
-    std::shared_ptr<Buffer> m_encoding_buffer = nullptr;
-    glm::uvec2 m_encoding_buffer_address = {};
+    std::vector<std::shared_ptr<Buffer>> m_split_encoding_buffers = {};
+    std::vector<glm::uvec2> m_split_encoding_buffer_addresses = {};
+    std::shared_ptr<Buffer> m_split_encoding_buffer_addresses_buffer = nullptr;
     const size_t m_max_attribute_buffer_size = ((64ul << 10) << 10);   // MB to store different floating point attributes back to back
     std::vector<int> m_attribute_start_position = {-1};           // the start index in the attribute_buffer for each attribute
     std::shared_ptr<Buffer> m_attribute_buffer = nullptr;       // stores attributes back to back
@@ -259,7 +264,7 @@ private:
     bool m_release_version = false;     // set to true if this is used in a renderer to release. Some parameters are hidden / set to default values in that case.
 
     vk::Extent2D m_resolution;
-    size_t m_camHash;       // todo: make multibuffered
+    size_t m_camHash;
     uint32_t m_framesSinceCameraMove;
     uint32_t m_frame;
     std::optional<RendererOutput> m_mostRecentFrame = {};

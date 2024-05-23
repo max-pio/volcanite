@@ -55,12 +55,12 @@ public:
     //! A non-standard conformant NRRD reader that is able to read files from https://klacansky.com/open-scivis-datasets/
     //! @param allowCast By default, an error is thrown if the volume component type and the component type stored in the file mismatch. If set to true, a conversion is attempted instead.
     static std::shared_ptr<Volume<ElementType, HolderType>> load_nrrd(std::string path, bool allowCast = true); // { throw std::runtime_error("element holder type combination unsupported for NRRD"); }
-    void writeNrrd(std::string path, bool separatePayloadFile = true);
+    void write_nrrd(std::string path, bool separatePayloadFile = true);
 
     //! An even more simplified nrrd format for the cellsinsilico volume data that Max hands out to students. Format is: one line "dim_x dim_y dim_z" and one line data type "uint[8|16|32]" followed by payload.
-    static std::shared_ptr<Volume<ElementType, HolderType>> load_simple_cellsinsilico(std::string path, bool allowCast = false);
+    static std::shared_ptr<Volume<ElementType, HolderType>> load_volcanite_raw(std::string path, bool allowCast = false);
 
-    void write_simple_cellsinsilico(std::string path);
+    void write_volcanite_raw(std::string path);
 
     //! Hdf5 file which is expected to have a 3D array as its first root object which will be loaded as the volume
     static std::shared_ptr<Volume<ElementType, HolderType>> load_hdf5(std::string path, bool allowCast = false);
