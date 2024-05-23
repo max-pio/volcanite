@@ -489,6 +489,7 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         shader_defines.push_back("SEPARATE_DETAIL");
     }
     shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
+    shader_defines.push_back("PALETTE_CACHE");
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if(getCtx()->getWsi())
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), shader_defines);
@@ -502,6 +503,25 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
     m_framesSinceCameraMove = 0;
     m_frame = 0u;
+
+    // update all bindings (if buffers were already created)
+    if(m_brick_starts_buffer) {
+        // update all bindings
+        m_pass->setStorageBuffer(0, 1, *m_brick_starts_buffer);
+        m_pass->setStorageBuffer(0, 2, *m_split_encoding_buffer_addresses_buffer);
+        m_pass->setStorageBuffer(0, 3, *m_cache_info_buffer);
+        m_pass->setStorageBuffer(0, 4, *m_assign_info_buffer);
+        m_pass->setStorageBuffer(0, 5, *m_free_stack_buffer);
+        m_pass->setStorageBuffer(0, 6, *m_cache_buffer);
+        if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
+            m_pass->setStorageBuffer(0, 7, *m_detail_starts_buffer);
+            m_pass->setStorageBuffer(0, 8, *m_detail_buffer);
+            m_pass->setStorageBuffer(0, 9, *m_detail_requests_buffer);
+        }
+        m_pass->setStorageBuffer(0, 16, *m_gpu_stats_buffer);
+        m_pass->setStorageBuffer(0, 17, *m_attribute_buffer);
+        m_pass->setStorageBuffer(0, 18, *m_materials_buffer);
+    }
 }
 
 void CompressedSegmentationVolumeRenderer::releaseShaderResources() {
