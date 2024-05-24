@@ -296,7 +296,7 @@ float CompressedSegmentationVolume::separateDetail() {
 
         const uint32_t* base_encoding = getBrickEncoding(i);
         // brick detail size: brick encoding size       - palette size      - detail LOD start
-        currentDetailStart += getBrickEncodingLength(i) - getPaletteSize(i) - base_encoding[lod_count - 1u] / 8;
+        currentDetailStart += getBrickEncodingLength(i) - getBrickPaletteLength(i) - base_encoding[lod_count - 1u] / 8;
     }
     split_detail_encoding_sizes.back() = currentDetailStart;
     m_detail_starts[brick_idx_count] = currentDetailStart;
@@ -322,7 +322,7 @@ float CompressedSegmentationVolume::separateDetail() {
         uint32_t* mut_encoding = m_encodings[brick_idx / m_brick_idx_to_enc_vector].data();
         uint32_t old_brick_start = getBrickStart(brick_idx);
         uint32_t old_brick_encoding_size = getBrickEncodingLength(brick_idx);
-        uint32_t palette_size = getPaletteSize(brick_idx);
+        uint32_t palette_size = getBrickPaletteLength(brick_idx);
 
         // changes for one brick's encoding:
         // - one uint32 element is removed from the header (LoD start position of the detail) --> now in m_detail_starts

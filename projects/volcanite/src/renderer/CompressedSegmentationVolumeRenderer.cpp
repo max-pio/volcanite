@@ -37,9 +37,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         const size_t cache_bricks = static_cast<uint32_t>(m_cache_buffer->getByteSize() / 4l / cache_element_size);
         // ToDo: update all cache size management with regards to m_bits_per_palette_index
         Logger(DEBUG) << "new data set with " << str(m_compressed_segmentation_volume->getBrickCount())
-        << " bricks added. Cache fits " <<  cache_bricks << " = "
-        << static_cast<uint32_t>(std::pow(static_cast<double>(cache_bricks), 1.f/3.f))
-        << "^3 bricks on finest LoD. Need " << m_bits_per_palette_index << " bits per palette indices to store " << m_palette_indices_per_uint << " indices per uint.";
+                      << " bricks added. Cache fits " << cache_bricks << " = "
+                      << static_cast<uint32_t>(std::pow(static_cast<double>(cache_bricks), 1.f/3.f))
+                      << "^3 bricks on finest LoD. Need " << m_cache_palette_idx_bits << " bits per palette indices to store " << m_cache_indices_per_uint << " indices per uint.";
 
         // update invocation sizes to brick dimension
         m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(), m_compressed_segmentation_volume->getLodCountPerBrick());
@@ -408,10 +408,10 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
                                                      static_cast<float>(free_heap_size) / 1024.f / 1024.f);
     }
     // for small data sets, we can limit the cache so that it fits all LoDs of the data set at once
-    size_t maximum_req_cache_size_MB;
+    size_t maximum_req_cache_size_MB = 4095;
     {
         // number base elements needed to store all LoDs of a brick at once
-        size_t brick_cache_size_in_lod = m_base_element_size;   // inv. LoD 0 needs no elements, inv. LoD 1 needs one
+        size_t brick_cache_size_in_lod = m_cache_base_element_uints;   // inv. LoD 0 needs no elements, inv. LoD 1 needs one
         maximum_req_cache_size_MB = brick_cache_size_in_lod;
         for(int l = 2; l < m_compressed_segmentation_volume->getLodCountPerBrick(); l++) {
             // next level needs 8 times the elements
@@ -429,15 +429,17 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
         Logger(DEBUG) << "Target cache size is bigger than required to store all LoDs of all bricks. Limitting size.";
         m_target_cache_size_MB = maximum_req_cache_size_MB;
     }
-    // ToDo: could use the BufferDeviceAddress extension for the cache as well to support caches > 4 GB
+    // ToDo: could use the BufferDeviceAddress extension for the cache buffer as well to support caches > 4 GB.
+    //  In shaders, cache idx is measured in # base_element where one base_element is ~4 to 16 bytes large.
+    //  Would only have to adapt the (cache_idx * g_cache_base_element_uints) in csgv_assign.
     if(m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
-        Logger(WARN) << "Cannot use cache size > 4 GB. Using smaller cache.";
+        Logger(WARN) << "Cache size is currently limited to 4 GB maximum.";
         m_target_cache_size_MB = 4294967295ul / 1024ul / 1024ul;
     }
     Logger(INFO) << "Allocating cache size " << m_target_cache_size_MB << " MB.";
-    m_cache_capacity = (m_target_cache_size_MB * 1024 * 1024) / (m_base_element_size * sizeof(uint32_t));
+    m_cache_capacity = (m_target_cache_size_MB * 1024 * 1024) / (m_cache_base_element_uints * sizeof(uint32_t));
     size_t maxGPUBufferSize = getCtx()->getPhysicalDevice().getProperties().limits.maxStorageBufferRange;
-    m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = m_cache_capacity * m_base_element_size * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = m_cache_capacity * m_cache_base_element_uints * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
 
     updateDeviceMemoryUsage();
     Logger(INFO) << "Device memory after initialization: " << m_gui_device_mem_text;
@@ -537,7 +539,8 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         shader_defines.push_back("SEPARATE_DETAIL");
     }
     shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
-    shader_defines.push_back("PALETTE_CACHE");
+    if(m_use_palette_cache)
+        shader_defines.push_back("PALETTE_CACHE");
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if(getCtx()->getWsi())
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), shader_defines);
@@ -801,6 +804,9 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_usegmented_volume_info->setUniform<uint32_t>("g_frame", m_frame);
         m_usegmented_volume_info->setUniform<uint32_t>("g_max_decoding_lod", glm::min(static_cast<uint32_t>(m_max_decoding_lod), lod_count));
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_capacity", m_cache_capacity);
+        m_usegmented_volume_info->setUniform<uint32_t>("g_cache_base_element_uints", m_cache_base_element_uints);
+        m_usegmented_volume_info->setUniform<uint32_t>("g_cache_indices_per_uint", m_cache_indices_per_uint);
+        m_usegmented_volume_info->setUniform<uint32_t>("g_cache_palette_idx_bits", m_cache_palette_idx_bits);
         m_usegmented_volume_info->setUniform<uint32_t>("g_free_stack_capacity", m_free_stack_capacity);
         m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
         m_usegmented_volume_info->setUniform<uint32_t>("g_brick_idx_to_enc_vector", m_compressed_segmentation_volume->getBrickIdxToEncVectorMapping());

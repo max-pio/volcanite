@@ -131,11 +131,19 @@ public:
         m_data_changed = true;
 
         // check how many bits are required to store cache indices
-//        m_bits_per_palette_index = static_cast<uint32_t>(glm::ceil(glm::log2(static_cast<double>(m_compressed_segmentation_volume->getMaxBrickPaletteCount()))));
-        uint32_t m_palette_size_max = ~0u;
-        m_bits_per_palette_index = static_cast<uint32_t>(glm::ceil(glm::log2(static_cast<double>(m_palette_size_max))));
-        m_palette_indices_per_uint = 32u / m_bits_per_palette_index;
-        m_base_element_size = (8u + m_palette_indices_per_uint - 1u) / m_palette_indices_per_uint;  // = ceil(8 / m_palette_indices_per_uint)
+        if(m_use_palette_cache) {
+            // must be (max_palette_count + 1), need an additional magic number (= 0) for not yet written output voxels
+            m_cache_palette_idx_bits = static_cast<uint32_t>(glm::ceil(
+                    glm::log2(static_cast<double>(m_compressed_segmentation_volume->getMaxBrickPaletteCount()) + 1.0)));
+            m_cache_indices_per_uint = 32u / m_cache_palette_idx_bits;
+            m_cache_base_element_uints = (8u + m_cache_indices_per_uint - 1u) /
+                                         m_cache_indices_per_uint;  // = ceil(8 / m_palette_indices_per_uint)
+        } else {
+            // without paletting, the cache stores explicit 32 bit labels = one label per uint
+            m_cache_palette_idx_bits = 32u;
+            m_cache_indices_per_uint = 1u;
+            m_cache_base_element_uints = 8;
+        }
 
         // when a database is provided, we use it for attribute visualization
         m_csgv_db = std::move(db);
@@ -230,11 +238,12 @@ private:
     std::vector<GPUSegmentedVolumeMaterial> m_gpu_materials{SEGMENTED_VOLUME_MATERIAL_COUNT};
 
     // palettized cache
-    uint32_t m_bits_per_palette_index = 32u;   // the GPU cache can store palette indices with fewer than 32 bits per entry
-    uint32_t m_palette_indices_per_uint = 1u;  // is floor(32/bits_per_palette_index), indices do not cross multiple words
-    uint32_t m_base_element_size = 8;          // number of uints needed to store 2x2x2 output voxels
-    size_t m_target_cache_size_MB = 0u;      // (user parameter)
-    size_t m_cache_capacity = 33554432ul;      // this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x (sizeof(uint)=32) / m_palette_indices_per_uint bytes large
+    const bool m_use_palette_cache = false;      // with paletting, the cache only stores indices into brick palettes instead of the actual indexed labels
+    uint32_t m_cache_palette_idx_bits = 32u;    // the GPU cache can store palette indices with fewer than 32 bits per entry
+    uint32_t m_cache_indices_per_uint = 1u;     // is floor(32/bits_per_palette_index), indices do not cross multiple words
+    uint32_t m_cache_base_element_uints = 8;    // number of uints needed to store 2x2x2 output voxels
+    size_t m_target_cache_size_MB = 0u;         // user parameter: 0 to use as much GPU memory as possible
+    size_t m_cache_capacity = 33554432ul;       // this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x (sizeof(uint)=32) / m_palette_indices_per_uint bytes large
     const size_t m_free_stack_capacity = 262144ul;  // this many elements (one uint=4byte each) fit into the free stack of EACH LoD > 0. We need max. volume_size/brick_size/lod_width³ elements. a capacity of 262144 equals 1MB * (lod_count-1)
     std::shared_ptr<Buffer> m_cache_info_buffer = nullptr;
     std::shared_ptr<Buffer> m_cache_buffer = nullptr;       // cache_capacity * 2x2x2 uints

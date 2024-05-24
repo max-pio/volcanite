@@ -354,7 +354,7 @@ public:
         return getDetailEncodingBufferForBrickIdx(brick_idx)->data() + getBrickDetailStart(brick_idx);
     }
     /** @return the number of elements in the reverse palette of the brick. */
-    uint32_t getPaletteSize(uint32_t brick_idx) const {
+    uint32_t getBrickPaletteLength(uint32_t brick_idx) const {
         if(brick_idx >= m_brick_starts.size() - 1)
             throw std::runtime_error("Trying to access out of bounds brick_idx " + std::to_string(brick_idx));
         return getBrickEncoding(brick_idx)[getPaletteSizeHeaderIndex()];
@@ -363,7 +363,7 @@ public:
     [[nodiscard]] std::span<const uint32_t> getBrickReversePalette(uint32_t brick_idx) const {
         if(brick_idx >= m_brick_starts.size() - 1)
             throw std::runtime_error("Trying to access out of bounds brick_idx " + std::to_string(brick_idx));
-        uint32_t palette_size = getPaletteSize(brick_idx);
+        uint32_t palette_size = getBrickPaletteLength(brick_idx);
         return std::span<const uint32_t>{
                 getEncodingBufferForBrickIdx(brick_idx)->data() + m_brick_starts[brick_idx + 1] - palette_size, palette_size};
     }

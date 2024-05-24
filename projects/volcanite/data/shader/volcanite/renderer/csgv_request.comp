@@ -59,12 +59,9 @@ void main() {
     uint brick_encoding_length = getBrickEncodingLength(brick_idx);
     EncodingRef brick_address = getBrickEncodingRef(brick_idx);
     // read total palette size from brick header
-#ifdef SEPARATE_DETAIL
-    uint palette_size = brick_address.buf[2u * g_lod_count - 1u];
-#else
-    uint palette_size = brick_address.buf[2u * g_lod_count];
-#endif
+    uint palette_size = brick_address.buf[getPaletteSizeHeaderIndex()];
     assert(palette_size > 0u, "palette size 0 should not be possible");
+    assert(palette_size < bitfieldExtract(~0u, 0, int(g_cache_palette_idx_bits)), "palette size exceeds available bits for cache palette indices");
     // check all entries in the palette if anything is visible (> 0)
     for (uint i = 1; i <= palette_size; i++) {
         if (isLabelVisible(brick_address.buf[brick_encoding_length - i])) {

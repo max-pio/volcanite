@@ -71,6 +71,18 @@ EncodingRef getBrickEncodingRef(uint brick_idx) {
     return EncodingRef(bufferAddressAdd(g_encoding_buffer_addresses[brick_idx / g_brick_idx_to_enc_vector], getBrickStart(brick_idx)));
 }
 
+uint getPaletteSizeHeaderIndex() {
+#ifdef SEPARATE_DETAIL
+    return 2u * g_lod_count - 1u;
+#else
+    return 2u * g_lod_count;
+#endif
+}
+
+uint getBrickPaletteLength(uint brick_idx) {
+    return getBrickEncodingRef(brick_idx).buf[getPaletteSizeHeaderIndex()];
+}
+
 #ifdef SEPARATE_DETAIL
 EncodingRef getBrickDetailEncodingRef(uint brick_idx) {
     return EncodingRef(bufferAddressAdd(g_detail_buffer_address, g_detail_starts[brick_idx]));

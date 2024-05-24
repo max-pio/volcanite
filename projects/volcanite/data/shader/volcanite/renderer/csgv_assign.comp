@@ -29,7 +29,7 @@ uint popFreeBlockStack(uint inv_lod) {
 
 void main() {
     // at the beginning of this shader execution:
-    // ASSIGN_NEW_BLOCK_START contains the first index (measured in 2x2x2 elements) in g_cache where the new elements for this LoD can start
+    // ASSIGN_NEW_BLOCK_START contains the first index (measured in base elements) in g_cache where the new elements for this LoD can start
     // ASSIGN_NEW_BLOCK_COUNT contains the number of elements (measured in LxLxL elements) in g_cache for this LoD available from there
     // (the other elements we will try to fetch from the freeBlockStack)
     //
@@ -74,7 +74,7 @@ void main() {
     }
 
     uint inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
-    uint elemSizeInCache = 1u << (3u * (inv_lod - 1u)); // number of 2x2x2 blocks we need for storing one element of this LoD in g_cache
+    uint elemSizeInCache = 1u << (3u * (inv_lod - 1u)); // number of base elements we need for storing one element of this LoD in g_cache
     assert(0 < inv_lod && inv_lod < g_lod_count, "brick has slot index but requests zero or invalid lod");
 
     // now find us an index in the cache
@@ -96,10 +96,11 @@ void main() {
     #ifdef SEPARATE_DETAIL
             assert(!(inv_lod == g_lod_count - 1U && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_idx] == g_detail_starts[brick_idx+1])), "detail not available but the provision shader told us it is");
     #endif
-            resetCSGVBrick(cache_idx * 8u, inv_lod);
-            decompressCSGVBrick(brick_idx, getBrickEncodingLength(brick_idx), valid_brick_size, 0u, inv_lod, cache_idx * 8u);
+            resetCSGVBrick(cache_idx * g_cache_base_element_uints, inv_lod);
+            decompressCSGVBrick(brick_idx, getBrickEncodingLength(brick_idx), valid_brick_size, 0u, inv_lod, cache_idx * g_cache_base_element_uints);
 #else
-        fillCSGVBrick(cache_idx * 8u, inv_lod, brick_idx + 1337u);
+        // fill the cache with "random" indices into the brick's palette
+        fillCSGVBrick(cache_idx * g_cache_base_element_uints, inv_lod, brick_idx % getBrickPaletteSize(brick_idx));
 #endif
         g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = inv_lod;
     }

@@ -28,9 +28,9 @@ void main() {
     // stacks
     // - if a brick is no longer visible but held an element in cache, it was freed and added to the free_block_stack
 
-    // ToDo: we could do this in ONE thread only and do a for-loop over all LoDs. This could guarantee to allocate smaller/coarser LoDs even if finer LoDs would increase the cache_top too high
+    // ToDo: could do this in ONE thread only and do a for-loop over all LoDs. This could guarantee to allocate smaller/coarser LoDs even if finer LoDs would increase the cache_top too high
     // find out for which lod we compute everything
-    // invocation 0 = LoD 1 which is the coarsest that we handle and uses 2x2x2 uints for storage in cache (= one base element)
+    // invocation 0 = LoD 1 which is the coarsest that we handle and uses stores 2x2x2 output voxels in cache (= one base element)
     uint inv_lod = gl_GlobalInvocationID.x + 1u;
     if (isHelperLane(inv_lod, g_lod_count))
         return;
@@ -78,7 +78,7 @@ void main() {
     }
 
     // .. we need to aquire new elements from the cache top
-    const int elemSizeInCache = 1 << (3 * (int(inv_lod) - 1)); // number of 2x2x2 blocks we need for storing one element of this LoD in g_cache
+    const int elemSizeInCache = 1 << (3 * (int(inv_lod) - 1)); // number of base elements we need for storing one element of this LoD in g_cache
     uint newBaseElemsToRequest = uint(numberOfNewBlocks * elemSizeInCache);
 
     const uint cache_top = (g_lod_count - 1u) * ASSIGN_ELEMS_PER_LOD;
@@ -132,7 +132,7 @@ void main() {
 
     // after this shader execution:
     // assign info
-    // - ASSIGN_NEW_BLOCK_START contains the first index (measured in 2x2x2 elements) in g_cache where the new elements for this LoD start
+    // - ASSIGN_NEW_BLOCK_START contains the first index (measured in base_elements) in g_cache where the new elements for this LoD start
     // - ASSIGN_NEW_BLOCK_COUNT contains the number of elements (measured in LxLxL elements) in g_cache for this LoD available from there
     // - START and COUNT are guaranteed to remain within g_cache_capacity
     // stacks

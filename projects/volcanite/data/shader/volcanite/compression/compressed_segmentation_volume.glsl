@@ -19,35 +19,97 @@ uint _cacheIndexInBrick(const uvec3 voxel_pos_in_brick) {
     return morton3Dp2i(voxel_pos_in_brick);
 }
 
-// returns the label for the voxel position within the brick starting at the start_idx.
+
+// reads the cache_idx_in_bricks entry from the brick's cache region starting at brick_start_base_element.
+uint readEntryFromCache(uint decoded_brick_start_uint, uint cache_idx_in_brick) {
+#ifdef PALETTE_CACHE
+    uint cache_uint_to_read = decoded_brick_start_uint                            // start uint
+                              + cache_idx_in_brick / g_cache_indices_per_uint;    // uint within the cache region
+    // returns a palette index in [1, brickPaletteLength]
+    return bitfieldExtract(CSGV_DECODING_ARRAY[cache_uint_to_read],
+                            int((cache_idx_in_brick % g_cache_indices_per_uint) * g_cache_palette_idx_bits),
+                            int(g_cache_palette_idx_bits));
+#else
+    // returns a label
+    return CSGV_DECODING_ARRAY[decoded_brick_start_uint + cache_idx_in_brick];
+#endif
+}
+
+#ifndef CSGV_READ_ONLY
+// writes the least significant g_cache_palette_idx_bits bits from entry to the cache_idx_in_bricks entry
+// from the brick's cache region starting at brick_start_base_element.
+void writeEntryToCache(uint decoded_brick_start_uint, uint cache_idx_in_brick, uint entry) {
+#ifdef PALETTE_CACHE
+    uint cache_uint_to_write = decoded_brick_start_uint                            // start uint
+                               + cache_idx_in_brick / g_cache_indices_per_uint;    // uint within the cache region
+    CSGV_DECODING_ARRAY[cache_uint_to_write] =
+                            bitfieldInsert(CSGV_DECODING_ARRAY[cache_uint_to_write],
+                                            entry,
+                                            int((cache_idx_in_brick % g_cache_indices_per_uint) * g_cache_palette_idx_bits),
+                                            int(g_cache_palette_idx_bits));
+#else
+    CSGV_DECODING_ARRAY[decoded_brick_start_uint + cache_idx_in_brick] = entry;
+#endif
+}
+
+//// writes the least significant g_cache_palette_idx_bits bits from entry to the cache_idx_in_bricks entry in the cache
+//// cache_idx_in_brick must be offset by (decoded_brick_start_uint * g_cache_indices_per_uint) already
+//void writeEntryToCacheDirect(uint cache_idx_in_brick, uint entry) {
+//#ifdef PALETTE_CACHE
+//    uint cache_uint_to_write = cache_idx_in_brick  / g_cache_indices_per_uint;
+//    CSGV_DECODING_ARRAY[cache_uint_to_write] =
+//                            bitfieldInsert(CSGV_DECODING_ARRAY[cache_uint_to_write],
+//                                            entry,
+//                                            (cache_idx_in_brick % g_cache_indices_per_uint) * g_cache_palette_idx_bits,
+//                                            g_cache_palette_idx_bits);
+//#else
+//    CSGV_DECODING_ARRAY[cache_idx_in_brick] = entry;
+//#endif
+//}
+#endif
+
+#ifdef PALETTE_CACHE
+// returns the label for the voxel position within the brick starting at the given base element.
 // decoded_inv_lod: the state of the brick in CSGV_DECODING_ARRAY *must* be a full decoding up to this inv_lod
 // brick_voxel: the coordinate of the lookup voxel on the *finest* lod, even if the lookup is for a coarser lod
-uint readCSGVBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, const uint decoded_brick_start_idx) {
-    uint lod_width = g_brick_size / (1u << decoded_inv_lod);
-    // determine position in brick
-    return CSGV_DECODING_ARRAY[decoded_brick_start_idx + (_cacheIndexInBrick(brick_voxel) / (lod_width * lod_width * lod_width))];
-}
-
-uint readCSGVPaletteBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, const uint decoded_brick_start_idx, const uint brick_idx) {
-    uint lod_width = g_brick_size / (1u << decoded_inv_lod);
+uint readCSGVPaletteBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, const uint brick_start_base_element, const uint brick_idx) {
+    // determine which index element to read from the cache region
+    uint lod_width = g_brick_size >> decoded_inv_lod;
+    uint cache_idx_in_brick = _cacheIndexInBrick(brick_voxel) / (lod_width * lod_width * lod_width);
+    // read it from the cache region. by design, the first palette index is 1, meaning we can directly substrac it from
+    // the brick's encoding length to arrive at the correct position
+    uint palette_idx = readEntryFromCache(brick_start_base_element * g_cache_base_element_uints, cache_idx_in_brick);
+    #ifndef NDEBUG
+        if (palette_idx > getBrickPaletteLength(brick_idx))
+            return INVALID;
+    #endif
     // the cache stores the uint32 index in the brick's encoding array (referencing the palette) where the label is stored.
-    return getBrickEncodingRef(brick_idx).buf[CSGV_DECODING_ARRAY[decoded_brick_start_idx + (_cacheIndexInBrick(brick_voxel) / (lod_width * lod_width * lod_width))]];
+    return getBrickEncodingRef(brick_idx).buf[getBrickEncodingLength(brick_idx) - palette_idx];
 }
+#else
+// returns the label for the voxel position within the brick starting at the given base element.
+// decoded_inv_lod: the state of the brick in CSGV_DECODING_ARRAY *must* be a full decoding up to this inv_lod
+// brick_voxel: the coordinate of the lookup voxel on the *finest* lod, even if the lookup is for a coarser lod
+uint readCSGVBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, const uint brick_start_base_element) {
+    // ToDo: why pass the decoded_inv_lod and the decoded_brick_star_base_element? just pass the brick_idx and read it from the cache info here
+    uint lod_width = g_brick_size >> decoded_inv_lod;
+    // determine position in brick
+    return readEntryFromCache(brick_start_base_element * g_cache_base_element_uints, (_cacheIndexInBrick(brick_voxel) / (lod_width * lod_width * lod_width)));
+}
+#endif
 
+//// ToDo: DEPRECATED headers do not store birth times anymore
+//uint unpackBrickIDFromCache(uint header) {
+//    return header & 0xFFFFFFu;
+//}
+//uint unpackBirthTimeFromCache(uint header) {
+//    return header >> 24;
+//}
+//void unpackCacheHeader32bit(uint header, out uint birthTime8bit, out uint brickID24bit) {
+//    brickID24bit = unpackBrickIDFromCache(header);
+//    birthTime8bit = unpackBirthTimeFromCache(header);
+//}
 
-#define CACHE_TIME_MOD 256u
-
-// Unpacks the two properties "birthTime" and "brickID" from the header. Used for debug purposes in rednerer.
-void unpackCacheHeader32bit(uint header, out uint birthTime8bit, out uint brickID24bit) {
-    brickID24bit = header & 0xFFFFFFu;
-    birthTime8bit = (header >> 24);
-}
-uint unpackBrickIDFromCache(uint header) {
-    return header & 0xFFFFFFu;
-}
-uint unpackBirthTimeFromCache(uint header) {
-    return header >> 24;
-}
 
 #ifndef CSGV_READ_ONLY
 
@@ -89,7 +151,7 @@ uvec3 _enumBrickPos(uint i) {
     return morton3Di2p(i);
 }
 
-uint _valueOfNeighbor(const uvec3 brick_pos, const uint local_lod_i, const uint lod_width, const int neighbor_i, const uint decoded_brick_start_idx) {
+uint _valueOfNeighbor(const uvec3 brick_pos, const uint local_lod_i, const uint lod_width, const int neighbor_i, const uint decoded_brick_start_uint) {
     // find the position of the neighbor
     ivec3 neighbor_pos = ivec3(brick_pos) + neighbor[local_lod_i][neighbor_i] * int(lod_width);
     // should not happen here! we just decode, assume correct labels
@@ -104,24 +166,26 @@ uint _valueOfNeighbor(const uvec3 brick_pos, const uint local_lod_i, const uint 
         neighbor_index -= neighbor_index % (lod_width * lod_width * lod_width * 8);
 
     // return value of neighbor or parent neighbor in brick
-    return CSGV_DECODING_ARRAY[decoded_brick_start_idx + neighbor_index];
-}
-
-// reset the brick by setting all of its entries to INVALID
-void resetCSGVBrick(const uint decoded_brick_start_idx, const uint inv_lod) {
-    uint voxel_count = 1u << (3u * inv_lod);
-    for(uint i = decoded_brick_start_idx; i < decoded_brick_start_idx + voxel_count; i++) {
-        CSGV_DECODING_ARRAY[i] = INVALID;
-    }
+    return readEntryFromCache(decoded_brick_start_uint, neighbor_index);
 }
 
 // fills the brick by setting all of its entries to value
-void fillCSGVBrick(const uint decoded_brick_start_idx, const uint inv_lod, const uint value) {
+void fillCSGVBrick(const uint decoded_brick_start_uint, const uint inv_lod, const uint value) {
     uint voxel_count = 1u << (3u * inv_lod);
-    for(uint i = decoded_brick_start_idx; i < decoded_brick_start_idx + voxel_count; i++) {
-        CSGV_DECODING_ARRAY[i] = value;
+    for(uint i = 0; i < voxel_count; i++) {
+        writeEntryToCache(decoded_brick_start_uint, i, value);
     }
 }
+
+// reset the brick by setting all of its entries to INVALID
+void resetCSGVBrick(const uint decoded_brick_start_uint, const uint inv_lod) {
+#ifdef PALETTE_CACHE
+    fillCSGVBrick(decoded_brick_start_uint, inv_lod, 0);
+#else
+    fillCSGVBrick(decoded_brick_start_uint, inv_lod, INVALID);
+#endif
+}
+
 
 
 // decompresses the encoding of the brick from the encoding array to the memory brick up to the given inverse LOD level.
@@ -131,17 +195,21 @@ void fillCSGVBrick(const uint decoded_brick_start_idx, const uint inv_lod, const
 // start_at_inv_Lod must not be the finest possible LoD
 void decompressCSGVBrick(const uint brick_idx, const uint brick_encoding_length,
                                   const uvec3 valid_brick_size, const uint start_at_inv_lod, const uint inv_lod,
-                                  const uint decoded_brick_start_idx) {
+                                  const uint decoded_brick_start_uint) {
 
 //    // safe mode test: do not decompress anything, instead fill the voxels with dummy values in [0, 256)
-//    fillCSGVBrick(decoded_brick_start_idx, inv_lod, (encoding_start_index / 7) % 256);
+//    fillCSGVBrick(decoded_brick_start_uint, inv_lod, (encoding_start_index / 7) % 256);
 //    return;
 
     // refine up to the LOD that was requested, starting with decoding of start_at_inv_lod
     // the starting position of the current LOD in the encoding array, measured in elements of entry_t. Taken from first brick header entries
     uint local_lod_i;   // the local index of this element within the lod block of the coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
     // the palette starts at the end of the encoding block
+#ifdef PALETTE_CACHE
+    uint paletteE = 1u;         // 0 is the magic number for unwritten output elements. 1 the first palette entry
+#else
     uint paletteE = brick_encoding_length - 1u;
+#endif
     CSGVReadState readState;    // read and changed in the _readNextLodOperationFromEncoding function
 
     // reference to the uint buffer containing this bricks encoding
@@ -190,22 +258,20 @@ void decompressCSGVBrick(const uint brick_idx, const uint brick_encoding_length,
             if (any(greaterThanEqual(_enumBrickPos(i).xyz * (g_brick_size/output_size), valid_brick_size)))
                 continue;
 
-            uint out_i = decoded_brick_start_idx + i;
-
-//            // just fill the brick with random values
-//            CSGV_DECODING_ARRAY[out_i] = ((encoding_start_index) % 8u) * 383u + ((i/index_step)%2)*512  + 1u; //brick_(i % 4095u) + 1u;
-//            continue;
-
             // every 8th element (we span 2*2*2=8 elements of the coarse LOD above), we fetch the new parent
             local_lod_i = (i % (index_step*8))/index_step;
             if (lod > 0u && i % (index_step*8) == 0) {
                 // if this subtree is already filled (because in a previous LOD we had a PARENT_STOP for this area), the last element of this block is set and we can skip it
-                if (CSGV_DECODING_ARRAY[out_i + (index_step*7)] != INVALID) {
+#ifdef PALETTE_CACHE
+                if (readEntryFromCache(decoded_brick_start_uint, i + (index_step * 7)) != 0) {
+#else
+                if (readEntryFromCache(decoded_brick_start_uint, i + (index_step * 7)) != INVALID) {
+#endif
                     i += (index_step*7);
                     continue;
                 }
 
-                parent_value = CSGV_DECODING_ARRAY[out_i];
+                parent_value = readEntryFromCache(decoded_brick_start_uint, i);
             }
 
             // get the next operation and apply it
@@ -213,42 +279,44 @@ void decompressCSGVBrick(const uint brick_idx, const uint brick_encoding_length,
 
             uint operation_lsb = operation & 7u; // extract least significant 3 bits with 0111
             if (operation_lsb == PARENT)
-                CSGV_DECODING_ARRAY[out_i] = parent_value;
+                writeEntryToCache(decoded_brick_start_uint, i, parent_value);
             else if (operation_lsb == NEIGHBOR_X)
-                CSGV_DECODING_ARRAY[out_i] = _valueOfNeighbor(_enumBrickPos(i), local_lod_i, lod_width, 0, decoded_brick_start_idx);
+                writeEntryToCache(decoded_brick_start_uint, i, _valueOfNeighbor(_enumBrickPos(i), local_lod_i, lod_width, 0, decoded_brick_start_uint));
             else if (operation_lsb == NEIGHBOR_Y)
-                CSGV_DECODING_ARRAY[out_i] = _valueOfNeighbor(_enumBrickPos(i), local_lod_i, lod_width, 1, decoded_brick_start_idx);
+                writeEntryToCache(decoded_brick_start_uint, i, _valueOfNeighbor(_enumBrickPos(i), local_lod_i, lod_width, 1, decoded_brick_start_uint));
             else if (operation_lsb == NEIGHBOR_Z)
-                CSGV_DECODING_ARRAY[out_i] = _valueOfNeighbor(_enumBrickPos(i), local_lod_i, lod_width, 2, decoded_brick_start_idx);
+                writeEntryToCache(decoded_brick_start_uint, i, _valueOfNeighbor(_enumBrickPos(i), local_lod_i, lod_width, 2, decoded_brick_start_uint));
 #ifdef PALETTE_CACHE
+            // with the palettized cache we store *ascending* palette indices into the bricks reverse palette.
+            // an index of 0 reference the first entry of the reverse palette, at the *end* of this brick's encoding
             else if (operation_lsb == PALETTE_ADV) {   // read palette entry and advance palette pointer to the next entry
-                CSGV_DECODING_ARRAY[out_i] = paletteE--;
+                writeEntryToCache(decoded_brick_start_uint, i, paletteE++);
             }
             else if (operation_lsb == PALETTE_LAST) { // reuse the last palette entry
-                CSGV_DECODING_ARRAY[out_i] = paletteE+1;
+                writeEntryToCache(decoded_brick_start_uint, i, paletteE - 1);
             }
             else if (operation_lsb == PALETTE_D) {
                 uint palette_delta = _readNextLodOperationFromEncoding(brick_encoding, readState) + 2u;
-                CSGV_DECODING_ARRAY[out_i] = paletteE + palette_delta;
+                writeEntryToCache(decoded_brick_start_uint, i, paletteE - palette_delta);
             }
 #else
             else if (operation_lsb == PALETTE_ADV) {   // read palette entry and advance palette pointer to the next entry
-                CSGV_DECODING_ARRAY[out_i] = brick_palette.buf[paletteE--];
+                writeEntryToCache(decoded_brick_start_uint, i, brick_palette.buf[paletteE--]);
             }
             else if (operation_lsb == PALETTE_LAST) { // reuse the last palette entry
-                CSGV_DECODING_ARRAY[out_i] = brick_palette.buf[paletteE+1];
+                writeEntryToCache(decoded_brick_start_uint, i, brick_palette.buf[paletteE+1]);
             }
             else if (operation_lsb == PALETTE_D) {
                 uint palette_delta = _readNextLodOperationFromEncoding(brick_encoding, readState) + 2u;
-                CSGV_DECODING_ARRAY[out_i] = brick_palette.buf[paletteE + palette_delta];
+                writeEntryToCache(decoded_brick_start_uint, i, brick_palette.buf[paletteE + palette_delta]);
             }
 #endif
 
             // stop traversal: fill all other parts of the brick with this value
             if ((operation & STOP_BIT) > 0u) {
                 // fill the whole subtree with the parent value
-                for (uint n = out_i; n < out_i + index_step; n++) {
-                    CSGV_DECODING_ARRAY[n] = CSGV_DECODING_ARRAY[out_i];
+                for (uint n = i; n < i + index_step; n++) {
+                    writeEntryToCache(decoded_brick_start_uint, n, readEntryFromCache(decoded_brick_start_uint, i));
                 }
             }
         }
@@ -257,6 +325,6 @@ void decompressCSGVBrick(const uint brick_idx, const uint brick_encoding_length,
         lod_width /= 2u;
     }
 }
-#endif // CSGV_READ_ONLY
+#endif // ndef CSGV_READ_ONLY
 
 #endif /* COMPRESSED_SEGMENTATION_VOLUME_GLSL */
