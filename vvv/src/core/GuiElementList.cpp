@@ -220,6 +220,8 @@ namespace vvv {
                         vstr.append(std::to_string(mat.tfAttribute) + " ");
                         vstr.append(std::to_string(mat.tfMinMax.x) + " ");
                         vstr.append(std::to_string(mat.tfMinMax.y) + " ");
+                        vstr.append(std::to_string(mat.opacity) + " ");
+                        vstr.append(std::to_string(mat.emission) + " ");
                         //
                         const auto& cm = e->colormapConfig[i];
                         for(auto c : cm.color)
@@ -406,6 +408,8 @@ namespace vvv {
                         in >> mat.tfAttribute;
                         in >> mat.tfMinMax.x;
                         in >> mat.tfMinMax.y;
+                        in >> mat.opacity;
+                        in >> mat.emission;
                         //
                         auto& cm = e->colormapConfig[m];
                         for(glm::vec3& c : cm.color) {
@@ -416,6 +420,11 @@ namespace vvv {
                         in >> cm.precomputedIdx;
                         int type;
                         in >> type;
+                        if(type < 0 || type > 2) {
+                            Logger(ERROR) << "Unsupported color map type " << type;
+                            return false;
+                        }
+
                         cm.type = static_cast<GuiTFSegmentedVolumeEntry::ColorMapType>(type);
 
                         e->initialize();

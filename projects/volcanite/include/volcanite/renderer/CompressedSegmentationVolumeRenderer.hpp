@@ -130,6 +130,13 @@ public:
         m_compressed_segmentation_volume = std::move(csgv);
         m_data_changed = true;
 
+        // check how many bits are required to store cache indices
+//        m_bits_per_palette_index = static_cast<uint32_t>(glm::ceil(glm::log2(static_cast<double>(m_compressed_segmentation_volume->getMaxBrickPaletteCount()))));
+        uint32_t m_palette_size_max = ~0u;
+        m_bits_per_palette_index = static_cast<uint32_t>(glm::ceil(glm::log2(static_cast<double>(m_palette_size_max))));
+        m_palette_indices_per_uint = 32u / m_bits_per_palette_index;
+        m_base_element_size = (8u + m_palette_indices_per_uint - 1u) / m_palette_indices_per_uint;  // = ceil(8 / m_palette_indices_per_uint)
+
         // when a database is provided, we use it for attribute visualization
         m_csgv_db = std::move(db);
         m_attribute_start_position.resize(m_csgv_db->getAttributeCount(), -1);
@@ -150,8 +157,12 @@ public:
 
     int getTargetAccumulationFrames() { return m_accum_frames; }
     /** Will save the renderer state to the path when the renderer is shut down */
-    void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = path; }
-    void setCacheSizeMB(size_t mb) { m_cache_capacity = (mb * 1024 * 1024) / (2*2*2 * sizeof(uint32_t)); }
+    void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = std::move(path); }
+    /** Sets the target cache size for the renderer in MB.
+     * A size of 0 tries to allocate the maximum available GPU memory.
+     * The cache size must be specified before startup to have an effect.
+     * Actual cache size may be lower if less space is needed or not enough GPU memory is available. */
+    void setCacheSizeMB(size_t mb) { m_target_cache_size_MB = mb; }
 
 private:
     // (gui) parameters:
@@ -218,22 +229,30 @@ private:
     std::vector<bool> m_gpu_material_changed = std::vector<bool>(SEGMENTED_VOLUME_MATERIAL_COUNT, true);
     std::vector<GPUSegmentedVolumeMaterial> m_gpu_materials{SEGMENTED_VOLUME_MATERIAL_COUNT};
 
-    std::vector<std::shared_ptr<TransferFunction1D>> m_materialTransferFunctions{SEGMENTED_VOLUME_MATERIAL_COUNT, nullptr};
-    bool m_data_changed = false;
-    std::vector<std::shared_ptr<Buffer>> m_split_encoding_buffers = {};
-    std::vector<glm::uvec2> m_split_encoding_buffer_addresses = {};
-    std::shared_ptr<Buffer> m_split_encoding_buffer_addresses_buffer = nullptr;
-    const size_t m_max_attribute_buffer_size = ((64ul << 10) << 10);   // MB to store different floating point attributes back to back
-    std::vector<int> m_attribute_start_position = {-1};           // the start index in the attribute_buffer for each attribute
-    std::shared_ptr<Buffer> m_attribute_buffer = nullptr;       // stores attributes back to back
-    std::shared_ptr<Buffer> m_materials_buffer = nullptr;       // stores the material information
-    std::shared_ptr<Buffer> m_brick_starts_buffer = nullptr;
-    size_t m_cache_capacity = 33554432ul;    // this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x sizeof(uint)=32 bytes large, so a capacity of 32000000 equals 1024MB
+    // palettized cache
+    uint32_t m_bits_per_palette_index = 32u;   // the GPU cache can store palette indices with fewer than 32 bits per entry
+    uint32_t m_palette_indices_per_uint = 1u;  // is floor(32/bits_per_palette_index), indices do not cross multiple words
+    uint32_t m_base_element_size = 8;          // number of uints needed to store 2x2x2 output voxels
+    size_t m_target_cache_size_MB = 0u;      // (user parameter)
+    size_t m_cache_capacity = 33554432ul;      // this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x (sizeof(uint)=32) / m_palette_indices_per_uint bytes large
     const size_t m_free_stack_capacity = 262144ul;  // this many elements (one uint=4byte each) fit into the free stack of EACH LoD > 0. We need max. volume_size/brick_size/lod_width³ elements. a capacity of 262144 equals 1MB * (lod_count-1)
     std::shared_ptr<Buffer> m_cache_info_buffer = nullptr;
     std::shared_ptr<Buffer> m_cache_buffer = nullptr;       // cache_capacity * 2x2x2 uints
     std::shared_ptr<Buffer> m_free_stack_buffer = nullptr;  // (lod_count - 1) * free_stack_capacity uints followed by (lod_count - 1) stack counters [free_stack_top[1], ..., fst[N-1])
     std::shared_ptr<Buffer> m_assign_info_buffer = nullptr; // (lod_count - 1) * 3 * uint assign infos for the LoDs + 1 * uint atomic top-index for the cache buffer
+
+    // (base) encoding
+    bool m_data_changed = false;
+    std::vector<std::shared_ptr<Buffer>> m_split_encoding_buffers = {};
+    std::vector<glm::uvec2> m_split_encoding_buffer_addresses = {};
+    std::shared_ptr<Buffer> m_split_encoding_buffer_addresses_buffer = nullptr;
+    //
+    std::vector<std::shared_ptr<TransferFunction1D>> m_materialTransferFunctions{SEGMENTED_VOLUME_MATERIAL_COUNT, nullptr};
+    const size_t m_max_attribute_buffer_size = ((64ul << 10) << 10);   // MB to store different floating point attributes back to back
+    std::vector<int> m_attribute_start_position = {-1};           // the start index in the attribute_buffer for each attribute
+    std::shared_ptr<Buffer> m_attribute_buffer = nullptr;       // stores attributes back to back
+    std::shared_ptr<Buffer> m_materials_buffer = nullptr;       // stores the material information
+    std::shared_ptr<Buffer> m_brick_starts_buffer = nullptr;
 
     // detail management
     const uint32_t m_max_detail_requests_per_frame = 512u; // how many brick_ids can be requested for detail upload per frame (affects the request buffer size)

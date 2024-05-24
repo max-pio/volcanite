@@ -200,7 +200,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
             ImGui::PopID();
             // emission slider
             ImGui::PushID(id++);
-            materialChanged |= ImGui::SliderFloat("Emission", &mat.emission, 0.f, 10.f);
+            materialChanged |= ImGui::SliderFloat("Emission", &mat.emission, 0.f, 4.f);
             ImGui::PopID();
         }
 

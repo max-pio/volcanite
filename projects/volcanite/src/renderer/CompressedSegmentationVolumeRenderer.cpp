@@ -35,7 +35,11 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         const size_t brick_size = m_compressed_segmentation_volume->getBrickSize();
         const size_t cache_element_size = brick_size * brick_size * brick_size;
         const size_t cache_bricks = static_cast<uint32_t>(m_cache_buffer->getByteSize() / 4l / cache_element_size);
-        Logger(DEBUG) << "new data set with " << str(m_compressed_segmentation_volume->getBrickCount()) << " bricks added. Cache fits " <<  cache_bricks << " = " << static_cast<uint32_t>(std::pow(static_cast<double>(cache_bricks), 1.f/3.f)) << "^3 bricks on finest LoD.";
+        // ToDo: update all cache size management with regards to m_bits_per_palette_index
+        Logger(DEBUG) << "new data set with " << str(m_compressed_segmentation_volume->getBrickCount())
+        << " bricks added. Cache fits " <<  cache_bricks << " = "
+        << static_cast<uint32_t>(std::pow(static_cast<double>(cache_bricks), 1.f/3.f))
+        << "^3 bricks on finest LoD. Need " << m_bits_per_palette_index << " bits per palette indices to store " << m_palette_indices_per_uint << " indices per uint.";
 
         // update invocation sizes to brick dimension
         m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(), m_compressed_segmentation_volume->getLodCountPerBrick());
@@ -87,7 +91,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             gpu_mat[m].tfIntervalMin = m_materials[m].tfMinMax.x;
             gpu_mat[m].tfIntervalMax = m_materials[m].tfMinMax.y;
             gpu_mat[m].opacity = m_materials[m].opacity;
-            gpu_mat[m].emission = m_materials[m].emission;
+            gpu_mat[m].emission = m_materials[m].emission * m_materials[m].emission;
 
             m_gpu_material_changed[m] = false;
         }
@@ -141,7 +145,8 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         // ToDo: download the cache_usage also if we don't use detail separation, e.g. m_last_gpu_stats.gpu_cache_size which is currently only set when m_show_step_count
     }
 
-    // trigger garbage collection on demand, but only if we have a different camHash since the last garbage collection
+    // A fragmented cache can occur if free stacks store unusable levels-of-detail leaving no space for other LoDs.
+    // Trigger cache flush on demand, but only if we have a different camHash since the last flush.
     const uint32_t cache_elements_per_finest_lod = m_compressed_segmentation_volume->getBrickSize() / 2u;
     if(m_frame % 4 == 0u && cache_usage >= m_cache_capacity - (cache_elements_per_finest_lod * cache_elements_per_finest_lod * cache_elements_per_finest_lod) && m_camHash_at_last_cache_reset != m_camHash) {
         m_pass->resetCacheOnNextCall();
@@ -384,12 +389,55 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     // GPU statistics buffer
     m_gpu_stats_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_gpu_stats_buffer", .byteSize = sizeof(GPUStats), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
 
-    // ToDo: cache size could be determined dynamically here given maxGPUBufferSize
-    size_t maxGPUBufferSize = getCtx()->getPhysicalDevice().getProperties().limits.maxStorageBufferRange;
-    m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = m_cache_capacity * (2u*2u*2u) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    // cache for decompressed bricks
     m_free_stack_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_free_stack_buffer", .byteSize = (m_free_stack_capacity * (lods_in_volume - 1u) + (lods_in_volume + 1u)) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_cache_info_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_info_buffer", .byteSize = bricks_in_volume*sizeof(uint32_t)*4u, .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_assign_info_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_assign_buffer", .byteSize = (1u + (lods_in_volume - 1u) * 3u) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    // limit cache size to maximum available GPU memory
+    auto heap_budget_and_usage = getMemoryHeapBudgetAndUsage(*ctx);
+    size_t free_heap_size = heap_budget_and_usage.first - heap_budget_and_usage.second;
+    if(m_target_cache_size_MB * 1024 * 1024 > free_heap_size) {
+        Logger(WARN) << "not enough GPU memory available to provide target cache size of " << m_target_cache_size_MB << " MB. Using smaller cache.";
+        m_target_cache_size_MB = 0;
+    }
+    // target size of 0 means to allocate as much for the cache as we can (or rather 90% of it to have some leeway)
+    if(m_target_cache_size_MB == 0) {
+        constexpr float free_heap_amount_to_use = 0.9f;
+        m_target_cache_size_MB = free_heap_size / 1024 / 1024;
+        m_target_cache_size_MB = static_cast<size_t>(free_heap_amount_to_use *
+                                                     static_cast<float>(free_heap_size) / 1024.f / 1024.f);
+    }
+    // for small data sets, we can limit the cache so that it fits all LoDs of the data set at once
+    size_t maximum_req_cache_size_MB;
+    {
+        // number base elements needed to store all LoDs of a brick at once
+        size_t brick_cache_size_in_lod = m_base_element_size;   // inv. LoD 0 needs no elements, inv. LoD 1 needs one
+        maximum_req_cache_size_MB = brick_cache_size_in_lod;
+        for(int l = 2; l < m_compressed_segmentation_volume->getLodCountPerBrick(); l++) {
+            // next level needs 8 times the elements
+            brick_cache_size_in_lod *= 2*2*2;
+            maximum_req_cache_size_MB += brick_cache_size_in_lod;
+        }
+        // number o bricks
+        auto brick_count = m_compressed_segmentation_volume->getBrickCount();
+        maximum_req_cache_size_MB *= brick_count.x * brick_count.y * brick_count.z;
+        // convert from #uints to MB
+        maximum_req_cache_size_MB *= sizeof(uint32_t);
+        maximum_req_cache_size_MB = static_cast<size_t>(std::ceil(static_cast<double>(maximum_req_cache_size_MB) / 1024. / 1024));
+    }
+    if(m_target_cache_size_MB > maximum_req_cache_size_MB) {
+        Logger(DEBUG) << "Target cache size is bigger than required to store all LoDs of all bricks. Limitting size.";
+        m_target_cache_size_MB = maximum_req_cache_size_MB;
+    }
+    // ToDo: could use the BufferDeviceAddress extension for the cache as well to support caches > 4 GB
+    if(m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
+        Logger(WARN) << "Cannot use cache size > 4 GB. Using smaller cache.";
+        m_target_cache_size_MB = 4294967295ul / 1024ul / 1024ul;
+    }
+    Logger(INFO) << "Allocating cache size " << m_target_cache_size_MB << " MB.";
+    m_cache_capacity = (m_target_cache_size_MB * 1024 * 1024) / (m_base_element_size * sizeof(uint32_t));
+    size_t maxGPUBufferSize = getCtx()->getPhysicalDevice().getProperties().limits.maxStorageBufferRange;
+    m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = m_cache_capacity * m_base_element_size * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
 
     updateDeviceMemoryUsage();
     Logger(INFO) << "Device memory after initialization: " << m_gui_device_mem_text;
