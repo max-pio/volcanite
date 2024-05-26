@@ -41,6 +41,7 @@ struct GPUSegmentedVolumeMaterial {
     float tfIntervalMax;            // attribute min / max values mapped to the TF interval [0, 1]
     float opacity;                  // opacity of the material, for < 1 is a semi-transparent volume, for >= 1 is a surface
     float emission;                 // how emissive the material is
+    int wrapping;                   // wrapping mode: 0 = clamp, 1 = repeat
 };
 
 #endif // CSGV_CONSTANTS_HPP

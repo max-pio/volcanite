@@ -27,9 +27,12 @@ public:
         for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
             auto &mat = m_materials[m];
             mat.discrAttribute = (m == 0) ? 0 : SegmentedVolumeMaterial::DISCR_NONE;
-            mat.discrInterval = glm::vec2(1.f, 1000000.f);
+            mat.discrInterval = glm::vec2(1, FLT_MAX);
             mat.tfAttribute = 0u;
-            mat.tfMinMax = glm::vec2(0.f, 1000000.f);
+            mat.tfMinMax = glm::vec2(0.f, 100.f);
+            mat.opacity = 1.f;
+            mat.emission = 0.f;
+            mat.wrapping = 1;
             // we use opaque transfer functions
             mat.tf->m_controlPointsOpacity.resize(4);
             mat.tf->m_controlPointsOpacity[0] = 0.f;

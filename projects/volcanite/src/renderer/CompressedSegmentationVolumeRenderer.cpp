@@ -90,7 +90,8 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             gpu_mat[m].tfIntervalMin = m_materials[m].tfMinMax.x;
             gpu_mat[m].tfIntervalMax = m_materials[m].tfMinMax.y;
             gpu_mat[m].opacity = m_materials[m].opacity;
-            gpu_mat[m].emission = m_materials[m].emission * m_materials[m].emission;
+            gpu_mat[m].emission = m_materials[m].emission * m_materials[m].emission;    // ^2 for better user control
+            gpu_mat[m].wrapping = m_materials[m].wrapping;
 
             m_gpu_material_changed[m] = false;
         }
@@ -572,6 +573,8 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         m_pass->setStorageBuffer(0, 17, *m_attribute_buffer);
         m_pass->setStorageBuffer(0, 18, *m_materials_buffer);
     }
+    m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(), m_compressed_segmentation_volume->getLodCountPerBrick());
+//    m_pass->resetCacheOnNextCall();
 }
 
 void CompressedSegmentationVolumeRenderer::releaseShaderResources() {

@@ -136,22 +136,31 @@ bool isLabelVisible(uint label) {
 }
 
 vec4 getColor(uint label, int material) {
-    // strange bug (occurs on my old AMD RX480 card):
+
+    // read attribute, map tfInterval to [0, 1)
+    float v = (getAttribute(label, g_materials[material].tfAttributeStart) - g_materials[material].tfIntervalMin)
+                / (g_materials[material].tfIntervalMax - g_materials[material].tfIntervalMin);;
+    // wrapping mode: 0 = clamp, handled by textureLoD, 1 = repeat
+    if(g_materials[material].wrapping == 1) { // repeat
+        v = fract(v);
+    }
+
+    // problem that at least occurs on my old AMD RX480 card:
     // if the texture(..) call accesses a sampler from the array based on the variable m, the same sampler is selected
-    // for all threads in a warp. This may be a problem of (non)-uniform control flow:
-    // see https://www.khronos.org/opengl/wiki/Sampler_(GLSL)#Non-uniform_flow_control
+    // for all threads in a warp. See (non)-uniform control flow:
+    // https://www.khronos.org/opengl/wiki/Sampler_(GLSL)#Non-uniform_flow_control
     // or  https://stackoverflow.com/questions/53734640/will-any-of-the-following-texture-lookups-cause-undefined-behavior-non-uniform
     //
     // This should not be an issue with GLSL version >= 4!
-    // Anyways, here's a strange fix by "forcing" non-uniform control flow:
+    // Anyways, here's a fix by "forcing" non-uniform control flow:
     if(material == 0)
-        return vec4(textureLod(s_transferFunctions[0], map(getAttribute(label, g_materials[0].tfAttributeStart), g_materials[0].tfIntervalMin, g_materials[0].tfIntervalMax, 0.f, 1.f), 0.f).rgb, g_materials[0].opacity);
+        return vec4(textureLod(s_transferFunctions[0], v, 0.f).rgb, g_materials[0].opacity);
 
 #ifndef NDEBUG
     assertf(material >= 0 && material <= g_max_active_material, "material %i assigned to label is invalid", material);
     assert(!any(isnan(vec4(g_materials[material].discrIntervalMin,  g_materials[material].discrIntervalMax, g_materials[material].tfIntervalMin, g_materials[material].tfIntervalMax))), "NaN in shader attribute limits");
 #endif
-    return vec4(textureLod(s_transferFunctions[material], map(getAttribute(label, g_materials[material].tfAttributeStart), g_materials[material].tfIntervalMin, g_materials[material].tfIntervalMax, 0.f, 1.f), 0.f).rgb, g_materials[material].opacity);
+    return vec4(textureLod(s_transferFunctions[material], v, 0.f).rgb, g_materials[material].opacity);
 }
 
 // Background color ----------------------------------------------------------------------------------------------------

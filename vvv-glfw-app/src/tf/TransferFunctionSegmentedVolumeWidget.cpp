@@ -25,7 +25,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
         bool colormapChanged = false;
 
         // ToDo: collapsable child for materials
-        ImGui::BeginChild(id++,  ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize() * 18.0f), true, ImGuiWindowFlags_MenuBar);
+        ImGui::BeginChild(id++,  ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize() * 19.0f), true, ImGuiWindowFlags_MenuBar);
 
         // Text field to give the material a name
         ImGui::PushID(id++);
@@ -201,6 +201,11 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
             // emission slider
             ImGui::PushID(id++);
             materialChanged |= ImGui::SliderFloat("Emission", &mat.emission, 0.f, 4.f);
+            ImGui::PopID();
+            // warpping mode
+            ImGui::PushID(id++);
+            materialChanged |= ImGui::RadioButton("Clamp", &mat.wrapping, 0); ImGui::SameLine();
+            materialChanged |= ImGui::RadioButton("Wrap", &mat.wrapping, 1);
             ImGui::PopID();
         }
 

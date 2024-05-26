@@ -222,6 +222,7 @@ namespace vvv {
                         vstr.append(std::to_string(mat.tfMinMax.y) + " ");
                         vstr.append(std::to_string(mat.opacity) + " ");
                         vstr.append(std::to_string(mat.emission) + " ");
+                        vstr.append(std::to_string(mat.wrapping) + " ");
                         //
                         const auto& cm = e->colormapConfig[i];
                         for(auto c : cm.color)
@@ -410,6 +411,7 @@ namespace vvv {
                         in >> mat.tfMinMax.y;
                         in >> mat.opacity;
                         in >> mat.emission;
+                        in >> mat.wrapping;
                         //
                         auto& cm = e->colormapConfig[m];
                         for(glm::vec3& c : cm.color) {
