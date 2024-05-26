@@ -199,8 +199,8 @@ private:
                 }
 
                 Logger(DEBUG) << "  import attributes from existing database " << attribute_database << " in " << t.restart() << " seconds";
+                db.exec("DETACH DATABASE attr_db");
             }
-            db.exec("DETACH DATABASE attr_db");
         }
         catch (const SQLite::Exception& e) {
             // remove broken database file and forward the exception
