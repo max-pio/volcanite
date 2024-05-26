@@ -90,8 +90,10 @@ int volcanite(int argc, char *argv[]) {
     // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
     if(args.performCompression()) {
         glm::uvec3 max_chunk_id = glm::uvec3(args.chunk_files[0], args.chunk_files[1], args.chunk_files[2]);
-        if(!args.verbose)
-            Logger(INFO) << "compressing segmentation volume " << args.input_file << (args.chunked ? " with max. chunks " + str(max_chunk_id) : "");
+        if(!args.verbose) {
+            Logger(INFO) << "compressing segmentation volume " << args.input_file
+                         << (args.chunked ? " with max. chunks " + str(max_chunk_id) : "");
+        }
 
         std::string complete_csgv_path = {};
         bool use_temporary_output_file = args.compress_export_file.empty();
@@ -230,7 +232,7 @@ int volcanite(int argc, char *argv[]) {
 
         const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
-        renderer->setCacheSizeMB(args.cache_size_MB);
+        renderer->setCacheParameters(args.cache_size_MB, args.cache_palettized);
 
         // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)
         if (!args.screenshot_output_file.empty()) {

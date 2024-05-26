@@ -166,11 +166,14 @@ public:
     int getTargetAccumulationFrames() { return m_accum_frames; }
     /** Will save the renderer state to the path when the renderer is shut down */
     void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = std::move(path); }
+
     /** Sets the target cache size for the renderer in MB.
      * A size of 0 tries to allocate the maximum available GPU memory.
      * The cache size must be specified before startup to have an effect.
-     * Actual cache size may be lower if less space is needed or not enough GPU memory is available. */
-    void setCacheSizeMB(size_t mb) { m_target_cache_size_MB = mb; }
+     * Actual cache size may be lower if less space is needed or not enough GPU memory is available.\n
+     * With palettized_cached set to true, the cache stores palette indices instead of labels. Allows to store larger
+     * portions of the volume in cache at the expense of a performance decrease.*/
+    void setCacheParameters(size_t cache_size_MB, bool palettized_cache) { m_target_cache_size_MB = cache_size_MB; m_use_palette_cache = palettized_cache; }
 
 private:
     // (gui) parameters:
@@ -238,7 +241,7 @@ private:
     std::vector<GPUSegmentedVolumeMaterial> m_gpu_materials{SEGMENTED_VOLUME_MATERIAL_COUNT};
 
     // palettized cache
-    const bool m_use_palette_cache = false;      // with paletting, the cache only stores indices into brick palettes instead of the actual indexed labels
+    bool m_use_palette_cache = false;     // with paletting, the cache only stores indices into brick palettes instead of the actual indexed labels
     uint32_t m_cache_palette_idx_bits = 32u;    // the GPU cache can store palette indices with fewer than 32 bits per entry
     uint32_t m_cache_indices_per_uint = 1u;     // is floor(32/bits_per_palette_index), indices do not cross multiple words
     uint32_t m_cache_base_element_uints = 8;    // number of uints needed to store 2x2x2 output voxels

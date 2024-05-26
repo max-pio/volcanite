@@ -37,6 +37,7 @@ public:
     uint32_t render_resolution[2] = {1920, 1080};
     bool stream_lod;
     size_t cache_size_MB = 1024ul;
+    bool cache_palettized = false;
     bool show_development_gui = false;
 
     // attribute args
@@ -112,10 +113,11 @@ public:
 
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
-            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{name of the label column referenced by the volume}]]\".", false, "", "database[,table[,label]]", cmd);
+            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{label column name referenced by volume}]]\".", false, "", "database[,table[,label]]", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal all development render parameters in GUI.", cmd);
-            ValueArg<uint32_t> cachesizeArg("", "cache-size", "Size in MB to allocate for GPU renderer brick cache.", false, va.cache_size_MB, "size", cmd);
+            ValueArg<uint32_t> cacheSizeMBArg("", "cache-size", "Size in MB of the renderer's brick cache. 0 to allocate all available.", false, va.cache_size_MB, "size", cmd);
+            SwitchArg cachePalettizedArg("", "cache-palette", "Store palette indices in brick cache instead of labels.", cmd);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "file", cmd);
@@ -155,7 +157,8 @@ public:
                     throw ArgException(resolutionArg.longID() + " must contain positive integers only", resolutionArg.longID());
             }
             va.stream_lod = streamlodArg.getValue();
-            va.cache_size_MB = cachesizeArg.getValue();
+            va.cache_size_MB = cacheSizeMBArg.getValue();
+            va.cache_palettized = cachePalettizedArg.getValue();
             va.show_development_gui = devArg.getValue();
             // if no input file was specified, try to open a file dialog
             std::string input_file = expandPath(inputpathArg.getValue());

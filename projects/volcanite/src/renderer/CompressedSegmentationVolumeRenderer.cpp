@@ -33,12 +33,11 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         initDataSetGPUBuffers();
 
         const size_t brick_size = m_compressed_segmentation_volume->getBrickSize();
-        const size_t cache_element_size = brick_size * brick_size * brick_size;
-        const size_t cache_bricks = static_cast<uint32_t>(m_cache_buffer->getByteSize() / 4l / cache_element_size);
-        // ToDo: update all cache size management with regards to m_bits_per_palette_index
+        const size_t output_voxels_per_brick = brick_size * brick_size * brick_size;
+        const size_t cache_bricks = static_cast<uint32_t>(m_cache_capacity * 8u / output_voxels_per_brick);
         Logger(DEBUG) << "new data set with " << str(m_compressed_segmentation_volume->getBrickCount())
                       << " bricks added. Cache fits " << cache_bricks << " = "
-                      << static_cast<uint32_t>(std::pow(static_cast<double>(cache_bricks), 1.f/3.f))
+                      << static_cast<uint32_t>(std::pow(static_cast<double>(cache_bricks), 1./3.))
                       << "^3 bricks on finest LoD. Need " << m_cache_palette_idx_bits << " bits per palette indices to store " << m_cache_indices_per_uint << " indices per uint.";
 
         // update invocation sizes to brick dimension
@@ -436,7 +435,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
         Logger(WARN) << "Cache size is currently limited to 4 GB maximum.";
         m_target_cache_size_MB = 4294967295ul / 1024ul / 1024ul;
     }
-    Logger(INFO) << "Allocating cache size " << m_target_cache_size_MB << " MB.";
+    Logger(INFO) << "Allocating cache size " << m_target_cache_size_MB << " MB at " << (m_cache_base_element_uints * 32u / 8u) << " bits per label";
     m_cache_capacity = (m_target_cache_size_MB * 1024 * 1024) / (m_cache_base_element_uints * sizeof(uint32_t));
     size_t maxGPUBufferSize = getCtx()->getPhysicalDevice().getProperties().limits.maxStorageBufferRange;
     m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = m_cache_capacity * m_cache_base_element_uints * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});

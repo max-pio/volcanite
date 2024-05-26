@@ -403,7 +403,6 @@ public:
             *cfg.latex_table_out_entry = ss.str();
         }
 
-        Logger(INFO) << "Total info: " << csgv->decodingInfoString();
         // create a log file
         if(create_log_file) {
             std::ofstream file(csgv->getCSGVFileName(csgv_path) + ".log", std::ios_base::out);
@@ -456,6 +455,7 @@ public:
             csgv->separateDetail();
         }
 
+        Logger(INFO) << "Total info: " << csgv->decodingInfoString();
         return csgv;
     }
 
