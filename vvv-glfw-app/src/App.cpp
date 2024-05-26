@@ -1078,6 +1078,7 @@ void setImGuiStyle() {
     style.WindowRounding = 0.f;
     style.FrameRounding = 0.f;
     style.ScrollbarRounding = 0;
+    style.Alpha = 0.75f;
 
     // progress bars / histograms should use calm colors as well
     style.Colors[ImGuiCol_PlotHistogram] = style.Colors[ImGuiCol_Button];
