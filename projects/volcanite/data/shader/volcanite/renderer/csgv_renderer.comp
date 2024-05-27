@@ -154,6 +154,11 @@ bool isEmptySpace(ivec3 voxel) {
 
 
 void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
+
+    // invalidate any nan samples
+    if(any(isnan(color)) || any(isinf(color)))
+        depth_valid = -abs(depth_valid);
+
     // if subsamplign is enabled, we only render one pixel per [g_subsampling]^2 block
     ivec2 subpixel;
     for(subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
@@ -325,7 +330,8 @@ void main() {
             writePixel(pixel, get_background_color(fragCoord), BACKGROUND_DEPTH);
         return;
     }
-    t_0 -= 0.0001f; // Epsilon
+    // start approx. one voxel before the data set
+    t_0 -= 1.f;
 
     // For debug views: only color every other pixel in the debug view to get some kind of "transparent" overlay effect
     // As we move this pixel around, the progressive accumulation averages this with the rendered colors.
@@ -373,7 +379,11 @@ void main() {
         // out of bounds check
         if(any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
             || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
-            break;
+            // we may have started out of bounds
+            if(state.step > 2)
+                break;
+            else
+                continue;
         }
 
         // sampling (read value at pos from previously decoded volume segments in brick cache) or return a
@@ -429,7 +439,7 @@ void main() {
             }
         }
         else if (g_debug_normals) {
-            state.out_color = vec4((state.normal + vec3(1.f)) * vec3(0.5f), 1.f);
+            state.out_color = vec4(-min(state.normal, vec3(0.f)) * 0.5f + max(state.normal, vec3(0.f)), 1.f);
             state.throughput = vec3(0.f);
             break;
         }
