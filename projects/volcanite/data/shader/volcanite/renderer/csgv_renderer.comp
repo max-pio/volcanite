@@ -67,8 +67,12 @@ uint get_inv_lod(ivec3 voxel) {
     //    return INVALID;
 
     float dist = length((g_model_to_world_space * vec4((vec3(0.5f) + vec3(voxel / int(g_brick_size))) * g_brick_size, 1.f)).xyz - g_camera_position_world_space) + (float(g_brick_size)/g_world_to_model_space_scaling);
-    float voxels_per_pixel_at_hit = g_voxels_per_pixel_per_dist * dist;
-    return g_lod_count - 1u - clamp(uint(g_lod_bias + log2(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
+    // use the MSB as a fast log2
+    int voxels_per_pixel_at_hit = int(g_voxels_per_pixel_per_dist * dist);
+    return g_lod_count - 1u - clamp(uint(g_lod_bias + findMSB(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
+
+    //    float voxels_per_pixel_at_hit = g_voxels_per_pixel_per_dist * dist;
+    //    return g_lod_count - 1u - clamp(uint(g_lod_bias + log2(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
 }
 
 bool isValid(float depth) { return depth >= 0.f; }
@@ -215,25 +219,70 @@ struct RayMarchState {
 
 #define SHADOW_RAY_PATH_LENGTH -1
 
+bool sn(vec3 v) {
+    return any(isnan(v)) || any(isinf(v));
+}
+bool sn(float v) {
+    return isnan(v) || isinf(v);
+}
 
 void dda_step(inout RayMarchState state, const Ray ray) {
-//    float next_t = min(state.side_dist.x, min(state.side_dist.y, state.side_dist.z));
     vec3 mask = vec3(lessThanEqual(state.side_dist.xyz, min(state.side_dist.yzx, state.side_dist.zxy)));
     state.t = dot(mask, state.side_dist);
     state.side_dist += state.delta * mask;
     state.voxel += state.stp * ivec3(mask);
     state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
     state.normal = -mask * state.stp;   // is normalized per definition
+
+#ifndef NDEBUG
+    if(any(isnan(state.pos)) || any(isinf(state.pos))) {
+        debugPrintfEXT("DDA step yields invalid position %v3f | state.t: %f | state.side_dist: %v3f | state.delta: %v3f", state.pos, state.t, state.side_dist);
+    }
+#endif
 }
 
-void dda_init(inout RayMarchState state, const Ray ray) {
+void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
     // DDA traversal initialisation
     // delta.i equals to the length the ray has to travel to hit the next cell in i direction.
     // side_dist is the distance from the ray origin to the next cell in each dimension.
-    vec3 rdinv = 1.0 / ray.direction;
+
+//    const int dda_voxel_size = int(g_brick_size >> get_inv_lod(ivec3(floor(state.pos))));
+    state.t = t_0;
+    state.pos = ray.origin + state.t * ray.direction;
+    state.voxel = ivec3(floor(state.pos));
+
     state.stp = ivec3( ray.direction.x >= 0.0 ? 1.0 : -1.0, ray.direction.y >= 0.0 ? 1.0 : -1.0, ray.direction.z >= 0.0 ? 1.0 : -1.0);
+    vec3 rdinv = 1.0 / ray.direction;
+
     state.delta = abs(rdinv); // min(rdinv * state.stp, 1.0);//
     state.side_dist = abs((vec3(state.voxel) + max(state.stp, vec3(0.0)) - ray.origin) * state.delta);
+
+    // ray.direction may be zero somewhere. we set the side_dist in this direction to FLT_MAX to never take a step in
+    // this direction.
+    if(ray.direction.x == 0.f) {
+        state.side_dist.x = 3.402823466e+38;
+        state.delta.x = 0.f;
+        state.stp.x = 0;
+    }
+    if(ray.direction.y == 0.f) {
+        state.side_dist.y = 3.402823466e+38;
+        state.delta.y = 0.f;
+        state.stp.y = 0;
+    }
+    if(ray.direction.z == 0.f) {
+        state.side_dist.z = 3.402823466e+38;
+        state.delta.z = 0.f;
+        state.stp.z = 0;
+    }
+
+    if(sn(state.delta))
+        debugPrintfEXT("DDAI delta is nan %v3f %v3f", ray.direction, state.delta);
+    if(sn(state.side_dist))
+        debugPrintfEXT("DDAI side_dist is nan %v3f | %v3f %v3f", state.side_dist, ray.direction, ray.origin);
+    if(sn(ray.direction))
+        debugPrintfEXT("DDAI raydir is nan %v3f", ray.direction);
+    if(sn(ray.origin))
+        debugPrintfEXT("DDAI rayorig is nan %v3f", ray.origin);
 }
 
 // ToDo: Use GGX?
@@ -330,8 +379,6 @@ void main() {
             writePixel(pixel, get_background_color(fragCoord), BACKGROUND_DEPTH);
         return;
     }
-    // start approx. one voxel before the data set
-    t_0 -= 1.f;
 
     // For debug views: only color every other pixel in the debug view to get some kind of "transparent" overlay effect
     // As we move this pixel around, the progressive accumulation averages this with the rendered colors.
@@ -355,9 +402,6 @@ void main() {
     RayMarchState state;
     // ToDo: use a CPU randomly generated number instead of g_camera_still_frames to initialize the RNG?
     state.rng = float(g_frame << 16);
-    state.t = t_0;
-    state.pos = ray.origin + state.t * ray.direction;
-    //state.voxel = ivec3(floor(state.pos))
     state.label = INVALID;
     state.last_label = INVALID;
     state.path_length = 0;
@@ -366,16 +410,29 @@ void main() {
     state.depth_valid = BACKGROUND_DEPTH;
 
     // ray marching loop
-    state.voxel = ivec3(floor(state.pos)); // DDA traversal start voxel
-    dda_init(state, ray);
+    t_0 -= 1.f;
+    dda_init(state, ray, t_0);
     for(state.step = 0; state.step < g_maxSteps; state.step++) {
-        dda_step(state, ray);
 
-        // empty space check
-        // ToDo: better empty space skipping - skip the non-visible brick in ONE big dda step
-        if(isEmptySpace(state.voxel)) {
-            continue;
+        // ToDo: real multi-level DDA. Current brute froce solution:
+        if(false)
+        {
+            const int dda_voxel_size = int(g_brick_size >> get_inv_lod(state.voxel));
+            ivec3 old_voxel = state.voxel / dda_voxel_size;
+            do {
+                dda_step(state, ray);
+#ifndef NDEBUG
+                if(sn(state.pos)) {
+                    debugPrintfEXT("nan or inf pos %v3f", state.pos);
+                    return;
+                }
+#endif
+            } while (state.voxel / dda_voxel_size == old_voxel);
         }
+        else {
+            dda_step(state, ray);
+        }
+
         // out of bounds check
         if(any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
             || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
@@ -383,8 +440,15 @@ void main() {
             if(state.step > 2)
                 break;
             else
-                continue;
+               continue;
         }
+
+        // empty space check
+        // ToDo: better empty space skipping - skip the non-visible brick in ONE big dda step
+        if(isEmptySpace(state.voxel)) {
+            continue;
+        }
+
 
         // sampling (read value at pos from previously decoded volume segments in brick cache) or return a
         // placeholder label if not yet decoded, in which case the depth_valid will be set to INVALID_DEPTH.
@@ -595,7 +659,7 @@ void main() {
 
             // re-init DDA traversal for the shadow ray
             ray.origin = state.pos;
-            dda_init(state, ray);
+            dda_init(state, ray, 0.f);
         }
 
         // RAY TERMINATION
