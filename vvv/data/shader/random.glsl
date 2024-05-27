@@ -166,8 +166,8 @@ vec3 sampleCosineWeightedHemisphereVoxel(const in vec2 u, in vec3 normal) {
     float r = sqrt(u.x);
     float theta = 2.0 * PI * u.y;
 
-    // Assuming that the normal is axis-oriented, the vector (0, 1, 1) is always orthogonal
-    vec3  bitangent = normalize(cross(normal, vec3(0.0,1.0,1.0)));
+    // Assuming that the normal is axis-oriented, the vector (1, 1, 1) always works
+    vec3  bitangent = normalize(cross(normal, vec3(1.f)));
     vec3  tangent = cross(bitangent, normal);
 
     return normalize(r * sin(theta) * bitangent + sqrt(1.0 - u.x) * normal + r * cos(theta) * tangent);
