@@ -1058,7 +1058,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     // backwards compatibility code:
     if (std::string(_version) == "0011") {
         Logger(WARN) << "Reading deprecated csgv file version " << _version << ". May lead to reduced rendering performance.";
-    } else if (std::string(_version) == "0012" && std::string(_version) != "0013") {
+    } else if (std::string(_version) != "0012" && std::string(_version) != "0013") {
         Logger(ERROR) << "Import does not support version " << _version << " of Compressed Segmentation Volume file " << path << ". Skipping.";
         return false;
     }
