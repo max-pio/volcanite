@@ -398,115 +398,173 @@ namespace vvv {
         return statistics;
     }
 
+    /** Exports back-to-back lists of brick operations to two files [path]_op.raw and [path]_op_starts.raw.\n
+     * The output depends on the compression mode. If the CSGV uses rANS:\n
+     * - op.raw contains back-to-back lists of the rANS compressed operation streams.\n
+     * - op_starts.raw stores two uint32 numbers per brick:\n
+     * If the CSGV does not use rANS:\n
+     * - op.raw stores back-to-back operation lists of the bricks using one unsigned char per operation code.\n
+     * - op_starts.raw stores two uint32 numbers per brick: the index (in 4 bit elements) of the brick's first
+     * operation and the zero-indexed position of the first operations within the brick at which the fines LoD starts.\n
+     * The op_starts.raw ends with one last dummy entry containing the total size of entries on op.raw and a zero.
+     * */
     void CompressedSegmentationVolume::exportAllBrickOperations(const std::string& path) const {
-        throw std::runtime_error("method not yet adapted for split encodings");
-//
-//        if(m_encodings.empty() || m_separate_detail)
-//            throw std::runtime_error("Compress the volume without detail separation first before exporting brick operations!");
-//
-//        // brick starts writes two uint32 numbers per brick:
-//        // [s] first operation of the brick in fout [d] index at which the detail LoD starts
-//        //
-//        // fout writes a back to back list of the operations of all bricks.
-//
-//
-//        std::ofstream fout(path + "_op.raw", std::ios::out | std::ios::binary);
-//        if(!fout.is_open())
-//            throw std::runtime_error("Could not open file " + path + ".raw");
-//        std::ofstream bs_out(path + "_op_starts.raw", std::ios::out | std::ios::binary);
-//        if(!bs_out.is_open())
-//            throw std::runtime_error("Could not open file " + path + "_starts.raw");
-//
-//        const glm::uvec3 brickCount = getBrickCount();
-//        uint32_t top_pointer = 0;
-//        for (uint32_t brick_idx = 0; brick_idx < brickCount.x * brickCount.y * brickCount.z; brick_idx++) {
-//            uint32_t lod_count = getLodCountPerBrick();
-//            uint32_t beginE = m_brick_starts[brick_idx];
-//            if(m_rANS_mode == NO_RANS) {
-//                uint32_t start4bit = m_encoding[m_brick_starts[brick_idx]]; // first entry of header is the lod start in number of 4 bit entries
-//                uint32_t end4bit = (m_brick_starts[brick_idx + 1] - m_brick_starts[brick_idx] - m_encoding[m_brick_starts[brick_idx] + 2u * lod_count]) * 8; // (total brick size - palette size) * 8
-//
-//                // write the index at which this brick starts in the encoding array
-//                bs_out.write(reinterpret_cast<char *>(&top_pointer), sizeof(uint32_t));
-//
-//                // write at which index (0 indexed from brick start) the detail level encoding starts that does not contain stop bits
-//                uint32_t base_lod_operation_count = m_encoding[m_brick_starts[brick_idx] + getLodCountPerBrick() - 1] - start4bit;
-//                bs_out.write(reinterpret_cast<char * >(&base_lod_operation_count), sizeof(uint32_t));
-//
-//                for (uint32_t i = start4bit; i < end4bit; i++) {
-//                    uint32_t operation = read4Bit(m_encoding, beginE, i);
-//                    if (operation >= 16)
-//                        throw std::runtime_error("4 bit operation must be < 16");
-//                    fout.write(reinterpret_cast<char *>(&operation), sizeof(uint32_t));
-//                    top_pointer++;
-//                }
-//            } else {
-//                uint32_t start32bit = m_encoding[m_brick_starts[brick_idx]] / 8u; // first entry of header is the lod start in number of 4 bit entries
-//                uint32_t end32bit = (m_brick_starts[brick_idx + 1] - m_brick_starts[brick_idx] - m_encoding[m_brick_starts[brick_idx] + 2u * lod_count]); // (total brick size - palette size) * 8
-//
-//                bs_out.write(reinterpret_cast<char *>(&top_pointer), sizeof(uint32_t));
-//
-//                // write at which uint32 index (0 indexed from brick start) the detail level encoding starts that does not contain stop bits
-//                uint32_t base_lod_operation_count = m_encoding[m_brick_starts[brick_idx] + getLodCountPerBrick() - 1] / 8u - start32bit;
-//                bs_out.write(reinterpret_cast<char * >(&base_lod_operation_count), sizeof(uint32_t));
-//
-//                for (uint32_t i = start32bit; i < end32bit; i++) {
-//                    uint32_t operations = m_encoding[i];
-//                    fout.write(reinterpret_cast<char *>(&operations), sizeof(uint32_t));
-//                    top_pointer++;
-//                }
-//            }
-//        }
-//        // write one dummy entry at the end to denote the end of the last brick with a detail start size of 0
-//        bs_out.write(reinterpret_cast<char *>(&top_pointer), sizeof(uint32_t));
-//        top_pointer = 0u;
-//        bs_out.write(reinterpret_cast<char *>(&top_pointer), sizeof(uint32_t));
-//
-//        fout.close();
-//        bs_out.close();
-//
-//        Logger(INFO) << "exported csgv operations to " << path << "_op.raw";
-//        /*
-//        // IMPORT:
-//        std::ifstream raw_in(path + ".raw", std::ios::in | std::ios::binary);
-//        std::ifstream bs_in(path + "_starts.raw", std::ios::in | std::ios::binary);
-//        if(!raw_in.is_open() || !bs_in.is_open())
-//            throw std::runtime_error("Could not open file " + path + "*.raw");
-//        // read bricks from the raw file, each brick consists of an operation stream between start_index and end_index
-//        uint32_t brick_start_index_in_raw = 0u;
-//        bs_in.read(reinterpret_cast<char *>(&brick_start_index_in_raw), sizeof(uint32_t));
-//        if(brick_start_index_in_raw != 0u)
-//            throw std::runtime_error("Invalid fist entry in starts file");
-//        uint32_t brick_end_index_in_raw = 0;
-//        while(true) {
-//            // read end index of brick
-//            bs_in.read(reinterpret_cast<char *>(&brick_end_index_in_raw), sizeof(uint32_t));
-//            if(bs_in.eof())
-//                break;
-//
-//            // read all operations of brick
-//            uint32_t operation;
-//            for(uint32_t i = 0u; i < (brick_end_index_in_raw - brick_start_index_in_raw); i++) {
-//                raw_in.read(reinterpret_cast<char *>(&operation), sizeof(uint32_t));
-//                if(raw_in.eof())
-//                    throw std::runtime_error("Unexpected end of file!");
-//
-//                // if(operation != i) // dummy file sanity check
-//                //     throw std::runtime_error("Dummy file should contain unsigned ints in ascending order!");
-//
-//                // ... do something, create ab buffer of these brick's operations etc!
-//            }
-//
-//            // next brick starts at current end index
-//            brick_start_index_in_raw = brick_end_index_in_raw;
-//        }
-//        raw_in.close();
-//        bs_in.close();
-//         */
+        if(m_encodings.empty() || m_separate_detail)
+            throw std::runtime_error("Compress the volume without detail separation first before exporting brick operations!");
+
+        // brick starts writes two uint32 numbers per brick:
+        // [s] first operation of the brick in fout [d] index at which the detail LoD starts
+        //
+        // fout writes a back to back list of the operations of all bricks.
+
+        std::ofstream fout(path + "_op.raw", std::ios::out | std::ios::binary);
+        if(!fout.is_open())
+            throw std::runtime_error("Could not open file " + path + ".raw");
+        std::ofstream bs_out(path + "_op_starts.raw", std::ios::out | std::ios::binary);
+        if(!bs_out.is_open())
+            throw std::runtime_error("Could not open file " + path + "_starts.raw");
+
+        // dummy file export just outputs ascending numbers to [*]_op.raw
+        constexpr bool DUMMY_DATA_OUTPUT = false;
+
+        const uint32_t brickCount = getBrickIndexCount();
+        const uint32_t lod_count = getLodCountPerBrick();
+        uint32_t top_pointer = 0;
+        for (uint32_t brick_idx = 0; brick_idx < brickCount; brick_idx++) {
+            const uint32_t* encoding = getBrickEncoding(brick_idx);
+            if (m_rANS_mode == NO_RANS) {
+                uint32_t start4bit = encoding[0]; // first entry of header is the lod start in number of 4 bit entries
+                uint32_t end4bit = (getBrickEncodingLength(brick_idx) - getBrickPaletteLength(brick_idx)) * 8; // (total brick size - palette size) * 8
+
+                if(static_cast<size_t>(top_pointer) + (end4bit - start4bit) >= UINT32_MAX) {
+                    Logger(ERROR) << "exceeding 32 bit index limit for operation export. Stopping export before brick " << brick_idx << " out of " << getBrickIndexCount();
+                    break;
+                }
+
+                // write the index at which this brick starts in the encoding array
+                bs_out.write(reinterpret_cast<char *>(&top_pointer), sizeof(uint32_t));
+
+                // write at which index (0 indexed from first operation of the brick in .raw).
+                // the detail level encoding starts that does not contain stop bits
+                uint32_t base_lod_operation_count = encoding[getLodCountPerBrick() - 1] - start4bit;
+                bs_out.write(reinterpret_cast<char * >(&base_lod_operation_count), sizeof(uint32_t));
+
+                for (uint32_t i = start4bit; i < end4bit; i++) {
+                    unsigned char operation = read4Bit(encoding, 0, i);
+
+                    if(DUMMY_DATA_OUTPUT) {
+                        // Dummy file export: ascending indices 0 1 2.. with max. value 7 in base and 15 in detail levels
+                        operation = (i >= encoding[getLodCountPerBrick() - 1]) ? ((i - start4bit) % 8) : (
+                                (i - start4bit) % 16);
+                    }
+
+                    if (operation >= 16)
+                        throw std::runtime_error("4 bit operation must be < 16");
+                    fout.write(reinterpret_cast<char *>(&operation), sizeof(unsigned char));
+                    top_pointer++;
+                }
+            } else {
+                uint32_t start32bit = encoding[0] / 8u; // first entry of header is the lod start in number of 4 bit entries
+                uint32_t end32bit = (getBrickEncodingLength(brick_idx) - getBrickPaletteLength(brick_idx)); // (total brick size - palette size) * 8
+
+                if(static_cast<size_t>(top_pointer) + (end32bit - start32bit) >= UINT32_MAX) {
+                    Logger(ERROR) << "exceeding 32 bit index limit for operation export. Stopping export before brick " << brick_idx << " out of " << getBrickIndexCount();
+                    break;
+                }
+
+                bs_out.write(reinterpret_cast<char *>(&top_pointer), sizeof(uint32_t));
+
+                // write at which uint32 index (0 indexed from brick start) the detail level encoding starts that does not contain stop bits
+                uint32_t base_lod_operation_count = encoding[getLodCountPerBrick() - 1] / 8u - start32bit;
+                bs_out.write(reinterpret_cast<char * >(&base_lod_operation_count), sizeof(uint32_t));
+
+                for (uint32_t i = start32bit; i < end32bit; i++) {
+                    uint32_t operations = encoding[i];
+                    fout.write(reinterpret_cast<char *>(&operations), sizeof(uint32_t));
+                    top_pointer++;
+                }
+            }
+        }
+        // write one dummy entry at the end to denote the end of the last brick with a detail start size of 0
+        bs_out.write(reinterpret_cast<char *>(&top_pointer), sizeof(uint32_t));
+        top_pointer = 0u;
+        bs_out.write(reinterpret_cast<char *>(&top_pointer), sizeof(uint32_t));
+
+        fout.close();
+        bs_out.close();
+
+        Logger(INFO) << "exported " << (DUMMY_DATA_OUTPUT ? "DUMMY " : "")
+                            << "csgv operations as " << ((m_rANS_mode == NO_RANS) ? " 4 bit codes " : " rANS stream")
+                            <<  "to " << path << "_op.raw and [*]_op_starts.raw";
+
+        if(m_rANS_mode == NO_RANS) {
+            // IMPORT OF 4BIT OPERATION STREAM:
+            std::ifstream raw_in(path + "_op.raw", std::ios::in | std::ios::binary);
+            std::ifstream bs_in(path + "_op_starts.raw", std::ios::in | std::ios::binary);
+            if (!raw_in.is_open() || !bs_in.is_open())
+                throw std::runtime_error("Could not open file " + path + "_op[_starts].raw");
+
+            // read bricks from the raw file, each brick consists of an operation stream between start_index and end_index
+            uint32_t brick_start_index_in_raw = 0u;
+            bs_in.read(reinterpret_cast<char *>(&brick_start_index_in_raw), sizeof(uint32_t));
+            if (brick_start_index_in_raw != 0u)
+                throw std::runtime_error("Invalid fist entry in starts file");
+
+            uint32_t first_op_in_detail_level = 0;
+            uint32_t brick_end_index_in_raw = 0;
+            while (true) {
+                // read index of first operation in finest level-of-detail
+                bs_in.read(reinterpret_cast<char *>(&first_op_in_detail_level), sizeof(uint32_t));
+
+                // read end index of brick
+                bs_in.read(reinterpret_cast<char *>(&brick_end_index_in_raw), sizeof(uint32_t));
+                if (bs_in.eof()) {
+                    bs_in.read(reinterpret_cast<char *>(&first_op_in_detail_level), sizeof(uint32_t));
+                    if (first_op_in_detail_level != 0u)
+                        throw std::runtime_error("[*]_op_starts.raw file does not end with magic zero");
+                    break;
+                }
+
+                if (first_op_in_detail_level >= (brick_end_index_in_raw - brick_start_index_in_raw))
+                    throw std::runtime_error("[*]_op_starts.raw file does not end with magic zero");
+
+                // read all operations of this brick, (brick_end_index_in_raw - brick_start_index_in_raw) in total
+                unsigned char operation;
+                for (uint32_t i = 0u; i < (brick_end_index_in_raw - brick_start_index_in_raw); i++) {
+                    raw_in.read(reinterpret_cast<char *>(&operation), sizeof(unsigned char));
+                    if (raw_in.eof())
+                        throw std::runtime_error("Unexpected end of file!");
+
+                    if (i >= first_op_in_detail_level) {
+                        // operations are in the value domain [0, 8)
+                        if (operation >= 8)
+                            throw std::runtime_error("invalid operation code in finest level-of-detail");
+                    } else {
+                        // operations are in the value domain [0, 16) as they may contain a 1 in the 4th bit for stop codes
+                        if (operation >= 16)
+                            throw std::runtime_error("invalid operation code in base level-of-detail");
+                    }
+
+                    if(DUMMY_DATA_OUTPUT) {
+                        // dummy file contains repeated ascending operation codes 0 1 2 3 4.. Sanity check:
+                        if (i >= first_op_in_detail_level && (operation != (i % 8))
+                            || i < first_op_in_detail_level && (operation != (i % 16))) {
+                            throw std::runtime_error("Dummy file should contain unsigned ints in ascending order!");
+                        }
+                    }
+
+                    // ... do something, create ab buffer of these brick's operations etc!
+                }
+
+                // next brick starts at current end index
+                brick_start_index_in_raw = brick_end_index_in_raw;
+            }
+            raw_in.close();
+            bs_in.close();
+        }
     }
 
     void CompressedSegmentationVolume::exportBrickOperationsToCSV(const std::string& path, uint32_t brick_idx) const {
-        throw std::runtime_error("method not yet adapted for split encodings");
 //
 //        if(m_encodings.empty() || m_rANS_mode != NO_RANS || m_separate_detail)
 //            throw std::runtime_error("Compress the volume without rANS encoding and without detail separation first before exporting brick codes!");
