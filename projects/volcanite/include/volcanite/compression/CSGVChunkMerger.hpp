@@ -92,7 +92,9 @@ public:
                 // store parameters of chunks
                 chunk_dimension = chunks[0].getVolumeDim();
                 brick_size = chunks[0].getBrickSize();
-                if(chunk_dimension.x % brick_size != 0 || chunk_dimension.x % brick_size != 0 || chunk_dimension.x % brick_size != 0) {
+                if((chunk_count.x > 1 && chunk_dimension.x % brick_size != 0)
+                   || (chunk_count.y > 1 && chunk_dimension.y % brick_size != 0)
+                   || (chunk_count.z > 1 && chunk_dimension.z % brick_size != 0)) {
                     Logger(ERROR) << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunk dimension must be multiple of brick size.";
                     return nullptr;
                 }
