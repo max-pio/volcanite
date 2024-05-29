@@ -1,7 +1,10 @@
 import os
+import shutil
 
 from intern import array
 import numpy as np
+import h5py
+
 
 # ----------- CONFIG --------------
 # data set to download (browse bossdb.org for available data)
@@ -24,7 +27,6 @@ full_dim_y = bossdb_dataset.shape[1]
 full_dim_z = bossdb_dataset.shape[0]
 
 
-
 min_non_empty_x = 99999999
 min_non_empty_y = 99999999
 min_non_empty_z = 99999999
@@ -32,11 +34,55 @@ max_non_empty_x = 0
 max_non_empty_y = 0
 max_non_empty_z = 0
 
+non_empty_file = open("./" + BOSSDB_DATASET + "/non_empty_xyz_chunks.txt")
+# while(non_empty_file):
+#     line_split = non_empty_file.readline().split()
+#     if len(line_split) == 0:
+#         break
+#     x, y, z = [int(i) for i in line_split]
+#     print((x, y, z))
+#     x_end = min(full_dim_x, x + CHUNK_SIZE)
+#     y_end = min(full_dim_y, y + CHUNK_SIZE)
+#     z_end = min(full_dim_z, z + CHUNK_SIZE)
+#
+#     cur_slice = bossdb_dataset[z:z_end, y:y_end, x:x_end].astype('uint32')
+#     with h5py.File("./" + BOSSDB_DATASET + "/x" + str(x // CHUNK_SIZE) + "y" + str(y // CHUNK_SIZE) + "z" + str(z // CHUNK_SIZE) + ".hdf5", "w") as f:
+#         dset = f.create_dataset("data", shape=(cur_slice.shape[2], cur_slice.shape[1], cur_slice.shape[0]), dtype='uint32', data=cur_slice,
+#                                 compression="gzip")
+
+for z in range(0, full_dim_z, CHUNK_SIZE):
+    for y in range(0, full_dim_y, CHUNK_SIZE):
+        for x in range(0, full_dim_x, CHUNK_SIZE):
+            x_end = min(full_dim_x, x + CHUNK_SIZE)
+            y_end = min(full_dim_y, y + CHUNK_SIZE)
+            z_end = min(full_dim_z, z + CHUNK_SIZE)
+            if not os.path.exists("./" + BOSSDB_DATASET + "/x" + str(x // CHUNK_SIZE) + "y" + str(y // CHUNK_SIZE) + "z" + str(z // CHUNK_SIZE) + ".hdf5"):
+
+                output_path = "./" + BOSSDB_DATASET + "/x" + str(x // CHUNK_SIZE) + "y" + str(y // CHUNK_SIZE) + "z" + str(
+                                z // CHUNK_SIZE) + ".hdf5"
+                # inner copy
+                if ((x > 0 or y > 0 or z > 0)
+                        and (z_end - z) == CHUNK_SIZE and (y_end - y) == CHUNK_SIZE and (x_end - x) == CHUNK_SIZE):
+                    shutil.copy("./" + BOSSDB_DATASET + "/x0y0z0.hdf5", output_path)
+                else:
+                    cur_slice = np.zeros(shape=(z_end - z, y_end - y, x_end - x), dtype='uint32')
+                    with h5py.File(
+                        "./" + BOSSDB_DATASET + "/x" + str(x // CHUNK_SIZE) + "y" + str(y // CHUNK_SIZE) + "z" + str(
+                                z // CHUNK_SIZE) + ".hdf5", "w") as f:
+                        dset = f.create_dataset("data", shape=(cur_slice.shape[2], cur_slice.shape[1], cur_slice.shape[0]), dtype='uint32', data=cur_slice,
+                                            compression="gzip")
+                print("/x" + str(x // CHUNK_SIZE) + "y" + str(y // CHUNK_SIZE) + "z" + str(z // CHUNK_SIZE) + ".hdf5")
+
+non_empty_file.close()
+exit(0)
 
 os.makedirs("./" + BOSSDB_DATASET + "/", exist_ok=True)
 if not os.listdir("./" + BOSSDB_DATASET + "/") == []:
     print("Aborting: directory ./" + BOSSDB_DATASET + "/ must be empty")
     exit(0)
+
+
+
 
 # each step downloads and processes a subvolume of size [CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE]
 for z in range(start_z, full_dim_z, CHUNK_SIZE):
