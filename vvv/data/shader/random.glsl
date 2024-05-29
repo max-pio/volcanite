@@ -146,6 +146,7 @@ vec3 nextRNG(const in vec2 xy, inout float seed) {
 // SAMPLING ------------------------------------------------------------------------------------------------------------
 
 vec3 uniformSampleSphere(const in vec2 u) {
+    // For u.x == 0.5, h = 0
     float h = 1.0 - 2.0 * u.x;
     float r = sqrt(1.0 - h * h);
     return vec3(r * cos(2.0 * PI * u.y), h, r * sin(2.0 * PI * u.y));
@@ -155,7 +156,9 @@ vec3 sampleUniformHemisphereVoxel(const in vec2 u, const in vec3 normal) {
     vec3 dir = uniformSampleSphere(u);
     // Assuming that the normal is axis-oriented, we only have to alter the sign of dir's components to project it into
     // the positive hemisphere. This is the case for surface normals of voxels.
-    return dir * sign(dot(normal, dir));
+    // note: sign(dot(n,d)) does not work for the singularities when one component is zero (sign returns 0 instead of 1)
+    //       this is the case for directions from uniformSampleSphere(u) that llie in the xz plane.
+    return dot(normal, dir) < 0.f ? -dir : dir;
 }
 
 float pdfUniformHemisphere(const in vec3 dir, const in vec3 normal) {
@@ -166,11 +169,11 @@ vec3 sampleCosineWeightedHemisphereVoxel(const in vec2 u, in vec3 normal) {
     float r = sqrt(u.x);
     float theta = 2.0 * PI * u.y;
 
-    // Assuming that the normal is axis-oriented, the vector (1, 1, 1) always works
-    vec3  bitangent = normalize(cross(normal, vec3(1.f)));
+    // Assuming that the normal is axis-oriented, the vector (1, 0, 1) is always valid
+    vec3  bitangent = normalize(cross(normal, vec3(1.f, 0.f, 1.f)));
     vec3  tangent = cross(bitangent, normal);
 
-    return normalize(r * sin(theta) * bitangent + sqrt(1.0 - u.x) * normal + r * cos(theta) * tangent);
+    return normalize(r * sin(theta) * bitangent + sqrt(1.0 - u.x) * normal + r * cos(theta) * tangent);;
 }
 
 float pdfCosineWeightedHemisphere( const in vec3 dir, const in vec3 normal) {
