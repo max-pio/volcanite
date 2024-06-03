@@ -509,7 +509,8 @@ public:
         return static_cast<float>(getCompressedSizeInBytes()) / static_cast<float>(m_volume_dim.x * m_volume_dim.y * m_volume_dim.z * sizeof(uint32_t)) * 100.f;
     }
 
-    [[nodiscard]] std::string decodingInfoString() const {
+    /** @return multiline string describing size and compression rates of the encoded volume and encoding components. */
+    [[nodiscard]] std::string getEncodingInfoString() const {
         double brick_starts_memory = static_cast<double>(m_brick_starts.size() * sizeof(uint32_t)) / 1000. / 1000.;
         double encoding_memory = 0.;
         for(const auto& e : m_encodings)

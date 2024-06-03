@@ -350,7 +350,7 @@ public:
                         csgv->exportToFile(chunk_output_path);
                     } else {
                         if (cfg.verbose) {
-                            Logger(INFO) << " reusing existing csgv file " << chunk_output_path << " " << csgv->decodingInfoString();
+                            Logger(INFO) << " reusing existing csgv file " << chunk_output_path << " " << csgv->getEncodingInfoString();
                         } else {
                             Logger(INFO) << " reusing existing csgv file " << chunk_output_path;
                         }
@@ -416,7 +416,7 @@ public:
                 file << "  Total compression: " << (total_freq_prepass_seconds + total_encoding_seconds) << std::endl;
                 file << "" << std::endl;
                 file << "Compressed volume information:" << std::endl;
-                file << "  " << csgv->decodingInfoString() << std::endl;
+                file << "  " << csgv->getEncodingInfoString() << std::endl;
                 file.close();
             }
         }
@@ -455,7 +455,7 @@ public:
             csgv->separateDetail();
         }
 
-        Logger(INFO) << "Total info: " << csgv->decodingInfoString();
+        Logger(INFO) << "Total info: " << csgv->getEncodingInfoString();
         return csgv;
     }
 
