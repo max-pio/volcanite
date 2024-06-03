@@ -137,12 +137,14 @@ bool isLabelVisible(uint label) {
 
 vec4 getColor(uint label, int material) {
 
-    // read attribute, map tfInterval to [0, 1)
+    // read attribute, map tfInterval to [0, 1]
     float v = (getAttribute(label, g_materials[material].tfAttributeStart) - g_materials[material].tfIntervalMin)
-                / (g_materials[material].tfIntervalMax - g_materials[material].tfIntervalMin);;
+                / (g_materials[material].tfIntervalMax - g_materials[material].tfIntervalMin);
     // wrapping mode: 0 = clamp, handled by textureLoD, 1 = repeat
     if(g_materials[material].wrapping == 1) { // repeat
-        v = fract(v);
+        float interval_length = (g_materials[material].tfIntervalMax - g_materials[material].tfIntervalMin);
+        // ToDo:  visible for small tfMax - tfMin differences
+        v = fract(v) * (interval_length + 1.f) / interval_length;
     }
 
     // problem that at least occurs on my old AMD RX480 card:
@@ -156,10 +158,8 @@ vec4 getColor(uint label, int material) {
     if(material == 0)
         return vec4(textureLod(s_transferFunctions[0], v, 0.f).rgb, g_materials[0].opacity);
 
-#ifndef NDEBUG
     assertf(material >= 0 && material <= g_max_active_material, "material %i assigned to label is invalid", material);
     assert(!any(isnan(vec4(g_materials[material].discrIntervalMin,  g_materials[material].discrIntervalMax, g_materials[material].tfIntervalMin, g_materials[material].tfIntervalMax))), "NaN in shader attribute limits");
-#endif
     return vec4(textureLod(s_transferFunctions[material], v, 0.f).rgb, g_materials[material].opacity);
 }
 
