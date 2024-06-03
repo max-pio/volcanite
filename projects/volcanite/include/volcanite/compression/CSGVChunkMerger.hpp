@@ -98,7 +98,7 @@ public:
                     Logger(ERROR) << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunk dimension must be multiple of brick size.";
                     return nullptr;
                 }
-                bricks_in_chunk = chunk_dimension / brick_size;
+                bricks_in_chunk = (chunk_dimension + brick_size - glm::uvec3(1u)) / brick_size;
                 rANS_mode = chunks[0].getRANSMode();
                 if (rANS_mode != NO_RANS)
                     complete_frequency_table = chunks[0].getCurrentFrequencyTable();
