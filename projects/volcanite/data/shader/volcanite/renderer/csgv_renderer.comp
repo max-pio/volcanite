@@ -80,9 +80,6 @@ bool isValid(float depth) { return depth >= 0.f; }
 /// returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
 uint get_volume_label(ivec3 voxel, inout float depth_valid) {
     assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label out of bounds!");
-//    if (any(lessThan(voxel, ivec3(0))) || any(greaterThanEqual(voxel, ivec3(g_vol_dim)))) {
-//        return 0u;
-//    }
 
     uvec3 brick = uvec3(voxel) / g_brick_size;
     uvec3 brick_voxel = uvec3(voxel) - (brick * g_brick_size);
@@ -119,11 +116,12 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
 
         // if the brick was not decoded, anything we compute from now on is invalid
         if(req_inv_lod > 0u && g_max_decoding_lod > 0u) {
-#ifdef SEPARATE_DETAIL
-            uint palette_size = encoding_address.buf[2u * (g_lod_count - 1u)];
-#else
-            uint palette_size =  encoding_address.buf[2u * g_lod_count];
-#endif
+            uint palette_size = getBrickPaletteLength(brick_idx);
+//#ifdef SEPARATE_DETAIL
+//            uint palette_size = encoding_address.buf[2u * (g_lod_count - 1u)];
+//#else
+//            uint palette_size =  encoding_address.buf[2u * g_lod_count];
+//#endif
 
             depth_valid = INVALID_DEPTH;
             // ToDo: this should be a random number from the random state
@@ -148,6 +146,8 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
 
 
 bool isEmptySpace(ivec3 voxel) {
+    assertf(all(greaterThanEqual(voxel, ivec3(0))) && all(lessThan(voxel, g_vol_dim)), "empty space request for invalid voxel %v3i", voxel);
+
     uvec3 brick = uvec3(voxel / g_brick_size);
     uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
 
@@ -160,12 +160,14 @@ bool isEmptySpace(ivec3 voxel) {
 void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
 
     // invalidate any nan samples
-    if(any(isnan(color)) || any(isinf(color)))
+    if (any(isnan(color)) || any(isinf(color)) || isnan(depth_valid) || isinf(depth_valid)) {
+        color = vec4(0.f, .5f, 1.f, 1.f);
         depth_valid = -abs(depth_valid);
+    }
 
     // if subsamplign is enabled, we only render one pixel per [g_subsampling]^2 block
     ivec2 subpixel;
-    for(subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
+    for (subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
         for (subpixel.x = 0; subpixel.x < g_subsampling; subpixel.x++) {
             ivec2 opix = (pixel/g_subsampling)*g_subsampling + subpixel;
             if (g_camera_still_frames == 0u) {
@@ -228,6 +230,14 @@ bool checkStateAndRay(const RayMarchState state, const Ray ray, int line) {
             debugPrintfEXT("nan/inf in line %i, step %i   state.pos: %v3f | state.t: %f | state.side_dist: %v3f | state.delta: %v3f | ray %v3f -> %v3f", line, state.step, state.pos, state.t, state.side_dist, state.delta, ray.origin, ray.direction);
         return false;
     }
+    if(any(notEqual(state.voxel, ivec3(floor(ray.origin + state.t * ray.direction))))) {
+        debugPrintfEXT("state.t yields pos: (%v3f + %f * %v3f) = %v3f not inside state.voxel %v3i", ray.origin, state.t, ray.direction, ray.origin + state.t * ray.direction, state.voxel);
+        return false;
+    }
+    if(any(notEqual(state.voxel, ivec3(floor(state.pos))))) {
+        debugPrintfEXT("state.pos: %v3f is not inside state.voxel %v3i", state.pos, state.voxel);
+        return false;
+    }
     return true;
 }
 
@@ -243,8 +253,9 @@ void dda_step(inout RayMarchState state, const Ray ray) {
     }
     state.t = dot(mask, state.side_dist);
     state.side_dist += state.delta * mask;
-    state.voxel += state.stp * ivec3(mask);
+//    state.voxel += state.stp * ivec3(mask);
     state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
+    state.voxel = ivec3(floor(state.pos));
     state.normal = -mask * state.stp;   // is normalized per definition
 }
 
@@ -414,7 +425,7 @@ void main() {
     dda_init(state, ray, t_0);
     for(state.step = 0; state.step < g_maxSteps; state.step++) {
         // ToDo: real multi-level DDA. Current brute froce solution:
-        if(false)
+        if(true)
         {
             const int dda_voxel_size = int(g_brick_size >> get_inv_lod(state.voxel));
             ivec3 old_voxel = state.voxel / dda_voxel_size;
@@ -448,7 +459,7 @@ void main() {
         if(any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
             || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
             // we may have started out of bounds
-            if(state.step > 2)
+            if(state.path_length > 0 || state.t > t_1)
                 break;
             else
                continue;
@@ -457,6 +468,9 @@ void main() {
         // empty space check
         // ToDo: better empty space skipping - skip the non-visible brick in ONE big dda step
         if(isEmptySpace(state.voxel)) {
+//            state.out_color.rgb += state.throughput * vec3(state.throughput.r, 0.f, 1.f - state.throughput.r) * 0.001f;
+//            state.throughput *= 0.999;
+//            state.out_color.a = max(state.out_color.a, 0.8);
             continue;
         }
 
@@ -484,8 +498,12 @@ void main() {
         }
 #endif
 
+        // obtain material at the current position
+        int material = getMaterial(state.label);
+
         // continue traversal if this is not a visible label
-        if (!isLabelVisible(state.label)) {
+        // material < 0 <=> !isLabelVisible(state.label)
+        if (material < 0) {
             continue;
         }
         else if(debug_view_visible && g_debug_brick_cache) {
@@ -519,7 +537,7 @@ void main() {
             break;
         }
 
-        int material = getMaterial(state.label);
+        // obtain surface albedo / volume emission and opacity
         vec4 surface_albedo_opacity = getColor(state.label, material);
 
         // ENTER SEMI-TRANSPARENT VOLUME
