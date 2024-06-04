@@ -137,6 +137,8 @@ bool isLabelVisible(uint label) {
 
 vec4 getColor(uint label, int material) {
 
+    assert(material >= 0 && material <= g_max_active_material, "invalid material request in getColor");
+
     // read attribute, map tfInterval to [0, 1]
     float v = (getAttribute(label, g_materials[material].tfAttributeStart) - g_materials[material].tfIntervalMin)
                 / (g_materials[material].tfIntervalMax - g_materials[material].tfIntervalMin);
