@@ -196,26 +196,33 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
 
 // all ray marching happens in the same loop to minimize thread divergence
 struct RayMarchState {
+
     float rng;          // random number generator state
+
     // DDA traversal parameter
+    int step;           // how many ray marching steps where done so far
+
     vec3 side_dist;     // distance to the next cell in each dimension
-    vec3 normal;
     ivec3 stp;
     vec3 delta;
 
     // ray marching
-    int step;           // how many ray marching steps where done so far
     // ToDo: pos and voxel are dependend on t should we waste registers here?
     float t;            // ray distance
     vec3 pos;           // the position of the ray marcher
+
     ivec3 voxel;        // the current voxel in which pos is
-    uint label;         // the label at the hit point
-    uint last_label;    // the label of the previous hit point
-    float depth_valid;  // depth to be written to the depth buffer. negative depth indicates an invalid hit
+    vec3 pos_in_voxel;  // sub-voxel position in [0,1)^3
+
+    // shading and G-Buffer
+    float depth_valid;  // depth to be written to the depth buffer. negative depth indicates an invalid sample
+    vec3 normal;        // normal at the current position
+    uint label;         // the label at the current position
+    uint last_label;    // the label of the previous position
 
     // path tracing
     vec4 out_color;     // (radiance) color to be written to the color buffer
-    vec3 throughput;   // accumulated throughput (albedo/pi * 2pi * geometry term * brdf)
+    vec3 throughput;    // accumulated throughput (albedo/pi * 2pi * geometry term * brdf)
     int path_length;    // number of path segments (= bounces), initialized with 0 for the view ray
 };
 
@@ -241,7 +248,34 @@ bool checkStateAndRay(const RayMarchState state, const Ray ray, int line) {
     return true;
 }
 
+
+void dda_step_lod(inout RayMarchState state, const Ray ray) {
+
+
+    TODO: 1) only iterate over integer state.voxel 1 unit step by step. At each hit point iteratively determine next pos_in_voxel. 3) state.pos = vec3(state.voxel) + state.pos_in_voxel only
+
+    // note: lessThanEqual(min(side_dist.yzx)..) computations can produce masks with multiple 1 entries.
+    vec3 mask = vec3(0.f);
+    if (state.side_dist.z < state.side_dist.x && state.side_dist.z < state.side_dist.y) {
+        mask.z = 1.f;
+    } else if (state.side_dist.y < state.side_dist.x && state.side_dist.y < state.side_dist.z) {
+        mask.y = 1.f;
+    } else {
+        mask.x = 1.f;
+    }
+    state.t = dot(mask, state.side_dist);
+    state.side_dist += state.delta * mask;
+    //    state.voxel += state.stp * ivec3(mask);
+    state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
+    state.voxel = ivec3(floor(state.pos));
+    state.normal = -mask * state.stp;   // is normalized per definition
+}
+
 void dda_step(inout RayMarchState state, const Ray ray) {
+
+    dda_step_lod(state, ray);
+    return;
+
     // note: lessThanEqual(min(side_dist.yzx)..) computations can produce masks with multiple 1 entries.
     vec3 mask = vec3(0.f);
     if (state.side_dist.z < state.side_dist.x && state.side_dist.z < state.side_dist.y) {
