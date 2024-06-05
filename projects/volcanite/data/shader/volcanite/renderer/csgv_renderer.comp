@@ -197,33 +197,32 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
 // all ray marching happens in the same loop to minimize thread divergence
 struct RayMarchState {
 
-    float rng;          // random number generator state
+    float rng;          ///< random number generator state
+    int step;           ///< how many ray marching steps where done so far
 
     // DDA traversal parameter
-    int step;           // how many ray marching steps where done so far
-
-    vec3 side_dist;     // distance to the next cell in each dimension
-    ivec3 stp;
-    vec3 delta;
+    vec3 next_t;        ///< distance to the next voxel in each dimension
+    ivec3 step_sign;    ///< -1 or 1 depending
+    vec3 delta_t;       ///< t distance per unit voxel step along each axis
 
     // ray marching
     // ToDo: pos and voxel are dependend on t should we waste registers here?
-    float t;            // ray distance
-    vec3 pos;           // the position of the ray marcher
+    float t;            ///< travelled distance along ray
+    vec3 pos;           ///< current position (= ray.origin + state.t * ray.direction)
 
-    ivec3 voxel;        // the current voxel in which pos is
-    vec3 pos_in_voxel;  // sub-voxel position in [0,1)^3
+    ivec3 voxel;        ///< the current voxel in which pos is located
+    vec3 pos_in_voxel;  ///< sub-voxel position of pos in [0,1)^3
 
     // shading and G-Buffer
-    float depth_valid;  // depth to be written to the depth buffer. negative depth indicates an invalid sample
-    vec3 normal;        // normal at the current position
-    uint label;         // the label at the current position
-    uint last_label;    // the label of the previous position
+    float depth_valid;  ///< depth to be written to the depth buffer. negative depth indicates an invalid sample
+    vec3 normal;        ///< normal at the current position
+    uint label;         ///< label at the current position
+    uint last_label;    ///< label of the previous position
 
     // path tracing
-    vec4 out_color;     // (radiance) color to be written to the color buffer
-    vec3 throughput;    // accumulated throughput (albedo/pi * 2pi * geometry term * brdf)
-    int path_length;    // number of path segments (= bounces), initialized with 0 for the view ray
+    vec4 out_color;     ///< (radiance) color to be written to the color buffer
+    vec3 throughput;    ///< accumulated throughput (albedo/pi * 2pi * geometry term * brdf [+ volumetric attenuation])
+    int path_length;    ///< number of path segments (= bounces), initialized with 0 for the view ray
 };
 
 #define SHADOW_RAY_PATH_LENGTH -1
@@ -231,44 +230,80 @@ struct RayMarchState {
 // ahecks some state variables and ray origin / direction for inf or nan values. returns false if any are found.
 bool checkStateAndRay(const RayMarchState state, const Ray ray, int line) {
     if (any(isnan(state.pos)) || any(isinf(state.pos))
-        || (any(isnan(state.side_dist)) || any(isinf(state.side_dist)))
+        || (any(isnan(state.pos_in_voxel)) || any(isinf(state.pos_in_voxel)))
+        || (any(isnan(state.next_t)) || any(isinf(state.next_t)))
         || (any(isnan(ray.origin)) || any(isinf(ray.origin)))
         ||  (any(isnan(ray.direction)) || any(isinf(ray.direction)))) {
-            debugPrintfEXT("nan/inf in line %i, step %i   state.pos: %v3f | state.t: %f | state.side_dist: %v3f | state.delta: %v3f | ray %v3f -> %v3f", line, state.step, state.pos, state.t, state.side_dist, state.delta, ray.origin, ray.direction);
+            debugPrintfEXT("nan/inf in line %i, step %i   state.pos: %v3f | in_voxel: %v3f | state.t: %f | state.next_t: %v3f | state.delta_t: %v3f | ray %v3f -> %v3f", line, state.step, state.pos, state.pos_in_voxel, state.t, state.next_t, state.delta_t, ray.origin, ray.direction);
         return false;
     }
-    if(any(notEqual(state.voxel, ivec3(floor(ray.origin + state.t * ray.direction))))) {
-        debugPrintfEXT("state.t yields pos: (%v3f + %f * %v3f) = %v3f not inside state.voxel %v3i", ray.origin, state.t, ray.direction, ray.origin + state.t * ray.direction, state.voxel);
-        return false;
-    }
-    if(any(notEqual(state.voxel, ivec3(floor(state.pos))))) {
-        debugPrintfEXT("state.pos: %v3f is not inside state.voxel %v3i", state.pos, state.voxel);
-        return false;
-    }
+//    if(any(notEqual(state.voxel, ivec3(floor(ray.origin + state.t * ray.direction))))) {
+//        debugPrintfEXT("%i | state.t yields pos: (%v3f + %fx %v3f) = %v3f not inside state.voxel %v3i | dir %v3f", state.step, ray.origin, state.t, ray.direction, ray.origin + state.t * ray.direction, state.voxel, ray.direction);
+//        return false;
+//    }
+//    if(any(notEqual(state.voxel, ivec3(floor(state.pos))))) {
+//        debugPrintfEXT("state.pos: %v3f is not inside state.voxel %v3i", state.pos, state.voxel);
+//        return false;
+//    }
     return true;
 }
 
 
 void dda_step_lod(inout RayMarchState state, const Ray ray) {
+    checkStateAndRay(state, ray, __LINE__);
 
+    //TODO: 1) only iterate over integer state.voxel 1 unit step by step. At each hit point iteratively determine next pos_in_voxel. 3) state.pos = vec3(state.voxel) + state.pos_in_voxel only
 
-    TODO: 1) only iterate over integer state.voxel 1 unit step by step. At each hit point iteratively determine next pos_in_voxel. 3) state.pos = vec3(state.voxel) + state.pos_in_voxel only
+    // how t has to change until the ray hits the next voxel edge
+    vec3 inv_ray_dir = 1.f / ray.direction;
+    vec3 next_t = inv_ray_dir * ( max(state.step_sign, vec3(0.f)) - state.pos_in_voxel );
 
-    // note: lessThanEqual(min(side_dist.yzx)..) computations can produce masks with multiple 1 entries.
-    vec3 mask = vec3(0.f);
-    if (state.side_dist.z < state.side_dist.x && state.side_dist.z < state.side_dist.y) {
-        mask.z = 1.f;
-    } else if (state.side_dist.y < state.side_dist.x && state.side_dist.y < state.side_dist.z) {
-        mask.y = 1.f;
-    } else {
-        mask.x = 1.f;
+    // next_t can be -inf or inf if ray.direction has zero components
+    if(ray.direction.x == 0.f) {
+        next_t.x = 3.402823466e+38;
+        inv_ray_dir.x = 0.f;
     }
-    state.t = dot(mask, state.side_dist);
-    state.side_dist += state.delta * mask;
-    //    state.voxel += state.stp * ivec3(mask);
-    state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
-    state.voxel = ivec3(floor(state.pos));
-    state.normal = -mask * state.stp;   // is normalized per definition
+    if(ray.direction.y == 0.f) {
+        next_t.y = 3.402823466e+38;
+        inv_ray_dir.y = 0.f;
+    }
+    if(ray.direction.z == 0.f) {
+        next_t.z = 3.402823466e+38;
+        inv_ray_dir.z = 0.f;
+    }
+
+    if(!all(greaterThanEqual(next_t, vec3(0.f)))) {
+        debugPrintfEXT("next t negative! %v3f raydir %v3f inv_raydir %v3f | pos_in_voxel %v3f step_sign %v3i", next_t, ray.direction, inv_ray_dir, state.pos_in_voxel, state.step_sign);
+    }
+
+    // get axis along which to step as mask[argmin(next_t)] = 1
+    // note: lessThanEqual(min(side_dist.yzx)..) computations can produce masks with multiple 1 entries.
+    int axis = 0;
+    if (next_t.z < next_t.x && next_t.z < next_t.y)
+        axis = 2;
+    else if (next_t.y < next_t.x && next_t.y < next_t.z)
+        axis = 1;
+
+    state.next_t = next_t;
+    checkStateAndRay(state, ray, __LINE__);
+
+    // advance voxel along the selcted axis
+    state.voxel[axis] += state.step_sign[axis];
+
+    // update sub-voxel position
+    const float ONE_MINUS_EPSILON = 0.9999999f;
+    state.pos_in_voxel = fract(state.pos_in_voxel + (next_t[axis] * ray.direction) * 1.000001f);
+    state.pos_in_voxel[axis] = max(-state.step_sign[axis], 0.f) * ONE_MINUS_EPSILON;
+
+    state.normal = vec3(0.f);
+    state.normal[axis] = float(-state.step_sign[axis]);
+
+    state.pos = vec3(state.voxel) + state.pos_in_voxel;
+    state.t = length(state.pos - ray.origin);
+
+    if(!checkStateAndRay(state, ray, __LINE__)) {
+        debugPrintfEXT(" step %i ray origin %v3f dir %v3f: axis %i", state.step, ray.origin, ray.direction, axis);
+    }
 }
 
 void dda_step(inout RayMarchState state, const Ray ray) {
@@ -278,55 +313,58 @@ void dda_step(inout RayMarchState state, const Ray ray) {
 
     // note: lessThanEqual(min(side_dist.yzx)..) computations can produce masks with multiple 1 entries.
     vec3 mask = vec3(0.f);
-    if (state.side_dist.z < state.side_dist.x && state.side_dist.z < state.side_dist.y) {
+    if (state.next_t.z < state.next_t.x && state.next_t.z < state.next_t.y) {
         mask.z = 1.f;
-    } else if (state.side_dist.y < state.side_dist.x && state.side_dist.y < state.side_dist.z) {
+    } else if (state.next_t.y < state.next_t.x && state.next_t.y < state.next_t.z) {
         mask.y = 1.f;
     } else {
         mask.x = 1.f;
     }
-    state.t = dot(mask, state.side_dist);
-    state.side_dist += state.delta * mask;
-//    state.voxel += state.stp * ivec3(mask);
+    state.t = dot(mask, state.next_t);
+    state.next_t += state.delta_t * mask;
+//    state.voxel += state.step_sign * ivec3(mask);
     state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
     state.voxel = ivec3(floor(state.pos));
-    state.normal = -mask * state.stp;   // is normalized per definition
+    state.normal = -mask * state.step_sign;   // is normalized per definition
 }
 
 void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
-    // DDA traversal initialisation
-    // delta.i equals to the length the ray has to travel to hit the next cell in i direction.
-    // side_dist is the distance from the ray origin to the next cell in each dimension.
-
-//    const int dda_voxel_size = int(g_brick_size >> get_inv_lod(ivec3(floor(state.pos))));
     state.t = t_0;
     state.pos = ray.origin + state.t * ray.direction;
+
     state.voxel = ivec3(floor(state.pos));
+    state.pos_in_voxel = state.pos - state.voxel;
 
-    state.stp = ivec3( ray.direction.x >= 0.0 ? 1.0 : -1.0, ray.direction.y >= 0.0 ? 1.0 : -1.0, ray.direction.z >= 0.0 ? 1.0 : -1.0);
-    vec3 rdinv = 1.0 / ray.direction;
+//    state.pos = state.voxel;
+//    state.t = length(state.pos - ray.origin);
 
-    state.delta = abs(rdinv); // min(rdinv * state.stp, 1.0);//
-    state.side_dist = abs((vec3(state.voxel) + max(state.stp, vec3(0.0)) - ray.origin) * state.delta);
+    state.step_sign = ivec3(ray.direction.x >= 0.f ? 1 : -1,
+                            ray.direction.y >= 0.0 ? 1 : -1,
+                            ray.direction.z >= 0.0 ? 1 : -1);
+
+    state.delta_t = abs(1.0 / ray.direction);
+//    state.next_t = abs((vec3(state.voxel) + max(state.step_sign, vec3(0.0)) - ray.origin) * state.delta_t);
+    state.next_t = abs((vec3(state.voxel) + max(state.step_sign, vec3(0.0)) - ray.origin) * state.delta_t);
 
     // ray.direction may be zero somewhere. we set the side_dist in this direction to FLT_MAX to never take a step in
-    // this direction.
+    // this direction. ToDo: check if this is still required in new DDA, when using that X < INF is always true
     if(ray.direction.x == 0.f) {
-        state.side_dist.x = 3.402823466e+38;
-        state.delta.x = 0.f;
-        state.stp.x = 0;
+        state.next_t.x = 3.402823466e+38;
+        state.delta_t.x = 0.f;
+        state.step_sign.x = 0;
     }
     if(ray.direction.y == 0.f) {
-        state.side_dist.y = 3.402823466e+38;
-        state.delta.y = 0.f;
-        state.stp.y = 0;
+        state.next_t.y = 3.402823466e+38;
+        state.delta_t.y = 0.f;
+        state.step_sign.y = 0;
     }
     if(ray.direction.z == 0.f) {
-        state.side_dist.z = 3.402823466e+38;
-        state.delta.z = 0.f;
-        state.stp.z = 0;
+        state.next_t.z = 3.402823466e+38;
+        state.delta_t.z = 0.f;
+        state.step_sign.z = 0;
     }
 
+    checkStateAndRay(state, ray, __LINE__);
 }
 
 // ToDo: Use GGX?
@@ -458,6 +496,7 @@ void main() {
     t_0 -= 1.f;
     dda_init(state, ray, t_0);
     for(state.step = 0; state.step < g_maxSteps; state.step++) {
+//    for(state.step = 0; state.step < 1; state.step++) {
         // ToDo: real multi-level DDA. Current brute froce solution:
         if(true)
         {
@@ -594,7 +633,7 @@ void main() {
 
             // emission and absorption from homogeneous volume (ignoring scattering!)
 //            // find distance the ray will travel in the next step
-//            float next_t = dot(vec3(lessThanEqual(state.side_dist.xyz, min(state.side_dist.yzx, state.side_dist.zxy))), state.side_dist);
+//            float next_t = dot(vec3(lessThanEqual(state.next_t.xyz, min(state.next_t.yzx, state.next_t.zxy))), state.next_t);
 //            // compute transmittance of homogeneous voluem segment
 //            vec3 transmittance = exp(-surface_albedo_opacity.a * abs(next_t - state.t) * (1.f - surface_albedo_opacity.rgb));
 //            // update opacity (computed over inverse opacity = transmittance)
@@ -749,4 +788,6 @@ void main() {
 
     // write to image
     writePixel(pixel, state.out_color, state.depth_valid);
+//    writePixel(pixel, vec4(state.step) / 10.f, state.depth_valid);
+//    writePixel(pixel, vec4(vec3(state.voxel) / vec3(g_vol_dim), 1.f), state.depth_valid);
 }

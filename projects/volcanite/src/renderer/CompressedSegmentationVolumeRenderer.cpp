@@ -695,6 +695,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
         // the g_voxels_per_pixel_per_dist determines how many voxels an image pixel footprint overlaps for a camera distance
         float voxels_per_pixel_at_near = scalingFactor / float(m_resolution.height);
+        // ToDo: make g_voxels_per_pixel_per_dist vec3 and account for anisotropic voxel sizes
         m_urender_info->setUniform<float>("g_voxels_per_pixel_per_dist", glm::tan(this->getCamera()->vertical_fov) * voxels_per_pixel_at_near);
 
         // debug
