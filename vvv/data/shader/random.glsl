@@ -1,3 +1,5 @@
+#ifndef RANDOM_GLSL
+#define RANDOM_GLSL
 
 #ifndef INV_PI
     #define INV_PI 0.3183098861837907f
@@ -121,6 +123,7 @@ float blueNoise32x32(ivec2 xy) {
 
 // RANDOM NUMBERS ------------------------------------------------------------------------------------------------------
 
+// ToDo: replace stackoverflow code with pcg3D from Jarzynski & Olano (2020) "Hash Functions for GPU Rendering"
 // https://stackoverflow.com/a/52207531/13565664
 vec3 hash(uvec3 x) {
     const uint hash_k = 1103515245U;
@@ -176,3 +179,5 @@ vec3 sampleCosineWeightedHemisphereVoxel(const in vec2 u, in vec3 normal) {
 float pdfCosineWeightedHemisphere( const in vec3 dir, const in vec3 normal) {
     return dot(dir, normal) * INV_PI;
 }
+
+#endif // RANDOM_GLSL
