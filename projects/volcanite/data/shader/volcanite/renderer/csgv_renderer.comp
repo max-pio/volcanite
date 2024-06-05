@@ -61,25 +61,25 @@ ivec2 pixelFromInvocationID() {
 }
 
 uint get_inv_lod(ivec3 voxel) {
-    // ToDo: the LOD computation is very expensive. should at least move it to the provision shader or replace it with something cheaper.
-    // outside volume
-    // if (any(lessThan(voxel, ivec3(0))) || any(greaterThanEqual(voxel, ivec3(g_vol_dim))))
-    //    return INVALID;
+    // Ensure the same level-of-detail for all bricks by computing it from the brick's center.
+    // Otherwise, different levels-of-detail would be requested for decompression of the same brick.
+    vec3 brick_center_world_space = (g_model_to_world_space * vec4((vec3(0.5f) + vec3(voxel / int(g_brick_size))) * g_brick_size, 1.f)).xyz;
+    float dist = length(brick_center_world_space - g_camera_position_world_space) + (float(g_brick_size)/g_world_to_model_space_scaling);
 
-    float dist = length((g_model_to_world_space * vec4((vec3(0.5f) + vec3(voxel / int(g_brick_size))) * g_brick_size, 1.f)).xyz - g_camera_position_world_space) + (float(g_brick_size)/g_world_to_model_space_scaling);
-    // use the MSB as a fast log2
+    // use the MSB as a fast log2 (rounding down to int anyways)
     int voxels_per_pixel_at_hit = int(g_voxels_per_pixel_per_dist * dist);
     return g_lod_count - 1u - clamp(uint(g_lod_bias + findMSB(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
 
-    //    float voxels_per_pixel_at_hit = g_voxels_per_pixel_per_dist * dist;
-    //    return g_lod_count - 1u - clamp(uint(g_lod_bias + log2(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
+    // More precise log2 variant:
+    // float voxels_per_pixel_at_hit = g_voxels_per_pixel_per_dist * dist;
+    // return g_lod_count - 1u - clamp(uint(g_lod_bias + log2(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
 }
 
-bool isValid(float depth) { return depth >= 0.f; }
+bool isDepthValid(float depth) { return depth >= 0.f; }
 
 /// returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
 uint get_volume_label(ivec3 voxel, inout float depth_valid) {
-    assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label out of bounds!");
+    assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
 
     uvec3 brick = uvec3(voxel) / g_brick_size;
     uvec3 brick_voxel = uvec3(voxel) - (brick * g_brick_size);
@@ -92,7 +92,7 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
     // tell the other shaders that we can see this brick if it's visibility state is "unknown"
     // but only if this is a valid pixel sample. An invalid sample could be accessing bricks that are actually not visible.
     assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] <= g_lod_count, "we try to access a brick that's flagged as invisible");
-    if(isValid(depth_valid) && req_inv_lod > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > req_inv_lod) {
+    if(isDepthValid(depth_valid) && req_inv_lod > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > req_inv_lod) {
         // if the brick was not requested so far:
         if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= g_lod_count)
             g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
@@ -117,11 +117,6 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
         // if the brick was not decoded, anything we compute from now on is invalid
         if(req_inv_lod > 0u && g_max_decoding_lod > 0u) {
             uint palette_size = getBrickPaletteLength(brick_idx);
-//#ifdef SEPARATE_DETAIL
-//            uint palette_size = encoding_address.buf[2u * (g_lod_count - 1u)];
-//#else
-//            uint palette_size =  encoding_address.buf[2u * g_lod_count];
-//#endif
 
             depth_valid = INVALID_DEPTH;
             // ToDo: this should be a random number from the random state
@@ -156,7 +151,6 @@ bool isEmptySpace(ivec3 voxel) {
 }
 
 
-
 void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
 
     // invalidate any nan samples
@@ -176,7 +170,7 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
                     imageStore(feedbackOut, opix, vec4(0.f));
                 // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame (set .a < 0)
                 else
-                    imageStore(feedbackOut, opix, vec4(color.rgb, isValid(depth_valid) ? 1.f :  -1.f));
+                    imageStore(feedbackOut, opix, vec4(color.rgb, isDepthValid(depth_valid) ? 1.f :  -1.f));
             }
             else {
                 vec4 prev_color = imageLoad(feedbackIn, opix);
@@ -184,7 +178,7 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
                 if (any(notEqual(opix, pixel)))
                     imageStore(feedbackOut, opix, prev_color);
                 // writing our pixel, but invalid new sample (from not yet decoded brick)
-                else if (!isValid(depth_valid))
+                else if (!isDepthValid(depth_valid))
                     imageStore(feedbackOut, opix, prev_color.a > 0.f ? prev_color : vec4(color.rgb, -1.f));
                 // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
                 else
@@ -196,22 +190,15 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
 
 // all ray marching happens in the same loop to minimize thread divergence
 struct RayMarchState {
-
     float rng;          ///< random number generator state
     int step;           ///< how many ray marching steps where done so far
 
     // DDA traversal parameter
-    vec3 next_t;        ///< distance to the next voxel in each dimension
-    ivec3 step_sign;    ///< -1 or 1 depending
-    vec3 delta_t;       ///< t distance per unit voxel step along each axis
-
-    // ray marching
-    // ToDo: pos and voxel are dependend on t should we waste registers here?
-    float t;            ///< travelled distance along ray
-    vec3 pos;           ///< current position (= ray.origin + state.t * ray.direction)
-
-    ivec3 voxel;        ///< the current voxel in which pos is located
-    vec3 pos_in_voxel;  ///< sub-voxel position of pos in [0,1)^3
+    ivec3 step_sign;    ///< voxel step direction per axis, either -1 or 1
+    vec3 inv_ray_dir;   ///< t distance required for one unit voxel step along each axis
+    // the DDA position is split into integer voxel and sub-voxel position to avoid numerical floating point problems
+    ivec3 voxel;        ///< current voxel of the DDA ray marching position
+    vec3 pos_in_voxel;  ///< sub-voxel position of the DDA position in [0,1)^3
 
     // shading and G-Buffer
     float depth_valid;  ///< depth to be written to the depth buffer. negative depth indicates an invalid sample
@@ -227,24 +214,18 @@ struct RayMarchState {
 
 #define SHADOW_RAY_PATH_LENGTH -1
 
-// ahecks some state variables and ray origin / direction for inf or nan values. returns false if any are found.
+// checks some state variables and ray origin / direction for inf or nan values. returns false if any are found.
 bool checkStateAndRay(const RayMarchState state, const Ray ray, int line) {
-    if (any(isnan(state.pos)) || any(isinf(state.pos))
+    if (any(isnan(state.voxel + state.pos_in_voxel)) || any(isinf(state.voxel + state.pos_in_voxel))
         || (any(isnan(state.pos_in_voxel)) || any(isinf(state.pos_in_voxel)))
-        || (any(isnan(state.next_t)) || any(isinf(state.next_t)))
         || (any(isnan(ray.origin)) || any(isinf(ray.origin)))
         ||  (any(isnan(ray.direction)) || any(isinf(ray.direction)))) {
-            debugPrintfEXT("nan/inf in line %i, step %i   state.pos: %v3f | in_voxel: %v3f | state.t: %f | state.next_t: %v3f | state.delta_t: %v3f | ray %v3f -> %v3f", line, state.step, state.pos, state.pos_in_voxel, state.t, state.next_t, state.delta_t, ray.origin, ray.direction);
+            debugPrintfEXT("nan/inf in line %i, step %i   state.pos: %v3f | sub_voxel_pos: %v3f | state.t: %f | state.inv_ray_dir: %v3f | ray %v3f -> %v3f",
+                            line, state.step, state.voxel + state.pos_in_voxel, state.pos_in_voxel,
+                            length((state.voxel + state.pos_in_voxel) - ray.origin),
+                            state.inv_ray_dir, ray.origin, ray.direction);
         return false;
     }
-//    if(any(notEqual(state.voxel, ivec3(floor(ray.origin + state.t * ray.direction))))) {
-//        debugPrintfEXT("%i | state.t yields pos: (%v3f + %fx %v3f) = %v3f not inside state.voxel %v3i | dir %v3f", state.step, ray.origin, state.t, ray.direction, ray.origin + state.t * ray.direction, state.voxel, ray.direction);
-//        return false;
-//    }
-//    if(any(notEqual(state.voxel, ivec3(floor(state.pos))))) {
-//        debugPrintfEXT("state.pos: %v3f is not inside state.voxel %v3i", state.pos, state.voxel);
-//        return false;
-//    }
     return true;
 }
 
@@ -252,54 +233,34 @@ bool checkStateAndRay(const RayMarchState state, const Ray ray, int line) {
 void dda_step_lod(inout RayMarchState state, const Ray ray) {
     checkStateAndRay(state, ray, __LINE__);
 
-    //TODO: 1) only iterate over integer state.voxel 1 unit step by step. At each hit point iteratively determine next pos_in_voxel. 3) state.pos = vec3(state.voxel) + state.pos_in_voxel only
+    // determine distances that t has to change until the ray hits the next voxel edge
+    // note: if a ray direction axis is 0, inv_ray_dir is INFTY and step_sign is 1 to yield INFTY which is > all others
+    // note: side_dist_t is always positive as inv_ray_dir is negative if and only if step_sign is negative
+    vec3 side_dist_t = state.inv_ray_dir * ( max(state.step_sign, vec3(0.f)) - state.pos_in_voxel );
 
-    // how t has to change until the ray hits the next voxel edge
-    vec3 inv_ray_dir = 1.f / ray.direction;
-    vec3 next_t = inv_ray_dir * ( max(state.step_sign, vec3(0.f)) - state.pos_in_voxel );
-
-    // next_t can be -inf or inf if ray.direction has zero components
-    if(ray.direction.x == 0.f) {
-        next_t.x = 3.402823466e+38;
-        inv_ray_dir.x = 0.f;
-    }
-    if(ray.direction.y == 0.f) {
-        next_t.y = 3.402823466e+38;
-        inv_ray_dir.y = 0.f;
-    }
-    if(ray.direction.z == 0.f) {
-        next_t.z = 3.402823466e+38;
-        inv_ray_dir.z = 0.f;
-    }
-
-    if(!all(greaterThanEqual(next_t, vec3(0.f)))) {
-        debugPrintfEXT("next t negative! %v3f raydir %v3f inv_raydir %v3f | pos_in_voxel %v3f step_sign %v3i", next_t, ray.direction, inv_ray_dir, state.pos_in_voxel, state.step_sign);
-    }
+    assertf(all(greaterThanEqual(side_dist_t, vec3(0.f))) || !any(isnan(side_dist_t)), "next_t nan/negative: %v3f", side_dist_t);
 
     // get axis along which to step as mask[argmin(next_t)] = 1
     // note: lessThanEqual(min(side_dist.yzx)..) computations can produce masks with multiple 1 entries.
     int axis = 0;
-    if (next_t.z < next_t.x && next_t.z < next_t.y)
+    if (side_dist_t.z < side_dist_t.x && side_dist_t.z < side_dist_t.y)
         axis = 2;
-    else if (next_t.y < next_t.x && next_t.y < next_t.z)
+    else if (side_dist_t.y < side_dist_t.x && side_dist_t.y < side_dist_t.z)
         axis = 1;
 
-    state.next_t = next_t;
-    checkStateAndRay(state, ray, __LINE__);
+    assertf(ray.direction[axis] != 0.f && !isinf(side_dist_t[axis]), "step along invalid axis. side_dist_t: %v3f", side_dist_t);
 
     // advance voxel along the selcted axis
     state.voxel[axis] += state.step_sign[axis];
 
     // update sub-voxel position
     const float ONE_MINUS_EPSILON = 0.9999999f;
-    state.pos_in_voxel = fract(state.pos_in_voxel + (next_t[axis] * ray.direction) * 1.000001f);
+    state.pos_in_voxel = fract(state.pos_in_voxel + (side_dist_t[axis] * ray.direction) * 1.000001f);
     state.pos_in_voxel[axis] = max(-state.step_sign[axis], 0.f) * ONE_MINUS_EPSILON;
 
+    // update normal
     state.normal = vec3(0.f);
     state.normal[axis] = float(-state.step_sign[axis]);
-
-    state.pos = vec3(state.voxel) + state.pos_in_voxel;
-    state.t = length(state.pos - ray.origin);
 
     if(!checkStateAndRay(state, ray, __LINE__)) {
         debugPrintfEXT(" step %i ray origin %v3f dir %v3f: axis %i", state.step, ray.origin, ray.direction, axis);
@@ -307,61 +268,34 @@ void dda_step_lod(inout RayMarchState state, const Ray ray) {
 }
 
 void dda_step(inout RayMarchState state, const Ray ray) {
-
     dda_step_lod(state, ray);
     return;
-
-    // note: lessThanEqual(min(side_dist.yzx)..) computations can produce masks with multiple 1 entries.
-    vec3 mask = vec3(0.f);
-    if (state.next_t.z < state.next_t.x && state.next_t.z < state.next_t.y) {
-        mask.z = 1.f;
-    } else if (state.next_t.y < state.next_t.x && state.next_t.y < state.next_t.z) {
-        mask.y = 1.f;
-    } else {
-        mask.x = 1.f;
-    }
-    state.t = dot(mask, state.next_t);
-    state.next_t += state.delta_t * mask;
-//    state.voxel += state.step_sign * ivec3(mask);
-    state.pos = vec4(ray.origin + state.t * ray.direction, 1.f).xyz;
-    state.voxel = ivec3(floor(state.pos));
-    state.normal = -mask * state.step_sign;   // is normalized per definition
 }
 
 void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
-    state.t = t_0;
-    state.pos = ray.origin + state.t * ray.direction;
-
-    state.voxel = ivec3(floor(state.pos));
-    state.pos_in_voxel = state.pos - state.voxel;
-
-//    state.pos = state.voxel;
-//    state.t = length(state.pos - ray.origin);
+    vec3 init_raypos = ray.origin + t_0 * ray.direction;
+    state.voxel = ivec3(floor(init_raypos));
+    state.pos_in_voxel = init_raypos - state.voxel;
 
     state.step_sign = ivec3(ray.direction.x >= 0.f ? 1 : -1,
                             ray.direction.y >= 0.0 ? 1 : -1,
                             ray.direction.z >= 0.0 ? 1 : -1);
 
-    state.delta_t = abs(1.0 / ray.direction);
-//    state.next_t = abs((vec3(state.voxel) + max(state.step_sign, vec3(0.0)) - ray.origin) * state.delta_t);
-    state.next_t = abs((vec3(state.voxel) + max(state.step_sign, vec3(0.0)) - ray.origin) * state.delta_t);
-
-    // ray.direction may be zero somewhere. we set the side_dist in this direction to FLT_MAX to never take a step in
-    // this direction. ToDo: check if this is still required in new DDA, when using that X < INF is always true
+    // ray.direction may be zero somewhere. set inv_ray_dir and step_sign so that dda_step will yield positive infinity
+    // for side_dist_t in the respective axis. This way, the traversal will never step into that direction.
+    state.inv_ray_dir = 1.f / ray.direction;
+    const float INFINITY = 1.f / 0.f;
     if(ray.direction.x == 0.f) {
-        state.next_t.x = 3.402823466e+38;
-        state.delta_t.x = 0.f;
-        state.step_sign.x = 0;
+        state.inv_ray_dir.x = INFINITY;
+        state.step_sign.x = 1;
     }
     if(ray.direction.y == 0.f) {
-        state.next_t.y = 3.402823466e+38;
-        state.delta_t.y = 0.f;
-        state.step_sign.y = 0;
+        state.inv_ray_dir.y = INFINITY;
+        state.step_sign.y = 1;
     }
     if(ray.direction.z == 0.f) {
-        state.next_t.z = 3.402823466e+38;
-        state.delta_t.z = 0.f;
-        state.step_sign.z = 0;
+        state.inv_ray_dir.z = INFINITY;
+        state.step_sign.z = 1;
     }
 
     checkStateAndRay(state, ray, __LINE__);
@@ -466,9 +400,6 @@ void main() {
     // As we move this pixel around, the progressive accumulation averages this with the rendered colors.
     bool debug_view_visible = (pixel.x + pixel.y) % 3u != (g_frame % 3u); // < (viewport_size.x + viewport_size.y) / 2u);
 
-//    writePixel(pixel, vec4(colormap_viridis(float(g_camera_still_frames)/float(g_subsampling * g_subsampling)), 1.f), BACKGROUND_DEPTH);
-//    return;
-
     // visualize model space coordinates
     if(g_debug_model_space) {
         vec3 pos = ray.origin + t_0 * ray.direction;
@@ -483,7 +414,7 @@ void main() {
     // the Ray Marching State contains all information required for ray marching
     RayMarchState state;
     // ToDo: use a CPU randomly generated number instead of g_camera_still_frames to initialize the RNG?
-    state.rng = float(g_frame << 16);
+    state.rng = float(g_camera_still_frames << 16);
     state.label = INVALID;
     state.last_label = INVALID;
     state.path_length = 0;
@@ -492,9 +423,7 @@ void main() {
     state.depth_valid = BACKGROUND_DEPTH;
 
     // ray marching loop
-    // offset the ray start to prevent aliasing
-    t_0 -= 1.f;
-    dda_init(state, ray, t_0);
+    dda_init(state, ray, t_0 - 0.01f); // offset t_0 to prevet aliasing
     for(state.step = 0; state.step < g_maxSteps; state.step++) {
 //    for(state.step = 0; state.step < 1; state.step++) {
         // ToDo: real multi-level DDA. Current brute froce solution:
@@ -532,7 +461,7 @@ void main() {
         if(any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
             || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
             // we may have started out of bounds
-            if(state.path_length > 0 || state.t > t_1)
+            if(state.path_length > 0 || state.step > 8)
                 break;
             else
                continue;
@@ -666,8 +595,10 @@ void main() {
 
             // the first surface hit is the only point for which we want to store our t value in the depth buffer
             // but if we previously stored an INVALID_DEPTH (< 0) at any point, we don't want to overwrite that
-            if(state.path_length == 0)
-                state.depth_valid = min(state.depth_valid, state.t);
+            if(state.path_length == 0) {
+                float t = length((state.voxel + state.pos_in_voxel) - ray.origin);
+                state.depth_valid = min(state.depth_valid, t);
+            }
             // opacity is always 1 on hit
             state.out_color.a = 1.f;
 
@@ -754,7 +685,7 @@ void main() {
             }
 
             // re-init DDA traversal for the shadow ray
-            ray.origin = state.pos;
+            ray.origin = state.voxel + state.pos_in_voxel;
             dda_init(state, ray, 0.f);
         }
 
@@ -788,6 +719,4 @@ void main() {
 
     // write to image
     writePixel(pixel, state.out_color, state.depth_valid);
-//    writePixel(pixel, vec4(state.step) / 10.f, state.depth_valid);
-//    writePixel(pixel, vec4(vec3(state.voxel) / vec3(g_vol_dim), 1.f), state.depth_valid);
 }
