@@ -190,6 +190,10 @@ int volcanite(int argc, char *argv[]) {
             Logger(INFO) << "No attribute database " << database_path << " found. Using dummy database.";
         }
 
+        if(args.verbose) {
+            Logger(DEBUG) << compressedSegmentationVolume->getEncodingInfoString();
+        }
+
         // if a config file exists next to the .csgv file, we use it to initialize the renderer
         std::string config_path = stripFileExtension(args.input_file) + ".vcfg";
         if(std::filesystem::exists(config_path))
@@ -224,6 +228,7 @@ int volcanite(int argc, char *argv[]) {
         if(args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
             Logger(DEBUG) << "separating detail level encoding for streaming";
             compressedSegmentationVolume->separateDetail();
+            Logger(DEBUG) << compressedSegmentationVolume->getEncodingInfoString();
         }
 
         // if the attribute database is a dummy, we update the min/max attribute values for the volume labels
@@ -231,8 +236,8 @@ int volcanite(int argc, char *argv[]) {
             csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
 
         const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
-        renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
         renderer->setCacheParameters(args.cache_size_MB, args.cache_palettized);
+        renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
 
         // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)
         if (!args.screenshot_output_file.empty()) {

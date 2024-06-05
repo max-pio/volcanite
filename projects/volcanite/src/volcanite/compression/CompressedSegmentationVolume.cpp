@@ -788,7 +788,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     m_brick_starts[brick_index_count] = static_cast<uint32_t>(m_encodings.back().size());
 
     m_last_total_encoding_seconds = static_cast<float>(totalTimer.elapsed());
-    Logger(INFO) << " Progress 100% in " << std::fixed << std::setprecision(3) << m_last_total_encoding_seconds << "s (" << (static_cast<float>(volume.size()) / m_last_total_encoding_seconds / 1000000.f) << " million voxels/second) " << decodingInfoString();
+    Logger(INFO) << " Progress 100% in " << std::fixed << std::setprecision(3) << m_last_total_encoding_seconds << "s (" << (static_cast<float>(volume.size()) / m_last_total_encoding_seconds / 1000000.f) << " million voxels/second) " << getEncodingInfoString();
 }
 
 //#define NO_BRICK_DECODE_INDEX_REMAP
@@ -1058,7 +1058,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     // backwards compatibility code:
     if (std::string(_version) == "0011") {
         Logger(WARN) << "Reading deprecated csgv file version " << _version << ". May lead to reduced rendering performance.";
-    } else if (std::string(_version) == "0012" && std::string(_version) != "0013") {
+    } else if (std::string(_version) != "0012" && std::string(_version) != "0013") {
         Logger(ERROR) << "Import does not support version " << _version << " of Compressed Segmentation Volume file " << path << ". Skipping.";
         return false;
     }
