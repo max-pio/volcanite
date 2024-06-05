@@ -218,7 +218,7 @@ private:
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
     int m_accum_frames = 16;
-    int m_max_decoding_lod = 6;
+    int m_max_inv_lod = 6;
     // utility
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text;

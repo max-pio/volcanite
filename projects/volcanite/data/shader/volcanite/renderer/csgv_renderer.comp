@@ -68,7 +68,9 @@ uint get_inv_lod(ivec3 voxel) {
 
     // use the MSB as a fast log2 (rounding down to int anyways)
     int voxels_per_pixel_at_hit = int(g_voxels_per_pixel_per_dist * dist);
-    return g_lod_count - 1u - clamp(uint(g_lod_bias + findMSB(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
+    // clamp with a potential user specified max inverse. LoD
+//    return g_lod_count - 1u - clamp(uint(g_lod_bias + findMSB(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
+    return g_max_inv_lod - clamp(uint(g_lod_bias + findMSB(voxels_per_pixel_at_hit)), 0u, g_max_inv_lod);
 
     // More precise log2 variant:
     // float voxels_per_pixel_at_hit = g_voxels_per_pixel_per_dist * dist;
@@ -115,7 +117,7 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
         uint encoding_size = getBrickEncodingLength(brick_idx);
 
         // if the brick was not decoded, anything we compute from now on is invalid
-        if(req_inv_lod > 0u && g_max_decoding_lod > 0u) {
+        if(req_inv_lod > 0u && g_max_inv_lod > 0u) {
             uint palette_size = getBrickPaletteLength(brick_idx);
 
             depth_valid = INVALID_DEPTH;
@@ -230,7 +232,49 @@ bool checkStateAndRay(const RayMarchState state, const Ray ray, int line) {
 }
 
 
-void dda_step_lod(inout RayMarchState state, const Ray ray) {
+void dda_step_multilevel(inout RayMarchState state, const Ray ray, int voxel_size) {
+    // Round down to do the traversal in one pseudo-voxel with a size of [voxel_size] many fine-resolution voxels
+    // To avoid handling negative voxels, assume normal voxel size 1 in that case. Altneratively, we would have to use
+    // floating point and floor the coarse position. e.g. integer div. maps (-1, 0, 0) with voxel_size 2 to (0, 0, 0)
+    assert(voxel_size == 1 || !any(lessThan(state.voxel, ivec3(0))), "multi-level DDA voxel size must be 1 for voxel positions < 0");
+
+    ivec3 big_voxel = state.voxel / voxel_size;
+    vec3 pos_in_big_voxel = (vec3(state.voxel % voxel_size) + state.pos_in_voxel) / float(voxel_size);
+
+    // determine distances that t has to change until the ray hits the next voxel edge
+    // note: if a ray direction axis is 0, inv_ray_dir is INFTY and step_sign is 1 to yield INFTY which is > all others
+    // note: side_dist_t is always positive as inv_ray_dir is negative if and only if step_sign is negative
+    vec3 side_dist_t = state.inv_ray_dir * ( max(state.step_sign, vec3(0.f)) - pos_in_big_voxel );
+
+    assertf(all(greaterThanEqual(side_dist_t, vec3(0.f))) || !any(isnan(side_dist_t)), "next_t nan/negative: %v3f", side_dist_t);
+
+    // get axis along which to step as mask[argmin(next_t)] = 1
+    // note: lessThanEqual(min(side_dist.yzx)..) computations can produce masks with multiple 1 entries.
+    int axis = 0;
+    if (side_dist_t.z < side_dist_t.x && side_dist_t.z < side_dist_t.y)
+        axis = 2;
+    else if (side_dist_t.y < side_dist_t.x && side_dist_t.y < side_dist_t.z)
+        axis = 1;
+
+    assertf(ray.direction[axis] != 0.f && !isinf(side_dist_t[axis]), "step along invalid axis. side_dist_t: %v3f", side_dist_t);
+
+    // advance voxel along the selcted axis
+    big_voxel[axis] += state.step_sign[axis];
+
+    // update sub-voxel position
+    pos_in_big_voxel = fract(pos_in_big_voxel + (side_dist_t[axis] * ray.direction));
+    const float ONE_MINUS_EPSILON = 0.9999999f;
+    pos_in_big_voxel[axis] = max(-state.step_sign[axis], 0.f) * ONE_MINUS_EPSILON;
+
+    state.voxel = big_voxel * voxel_size + ivec3(floor(pos_in_big_voxel * voxel_size));
+    state.pos_in_voxel = fract(pos_in_big_voxel * voxel_size);
+
+    // update normal
+    state.normal = vec3(0.f);
+    state.normal[axis] = float(-state.step_sign[axis]);
+}
+
+void dda_step(inout RayMarchState state, const Ray ray) {
     checkStateAndRay(state, ray, __LINE__);
 
     // determine distances that t has to change until the ray hits the next voxel edge
@@ -254,22 +298,17 @@ void dda_step_lod(inout RayMarchState state, const Ray ray) {
     state.voxel[axis] += state.step_sign[axis];
 
     // update sub-voxel position
+    state.pos_in_voxel = fract(state.pos_in_voxel + (side_dist_t[axis] * ray.direction));
     const float ONE_MINUS_EPSILON = 0.9999999f;
-    state.pos_in_voxel = fract(state.pos_in_voxel + (side_dist_t[axis] * ray.direction) * 1.000001f);
     state.pos_in_voxel[axis] = max(-state.step_sign[axis], 0.f) * ONE_MINUS_EPSILON;
 
     // update normal
     state.normal = vec3(0.f);
     state.normal[axis] = float(-state.step_sign[axis]);
 
-    if(!checkStateAndRay(state, ray, __LINE__)) {
+    if (!checkStateAndRay(state, ray, __LINE__)) {
         debugPrintfEXT(" step %i ray origin %v3f dir %v3f: axis %i", state.step, ray.origin, ray.direction, axis);
     }
-}
-
-void dda_step(inout RayMarchState state, const Ray ray) {
-    dda_step_lod(state, ray);
-    return;
 }
 
 void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
@@ -411,7 +450,7 @@ void main() {
         return;
     }
 
-    // the Ray Marching State contains all information required for ray marching
+
     RayMarchState state;
     // ToDo: use a CPU randomly generated number instead of g_camera_still_frames to initialize the RNG?
     state.rng = float(g_camera_still_frames << 16);
@@ -421,32 +460,26 @@ void main() {
     state.throughput = vec3(1.f);
     state.out_color = vec4(0.f);
     state.depth_valid = BACKGROUND_DEPTH;
+    // initialize DDA traversal with t_0  offset to prevent aliasing
+    dda_init(state, ray, t_0 - 0.01f);
 
     // ray marching loop
-    dda_init(state, ray, t_0 - 0.01f); // offset t_0 to prevet aliasing
     for(state.step = 0; state.step < g_maxSteps; state.step++) {
-//    for(state.step = 0; state.step < 1; state.step++) {
-        // ToDo: real multi-level DDA. Current brute froce solution:
-        if(true)
+
+        // single-level DDA traversal step
+//         dda_step(state, ray);
+        // multi-level DDA traversal step
         {
-            const int dda_voxel_size = int(g_brick_size >> get_inv_lod(state.voxel));
-            ivec3 old_voxel = state.voxel / dda_voxel_size;
+            // determine size of the coarse traversal voxel in 2^n number of fine-resolution voxels
+            uint dda_voxel_size = isEmptySpace(state.voxel) ? g_brick_size
+                                                            : g_brick_size >> get_inv_lod(state.voxel);
+            // edge cases not handled in multi-level DDA:
+            //  - internal integer division does not handle negative voxel coordinates
+            //  - upper volume borders may lie in the middle of a coarse voxel
+            if (any(lessThan(state.voxel, ivec3(0))) || any(greaterThanEqual(state.voxel, ivec3(g_vol_dim))))
+                dda_voxel_size = 1u;
 
-            // two problems with multi-level DDA:
-            //   1. integer dividing a voxel (-1, 0, 0) by a dda_voxel_size of 2 yields (0,0,0). Same as (1, 0, 0) even
-            //      thought they are different coarse voxels.
-            //   2. if the data set dimension is not a multiple of the dda_voxel_size, the first hit with the positive
-            //      coarse border voxel yields a positive out of bounds. Skipping the traversal step and immediately
-            //      going towards the next coarse voxel group, skipping any inner small boundary voxels.
-            if (any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz))) || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz))))
-                old_voxel = ivec3(-99999);
-
-            do {
-                dda_step(state, ray);
-            } while (state.voxel / dda_voxel_size == old_voxel);
-        }
-        else {
-            dda_step(state, ray);
+            dda_step_multilevel(state, ray, int(dda_voxel_size));
         }
 
 #ifndef NDEBUG
@@ -470,10 +503,21 @@ void main() {
         // empty space check
         // ToDo: better empty space skipping - skip the non-visible brick in ONE big dda step
         if(isEmptySpace(state.voxel)) {
-//            state.out_color.rgb += state.throughput * vec3(state.throughput.r, 0.f, 1.f - state.throughput.r) * 0.001f;
-//            state.throughput *= 0.999;
-//            state.out_color.a = max(state.out_color.a, 0.8);
+//#define VISUALIZE_EMPTY_SPACE
+#ifndef VISUALIZE_EMPTY_SPACE
             continue;
+#else
+            const float empty_space_opacity = 0.2f;
+            state.out_color.rgb += state.throughput * vec3(state.throughput.r, 0.f, 1.f - state.throughput.r) * empty_space_opacity;
+            state.throughput *= 1.f - empty_space_opacity;
+            state.out_color.a = max(state.out_color.a, 1.f - (state.throughput.r + state.throughput.g + state.throughput.b) / 3.f);
+            continue;
+        } else {
+            const float empty_space_opacity = 0.05f;
+            state.out_color.rgb += state.throughput * vec3(1.f - state.throughput.r, state.throughput.r, 0.f) * empty_space_opacity;
+            state.throughput *= 1.f - empty_space_opacity;
+            state.out_color.a = max(state.out_color.a, 1.f - (state.throughput.r + state.throughput.g + state.throughput.b) / 3.f);
+#endif
         }
 
 

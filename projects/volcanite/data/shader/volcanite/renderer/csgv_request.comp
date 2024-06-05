@@ -71,11 +71,11 @@ void main() {
     }
 
     // we can set a maximum LoD to decode to in the gui
-    if(g_max_decoding_lod == 0u) {
+    if(g_max_inv_lod == 0u) {
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = g_lod_count;
     }
     else if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < g_lod_count) {
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = min(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], g_max_decoding_lod);
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = min(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], g_max_inv_lod);
     }
 
 #ifndef NDEBUG

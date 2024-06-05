@@ -21,7 +21,7 @@ layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uint g_lod_count;               // number of lod levels per brick
     uint g_frame;                   // current frame of the rendering
 //
-    uint g_max_decoding_lod;        // max. inv LOD that we would decode, even if a finer LOD is requested
+    uint g_max_inv_lod;             // max. inv LOD that we would decode / traverse
     uint g_cache_capacity;          // number of base elements that can be held in cache at the same time
     uint g_cache_base_element_uints;// size in uints of an atomic cache memory region that stores 2x2x2=8 output voxels
     uint g_cache_indices_per_uint;  // number of output element indices that are stored in one uint in the cache

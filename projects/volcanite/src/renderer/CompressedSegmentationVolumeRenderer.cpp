@@ -776,7 +776,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         newCamHash = hashMemory(&m_ratio_spec_diff, sizeof(m_ratio_spec_diff), newCamHash);
         newCamHash = hashMemory(&m_tonemap_enabled, sizeof(m_tonemap_enabled), newCamHash);
         newCamHash = hashMemory(&m_shadow_pathtracing_ratio, sizeof(m_shadow_pathtracing_ratio), newCamHash);
-        newCamHash = hashMemory(&m_max_decoding_lod, sizeof(m_max_decoding_lod), newCamHash);
+        newCamHash = hashMemory(&m_max_inv_lod, sizeof(m_max_inv_lod), newCamHash);
         newCamHash = hashMemory(&m_lod_bias, sizeof(m_lod_bias), newCamHash);
         newCamHash = hashMemory(&m_accum_frames, sizeof(m_accum_frames), newCamHash);
         if (newCamHash != m_camHash || m_clear_accum_every_frame || m_pass->willCacheBeResetOnNextCall()) {
@@ -805,7 +805,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         auto lod_count = m_compressed_segmentation_volume->getLodCountPerBrick();
         m_usegmented_volume_info->setUniform<uint32_t>("g_lod_count", lod_count);
         m_usegmented_volume_info->setUniform<uint32_t>("g_frame", m_frame);
-        m_usegmented_volume_info->setUniform<uint32_t>("g_max_decoding_lod", glm::min(static_cast<uint32_t>(m_max_decoding_lod), lod_count));
+        m_usegmented_volume_info->setUniform<uint32_t>("g_max_inv_lod", glm::min(static_cast<uint32_t>(m_max_inv_lod), lod_count - 1u));
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_capacity", m_cache_capacity);
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_base_element_uints", m_cache_base_element_uints);
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_indices_per_uint", m_cache_indices_per_uint);
@@ -960,7 +960,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addBool(&m_tonemap_enabled, "Tone Mapping");
     g_dev->addSeparator();
     g_dev->addLabel("Debug");
-    g_dev->addInt(&m_max_decoding_lod, "Max. Decoding LoD", 0, 6, 1);
+    g_dev->addInt(&m_max_inv_lod, "Max. Decoding LoD", 0, 6, 1);
     g_dev->addBool(&m_show_model_space, "Show Model Space");
     g_dev->addBool(&m_show_brick_cache, "Show Brick Cache");
     g_dev->addBool(&m_show_lod, "Show LOD Levels");
