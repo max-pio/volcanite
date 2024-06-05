@@ -176,8 +176,8 @@ void vvv::DefaultGpuContext::createInstance() {
 
     // enable GLSL debugPrintfEXT() output
     vk::ValidationFeaturesEXT valFeatures;
-    auto feature = vk::ValidationFeatureEnableEXT::eDebugPrintf;
-    valFeatures.setEnabledValidationFeatures(feature);
+    auto features = {vk::ValidationFeatureEnableEXT::eDebugPrintf, vk::ValidationFeatureEnableEXT::eSynchronizationValidation};
+    valFeatures.setEnabledValidationFeatures(features);
     valFeatures.pNext = instanceCreateInfo.pNext;
     instanceCreateInfo.pNext = &valFeatures;
 
