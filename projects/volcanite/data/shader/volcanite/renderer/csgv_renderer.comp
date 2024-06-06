@@ -476,13 +476,19 @@ void main() {
         // multi-level DDA traversal step
         {
             // determine size of the coarse traversal voxel in 2^n number of fine-resolution voxels
-            uint dda_voxel_size = isEmptySpace(state.voxel) ? g_brick_size
-                                                            : g_brick_size >> get_inv_lod(state.voxel);
+            uint dda_voxel_size;
+
             // edge cases not handled in multi-level DDA:
             //  - internal integer division does not handle negative voxel coordinates
             //  - upper volume borders may lie in the middle of a coarse voxel
             if (any(lessThan(state.voxel, ivec3(0))) || any(greaterThanEqual(state.voxel, ivec3(g_vol_dim))))
                 dda_voxel_size = 1u;
+            // empty space skipping: move into next brick
+            else if (isEmptySpace(state.voxel))
+                dda_voxel_size = g_brick_size;
+            // normal traversal:
+            else
+                dda_voxel_size = g_brick_size >> get_inv_lod(state.voxel);
 
             dda_step_multilevel(state, ray, int(dda_voxel_size));
         }
