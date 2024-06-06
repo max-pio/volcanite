@@ -23,6 +23,10 @@ vec3 tonemap_ACES(vec3 x)
     return clamp((x*(a*x+b))/(x*(c*x+d)+e), vec3(0.f), vec3(1.f));
 }
 
+float gaussian(float x, float sigma) {
+    return exp(-0.5 * (x * x) / (sigma * sigma));
+}
+
 void main() {
     // obtain pixel and fragment coordinates
     const ivec2 viewport_size = imageSize(inpaintedOutColor);
@@ -51,27 +55,22 @@ void main() {
     vec3 normal;
     uint label_hash;
     uvec2 g_buffer_packed = imageLoad(gBuffer, pixel).rg;
-    if(unpackGBufferRG8(g_buffer_packed, label_hash, normal, normalized_depth)) {
-        if(pixel.x + pixel.y > (viewport_size.x + viewport_size.y) / 2)
-            pixel_color.rgb = abs(normal);
-        else
-            pixel_color.rgb = vec3(float(normalized_depth));
-
-        pixel_color.a = 1.f;
-    }
+    unpackGBufferRG8(g_buffer_packed, label_hash, normal, normalized_depth);
 
 
     // rgb stores radiance sum, alpha stores number of samples
     vec4 accum_color = pixel_color;
-
     // a simple bilateral filter for denoising
-    if (false) {
+    if (g_denoise) {
         accum_color = vec4(0.f);
         // compute an average of all pixels in this
-        const int kernel_size = 1;    // kernel_size 1 => 3x3 pixel kernel
         ivec2 block_pixel;
-        for(block_pixel.y = pixel.y - kernel_size; block_pixel.y < pixel.y + kernel_size; block_pixel.y++) {
-            for(block_pixel.x = pixel.x - kernel_size; block_pixel.x < pixel.x + kernel_size; block_pixel.x++) {
+        float weight = 1.f;
+        float normalization  = 0.f;
+        for (int i = -g_denoise_filter_kernel_size; i < g_denoise_filter_kernel_size; i++) {
+            for (int j = -g_denoise_filter_kernel_size; j < g_denoise_filter_kernel_size; j++) {
+                block_pixel.x = pixel.x + i;
+                block_pixel.y = pixel.y + j;
 
                 if(any(lessThan(block_pixel, ivec2(0))) || any(greaterThanEqual(block_pixel, viewport_size)))
                     continue;
@@ -80,14 +79,40 @@ void main() {
                 vec4 rgb_samples = imageLoad(feedbackOut, block_pixel);
                 // we take the abs because invalid samples are marked with a sample count < 0 (usually -1)
                 if(abs(rgb_samples.a) > 0.f) {
-                    // accumulate samples
-                    // ..
+                    float normalized_depth_temp;
+                    vec3 normal_temp;
+                    uint label_hash_temp;
+                    uvec2 g_buffer_packed_temp = imageLoad(gBuffer, block_pixel).rg;
+                    if (!unpackGBufferRG8(g_buffer_packed_temp, label_hash_temp, normal_temp, normalized_depth_temp)) continue;
 
-                    accum_color.rgb += rgb_samples.rgb;
-                    accum_color.a += abs(rgb_samples.a);
+                    if (normal.x != normal_temp.x || normal.y != normal_temp.y || normal.z != normal_temp.z) continue;
+                    if (abs(float(normalized_depth) - float(normalized_depth_temp)) + 0.001f > g_difference_depth_denoising) continue;
+
+                    float spatial_gaussian = 1.f;
+                    if (g_spatial_sigma > 0)
+                        spatial_gaussian = gaussian(length(vec2(i, j)), g_spatial_sigma);
+
+                    float depth_gaussian = 1.f;
+                    if (g_depth_sigma > 0)
+                        depth_gaussian.r = gaussian((pixel_color.r + pixel_color.g + pixel_color.b) - (rgb_samples.r + rgb_samples.g + rgb_samples.b), g_depth_sigma);
+//                        depth_gaussian.r = gaussian(length(pixel_color.rgb - rgb_samples.rgb), g_depth_sigma);
+
+                    float weight = spatial_gaussian * depth_gaussian;
+
+                    accum_color.rgb += (rgb_samples.rgb) * weight;
+                    accum_color.a += abs(rgb_samples.a) * weight;
+                    normalization  += weight;
                 }
             }
         }
+
+        if (normalization  > 0.f)
+            accum_color.rgba /= normalization ;
+
+        if (pixel.x + pixel.y < (viewport_size.x + viewport_size.y) / 2)
+            accum_color = pixel_color;
+
+        if (accum_color.rgb == vec3(0)) accum_color = pixel_color;
     }
 
     // weight by sample count

@@ -177,7 +177,13 @@ private:
     glm::ivec3 m_subblock_start = glm::ivec3(0, 0, 0);
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
-    // debugging and dev options
+    // denoising
+    bool m_denoise = true;
+    float m_difference_depth_denoising = 1.0f;
+    float m_spatial_sigma = 2.0f;
+    float m_depth_sigma = 0.1f;
+    int m_denoise_filter_kernel_size = 2;
+//     debugging and dev options
     float m_lod_bias = 0.f;
     bool m_show_envmap = false;
     bool m_show_normals = false;
