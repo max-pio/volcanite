@@ -1138,7 +1138,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     if(verbose)
         Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim)
         << " voxels and " << str(getBrickCount()) << " = " << getBrickIndexCount()
-                      << " bricks for brick size " << m_brick_size << "^3"
+                      << " [b=" << m_brick_size << ",s=" << m_rANS_mode << "]"
                       << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
 
     if(verify) {
