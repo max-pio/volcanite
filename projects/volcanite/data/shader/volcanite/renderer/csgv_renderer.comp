@@ -116,11 +116,13 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
         EncodingRef encoding_address = getBrickEncodingRef(brick_idx);
         uint encoding_size = getBrickEncodingLength(brick_idx);
 
-        // if the brick was not decoded, anything we compute from now on is invalid
+        // if the brick was not decoded, sample a random palette entry
         if(req_inv_lod > 0u && g_max_inv_lod > 0u) {
             uint palette_size = getBrickPaletteLength(brick_idx);
 
-            depth_valid = INVALID_DEPTH;
+            // indicate the smaple as invalid (if it is not a homogeneous brick)
+            if(palette_size > 1u)
+                depth_valid = INVALID_DEPTH;
             // ToDo: this should be a random number from the random state
             float rnd = hash(uvec3(gl_GlobalInvocationID.xy, g_frame)).r;
             return  encoding_address.buf[encoding_size - 1u - uint(rnd * rnd * float(palette_size))];
@@ -428,8 +430,11 @@ void main() {
     ray_box_intersection(ray, bounding_box, t_0, t_1);
     // if we don't hit the data set, we can directly output the background
     if (t_0 >= t_1) {
-        if(g_debug_envmap)
+        if(g_debug_envmap) {
+            // ToDo: expensive inverse as the matrix may contain scaling. use scaling and transpose(rotation) instead
+            ray.direction = normalize(inverse(g_world_to_model_space_dir) * ray.direction);
             writePixel(pixel, vec4(dummy_envmap(ray.direction), 1.f), BACKGROUND_DEPTH);
+        }
         else
             writePixel(pixel, get_background_color(fragCoord), BACKGROUND_DEPTH);
         return;
@@ -507,13 +512,13 @@ void main() {
 #ifndef VISUALIZE_EMPTY_SPACE
             continue;
 #else
-            const float empty_space_opacity = 0.2f;
+            const float empty_space_opacity = 0.005f;
             state.out_color.rgb += state.throughput * vec3(state.throughput.r, 0.f, 1.f - state.throughput.r) * empty_space_opacity;
             state.throughput *= 1.f - empty_space_opacity;
             state.out_color.a = max(state.out_color.a, 1.f - (state.throughput.r + state.throughput.g + state.throughput.b) / 3.f);
             continue;
         } else {
-            const float empty_space_opacity = 0.05f;
+            const float empty_space_opacity = 0.005f;
             state.out_color.rgb += state.throughput * vec3(1.f - state.throughput.r, state.throughput.r, 0.f) * empty_space_opacity;
             state.throughput *= 1.f - empty_space_opacity;
             state.out_color.a = max(state.out_color.a, 1.f - (state.throughput.r + state.throughput.g + state.throughput.b) / 3.f);
@@ -646,12 +651,11 @@ void main() {
             // opacity is always 1 on hit
             state.out_color.a = 1.f;
 
-            // include ambient lighting factor - not physically based
-            // ToDo: this seems to not normalize correctly when we have multiple bounces, i.e. g_max_path_length > 1
+            // include ambient lighting factor - not physically based but interpolates between non-shaded and shaded
             if(state.path_length == 0) {
                 state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_factor_ambient;
+                state.throughput *= 1.f - g_factor_ambient;
             }
-            state.throughput *= 1.f - g_factor_ambient;
 
             // emission
             if(g_materials[material].emission > 0.f) {
@@ -748,8 +752,10 @@ void main() {
         atomicAdd(gpu_bbox_hits, 1u);
     }
 
-    if(g_envmap_enable)
+    if(g_envmap_enable) {
+        ray.direction = normalize(inverse(g_world_to_model_space_dir) * ray.direction);
         state.out_color.rgb += state.throughput * vec3(g_light_intensity) * dummy_envmap(ray.direction);
+    }
     else
         state.out_color.rgb += state.throughput * vec3(g_light_intensity);
 

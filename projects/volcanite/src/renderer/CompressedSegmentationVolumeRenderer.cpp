@@ -954,7 +954,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_render->addInt(&m_max_path_length, "Path Length", 1, 32, 1);
 
     // Development
-    g_dev->addInt(&m_max_steps, "Max DDA Steps", 16, 4096, 16);
+    g_dev->addInt(&m_max_steps, "Max DDA Steps", 16, 1 << 16u, 16);
     g_dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
     g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
     g_dev->addBool(&m_tonemap_enabled, "Tone Mapping");
