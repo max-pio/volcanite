@@ -69,12 +69,7 @@ uint get_inv_lod(ivec3 voxel) {
     // use the MSB as a fast log2 (rounding down to int anyways)
     int voxels_per_pixel_at_hit = int(g_voxels_per_pixel_per_dist * dist);
     // clamp with a potential user specified max inverse. LoD
-//    return g_lod_count - 1u - clamp(uint(g_lod_bias + findMSB(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
-    return g_max_inv_lod - clamp(uint(g_lod_bias + findMSB(voxels_per_pixel_at_hit)), 0u, g_max_inv_lod);
-
-    // More precise log2 variant:
-    // float voxels_per_pixel_at_hit = g_voxels_per_pixel_per_dist * dist;
-    // return g_lod_count - 1u - clamp(uint(g_lod_bias + log2(voxels_per_pixel_at_hit)), 0u, g_lod_count - 1u);
+    return min(g_lod_count - 1u - uint(clamp(g_lod_bias + findMSB(voxels_per_pixel_at_hit), 0, g_lod_count - 1u)), g_max_inv_lod);
 }
 
 bool isDepthValid(float depth) { return depth >= 0.f; }
