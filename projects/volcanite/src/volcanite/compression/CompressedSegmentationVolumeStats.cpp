@@ -142,7 +142,7 @@ namespace vvv {
 //                child_index = (i % (index_step * 8)) / index_step;
 //                if (lod > 0 && i % (index_step * 8) == 0) {
 //
-//                    // if this subtree is already filled (because in a previous LOD we had a PARENT_STOP for this area), the last element of this block is set and we can skip it
+//                    // if this subtree is already filled (because in a previous LOD we had a STOP_BIT for this area), the last element of this block is set and we can skip it
 //                    if (output_brick[i + (index_step * 7)] != INVALID) {
 //                        // we have to remove the parent's encoding flag at this position
 //                        output_encoding[i] = INVALID;
@@ -293,7 +293,7 @@ namespace vvv {
 //                child_index = (i % (index_step * 8)) / index_step;
 //                if (lod > 0 && i % (index_step * 8) == 0) {
 //
-//                    // if this subtree is already filled (because in a previous LOD we had a PARENT_STOP for this area), the last element of this block is set and we can skip it
+//                    // if this subtree is already filled (because in a previous LOD we had a STOP_BIT for this area), the last element of this block is set and we can skip it
 //                    if (output_brick[i + (index_step * 7)] != INVALID) {
 //                        i += (index_step * 7);
 //                        continue;

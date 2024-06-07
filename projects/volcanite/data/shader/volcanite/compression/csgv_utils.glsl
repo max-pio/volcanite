@@ -26,12 +26,12 @@
 
 
 // Indexing and vector utils -------------------------------------------------------------------------------------------
-uint brick_pos2idx(uvec3 brick_idx, uvec3 brick_count) {
+uint brick_pos2idx(const uvec3 brick_idx, const uvec3 brick_count) {
     return brick_idx.x + brick_count.x * (brick_idx.y + brick_count.y * brick_idx.z);
 }
 
 // adds the element offset (one unit = 4 byte) to the 64 bit address represented in an uvec2
-uvec2 bufferAddressAdd(uvec2 address, uint uint_elem_offset) {
+uvec2 bufferAddressAdd(uvec2 address, const uint uint_elem_offset) {
     uint carry;
     // the offset is measured in uints but we have to add 4 byte per uint. To prevent uint overflow, we repeat the op:
     address.x = uaddCarry(address.x, uint_elem_offset, carry); address.y += carry;
@@ -42,7 +42,7 @@ uvec2 bufferAddressAdd(uvec2 address, uint uint_elem_offset) {
 }
 
 // substracts the element offset (one unit = 4 byte) from the 64 bit address represented in an uvec2
-uvec2 bufferAddressSub(uvec2 address, uint uint_elem_offset) {
+uvec2 bufferAddressSub(uvec2 address, const uint uint_elem_offset) {
     uint borrow;
     address.x = usubBorrow(address.x, uint_elem_offset, borrow); address.y -= borrow;
     address.x = usubBorrow(address.x, uint_elem_offset, borrow); address.y -= borrow;

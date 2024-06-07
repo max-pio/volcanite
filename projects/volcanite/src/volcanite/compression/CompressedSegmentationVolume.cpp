@@ -159,7 +159,7 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
 
         for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i += lod_width * lod_width * lod_width) {
             // we don't store any operations for a grid node that would lie completely outside the volume
-            // if this is problematic, and we would like to always handle a full brick, we could output anything here and thus just write PARENT_STOP.
+            // if this is problematic, and we would like to always handle a full brick, we could output anything here and thus just write STOP_BIT.
             brick_pos = enumBrickPos(i, m_brick_size);
             volume_pos = start + brick_pos;
             if (glm::any(glm::greaterThanEqual(volume_pos, volume_dim)))
@@ -170,8 +170,8 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
             if (child_index == 0) {
                 assert(parent_counter <= 8 && "parent element would be used for more than 8 elements!");
 
-                // if this subtree is already filled (because in a previous LOD we set a PARENT_STOP for this area), the last element of this block is set, and we can skip it
-                // note that this will also happen if this grid node lies completely outside the volume because some parent would've been set to PARENT_STOP earlier
+                // if this subtree is already filled (because in a previous LOD we set a STOP_BIT for this area), the last element of this block is set, and we can skip it
+                // note that this will also happen if this grid node lies completely outside the volume because some parent would've been set to STOP_BIT earlier
                 // our parent spanned 8 elements of this finer current level, so we need to look at the element 7 indices further
                 if (multigrid[parent_multigrid_lod_start +
                         voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].constant_subregion) {
@@ -569,7 +569,7 @@ void CompressedSegmentationVolume::decodeBrick(uint32_t brick_idx, uint32_t* out
             child_index = (i % (index_step * 8)) / index_step;
             if (lod > 0 && i % (index_step * 8) == 0) {
 
-                // if this subtree is already filled (because in a previous LOD we had a PARENT_STOP for this area), the last element of this block is set and we can skip it
+                // if this subtree is already filled (because in a previous LOD we had a STOP_BIT for this area), the last element of this block is set and we can skip it
                 if (output_brick[i + (index_step * 7)] != INVALID) {
                     i += (index_step * 7);
                     continue;
@@ -1198,7 +1198,7 @@ void CompressedSegmentationVolume::freqEncodeBrick(const std::vector<uint32_t>& 
 
         for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i += lod_width * lod_width * lod_width) {
             // we don't store any operations for grid nodes that would lie completely outside the volume
-            // if this is problematic, and we would like to always handle a full brick, we could output anything here and thus just write PARENT_STOP.
+            // if this is problematic, and we would like to always handle a full brick, we could output anything here and thus just write STOP_BIT.
             brick_pos = enumBrickPos(i, m_brick_size);
             volume_pos = start + brick_pos;
             if (glm::any(glm::greaterThanEqual(volume_pos, volume_dim)))
@@ -1207,8 +1207,8 @@ void CompressedSegmentationVolume::freqEncodeBrick(const std::vector<uint32_t>& 
             // every 8th element (we span 2*2*2=8 elements of the coarse LOD above), we fetch the new parent
             child_index = (i % (lod_width * lod_width * lod_width * 8)) / (lod_width * lod_width * lod_width);
             if (child_index == 0) {
-                // if this subtree is already filled (because in a previous LOD we set a PARENT_STOP for this area), the last element of this block is set and we can skip it
-                // note that this will also happen if this LOD block lies completely outside the volume because some parent would've been set to PARENT_STOP earlier
+                // if this subtree is already filled (because in a previous LOD we set a STOP_BIT for this area), the last element of this block is set and we can skip it
+                // note that this will also happen if this LOD block lies completely outside the volume because some parent would've been set to STOP_BIT earlier
                 // our parent spanned 8 elements of this finer current level, so we need to look at the element 7 indices further
                 if (multigrid[parent_multigrid_lod_start +
                         voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].constant_subregion) { //tmpBrick[i + (lod_width * lod_width * lod_width * 7)] != INVALID) {
