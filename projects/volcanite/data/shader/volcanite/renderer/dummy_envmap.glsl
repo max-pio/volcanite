@@ -65,7 +65,7 @@ vec3 dummy_envmap(vec3 dir) {
     vec3 c = vec3(0.f);
     c += mix(vec3(fractralBrownianPerlin(abs(vec2(axz, ay)), 8)), vec3(1.f), dir.y * dir.y * dir.y);
     c = mix(c, base_color, ay);
-    c = mix(c, light_color, max(dir.x * dir.x * dir.x - 0.2f, 0.f));
+    c = mix(c, light_color, max(dir.x * dir.x * dir.x * max(dir.y + 0.2f, 0.f), 0.f));
     c += vec3(0.3f);
 
     return clamp(c, vec3(0.f), vec3(1.f));
