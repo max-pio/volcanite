@@ -91,9 +91,9 @@ void main() {
 #ifdef SEPARATE_DETAIL
     // if the detail for this brick is not available and it is currently not decoded, we can only decode it with the base levels
     // in this case, we request the detail level of the brick to be decoded
-    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == (g_lod_count - 1u)  // we request the finest LoD
-    && g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != (g_lod_count - 1u)  // we are not already decoded up to the finest LoD
-    && (g_detail_buffer_dirty == 1u || (g_detail_starts[brick_idx + 1u] - g_detail_starts[brick_idx]) == 0u)) {       // but the detail is not available
+    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == (g_lod_count - 1u)  // finest LoD (detail) requested for brick
+    && g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != (g_lod_count - 1u)  // brick is not yet decoded up to the finest LoD
+    && (g_detail_buffer_dirty == 1u || (g_detail_starts[brick_idx + 1u] - g_detail_starts[brick_idx]) == 0u)) {  // but the detail encoding is not available
 
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = g_lod_count - 2u;
         if(g_detail_requests[g_request_buffer_capacity] < g_request_buffer_capacity) {

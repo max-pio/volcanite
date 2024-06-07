@@ -59,10 +59,6 @@ void main() {
 
     // number of elements that are available on the free stack for this LoD
     uint numberOfFreeBlocks = g_free_block_stacks[(g_lod_count - 1u) * g_free_stack_capacity + (inv_lod - 1u)];
-#if 0
-    if(numberOfFreeBlocks > 0u)
-        debugPrintfEXT("we have %u free blocks in LoD %u (frame %u)", numberOfFreeBlocks, inv_lod, g_frame);
-#endif
     // find out how many elements for this LoD can not be aquired from the free stack
     int numberOfNewBlocks = int(numberOfRequests) - int(numberOfFreeBlocks);
 
@@ -88,7 +84,7 @@ void main() {
         atomicAdd(g_assign_info[cache_top], uint(-int(newBaseElemsToRequest)));
         g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_START] = INVALID;
         g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_COUNT] = 0u;
-#ifndef NDEBUG
+#ifdef PRINT_CACHE_USAGE
         debugPrintfEXT("for inv. LoD %u we couldn't aquired any of the %u new elements in addition to the %u free stack blocks for %u requests. Cache usage at %u / %u. (100%%)", inv_lod, newBaseElemsToRequest, numberOfFreeBlocks, numberOfRequests, (start_idx), g_cache_capacity);
 #endif
         gpu_blocks_decoded[inv_lod - 1u] = numberOfFreeBlocks;
@@ -99,7 +95,7 @@ void main() {
         atomicAdd(g_assign_info[cache_top], uint(-(newBaseElemsToRequest - possible_number_of_blocks * elemSizeInCache)));
         g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_START] = start_idx;
         g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_COUNT] = possible_number_of_blocks; // can be zero!
-#ifndef NDEBUG
+#ifdef PRINT_CACHE_USAGE
         debugPrintfEXT("for inv. LoD %u we partially aquired %u / %u new elements in addition to the %u free stack blocks for %u requests. Cache usage at %u / %u. (%3.1f%%)", inv_lod, possible_number_of_blocks, newBaseElemsToRequest, numberOfFreeBlocks, numberOfRequests, (start_idx + possible_number_of_blocks * elemSizeInCache), g_cache_capacity, 100.f*float(start_idx + possible_number_of_blocks * elemSizeInCache)/float(g_cache_capacity));
 #endif
 
@@ -110,7 +106,7 @@ void main() {
         // that can't be obtained from the freeBlockStack
         g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_START] = start_idx;
         g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_COUNT] = uint(numberOfNewBlocks);
-#ifndef NDEBUG
+#ifdef PRINT_CACHE_USAGE
         debugPrintfEXT("for inv. LoD %u we aquired all %u new elements in addition to the %u free stack blocks to fullfill %u requests. Cache usage at %u / %u. (%3.1f%%)", inv_lod, newBaseElemsToRequest, numberOfFreeBlocks, numberOfRequests, (start_idx + newBaseElemsToRequest), g_cache_capacity, 100.f*float((start_idx + newBaseElemsToRequest))/float(g_cache_capacity));
 #endif
         gpu_blocks_decoded[inv_lod - 1u] = uint(numberOfNewBlocks) + numberOfFreeBlocks;

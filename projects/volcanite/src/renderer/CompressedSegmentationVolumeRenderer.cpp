@@ -131,36 +131,35 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     }
 
     // if any previous detail construction is finished, download next brick indices for which the detail level is required
-    uint32_t cache_usage = 0u;
-    uint32_t detail_request_count = 0u;
     if (m_detail_stage == DetailReady && m_frame > 0u) {
         if (m_compressed_segmentation_volume->isUsingSeparateDetail()) {
+            assert(m_detail_requests.size() >= m_max_detail_requests_per_frame + 2u && "Detail request buffer is too small.");
+
             m_detail_requests_buffer->download(m_detail_requests);
             // second to last element stores the number of brick indices for which the detail level is requested
             uint32_t detail_request_count = std::min(m_detail_requests[m_max_detail_requests_per_frame], m_max_detail_requests_per_frame);
 
             // last element stores the current cache usage as number of used 2x2x2 elements
-            cache_usage = m_detail_requests[m_max_detail_requests_per_frame + 1u];
+            uint32_t cache_usage = m_detail_requests[m_max_detail_requests_per_frame + 1u];
+            // A fragmented cache can occur if free stacks store unusable levels-of-detail leaving no space for other LoDs.
+            // Trigger cache flush on demand, but only if we have a different camHash since the last flush.
+            const uint32_t cache_elements_per_finest_lod = m_compressed_segmentation_volume->getBrickSize() / 2u;
+            if(m_frame % 4 == 0u && cache_usage >= m_cache_capacity - (cache_elements_per_finest_lod * cache_elements_per_finest_lod * cache_elements_per_finest_lod) && m_camHash_at_last_cache_reset != m_camHash) {
+                m_pass->resetCacheOnNextCall();
+                m_camHash_at_last_cache_reset = m_camHash;
+            }
 
             // reset the (atomic) counters at this location
             static constexpr uint32_t zeroes[2] = {0u, 0u};
             m_detail_requests_buffer->upload(m_max_detail_requests_per_frame * sizeof(uint32_t), &zeroes,
                                              2 * sizeof(uint32_t));
 
-            m_detail_stage = DetailAwaitingCPUConstruction;
+            if (detail_request_count > 0u)
+                m_detail_stage = DetailAwaitingCPUConstruction;
         } else {
             // ToDo: download the cache_usage also if we don't use detail separation
         }
     }
-
-    // A fragmented cache can occur if free stacks store unusable levels-of-detail leaving no space for other LoDs.
-    // Trigger cache flush on demand, but only if we have a different camHash since the last flush.
-    const uint32_t cache_elements_per_finest_lod = m_compressed_segmentation_volume->getBrickSize() / 2u;
-    if(m_frame % 4 == 0u && cache_usage >= m_cache_capacity - (cache_elements_per_finest_lod * cache_elements_per_finest_lod * cache_elements_per_finest_lod) && m_camHash_at_last_cache_reset != m_camHash) {
-        m_pass->resetCacheOnNextCall();
-        m_camHash_at_last_cache_reset = m_camHash;
-    }
-
 
     if(m_clear_cache_every_frame)
         m_pass->resetCacheOnNextCall();
@@ -229,6 +228,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         //      can we use a ring buffer for that?
         // ToDo: do all the CPU work in another thread so not to block rendering
 
+        uint32_t detail_request_count = std::min(m_detail_requests[m_max_detail_requests_per_frame], m_max_detail_requests_per_frame);
         bool detail_update_required = false;
         // check if any requested brick indices are new, otherwise the buffers can stay unchanged
         #pragma omp parallel for default(none) shared(detail_request_count, m_detail_requests, m_constructed_detail_starts, detail_update_required)
@@ -242,8 +242,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
         if(detail_update_required) {
             m_detail_stage = DetailCPUConstruction;
-            // ToDo: execute as thread
-            updateCPUDetailBuffers();
+            // async thread constructs detail buffers on the CPU side and marks m_detail_stage = DetailAwaitingUpload once finished
+            std::thread construction_thread(&CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers, this);
+            construction_thread.detach();
         } else {
             m_detail_stage = DetailReady;
         }
@@ -318,6 +319,8 @@ void CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers() {
             }
 #endif
 
+    // GPU upload can only start if all current rendering is finished and is thus dispatched in the render loop
+    // ToDo: GPU upload *can* take place during rendering but not during decompression stages. Do a more fine grained sync.
     m_detail_stage = DetailAwaitingUpload;
     Logger(DEBUG) << " CPU detail construction in " << detail_construction_timer.elapsed() * 1000.f << " ms.";
 }
@@ -373,6 +376,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
             detail_buffer_fits_whole_detail = true;
         }
 
+        m_detail_requests.resize(m_max_detail_requests_per_frame + 2u);
         m_detail_requests_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_requests_buffer", .byteSize = (m_max_detail_requests_per_frame + 2u) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
         m_detail_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_starts_buffer", .byteSize = (bricks_in_volume + 1u)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
         m_detail_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_buffer", .byteSize = m_detail_capacity * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});

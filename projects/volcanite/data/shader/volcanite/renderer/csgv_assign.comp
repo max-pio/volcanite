@@ -94,7 +94,7 @@ void main() {
         uvec3 valid_brick_size = clamp(g_vol_dim.xyz - brick * g_brick_size, uvec3(0u), uvec3(g_brick_size));
 #if 1
     #ifdef SEPARATE_DETAIL
-            assert(!(inv_lod == g_lod_count - 1U && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_idx] == g_detail_starts[brick_idx+1])), "detail not available but the provision shader told us it is");
+            assert(!(inv_lod == g_lod_count - 1U && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_idx] == g_detail_starts[brick_idx+1])), "detail buffers marked dirty but the provision shader requested detail decoding");
     #endif
             resetCSGVBrick(cache_idx * g_cache_base_element_uints, inv_lod);
             decompressCSGVBrick(brick_idx, getBrickEncodingLength(brick_idx), valid_brick_size, 0u, inv_lod, cache_idx * g_cache_base_element_uints);
