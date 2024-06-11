@@ -268,7 +268,7 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
 }
 
 float CompressedSegmentationVolume::separateDetail() {
-    if(!m_detail_encoding.empty() || m_separate_detail)
+    if(!m_detail_encodings.empty() || m_separate_detail)
         throw std::runtime_error("Detail separation was already performed!");
     if(m_encodings.empty())
         throw std::runtime_error("Segmentation volume is not yet compressed! Call compress() before performing detail separation.");
@@ -304,16 +304,16 @@ float CompressedSegmentationVolume::separateDetail() {
     // Second, cut the operation encoding arrays apart und update brick headers / base encoding starts.
     // The same brick_idx to split (detail) encoding vector is used for base and detail encodings.
     // Handle one brick after another, splitting encoding arrays if necessary:
-    m_detail_encoding.resize(1);
-    m_detail_encoding.back().resize(split_detail_encoding_sizes.at(0));
+    m_detail_encodings.resize(1);
+    m_detail_encodings.back().resize(split_detail_encoding_sizes.at(0));
     // ToDo: it would be possible to process all split encoding arrays in parallel, but woudl drastically increase tmp memory
     for(uint32_t brick_idx = 0u; brick_idx < brick_idx_count; brick_idx++) {
 
         uint32_t detail_start = m_detail_starts[brick_idx];
         // Check if we have to start a new split encoding "vector" before writing the next brick's encoding.
-        if(brick_idx / m_brick_idx_to_enc_vector > m_detail_encoding.size() - 1u) {
+        if(brick_idx / m_brick_idx_to_enc_vector > m_detail_encodings.size() - 1u) {
             // start a new detail encoding array
-            m_detail_encoding.emplace_back(split_detail_encoding_sizes.at(brick_idx / m_brick_idx_to_enc_vector));
+            m_detail_encodings.emplace_back(split_detail_encoding_sizes.at(brick_idx / m_brick_idx_to_enc_vector));
             detail_start = 0u;
         }
         uint32_t detail_encoding_size = m_detail_starts[brick_idx+1] - detail_start;
@@ -340,7 +340,7 @@ float CompressedSegmentationVolume::separateDetail() {
         size_t base_op_stream_length = mut_encoding[old_brick_start + lod_count - 1] / 8 - header_size;
 
         // copy the detail encoding to the detail buffer
-        memcpy(&(m_detail_encoding.at(brick_idx / m_brick_idx_to_enc_vector).at(detail_start)), old_brick_encoding + header_size + base_op_stream_length, detail_encoding_size * sizeof(uint32_t));
+        memcpy(&(m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).at(detail_start)), old_brick_encoding + header_size + base_op_stream_length, detail_encoding_size * sizeof(uint32_t));
 
         // copy the first part of the header (LOD starts from 0 to L-2 without the detail level), to the base encoding buffer.
         // the header is missing one element (start pos. of the detail layer) now, so we have to adjust the lod start entries.
@@ -401,7 +401,7 @@ bool CompressedSegmentationVolume::verifyCompression() const {
         }
     }
 
-    #pragma omp parallel for collapse(3) default(none) shared(is_ok, brick_count, header_size, header_start_lods, lod_count, m_brick_starts, m_encodings, m_detail_starts, m_detail_encoding)
+    #pragma omp parallel for collapse(3) default(none) shared(is_ok, brick_count, header_size, header_start_lods, lod_count, m_brick_starts, m_encodings, m_detail_starts, m_detail_encodings)
     for(uint32_t z = 0u; z < brick_count.z; z++) {
         for (uint32_t y = 0u; y < brick_count.y; y++) {
             for (uint32_t x = 0u; x < brick_count.x; x++) {
@@ -654,7 +654,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
 
     // detail buffers can only be filled with a subsequent call to separateDetail()
     m_separate_detail = false;
-    m_detail_encoding.clear();
+    m_detail_encodings.clear();
     m_detail_starts.clear();
 
 
@@ -702,6 +702,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
         // Check if we have to start a new encoding vector here. As m_brick_idx_to_enc_vector is always a multiple of
         // m_cpu_threads, either all or none of the new bricks belong to a new split encoding array.
         if(std::min(brick_index_count, (brick_index + m_cpu_threads - 1u)) / m_brick_idx_to_enc_vector >= m_encodings.size()) {
+            m_encodings.back().shrink_to_fit();
             m_encodings.emplace_back();
             m_encodings.back().reserve(reserved_size);
             old_encoding_size = 0ul;
@@ -715,9 +716,11 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
             // We can not reduce m_brick_idx_to_enc_vector further if it was already used for splitting encoding vectors.
             // Otherwise, the old split may become invalid.
             else if(m_encodings.size() == 1) {
-                // To make things easier, we always split at an index that is a multiple of m_cpu_threads
+                // To make things easier, always split at an index that is a multiple of m_cpu_threads.
                 m_brick_idx_to_enc_vector = brick_index;
                 uint32_t split_encoding_count = (brick_index_count - 1u) / m_brick_idx_to_enc_vector + 1u;
+                // Start new encoding vector.
+                m_encodings.back().shrink_to_fit();
                 m_encodings.emplace_back();
                 m_encodings.back().reserve(reserved_size);
                 old_encoding_size = 0ul;
@@ -1018,9 +1021,9 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
         file.write(reinterpret_cast<char *>(&m_detail_starts[0]), static_cast<long>(size * sizeof(m_detail_starts[0])));
 
         // write number of split encoding buffers, all split encodings, and index to split array mapping
-        size = m_detail_encoding.size();
+        size = m_detail_encodings.size();
         file.write(reinterpret_cast<char *>(&size), sizeof(size_t));  // since 0013
-        for(const auto& enc : m_detail_encoding) {  // since 0013
+        for(const auto& enc : m_detail_encodings) {  // since 0013
             size = enc.size();
             file.write(reinterpret_cast<char *>(&size), sizeof(size_t));
             file.write(reinterpret_cast<const char *>(&enc[0]), static_cast<long>(size * sizeof(enc[0])));
@@ -1117,17 +1120,17 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
             fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
         else
             size = 1;
-        m_detail_encoding.resize(size);
+        m_detail_encodings.resize(size);
         // read all single split encoding arrays
-        for(int i = 0; i < m_detail_encoding.size(); i++) {
+        for(int i = 0; i < m_detail_encodings.size(); i++) {
             fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
-            m_detail_encoding[i].resize(size);
-            fin.read(reinterpret_cast<char *>(&m_detail_encoding[i][0]), static_cast<long>(size * sizeof(uint32_t)));
+            m_detail_encodings[i].resize(size);
+            fin.read(reinterpret_cast<char *>(&m_detail_encodings[i][0]), static_cast<long>(size * sizeof(uint32_t)));
         }
     }
     else {
         m_detail_starts.clear();
-        m_detail_encoding.clear();
+        m_detail_encodings.clear();
     }
 
     char single_byte;

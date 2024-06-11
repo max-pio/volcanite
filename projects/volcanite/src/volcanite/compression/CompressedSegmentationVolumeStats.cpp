@@ -120,7 +120,7 @@ namespace vvv {
 //                if(m_separate_detail) {
 //                    beginE = m_detail_starts[brick_idx]; // beginE now refers to another buffer (detail) and has to be changed
 //                    readState.idxE = beginE * 4;
-//                    m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_detail_encoding.data());
+//                    m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_detail_encodings.data());
 //                }
 //                else {
 //                    // Read the lod start from the brick header to start reading at the right encoding buffer index.
@@ -271,7 +271,7 @@ namespace vvv {
 //                if(m_separate_detail) {
 //                    beginE = m_detail_starts[brick_idx]; // beginE now refers to another buffer (detail) and has to be changed
 //                    readState.idxE = (beginE + 1) * 4;
-//                    m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_detail_encoding.data());
+//                    m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_detail_encodings.data());
 //                }
 //                else {
 //                    // Read the lod start from the brick header to start reading at the right encoding buffer index.

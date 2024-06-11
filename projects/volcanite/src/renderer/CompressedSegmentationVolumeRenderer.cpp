@@ -292,7 +292,7 @@ void CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers() {
             next_requested_id++;
         }
     }
-    // 3. in parallel: copy all detail encodings to the m_detail_encoding
+    // 3. in parallel: copy all detail encodings to the m_detail_encodings
     #pragma omp parallel for default(none) shared(detail_request_count, m_detail_requests, m_constructed_detail_starts, m_constructed_detail)
     for (int i = 0; i < detail_request_count; i++) {
         uint32_t brick_idx = m_detail_requests[i];

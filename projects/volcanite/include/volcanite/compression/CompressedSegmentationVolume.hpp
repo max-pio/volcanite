@@ -141,7 +141,7 @@ private:
             throw std::runtime_error("Volume must be compressed first! Call compress() or import a CSGV from a file!");
         if(!m_separate_detail)
             throw std::runtime_error("Detail buffers not separated! Call separateDetail() first.");
-        return &m_detail_encoding.at(brick_idx / m_brick_idx_to_enc_vector);
+        return &m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector);
     }
     /** @return the start uint32_t index of this brick brick_idx within the array returned by getEncodingBufferForBrickIdx(brick_idx). */
     [[nodiscard]] uint32_t getBrickDetailStart(uint32_t brick_idx) const {
@@ -212,8 +212,8 @@ public:
     void getBrickStatistics(std::map<std::string, float>& statistics, uint32_t brick_idx, glm::uvec3 valid_brick_size) const;
 
 public:
-    explicit CompressedSegmentationVolume() : VolumeCompressionBase(), m_brick_size(0u), m_encodings(), m_brick_idx_to_enc_vector(~0u), m_brick_starts(), m_detail_encoding(), m_detail_starts(), m_volume_dim(-1),
-                                                    m_rANS_mode(NO_RANS), m_separate_detail(false), m_cpu_threads(std::thread::hardware_concurrency()), m_max_brick_palette_count(0) {}
+    explicit CompressedSegmentationVolume() : VolumeCompressionBase(), m_brick_size(0u), m_encodings(), m_brick_idx_to_enc_vector(~0u), m_brick_starts(), m_detail_encodings(), m_detail_starts(), m_volume_dim(-1),
+                                              m_rANS_mode(NO_RANS), m_separate_detail(false), m_cpu_threads(std::thread::hardware_concurrency()), m_max_brick_palette_count(0) {}
 
     ~CompressedSegmentationVolume() { clear(); }
 
@@ -306,7 +306,7 @@ public:
     [[nodiscard]] const std::vector<std::vector<uint32_t>>* getAllDetails() const {
         if(!m_separate_detail)
             throw std::runtime_error("Detail separation must be performed before accessing detail buffers! Call separateDetail()!");
-        return &m_detail_encoding;
+        return &m_detail_encodings;
     }
     /** The detail starts array contains one start index per brick counting the start uint32 element in the split
      * detail encoding array of this brick. As the brick start of brick (i+1) is also used to determine the end index of
@@ -487,7 +487,7 @@ public:
         m_brick_size = 0u;
         m_encodings.clear();
         m_brick_starts.clear();
-        m_detail_encoding.clear();
+        m_detail_encodings.clear();
         m_detail_starts.clear();
         m_separate_detail = false;
         m_brick_idx_to_enc_vector = ~0u;
@@ -498,7 +498,7 @@ public:
         size_t total_uints = 0ul;
         for(const auto& e : m_encodings)
             total_uints += e.size();
-        total_uints += m_brick_starts.size() + m_detail_encoding.size() + m_detail_starts.size();
+        total_uints += m_brick_starts.size() + m_detail_encodings.size() + m_detail_starts.size();
         return total_uints * sizeof(uint32_t);
     }
 
@@ -517,7 +517,9 @@ public:
             encoding_memory += static_cast<double>(e.size() * sizeof(uint32_t));
         encoding_memory = encoding_memory / 1000. / 1000.;
         double detail_starts_memory = static_cast<double>(m_detail_starts.size() * sizeof(uint32_t)) / 1000. / 1000.;
-        double detail_memory = static_cast<double>(m_detail_encoding.size() * sizeof(uint32_t)) / 1000. / 1000.;
+        double detail_memory = 0.;
+        for(const auto& d : m_detail_encodings)
+            detail_memory += static_cast<double>(d.size() * sizeof(uint32_t)) / 1000. / 1000.;
         double volume_memory = static_cast<double>(static_cast<size_t>(m_volume_dim[0]) * m_volume_dim[1] * m_volume_dim[2] * sizeof(uint32_t)) / 1000. / 1000.;
         std::stringstream ss;
         ss << "start buffer (base  " << brick_starts_memory << "MB + detail " << detail_starts_memory
@@ -526,11 +528,13 @@ public:
            << "MB original size (" << (static_cast<double>(brick_starts_memory + encoding_memory + detail_starts_memory + detail_memory)/volume_memory*100.f) << "%) " << str(m_volume_dim) << " voxels."
            << " max. brick palette size " << m_max_brick_palette_count << ".";
         if(m_encodings.size() > 1) {
-            ss << "\n-------------\nSplit encoding buffers (" << m_encodings.size() << "):";
+            ss << "\n        Split encoding buffers (" << m_encodings.size() << "):";
             uint32_t brick_index_count = getBrickCount().x * getBrickCount().y * getBrickCount().z;
             for (int i = 0; i < m_encodings.size(); i++) {
-                ss << "\n  " << static_cast<double>(m_encodings[i].size() * sizeof(uint32_t)) / 1000. / 1000. << "MB, bricks [";
-                ss << (m_brick_idx_to_enc_vector * i) << " - " << std::min(m_brick_idx_to_enc_vector * (i+1) - 1, brick_index_count) << "]";
+                ss << "\n          " << static_cast<double>(m_encodings[i].size() * sizeof(uint32_t)) / 1000. / 1000. << "MB";
+                if(m_separate_detail)
+                    ss << " + " << static_cast<double>(m_detail_encodings[i].size() * sizeof(uint32_t)) / 1000. / 1000. << "MB detail";
+                ss << ", bricks [" << (m_brick_idx_to_enc_vector * i) << " - " << std::min(m_brick_idx_to_enc_vector * (i+1) - 1, brick_index_count) << "]";
             }
         }
         return ss.str();
@@ -629,8 +633,8 @@ private:
     const uint32_t m_target_uints_per_split_encoding = 536870912u;//20000u; /// targeted max. number of uint32 elements per encoding vector (536870912u -> 2 GB)
     uint32_t m_brick_idx_to_enc_vector = ~0u;       /// dividing 1D brick idx by this value maps to split encoding vector index.
     std::vector<uint32_t> m_brick_starts;           /// points to indices in m_encoding
-    std::vector<std::vector<uint32_t>> m_detail_encoding; /// contains the finest LoDs of all bricks if detail separation is enabled
-    std::vector<uint32_t> m_detail_starts;          /// points to indices m_detail_encoding
+    std::vector<std::vector<uint32_t>> m_detail_encodings; /// contains the finest LoDs of all bricks if detail separation is enabled
+    std::vector<uint32_t> m_detail_starts;          /// points to indices m_detail_encodings
 
     RANS m_rans;
     RANS m_detail_rans;
