@@ -141,7 +141,10 @@ public:
             uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
             #pragma omp parallel for default(none) shared(data, id_types, volume_size)
             for (int i = 0; i < volume_size; i++) {
-                data[i] = id_types[data[i]];
+                if(id_types.find(data[i]) != id_types.end())
+                    data[i] = id_types[data[i]];
+                else
+                    data[i] = 0u;
             }
         }
 #endif
