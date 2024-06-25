@@ -22,12 +22,14 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
         throw std::runtime_error(err.str());
     }
 
-    // TODO(Max): read fields with key/value pairs from nrrd file
     // read dimension
-    uint64_t img_width = 0;
-    uint64_t img_height = 0;
-    uint64_t img_depth = 0;
+    int img_width = 0;
+    int img_height = 0;
+    int img_depth = 0;
     uint16_t bits_per_sample = 0;
+    double spacing_width = 1.;
+    double spacing_height = 1.;
+    double spacing_depth = 1.;
 
     std::optional<std::string> detachedPayload;
 
@@ -53,7 +55,9 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
         }
 
         // optionally accept the header, required per standard but optional in our impl...
-        if (lineNum == 1 && line == "NRRD0004") {
+        if (lineNum == 1) {
+            if(line != "NRRD0004")
+                throw std::runtime_error("invalid NRRD magic not matchin xpected NRRD format NRRD0004: " + line);
             continue;
         }
 
@@ -87,7 +91,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
                 bits_per_sample = bitwidth;
             } else {
                 nrrd.close();
-                throw std::runtime_error("expected uint8 or uint16 data type, got: " + fieldName);
+                throw std::runtime_error("expected uint8, uint16, or uint32 data type, got: " + fieldName);
             }
         } else if (fieldName == "encoding") {
             if (fieldValue != "raw") {
@@ -102,18 +106,20 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
         } else if (fieldName == "data file") {
             detachedPayload = fieldValue;
         } else if (fieldName == "sizes") {
-            // TODO(Reiner): check for end of line
             std::istringstream sizes(fieldValue);
             sizes >> img_width >> img_height >> img_depth;
+        } else if (fieldName == "spacings") {
+            std::istringstream spacings(fieldValue);
+            spacings >> spacing_width >> spacing_height >> spacing_depth;
         } else {
-            std::cout << "ignoring unknown header field: " << fieldName << std::endl;
+            std::cout << "ignoring unknown NRRD header field: " << fieldName << std::endl;
         }
     }
 
-    float max_dim = static_cast<float>(std::max(img_width, std::max(img_height, img_depth)));
-    float physical_size_x = img_width / max_dim;
-    float physical_size_y = img_height / max_dim;
-    float physical_size_z = img_depth / max_dim;
+    float max_dim = static_cast<float>(std::max(img_width * spacing_width, std::max(img_height * spacing_height, img_depth * spacing_depth)));
+    float physical_size_x = static_cast<float>(img_width * spacing_width / max_dim);
+    float physical_size_y = static_cast<float>(img_height * spacing_height / max_dim);
+    float physical_size_z = static_cast<float>(img_depth * spacing_depth / max_dim);
 
     if (!is_valid_physical_size(physical_size_x) || !is_valid_physical_size(physical_size_y) || !is_valid_physical_size(physical_size_z)) {
         nrrd.close();
@@ -157,7 +163,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
     }
 
     // read binary data inline
-    nrrd.read(reinterpret_cast<char *>(payload.data()), byte_size);
+    nrrd.read(reinterpret_cast<char *>(payload.data()), static_cast<long>(byte_size));
 
     if (!nrrd) {
         nrrd.close();
@@ -186,6 +192,9 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::strin
     uint32_t payloadComponentSize;
     float minVal = std::numeric_limits<float>::max();
     float maxVal = std::numeric_limits<float>::min();
+    double spacing_width = 1.;
+    double spacing_height = 1.;
+    double spacing_depth = 1.;
 
     std::optional<std::string> detachedPayload;
 
@@ -241,7 +250,12 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::strin
                 throw std::runtime_error("expected 3 dimensions, got " + std::to_string(dim));
             }
         } else if (fieldName == "type") {
-            if (fieldValue == "uint16") {
+            if (fieldValue == "uint32") {
+                payloadTy = fieldValue;
+                payloadComponentSize = 4;
+                minVal = std::numeric_limits<uint32_t>::min();
+                maxVal = std::numeric_limits<uint32_t>::max();
+            } else if (fieldValue == "uint16") {
                 payloadTy = fieldValue;
                 payloadComponentSize = 2;
                 minVal = std::numeric_limits<uint16_t>::min();
@@ -253,7 +267,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::strin
                 maxVal = std::numeric_limits<uint8_t>::max();
             } else {
                 nrrd.close();
-                throw std::runtime_error("expected uint8 or uint16 data type, got: " + fieldName);
+                throw std::runtime_error("expected uint8, uint16, or uint32 data type, got: " + fieldValue);
             }
         } else if (fieldName == "encoding") {
             if (fieldValue != "raw") {
@@ -268,18 +282,21 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::strin
         } else if (fieldName == "data file") {
             detachedPayload = fieldValue;
         } else if (fieldName == "sizes") {
-            // TODO(Reiner): check for end of line
+            // TODO: check for end of line
             std::istringstream sizes(fieldValue);
             sizes >> img_width >> img_height >> img_depth;
+        } else if (fieldName == "spacings") {
+            std::istringstream spacings(fieldValue);
+            spacings >> spacing_width >> spacing_height >> spacing_depth;
         } else {
-            std::cout << "ignoring unknown header field: " << fieldName << std::endl;
+            std::cout << "ignoring unknown NRRD header field: " << fieldName << std::endl;
         }
     }
 
-    float max_dim = static_cast<float>(std::max(img_width, std::max(img_height, img_depth)));
-    float physical_size_x = img_width / max_dim;
-    float physical_size_y = img_height / max_dim;
-    float physical_size_z = img_depth / max_dim;
+    float max_dim = static_cast<float>(std::max(img_width * spacing_width, std::max(img_height * spacing_height, img_depth * spacing_depth)));
+    float physical_size_x = static_cast<float>(img_width * spacing_width / max_dim);
+    float physical_size_y = static_cast<float>(img_height * spacing_height / max_dim);
+    float physical_size_z = static_cast<float>(img_depth * spacing_depth / max_dim);
 
     if (!is_valid_physical_size(physical_size_x) || !is_valid_physical_size(physical_size_y) || !is_valid_physical_size(physical_size_z)) {
         nrrd.close();
@@ -351,46 +368,56 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::strin
                 auto cval = static_cast<T>(((static_cast<float>(val) - minVal) / (maxVal - minVal) * trange) + tmin);
                 payload[j] = cval;
             }
+        } else if (payloadTy == "uint32") {
+            for (int j = 0; j < voxel_count; ++j) {
+                // assumes the machine is using little endian
+                auto val = reinterpret_cast<uint32_t *>(payloadRaw.data())[j];
+                auto cval = static_cast<T>(((static_cast<float>(val) - minVal) / (maxVal - minVal) * trange) + tmin);
+                payload[j] = cval;
+            }
         } else {
             assert(false);
         }
 
         return std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, img_width, img_height, img_depth, gpuFormat, payload);
     } else {
-        const auto first = reinterpret_cast<uint16_t *>(payloadRaw.data());
+        const auto first = reinterpret_cast<T*>(payloadRaw.data());
         return std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, img_width, img_height, img_depth, gpuFormat, first, first + voxel_count);
     }
 }
 
+template <> std::shared_ptr<Volume<uint32_t>> Volume<uint32_t>::load_nrrd(std::string path, bool allowCast) {
+    return allowCast ? load_nrrd_with_cast_<uint32_t>(path, "uint32", vk::Format::eR32Uint) : load_nrrd_<uint32_t>(path, "uint32", 32, vk::Format::eR32Uint);
+};
 template <> std::shared_ptr<Volume<uint16_t>> Volume<uint16_t>::load_nrrd(std::string path, bool allowCast) {
-    return allowCast ? load_nrrd_with_cast_<uint16_t>(path, "uint16", vk::Format::eR16Unorm) : load_nrrd_<uint16_t>(path, "uint16", 16, vk::Format::eR16Unorm);
+    return allowCast ? load_nrrd_with_cast_<uint16_t>(path, "uint16", vk::Format::eR16Uint) : load_nrrd_<uint16_t>(path, "uint16", 16, vk::Format::eR16Uint);
 };
 template <> std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_nrrd(std::string path, bool allowCast) {
-    return allowCast ? load_nrrd_with_cast_<uint8_t>(path, "uint8", vk::Format::eR8Unorm) : load_nrrd_<uint8_t>(path, "uint8", 8, vk::Format::eR8Unorm);
+    return allowCast ? load_nrrd_with_cast_<uint8_t>(path, "uint8", vk::Format::eR8Uint) : load_nrrd_<uint8_t>(path, "uint8", 8, vk::Format::eR8Uint);
 };
 
-template <> void Volume<uint16_t>::writeNrrd(std::string path, bool separatePayloadFile) {
 
-    const std::string pathmeta = path + ".nhdr";
+template <typename T> void write_nrrd_(Volume<T>* volume, std::string path, bool separatePayloadFile, std::string formatLabel) {
+    const std::string pathmeta = path + (separatePayloadFile ? ".nhdr" : ".nrrd");
 
     std::ofstream meta(pathmeta, std::ios_base::out | std::ios_base::binary | std::ios_base::trunc);
     meta << "NRRD0004" << std::endl
          << "# Complete NRRD file format specification at:" << std::endl
          << "# http://teem.sourceforge.net/nrrd/format.html" << std::endl
          << "# http://teem.sourceforge.net/nrrd/format.html" << std::endl
-         << "type: uint16" << std::endl
+         << "type: " << formatLabel << std::endl
          << "dimension: 3" << std::endl
          << "space: left-posterior-superior"
          << std::endl
          //<< "space directions: (1.0,0,0) (0,1.0,0) (0,0,1.0)" << std::endl
          << "kinds: domain domain domain" << std::endl
-         << "sizes: " << dim_x << " " << dim_y << " " << dim_z << std::endl
+         << "sizes: " << volume->dim_x << " " << volume->dim_y << " " << volume->dim_z << std::endl
          << "endian: little" << std::endl
          << "encoding: raw" << std::endl;
 
     if (separatePayloadFile) {
 
-        const std::string pathpayload = path + "_uint16.raw";
+        const std::string pathpayload = path + "_" + formatLabel + ".raw";
 
         std::string basename = pathpayload;
 
@@ -402,13 +429,24 @@ template <> void Volume<uint16_t>::writeNrrd(std::string path, bool separatePayl
         meta << "data file: " << basename << std::endl;
 
         std::ofstream payload(pathpayload, std::ios_base::out | std::ios_base::trunc | std::ios_base::binary);
-        payload.write(reinterpret_cast<const char *>(m_payload.data()), m_payload.size() * sizeof(uint16_t));
+        payload.write(volume->getRawData_const(), volume->memorySize());
         payload.close();
     } else {
         meta << std::endl;
-        meta.write(reinterpret_cast<const char *>(m_payload.data()), m_payload.size() * sizeof(uint16_t));
+        meta.write(volume->getRawData_const(), volume->memorySize());
     }
 
     meta.close();
 }
+
+template <> void Volume<uint32_t>::write_nrrd(std::string path, bool separatePayloadFile) {
+    write_nrrd_(this, path, separatePayloadFile, "uint32");
+}
+template <> void Volume<uint16_t>::write_nrrd(std::string path, bool separatePayloadFile) {
+    write_nrrd_(this, path, separatePayloadFile, "uint16");
+}
+template <> void Volume<uint8_t>::write_nrrd(std::string path, bool separatePayloadFile) {
+    write_nrrd_(this, path, separatePayloadFile, "uint8");
+}
+
 }

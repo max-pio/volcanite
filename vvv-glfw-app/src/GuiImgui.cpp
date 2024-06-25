@@ -60,7 +60,7 @@ void GuiImgui::renderGui() {
 
         if (m_firstCall) {
             ImGui::DockBuilderRemoveNode(dockspace_id);
-            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_PassthruCentralNode | ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_PassthruCentralNode | static_cast<ImGuiDockNodeFlags_>(ImGuiDockNodeFlags_DockSpace));
             ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
 
             ImGuiID dock_id_down = 0u, dock_id_left = 0u, dock_id_up = 0u, dock_id_right = 0u;

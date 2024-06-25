@@ -13,24 +13,7 @@
 
 namespace vvv {
 
-/** Helpfer function to remove the file extension from a file path, e.g. test.abc -> test */
-static std::string stripFileExtension(std::string path) {
-    return path.substr(0, path.find_last_of('.'));
-}
-
 struct VolcaniteArgs {
-
-private:
-    static std::string expandPath(std::string path) {
-        if(path.empty())
-            return "";
-        if(path.find('~') != std::string::npos)
-            Logger(WARN) << "tilde-expansion is a bash specific feature. Use explicit home directory instead of '~' in " << path;
-        // make path absolute and normalize
-        std::filesystem::path absolute = std::filesystem::path(path);
-        std::filesystem::path canonicalPath = std::filesystem::absolute(std::filesystem::weakly_canonical(absolute));
-        return canonicalPath.make_preferred().string();
-    }
 
 public:
     enum Mode {
@@ -54,6 +37,7 @@ public:
     uint32_t render_resolution[2] = {1920, 1080};
     bool stream_lod;
     size_t cache_size_MB = 1024ul;
+    bool cache_palettized = false;
     bool show_development_gui = false;
 
     // attribute args
@@ -63,12 +47,12 @@ public:
     bool label_remapping = false;       // if label ids in the volume should be remapped to a consecutive interval
 
     // compression args
-    std::string compress_export_file;      // !empty = perform compression to file         Only one of
-    std::string decompress_export_file;    // !empty = perform decompression to file       both can be set!
+    std::string compress_export_file;   // !empty = perform compression to file         Only one of
+    std::string decompress_export_file; // !empty = perform decompression to file       both can be set!
     std::string segmented_volume_file;
     uint32_t brick_size = 32;
-    CompressedSegmentationVolume::RANSMode rANS_mode = CompressedSegmentationVolume::RANSMode::DOUBLE_TABLE_RANS;
-    uint32_t freq_subsampling = 8;     // n^3 factor for subsampling bricks for frequency table computation with rANS
+    RANSMode rANS_mode = RANSMode::DOUBLE_TABLE_RANS;
+    uint32_t freq_subsampling = 8;      // n^3 factor for subsampling bricks for frequency table computation with rANS
 
     bool run_tests = false;
     bool export_stats = false;
@@ -129,10 +113,11 @@ public:
 
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
-            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{name of the label column referenced by the volume}]]\".", false, "", "database[,table[,label]]", cmd);
+            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{label column name referenced by volume}]]\".", false, "", "database[,table[,label]]", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal all development render parameters in GUI.", cmd);
-            ValueArg<uint32_t> cachesizeArg("", "cache-size", "Size in MB to allocate for GPU renderer brick cache.", false, va.cache_size_MB, "size", cmd);
+            ValueArg<uint32_t> cacheSizeMBArg("", "cache-size", "Size in MB of the renderer's brick cache. 0 to allocate all available.", false, va.cache_size_MB, "size", cmd);
+            SwitchArg cachePalettizedArg("", "cache-palette", "Store palette indices in brick cache instead of labels.", cmd);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "file", cmd);
@@ -157,6 +142,7 @@ public:
 #endif
             va.decompress_export_file = expandPath(decompresspathArg.getValue());
             va.compress_export_file = expandPath(compresspathArg.getValue());
+            va.export_stats = statsArg.getValue();
             // rendering arguments
             va.rendering_config_file = expandPath(renderconfigArg.getValue());
             va.screenshot_output_file = expandPath(imageArg.getValue());
@@ -171,7 +157,8 @@ public:
                     throw ArgException(resolutionArg.longID() + " must contain positive integers only", resolutionArg.longID());
             }
             va.stream_lod = streamlodArg.getValue();
-            va.cache_size_MB = cachesizeArg.getValue();
+            va.cache_size_MB = cacheSizeMBArg.getValue();
+            va.cache_palettized = cachePalettizedArg.getValue();
             va.show_development_gui = devArg.getValue();
             // if no input file was specified, try to open a file dialog
             std::string input_file = expandPath(inputpathArg.getValue());
@@ -183,7 +170,7 @@ public:
 
                 // Open a file dialog to choose a file
                 auto selected_file = pfd::open_file("Open Segmentation Volume", pfd::path::home(),
-                                                    { "Segmentation Volumes (.csgv .vti .hdf5 .raw)", "*.csgv *.vti *.hdf5 *.raw", "All Files", "*" });
+                                                    { "Segmentation Volumes (.csgv .vti .hdf5 .h5 .raw .vraw .nrrd .nhdr)", "*.csgv *.vti *.hdf5 *.h5 *.raw *.vraw *.nrrd *.nhdr", "All Files", "*" });
                 if(selected_file.result().empty()) {
                     throw ArgException("No input file was provided", inputpathArg.longID());
                 }
@@ -201,8 +188,11 @@ public:
             }
             // .. or if we compress a volume
             else {
-                if(!(input_file.ends_with(".vti") || input_file.ends_with(".raw") || input_file.ends_with(".hdf5"))) {
-                    throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.raw})", inputpathArg.longID());
+                if(!(input_file.ends_with(".vti")
+                    || input_file.ends_with(".raw") || input_file.ends_with(".vraw")
+                    || input_file.ends_with(".hdf5") || input_file.ends_with(".h5")
+                    || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {
+                    throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.h5|.raw|.vraw|.nrrd|.nhdr})", inputpathArg.longID());
                 }
 
                 if(!va.decompress_export_file.empty()) {
@@ -247,7 +237,7 @@ public:
 
                 // compression arguments
                 va.brick_size = bricksizeArg.getValue();
-                const CompressedSegmentationVolume::RANSMode _strengths[] = {CompressedSegmentationVolume::NO_RANS, CompressedSegmentationVolume::SINGLE_TABLE_RANS, CompressedSegmentationVolume::DOUBLE_TABLE_RANS};
+                const RANSMode _strengths[] = {NO_RANS, SINGLE_TABLE_RANS, DOUBLE_TABLE_RANS};
                 va.rANS_mode = _strengths[strengthArg.getValue()];
                 va.freq_subsampling = subsamplingArg.getValue();
                 va.threads = threadsArg.getValue();
@@ -289,7 +279,6 @@ public:
                     }
                 }
                 va.run_tests = testArg.getValue();
-                va.export_stats = statsArg.getValue();
             }
 
             return va;

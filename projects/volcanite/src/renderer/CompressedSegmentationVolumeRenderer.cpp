@@ -20,7 +20,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     if(!(m_usegmented_volume_info && m_urender_info && m_compressed_segmentation_volume && m_csgv_db))
         throw std::runtime_error("CompressedSegmentationVolumeRenderer data missing!");
 
-    // we only want to render the next frame, if the previous frame finished execution
+    // only start rendering the next frame, if the previous frame finished execution
     if(m_mostRecentFrame.has_value()) {
         awaitBeforeExecution.insert(awaitBeforeExecution.end(), m_mostRecentFrame->renderingComplete.begin(), m_mostRecentFrame->renderingComplete.end());
     }
@@ -29,35 +29,30 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         // wait until all previous frames are processed
         getCtx()->getDevice().waitIdle();
 
-        assert(!m_compressed_segmentation_volume->getBrickStarts()->empty() && !m_compressed_segmentation_volume->getEncoding()->empty() && "CompressedSegmentationVolume not initialized!");
-        auto [encoding_upload_finished, _encoding_staging_buffer] = m_encoding_buffer->uploadWithStagingBuffer(*(m_compressed_segmentation_volume->getEncoding()), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-        auto [brickstarts_upload_finished, _brickstarts_staging_buffer] = m_brick_starts_buffer->uploadWithStagingBuffer(*(m_compressed_segmentation_volume->getBrickStarts()),  {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        // create and populate all encoding buffer
+        initDataSetGPUBuffers();
 
-        awaitBeforeExecution.push_back(encoding_upload_finished);
-        awaitBeforeExecution.push_back(brickstarts_upload_finished);
-
-        // reset cache
-        m_pass->resetCacheOnNextCall();
+        const size_t brick_size = m_compressed_segmentation_volume->getBrickSize();
+        const size_t output_voxels_per_brick = brick_size * brick_size * brick_size;
+        const size_t cache_bricks = static_cast<uint32_t>(m_cache_capacity * 8u / output_voxels_per_brick);
+        Logger(DEBUG) << "new data set with " << str(m_compressed_segmentation_volume->getBrickCount())
+                      << " bricks added. Cache fits " << cache_bricks << " = "
+                      << static_cast<uint32_t>(std::pow(static_cast<double>(cache_bricks), 1./3.))
+                      << "^3 bricks on finest LoD. Need " << m_cache_palette_idx_bits << " bits per palette indices to store " << m_cache_indices_per_uint << " indices per uint.";
 
         // update invocation sizes to brick dimension
         m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(), m_compressed_segmentation_volume->getLodCountPerBrick());
-        {
-            const size_t brick_size = m_compressed_segmentation_volume->getBrickSize();
-            const size_t cache_element_size = brick_size * brick_size * brick_size;
-            const size_t cache_bricks = static_cast<uint32_t>(m_cache_buffer->getByteSize() / 4l / cache_element_size);
-            Logger(DEBUG) << "new data set with " << str(m_compressed_segmentation_volume->getBrickCount()) << " bricks added. Cache fits " <<  cache_bricks << " = " << static_cast<uint32_t>(std::pow(static_cast<double>(cache_bricks), 1.f/3.f)) << "^3 bricks on finest LoD.";
-        }
 
-        // reset all accumulation buffers
+        // trigger accumulation buffer and cache resets
+        m_pass->resetCacheOnNextCall();
         m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
 
-        // ToDo? is this required? wait until everything is uploaded
-        getCtx()->getDevice().waitIdle();
         m_data_changed = false;
     }
 
     updateAttributeBuffers();
-    // if one of our materials changed, we update the whole buffer
+
+    // if one of the materials changed, update the whole buffer
     if(std::find(m_gpu_material_changed.begin(), m_gpu_material_changed.end(), true) != m_gpu_material_changed.end()) {
         std::vector<GPUSegmentedVolumeMaterial> gpu_mat(m_materials.size());
         for (int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
@@ -96,16 +91,19 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             gpu_mat[m].tfIntervalMin = m_materials[m].tfMinMax.x;
             gpu_mat[m].tfIntervalMax = m_materials[m].tfMinMax.y;
             gpu_mat[m].opacity = m_materials[m].opacity;
-            gpu_mat[m].emission = m_materials[m].emission;
+            gpu_mat[m].emission = m_materials[m].emission * m_materials[m].emission;    // ^2 for better user control
+            gpu_mat[m].wrapping = m_materials[m].wrapping;
 
             m_gpu_material_changed[m] = false;
         }
-        // upload material buffer
+        // wait for previous frame to finish before uploading material buffer
+        getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution);
         auto [material_upload_finished, _material_upload_staging_buffer] = m_materials_buffer->uploadWithStagingBuffer(
                 gpu_mat.data(), sizeof(GPUSegmentedVolumeMaterial) * m_materials.size(), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-        getCtx()->sync->hostWaitOnDevice({material_upload_finished}); // we have to wait here, otherwise the upload_staging buffer is freed immediately
+        getCtx()->sync->hostWaitOnDevice({material_upload_finished}); // have to wait here, otherwise the upload_staging buffer is freed immediately
     }
 
+    // ToDo: add timeout to hostWaitOnDevice and stop execution if it occurs
     // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts finished)
     getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution);
 
@@ -121,41 +119,47 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         m_download_frame_to_image_file = {};
     }
 
-    // we have to know if the detail buffer is still in an uploading state. If yes, we don't do anything else with the detail buffer
-    // if streaming the detail buffer is disabled, we set the flag to true to avoid any usage of the detail resources.
-    bool detail_buffer_dirty = !m_compressed_segmentation_volume->isUsingSeparateDetail() ||
-                                (  (m_detail_starts_staging.first != nullptr && !getCtx()->sync->isAwaitableResolved(m_detail_starts_staging.first))
-                                || (m_detail_staging.first != nullptr && !getCtx()->sync->isAwaitableResolved(m_detail_staging.first)) );
-    // download the next request buffer
-    std::vector<uint32_t> requested_ids(m_max_detail_requests_per_frame + 2u, INVALID);
-    uint32_t requested_id_count = 0u;
-    uint32_t cache_usage = 0u;
-    if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
-        if (!detail_buffer_dirty && m_frame > 0u) {
-            m_detail_starts_staging = {nullptr, nullptr}; // we can now free the staging buffers for the detail upload because they are no longer uploading / in a dirty state
+    // check if any previous detail upload is finished
+    if (m_detail_stage == DetailUploading) {
+        if ((m_detail_starts_staging.first == nullptr || getCtx()->sync->isAwaitableResolved(m_detail_starts_staging.first))
+            && (m_detail_staging.first == nullptr || getCtx()->sync->isAwaitableResolved(m_detail_staging.first))) {
+            // we can now free the staging buffers for the detail upload because they are no longer uploading / in a dirty state
+            m_detail_starts_staging = {nullptr,nullptr};
             m_detail_staging = {nullptr, nullptr};
-
-            m_detail_requests_buffer->download(requested_ids);
-            requested_id_count = requested_ids[m_max_detail_requests_per_frame] > m_max_detail_requests_per_frame ? m_max_detail_requests_per_frame : requested_ids[m_max_detail_requests_per_frame];
+            m_detail_stage = DetailReady;
         }
-        // reset the atomic counter
-        static const uint32_t zeroes[2] = {0u, 0u};
-        m_detail_requests_buffer->upload(m_max_detail_requests_per_frame * sizeof(uint32_t), &zeroes, 2 * sizeof(uint32_t));
-
-        // one element after, we store the current cache usage as number of used 2x2x2 elements
-        cache_usage = requested_ids[m_max_detail_requests_per_frame + 1u];
-    }
-    else {
-        // ToDo: download the cache_usage also if we don't use detail separation, e.g. m_last_gpu_stats.gpu_cache_size which is currently only set when m_show_step_count
     }
 
-    // trigger garbage collection on demand, but only if we have a different camHash since the last garbage collection
-    const uint32_t cache_elements_per_finest_lod = m_compressed_segmentation_volume->getBrickSize() / 2u;
-    if(m_frame % 4 == 0u && cache_usage >= m_cache_capacity - (cache_elements_per_finest_lod * cache_elements_per_finest_lod * cache_elements_per_finest_lod) && m_camHash_at_last_cache_reset != m_camHash) {
-        m_pass->resetCacheOnNextCall();
-        m_camHash_at_last_cache_reset = m_camHash;
-    }
+    // if any previous detail construction is finished, download next brick indices for which the detail level is required
+    if (m_detail_stage == DetailReady && m_frame > 0u) {
+        if (m_compressed_segmentation_volume->isUsingSeparateDetail()) {
+            assert(m_detail_requests.size() >= m_max_detail_requests_per_frame + 2u && "Detail request buffer is too small.");
 
+            m_detail_requests_buffer->download(m_detail_requests);
+            // second to last element stores the number of brick indices for which the detail level is requested
+            uint32_t detail_request_count = std::min(m_detail_requests[m_max_detail_requests_per_frame], m_max_detail_requests_per_frame);
+
+            // last element stores the current cache usage as number of used 2x2x2 elements
+            uint32_t cache_usage = m_detail_requests[m_max_detail_requests_per_frame + 1u];
+            // A fragmented cache can occur if free stacks store unusable levels-of-detail leaving no space for other LoDs.
+            // Trigger cache flush on demand, but only if we have a different camHash since the last flush.
+            const uint32_t cache_elements_per_finest_lod = m_compressed_segmentation_volume->getBrickSize() / 2u;
+            if(m_frame % 4 == 0u && cache_usage >= m_cache_capacity - (cache_elements_per_finest_lod * cache_elements_per_finest_lod * cache_elements_per_finest_lod) && m_camHash_at_last_cache_reset != m_camHash) {
+                m_pass->resetCacheOnNextCall();
+                m_camHash_at_last_cache_reset = m_camHash;
+            }
+
+            // reset the (atomic) counters at this location
+            static constexpr uint32_t zeroes[2] = {0u, 0u};
+            m_detail_requests_buffer->upload(m_max_detail_requests_per_frame * sizeof(uint32_t), &zeroes,
+                                             2 * sizeof(uint32_t));
+
+            if (detail_request_count > 0u)
+                m_detail_stage = DetailAwaitingCPUConstruction;
+        } else {
+            // ToDo: download the cache_usage also if we don't use detail separation
+        }
+    }
 
     if(m_clear_cache_every_frame)
         m_pass->resetCacheOnNextCall();
@@ -165,26 +169,26 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         updateUniformDescriptorset();
 
         // inform the shader if the detail buffer upload is ready (= the staging buffer upload finished
-        m_usegmented_volume_info->setUniform<uint32_t>("g_detail_buffer_dirty", detail_buffer_dirty ? 1u : 0u);
+        m_usegmented_volume_info->setUniform<uint32_t>("g_detail_buffer_dirty", m_detail_stage == DetailUploading ? 1u : 0u);
 
         m_urender_info->upload(m_pass->getActiveIndex());
         m_usegmented_volume_info->upload(m_pass->getActiveIndex());
     }
 
-    // if we only accumulate a certain number of frames, we just return the last result
+    // just return the last result if only a certain number of frames have to be accumulated
     if (m_accum_frames > 0 && m_framesSinceCameraMove >= m_accum_frames) {
         m_framesSinceCameraMove = m_accum_frames;
         return m_mostRecentFrame.value();
     }
 
-    if (m_compressed_segmentation_volume->isUsingSeparateDetail()) {
-        if(!detail_buffer_dirty && m_detail_update_required && m_constructed_detail_starts.back() > 0u) {
-            m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-            m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(m_constructed_detail.data(), m_constructed_detail_starts.back() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-        }
+    // start asynchronous detail upload if scheduled
+    if (m_detail_stage == DetailAwaitingUpload && m_constructed_detail_starts.back() > 0u) {
+        m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(m_constructed_detail.data(), m_constructed_detail_starts.back() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        m_detail_stage = DetailUploading;
     }
 
-    // GPU debug / stats
+    // download GPU debug information and statistics
     if(m_show_step_count) {
         m_gpu_stats_buffer->download(&m_last_gpu_stats, sizeof(m_last_gpu_stats));
         size_t decoded_bytes_in_frame = 0;
@@ -201,8 +205,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             Logger(INFO) << "decoded " << std::fixed << std::setprecision(3) << static_cast<double>(decoded_bytes_in_frame) / 1000. / 1000. << " MB";
     }
 
-    //m_pass->setStorageImage("outDepth", *m_outDepth);
-    //m_pass->setStorageImage("outColor", *m_outColor);
+
     m_pass->setStorageImage("inpaintedOutColor", *m_inpaintedOutColor);
     // feedback texture ping pong for the inpainting shader
     m_pass->setStorageImage("feedbackIn", *m_feedback_tex[m_frame % 2u]);
@@ -210,7 +213,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
 
     std::vector<std::shared_ptr<Awaitable>> renderAwaitableList = {};
-    // we just check the awaitables in the shader now!
+    // we just check the awaitables in the shader now! ToDo: do we??
 //    if(m_detail_starts_staging.first)
 //        renderAwaitableList.push_back(m_detail_starts_staging.first);
 //    if(m_detail_staging.first)
@@ -218,63 +221,32 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
     const auto renderingFinished = m_pass->execute(renderAwaitableList, awaitBinaryAwaitableList, signalBinarySemaphore);
     
-    if(m_compressed_segmentation_volume->isUsingSeparateDetail() && !detail_buffer_dirty) {
-        assert(!m_constructed_detail.empty() && "creating detail buffers but detail buffer has no capacity");
+    if(m_detail_stage == DetailAwaitingCPUConstruction) {
+        assert(!m_constructed_detail.empty() && "trying to construct detail buffers but detail buffer has no capacity");
         // ToDo: m_detail_update_required = check if current and previous detail indices changed
         // ToDo: use remaining space in g_detail to store the perviously requested bricks (move to right)? would need one dummy element in between to make the detail_starts[i+1]-[i] size query possible
         //      can we use a ring buffer for that?
+        // ToDo: do all the CPU work in another thread so not to block rendering
 
-        m_detail_update_required = false;
-        // check if any id is new
-        #pragma omp parallel for default(none) shared(requested_id_count, requested_ids, m_constructed_detail_starts, m_detail_update_required)
-        for(int i = 0; i < requested_id_count; i++) {
-            if(m_detail_update_required)
+        uint32_t detail_request_count = std::min(m_detail_requests[m_max_detail_requests_per_frame], m_max_detail_requests_per_frame);
+        bool detail_update_required = false;
+        // check if any requested brick indices are new, otherwise the buffers can stay unchanged
+        #pragma omp parallel for default(none) shared(detail_request_count, m_detail_requests, m_constructed_detail_starts, detail_update_required)
+        for(int i = 0; i < detail_request_count; i++) {
+            if(detail_update_required)
                 continue;
-            if(m_constructed_detail_starts[requested_ids[i] + 1u] - m_constructed_detail_starts[requested_ids[i]] == 0u) {
-                m_detail_update_required = true;
+            if(m_constructed_detail_starts[m_detail_requests[i] + 1u] - m_constructed_detail_starts[m_detail_requests[i]] == 0u) {
+                detail_update_required = true;
             }
         }
 
-
-        if(m_detail_update_required) {
-            // 1. sort requested brick IDs
-            std::sort(requested_ids.begin(), requested_ids.begin() + requested_id_count);
-            // 2. for ALL bricks: compute prefix sum of sizes, assuming an added 0 size if brick is not requested. Store in m_detail_starts
-            uint32_t next_requested_id = 0u;
-            uint32_t total_detail_size = 0u;
-            const std::vector<uint32_t> *detail_starts = m_compressed_segmentation_volume->getDetailStarts();
-            for (int i = 0; i < m_constructed_detail_starts.size(); i++) {
-                m_constructed_detail_starts[i] = total_detail_size;
-
-                // if this id is requested, we reserve some memory for it (as long as there's enough space in the detail array left)
-                if (next_requested_id < requested_id_count && i == requested_ids[next_requested_id]) {
-                    uint32_t brick_detail_size = (*detail_starts)[i + 1] - (*detail_starts)[i];
-                    if ((total_detail_size + brick_detail_size) <= m_detail_capacity) {
-                        total_detail_size += brick_detail_size;
-                        next_requested_id++;
-                    }
-                }
-            }
-            // 3. in parallel: copy all detail encodings to the m_detail_encoding
-            const std::vector<uint32_t> *detail = m_compressed_segmentation_volume->getDetail();
-            #pragma omp parallel for default(none) shared(requested_id_count, requested_ids, m_constructed_detail_starts, m_constructed_detail, detail_starts, detail)
-            for (int i = 0; i < requested_id_count; i++) {
-                uint32_t brick_id = requested_ids[i];
-                uint32_t start = (*detail_starts)[brick_id];
-                uint32_t end = (*detail_starts)[brick_id + 1];
-                memcpy(m_constructed_detail.data() + m_constructed_detail_starts[brick_id], detail->data() + start, (end - start) * sizeof(uint32_t));
-            }
-
-#if 0
-            if (m_constructed_detail_starts.back() > 0u) {
-                std::stringstream ss;
-                ss << "Total size: " << m_constructed_detail_starts.back() << " for bricks ";
-                for (int i = 0; i < requested_id_count; i++) {
-                    ss << requested_ids[i] << " ";
-                }
-                Logger(INFO) << ss.str();
-            }
-#endif
+        if(detail_update_required) {
+            m_detail_stage = DetailCPUConstruction;
+            // async thread constructs detail buffers on the CPU side and marks m_detail_stage = DetailAwaitingUpload once finished
+            std::thread construction_thread(&CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers, this);
+            construction_thread.detach();
+        } else {
+            m_detail_stage = DetailReady;
         }
     }
 
@@ -293,107 +265,257 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     return m_mostRecentFrame.value();
 }
 
-void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
-    setCtx(ctx);
-    updateDeviceMemoryUsage();
-    Logger(INFO) << "Device memory on startup: " << m_gui_device_mem_text;
+void CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers() {
+    if(m_detail_stage != DetailCPUConstruction)
+        throw std::runtime_error("Attempting to construct detail buffers on CPU in wrong stage.");
 
-    // allocate GPU buffers for our data
-    size_t bricks_in_volume = 0u;
-    size_t lods_in_volume = 0u;
-    size_t encoding_byte_size = 0u;
-    m_detail_capacity = 0u; // measured in number of uints
-    bool detail_buffer_fits_whole_detail = false;
-    if(m_compressed_segmentation_volume) {
-        auto brick_count = m_compressed_segmentation_volume->getBrickCount();
-        bricks_in_volume = brick_count.x * brick_count.y * brick_count.z;
-        encoding_byte_size = m_compressed_segmentation_volume->getEncoding()->size() * sizeof(uint32_t);
-        lods_in_volume = m_compressed_segmentation_volume->getLodCountPerBrick();
+    MiniTimer detail_construction_timer;
 
-        if(m_compressed_segmentation_volume->isUsingSeparateDetail() && !m_compressed_segmentation_volume->isUsingDetailFreq())
-            throw std::runtime_error("Renderer only supports detail separation when rANS is in double table mode!");
+    uint32_t detail_request_count = std::min(m_detail_requests[m_max_detail_requests_per_frame], m_max_detail_requests_per_frame);
 
-        if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
-            size_t optimal_detail_size = m_compressed_segmentation_volume->getDetail()->size();
-            // we can't fit the complete detail buffer onto the GPU
-//#define ALWAYS_STREAM_DETAIL
-#ifdef ALWAYS_STREAM_DETAIL
-            if(true) {
-#else
-            if(m_max_detail_byte_size / sizeof(uint32_t) < optimal_detail_size) {
+    // 1. sort requested brick IDs
+    std::sort(m_detail_requests.begin(), m_detail_requests.begin() + detail_request_count);
+    // 2. for ALL bricks: compute prefix sum of sizes, assuming an added 0 size if brick is not requested. Store in m_detail_starts
+    uint32_t next_requested_id = 0u;
+    uint32_t total_detail_size = 0u;
+    for (int i = 0; i < m_constructed_detail_starts.size(); i++) {
+        m_constructed_detail_starts[i] = total_detail_size;
+
+        // if this id is requested, we reserve some memory for it (as long as there's enough space in the detail array left)
+        if (next_requested_id < detail_request_count && i == m_detail_requests[next_requested_id]) {
+            uint32_t brick_detail_size = m_compressed_segmentation_volume->getBrickDetailEncodingLength(i);
+            if ((total_detail_size + brick_detail_size) <= m_detail_capacity) {
+                total_detail_size += brick_detail_size;
+//                        next_requested_id++;
+            }
+            // even if the previous brick did not fit, we can try the next ones
+            next_requested_id++;
+        }
+    }
+    // 3. in parallel: copy all detail encodings to the m_detail_encodings
+    #pragma omp parallel for default(none) shared(detail_request_count, m_detail_requests, m_constructed_detail_starts, m_constructed_detail)
+    for (int i = 0; i < detail_request_count; i++) {
+        uint32_t brick_idx = m_detail_requests[i];
+        uint32_t reserved_size = m_constructed_detail_starts[brick_idx+1] - m_constructed_detail_starts[brick_idx];
+        // if we reserved space for this brick id, copy it
+        if(reserved_size > 0) {
+            const uint32_t *detail_encoding = m_compressed_segmentation_volume->getBrickDetailEncoding(brick_idx);
+            uint32_t detail_length = m_compressed_segmentation_volume->getBrickDetailEncodingLength(brick_idx);
+            if(reserved_size != detail_length)
+                Logger(ERROR) << reserved_size << " vs " << detail_length << " for brick " << brick_idx;
+            assert(reserved_size == detail_length && "did not reserve fitting detail encoding area for brick.");
+            memcpy(m_constructed_detail.data() + m_constructed_detail_starts[brick_idx], detail_encoding, reserved_size * sizeof(uint32_t));
+        }
+    }
+
+#if 0
+    if (m_constructed_detail_starts.back() > 0u) {
+                std::stringstream ss;
+                ss << "Total size: " << m_constructed_detail_starts.back() << " for bricks ";
+                for (int i = 0; i < requested_id_count; i++) {
+                    ss << requested_ids[i] << " ";
+                }
+                Logger(INFO) << ss.str();
+            }
 #endif
-                m_detail_capacity = m_max_detail_byte_size / sizeof(uint32_t);
-            }
-            // we can fit the complete detail buffer onto the GPU
-            else {
-                m_detail_capacity = optimal_detail_size;
-                detail_buffer_fits_whole_detail = true;
-            }
-            m_constructed_detail_starts.resize(bricks_in_volume + 1u, 0u);
-            m_constructed_detail.resize(m_detail_capacity, 0u);
-        }
 
-        // check limits of physical device (GPU)
-        size_t maxGPUBufferSize = getCtx()->getPhysicalDevice().getProperties().limits.maxStorageBufferRange;
-        if (encoding_byte_size > maxGPUBufferSize) {
-            throw std::runtime_error("Base encoding buffer size exceeds max. GPU buffer range (" + std::to_string(encoding_byte_size) + " > " +
-                                     std::to_string(maxGPUBufferSize) + ")");
-        }
-        if(m_max_detail_byte_size > maxGPUBufferSize) {
-            throw std::runtime_error("Detail encoding buffer size exceeds max. GPU buffer range (" + std::to_string(m_max_detail_byte_size) + " > " +
-                                     std::to_string(maxGPUBufferSize) + ")");
-        }
-    }
-    else {
-        throw std::runtime_error("Currently, a Compressed Segmentation Volume must be passed before rendering to allocate correct GPU buffer sizes.");
-    }
+    // GPU upload can only start if all current rendering is finished and is thus dispatched in the render loop
+    // ToDo: GPU upload *can* take place during rendering but not during decompression stages. Do a more fine grained sync.
+    m_detail_stage = DetailAwaitingUpload;
+//    Logger(DEBUG) << " CPU detail construction in " << detail_construction_timer.elapsed() * 1000.f << " ms.";
+}
+
+void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
+    if(!m_compressed_segmentation_volume || m_compressed_segmentation_volume->getAllEncodings()->empty())
+        throw std::runtime_error("CompressedSegmentationVolume not initialized!");
+    if(m_compressed_segmentation_volume->isUsingSeparateDetail() && !m_compressed_segmentation_volume->isUsingDetailFreq())
+        throw std::runtime_error("Renderer only supports detail separation when rANS is in double table mode.");
+
+    const GpuContext* ctx = getCtx();
+
+    // CREATE GPU BUFFERS ---------------------------------
+    size_t bricks_in_volume = m_compressed_segmentation_volume->getBrickIndexCount();
+    size_t lods_in_volume = m_compressed_segmentation_volume->getLodCountPerBrick();
+
+    // create (base) split encoding buffers
     m_brick_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_brick_start_buffer", .byteSize = (bricks_in_volume + 1u)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
-    m_encoding_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_encoding_buffer", .byteSize = encoding_byte_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
-    Buffer::deviceAddressUvec2(m_encoding_buffer->getDeviceAddress(), &m_encoding_buffer_address.x);
+    size_t split_encoding_count = m_compressed_segmentation_volume->getAllEncodings()->size();
+    m_split_encoding_buffers.resize(split_encoding_count);
+    m_split_encoding_buffer_addresses.resize(split_encoding_count);
+    m_split_encoding_buffer_addresses_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_split_encoding_buffer_addresses_buffer", .byteSize = split_encoding_count * 2 * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    for(int i = 0; i < split_encoding_count; i++) {
+        size_t encoding_byte_size =
+                m_compressed_segmentation_volume->getAllEncodings()->at(i).size() * sizeof(uint32_t);
+        m_split_encoding_buffers[i] = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_encoding_buffer_" + std::to_string(i), .byteSize = encoding_byte_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+        Buffer::deviceAddressUvec2(m_split_encoding_buffers[i]->getDeviceAddress(), &m_split_encoding_buffer_addresses[i].x);
+    }
+
+    // create attribute and material buffers
     m_attribute_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_attribute_buffer", .byteSize = m_max_attribute_buffer_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_materials_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_materials_buffer", .byteSize = sizeof(GPUSegmentedVolumeMaterial) * SEGMENTED_VOLUME_MATERIAL_COUNT, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
 
-    m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = m_cache_capacity * (2u*2u*2u) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
-    m_free_stack_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_free_stack_buffer", .byteSize = (m_free_stack_capacity * (lods_in_volume - 1u) + (lods_in_volume + 1u)) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
-    m_cache_info_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_info_buffer", .byteSize = bricks_in_volume*sizeof(uint32_t)*4u, .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
-    m_assign_info_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_assign_buffer", .byteSize = (1u + (lods_in_volume - 1u) * 3u) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    // create detail encoding buffers
+    m_detail_capacity = 0u; // measured in number of uints
+    if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
+        bool detail_buffer_fits_whole_detail = false;
+        size_t complete_detail_size = 0;
+        for(const auto& d : *m_compressed_segmentation_volume->getAllDetails())
+            complete_detail_size += d.size();
+#define ALWAYS_STREAM_DETAIL
+#ifdef ALWAYS_STREAM_DETAIL
+        if(true) {
+#else
+        // we can't fit the complete detail buffer onto the GPU
+        if(m_max_detail_byte_size / sizeof(uint32_t) < complete_detail_size) {
+#endif
+            m_detail_capacity = m_max_detail_byte_size / sizeof(uint32_t);
+        }
+        // we can fit the complete detail buffer onto the GPU
+        else {
+            m_detail_capacity = complete_detail_size;
+            detail_buffer_fits_whole_detail = true;
+        }
 
-    if(m_detail_capacity > 0ul) {
+        m_detail_requests.resize(m_max_detail_requests_per_frame + 2u);
         m_detail_requests_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_requests_buffer", .byteSize = (m_max_detail_requests_per_frame + 2u) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
         m_detail_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_starts_buffer", .byteSize = (bricks_in_volume + 1u)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
         m_detail_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_buffer", .byteSize = m_detail_capacity * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
         Buffer::deviceAddressUvec2(m_detail_buffer->getDeviceAddress(), &m_detail_buffer_address.x);
 
+        m_constructed_detail_starts.resize(bricks_in_volume + 1u, 0u);
+        m_constructed_detail.resize(m_detail_capacity, 0u);
         if(detail_buffer_fits_whole_detail) {
             Logger(WARN) << "GPU detail buffer fits the whole detail level. Performing full upload, effectively disabling detail streaming. Consider to not use detail streaming for better performance!";
-            m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(m_compressed_segmentation_volume->getDetail()->data(), m_compressed_segmentation_volume->getDetail()->size() * sizeof(uint32_t));
-            m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_compressed_segmentation_volume->getDetailStarts()->data(),
-                                                                                      m_compressed_segmentation_volume->getDetailStarts()->size() * sizeof(uint32_t));
-            m_constructed_detail_starts = *m_compressed_segmentation_volume->getDetailStarts(); // just to be sure: we tell the CPU side that every brick is uploaded
-            getCtx()->sync->hostWaitOnDevice({m_detail_staging.first, m_detail_starts_staging.first});
-            m_detail_staging = {nullptr, nullptr};
-            m_detail_starts_staging = {nullptr, nullptr};
+
+            size_t offset = 0ul;
+            size_t brick_idx = 0ul;
+            for(int i = 0; i < m_compressed_segmentation_volume->getAllDetails()->size(); i++) {
+                const std::vector<uint32_t>& detail_encoding = m_compressed_segmentation_volume->getAllDetails()->at(i);
+                // upload next single detail encoding buffer into offset memory region to form a back-to-back buffer
+                m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(detail_encoding.data(),
+                                                                            detail_encoding.size() * sizeof(uint32_t),
+                                                                            offset * sizeof(uint32_t));
+                // construct detail starts into continuous detail encoding array
+                while(brick_idx < bricks_in_volume && brick_idx / m_compressed_segmentation_volume->getBrickIdxToEncVectorMapping() == i) {
+                    m_constructed_detail_starts[brick_idx + 1] = m_constructed_detail_starts[brick_idx] + m_compressed_segmentation_volume->getBrickDetailEncodingLength(brick_idx);
+                    brick_idx++;
+                }
+                offset += detail_encoding.size();
+                getCtx()->sync->hostWaitOnDevice({m_detail_staging.first});
+            }
         }
-        else {
-            // initialize detail starts buffer on the GPU with zeros (no detail is uploaded initially)
-            m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-            getCtx()->sync->hostWaitOnDevice({m_detail_starts_staging.first});
-            m_detail_staging = {nullptr, nullptr};
-            m_detail_starts_staging = {nullptr, nullptr};
-        }
+        // upload initial detail starts buffer (all zeros if no detail is uploaded initially)
+        m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        getCtx()->sync->hostWaitOnDevice({m_detail_starts_staging.first});
+        m_detail_staging = {nullptr, nullptr};
+        m_detail_starts_staging = {nullptr, nullptr};
     }
 
-    // GPU stats buffer
+    // GPU statistics buffer
     m_gpu_stats_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_gpu_stats_buffer", .byteSize = sizeof(GPUStats), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
+
+    // cache for decompressed bricks
+    m_free_stack_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_free_stack_buffer", .byteSize = (m_free_stack_capacity * (lods_in_volume - 1u) + (lods_in_volume + 1u)) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    m_cache_info_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_info_buffer", .byteSize = bricks_in_volume*sizeof(uint32_t)*4u, .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    m_assign_info_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_assign_buffer", .byteSize = (1u + (lods_in_volume - 1u) * 3u) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    // limit cache size to maximum available GPU memory
+    auto heap_budget_and_usage = getMemoryHeapBudgetAndUsage(*ctx);
+    size_t free_heap_size = heap_budget_and_usage.first - heap_budget_and_usage.second;
+    if(m_target_cache_size_MB * 1024 * 1024 > free_heap_size) {
+        Logger(WARN) << "not enough GPU memory available to provide target cache size of " << m_target_cache_size_MB << " MB. Using smaller cache.";
+        m_target_cache_size_MB = 0;
+    }
+    // target size of 0 means to allocate as much for the cache as we can (or rather 90% of it to have some leeway)
+    if(m_target_cache_size_MB == 0) {
+        constexpr float free_heap_amount_to_use = 0.9f;
+        m_target_cache_size_MB = free_heap_size / 1024 / 1024;
+        m_target_cache_size_MB = static_cast<size_t>(free_heap_amount_to_use *
+                                                     static_cast<float>(free_heap_size) / 1024.f / 1024.f);
+    }
+    // for small data sets, we can limit the cache so that it fits all LoDs of the data set at once
+    size_t maximum_req_cache_size_MB = 4095;
+    {
+        // number base elements needed to store all LoDs of a brick at once
+        size_t brick_cache_size_in_lod = m_cache_base_element_uints;   // inv. LoD 0 needs no elements, inv. LoD 1 needs one
+        maximum_req_cache_size_MB = brick_cache_size_in_lod;
+        for(int l = 2; l < m_compressed_segmentation_volume->getLodCountPerBrick(); l++) {
+            // next level needs 8 times the elements
+            brick_cache_size_in_lod *= 2*2*2;
+            maximum_req_cache_size_MB += brick_cache_size_in_lod;
+        }
+        // number o bricks
+        auto brick_count = m_compressed_segmentation_volume->getBrickCount();
+        maximum_req_cache_size_MB *= brick_count.x * brick_count.y * brick_count.z;
+        // convert from #uints to MB
+        maximum_req_cache_size_MB *= sizeof(uint32_t);
+        maximum_req_cache_size_MB = static_cast<size_t>(std::ceil(static_cast<double>(maximum_req_cache_size_MB) / 1024. / 1024));
+    }
+    if(m_target_cache_size_MB > maximum_req_cache_size_MB) {
+        Logger(DEBUG) << "Target cache size is bigger than required to store all LoDs of all bricks. Limitting size.";
+        m_target_cache_size_MB = maximum_req_cache_size_MB;
+    }
+    // ToDo: could use the BufferDeviceAddress extension for the cache buffer as well to support caches > 4 GB.
+    //  In shaders, cache idx is measured in # base_element where one base_element is ~4 to 16 bytes large.
+    //  Would only have to adapt the (cache_idx * g_cache_base_element_uints) in csgv_assign.
+    if(m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
+        Logger(WARN) << "Cache size is currently limited to 4 GB maximum.";
+        m_target_cache_size_MB = 4294967295ul / 1024ul / 1024ul;
+    }
+    Logger(INFO) << "Allocating cache size " << m_target_cache_size_MB << " MB at " << (m_cache_base_element_uints * 32u / 8u) << " bits per label";
+    m_cache_capacity = (m_target_cache_size_MB * 1024 * 1024) / (m_cache_base_element_uints * sizeof(uint32_t));
+    size_t maxGPUBufferSize = getCtx()->getPhysicalDevice().getProperties().limits.maxStorageBufferRange;
+    m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = m_cache_capacity * m_cache_base_element_uints * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
 
     updateDeviceMemoryUsage();
     Logger(INFO) << "Device memory after initialization: " << m_gui_device_mem_text;
 
+
+    // UPLOAD TO GPU BUFFERS ---------------------------------
+    AwaitableList awaitBeforeExecution;
+    std::vector<std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>>> _encoding_upload;
+    for(int i = 0; i < split_encoding_count; i++) {
+        _encoding_upload.emplace_back(
+                m_split_encoding_buffers[i]->uploadWithStagingBuffer(m_compressed_segmentation_volume->getAllEncodings()->at(i),
+                                                           {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()}));
+        awaitBeforeExecution.push_back(_encoding_upload[i].first);
+    }
+    auto [encoding_addresses_upload_finished, _encoding_addresses_staging_buffer] = m_split_encoding_buffer_addresses_buffer->uploadWithStagingBuffer(m_split_encoding_buffer_addresses,  {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+    awaitBeforeExecution.push_back(encoding_addresses_upload_finished);
+    auto [brickstarts_upload_finished, _brickstarts_staging_buffer] = m_brick_starts_buffer->uploadWithStagingBuffer(*(m_compressed_segmentation_volume->getBrickStarts()),  {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+    awaitBeforeExecution.push_back(brickstarts_upload_finished);
+
+
+    // wait until all uploads finished
+    getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution);
+
+    // update all bindings
+    m_pass->setStorageBuffer(0, 1, *m_brick_starts_buffer);
+    m_pass->setStorageBuffer(0, 2, *m_split_encoding_buffer_addresses_buffer);
+    m_pass->setStorageBuffer(0, 3, *m_cache_info_buffer);
+    m_pass->setStorageBuffer(0, 4, *m_assign_info_buffer);
+    m_pass->setStorageBuffer(0, 5, *m_free_stack_buffer);
+    m_pass->setStorageBuffer(0, 6, *m_cache_buffer);
+    if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
+        m_pass->setStorageBuffer(0, 7, *m_detail_starts_buffer);
+        m_pass->setStorageBuffer(0, 8, *m_detail_buffer);
+        m_pass->setStorageBuffer(0, 9, *m_detail_requests_buffer);
+    }
+    m_pass->setStorageBuffer(0, 16, *m_gpu_stats_buffer);
+    m_pass->setStorageBuffer(0, 17, *m_attribute_buffer);
+    m_pass->setStorageBuffer(0, 18, *m_materials_buffer);
+}
+
+void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
+    setCtx(ctx);
+    updateDeviceMemoryUsage();
+    Logger(INFO) << "Device memory on startup: " << m_gui_device_mem_text;
+
     // Set camera to a nice start position
     getCamera().reset();
 
+    // all buffers for the encoding etc. are created in initDataSetGPUBuffers() called in the first render loop
     if(m_compressed_segmentation_volume)
-        m_data_changed = true; // trigger re-upload to new buffers
+        m_data_changed = true; // trigger creation of buffers and re-upload of data
     for (int m = 0; m < m_gpu_material_changed.size(); m++)
         m_gpu_material_changed[m] = true;
     int attributeCount = m_csgv_db ? static_cast<int>(m_csgv_db->getAttributeCount()) : 1;
@@ -409,7 +531,11 @@ void CompressedSegmentationVolumeRenderer::releaseResources() {
     m_cache_buffer = nullptr;
     m_attribute_buffer = nullptr;
     m_materials_buffer = nullptr;
-    m_encoding_buffer = nullptr;
+    for(auto& e : m_split_encoding_buffers)
+        e = nullptr;
+    m_split_encoding_buffers.clear();
+    m_split_encoding_buffer_addresses.clear();
+    m_split_encoding_buffer_addresses_buffer = nullptr;
     m_brick_starts_buffer = nullptr;
     m_detail_buffer = nullptr;
     m_detail_starts_buffer = nullptr;
@@ -425,6 +551,7 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     assert(getCtx() != nullptr && "renderer needs a valid GPU context");
     assert(m_compressed_segmentation_volume && "can't render without a CompressedSegmentationVolume");
 
+    // @ToDo: the shader code being dependent on data set properties means that we need to re-init shader resources on data set changes
     std::vector<std::string> shader_defines;
     if(m_compressed_segmentation_volume->isUsingRANS()) {
         shader_defines.push_back("USE_RANS");
@@ -437,7 +564,9 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         shader_defines.push_back("SEPARATE_DETAIL");
     }
     shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
-    // ToDo: does this work? if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
+    if(m_use_palette_cache)
+        shader_defines.push_back("PALETTE_CACHE");
+    // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if(getCtx()->getWsi())
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), shader_defines);
     else
@@ -445,25 +574,31 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     m_pass->allocateResources();
     m_urender_info = m_pass->getUniformSet("render_info");
     m_usegmented_volume_info = m_pass->getUniformSet("segmented_volume_info");
-    m_pass->setStorageBuffer(0, 1, *m_brick_starts_buffer);
-    m_pass->setStorageBuffer(0, 2, *m_encoding_buffer);
-    m_pass->setStorageBuffer(0, 3, *m_cache_info_buffer);
-    m_pass->setStorageBuffer(0, 4, *m_assign_info_buffer);
-    m_pass->setStorageBuffer(0, 5, *m_free_stack_buffer);
-    m_pass->setStorageBuffer(0, 6, *m_cache_buffer);
-    if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
-        m_pass->setStorageBuffer(0, 7, *m_detail_starts_buffer);
-        m_pass->setStorageBuffer(0, 8, *m_detail_buffer);
-        m_pass->setStorageBuffer(0, 9, *m_detail_requests_buffer);
-    }
-    m_pass->setStorageBuffer(0, 16, *m_gpu_stats_buffer);
-    m_pass->setStorageBuffer(0, 17, *m_attribute_buffer);
-    m_pass->setStorageBuffer(0, 18, *m_materials_buffer);
-    m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(), m_compressed_segmentation_volume->getLodCountPerBrick());
+
     // reset all camera hashes and frame counters
     m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
     m_framesSinceCameraMove = 0;
     m_frame = 0u;
+
+    // update all bindings (if buffers were already created)
+    if(m_brick_starts_buffer) {
+        // update all bindings
+        m_pass->setStorageBuffer(0, 1, *m_brick_starts_buffer);
+        m_pass->setStorageBuffer(0, 2, *m_split_encoding_buffer_addresses_buffer);
+        m_pass->setStorageBuffer(0, 3, *m_cache_info_buffer);
+        m_pass->setStorageBuffer(0, 4, *m_assign_info_buffer);
+        m_pass->setStorageBuffer(0, 5, *m_free_stack_buffer);
+        m_pass->setStorageBuffer(0, 6, *m_cache_buffer);
+        if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
+            m_pass->setStorageBuffer(0, 7, *m_detail_starts_buffer);
+            m_pass->setStorageBuffer(0, 8, *m_detail_buffer);
+            m_pass->setStorageBuffer(0, 9, *m_detail_requests_buffer);
+        }
+        m_pass->setStorageBuffer(0, 16, *m_gpu_stats_buffer);
+        m_pass->setStorageBuffer(0, 17, *m_attribute_buffer);
+        m_pass->setStorageBuffer(0, 18, *m_materials_buffer);
+    }
+    m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(), m_compressed_segmentation_volume->getLodCountPerBrick());
 //    m_pass->resetCacheOnNextCall();
 }
 
@@ -585,6 +720,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
         // the g_voxels_per_pixel_per_dist determines how many voxels an image pixel footprint overlaps for a camera distance
         float voxels_per_pixel_at_near = scalingFactor / float(m_resolution.height);
+        // ToDo: make g_voxels_per_pixel_per_dist vec3 and account for anisotropic voxel sizes
         m_urender_info->setUniform<float>("g_voxels_per_pixel_per_dist", glm::tan(this->getCamera()->vertical_fov) * voxels_per_pixel_at_near);
 
         // debug
@@ -665,7 +801,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         newCamHash = hashMemory(&m_ratio_spec_diff, sizeof(m_ratio_spec_diff), newCamHash);
         newCamHash = hashMemory(&m_tonemap_enabled, sizeof(m_tonemap_enabled), newCamHash);
         newCamHash = hashMemory(&m_shadow_pathtracing_ratio, sizeof(m_shadow_pathtracing_ratio), newCamHash);
-        newCamHash = hashMemory(&m_max_decoding_lod, sizeof(m_max_decoding_lod), newCamHash);
+        newCamHash = hashMemory(&m_max_inv_lod, sizeof(m_max_inv_lod), newCamHash);
         newCamHash = hashMemory(&m_lod_bias, sizeof(m_lod_bias), newCamHash);
         newCamHash = hashMemory(&m_accum_frames, sizeof(m_accum_frames), newCamHash);
         if (newCamHash != m_camHash || m_clear_accum_every_frame || m_pass->willCacheBeResetOnNextCall()) {
@@ -694,11 +830,14 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         auto lod_count = m_compressed_segmentation_volume->getLodCountPerBrick();
         m_usegmented_volume_info->setUniform<uint32_t>("g_lod_count", lod_count);
         m_usegmented_volume_info->setUniform<uint32_t>("g_frame", m_frame);
-        m_usegmented_volume_info->setUniform<uint32_t>("g_max_decoding_lod", glm::min(static_cast<uint32_t>(m_max_decoding_lod), lod_count));
+        m_usegmented_volume_info->setUniform<uint32_t>("g_max_inv_lod", glm::min(static_cast<uint32_t>(m_max_inv_lod), lod_count - 1u));
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_capacity", m_cache_capacity);
+        m_usegmented_volume_info->setUniform<uint32_t>("g_cache_base_element_uints", m_cache_base_element_uints);
+        m_usegmented_volume_info->setUniform<uint32_t>("g_cache_indices_per_uint", m_cache_indices_per_uint);
+        m_usegmented_volume_info->setUniform<uint32_t>("g_cache_palette_idx_bits", m_cache_palette_idx_bits);
         m_usegmented_volume_info->setUniform<uint32_t>("g_free_stack_capacity", m_free_stack_capacity);
         m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
-        m_usegmented_volume_info->setUniform<glm::uvec2>("g_encoding_buffer_address", m_encoding_buffer_address);
+        m_usegmented_volume_info->setUniform<uint32_t>("g_brick_idx_to_enc_vector", m_compressed_segmentation_volume->getBrickIdxToEncVectorMapping());
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_detail_buffer_address", m_detail_buffer_address);
     }
 }
@@ -853,6 +992,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dis->addBool([this](bool b) { if(getCtx()->getWsi()) getCtx()->getWsi()->setWindowResizable(b); }, [this]() { return getCtx()->getWsi() != nullptr && getCtx()->getWsi()->isWindowResizable(); }, "Resizable Window");
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
+    g_dis->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
 
     // Materials
     if(m_csgv_db) {
@@ -873,13 +1013,13 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_render->addInt(&m_max_path_length, "Path Length", 1, 32, 1);
 
     // Development
-    g_dev->addInt(&m_max_steps, "Max DDA Steps", 16, 4096, 16);
+    g_dev->addInt(&m_max_steps, "Max DDA Steps", 16, 1 << 16u, 16);
     g_dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
     g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
     g_dev->addBool(&m_tonemap_enabled, "Tone Mapping");
     g_dev->addSeparator();
     g_dev->addLabel("Debug");
-    g_dev->addInt(&m_max_decoding_lod, "Max. Decoding LoD", 0, 6, 1);
+    g_dev->addInt(&m_max_inv_lod, "Max. Decoding LoD", 0, 6, 1);
     g_dev->addBool(&m_show_model_space, "Show Model Space");
     g_dev->addBool(&m_show_brick_cache, "Show Brick Cache");
     g_dev->addBool(&m_show_lod, "Show LOD Levels");
@@ -887,7 +1027,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addBool(&m_show_envmap, "Show Environment Map");
     g_dev->addBool(&m_show_normals, "Show Normals");
     g_dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
-    g_dev->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
     g_dev->addAction(
             [this]() {
                 if (m_pass)

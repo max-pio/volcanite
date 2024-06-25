@@ -45,26 +45,23 @@ void main() {
         return;
 
     // iterate over the whole palette in this brick (read the palette size from the header)
-    uint brick_id = brick_to_1D(brick, g_brick_count);
-    uint brick_info_pos = brick_id * 4u;
+    uint brick_idx = brick_pos2idx(brick, g_brick_count);
+    uint brick_info_pos = brick_idx * 4u;
     assert(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < g_lod_count)), "brick CUR_INV_LOD or INDEX are corrupted");
 
 
     //    // check if brick is already decoded (if anything changes, the decoder will release it)
-    //    if(g_brick_info[brick_id * 4u + BRICK_INFO_CUR_INV_LOD] < g_lod_count)
+    //    if(g_brick_info[brick_idx * 4u + BRICK_INFO_CUR_INV_LOD] < g_lod_count)
     //        return;
 
     bool potentially_visible = false;
 
-    uint brick_encoding_length = g_brick_starts[brick_id + 1u] - g_brick_starts[brick_id];
-    EncodingRef brick_address = getBrickEncodingRef(brick_id);
+    uint brick_encoding_length = getBrickEncodingLength(brick_idx);
+    EncodingRef brick_address = getBrickEncodingRef(brick_idx);
     // read total palette size from brick header
-#ifdef SEPARATE_DETAIL
-    uint palette_size = brick_address.buf[2u * g_lod_count - 1u];
-#else
-    uint palette_size = brick_address.buf[2u * g_lod_count];
-#endif
+    uint palette_size = brick_address.buf[getPaletteSizeHeaderIndex()];
     assert(palette_size > 0u, "palette size 0 should not be possible");
+    assert(palette_size < bitfieldExtract(~0u, 0, int(g_cache_palette_idx_bits)), "palette size exceeds available bits for cache palette indices");
     // check all entries in the palette if anything is visible (> 0)
     for (uint i = 1; i <= palette_size; i++) {
         if (isLabelVisible(brick_address.buf[brick_encoding_length - i])) {
@@ -74,11 +71,11 @@ void main() {
     }
 
     // we can set a maximum LoD to decode to in the gui
-    if(g_max_decoding_lod == 0u) {
+    if(g_max_inv_lod == 0u) {
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = g_lod_count;
     }
     else if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < g_lod_count) {
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = min(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], g_max_decoding_lod);
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = min(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], g_max_inv_lod);
     }
 
 #ifndef NDEBUG
@@ -94,14 +91,14 @@ void main() {
 #ifdef SEPARATE_DETAIL
     // if the detail for this brick is not available and it is currently not decoded, we can only decode it with the base levels
     // in this case, we request the detail level of the brick to be decoded
-    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == (g_lod_count - 1u)  // we request the finest LoD
-    && g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != (g_lod_count - 1u)  // we are not already decoded up to the finest LoD
-    && (g_detail_buffer_dirty == 1u || (g_detail_starts[brick_id + 1u] - g_detail_starts[brick_id]) == 0u)) {       // but the detail is not available
+    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == (g_lod_count - 1u)  // finest LoD (detail) requested for brick
+    && g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != (g_lod_count - 1u)  // brick is not yet decoded up to the finest LoD
+    && (g_detail_buffer_dirty == 1u || (g_detail_starts[brick_idx + 1u] - g_detail_starts[brick_idx]) == 0u)) {  // but the detail encoding is not available
 
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = g_lod_count - 2u;
         if(g_detail_requests[g_request_buffer_capacity] < g_request_buffer_capacity) {
             uint pos = atomicAdd(g_detail_requests[g_request_buffer_capacity], 1u);
-            g_detail_requests[pos % g_request_buffer_capacity] = brick_id;
+            g_detail_requests[pos % g_request_buffer_capacity] = brick_idx;
         }
     }
 #endif

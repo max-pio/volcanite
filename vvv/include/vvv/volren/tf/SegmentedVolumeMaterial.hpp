@@ -17,6 +17,7 @@ public:
     glm::vec2 tfMinMax = {0.f, 1.f};
     float opacity = 1.f;
     float emission = 0.f;
+    int wrapping = 0;   // wrap mode: 0 = clamp, 1 = repeat
 
     bool isActive() { return discrAttribute > DISCR_NONE; }
 

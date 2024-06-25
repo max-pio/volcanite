@@ -29,7 +29,7 @@ int csgv_brick_viewer(int argc, char *argv[]) {
     Application::logLibraryAvailabilty();
 
     // Load a data set and encode it as a CompressedSegmentationVolume
-    std::shared_ptr<Volume<uint32_t>> volume = Volume<uint32_t>::load_simple_cellsinsilico(path);
+    std::shared_ptr<Volume<uint32_t>> volume = Volume<uint32_t>::load_volcanite_raw(path);
     glm::ivec3 volume_dim(volume->dim_x, volume->dim_y, volume->dim_z);
     Logger(INFO) << path + " loaded with dim " << str(volume_dim);
 
@@ -38,7 +38,7 @@ int csgv_brick_viewer(int argc, char *argv[]) {
     // Perform the encoding
     // we try to load a previously exported Compressed Segmentation Volume for this file if possible, and export the compression otherwise
     // @ToDo does this have to have rANS mode set to NO_RANS?
-    if(!compression->importFromFile(CompressedSegmentationVolume::getCSGVFileName(path, brick_dim, vvv::CompressedSegmentationVolume::NO_RANS, false))) {
+    if(!compression->importFromFile(CompressedSegmentationVolume::getCSGVFileName(path, brick_dim, vvv::NO_RANS, false))) {
         Logger(ERROR) << "Compressed Segmentation Volume file does not yet exist!";
         return 0;
     }

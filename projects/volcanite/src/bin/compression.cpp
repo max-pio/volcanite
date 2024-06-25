@@ -106,7 +106,7 @@ int compression(int argc, char *argv[]) {
         Logger(ERROR) << "could not create / load Compressed Segmentation Volume. Aborting.";
         return -1;
     }
-    Logger(DEBUG) << compressedSegmentationVolume->decodingInfoString() << "\n\n";
+    Logger(DEBUG) << compressedSegmentationVolume->getEncodingInfoString() << "\n\n";
 
     Logger(INFO) << " --------------------------------------------------- ";
 

@@ -53,6 +53,9 @@ size_t vvv::getMemoryHeapSize(vvv::GpuContextRef ctx, vk::MemoryHeapFlagBits req
     return total_heap_memory;
 }
 
+/** Obtains the total heap memory size that this application can use as well as the currently used heap memory size.
+ * The remaining available heap memory size is (total size - used size). Both numbers are reported as a number of bytes.
+ * @returns pair of the total heap memory in bytes and the currently used heap memory in bytes. */
 std::pair<size_t, size_t> vvv::getMemoryHeapBudgetAndUsage(vvv::GpuContextRef ctx, vk::MemoryHeapFlagBits requirementMask) {
     // See https://asawicki.info/news_1740_vulkan_memory_types_on_pc_and_how_to_use_them for a description of vendor
     // specific memory types. Keep in mind that these methods do not work 100% of the time, as there are so many nuances

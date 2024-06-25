@@ -162,8 +162,8 @@ int compression_synth(int argc, char *argv[]) {
     // perform the compression
     glm::uvec3 volume_dim = glm::uvec3(volume->dim_x, volume->dim_y, volume->dim_z);
     size_t code_frequencies[32];
-    if(rANS_mode != vvv::CompressedSegmentationVolume::NO_RANS) {
-        csgvol->setCompressionOptions(brick_dim, CompressedSegmentationVolume::NO_RANS);
+    if(rANS_mode != vvv::NO_RANS) {
+        csgvol->setCompressionOptions(brick_dim, NO_RANS);
         csgvol->compressForFrequencyTable(volume->data(), volume_dim, code_frequencies, frequency_pass_subsampling, false);
         // we can't risk missing symbol frequencies >0 in our table due to subsampling
         if(frequency_pass_subsampling > 1u) {
@@ -181,7 +181,7 @@ int compression_synth(int argc, char *argv[]) {
                 Logger(WARN) << " set zero frequency to 2 to avoid missing symbols because of frequency pass subsampling.";
         }
     }
-    csgvol->setCompressionOptions64(brick_dim, rANS_mode, code_frequencies, code_frequencies + 16);
+    csgvol->setCompressionOptions64(brick_dim, rANS_mode, false, code_frequencies, code_frequencies + 16);
     if (use_detail_separation)
         csgvol->separateDetail();
     csgvol->compress(volume->data(), volume_dim, true);

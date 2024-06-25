@@ -7,37 +7,46 @@ layout(std430, buffer_reference, buffer_reference_align = 4) readonly buffer Enc
     uint buf[];
 };
 
+// ToDo: use push constants for camera parameters and uniform buffers for things that change rarely
+
 layout(std140, set=0, binding=0) uniform segmented_volume_info {
-    uvec3 g_vol_dim;            // xyz dimension of the original volume
-    vec3 g_voxel_size;          // relative size of a single voxel (can be greater than 1 in any dim)
-    ivec3 g_vol_translation;    // translates the volume by the given voxel count
-    vec3 g_physical_vol_dim;    // physical volume size: g_vol_dim * g_voxel_size
-    vec3 g_normalized_volume_size;   // world space size of the volume (usually ~1m^3 with the largest dim being 1)
-    uint g_vol_max_label;       // maximum label in the segmented volume
-    uint g_brick_size;          // power of 2 size along one axis of the bricks
-    uvec3 g_brick_count;        // number of bricks in each xyz dimension for the encoded volume
-    uint g_lod_count;           // number of lod levels per brick
-    uint g_frame;               // current frame of the rendering
+    uvec3 g_vol_dim;                // xyz dimension of the original volume
+    vec3 g_voxel_size;              // relative size of a single voxel (can be greater than 1 in any dim)
+    ivec3 g_vol_translation;        // translates the volume by the given voxel count
+    vec3 g_physical_vol_dim;        // physical volume size: g_vol_dim * g_voxel_size
+    vec3 g_normalized_volume_size;  // world space size of the volume (usually ~1m^3 with the largest dim being 1)
+    uint g_vol_max_label;           // maximum label in the segmented volume
+    uint g_brick_size;              // power of 2 size along one axis of the bricks
+    uvec3 g_brick_count;            // number of bricks in each xyz dimension for the encoded volume
+    uint g_lod_count;               // number of lod levels per brick
+    uint g_frame;                   // current frame of the rendering
 //
-    uint g_max_decoding_lod;        // max. inv LOD that we would decode, even if a finer LOD is requested
-    uint g_cache_capacity;          // number of 2x2x2 blocks that can be held in cache at the same time
+    uint g_max_inv_lod;             // max. inv LOD that we would decode / traverse
+    uint g_cache_capacity;          // number of base elements that can be held in cache at the same time
+    uint g_cache_base_element_uints;// size in uints of an atomic cache memory region that stores 2x2x2=8 output voxels
+    uint g_cache_indices_per_uint;  // number of output element indices that are stored in one uint in the cache
+    uint g_cache_palette_idx_bits;  // size of one index of one output element in the cache measured in bits
     uint g_free_stack_capacity;     // number of max. stack elements in each LoD of the free_block_stack
     uint g_request_buffer_capacity; // the size of the request buffer
     uint g_detail_buffer_dirty;     // 0 if we can read from the detail buffer, 1 if the detail buffer is dirty
-    uvec2 g_encoding_buffer_address;// we store the 64 bit device addresses as uvec2 for protability and
-    uvec2 g_detail_buffer_address;  //   missing support / bugs in spirv reflect returning a size of 0 for pointers
+    uint g_brick_idx_to_enc_vector; // dividing the brick index by this number yields its encoding vector index
+    uvec2 g_detail_buffer_address;  // ToDo: split detail encodings as well
 };
 
 
 layout(std430, binding = 1) buffer restrict readonly brick_starts
 {
-    uint g_brick_starts[];  // start points of each brick in g_encoding. Ends with dummy entry one after g_encoding
+    uint g_brick_starts[];  // start points of each brick in its resepctive array in g_encoding_buffer_addresses.
 };
 
-layout(std430, binding = 2) buffer restrict readonly encoding
+layout(std430, binding = 2) buffer restrict readonly encoding_buffer_addresses
 {
-    uint g_encoding[];      // encoding of all bricks where each brick contains all its LODs. we use it to check palttes
+// Encoding buffer addresses of all bricks where each brick contains all its LODs, except the finest one if detail
+// separation is enabled. The full palette is always included in the encoding arrays. We store the list of 64 bit device
+// addresses as uvec2 for protability. Dividing a 1D brick index by g_brick_idx_to_enc_vector yields its encoding array.
+    uvec2 g_encoding_buffer_addresses[];
 };
+
 layout(std430, binding = 3) buffer brick_cache_infos
 {
 // for each block 4 entries:
@@ -47,7 +56,7 @@ layout(std430, binding = 3) buffer brick_cache_infos
 // cur_inv_lod: INVALID brick is not decoded
 //              otherwise currently decoded LoD
 // cache_index: INVALID brick is not decoded
-//              otherwise the cache index where each cache element is 2x2x2=8 uints large
+//              otherwise the cache index where each cache element is (base_element_size) uints large to fit 2x2x2=8 output voxels
 // req_slot:    INVALID nothing to do
 //              otherwise the unique request index in [0, total_number_of_requests_in_this_frame_for_this_lod)
     uint g_brick_info[];
@@ -64,7 +73,7 @@ layout(std430, binding = 4) buffer restrict assign_info
 // - new_blocks_count:    number of newly allocated elements in cache
 // - req_counter:         to get request indices starting from 0 per frame (written by request and read by provision and assign)
 // (- potential fourth: max. index that will be able to grab an element from the freeBlockStack)
-// followed by one uint which is the g_cache_top counter pointing to the next free 2x2x2 element in g_cache
+// followed by one uint which is the g_cache_top counter pointing to the next free base_element index in g_cache
     uint g_assign_info[];
 };
 #define ASSIGN_NEW_BLOCK_START 0
@@ -81,7 +90,7 @@ layout(std430, binding = 5) buffer restrict free_block_stacks
 
 layout(std430, binding = 6) buffer brick_cache
 {
-// contains g_cache_capacity base elements made up by 2x2x2=8 uints.
+// contains g_cache_capacity base elements made up by (base_element_size) uints to fit 2x2x2=8 output voxels.
 // the g_brick_info[].CACHE_INDEX points to a base element from which on it is decoded into N
 // base elements, where N depends on the LoD that this is decoded to. The higher the inv. lod
 // the higher is N because more base elements are needed to store the finer brick resolution.

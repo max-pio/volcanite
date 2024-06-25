@@ -129,7 +129,7 @@ set(VVV_SOURCES
         src/reader/vti.cpp
         src/reader/tiff_ome.cpp
         src/reader/nrrd.cpp
-        src/reader/simple_cellsinsilico.cpp
+        src/reader/volcanite_raw.cpp
 
         ../extern/SPIRV-Reflect/spirv_reflect.cpp
 

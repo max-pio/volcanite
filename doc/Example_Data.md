@@ -17,3 +17,7 @@ Note: The Volcanite backend offers support for compressing chunked data and is a
 However, for your fist contact with the framework it is recommended to only process a single chunk.
 
 *Motta A, Berning M, Boergens KM, Staffler B, Beining M, Loomba S, Hennig Ph, Wissler H, Helmstaedter M (2019). Dense connectomic reconstruction in layer 4 of the somatosensory cortex. Science. DOI: 10.1126/science.aay3134* 
+
+### BossDB Data
+
+TODO: add python scripts to download data from BossDB

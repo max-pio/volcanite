@@ -47,7 +47,7 @@ public:
     Mode camera_mode;
     float orthogonal_scale;
 
-    Camera(bool is_orbital = false) : orbital(is_orbital), rotation_x(0), rotation_y(0), rotation_x_0(0), rotation_y_0(0), near(0.05f), far(1.0e3f), vertical_fov(0.33f * std::numbers::pi),
+    Camera(bool is_orbital = true) : orbital(is_orbital), rotation_x(0), rotation_y(0), rotation_x_0(0), rotation_y_0(0), near(0.05f), far(1.0e3f), vertical_fov(0.33f * std::numbers::pi),
                                       speed(2.0f), position_world_space(0, 0, 5), position_look_at_world_space(0, 0, 0), rotate_camera(false), camera_mode(Mode::Perspective), orthogonal_scale(5.f) {
         reset();
     }
@@ -70,7 +70,6 @@ public:
     }
 
     void reset() {
-        std::cout << rotation_x << " " << rotation_y << " " << orbital_radius << std::endl;
         if(orbital) {
             rotation_x = 0.5f;
             rotation_y = 4.0f;

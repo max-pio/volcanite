@@ -20,11 +20,11 @@ class VolumeCompressionBase {
 
 protected:
 
-    static inline glm::uvec3 idx2pos(size_t i, glm::uvec3 volume_dim) {
+    static inline glm::uvec3 voxel_idx2pos(size_t i, glm::uvec3 volume_dim) {
         assert(i < volume_dim.x*volume_dim.y*volume_dim.z);
         return sfc::Cartesian::i2p(i, volume_dim);
     }
-    static inline size_t pos2idx(glm::uvec3 p, glm::uvec3 volume_dim) {
+    static inline size_t voxel_pos2idx(glm::uvec3 p, glm::uvec3 volume_dim) {
         assert(glm::all(glm::lessThan(p, volume_dim)));
         return sfc::Cartesian::p2i(p, volume_dim);
     }
@@ -52,14 +52,15 @@ public:
             for (pos.y = 0u; pos.y < brick_dim; pos.y++) {
                 for (pos.x = 0u; pos.x < brick_dim; pos.x++) {
                     if(glm::any(glm::greaterThanEqual(brick_start + pos, volume_dim))) {
-                        out[pos2idx(pos, glm::uvec3(brick_dim))].label = 0xFFFFFFFF;
+                        out[voxel_pos2idx(pos, glm::uvec3(brick_dim))].label = 0xFFFFFFFF;
                     }
                     else {
-                        assert(volume[pos2idx(brick_start + pos, volume_dim)] != 0xFFFFFFFF && "Volume contains forbidden magic number to flag multigrid nodes lying outside the volume");
-                        out[pos2idx(pos, glm::uvec3(brick_dim))].label = volume[pos2idx(brick_start + pos, volume_dim)];
+                        assert(volume[voxel_pos2idx(brick_start + pos, volume_dim)] != 0xFFFFFFFF && "Volume contains forbidden magic number to flag multigrid nodes lying outside the volume");
+                        out[voxel_pos2idx(pos, glm::uvec3(brick_dim))].label = volume[voxel_pos2idx(brick_start + pos,
+                                                                                                    volume_dim)];
                     }
                     // you can have different opinions about this but we set it to false because it leads to smaller numbers in our encoding -> better rANS compression:
-                    out[pos2idx(pos, glm::uvec3(brick_dim))].constant_subregion = false;
+                    out[voxel_pos2idx(pos, glm::uvec3(brick_dim))].constant_subregion = false;
                 }
             }
         }
@@ -82,12 +83,14 @@ public:
                         for (delta.z = 0u; delta.z <= 1u; delta.z++) {
                             for (delta.y = 0u; delta.y <= 1u; delta.y++) {
                                 for (delta.x = 0u; delta.x <= 1u; delta.x++) {
-                                    child_elements[i] = &out[prev_lod_start + pos2idx((2u * pos) + delta, glm::uvec3(current_dim * 2u))];
+                                    child_elements[i] = &out[prev_lod_start +
+                                            voxel_pos2idx((2u * pos) + delta, glm::uvec3(current_dim * 2u))];
                                     i++;
                                 }
                             }
                         }
                         // find most frequent label in child elements and check if they're constant
+                        // ToDo: could be sped up with https://towardsdatascience.com/countless-3d-vectorized-2x-downsampling-of-labeled-volume-images-using-python-and-numpy-59d686c2f75
                         uint32_t max_ocurrences = 0u;
                         uint32_t max_label = 0xFFFFFFFF;
                         bool constant = true;
@@ -124,9 +127,9 @@ public:
                         }
 #endif
 
-                        out[lod_start + pos2idx(pos, glm::uvec3(current_dim))].label = max_label;
-                        out[lod_start + pos2idx(pos, glm::uvec3(current_dim))].constant_subregion = constant;
-                        assert(lod_start + pos2idx(pos, glm::uvec3(current_dim)) < out.size() && "Writing multigrid node outside of array!");
+                        out[lod_start + voxel_pos2idx(pos, glm::uvec3(current_dim))].label = max_label;
+                        out[lod_start + voxel_pos2idx(pos, glm::uvec3(current_dim))].constant_subregion = constant;
+                        assert(lod_start + voxel_pos2idx(pos, glm::uvec3(current_dim)) < out.size() && "Writing multigrid node outside of array!");
                     }
                 }
             }
@@ -158,7 +161,7 @@ public:
      */
     static uint32_t maxOccurrenceInBrick(const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, const glm::uvec3 brick_start, const glm::uvec3 brick_dim) {
         if(brick_dim.x == 1 && brick_dim.y == 1 && brick_dim.z == 1)
-            return volume[pos2idx(brick_start, volume_dim)];
+            return volume[voxel_pos2idx(brick_start, volume_dim)];
 
         // count all occurring items in a hash map
         std::unordered_map<uint32_t, int> occurences;
@@ -169,7 +172,7 @@ public:
                     if(glm::any(glm::greaterThanEqual(brick_start + pos, volume_dim)))
                         continue;
 
-                    uint32_t v = volume[pos2idx(brick_start + pos, volume_dim)];
+                    uint32_t v = volume[voxel_pos2idx(brick_start + pos, volume_dim)];
                     if(occurences.contains(v))
                         occurences[v]++;
                     else
@@ -197,7 +200,7 @@ public:
         if((brick_dim.x == 1 && brick_dim.y == 1 && brick_dim.z == 1) || glm::any(glm::greaterThanEqual(brick_start, volume_dim)))
             return true;
 
-        uint32_t v = volume[pos2idx(brick_start, volume_dim)];
+        uint32_t v = volume[voxel_pos2idx(brick_start, volume_dim)];
         glm::uvec3 pos;
         for (pos.z = 0u; pos.z < brick_dim.z; pos.z++) {
             for (pos.y = 0u; pos.y < brick_dim.y; pos.y++) {
@@ -205,7 +208,7 @@ public:
                     if(glm::any(glm::greaterThanEqual(brick_start + pos, volume_dim)))
                         continue;
 
-                    if(volume[pos2idx(brick_start + pos, volume_dim)] != v)
+                    if(volume[voxel_pos2idx(brick_start + pos, volume_dim)] != v)
                         return false;
                 }
             }
@@ -244,7 +247,7 @@ public:
         for(size_t i = 0; i < volume.size(); i++) {
             if (volume[i] != (*out)[i]) {
                 if (error_count < max_error_lines)
-                    Logger(ERROR) << "error at " << str(idx2pos(i, volume_dim)) << " in " << volume[i] << " != out " << (*out)[i];
+                    Logger(ERROR) << "error at " << str(voxel_idx2pos(i, volume_dim)) << " in " << volume[i] << " != out " << (*out)[i];
                 else if (error_count == max_error_lines)
                     Logger(ERROR) << "[...] skipping additional errors";
                 error_count++;

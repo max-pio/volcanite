@@ -5,21 +5,21 @@
 #include <glm/gtc/constants.hpp>
 
 void vvv::PointUtil::transformInPlace(std::vector<glm::vec3> &points, const glm::mat4 &transformation) {
-#pragma omp parallel for default(none) shared(points, transformation)
-    for(auto it = points.begin(); it != points.end(); it++)
-        *it = glm::vec3(transformation * glm::vec4(*it, 1.f));
+    #pragma omp parallel for default(none) shared(points, transformation)
+    for(auto i = 0; i < points.size(); i++)
+        points[i] = glm::vec3(transformation * glm::vec4(points[i], 1.f));
 }
 
 void vvv::PointUtil::transformInPlace(std::vector<glm::vec4> &points, const glm::mat4 &transformation) {
 #pragma omp parallel for default(none) shared(points, transformation)
-    for(int i =0; i < points.size(); i++)
+    for(auto i = 0; i < points.size(); i++)
         points[i] = transformation * points[i];
 }
 
 template <glm::length_t L>
 std::vector<glm::vec<L, float, glm::defaultp>> vvv::PointUtil::indexToPositions(const std::vector<size_t> &indices, const std::vector<glm::vec<L, float, glm::defaultp>> &position_in) {
     std::vector<glm::vec<L, float, glm::defaultp>> out(indices.size());
-#pragma omp parallel for default(none)
+    #pragma omp parallel for default(none)
     for(auto i = 0; i < indices.size(); i++)
         out[i] = position_in[indices[i]];
     return out;
@@ -70,11 +70,11 @@ std::vector<glm::vec4> vvv::PointUtil::fillPoisson(glm::vec3 size, float rejecti
     float poissonCellSize = rejectionDist / glm::sqrt(3.f);
     int voxelCheckRadius = static_cast<int>(glm::ceil(rejectionDist / poissonCellSize));
     glm::ivec3 poissonDim = glm::ivec3(glm::ceil(size / poissonCellSize)) + glm::ivec3(1);
-    size_t poissonCellCount = static_cast<size_t>(poissonDim.x) * poissonDim.y * poissonDim.z;
-    glm::vec4 points[poissonCellCount];
+    const size_t poissonCellCount = static_cast<size_t>(poissonDim.x) * poissonDim.y * poissonDim.z;
+    std::vector<glm::vec4> points(poissonCellCount);
     // mark all grid cells empty (i.e. set its w component to 0)
     #pragma omp parallel for default(none) shared(poissonCellCount, points)
-    for (int i = 0; i < poissonCellCount; i++)
+    for (auto i = 0; i < poissonCellCount; i++)
         points[i].w = 0.f;
 
     // generate a list of active points (points with a neighborhood in which we can add new points)
@@ -101,7 +101,7 @@ std::vector<glm::vec4> vvv::PointUtil::fillPoisson(glm::vec3 size, float rejecti
 
                 bool cont = false;
                 #pragma omp parallel for default(none), shared(cont, addedPointCount, active, points, pos, rejectionDist)
-                for (int i = 0; i < addedPointCount; i++) {
+                for (auto i = 0; i < addedPointCount; i++) {
                     if (cont)
                         continue;
                     if (glm::length(points[active[i]] - pos) < rejectionDist)
@@ -202,7 +202,7 @@ std::vector<glm::vec4> vvv::PointUtil::fillPoisson(glm::vec3 size, float rejecti
     std::vector<glm::vec4> out;
     out.reserve(addedPointCount);
     #pragma omp parallel for default(none) shared(out, poissonCellCount, points, rejectionDist)
-    for(size_t i=0; i<poissonCellCount; i++) {
+    for(auto i = 0; i < poissonCellCount; i++) {
         if(points[i].w > 0.f) {
             #pragma omp critical
             { out.push_back(points[i]); }

@@ -71,7 +71,8 @@ void vvv::DefaultGpuContext::destroyGpuContext() {
 bool is_instance_extension_supported(std::string name) {
     const auto extensions = vk::enumerateInstanceExtensionProperties(); //get number of extensions
     for (auto const& extension : extensions) {
-        if (std::string{extension.extensionName} == name) { return true; }
+        std::string ex_name = extension.extensionName;
+        if (ex_name == name) { return true; }
     }
     return false;
 }
@@ -89,7 +90,8 @@ bool log_supported_instance_extensions() {
 bool is_instance_layer_supported(std::string name) {
     const auto layers = vk::enumerateInstanceLayerProperties();
     for (auto const& layer : layers) {
-        if (std::string{layer.layerName} == name) return true;
+        std::string l_name = layer.layerName;
+        if (l_name == name) return true;
     }
     return false;
 }
@@ -106,7 +108,8 @@ void log_supported_instance_layers() {
 bool is_device_extension_supported(vk::PhysicalDevice device, std::string name) {
     const auto extensions = device.enumerateDeviceExtensionProperties(); //get number of extensions
     for (auto const& extension : extensions) {
-        if(std::string{extension.extensionName} == name) { return true; }
+        std::string ex_name = extension.extensionName;
+        if (ex_name == name) { return true; }
     }
     return false;
 }
@@ -173,8 +176,8 @@ void vvv::DefaultGpuContext::createInstance() {
 
     // enable GLSL debugPrintfEXT() output
     vk::ValidationFeaturesEXT valFeatures;
-    auto feature = vk::ValidationFeatureEnableEXT::eDebugPrintf;
-    valFeatures.setEnabledValidationFeatures(feature);
+    auto features = {vk::ValidationFeatureEnableEXT::eDebugPrintf, vk::ValidationFeatureEnableEXT::eSynchronizationValidation};
+    valFeatures.setEnabledValidationFeatures(features);
     valFeatures.pNext = instanceCreateInfo.pNext;
     instanceCreateInfo.pNext = &valFeatures;
 
@@ -317,7 +320,7 @@ void vvv::DefaultGpuContext::setupDebugMessenger() {
 }
 
 void vvv::DefaultGpuContext::destroyDebugMessenger() {
-    if (m_gpu.debugUtilsMessenger != static_cast<typeof m_gpu.debugUtilsMessenger>(nullptr)) {
+    if (m_gpu.debugUtilsMessenger != static_cast<decltype(m_gpu.debugUtilsMessenger)>(nullptr)) {
         getInstance().destroyDebugUtilsMessengerEXT(m_gpu.debugUtilsMessenger);
         m_gpu.debugUtilsMessenger = nullptr;
     }
@@ -326,7 +329,8 @@ void vvv::DefaultGpuContext::destroyDebugMessenger() {
 bool isBlacklistedPhysicalDevice(const vk::PhysicalDeviceProperties &properties) {
 
     // llvmpipe is some non-conforming test driver installed with LLVM
-    if (std::string(properties.deviceName).find("llvmpipe") != std::string::npos) {
+    std::string dev_name = properties.deviceName;
+    if (dev_name.find("llvmpipe") != std::string::npos) {
         return true;
     }
 
@@ -334,7 +338,7 @@ bool isBlacklistedPhysicalDevice(const vk::PhysicalDeviceProperties &properties)
 }
 
 void vvv::DefaultGpuContext::destroySurface() {
-    if (m_gpu.surface != static_cast<typeof m_gpu.surface>(nullptr)) {
+    if (m_gpu.surface != static_cast<decltype(m_gpu.surface)>(nullptr)) {
         m_gpu.instance.destroySurfaceKHR(m_gpu.surface);
         m_gpu.surface = nullptr;
     }
