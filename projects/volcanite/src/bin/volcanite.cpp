@@ -44,19 +44,8 @@ int tryImportRenderConfig(VolcaniteArgs& args, std::shared_ptr<CompressedSegment
     //renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
     // read optional config file
     if(!args.rendering_config_file.empty()) {
-        std::ifstream in(args.rendering_config_file);
-        if(in.is_open()) {
-            if (!renderer->readParameters(in, VOLCANITE_VERSION)) {
-                Logger(ERROR) << "Could not import parameters from " << args.rendering_config_file;
-                return RET_INVALID_ARG;
-            }
-            in.close();
-        }
-        else {
-            Logger(ERROR) << "Could not open config file " << args.rendering_config_file;
+        if (!renderer->readParameterFile(args.rendering_config_file, VOLCANITE_VERSION))
             return RET_INVALID_ARG;
-        }
-        Logger(DEBUG) << "Imported rendering config from " << args.rendering_config_file;
     }
     return 0;
 }

@@ -5,6 +5,7 @@
 #include "GpuContext.hpp"
 #include "GuiInterface.hpp"
 #include "Texture.hpp"
+#include "vvv/util/Paths.hpp"
 
 namespace vvv {
 
@@ -61,7 +62,7 @@ public:
      * exports all GUI interface parameters as well as camera parameters.
      * @return true on success, false otherwise
      */
-    virtual bool writeParameters(std::ostream& out, const std::string& version_string="") {
+    virtual bool writeParameters(std::ostream& out, const std::string& version_string="") const {
         out << "Version " << version_string << std::endl;
         if(!m_camera) {
             Logger(WARN) << "Cannot write renderer parameters as camera is not set!";
@@ -85,16 +86,38 @@ public:
     }
 
     /**
+     * Writes all rendering and camera parameters in human readable form to the given file.
+     * @return true on success, false otherwise
+     */
+    virtual bool writeParameterFile(const std::string& path, const std::string& version_string="") const {
+        std::ofstream out(path);
+        if(out.is_open()) {
+            if (!writeParameters(out, version_string)) {
+                Logger(WARN) << "Could not export parameters to " << path;
+                out.close();
+                return false;
+            }
+            else {
+                out.close();
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    /**
      * Reads all rendering and camera parameters from the given stream. The Renderer superclass reads all GUI interface
      * parameters as well as camera parameters if exported with writeParameters(..).
+     * @param expected_version_string if not empty, reading configurations with a different version will fail
      * @return true on success, false otherwise
      */
     virtual bool readParameters(std::istream& in, const std::string& expected_version_string="") {
         std::string tmp;
         in >> tmp; // "Version"
         in >> tmp; // VOLCANITE_VERSION
-        if(tmp != expected_version_string) {
-            Logger(WARN) << "Unexpected config version " << tmp;
+        if(!expected_version_string.empty() && tmp != expected_version_string) {
+            Logger(WARN) << "Unexpected config version " << tmp << " instead of " << expected_version_string;
             return false;
         }
         if (!m_camera) {
@@ -126,6 +149,48 @@ public:
         if(!(in.rdstate() & std::istream::eofbit))
             Logger(WARN) << "Possible parameter import error. Did not reach end of file.";
         return true;
+    }
+
+    /**
+     * Reads all rendering and camera parameters from the given path.
+     * If parameters could not be imported from path, the previous parameter state is restored.
+     * @return true if parameters were successfully read from path, false otherwise
+     */
+    virtual bool readParameterFile(const std::string& path, const std::string& expected_version_string= "") {
+        // Save old parameters to reload in case of failure
+        std::filesystem::path path_backup_config = vvv::Paths::getTempFileWithName("tmp_render_config_params.vcfg");
+        if(std::filesystem::exists(path_backup_config))
+            std::filesystem::remove(path_backup_config);
+        if(!writeParameterFile(path_backup_config, expected_version_string))
+            Logger(WARN) << "Could not export backup rendering parameters to " << path_backup_config;
+
+        // Try to load selected config path
+        // Load backup config in case of failure
+        bool success = true;
+        std::ifstream in(path);
+        if(in.is_open()) {
+            if (!readParameters(in, expected_version_string)) {
+                Logger(WARN) << "Could not import rendering parameters from " << path;
+
+                std::ifstream backup_in(path_backup_config);
+                if (!backup_in.is_open() || !readParameters(backup_in, expected_version_string)) {
+                    Logger(ERROR) << "Could not import backup rendering parameters from " << path_backup_config;
+                } else {
+                    Logger(DEBUG) << "Imported backup rendering parameters from " << path_backup_config;
+                }
+                backup_in.close();
+                success = false;
+            }
+            else {
+                Logger(DEBUG) << "Imported rendering parameters from " << path;
+            }
+            in.close();
+        }
+        else {
+            Logger(WARN) << "Could not import parameters from " << path;
+            success = false;
+        }
+        return success;
     }
 
 protected:

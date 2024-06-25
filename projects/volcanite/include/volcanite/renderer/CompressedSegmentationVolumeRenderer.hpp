@@ -107,12 +107,7 @@ public:
 
         // save rendering parameters on GUI shutdown if requested
         if(!m_save_config_on_shutdown_path.empty()) {
-            std::ofstream out(m_save_config_on_shutdown_path);
-            if(out.is_open()) {
-                if (!writeParameters(out, VOLCANITE_VERSION))
-                    Logger(WARN) << "Could not export parameters to " << m_save_config_on_shutdown_path;
-                out.close();
-            }
+            writeParameterFile(m_save_config_on_shutdown_path, VOLCANITE_VERSION);
         }
 
         m_gui_interface = nullptr;
