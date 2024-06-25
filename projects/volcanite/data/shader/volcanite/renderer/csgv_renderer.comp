@@ -428,7 +428,7 @@ void main() {
         if(g_debug_envmap) {
             // ToDo: expensive inverse as the matrix may contain scaling. use scaling and transpose(rotation) instead
             ray.direction = normalize(inverse(g_world_to_model_space_dir) * ray.direction);
-            writePixel(pixel, vec4(dummy_envmap(ray.direction), 1.f), BACKGROUND_DEPTH);
+            writePixel(pixel, vec4(g_light_intensity * dummy_envmap(ray.direction), 1.f), BACKGROUND_DEPTH);
         }
         else
             writePixel(pixel, get_background_color(fragCoord), BACKGROUND_DEPTH);
@@ -763,7 +763,7 @@ void main() {
     // ToDo: the background should be added in the csgv_upsample_resolve shader
     // perform alpha blending with backgroun
     if(g_debug_envmap)
-        state.out_color.rgb = dummy_envmap(ray.direction) * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
+        state.out_color.rgb = vec3(g_light_intensity) * dummy_envmap(ray.direction) * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
     else
         state.out_color.rgb = get_background_color(fragCoord).rgb * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
 
