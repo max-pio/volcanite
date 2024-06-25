@@ -2,7 +2,7 @@
 
 // ToDo: control which buffers/images are read- and/or writeonly with defines
 
-layout(std430, buffer_reference, buffer_reference_align = 4) readonly buffer EncodingRef
+layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict EncodingRef
 {
     uint buf[];
 };
@@ -47,7 +47,7 @@ layout(std430, binding = 2) buffer restrict readonly encoding_buffer_addresses
     uvec2 g_encoding_buffer_addresses[];
 };
 
-layout(std430, binding = 3) buffer brick_cache_infos
+layout(std430, binding = 3) buffer restrict brick_cache_infos
 {
 // for each block 4 entries:
 // req_inv_lod: <  lod_count is "req. inv. LoD and is visible"
@@ -88,7 +88,7 @@ layout(std430, binding = 5) buffer restrict free_block_stacks
     uint g_free_block_stacks[];
 };
 
-layout(std430, binding = 6) buffer brick_cache
+layout(std430, binding = 6) buffer restrict brick_cache
 {
 // contains g_cache_capacity base elements made up by (base_element_size) uints to fit 2x2x2=8 output voxels.
 // the g_brick_info[].CACHE_INDEX points to a base element from which on it is decoded into N
