@@ -243,6 +243,17 @@ void GuiImgui::renderGui() {
                     gui_set(e, changed, value);
                     break;
                 }
+                case GuiFloatRange: {
+                    auto e = GUI_CAST(be, glm::vec2);
+                    auto value = gui_get(e);
+                    bool changed;
+                    if (e->min.has_value() && e->max.has_value())
+                        changed = ImGui::DragFloatRange2(e->label.c_str(), &value.x, &value.y, glm::pow(10, -e->floatDecimals), e->min.value().r, e->max.value().r, ("%." + std::to_string(e->floatDecimals) + "f").c_str());
+                    else
+                        changed = ImGui::DragFloatRange2(e->label.c_str(), &value.x, &value.y, glm::pow(10, -e->floatDecimals), 0.f, 0.f, ("%." + std::to_string(e->floatDecimals) + "f").c_str());
+                    gui_set(e, changed, value);
+                    break;
+                }
                 case GuiVec3: {
                     auto e = GUI_CAST(be, glm::vec3);
                     auto value = gui_get(e);

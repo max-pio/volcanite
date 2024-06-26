@@ -31,7 +31,7 @@ typedef size_t gui_id;
  */
 
 #define PROPERTY_REF(F, T, G)                                                                                                                                                                     \
-    virtual gui_id F(T *v, const std::string &name) { return add<T>(v, name, G); }                                                                                                                \
+    virtual gui_id F(T *v, const std::string &name = "") { return add<T>(v, name, G); }                                                                                                                \
     virtual gui_id F(std::function<void(T)> setter, std::function<T()> getter, const std::string &name = "") { return add<T>(setter, getter, name, G); }
 
 #define PROPERTY_REF_MINMAX(F, T, G)                                                                                                                                                              \
@@ -39,9 +39,10 @@ typedef size_t gui_id;
     virtual gui_id F(std::function<void(T)> setter, std::function<T()> getter, const std::string &name, T min, T max, T step) { return add<T>(setter, getter, name, G, min, max, step, 0); }
 
 #define FLOAT_PROPERTY_REF(F, T, G)                                                                                                                                                               \
-    virtual gui_id F(T *v, const std::string &name, int decimals = 3) { return add<T>(v, name, G, decimals); }                                                                                    \
+    virtual gui_id F(T *v, const std::string &name = "", int decimals = 3) { return add<T>(v, name, G, decimals); }                                                                                    \
     virtual gui_id F(T *v, const std::string &name, T min, T max, T step, int decimals = 3) { return add<T>(v, name, G, min, max, step, decimals); }                                              \
-    virtual gui_id F(std::function<void(T)> setter, std::function<T()> getter, const std::string &name = "", int decimals = 3) { return add<T>(setter, getter, name, G, decimals); }
+    virtual gui_id F(std::function<void(T)> setter, std::function<T()> getter, const std::string &name = "", int decimals = 3) { return add<T>(setter, getter, name, G, decimals); }              \
+    virtual gui_id F(std::function<void(T)> setter, std::function<T()> getter, const std::string &name, T min, T max, T step, int decimals = 3) { return add<T>(setter, getter, name, G, min, max, step, decimals); }
 
 #define GUI_CAST(e, T) (reinterpret_cast<GuiEntry<T> *>(e))
 #define GUI_FUNC_CAST(e) (reinterpret_cast<GuiFuncEntry *>(e))
@@ -70,7 +71,7 @@ namespace vvv {
  */
 class GuiInterface {
 protected:
-    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiAction, GuiLabel, GuiDynamicText, GuiProgress, GuiSeparator, GuiTF1D, GuiTF2D, GuiTFSegmentedVolume, GuiCustomCode };
+    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2, GuiFloatRange, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiAction, GuiLabel, GuiDynamicText, GuiProgress, GuiSeparator, GuiTF1D, GuiTF2D, GuiTFSegmentedVolume, GuiCustomCode };
 
     // ------------------------------- GUI ENTRIES ------------------------------------ //
 public:
@@ -186,6 +187,7 @@ public:
         PROPERTY_REF(addIVec3, glm::ivec3, GuiIVec3)
         PROPERTY_REF(addIVec4, glm::ivec4, GuiIVec4)
         FLOAT_PROPERTY_REF(addVec2, glm::vec2, GuiVec2)
+        FLOAT_PROPERTY_REF(addFloatRange, glm::vec2, GuiFloatRange)
         FLOAT_PROPERTY_REF(addVec3, glm::vec3, GuiVec3)
         PROPERTY_REF(addDirection, glm::vec3, GuiDirection)
         FLOAT_PROPERTY_REF(addVec4, glm::vec4, GuiVec4)

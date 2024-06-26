@@ -178,7 +178,8 @@ namespace vvv {
                     vstr = gui_get(GUI_CAST(be, std::string));
                     break;
                 }
-                case GuiVec2: {
+                case GuiVec2:
+                case GuiFloatRange: {
                     auto value = gui_get(GUI_CAST(be, glm::vec2));
                     for(int i = 0; i < 2; i++)
                         vstr += std::to_string(value[i]) + (i < 2 ? " " : "");
@@ -325,7 +326,8 @@ namespace vvv {
                     gui_set(GUI_CAST(be, std::string), true, v);
                     break;
                 }
-                case GuiVec2: {
+                case GuiVec2:
+                case GuiFloatRange: {
                     if(!checkLabel(in, be))
                         return false;
                     glm::vec2 v;

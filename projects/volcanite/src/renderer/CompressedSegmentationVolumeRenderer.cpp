@@ -859,28 +859,17 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                            {"Development", "Materials"}});
 
     // General options
-//ToDo: addFloatRange2 to the GUIInterface
-#ifdef IMGUI
-    g_gen->addCustomCode(
-            [this]() {
-                auto old_voxel_size = m_voxel_size;
-                ImGui::InputFloat3("Voxel Size", &m_voxel_size.x);
-                if(glm::any(glm::lessThanEqual(m_voxel_size, glm::vec3(0.f)))) {
-                    Logger(WARN) << "voxel size must be > 0 in all dimensions! Resetting..";
-                    m_voxel_size = old_voxel_size;
-                }
-            },
-            "Voxel Size");
-    g_gen->addCustomCode(
-            [this]() {
-                ImGui::DragFloatRange2("Splitting Plane X", &m_bboxMin.x, &m_bboxMax.x, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                ImGui::DragFloatRange2("Splitting Plane Y", &m_bboxMin.y, &m_bboxMax.y, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                ImGui::DragFloatRange2("Splitting Plane Z", &m_bboxMin.z, &m_bboxMax.z, 0.01f, 0.0f, 1.f, "Min: %.2f %%", "Max: %.2f %%");
-                m_bboxMin = glm::clamp(m_bboxMin, glm::vec3(0.f), glm::vec3(1.f));
-                m_bboxMax = glm::clamp(m_bboxMax, m_bboxMin, glm::vec3(1.f));
-            },
-            "Splitting Planes");
-#endif
+    g_gen->addVec3([this](glm::vec3 v) { if (glm::all(glm::greaterThan(v, glm::vec3(0.f)))) m_voxel_size = v; },
+                   [this]() { return m_voxel_size; }, "Voxel Size", 3);
+    g_gen->addFloatRange([this](glm::vec2 v) {m_bboxMin.x = v.x; m_bboxMax.x = v.y;},
+                         [this](){return glm::vec2(m_bboxMin.x, m_bboxMax.x);},
+                         "Splitting Plane X", glm::vec2(0.f), glm::vec2(1.f), glm::vec2(0.01f), 2);
+    g_gen->addFloatRange([this](glm::vec2 v) {m_bboxMin.y = v.x; m_bboxMax.y = v.y;},
+                         [this](){return glm::vec2(m_bboxMin.y, m_bboxMax.y);},
+                         "Splitting Plane Y", glm::vec2(0.f), glm::vec2(1.f), glm::vec2(0.01f), 2);
+    g_gen->addFloatRange([this](glm::vec2 v) {m_bboxMin.z = v.x; m_bboxMax.z = v.y;},
+                         [this](){return glm::vec2(m_bboxMin.z, m_bboxMax.z);},
+                         "Splitting Plane Z", glm::vec2(0.f), glm::vec2(1.f), glm::vec2(0.01f), 2);
     g_gen->addSeparator();
     g_gen->addAction([this]() {
         if (!pfd::settings::available()) {
