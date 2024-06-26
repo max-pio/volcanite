@@ -154,7 +154,7 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
 
     // invalidate any nan samples
     if (any(isnan(color)) || any(isinf(color)) || isnan(depth_valid) || isinf(depth_valid)) {
-        color = vec4(0.f, .5f, 1.f, 1.f);
+        color = vec4(1.f, 0.f, 1.f, 1.f);
         depth_valid = -abs(depth_valid);
     }
 
@@ -452,7 +452,6 @@ void main() {
 
 
     RayMarchState state;
-    // ToDo: use a CPU randomly generated number instead of g_camera_still_frames to initialize the RNG?
     state.rng = float(g_camera_still_frames << 16);
     state.label = INVALID;
     state.last_label = INVALID;
@@ -476,7 +475,8 @@ void main() {
             // edge cases not handled in multi-level DDA:
             //  - internal integer division does not handle negative voxel coordinates
             //  - upper volume borders may lie in the middle of a coarse voxel
-            if (any(lessThan(state.voxel, ivec3(0))) || any(greaterThanEqual(state.voxel, ivec3(g_vol_dim))))
+            if (any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
+                || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz))))
                 dda_voxel_size = 1u;
             // empty space skipping: move into next brick
             else if (isEmptySpace(state.voxel))
@@ -500,14 +500,13 @@ void main() {
         if(any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
             || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
             // we may have started out of bounds
-            if(state.path_length > 0 || state.step > 8)
+            if(state.path_length > 0 || state.step > 16)
                 break;
             else
                continue;
         }
 
         // empty space check
-        // ToDo: better empty space skipping - skip the non-visible brick in ONE big dda step
         if(isEmptySpace(state.voxel)) {
 //#define VISUALIZE_EMPTY_SPACE
 #ifndef VISUALIZE_EMPTY_SPACE
@@ -559,9 +558,6 @@ void main() {
             continue;
         }
         else if(debug_view_visible && g_debug_brick_cache) {
-            // trigger visibility update
-            get_volume_label(state.voxel, state.depth_valid);
-
             uvec3 brick = uvec3(state.voxel) / g_brick_size;
             uvec3 brick_voxel = uvec3(state.voxel) - (brick * g_brick_size);
             uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
@@ -593,6 +589,7 @@ void main() {
         vec4 surface_albedo_opacity = getColor(state.label, material);
 
         // ENTER SEMI-TRANSPARENT VOLUME
+        // ToDo: integrate this into the correct path tracing interaction
         if (surface_albedo_opacity.a < 1.f) {
             if(state.last_label != state.label) {
                 // add the contribution of a semi-transparent surface (local shading only)
@@ -692,9 +689,8 @@ void main() {
                 // ToDo: get the probabilities right so that this is real next event estimation?. Is it right to treat this as the PDF of uniform hemisphere sampling? Looks okay at least..
                 state.throughput /= pdfUniformHemisphere(ray.direction, state.normal);  // 1/(2*PI)
 
-                // check for self shadowing of the current voxel
+                // check for self shadowing of the current voxel ToDo: should not happen?
                 if (g_global_illumination_enable && dot(state.normal, ray.direction) < 0) {
-                    // same code as for a shadow hit!
                     state.throughput = vec3(0.f);
                     break;
                 }
