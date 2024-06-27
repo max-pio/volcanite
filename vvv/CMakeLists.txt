@@ -9,6 +9,7 @@ set(VVV_HEADERS
 
         include/vvv/core/Buffer.hpp
         include/vvv/core/Camera.hpp
+        include/vvv/core/CameraController.hpp
         include/vvv/core/DefaultGpuContext.hpp
         include/vvv/core/GpuContext.hpp
         include/vvv/core/GuiInterface.hpp
@@ -83,6 +84,7 @@ set(VVV_SOURCES
 
         src/core/Buffer.cpp
         src/core/Camera.cpp
+        src/core/CameraController.cpp
         src/core/DefaultGpuContext.cpp
         src/core/GuiInterface.cpp
         src/core/GuiElementList.cpp

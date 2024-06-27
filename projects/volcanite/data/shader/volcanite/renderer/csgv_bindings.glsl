@@ -59,6 +59,7 @@ layout(std430, binding = 3) buffer restrict brick_cache_infos
 //              otherwise the cache index where each cache element is (base_element_size) uints large to fit 2x2x2=8 output voxels
 // req_slot:    INVALID nothing to do
 //              otherwise the unique request index in [0, total_number_of_requests_in_this_frame_for_this_lod)
+// ToDo: change to array of structs
     uint g_brick_info[];
 };
 #define BRICK_INFO_REQ_INV_LOD 0
@@ -74,6 +75,7 @@ layout(std430, binding = 4) buffer restrict assign_info
 // - req_counter:         to get request indices starting from 0 per frame (written by request and read by provision and assign)
 // (- potential fourth: max. index that will be able to grab an element from the freeBlockStack)
 // followed by one uint which is the g_cache_top counter pointing to the next free base_element index in g_cache
+// ToDo: change to array of structs
     uint g_assign_info[];
 };
 #define ASSIGN_NEW_BLOCK_START 0
