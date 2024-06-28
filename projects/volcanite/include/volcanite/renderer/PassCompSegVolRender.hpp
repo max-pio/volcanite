@@ -26,26 +26,37 @@ public:
         REQUEST = 1,
         PROVISION = 2,
         ASSIGN = 3,
-        RENDERING = 4,
-        INPAINTING = 5
+        DECOMPRESS = 4,
+        RENDERING = 5,
+        RESOLVE = 6,
     };
 
-    PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering, std::vector<std::string> shaderDefines = {}, vk::ImageUsageFlags outputImageUsage = {},
-                            const std::string& label = "PassCompSegVolRender")
-        : PassCompute(ctx, label, multiBuffering, ctx->getQueueFamilyIndices().graphics.value()), WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_shader_defines(shaderDefines) {}
+    PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering,
+                         std::vector<std::string> shaderDefines = {}, vk::ImageUsageFlags outputImageUsage = {},
+                         bool parallel_decode = false, const std::string& label = "PassCompSegVolRender")
+        : PassCompute(ctx, label, multiBuffering, ctx->getQueueFamilyIndices().graphics.value()),
+          WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_shader_defines(std::move(shaderDefines)),
+          m_parallel_decode(parallel_decode) {}
 
     AwaitableHandle execute(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override;
 
 
-    void setVolumeInfo(glm::uvec3 brick_count, uint32_t lod_count) {
+    void setVolumeInfo(glm::uvec3 brick_count, uint32_t lod_count, uint32_t brick_size) {
         setGlobalInvocationSize(CACHECLEAR, brick_count.x, brick_count.y, brick_count.z);
         setGlobalInvocationSize(REQUEST, brick_count.x, brick_count.y, brick_count.z);
         setGlobalInvocationSize(PROVISION, lod_count-1u, 1u, 1u);
         setGlobalInvocationSize(ASSIGN, brick_count.x, brick_count.y, brick_count.z);
+        if (m_parallel_decode) {
+            setGlobalInvocationSize(DECOMPRESS, brick_count.x * brick_size,
+                                                brick_count.y * brick_size,
+                                                brick_count.z * brick_size);
+        } else {
+            setGlobalInvocationSize(DECOMPRESS, brick_count.x, brick_count.y, brick_count.z);
+        }
     }
     void setImageInfo(uint32_t width, uint32_t height) {
         setGlobalInvocationSize(RENDERING, width, height, 1u);
-        setGlobalInvocationSize(INPAINTING, width, height, 1u);
+        setGlobalInvocationSize(RESOLVE, width, height, 1u);
     }
 
     void resetCacheOnNextCall() { m_reset_cache = true; }
@@ -55,13 +66,16 @@ protected:
     std::vector<std::shared_ptr<Shader>> createShaders() override;
     void setGlobalInvocationSize(CSGVRenderStage shader_index, uint32_t width, uint32_t height, uint32_t depth) {
         assert(shader_index < m_shaders.size());
-        m_workgroupCount[shader_index] = getDispatchSize(width, height, depth, m_shaders[shader_index]->reflectWorkgroupSize());
+        m_work_group_sizes[shader_index] = getDispatchSize(width, height, depth, m_shaders[shader_index]->reflectWorkgroupSize());
     }
     void executeCommands(vk::CommandBuffer commandBuffer, CSGVRenderStage stage);
 
-    vk::Extent3D m_workgroupCount[6] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}}; // work group sizes per shader index
-    bool m_reset_cache = false;
-    const std::vector<std::string> m_shader_defines;
+    /// work group sizes per stage
+    vk::Extent3D m_work_group_sizes[7] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u},
+                                          {0u, 0u, 0u}, {0u, 0u, 0u}};
+    bool m_reset_cache = false;                        /// if the GPU cache reset should be triggered on the next call
+    const std::vector<std::string> m_shader_defines;   /// defines that are passed on to shader compilation
+    bool m_parallel_decode = false;                    /// if decompression is parallelized within one brick
 };
 
 } // namespace vvv

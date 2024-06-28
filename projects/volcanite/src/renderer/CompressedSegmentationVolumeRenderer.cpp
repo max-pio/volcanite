@@ -38,10 +38,13 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         Logger(DEBUG) << "new data set with " << str(m_compressed_segmentation_volume->getBrickCount())
                       << " bricks added. Cache fits " << cache_bricks << " = "
                       << static_cast<uint32_t>(std::pow(static_cast<double>(cache_bricks), 1./3.))
-                      << "^3 bricks on finest LoD. Need " << m_cache_palette_idx_bits << " bits per palette indices to store " << m_cache_indices_per_uint << " indices per uint.";
+                      << "^3 bricks on finest LoD. Need " << m_cache_palette_idx_bits
+                      << " bits per palette indices to store " << m_cache_indices_per_uint << " indices per uint.";
 
         // update invocation sizes to brick dimension
-        m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(), m_compressed_segmentation_volume->getLodCountPerBrick());
+        m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(),
+                              m_compressed_segmentation_volume->getLodCountPerBrick(),
+                              m_compressed_segmentation_volume->getBrickSize());
 
         // trigger accumulation buffer and cache resets
         m_pass->resetCacheOnNextCall();
@@ -598,7 +601,9 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         m_pass->setStorageBuffer(0, 17, *m_attribute_buffer);
         m_pass->setStorageBuffer(0, 18, *m_materials_buffer);
     }
-    m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(), m_compressed_segmentation_volume->getLodCountPerBrick());
+    m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(),
+                          m_compressed_segmentation_volume->getLodCountPerBrick(),
+                          m_compressed_segmentation_volume->getBrickSize());
 //    m_pass->resetCacheOnNextCall();
 }
 

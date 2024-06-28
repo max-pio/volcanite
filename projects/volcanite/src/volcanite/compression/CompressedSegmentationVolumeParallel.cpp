@@ -209,7 +209,7 @@ void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint3
 //                palette_prefix_index[i] = INVALID;
         }
         auto exp = getBrickPaletteLength(brick_idx);
-        assert(prefix == getPaletteSize(brick_idx) && "palette prefix sum error");
+        assert(prefix == getBrickPaletteLength(brick_idx) && "palette prefix sum error");
     }
 
     // ToDo: remove dependent variables, reduce register load
