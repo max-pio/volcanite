@@ -199,6 +199,8 @@ public:
     virtual vk::PhysicalDevice getPhysicalDevice() const = 0;
     virtual QueueFamilyIndices const &getQueueFamilyIndices() const = 0;
 
+    virtual vk::PhysicalDeviceSubgroupProperties getPhysicalDeviceSubgroupProperties() const = 0;
+
     // TODO(Reiner): but this behind a getter
     std::shared_ptr<DebugUtilities> debugMarker;
 

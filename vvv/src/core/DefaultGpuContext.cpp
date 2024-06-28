@@ -463,3 +463,13 @@ void vvv::DefaultGpuContext::destroyLogicalDevice() {
     // TODO(Reiner): debugMarker->destroy(this);
     VK_DESTROY(m_gpu.device)
 }
+
+vk::PhysicalDeviceSubgroupProperties vvv::DefaultGpuContext::getPhysicalDeviceSubgroupProperties() const {
+    vk::PhysicalDeviceSubgroupProperties subgroupProperties;
+    vk::PhysicalDeviceProperties2 deviceProperties2;
+    deviceProperties2.pNext = &subgroupProperties;
+
+    if(hasDeviceExtension("VK_EXT_memory_budget"))
+        getPhysicalDevice().getProperties2(&deviceProperties2);
+    return subgroupProperties;
+}
