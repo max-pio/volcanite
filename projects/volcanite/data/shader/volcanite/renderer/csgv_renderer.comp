@@ -20,9 +20,9 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #define CSGV_DECODING_ARRAY g_cache
 #define CSGV_READ_ONLY
 #ifdef CSGV_PARALLEL_DECODE
-    #include "volcanite/compression/compressed_segmentation_volume.glsl"
-#else
     #include "volcanite/compression/compressed_segmentation_volume_parallel.glsl"
+#else
+    #include "volcanite/compression/compressed_segmentation_volume.glsl"
 #endif
 #include "volcanite/compression/csgv_utils.glsl"
 

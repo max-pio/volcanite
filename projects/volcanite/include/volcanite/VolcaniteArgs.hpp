@@ -162,6 +162,8 @@ public:
             va.stream_lod = streamlodArg.getValue();
             va.cache_size_MB = cacheSizeMBArg.getValue();
             va.cache_palettized = cachePalettizedArg.getValue();
+            if(va.cache_palettized && va.parallel_decoding)
+                throw ArgException(cachePalettizedArg.longID() + " can not be used in combination with " + parallelDecodeArg.longID(), cachePalettizedArg.longID());
             va.show_development_gui = devArg.getValue();
             // if no input file was specified, try to open a file dialog
             std::string input_file = expandPath(inputpathArg.getValue());

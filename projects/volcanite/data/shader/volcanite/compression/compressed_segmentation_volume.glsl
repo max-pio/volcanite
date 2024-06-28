@@ -64,7 +64,7 @@ uint readCSGVPaletteBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, c
 
     // By design, the first palette index is 1, meaning it can be substract directly from the brick's encoding length.
     uint palette_idx = readEntryFromCache(brick_start_base_element * g_cache_base_element_uints, cache_idx_in_brick);
-    assert(palette_idx > 0 && palette_idx <= getBrickPaletteLength(brick_idx), "read palette index %u is 0 or greater than palette size from cache", palette_idx);
+    assertf(palette_idx > 0 && palette_idx <= getBrickPaletteLength(brick_idx), "read palette index %u is 0 or greater than palette size from cache", palette_idx);
     return getBrickEncodingRef(brick_idx).buf[getBrickEncodingLength(brick_idx) - palette_idx];
 }
 #else
@@ -141,6 +141,7 @@ void fillCSGVBrick(const uint decoded_brick_start_uint, const uint inv_lod, cons
 void resetCSGVBrick(const uint decoded_brick_start_uint, const uint inv_lod) {
 #ifdef PALETTE_CACHE
     fillCSGVBrick(decoded_brick_start_uint, inv_lod, 0);
+    // ToDo: do a for loop over full uints and set multiple elements to 0 at once
 #else
     fillCSGVBrick(decoded_brick_start_uint, inv_lod, INVALID);
 #endif
@@ -162,9 +163,9 @@ void decompressCSGVBrick(const uint brick_idx, const uint brick_encoding_length,
 
     // the cache region must be prepared with resetCSGVBrick before decoding
 #ifdef PALETTE_CACHE
-    assertf(CSGV_DECODING_ARRAY[decoded_brick_start_uint] == 0, "brick cache region at %u not reset before deocding", decoded_brick_start_uint);
+    assertf(readEntryFromCache(decoded_brick_start_uint, 0u) == 0, "brick cache region at %u not reset before decoding", CSGV_DECODING_ARRAY[decoded_brick_start_uint]);
 #else
-    assertf(CSGV_DECODING_ARRAY[decoded_brick_start_uint] == INVALID, "brick cache region at %u not reset before deocding", decoded_brick_start_uint);
+    assertf(CSGV_DECODING_ARRAY[decoded_brick_start_uint] == INVALID, "brick cache region at %u not reset before decoding", decoded_brick_start_uint);
 #endif
 
     // The starting position of the current LoD in the encoding array, measured in elements of entry_t. Taken from first brick header entries.
@@ -254,12 +255,6 @@ void decompressCSGVBrick(const uint brick_idx, const uint brick_encoding_length,
                                   _valueOfNeighbor(_cache_idx2pos(i), local_lod_i, lod_width,
                                                    int(operation_lsb - NEIGHBOR_X), decoded_brick_start_uint));
             }
-//            else if (operation_lsb == NEIGHBOR_X)
-//                writeEntryToCache(decoded_brick_start_uint, i, _valueOfNeighbor(_cache_idx2pos(i), local_lod_i, lod_width, 0, decoded_brick_start_uint));
-//            else if (operation_lsb == NEIGHBOR_Y)
-//                writeEntryToCache(decoded_brick_start_uint, i, _valueOfNeighbor(_cache_idx2pos(i), local_lod_i, lod_width, 1, decoded_brick_start_uint));
-//            else if (operation_lsb == NEIGHBOR_Z)
-//                writeEntryToCache(decoded_brick_start_uint, i, _valueOfNeighbor(_cache_idx2pos(i), local_lod_i, lod_width, 2, decoded_brick_start_uint));
 #ifdef PALETTE_CACHE
             // With a palettized cache, the *ascending* palette indices in the bricks *reverse* palette are stored.
             // An index of 1 references the first entry of the reverse palette, at the end of this brick's encoding.
