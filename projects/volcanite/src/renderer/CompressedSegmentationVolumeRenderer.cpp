@@ -43,8 +43,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
         // update invocation sizes to brick dimension
         m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(),
-                              m_compressed_segmentation_volume->getLodCountPerBrick(),
-                              m_compressed_segmentation_volume->getBrickSize());
+                              m_compressed_segmentation_volume->getLodCountPerBrick());
 
         // trigger accumulation buffer and cache resets
         m_pass->resetCacheOnNextCall();
@@ -569,11 +568,15 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
     if(m_use_palette_cache)
         shader_defines.push_back("PALETTE_CACHE");
+    if(m_compressed_segmentation_volume->isUsingParallelDecode()) {
+        shader_defines.push_back("CSGV_PARALLEL_DECODE");
+        shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
+    }
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if(getCtx()->getWsi())
-        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), shader_defines);
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), shader_defines, m_compressed_segmentation_volume->isUsingParallelDecode());
     else
-        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, shader_defines);
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, shader_defines, m_compressed_segmentation_volume->isUsingParallelDecode());
     m_pass->allocateResources();
     m_urender_info = m_pass->getUniformSet("render_info");
     m_usegmented_volume_info = m_pass->getUniformSet("segmented_volume_info");
@@ -602,8 +605,7 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         m_pass->setStorageBuffer(0, 18, *m_materials_buffer);
     }
     m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(),
-                          m_compressed_segmentation_volume->getLodCountPerBrick(),
-                          m_compressed_segmentation_volume->getBrickSize());
+                          m_compressed_segmentation_volume->getLodCountPerBrick());
 //    m_pass->resetCacheOnNextCall();
 }
 

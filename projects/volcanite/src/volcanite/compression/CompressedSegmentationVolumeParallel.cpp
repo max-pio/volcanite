@@ -196,7 +196,7 @@ void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint3
         output_brick[i] = INVALID;
 
     // construct the palette mapping as a prefix sum:
-    // ToDo: this could be a hash map [operation index]->[palette index], precomputed for the brick
+    // ToDo: this would be replaced by the rank(PALETTE_ADV) operation later
     std::vector<uint32_t> palette_prefix_index(getMaxOperationsInBrick());
     {
         uint32_t prefix = 0u;
@@ -205,10 +205,7 @@ void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint3
             if(operation_lsb == PALETTE_ADV)
                 prefix++;
               palette_prefix_index[i] = prefix - 1u;
-//            if(operation_lsb != PALETTE_ADV && operation_lsb != PALETTE_LAST)
-//                palette_prefix_index[i] = INVALID;
         }
-        auto exp = getBrickPaletteLength(brick_idx);
         assert(prefix == getBrickPaletteLength(brick_idx) && "palette prefix sum error");
     }
 
@@ -229,8 +226,6 @@ void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint3
     #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(output_i_offset, output_index_step, output_voxel_count, target_inv_lod, brick_encoding, output_brick, target_brick_size, palette_prefix_index, brick_encoding_length)
     {
         uint32_t output_i = omp_get_thread_num();
-
-//        while (output_i_offset < output_voxel_count) {
         while (output_i < output_voxel_count) {
 
             // Start by reading the operations in the target inverse LoD's encoding:
@@ -272,7 +267,7 @@ void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint3
                         inv_lod_voxel += neighbor[child_index][neighbor_index];
                         inv_lod_op_i = indexOfBrickPos(inv_lod_voxel);
 
-                        // ToDo: remove this! for neighbors with later indices, we have to copy from its parent instead
+                        // ToDo: may be able to remove this later! for neighbors with later indices, we have to copy from its parent instead
                         if (glm::any(glm::greaterThan(neighbor[child_index][neighbor_index], glm::ivec3(0)))) {
                             inv_lod--;
                             inv_lod_op_i /= 8u;

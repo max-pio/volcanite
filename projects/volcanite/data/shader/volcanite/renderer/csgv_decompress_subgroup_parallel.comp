@@ -1,0 +1,193 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_KHR_shader_subgroup_basic : require
+
+#define SUBGROUP_SIZE 64
+
+// TODO: instead of invoking brick_idx_count * SUBGROUP_SIZE for .x, invoke .x=SUBGROUP_SIZE, .y=brick_idx_count?
+// brick_idx_count * SUBGROUP_SIZE invocations: one subgroup is responsible for decompressing one brick
+layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+
+#include "csgv_bindings.glsl"
+
+#include "util.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
+#define CSGV_DECODING_ARRAY g_cache
+#include "volcanite/compression/compressed_segmentation_volume_parallel.glsl"
+
+#define MAX_BRICK_ENCODING_32BIT_LENGTH 12288
+shared uint[MAX_BRICK_ENCODING_32BIT_LENGTH] s_brick_encoding;
+
+uint read4Bit(uint entry_id) {
+    return bitfieldExtract(s_brick_encoding[entry_id/8], 28 - int(entry_id % 8u) * 4, 4);
+}
+
+/** number of PALETTE_ADV occurrences before enc_operation_index. */
+uint rank_palette_adv(uint header_size, uint enc_operation_index) {
+    // TODO: good lord this is expensive if we do it without an O(1) rank
+    uint occurrences = 0u;
+    for(uint entry_id = header_size; entry_id <= enc_operation_index; entry_id++) {
+        if ((read4Bit(entry_id) & 7u) == PALETTE_ADV)
+            occurrences++;
+    }
+    return occurrences;
+}
+
+void main() {
+    assert(gl_NumSubgroups == 1, "decompression assumes exactly one subgroup per workgroup");
+    assert(gl_SubgroupSize == SUBGROUP_SIZE && gl_WorkGroupSize.x == SUBGROUP_SIZE && gl_WorkGroupSize.y == 1u
+            && gl_WorkGroupSize.z == 1u, "decompression assumes workgroup size equal to the subgroup size");
+
+    // one workgroup decompresses one brick
+    const uint workgroup_thread_id = gl_LocalInvocationID.x;
+    const uint workgroup_size = gl_WorkGroupSize.x;
+
+    const uint brick_idx = gl_GlobalInvocationID.x / gl_WorkGroupSize.x;
+    const uvec3 brick = brick_idx2pos(brick_idx, g_brick_count);
+    const uint brick_info_pos = brick_idx * 4u;
+    if (isHelperLane(brick, g_brick_count))
+        return;
+
+    // if this brick has a valid request slot, it requests decompression. Otherwise, it can be ignored.
+    if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] == INVALID) {
+        return;
+    }
+
+    // obtain requested inv_lod and previously assigned cache_idx
+    const uint target_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
+    assert(0 < target_inv_lod && target_inv_lod < g_lod_count, "brick has slot index but requests zero or invalid lod");
+    const uint cache_idx = g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX];
+
+    barrier();
+
+    // reset the requested LOD. the renderer will have to flag everything visible again
+    if (workgroup_thread_id == 0u) {
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = max(g_lod_count, g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]);
+    }
+
+    // decompression requested for brick, but brick could not receive a free cache region
+    if (cache_idx == INVALID) {
+        if (workgroup_thread_id == 0u) {
+            g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = INVALID;
+            g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = INVALID;
+        }
+        return;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //                  perform the decompression of the brick into the previously assigned cache region              //
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    #ifdef SEPARATE_DETAIL
+        assert(!(target_inv_lod == g_lod_count - 1U
+               && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_idx] == g_detail_starts[brick_idx+1])),
+               "detail buffers marked dirty but the provision shader requested detail decoding");
+    #endif
+    // 1. copy brick encoding to shared memory
+    // TODO: care about detail encoding! should be glued to the back of the same region
+    EncodingRef global_brick_encoding = getBrickEncodingRef(brick_idx);
+    const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
+    assert(brick_encoding_length < MAX_BRICK_ENCODING_32BIT_LENGTH, "shared memory brick encoding buffer is too small");
+    for (uint e = workgroup_thread_id; e < brick_encoding_length; e += workgroup_size) {
+        s_brick_encoding[e] = global_brick_encoding.buf[e];
+    }
+    memoryBarrierShared();
+    barrier();
+
+    // 2. iterate over output voxels of brick (cache positions) for the requested LOD and decompress each one in parallel
+    const uint decoded_brick_start_uint = cache_idx * g_cache_base_element_uints;
+    const uint output_voxel_count = 1u << (3u * target_inv_lod);
+    const uint target_brick_size = 1u << target_inv_lod;
+    // The workgroup_size many work items iterate through the Morton indexing order from front to back.
+    // The threads work on the next following items in parallel.
+    //
+    // If workgroup_size >= number_of_output_voxels: each thread computes ONE output element
+    // If workgroup_size <  number_of_output_voxels: each thread computes multiple output elements
+    // With a workgroup_size equal to the subgroup size, optimization like vulkan subgroup operations are posssible.
+    uint output_i = workgroup_thread_id;
+    while (output_i < output_voxel_count) {
+
+        // Compute the label of the output voxel output_i:
+        // vvvvvvvvvvvvvvvvvvvvvvvvv  MOVE TO compressed_segmentation_volume_parallel.glsl? vvvvvvvvvvvvvvvvvvvvvvvvvvvv
+
+        // Start by reading the operations in the target inverse LoD's encoding:
+        uint inv_lod = target_inv_lod;
+        // operation index within in the current inv. LoD, starting at the target LoD
+        uint inv_lod_op_i = output_i;
+        // corresponding voxel position within the inv. LoD
+        uvec3 inv_lod_voxel = _cache_idx2pos(inv_lod_op_i);
+
+        // obtain encoding operation read index (4 bit)
+        uint enc_operation_index = s_brick_encoding[inv_lod] + inv_lod_op_i;
+        uint operation = read4Bit(enc_operation_index);
+
+        assert(enc_operation_index < brick_encoding_length * 8u, "brick encoding out of bounds read");
+        // ToDo: handle stop bits
+        assert((operation & STOP_BIT) == 0u, "stop bit not yet supported in parallel decode");
+
+        // follow the chain of operations from the current output voxel up to an operation that accesses the palette
+        {
+            uint operation_lsb = operation & 7u; // extract least significant 3 bits
+
+            // equal to (operation_lsb != PALETTE_LAST && operation_lsb != PALETTE_ADV && operation_lsb != PALETTE_D)
+            while (operation_lsb < 4u) {
+                // find the read position for the next operation along the chain
+                if (operation_lsb == PARENT) {
+                    // read from the parent in the next iteration
+                    inv_lod--;
+                    inv_lod_op_i /= 8u;
+                    inv_lod_voxel = _cache_idx2pos(inv_lod_op_i);
+                }
+                // operation_lsb is NEIGHBOR_X, NEIGHBOR_Y, or NEIGHBOR_Z:
+                else {
+                    // read from a neighbor in the next iteration
+                    const uint neighbor_index = operation_lsb - NEIGHBOR_X; // X: 0, Y: 1, Z: 2
+                    const uint child_index = inv_lod_op_i % 8u;
+
+                    inv_lod_voxel += neighbor[child_index][neighbor_index];
+                    inv_lod_op_i = _cache_pos2idx(inv_lod_voxel);
+
+                    // ToDo: may be able to remove this later! for neighbors with later indices, we have to copy from its parent instead
+                    if (any(greaterThan(neighbor[child_index][neighbor_index], ivec3(0)))) {
+                        inv_lod--;
+                        inv_lod_op_i /= 8u;
+                        inv_lod_voxel = _cache_idx2pos(inv_lod_op_i);
+                    }
+                }
+
+                // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
+                enc_operation_index = s_brick_encoding[inv_lod] + inv_lod_op_i;
+                operation_lsb = read4Bit(enc_operation_index) & 7u;
+            }
+
+            // at this point, the current operation accesses the palette: write the resulting palette entry
+            // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
+            uint palette_index = rank_palette_adv(s_brick_encoding[0], enc_operation_index - 1u);
+            // the actual palette index may be offset depending on the operation
+            if (operation_lsb == PALETTE_LAST) {
+                palette_index--;
+            }
+            assert(operation_lsb != PALETTE_D, "palette delta operation not supported in parallel decode");
+            assert(palette_index < getBrickPaletteLength(brick_idx), "obtained wrong palette index");
+
+            // Write to the index in the output array. The output array's positions are in Morton order.
+            // But if target_inv_lod < brick_lod_count, there are gaps between the entries.
+            writeEntryToCache(decoded_brick_start_uint, output_i, s_brick_encoding[brick_encoding_length - 1u - palette_index]);
+        }
+
+        // ^^^^^^^^^^^^^^^^^^^^^^^^^  MOVE TO compressed_segmentation_volume_parallel.glsl? ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+        // barrier()
+        output_i += workgroup_size;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // the brick was successfuly decompressed into the cache into the requested inverse LOD, the request can be removed.
+    if (workgroup_thread_id == 0u) {
+        g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = target_inv_lod;
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = INVALID;
+    }
+}

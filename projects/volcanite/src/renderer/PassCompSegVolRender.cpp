@@ -76,7 +76,7 @@ std::vector<std::shared_ptr<Shader>> PassCompSegVolRender::createShaders() {
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_request.comp", .defines= m_shader_defines, .label="csgv_request.comp"}, compileErrorCallback),
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_provision.comp", .defines= m_shader_defines, .label="csgv_provision.comp"}, compileErrorCallback),
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_assign.comp", .defines= m_shader_defines, .label="csgv_assign.comp"}, compileErrorCallback),
-            m_parallel_decode ? std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_decompress_parallel.comp", .defines= m_shader_defines, .label="csgv_decompress_parallel.comp"}, compileErrorCallback) :
+            m_parallel_decode ? std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_decompress_subgroup_parallel.comp", .defines= m_shader_defines, .label="csgv_decompress_subgroup_parallel.comp"}, compileErrorCallback) :
                                 std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_decompress.comp", .defines= m_shader_defines, .label="csgv_decompress.comp"}, compileErrorCallback),
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_renderer.comp", .defines= m_shader_defines, .label="csgv_renderer.comp"}, compileErrorCallback),
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_upsample_resolve.comp", .defines= m_shader_defines, .label="csgv_upsample_resolve.comp"}, compileErrorCallback)

@@ -26,8 +26,14 @@
 
 
 // Indexing and vector utils -------------------------------------------------------------------------------------------
-uint brick_pos2idx(const uvec3 brick_idx, const uvec3 brick_count) {
-    return brick_idx.x + brick_count.x * (brick_idx.y + brick_count.y * brick_idx.z);
+uint brick_pos2idx(const uvec3 brick_pos, const uvec3 brick_count) {
+    return brick_pos.x + brick_count.x * (brick_pos.y + brick_count.y * brick_pos.z);
+}
+
+uvec3 brick_idx2pos(const uint brick_idx, const uvec3 brick_count) {
+    return uvec3(brick_idx % brick_count.x,
+                 (brick_idx / brick_count.x) % brick_count.y,
+                 (brick_idx / brick_count.x / brick_count.y) % brick_count.z);
 }
 
 // adds the element offset (one unit = 4 byte) to the 64 bit address represented in an uvec2

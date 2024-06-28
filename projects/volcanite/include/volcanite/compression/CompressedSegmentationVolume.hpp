@@ -435,6 +435,7 @@ public:
     [[nodiscard]] bool isUsingRANS() const { return m_rANS_mode == SINGLE_TABLE_RANS || m_rANS_mode == DOUBLE_TABLE_RANS; }
     [[nodiscard]] bool isUsingDetailFreq() const { return m_rANS_mode == DOUBLE_TABLE_RANS; }
     [[nodiscard]] bool isUsingSeparateDetail() const { return m_separate_detail; }
+    [[nodiscard]] bool isUsingParallelDecode() const { return m_parallel_decode; }
 
     /** returns the maximum number of uint32 palette entries that any brick in the volume contains. **/
     [[nodiscard]] uint32_t getMaxBrickPaletteCount() const { return m_max_brick_palette_count; };

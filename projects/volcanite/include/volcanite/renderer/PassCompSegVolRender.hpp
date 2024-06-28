@@ -32,8 +32,8 @@ public:
     };
 
     PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering,
-                         std::vector<std::string> shaderDefines = {}, vk::ImageUsageFlags outputImageUsage = {},
-                         bool parallel_decode = false, const std::string& label = "PassCompSegVolRender")
+                         std::vector<std::string> shaderDefines = {}, bool parallel_decode = false,
+                         vk::ImageUsageFlags outputImageUsage = {}, const std::string& label = "PassCompSegVolRender")
         : PassCompute(ctx, label, multiBuffering, ctx->getQueueFamilyIndices().graphics.value()),
           WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_shader_defines(std::move(shaderDefines)),
           m_parallel_decode(parallel_decode) {}
@@ -41,15 +41,14 @@ public:
     AwaitableHandle execute(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override;
 
 
-    void setVolumeInfo(glm::uvec3 brick_count, uint32_t lod_count, uint32_t brick_size) {
+    void setVolumeInfo(glm::uvec3 brick_count, uint32_t lod_count) {
         setGlobalInvocationSize(CACHECLEAR, brick_count.x, brick_count.y, brick_count.z);
         setGlobalInvocationSize(REQUEST, brick_count.x, brick_count.y, brick_count.z);
         setGlobalInvocationSize(PROVISION, lod_count-1u, 1u, 1u);
         setGlobalInvocationSize(ASSIGN, brick_count.x, brick_count.y, brick_count.z);
         if (m_parallel_decode) {
-            setGlobalInvocationSize(DECOMPRESS, brick_count.x * brick_size,
-                                                brick_count.y * brick_size,
-                                                brick_count.z * brick_size);
+            const uint32_t subgroup_size = getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize;
+            setGlobalInvocationSize(DECOMPRESS, brick_count.x * brick_count.y * brick_count.z * subgroup_size, 1u, 1u);
         } else {
             setGlobalInvocationSize(DECOMPRESS, brick_count.x, brick_count.y, brick_count.z);
         }
