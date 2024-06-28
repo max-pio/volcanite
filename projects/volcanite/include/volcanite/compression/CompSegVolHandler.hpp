@@ -153,6 +153,7 @@ public:
     struct CSGVCompressionConfig {
         int brick_dim = 32;
         RANSMode rANS_mode = DOUBLE_TABLE_RANS;
+        bool parallel_decoding = false;
         std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> label_remapping = nullptr;
         uint32_t cpu_threads = 0u;
         bool use_detail_separation = false;
@@ -203,9 +204,11 @@ public:
 
 
         if(cfg.verbose) {
-            Logger(INFO) << "Compressing " << volume_input_path <<
-                         (cfg.chunked_input_data ? " with chunk indices " + str(cfg.max_file_index) : "") << " to " << csgv_path <<
-                         " [b=" << cfg.brick_dim << ", s=" << cfg.rANS_mode << "]" << (cfg.use_detail_separation ? " with lod separation" : "");
+            Logger(INFO) << "Compressing " << volume_input_path
+                         << (cfg.chunked_input_data ? " with chunk indices " + str(cfg.max_file_index) : "")
+                         << " to " << csgv_path << " [b=" << cfg.brick_dim << ", s=" << cfg.rANS_mode
+                         << (cfg.parallel_decoding ? ", p" : "") << "]"
+                         << (cfg.use_detail_separation ? " with lod separation" : "");
 
         }
 
@@ -263,7 +266,7 @@ public:
                             volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
 
                             size_t tmp_code_frequencies[32];
-                            csgv->setCompressionOptions(cfg.brick_dim, NO_RANS);
+                            csgv->setCompressionOptions(cfg.brick_dim, NO_RANS, cfg.parallel_decoding);
                             csgv->compressForFrequencyTable(volume->data(), volume_dim, tmp_code_frequencies, cfg.freq_subsampling, cfg.rANS_mode == DOUBLE_TABLE_RANS, false);
                             for (int i = 0; i < 16; i++) {
                                 code_frequencies[i] += tmp_code_frequencies[i];
@@ -338,7 +341,8 @@ public:
 
                         // perform the actual compression
                         csgv->clear();
-                        csgv->setCompressionOptions64(cfg.brick_dim, cfg.rANS_mode, code_frequencies.data(), detail_code_frequencies.data());
+                        csgv->setCompressionOptions64(cfg.brick_dim, cfg.rANS_mode, cfg.parallel_decoding,
+                                                      code_frequencies.data(), detail_code_frequencies.data());
                         csgv->compress(volume->data(), volume_dim, cfg.verbose);
                         total_encoding_seconds += csgv->getLastTotalEncodingSeconds();
                         if (std::filesystem::exists(chunk_output_path)) {
