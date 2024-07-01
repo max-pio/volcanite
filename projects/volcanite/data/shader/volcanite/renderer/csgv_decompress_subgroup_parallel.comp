@@ -4,7 +4,9 @@
 #extension GL_EXT_buffer_reference_uvec2 : require
 #extension GL_KHR_shader_subgroup_basic : require
 
-#define SUBGROUP_SIZE 64
+#ifndef SUBGROUP_SIZE
+    #define SUBGROUP_SIZE 64
+#endif
 
 // TODO: instead of invoking brick_idx_count * SUBGROUP_SIZE for .x, invoke .x=SUBGROUP_SIZE, .y=brick_idx_count?
 // brick_idx_count * SUBGROUP_SIZE invocations: one subgroup is responsible for decompressing one brick
@@ -68,9 +70,10 @@ void main() {
     //                  perform the decompression of the brick into the previously assigned cache region              //
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     #ifdef SEPARATE_DETAIL
-        assert(!(target_inv_lod == g_lod_count - 1U
-               && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_idx] == g_detail_starts[brick_idx+1])),
-               "detail buffers marked dirty but the provision shader requested detail decoding");
+        assert(false, "Parallel decompression does not support detail separation yet");
+//        assert(!(target_inv_lod == g_lod_count - 1U
+//               && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_idx] == g_detail_starts[brick_idx+1])),
+//               "detail buffers marked dirty but the provision shader requested detail decoding");
     #endif
     // 1. copy brick encoding to shared memory
     // TODO: care about detail encoding! should be glued to the back of the same region

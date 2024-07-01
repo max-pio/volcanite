@@ -196,7 +196,7 @@ void decompressCSGVVoxelSharedMemory(const uint output_i, const uint brick_encod
         // TODO: This is a race condition! Different threads write to (different bits of) the same uint in the cache
         writeEntryToCache(decoded_brick_start_uint, output_i, palette_index + 1u);
 #else
-        writeEntryToCache(decoded_brick_start_uint, output_i, 1u);// CSGV_SHARED_MEMORY_BRICK_ENCODING[brick_encoding_length - 1u - palette_index]);
+        writeEntryToCache(decoded_brick_start_uint, output_i, CSGV_SHARED_MEMORY_BRICK_ENCODING[brick_encoding_length - 1u - palette_index]);
 #endif
     }
 }
