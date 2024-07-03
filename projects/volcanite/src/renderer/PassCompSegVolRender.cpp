@@ -75,4 +75,8 @@ std::vector<std::shared_ptr<Shader>> PassCompSegVolRender::createShaders() {
             };
 }
 
+std::vector<vk::PushConstantRange> PassCompSegVolRender::definePushConstantRanges() {
+    return {};
+}
+
 } // namspace vvv

@@ -311,7 +311,7 @@ void PassBase::createCommandBuffers()  {
     }
 }
 
-void PassBase::createPipelineLayout(uint32_t push_constant_byte_size) {
+void PassBase::createPipelineLayout() {
 
     const auto device = getCtx()->getDevice();
     const auto debug = getCtx()->debugMarker;
@@ -367,14 +367,10 @@ void PassBase::createPipelineLayout(uint32_t push_constant_byte_size) {
     }
 
     vk::PipelineLayoutCreateInfo pipeInfo({}, m_descriptorSetLayouts);
-    vk::PushConstantRange pcr;
-    pcr.offset = 0;
-    pcr.size = push_constant_byte_size;
-    pcr.stageFlags = vk::ShaderStageFlagBits::eCompute;
-    if (push_constant_byte_size > 0)
-    {
-        pipeInfo.pushConstantRangeCount = 1;
-        pipeInfo.pPushConstantRanges = &pcr;
+    std::vector<vk::PushConstantRange> pushConstantRanges = definePushConstantRanges();
+    if (!pushConstantRanges.empty()) {
+        pipeInfo.pushConstantRangeCount = pushConstantRanges.size();
+        pipeInfo.pPushConstantRanges = pushConstantRanges.data();
     }
     m_pipelineLayout = device.createPipelineLayout(pipeInfo);
     debug->setName(m_pipelineLayout, m_label + ".m_pipelineLayout");
