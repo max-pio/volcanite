@@ -207,7 +207,9 @@ protected:
     //! Creates all shaders that are used in this pass. Shader reflections from this pass are performed on this shader list.
     virtual std::vector<std::shared_ptr<Shader>> createShaders() = 0;
 
-    void createPipelineLayout(uint32_t push_constant_byte_size = 0);
+    virtual std::vector<vk::PushConstantRange> definePushConstantRanges() { return {}; };
+
+    void createPipelineLayout();
 
     //! Creates one (single pass) or more (multi pass) pipelines. At this point, the pipeline layout is already created from the shaders.
     virtual std::vector<vk::Pipeline> createPipelines() = 0;

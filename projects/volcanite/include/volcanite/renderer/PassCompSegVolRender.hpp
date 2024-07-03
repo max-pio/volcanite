@@ -53,6 +53,8 @@ public:
 
 protected:
     std::vector<std::shared_ptr<Shader>> createShaders() override;
+    std::vector<vk::PushConstantRange> definePushConstantRanges() override;
+
     void setGlobalInvocationSize(CSGVRenderStage shader_index, uint32_t width, uint32_t height, uint32_t depth) {
         assert(shader_index < m_shaders.size());
         m_workgroupCount[shader_index] = getDispatchSize(width, height, depth, m_shaders[shader_index]->reflectWorkgroupSize());
