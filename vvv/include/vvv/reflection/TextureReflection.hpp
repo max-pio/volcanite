@@ -97,6 +97,8 @@ const std::map<SpvImageFormat, vk::Format> spvr2vk_format{
  */
 std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts);
 
+std::vector<std::shared_ptr<Texture>> reflectTextureArray(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts);
+
 std::shared_ptr<Texture> reflectColorAttachment(vvv::GpuContextPtr ctx,vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts);
 
 }; // namespace vvv
