@@ -62,13 +62,11 @@ DescriptorBinding PassBase::findDescriptorBindingByName(const std::string &name)
 }
 
 void PassBase::setImageSampler(uint32_t setIdx, uint32_t bindingIdx, Texture &texture, vk::ImageLayout layout, bool atActiveIndex) {
-    // TODO: array element support
     // TODO: batching into a single write with multiple sets, does that improve perf?
     updateDescriptorSetsImage(setIdx, bindingIdx, texture, vk::DescriptorType::eCombinedImageSampler, layout, atActiveIndex);
 }
 
 void PassBase::setImageSamplerArray(uint32_t setIdx, uint32_t bindingIdx, uint32_t arrayElement, Texture &texture, vk::ImageLayout layout, bool atActiveIndex) {
-    // TODO: array element support
     // TODO: batching into a single write with multiple sets, does that improve perf?
     updateDescriptorSetsImageArray(setIdx, bindingIdx, arrayElement, texture, vk::DescriptorType::eCombinedImageSampler, layout, atActiveIndex);
 }

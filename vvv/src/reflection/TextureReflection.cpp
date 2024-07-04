@@ -7,6 +7,7 @@ std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<c
     vk::ImageUsageFlags usage = opts.usage;
     auto format = opts.format;
     std::string label = "";
+    uint32_t array_dims_count = 0;
 
     bool used = false;
 
@@ -23,7 +24,6 @@ std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<c
             label = shader->label + "." + names.data()[j];
 
             const auto binding = binding_.value();
-
             used = true;
 
             const auto binding_dim = details::spvr2vvv_Dimensions.at(binding->image.dim);
@@ -37,8 +37,7 @@ std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<c
                 throw std::runtime_error("texture reflection, unable to reflect descriptor type. Maybe you can add reflection logic for it?");
             }
 
-            assert(binding->array.dims_count == 0 && "texture reflection, arrays currently unsupported. Maybe you can implement it?");
-            assert(binding->count == 1 && "texture reflection, arrays currently unsupported. Maybe you can implement it?");
+            array_dims_count = binding->array.dims_count;
 
             if (!format && binding->image.image_format != SpvImageFormatUnknown) {
                 format = details::spvr2vk_format.at(binding->image.image_format);
@@ -57,6 +56,10 @@ std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<c
         }
     }
 
+    if(array_dims_count > 0) {
+        Logger(WARN) << "reflecting texture array for " << label << " as single texture. Use reflectTextureArray instead of reflectTexture.";
+    }
+
     if (!used) {
         std::string namesStr;
         for(int i = 0; i < names.size(); i++)
@@ -71,6 +74,105 @@ std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<c
     auto texture = std::make_shared<Texture>(ctx, format.value(), dim, opts.width, opts.height, opts.depth, usage, opts.queues);
     texture->setName(label);
     return texture;
+}
+
+std::vector<std::shared_ptr<Texture>> reflectTextureArray(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts) {
+    TextureDimensions dim;
+    vk::ImageUsageFlags usage = opts.usage;
+    auto format = opts.format;
+    std::string label = "";
+    uint32_t array_dims_count = 0;
+    uint32_t array_dims[32];
+
+    bool used = false;
+
+    for (const auto &shader : shaders) {
+        // TODO(Reiner): there is a `accessed` flag on bindings. not sure how it works... but we could probably
+        // skip or ignore bindings that are not accessed...
+        for (int j = 0; j < names.size(); ++j) {
+            const auto binding_ = shader->tryRawReflectBindingByName(names.data()[j]);
+
+            if (!binding_) {
+                continue;
+            }
+
+            label = shader->label + "." + names.data()[j];
+
+            const auto binding = binding_.value();
+            used = true;
+
+            const auto binding_dim = details::spvr2vvv_Dimensions.at(binding->image.dim);
+
+            // TODO(Reiner): we can derive a lot more things here :)
+            if (binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
+                usage |= vk::ImageUsageFlagBits::eSampled;
+            } else if (binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
+                usage |= vk::ImageUsageFlagBits::eStorage;
+            } else {
+                throw std::runtime_error("texture reflection, unable to reflect descriptor type. Maybe you can add reflection logic for it?");
+            }
+
+            array_dims_count = binding->array.dims_count;
+            for(int d=0; d < array_dims_count; d++)
+                array_dims[d] = binding->array.dims[d];
+
+            if (!format && binding->image.image_format != SpvImageFormatUnknown) {
+                format = details::spvr2vk_format.at(binding->image.image_format);
+            }
+
+            if (j == 0) {
+                dim = binding_dim;
+            } else {
+                if (binding_dim != dim) {
+                    throw std::runtime_error("texture reflection, incompatible binding dimensions");
+                }
+                if (format && binding->image.image_format != SpvImageFormatUnknown && format != static_cast<vk::Format>(binding->image.image_format)) {
+                    throw std::runtime_error("texture reflection, incompatible image formats");
+                }
+            }
+        }
+    }
+
+    if(array_dims_count == 0) {
+        Logger(WARN) << "reflecting single texture " << label << " as array texture. Use reflectTexture instead of reflectTextureArray.";
+    }
+
+    if (!used) {
+        std::string namesStr;
+        for(int i = 0; i < names.size(); i++)
+            namesStr += ((i != 0) ? "|" : "") + names.data()[i];
+        throw std::runtime_error("none of the given uniform names '" + namesStr + "' could be found in any of the shaders");
+    }
+
+    if (!format) {
+        throw std::runtime_error("texture reflection, unable to derive image format, specify one explicitly");
+    }
+
+    // create a flattened 1D array containing all textures
+    // ToDo: store the texture array index in a more useful way instead of just in the string label?
+    uint32_t number_of_textures = 1;
+    for (int i = 0; i < array_dims_count; i++)
+        number_of_textures *= array_dims[i];
+    std::vector<std::shared_ptr<Texture>> textures(number_of_textures);
+    uint32_t idx[32];
+    for (int t = 0; t < number_of_textures; t++) {
+
+        std::stringstream array_label;
+        array_label << label;
+        uint32_t scale = 1u;
+        for(int d = 0; d < array_dims_count; d++) {
+            idx[d] = (t / scale) % array_dims[d];
+            scale *= array_dims[d];
+            array_label << "[" << idx[d] << "]";
+        }
+
+
+        auto texture = std::make_shared<Texture>(ctx, format.value(), dim, opts.width, opts.height, opts.depth,
+                                                     usage, opts.queues);
+        texture->setName(array_label.str());
+        textures[t] = texture;
+    }
+    return textures;
 }
 
 // TODO(Max) pull this upwards inside one unified method where colorAttachments and textures can be reflected in one command
