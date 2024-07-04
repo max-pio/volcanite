@@ -43,8 +43,21 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
     commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
     getCtx()->debugMarker->endRegion(commandBuffer); // ray_marching
 
-    // inpainting (for progressive pixel subsampling rendering)
-    executeCommands(commandBuffer, INPAINTING);
+    // denoising
+    getCtx()->debugMarker->beginRegion(commandBuffer, "denoising", glm::vec4(0.f, 0.f, 1.f, 1.f));
+    commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, m_pipelines.at(INPAINTING));
+    static constexpr int svgf_passes = 3;
+    for (uint32_t i = 0; i < svgf_passes; i++) {
+        PushConstants pushConstants{.denoising_iteration=i};
+        commandBuffer.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants), &pushConstants);
+//        executeCommands(commandBuffer, INPAINTING);
+        if (hasDescriptors()) {
+            commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_pipelineLayout, 0, m_descriptorSets->getActive(), nullptr);
+        }
+        commandBuffer.dispatch(m_workgroupCount[INPAINTING].width, m_workgroupCount[INPAINTING].height, m_workgroupCount[INPAINTING].depth);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
+    }
+    getCtx()->debugMarker->endRegion(commandBuffer); // denoising
 
     getCtx()->debugMarker->endRegion(commandBuffer); // total_renderer
     commandBuffer.end();
@@ -76,7 +89,12 @@ std::vector<std::shared_ptr<Shader>> PassCompSegVolRender::createShaders() {
 }
 
 std::vector<vk::PushConstantRange> PassCompSegVolRender::definePushConstantRanges() {
-    return {};
+    vk::PushConstantRange pushConstantRange{};
+    pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eCompute;
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof(PushConstants);
+
+    return {pushConstantRange};
 }
 
 } // namspace vvv

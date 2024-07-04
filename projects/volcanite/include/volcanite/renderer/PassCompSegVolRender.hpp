@@ -52,6 +52,10 @@ public:
     bool willCacheBeResetOnNextCall() { return m_reset_cache; }
 
 protected:
+    struct PushConstants {
+        uint32_t denoising_iteration;
+    };
+
     std::vector<std::shared_ptr<Shader>> createShaders() override;
     std::vector<vk::PushConstantRange> definePushConstantRanges() override;
 

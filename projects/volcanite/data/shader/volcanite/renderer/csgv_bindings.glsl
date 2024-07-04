@@ -162,6 +162,7 @@ layout (std140, binding = 10) uniform render_info {
 layout (binding = 13, rgba32f) uniform restrict readonly image2D feedbackIn;
 layout (binding = 14, rgba32f) uniform restrict image2D feedbackOut;
 layout (binding = 20, rg8ui) uniform restrict uimage2D gBuffer;
+layout(binding = 21, rgba32f) uniform image2D denoisingBuffer[2];
 layout (binding = 15, rgba8) uniform restrict writeonly image2D inpaintedOutColor;
 
 
@@ -185,3 +186,9 @@ layout(std430, binding = 18) buffer restrict readonly materials
 };
 
 layout(binding = 19) uniform sampler1D s_transferFunctions[SEGMENTED_VOLUME_MATERIAL_COUNT];
+
+
+layout(push_constant) uniform restrict readonly PushConstants
+{
+    uint denoising_iteration; // denoising iteration variable for ping pong svgf-buffer
+} pc;

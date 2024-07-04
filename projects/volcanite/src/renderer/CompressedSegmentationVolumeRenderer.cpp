@@ -205,6 +205,11 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     // feedback texture ping pong for the inpainting shader
     m_pass->setStorageImage("feedbackIn", *m_feedback_tex[m_frame % 2u]);
     m_pass->setStorageImage("feedbackOut", *m_feedback_tex[1u - (m_frame % 2u)]);
+
+    // ping pong texture for svgf
+    m_pass->setStorageImageArray("denoisingBuffer", 0, *m_denoise_tex[0], vk::ImageLayout::eGeneral, false);
+    m_pass->setStorageImageArray("denoisingBuffer", 1, *m_denoise_tex[1], vk::ImageLayout::eGeneral, false);
+
     // 16 bit packed gBuffer texture storing
     m_pass->setStorageImage("gBuffer", *m_gBuffer_tex);
 
@@ -491,6 +496,14 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
     }
+
+    m_denoise_tex = m_pass->reflectTextureArray("denoisingBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    for (auto & texture : m_denoise_tex) {
+        texture->ensureResources();
+        const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
+        reinitDone.push_back(layoutTransformDone);
+    }
+
     m_gBuffer_tex = m_pass->reflectTexture("gBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     {
         m_gBuffer_tex->ensureResources();
@@ -532,6 +545,10 @@ void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
         m_feedback_tex[0] = nullptr;
     if(m_feedback_tex[1])
         m_feedback_tex[1] = nullptr;
+    if(m_denoise_tex[0])
+        m_denoise_tex[0] = nullptr;
+    if(m_denoise_tex[1])
+        m_denoise_tex[1] = nullptr;
     if(m_gBuffer_tex)
         m_gBuffer_tex = nullptr;
     if (m_inpaintedOutColor)
