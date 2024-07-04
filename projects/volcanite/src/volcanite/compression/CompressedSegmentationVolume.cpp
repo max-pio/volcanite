@@ -618,14 +618,14 @@ void CompressedSegmentationVolume::decodeBrick(uint32_t brick_idx, uint32_t* out
 }
 
 void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume, const glm::uvec3 volume_dim, bool verbose) {
-    if(m_brick_size == 0u)
+    if (m_brick_size == 0u)
         throw std::runtime_error("Compression parameters are not initialized!");
-    if(m_parallel_decode && volume_dim.x % m_brick_size + volume_dim.y % m_brick_size + volume_dim.y % m_brick_size != 0u)
+    if (m_parallel_decode && volume_dim.x % m_brick_size + volume_dim.y % m_brick_size + volume_dim.y % m_brick_size != 0u)
         throw std::runtime_error("Volume size must be evenly dividable by brick size for in-brick parallelism!");
 
     m_volume_dim = volume_dim;
     glm::uvec3 brickCount = getBrickCount();
-    if(verbose) {
+    if (verbose) {
         Logger(DEBUG) << " running with " << m_cpu_threads << " threads on " << std::thread::hardware_concurrency() << " CPU cores";
         Logger(DEBUG) << " brick count: " << str(brickCount) << " = " << getBrickIndexCount() << " with brick size " << m_brick_size << "^3";
     }
@@ -684,7 +684,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
             if (brick_index + thread_id < brick_index_count) {
                 glm::uvec3 brick = brick_idx2pos(brick_index + thread_id, brickCount);
                 // compress the current brick
-                if(m_parallel_decode)
+                if (m_parallel_decode)
                     encoded_element_count[thread_id] = encodeBrickForParallelDecode(volume, encodedBrick[thread_id], brick * m_brick_size, m_volume_dim);
                 else
                     encoded_element_count[thread_id] = encodeBrick(volume, encodedBrick[thread_id], brick * m_brick_size, m_volume_dim);
@@ -846,7 +846,7 @@ void CompressedSegmentationVolume::decompressBrickTo(uint32_t* out, glm::uvec3 b
                                                 glm::uvec3(m_brick_size)), inverse_lod);
     }
     else {
-        if(m_parallel_decode) {
+        if (m_parallel_decode) {
             parallelDecodeBrick(brick_idx, out,
                                 glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u), glm::uvec3(m_brick_size)),
                                 inverse_lod);
@@ -1316,15 +1316,15 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
                     unsigned int thread_id = omp_get_thread_num();
                     if (brick.x + thread_id*subsampling_factor < brickCount.x) {
                         // compress the current brick
-                        if(m_parallel_decode) {
-                            freqEncodeBrick(volume, brick_freq[thread_id],
-                                            glm::uvec3(brick.x + thread_id * subsampling_factor, brick.y, brick.z) *
-                                            m_brick_size, m_volume_dim, detail_freq);
-                        }
-                        else {
+                        if (m_parallel_decode) {
                             freqEncodeBrickForParallelDecode(volume, brick_freq[thread_id],
                                                              glm::uvec3(brick.x + thread_id * subsampling_factor, brick.y, brick.z) *
                                                              m_brick_size, m_volume_dim, detail_freq);
+                        }
+                        else {
+                            freqEncodeBrick(volume, brick_freq[thread_id],
+                                            glm::uvec3(brick.x + thread_id * subsampling_factor, brick.y, brick.z) *
+                                            m_brick_size, m_volume_dim, detail_freq);
                         }
                     }
                 }

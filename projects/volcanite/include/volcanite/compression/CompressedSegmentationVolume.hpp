@@ -685,7 +685,7 @@ private:
     RANS m_rans;
     RANS m_detail_rans;
     RANSMode m_rANS_mode;
-    bool m_parallel_decode = true;                  /// decompresses with in-brick parallelism and encodes bricks accordingly
+    bool m_parallel_decode = false;                 /// decompresses with in-brick parallelism and encodes bricks accordingly
     bool m_separate_detail;
     uint32_t m_max_brick_palette_count;             /// the max. palette length of any brick as a number of label entries
 

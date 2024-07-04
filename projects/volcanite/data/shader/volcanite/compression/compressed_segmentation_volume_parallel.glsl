@@ -102,6 +102,7 @@ const ivec3 neighbor[8][3] = {  {ivec3(-1, 0, 0), ivec3(0, -1, 0), ivec3(0, 0, -
                                 {ivec3( 1, 0, 0), ivec3(0,  1, 0), ivec3(0, 0,  1)}};
 
 uint _readOperationFromEncoding(uint entry_id) {
+    // ToDo: this is where the implementation of access(i) of the wavelet tree goes
     return bitfieldExtract(CSGV_SHARED_MEMORY_BRICK_ENCODING[entry_id/8], 28 - int(entry_id % 8u) * 4, 4);
 }
 
