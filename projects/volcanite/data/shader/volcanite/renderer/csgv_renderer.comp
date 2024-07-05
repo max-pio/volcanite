@@ -589,7 +589,7 @@ void main() {
         vec4 surface_albedo_opacity = getColor(state.label, material);
 
         // ENTER SEMI-TRANSPARENT VOLUME
-        // ToDo: integrate this into the correct path tracing interaction
+        // ToDo: integrate this into the correct path tracing interaction, simplify BRDF sampling e.g. https://boksajak.github.io/files/CrashCourseBRDF.pdf
         if (surface_albedo_opacity.a < 1.f) {
             if(state.last_label != state.label) {
                 // add the contribution of a semi-transparent surface (local shading only)

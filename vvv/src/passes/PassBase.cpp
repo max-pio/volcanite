@@ -62,13 +62,11 @@ DescriptorBinding PassBase::findDescriptorBindingByName(const std::string &name)
 }
 
 void PassBase::setImageSampler(uint32_t setIdx, uint32_t bindingIdx, Texture &texture, vk::ImageLayout layout, bool atActiveIndex) {
-    // TODO: array element support
     // TODO: batching into a single write with multiple sets, does that improve perf?
     updateDescriptorSetsImage(setIdx, bindingIdx, texture, vk::DescriptorType::eCombinedImageSampler, layout, atActiveIndex);
 }
 
 void PassBase::setImageSamplerArray(uint32_t setIdx, uint32_t bindingIdx, uint32_t arrayElement, Texture &texture, vk::ImageLayout layout, bool atActiveIndex) {
-    // TODO: array element support
     // TODO: batching into a single write with multiple sets, does that improve perf?
     updateDescriptorSetsImageArray(setIdx, bindingIdx, arrayElement, texture, vk::DescriptorType::eCombinedImageSampler, layout, atActiveIndex);
 }
@@ -311,7 +309,7 @@ void PassBase::createCommandBuffers()  {
     }
 }
 
-void PassBase::createPipelineLayout(uint32_t push_constant_byte_size) {
+void PassBase::createPipelineLayout() {
 
     const auto device = getCtx()->getDevice();
     const auto debug = getCtx()->debugMarker;
@@ -367,14 +365,10 @@ void PassBase::createPipelineLayout(uint32_t push_constant_byte_size) {
     }
 
     vk::PipelineLayoutCreateInfo pipeInfo({}, m_descriptorSetLayouts);
-    vk::PushConstantRange pcr;
-    pcr.offset = 0;
-    pcr.size = push_constant_byte_size;
-    pcr.stageFlags = vk::ShaderStageFlagBits::eCompute;
-    if (push_constant_byte_size > 0)
-    {
-        pipeInfo.pushConstantRangeCount = 1;
-        pipeInfo.pPushConstantRanges = &pcr;
+    std::vector<vk::PushConstantRange> pushConstantRanges = definePushConstantRanges();
+    if (!pushConstantRanges.empty()) {
+        pipeInfo.pushConstantRangeCount = pushConstantRanges.size();
+        pipeInfo.pPushConstantRanges = pushConstantRanges.data();
     }
     m_pipelineLayout = device.createPipelineLayout(pipeInfo);
     debug->setName(m_pipelineLayout, m_label + ".m_pipelineLayout");

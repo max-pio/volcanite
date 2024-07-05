@@ -1,5 +1,6 @@
 #pragma once
 
+#include <utility>
 #include <vvv/core/preamble.hpp>
 
 #include <vvv/core/MultiBuffering.hpp>
@@ -149,10 +150,15 @@ public:
 
     [[nodiscard]] std::shared_ptr<UniformReflected> reflectUniformSet(const std::string &name) const { return ::vvv::reflectUniformSet(getCtx(), getShaders(), name); }
     [[nodiscard]] std::shared_ptr<Texture> reflectTexture(vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts) const {
-        return ::vvv::reflectTexture(getCtx(), getShaders(), names, opts);
+        return ::vvv::reflectTexture(getCtx(), getShaders(), names, std::move(opts));
     }
     std::shared_ptr<Texture> reflectTexture(const char *name, TextureReflectionOptions opts) const { return reflectTexture(std::string(name), std::move(opts)); }
     std::shared_ptr<MultiBufferedTexture> reflectTextures(const char *name, TextureReflectionOptions opts) const;
+
+    [[nodiscard]] std::vector<std::shared_ptr<Texture>> reflectTextureArray(vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts) const {
+        return ::vvv::reflectTextureArray(getCtx(), getShaders(), names, std::move(opts));
+    }
+    std::vector<std::shared_ptr<Texture>> reflectTextureArray(const char *name, TextureReflectionOptions opts) const { return reflectTextureArray(std::string(name), std::move(opts)); }
 
     //
     // A note on caching of descriptor sets: the healthy mental model is that you are rebuilding descriptor sets each
@@ -207,7 +213,9 @@ protected:
     //! Creates all shaders that are used in this pass. Shader reflections from this pass are performed on this shader list.
     virtual std::vector<std::shared_ptr<Shader>> createShaders() = 0;
 
-    void createPipelineLayout(uint32_t push_constant_byte_size = 0);
+    virtual std::vector<vk::PushConstantRange> definePushConstantRanges() { return {}; };
+
+    void createPipelineLayout();
 
     //! Creates one (single pass) or more (multi pass) pipelines. At this point, the pipeline layout is already created from the shaders.
     virtual std::vector<vk::Pipeline> createPipelines() = 0;
