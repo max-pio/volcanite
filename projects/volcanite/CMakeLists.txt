@@ -46,7 +46,6 @@ function(makeVolcaniteExecutable name)
     installExecutable(${name})
 endfunction()
 
-makeVolcaniteExecutable(compression)
 makeVolcaniteExecutable(compression_synth)
 makeVolcaniteExecutable(csgv_brick_viewer)
 makeVolcaniteExecutable(volcanite)
