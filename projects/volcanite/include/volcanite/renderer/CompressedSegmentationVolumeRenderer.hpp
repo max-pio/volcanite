@@ -121,7 +121,7 @@ public:
 
 
         if(csgv->getBrickCount().x < csgv->getLodCountPerBrick()) {
-            Logger(WARN) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
+            Logger(DEBUG) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
                          ") in one dimension than there are brick level-of-details (" << csgv->getLodCountPerBrick() <<
                          "). This may break some shaders. Advice: Re-Compress with a smaller brick-size.";
         }
@@ -196,7 +196,7 @@ private:
     bool m_envmap_enabled = false;
     float m_shadow_pathtracing_ratio = 1.0f;
     glm::vec2 m_ambient_occlusion_dist_strength = glm::vec2(15.f, 0.5f);
-    glm::vec3 m_light_direction = glm::vec3(-1.f, 1.f, 0.1f);
+    glm::vec3 m_light_direction = glm::vec3(0.309426f, 0.721995f, 0.618853f);
     float m_light_intensity = 1.f;
     // voxel traversal
     int m_max_path_length = 32;
@@ -297,7 +297,7 @@ private:
     } m_last_gpu_stats = {};
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
 
-    bool m_release_version = false;     // set to true if this is used in a renderer to release. Some parameters are hidden / set to default values in that case.
+    bool m_release_version = false;                                    ///< if this is used in a release where development parameters are hidden
 
     vk::Extent2D m_resolution;
     size_t m_camHash;

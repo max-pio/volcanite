@@ -40,7 +40,7 @@ namespace vvv {
         glfwSetScrollCallback(m_window, &CameraController::glfwUpdateScrollWheel);
     }
 
-    void CameraController::updateCamera() {
+    void CameraController::updateCamera(bool captureMouse, bool captureKeyboard) {
         if (!m_window || !m_camera) {
             throw std::runtime_error("GLFWwindow or camera not set before trying to update camera controller");
         }
@@ -48,17 +48,8 @@ namespace vvv {
         // read scroll wheel value
         float scrollWheelDelta = static_cast<float>(s_mouse_scroll_wheel - m_mouse_scroll_wheel_previous_frame);
         m_mouse_scroll_wheel_previous_frame = s_mouse_scroll_wheel;
-
-#ifdef IMGUI
-        // do not process mouse input if the pointer is in a GUI window
-        if (ImGui::GetIO().WantCaptureMouse)
+        if (!captureMouse)
             scrollWheelDelta = 0.f;
-
-        // do not process keyboard input if ImGui obtains text input
-        bool captureKeyboard = !ImGui::GetIO().WantCaptureKeyboard;
-#else
-        bool captureKeyboard = true;
-#endif
 
         // Figure out how much time has passed since the last invocation
         static double last_time = 0.0;
@@ -71,13 +62,11 @@ namespace vvv {
 
         int left_mouse_state = glfwGetMouseButton(m_window, GLFW_MOUSE_BUTTON_1);
         int right_mouse_state = glfwGetMouseButton(m_window, GLFW_MOUSE_BUTTON_2);
-#ifdef IMGUI
-        // do not process mouse input if the pointer is in a GUI window
-        if (ImGui::GetIO().WantCaptureMouse) {
+        if (!captureMouse) {
             left_mouse_state = GLFW_RELEASE;
             right_mouse_state = GLFW_RELEASE;
         }
-#endif
+
 
         float final_speed = m_camera->speed * 0.5f;
         final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 2.0f : 1.0f;

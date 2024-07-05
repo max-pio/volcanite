@@ -45,7 +45,7 @@ namespace vvv {
 
         void setWindow(GLFWwindow* window);
 
-        void updateCamera();
+        void updateCamera(bool captureMouse = true, bool captureKeyboard = true);
     };
 
 }

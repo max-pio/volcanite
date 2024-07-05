@@ -280,9 +280,11 @@ int Application::exec() {
 #ifdef IMGUI
         if(m_display_imgui)
             m_gui->renderGui();
+        // do not capture mouse or keyboard input if in an imgui window
+        m_camera_controller.updateCamera(!ImGui::GetIO().WantCaptureMouse, !ImGui::GetIO().WantCaptureKeyboard);
+#else
+        m_camera_controller.updateCamera(true, true);
 #endif
-
-        m_camera_controller.updateCamera();
         processParameterRecording();
         renderFrame();
         processVideoRecording();
