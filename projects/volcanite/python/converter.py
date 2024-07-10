@@ -1,9 +1,10 @@
-import io
 import os
 import string
 
 import numpy as np
-import pyvista as pv
+from vtkmodules.vtkCommonDataModel import vtkImageData
+from vtkmodules.vtkIOXML import vtkXMLImageDataReader, vtkXMLImageDataWriter
+from vtkmodules.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 import h5py
 import PIL.Image as Image
 import nibabel as nib
@@ -32,21 +33,21 @@ def read_vraw(path_in):
     return vraw_volume
 
 
-def write_vraw(volume, out_path):
-    file = open(out_path, "wb")
-    # write two line header:
-    # [DimX] [DimY] [DimZ]
-    # [data type]
-    file.write(
-        (str(volume.shape[2]) + " " + str(volume.shape[1]) + " " + str(volume.shape[0]) + "\n").encode('utf8'))
-    file.write("uint32\n".encode('utf8'))
-    # write binary
-    np.ascontiguousarray(volume.astype('uint32')).tofile(file)
-    # for z in range(volume.shape[0]):
-    #     for y in range(volume.shape[1]):
-    #         for x in range(volume.shape[2]):
-    #             file.write(volume[z, y, x])
-    file.close()
+def write_vraw(volume, out_path, dtype=None):
+    volume = guard_volume_dtype(volume, dtype)
+    with open(out_path, "wb") as file:
+        # write two line header:
+        # [DimX] [DimY] [DimZ]
+        # [data type]
+        file.write(
+            (str(volume.shape[2]) + " " + str(volume.shape[1]) + " " + str(volume.shape[0]) + "\n").encode('utf8'))
+        file.write((volume.dtype + "\n").encode('utf8'))
+        # write binary
+        np.ascontiguousarray(volume.astype(volume.dtype)).tofile(file)
+        # for z in range(volume.shape[0]):
+        #     for y in range(volume.shape[1]):
+        #         for x in range(volume.shape[2]):
+        #             file.write(volume[z, y, x])
 
 
 # NRRD4
@@ -54,11 +55,12 @@ def read_nrrd(path_in):
     raise NotImplementedError("reading NRRD files not yet implemented")
 
 
-def write_nrrd(volume, out_path):
+def write_nrrd(volume, out_path, dtype=None):
+    volume = guard_volume_dtype(volume, dtype)
     with open(out_path, "wb") as file:
         # write header:
         file.write("NRRD0004\n".encode('utf8'))
-        file.write("type: uint32\n".encode('utf8'))
+        file.write(("type: " + str(volume.dtype) + "\n").encode('utf8'))
         file.write("dimension: 3\n".encode('utf8'))
         file.write("space: left-posterior-superior\n".encode('utf8'))
         file.write("kinds: domain domain domain\n".encode('utf8'))
@@ -69,20 +71,20 @@ def write_nrrd(volume, out_path):
         file.write("encoding: raw\n".encode('utf8'))
         file.write("\n".encode('utf8'))
         # write binary payload in c-order
-        np.ascontiguousarray(volume.astype('uint32')).tofile(file)
+        np.ascontiguousarray(volume.astype(volume.dtype)).tofile(file)
 
 
 # HDF5
 def read_hdf5(path_in):
     f = h5py.File(path_in, 'r')
     key = list(f.keys())[0]
-    print("read hdf5 file, using key " + key + ". Has shape " + str(f[key].shape) + ", type " + str(f[key].dtype))
     return f[key][()]
 
 
-def write_hdf5(volume, path_out):
+def write_hdf5(volume, path_out, dtype=None):
+    volume = guard_volume_dtype(volume, dtype)
     with h5py.File(path_out, "w") as f:
-        f.create_dataset("data", shape=volume.shape, dtype='uint32', data=volume.data, compression="gzip")
+        f.create_dataset("data", shape=volume.shape, dtype=volume.dtype, data=volume.data, compression="gzip")
 
 
 # Sliced TIFF
@@ -141,7 +143,8 @@ def read_numpy(path_in):
     else:
         return np.load(path_in)
 
-def write_numpy(volume, path_out, compressed = True):
+def write_numpy(volume, path_out, dtype=None, compressed = True):
+    volume = guard_volume_dtype(volume, dtype)
     if compressed:
         volume.savez(path_out)
     else:
@@ -151,42 +154,66 @@ def write_numpy(volume, path_out, compressed = True):
 def read_nifti(path_in):
     return np.array(nib.load(path_in).dataobj)
 
-def write_nifti(volume, path_out):
+def write_nifti(volume, path_out, dtype=None):
     raise NotImplementedError("writing nifti files not yet implemented")
 
 # VTI
 def read_vti(path_in):
-    vti = pv.read(path_in)
-    return vti.active_scalars.reshape(np.array(vti.dimensiopns) - 1)
+    reader = vtkXMLImageDataReader()
+    reader.SetFileName(path_in)
+    reader.Update(None)
+    image = reader.GetOutput()
+    if image.GetCellData().GetNumberOfArrays() > 0:
+        return vtk_to_numpy(image.GetCellData().GetArray(0)).reshape(np.array(image.GetDimensions()) - 1)
+    elif image.GetPointData().GetNumberOfArrays() > 0:
+        return vtk_to_numpy(image.GetPointData().GetArray(0)).reshape(image.GetDimensions())
+    else:
+        raise IOError("Could not find any cell or point data in vtk image.")
 
-def write_vti(volume, path_out):
-    raise NotImplementedError("writing vti files not yet implemented")
+def write_vti(volume, path_out, dtype=None, as_cell_data=False):
+    volume = guard_volume_dtype(volume, dtype)
+
+    image = vtkImageData()
+    flat_data_array = volume.flatten()
+    vtk_data = numpy_to_vtk(num_array=flat_data_array)
+
+    if as_cell_data:
+        image.GetCellData().SetScalars(vtk_data)
+        image.SetDimensions(volume.shape[0] + 1, volume.shape[1] + 1, volume.shape[2] + 1)
+    else:
+        image.GetPointData().SetScalars(vtk_data)
+        image.SetDimensions(volume.shape[0], volume.shape[1], volume.shape[2])
+
+    writer = vtkXMLImageDataWriter()
+    writer.SetFileName(path_out)
+    writer.SetInputData(image)
+    writer.Write()
 
 ########################################################################################################################
 #                                               UTILITY FUNCTIONS                                                      #
 ########################################################################################################################
 
-def write_volume(volume, path_out):
+def write_volume(volume, path_out, dtype=None):
     """Automatically selects the writer for the respective format based on path_out file extension."""
     extension = path_out[(path_out.rfind('.') + 1):].lower()
     if extension == "vraw" or extension == "raw":
-        write_vraw(volume, path_out)
+        write_vraw(volume, path_out, dtype)
     elif extension == "nrrd":
-        write_nrrd(volume, path_out)
+        write_nrrd(volume, path_out, dtype)
     elif extension == "hdf5" or extension == "h5":
-        write_hdf5(volume, path_out)
+        write_hdf5(volume, path_out, dtype)
     elif extension == "tiff":
-        write_sliced_tiff(volume, path_out)
+        write_sliced_tiff(volume, path_out, dtype)
     elif extension == "png":
-        write_sliced_png(volume, path_out)
+        write_sliced_png(volume, path_out, dtype)
     elif extension == "np":
-        write_numpy(volume, path_out, False)
+        write_numpy(volume, path_out, dtype, False)
     elif extension == "npz":
-        write_numpy(volume, path_out, True)
+        write_numpy(volume, path_out, dtype, True)
     elif path_out.endswith(".nii.gz"):
-        return write_nifti(volume, path_out)
+        return write_nifti(volume, path_out, dtype)
     elif extension == "vti":
-        return write_vti(volume, path_out)
+        return write_vti(volume, path_out, dtype)
     else:
         raise Exception("unknown segmentation volume file extension " + extension)
 
@@ -231,12 +258,50 @@ def write_chunked_volume(volume, path_out_format, chunk_size):
 def read_chunked_volume(in_path_prefix):
     raise NotImplementedError("reading chunked volumes is not yet implemented")
 
-def convert(path_in, path_out):
-    write_volume(read_volume(path_in), path_out)
+def guard_volume_dtype(volume, dtype):
+    """If dtype is not None, converts the volume to the given dtype with safeguards:
+       1) if dtype is an unsigned type but volume contains values < 0, the values are offset to be 0 at minimum,
+       2) if volume contains values outside the range of dtype, the values are normalized to that interval."""
 
-def test_vis(volume, row_count=2, col_count=3, colormap='turbo'):
+    if not dtype or volume.dtype.num == np.dtype(dtype).num:
+        return volume
+
+    supported_min = np.iinfo(dtype).min
+    supported_max = np.iinfo(dtype).max
+    vol_min = np.min(volume)
+    vol_max = np.max(volume)
+
+    if (supported_max - supported_min) < (vol_max - vol_min):
+        print("Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
+              + " by normalization to range [" + str(supported_min) + "," + str(supported_max) + "].")
+        volume = (volume - vol_min) / (vol_max - vol_min) * (supported_max - supported_min) + supported_min
+    elif vol_min < supported_min:
+        print("Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
+              + " by offsetting values to [" + str(supported_min) + "," + str(vol_max - vol_min + supported_min) + "].")
+        volume = volume - vol_min + supported_min
+    elif vol_max > supported_min:
+        print("Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
+              + " by offsetting values to [" + str(vol_min - vol_max + supported_max) + "," + str(supported_max) + "].")
+        volume = volume - vol_max + supported_max
+
+    return volume.astype(dtype)
+
+
+
+
+def convert(path_in, path_out, dtype=None):
+    write_volume(read_volume(path_in), path_out, dtype)
+
+def debug_print(volume):
+    print("volume with shape " + str(volume.shape) + " type " + str(volume.dtype)
+          + " min. " + str(np.min(volume)) + " max. " + str(np.max(volume)))
+
+def debug_vis(volume, row_count=2, col_count=3, colormap='turbo', print_info=True):
     """Plot (row_count * col_count) 2D slices of the segmentation volume."""
-    print("Plotting volume with shape " + str(volume.shape) + " and max. value " + str(np.max(volume)))
+
+    if print_info:
+        debug_print(volume)
+    # create a set of subplots displaying slices of the volume
     fig, axs = plt.subplots(nrows=row_count, ncols=col_count)
     axs = axs.reshape(-1)
     slice_loc = (volume.shape[0] // len(axs)) // 2
