@@ -18,7 +18,7 @@ Do not distribute this code or any fragments or builds of it without permission!
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
 3. Install all required packages:
 ```
-sudo apt install build-essential cmake libglfw3-dev libglm-dev libtclap-dev -y
+sudo apt install build-essential cmake libglfw3-dev libglm-dev -y
 ```
 4. Optional: Install optional packages:
 ```
@@ -43,7 +43,7 @@ If your IDE supports generating build files, you can directly open the `CMakeLis
 4. Install [MS Visual Studio](https://visualstudio.microsoft.com/downloads/) 2015 Update 3 or greater and select the tools for C++ desktop development: `MSVC`, `C++-CMake-Tools`, `C++ AddressSanitizer`.
 5. Install the [vcpkg](https://vcpkg.io/en/getting-started) package manager. From the vcpkg install directory, install the required 64 bit packages in a powershell console:
 ```
-.\vcpkg install glfw3 glm tclap --triplet=x64-windows
+.\vcpkg install glfw3 glm --triplet=x64-windows
 ```
 6. Optional: Install optional packages:
 ```
@@ -151,7 +151,7 @@ Replace steps 3. to 4. from the [quick start build guide](#Quick-Start)  with th
 
 H3. Install all required packages without GLFW:
 ```
-sudo apt install build-essential cmake libglm-dev libtclap-dev -y
+sudo apt install build-essential cmake libglm-dev -y
 ```
 H4. Optional: Install optional packages:
 ```
@@ -186,7 +186,6 @@ If you have questions about certain parts in the implementation, feel free to co
 | glslangValidator    | 11:12.2      | SPIR-V shader compiler               | included in drivers, alternative package`glslang-tools`                 |
 | glm                 | 0.9.9.8      | GLSL equivalents for host code       | `libglm-dev`                                                            |
 | GLFW                | 3.3.6        | windowing for GLFW application       | `libglfw3-dev`                                                          |
-| TCLAP               | 1.2.5        | parse command line arguments         | `libtclap-dev`                                                          |
 
 | Optional Dependency | Min. Version | Usage                                   | Ubuntu / Debian package name  |
 |---------------------|:-------------|-----------------------------------------|-------------------------------|
