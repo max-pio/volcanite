@@ -1101,9 +1101,58 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
         auto [attr_upload_finished, _attr_staging_buffer] = m_attribute_buffer->uploadWithStagingBuffer(attributes.data(), attributes.size() * sizeof(float), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
         getCtx()->sync->hostWaitOnDevice({attr_upload_finished});
-        // can't just return the awaitable as _attr_staging_buffer can not be freed yet
-        // return {attr_upload_finished};
+        // can't just return the awaitable (return {attr_upload_finished}) as _attr_staging_buffer can not be freed yet
         return {};
+    }
+
+    void CompressedSegmentationVolumeRenderer::printGPUMemoryUsage() {
+
+        size_t textures = 0ul;
+        if (m_feedback_tex[0]) {
+            textures += m_feedback_tex[0]->memorySize() + m_feedback_tex[1]->memorySize();
+                      //+ m_outColor->memorySize() + m_outDepth->memorySize();
+            for (const auto &t: *m_inpaintedOutColor)
+                textures += t->memorySize();
+        }
+
+        size_t uniform_buffers = 0ul;
+        if (m_urender_info) {
+            uniform_buffers += m_urender_info->getByteSize() + m_usegmented_volume_info->getByteSize();
+        }
+
+        size_t materials = 0ul;
+        if (m_materials_buffer) {
+            materials += m_materials_buffer->getByteSize() + m_attribute_buffer->getByteSize();
+            for (const auto &t: m_materialTransferFunctions)
+                materials += t->texture().memorySize();
+        }
+
+        size_t cache = 0ul;
+        if (m_cache_buffer) {
+            cache += m_cache_info_buffer->getByteSize() + m_cache_buffer->getByteSize()
+                   + m_free_stack_buffer->getByteSize() + m_assign_info_buffer->getByteSize()
+                   + (m_detail_requests_buffer ? m_detail_requests_buffer->getByteSize() : 0ul);
+        }
+
+        size_t encoding = 0ul;
+        if (m_brick_starts_buffer) {
+            encoding += m_split_encoding_buffer_addresses_buffer->getByteSize() + m_brick_starts_buffer->getByteSize();
+            for (const auto &b: m_split_encoding_buffers)
+                encoding += b->getByteSize();
+            if (m_detail_buffer) {
+                encoding += m_detail_buffer->getByteSize() + m_detail_starts_buffer->getByteSize();
+            }
+        }
+
+        size_t total_used = getMemoryHeapBudgetAndUsage(*getCtx()).second;
+        Logger(INFO) << "[GPU Memory] " << std::fixed << std::setprecision(3)
+                    << "Framebuffers: " << static_cast<double>(textures) / 1024. / 1024. / 1024. << " GB | "
+                    << "Uniform Buffers: " << static_cast<double>(uniform_buffers) / 1024. / 1024. / 1024. << " GB | "
+                    << "Materials: " << static_cast<double>(materials) / 1024. / 1024. / 1024. << " GB | "
+                    << "Encoding: " << static_cast<double>(encoding) / 1024. / 1024. / 1024. << " GB | "
+                    << "Cache: " << static_cast<double>(cache) / 1024. / 1024. / 1024. << " GB   | "
+                    << " = " << static_cast<double>(textures + uniform_buffers + materials + encoding + cache) / 1024. / 1024. / 1024. << " GB"
+                    << " / " << static_cast<double>(total_used) / 1024. / 1024. / 1024. << " GB";
     }
 
 } // namespace vvv

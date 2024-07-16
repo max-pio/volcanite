@@ -194,6 +194,8 @@ private:
      * m_detail_stage being set to DetailAwaitingUpload. */
     void updateCPUDetailBuffers();
 
+    void printGPUMemoryUsage();
+
 private:
     // (gui) parameters:
     // materials
@@ -277,13 +279,13 @@ private:
     std::vector<std::shared_ptr<Buffer>> m_split_encoding_buffers = {};
     std::vector<glm::uvec2> m_split_encoding_buffer_addresses = {};
     std::shared_ptr<Buffer> m_split_encoding_buffer_addresses_buffer = nullptr;
+    std::shared_ptr<Buffer> m_brick_starts_buffer = nullptr;
     //
     std::vector<std::shared_ptr<TransferFunction1D>> m_materialTransferFunctions{SEGMENTED_VOLUME_MATERIAL_COUNT, nullptr};
     const size_t m_max_attribute_buffer_size = ((64ul << 10) << 10);   ///< MB to store different floating point attributes back to back
     std::vector<int> m_attribute_start_position = {-1};                ///< start index in the attribute_buffer for each attribute
     std::shared_ptr<Buffer> m_attribute_buffer = nullptr;              ///< stores attributes back to back
     std::shared_ptr<Buffer> m_materials_buffer = nullptr;              ///< stores the material information
-    std::shared_ptr<Buffer> m_brick_starts_buffer = nullptr;
 
     // detail management
     static constexpr uint32_t m_max_detail_requests_per_frame = 512u;  ///< how many brick_ids can be requested for detail upload per frame (affects the request buffer size)
