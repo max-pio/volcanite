@@ -46,18 +46,6 @@ if (ENABLE_ADDRESS_SANITIZER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -g -DLSAN_OPTIONS=verbosity=1:log_threads=1")
 endif()
 
-# enable colored output for Ninja in Linux
-# idea from: https://github.com/darktable-org/darktable/blob/master/CMakeLists.txt
-# https://medium.com/@alasher/colored-c-compiler-output-with-ninja-clang-gcc-10bfe7f2b949
-option (FORCE_COLORED_OUTPUT "Always produce ANSI-colored compiler output, even in ninja (GNU/Clang only)." FALSE)
-if(${FORCE_COLORED_OUTPUT})
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    add_compile_options(-fdiagnostics-color=always)
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    add_compile_options(-fcolor-diagnostics)
-  endif()
-endif()
-
 # we use target folders to organize the copy targets. This allows to hide the targets easier in certain IDEs
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 # the makeExecutable is used to create project executables with all CMake and compile dependencies
@@ -121,7 +109,8 @@ if (USE_SQLite3)
 endif ()
 
 # TCLAP for command line argument parsing (used by multiple subprojects)
-find_package(tclap REQUIRED)
+add_subdirectory(extern/tclap)
+add_library(tclap::tclap ALIAS TCLAP)
 
 # Add vvv and vvv glfw application libraries
 add_subdirectory(vvv)
