@@ -36,12 +36,12 @@ add_library(imgui
 	implot/implot_items.cpp
 )
 
-# imgui uses glm internally
-find_package(glm REQUIRED)
-if(NOT TARGET glm::glm AND TARGET glm)
-	# if the modern CMake alias target does not exist, we define it ourselves.
-	add_library(glm::glm ALIAS glm)
-endif()
+## imgui uses glm internally
+#find_package(glm REQUIRED)
+#if(NOT TARGET glm::glm AND TARGET glm)
+#	# if the modern CMake alias target does not exist, we define it ourselves.
+#	add_library(glm::glm ALIAS glm)
+#endif()
 
 # required packages
 find_package(Vulkan REQUIRED)
@@ -49,4 +49,4 @@ find_package(Vulkan REQUIRED)
 target_compile_definitions(imgui PUBLIC -DIMGUI=1 -DIMGUI_DEFINE_MATH_OPERATORS -DGLM_ENABLE_EXPERIMENTAL -DVGIZMO_USES_GLM -DIMGUIZMO_IMGUI_FOLDER=./)
 target_include_directories(imgui PUBLIC ./)
 
-target_link_libraries(imgui PRIVATE ${GLFW_LIBRARIES} Vulkan::Vulkan glm::glm)
+target_link_libraries(imgui PRIVATE ${GLFW_LIBRARIES} Vulkan::Vulkan glm::glm-header-only)

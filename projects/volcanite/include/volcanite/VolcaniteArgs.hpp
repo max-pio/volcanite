@@ -20,7 +20,9 @@
 #include <iostream>
 #include <optional>
 #include <tclap/CmdLine.h>
-#include "portable-file-dialogs.h"
+#ifndef HEADLESS
+    #include "portable-file-dialogs.h"
+#endif
 
 #include "vvv/util/Logger.hpp"
 // ToDo: Split the rANS-Mode etc into a separate Header / forward decl
@@ -180,6 +182,9 @@ public:
             // if no input file was specified, try to open a file dialog
             std::string input_file = expandPath(inputpathArg.getValue());
             if(input_file.empty()) {
+#ifdef HEADLESS
+                throw ArgException("Must provide input file in headless mode", inputpathArg.longID(""));
+#else
                 if(va.headless)
                     throw ArgException("Must provide input file in headless mode", inputpathArg.longID(""));
                 if (!pfd::settings::available())
@@ -193,6 +198,7 @@ public:
                 }
 
                 input_file = selected_file.result().at(0);
+#endif
             }
             va.input_file = input_file;
             // some arguments depend on if we import a previously compressed .csgv file..

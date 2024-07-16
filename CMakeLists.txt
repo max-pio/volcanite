@@ -51,9 +51,12 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 # the makeExecutable is used to create project executables with all CMake and compile dependencies
 include(makeExecutable)
 
+option(HEADLESS "Build without GUI and windowing functionality to run only in --headless mode." OFF)
+
 # LIBRARIES ------------------------------------------------------------------------------------------------------------
 
-option(HEADLESS "Build without GUI and windowing functionality to run only in --headless mode." OFF)
+# GLM
+add_subdirectory(extern/glm)
 
 # add extern public imgui library
 if(NOT HEADLESS)
@@ -61,7 +64,6 @@ if(NOT HEADLESS)
 endif()
 
 # add extern HighFive simplified hdf5 library if libhdf5-dev is installed
-# we can not do this in the vvv library cmake as extern/HighFive cannot be added as a subdirectory from there
 option(USE_HDF5_SUPPORT  "Includes the hdf5 library for importing and exporting .hdf5 files" ON)
 if (USE_HDF5_SUPPORT)
     find_package(HDF5)
@@ -96,7 +98,6 @@ if (USE_VTK_SUPPORT)
 endif ()
 
 # add extern SQLiteCpp library if libsqlite3-dev is installed
-# we can not do this in the volcanite project cmake as extern/SQLiteCpp cannot be added as a subdirectory from there
 option(USE_SQLite3 "Includes the SQLite3 library for importing and exporting .sqlite files" ON)
 if (USE_SQLite3)
     find_package(SQLite3)
@@ -132,23 +133,14 @@ endif()
 add_subdirectory(extern/ryg_rans)
 
 # add extern portable file dialog
-# ToDo: also remove when build in HEADLESS mode?
-add_subdirectory(extern/portable-file-dialogs)
+if(NOT HEADLESS)
+    add_subdirectory(extern/portable-file-dialogs)
+endif()
 
 # PROJECTS  ------------------------------------------------------------------------------------------------------------
 
 add_subdirectory(projects/volcanite)
 
-# [DEPRECATED] ToDo: python binding support in CMake files
-#if (SKBUILD)
-#    # to use a local copy, e.g. when you want to make a debug build of pybind:
-#    #add_subdirectory(extern/pybind11)
-#    # to use the version from your package manager:
-#    find_package(pybind11 REQUIRED)
-#    pybind11_add_module(pyvvv_core pyvvv/src/main.cpp)
-#    target_link_libraries(pyvvv_core PRIVATE LibVVV::libvvv LibVVV::libvvvwindow)
-#    install(TARGETS pyvvv_core DESTINATION .)
-#endif ()
 
 # PACKAGING ------------------------------------------------------------------------------------------------------------
 

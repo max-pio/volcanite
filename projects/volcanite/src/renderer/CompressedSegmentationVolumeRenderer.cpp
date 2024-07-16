@@ -887,6 +887,9 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                          "Splitting Plane Z", glm::vec2(0.f), glm::vec2(1.f), glm::vec2(0.01f), 2);
     g_gen->addSeparator();
     g_gen->addAction([this]() {
+#ifdef HEADLESS
+        m_download_frame_to_image_file = "./volcanite_output.png";
+#else
         if (!pfd::settings::available()) {
             Logger(WARN) << "Can not open file dialog for screenshot export. Using default file ./volcanite_output.png";
             m_download_frame_to_image_file = "./volcanite_output.png";
@@ -901,6 +904,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             if(!m_download_frame_to_image_file->ends_with(".png"))
                 m_download_frame_to_image_file->append(".png");
         }
+#endif
     }, "Screenshot");
     //
     g_gen->addAction([this]() {
