@@ -18,7 +18,7 @@ Do not distribute this code or any fragments or builds of it without permission!
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
 3. Install all required packages:
 ```
-sudo apt install build-essential cmake libglfw3-dev libglm-dev -y
+sudo apt install build-essential cmake libglfw3-dev -y
 ```
 4. Optional: Install optional packages:
 ```
@@ -43,7 +43,7 @@ If your IDE supports generating build files, you can directly open the `CMakeLis
 4. Install [MS Visual Studio](https://visualstudio.microsoft.com/downloads/) 2015 Update 3 or greater and select the tools for C++ desktop development: `MSVC`, `C++-CMake-Tools`, `C++ AddressSanitizer`.
 5. Install the [vcpkg](https://vcpkg.io/en/getting-started) package manager. From the vcpkg install directory, install the required 64 bit packages in a powershell console:
 ```
-.\vcpkg install glfw3 glm --triplet=x64-windows
+.\vcpkg install glfw3 --triplet=x64-windows
 ```
 6. Optional: Install optional packages:
 ```
@@ -138,6 +138,8 @@ This format is only available when the hdf5 library is available:
 Either by installing the package `libhdf5-dev` on Ubuntu or by using the [precompiled binary distributions](https://www.hdfgroup.org/downloads/hdf5/) from the HDF group.
 File name must end with `.hdf5` or `.h5`.
 
+* **Others** See the [Python](doc/Python.md) readme and [converter.py](projects/volcanite/python/converter.py) for converting other data into Volcanite supported formats using Python.  
+
 ## Headless Builds
 
 It is possible to run Volcanite without opening a GUI window.
@@ -151,7 +153,7 @@ Replace steps 3. to 4. from the [quick start build guide](#Quick-Start)  with th
 
 H3. Install all required packages without GLFW:
 ```
-sudo apt install build-essential cmake libglm-dev -y
+sudo apt install build-essential cmake -y
 ```
 H4. Optional: Install optional packages:
 ```
@@ -174,7 +176,7 @@ We as the authors shall in no event be liable for any claim, damages or other li
 The documentation may contain insufficient or deprecated information for certain features.
 A lot of the code base was extended iteratively and merged from other side projects.
 Keep all of this in mind when working with the code and in case you encounter any problems.
-If you have questions about certain parts in the implementation, feel free to contact [Max Piochowiak](mailto:max.piochowiak@kit.edu).
+If you have questions, feel free to contact [Max Piochowiak](mailto:max.piochowiak@kit.edu).
 
 
 ### Dependencies
@@ -184,8 +186,9 @@ If you have questions about certain parts in the implementation, feel free to co
 | CMake               | 3.16         | creating project build files         | `cmake`                                                                 |
 | Vulkan SDK          | 1.3          | Vulkan development tools and headers | Download from [https://vulkan.lunarg.com/](https://vulkan.lunarg.com/)  |
 | glslangValidator    | 11:12.2      | SPIR-V shader compiler               | included in drivers, alternative package`glslang-tools`                 |
-| glm                 | 0.9.9.8      | GLSL equivalents for host code       | `libglm-dev`                                                            |
-| GLFW                | 3.3.6        | windowing for GLFW application       | `libglfw3-dev`                                                          |
+| *GLFW               | 3.3.6        | windowing for GLFW application       | `libglfw3-dev`                                                          |
+
+*GLFW is not required when the CMake option `HEADLESS` is set
 
 | Optional Dependency | Min. Version | Usage                                   | Ubuntu / Debian package name  |
 |---------------------|:-------------|-----------------------------------------|-------------------------------|
@@ -256,7 +259,7 @@ Until then, you can have a look at the [code examples](projects/examples/src/bin
 * Each developer starts own branch names with a prefix `ab/<branch>`. Usually, `ab` are your initials.
 * Each developer has their own development branch from which additional branches for features can be created.
 * Merging happens to the `staging` branch first where merging bugs can be fixed. We do not rebase here.
-* Ideally, we test the `staging` branch with different builds (Ubuntu, MCSV Windows, headless, ..) before release.
+* Ideally, we test the `staging` branch with different builds (Ubuntu, Windows, headless, ..) before release.
 * If the `staging` branch feels complete and bug free, it can be merged into `main` by the repository maintainer.
 
 ```
