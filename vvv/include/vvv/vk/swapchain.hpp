@@ -84,10 +84,7 @@ vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &
     return no_vsync_present_mode;
 }
 
-/**
- *
- * Also known as `max concurrently in flight frames` and `frame lag`.
- */
+/// Also known as `max concurrently in flight frames` and `frame lag`.
 uint32_t chooseSwapchainImageCount(const vk::SurfaceCapabilitiesKHR &capabilities) {
     uint32_t imageCount = capabilities.minImageCount + 1;
     if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount) {
@@ -97,7 +94,7 @@ uint32_t chooseSwapchainImageCount(const vk::SurfaceCapabilitiesKHR &capabilitie
     return imageCount;
 }
 
-/** Clamp swap extent to the valid range */
+/// Clamp swap extent to the valid range
 vk::Extent2D chooseSwapExtent(vk::Extent2D extent, const vk::SurfaceCapabilitiesKHR &capabilities) {
     // if (capabilities.currentExtent.width != UINT32_MAX) {
     //    return capabilities.currentExtent;

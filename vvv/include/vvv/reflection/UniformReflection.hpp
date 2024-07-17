@@ -167,9 +167,7 @@ template<> void memcpy_type<glm::mat3>(SpvReflectBlockVariable* member, char* un
 
 }; // namespace details
 
-/**
- * Let's you work with uniform sets without first creating a CPP struct through a stringly-typed API.
- */
+/// Let's you work with uniform sets without first creating a CPP struct through a stringly-typed API.
 class UniformReflected {
 public:
     UniformReflected(const SpvReflectDescriptorBinding *const binding) : m_dirty({}), m_data(binding->block.size), m_binding(binding) {}

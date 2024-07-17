@@ -85,25 +85,23 @@ float feathered_sdf(float sdf) {
         return smoothstep(0.0, g_feathering, -sdf + g_feathering);
 }
 
-/**
- * Converts a 1D transfer function to a 2D transfer function:
- * - the scalar value of the 1D transfer function is on the x-axis and thus varies along the width
- * - the gradient magnitude is on the y-axis and thus varies along the height
- * - (0,0) is a the top left.
- *
- * In essence, the 1D transfer function is first repeated/copied to each gradient value and
- * then masked using a set of polygons. Polygons are represented using signed distance functions.
- * This allows us to easily feather transitions from masks.
- *
- * Most of the time, you want the 2d TF to have the same width, but there is nothing that prevents
- * you from upsampling or downsampling of the x-axis.
- *
- * Based on https://www.shadertoy.com/view/wdBXRW.
- *
- * TODO(Reiner): this is a proof of concept, using triangles with vertices marked as outline or inner vertices would give the same result in probably significantly less time.
- * TODO(Reiner): there are also closed formulas for parabulas https://www.shadertoy.com/view/ws3GD7, parabula segments https://www.shadertoy.com/view/3lSczz and cubic beziers https://www.shadertoy.com/view/MlKcDD
- * TODO(Reiner): Two parabula distance functions could be easily combined to create the usual banana shape.
- */
+/// Converts a 1D transfer function to a 2D transfer function:
+/// - the scalar value of the 1D transfer function is on the x-axis and thus varies along the width
+/// - the gradient magnitude is on the y-axis and thus varies along the height
+/// - (0,0) is a the top left.
+///
+/// In essence, the 1D transfer function is first repeated/copied to each gradient value and
+/// then masked using a set of polygons. Polygons are represented using signed distance functions.
+/// This allows us to easily feather transitions from masks.
+///
+/// Most of the time, you want the 2d TF to have the same width, but there is nothing that prevents
+/// you from upsampling or downsampling of the x-axis.
+///
+/// Based on https://www.shadertoy.com/view/wdBXRW.
+///
+/// TODO(Reiner): this is a proof of concept, using triangles with vertices marked as outline or inner vertices would give the same result in probably significantly less time.
+/// TODO(Reiner): there are also closed formulas for parabulas https://www.shadertoy.com/view/ws3GD7, parabula segments https://www.shadertoy.com/view/3lSczz and cubic beziers https://www.shadertoy.com/view/MlKcDD
+/// TODO(Reiner): Two parabula distance functions could be easily combined to create the usual banana shape.
 void main() {
     ivec2 tableSize = imageSize(IMAGE_transferFunction2D);
     ivec2 tableIdx = ivec2(gl_GlobalInvocationID.xy);

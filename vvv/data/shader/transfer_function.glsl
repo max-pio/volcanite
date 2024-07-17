@@ -48,4 +48,4 @@ vec4 opacityCorrection(vec4 color, float stepSize) {
     return vec4(colorPremultipliedCorrected, opacityCorrected);
 }
 
-#endif /* TRANSFER_FUNCTION_H */
+#endif // TRANSFER_FUNCTION_H

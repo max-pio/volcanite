@@ -32,15 +32,13 @@ struct HeadFeaturesKhr {
     void* pNext;
 };
 
-/**
- * A collection of all vulkan resources that are usually acquired during
- * application initialization.
- *
- * The reference to this class MUST be stable. This allows renderers to internalize
- * a reference to the structure for lifetime management of resources. Methods
- * like `Renderer::initSwapchainResources` should just be understood as events
- * that only announce change for data within the stable class reference.
- */
+/// A collection of all vulkan resources that are usually acquired during
+/// application initialization.
+///
+/// The reference to this class MUST be stable. This allows renderers to internalize
+/// a reference to the structure for lifetime management of resources. Methods
+/// like `Renderer::initSwapchainResources` should just be understood as events
+/// that only announce change for data within the stable class reference.
 class DefaultGpuContext : public GpuContext {
 public:
     // TODO(Reiner): move appname to debug utilities or at least to GpuContext
@@ -62,9 +60,8 @@ public:
     vk::PhysicalDeviceVulkan12Features &physicalDeviceFeaturesV12() override { return m_builder.deviceFeaturesV12; }
     vk::PhysicalDeviceVulkan13Features &physicalDeviceFeaturesV13() override { return m_builder.deviceFeaturesV13; }
 
-    /** Lots of extensions require you to enable features on some <...FeaturesKHR> struct. You can enable these features
-     * by passing them to this function. Make sure to keep the pointer valid until after the context is created.
-     */
+    /// Lots of extensions require you to enable features on some <...FeaturesKHR> struct. You can enable these features
+    /// by passing them to this function. Make sure to keep the pointer valid until after the context is created.
     void physicalDeviceAddExtensionFeatures(void* featuresKhr) override {
         // put the new extension features object at the beginning of the linked list of config objects
         // we do not have to check for nullpointers since we always manually append `PhysicalDeviceVulkan12Features` at startup.
@@ -85,17 +82,17 @@ public:
 
     std::string const &getAppName() { return m_builder.appName; }
 
-    /** Acquire all GPU resources. This method is reintrant. */
+    /// Acquire all GPU resources. This method is reintrant.
     void createGpuContext();
-    /** Release all GPU resources. This method is reintrant. */
+    /// Release all GPU resources. This method is reintrant.
     void destroyGpuContext() override;
-    /** Check if GPU resources are currently acquired or not. */
+    /// Check if GPU resources are currently acquired or not.
     bool isGpuContextCreated() { return m_gpu.device != static_cast<vk::Device>(nullptr); }
 
     ~DefaultGpuContext() { destroyGpuContext(); }
 
 protected:
-    /** by default, a context without present capabilities will be created */
+    /// by default, a context without present capabilities will be created
     virtual vk::SurfaceKHR createSurface() { return nullptr; };
     virtual void destroySurface();
     vk::SurfaceKHR getSurface() { return m_gpu.surface; }
@@ -107,6 +104,10 @@ private:
     void createInstance();
     void setupDebugMessenger();
 
+    /// The physical device is selected according to the following rules in order:\n
+    /// 1.) the device with the number specified with the environment variable "VVV_DEVICE"\n
+    /// 2.) the first (not blacklisted) discrete GPU\n
+    /// 3.) the first (not blacklisted) GPU
     void createPhysicalDevice();
     void createLogicalDevice();
     void destroyInstance();
@@ -115,7 +116,7 @@ private:
     void destroyLogicalDevice();
 
     struct {
-        /** A list of vulkan instance layers that should be enabled by user request */
+        /// A list of vulkan instance layers that should be enabled by user request
         std::vector<std::string> instanceLayers = {};
         std::vector<std::string> instanceExtensions = {};
         std::vector<std::string> deviceLayers = {};
@@ -127,7 +128,7 @@ private:
         bool enableDebug = vvv::EnableVulkanValidationLayersByDefault;
     } m_builder;
 
-    /** state bound to the lifetime of the device and instance */
+    /// state bound to the lifetime of the device and instance
     struct {
         vk::Instance instance = nullptr;
         vk::PhysicalDevice physicalDevice = nullptr;

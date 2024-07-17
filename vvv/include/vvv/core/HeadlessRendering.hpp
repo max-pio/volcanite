@@ -49,29 +49,21 @@ public:
         return std::shared_ptr<HeadlessRendering>(new HeadlessRendering(std::move(appName), std::move(renderer), std::move(debugUtilities)));
     }
 
-    /**
-     * Acquire all GPU resources including instance and device resources. This method must be called before any
-     * rendering is processed.
-     * This method is reintrant.
-     */
+    /// Acquire all GPU resources including instance and device resources. This method must be called before any
+    /// rendering is processed.
+    /// This method is reintrant.
     void acquireResources();
-    /**
-     * Release all GPU resources including instance, device and swapchain resources.
-     * This method is reintrant.
-     */
+    /// Release all GPU resources including instance, device and swapchain resources.
+    /// This method is reintrant.
     void releaseResources();
 
-    /**
-     * Run the renderloop for number_of_frames taking ownership of the current thread.
-     * If a frame finished callback is passed it is called everytime a frame finished with the current texture output
-     * @return the final Texture of the render loop
-     */
+    /// Run the renderloop for number_of_frames taking ownership of the current thread.
+    /// If a frame finished callback is passed it is called everytime a frame finished with the current texture output
+    /// @return the final Texture of the render loop
     std::shared_ptr<Texture> renderFrames(size_t number_of_frames, void (*frameFinishedCallback)(Texture*) = nullptr);
 
-//    /**
-//     * Run the renderloop without taking ownership of the current thread.
-//     * You MUST NOT call `execAsync` or `exec` to invoke a second instance of the renderloop until the forked renderloop terminates.
-//     */
+//    /// Run the renderloop without taking ownership of the current thread.
+//    /// You MUST NOT call `execAsync` or `exec` to invoke a second instance of the renderloop until the forked renderloop terminates.
 //    void execAsync();
 //    std::thread execAsyncAttached();
 
@@ -79,9 +71,7 @@ public:
 
     ~HeadlessRendering() { releaseResources(); m_gui = nullptr; }
 
-    /**
-     * @return an GuiInterface to which GUI controlled properties can be added in a sequential manner.
-     */
+    /// @return an GuiInterface to which GUI controlled properties can be added in a sequential manner.
     vvv::GuiInterface *getGui() const { return m_gui.get(); }
 
 private:

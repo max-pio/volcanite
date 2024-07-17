@@ -19,22 +19,18 @@
 
 namespace vvv {
 
-/**
- * A timeline semaphore is a `counting semaphore` that
- *
- * - wait until semaphore value is >= N
- * - the execution state is the semaphore value M_h known to the CPU (host)
- * - the actual execution state is the semaphore value M_d on the GPU (device)
- * - M_d >= M_h
- * - the planing state is the maximal semahpore value M_p of all waited (signaled and unsignaled) semaphore values.
- *   Consequently M_d = M_p implies that all planned work has already executed.
- * - M_p >= M_d >= M_h
- */
+///  @brief A timeline semaphore is a `counting semaphore`.
+///
+/// - wait until semaphore value is >= N\n
+/// - the execution state is the semaphore value M_h known to the CPU (host)\n
+/// - the actual execution state is the semaphore value M_d on the GPU (device)\n
+/// - M_d >= M_h\n
+/// - the planing state is the maximal semahpore value M_p of all waited (signaled and unsignaled) semaphore values.\n
+///   Consequently M_d = M_p implies that all planned work has already executed.\n
+/// - M_p >= M_d >= M_h\n
 class TimelineSemaphore {
 public:
-    /**
-     * @param semaphoreId some arbitrary integer that can be used by external code to map this semaphore to metadata
-     */
+     /// @param semaphoreId some arbitrary integer that can be used by external code to map this semaphore to metadata
     explicit TimelineSemaphore(size_t semaphoreId = 0) : m_semaphoreId(semaphoreId) {}
     ~TimelineSemaphore() { deallocateResources(); }
 
@@ -52,11 +48,11 @@ public:
 
     void deallocateResources() { VK_DEVICE_DESTROY(m_device, m_semaphore); }
 
-    //! Increment the planing state. This effectively reserves the returned semaphore value for the caller.
-    //! The caller should use that value in the list of semaphores to signal in some Vulkan API call.
+    /// Increment the planing state. This effectively reserves the returned semaphore value for the caller.
+    /// The caller should use that value in the list of semaphores to signal in some Vulkan API call.
     uint64_t incrementPlaningState() { return m_nextId++; }
 
-    //! get the highest semaphore value __already in use__.
+    /// get the highest semaphore value __already in use__.
     uint64_t getPlaningState() const { return m_nextId-1; }
     size_t getId() const { return m_semaphoreId; }
 
@@ -70,7 +66,7 @@ private:
 
     size_t m_semaphoreId;
 
-    /** the timeline semaphore `m_semaphore` was used to plan a schedule up to `m_nextId` */
+    /// the timeline semaphore `m_semaphore` was used to plan a schedule up to `m_nextId`
     uint64_t m_nextId = 1; // zero is the initial state
     vk::Semaphore m_semaphore = nullptr;
     vk::Device m_device = nullptr;

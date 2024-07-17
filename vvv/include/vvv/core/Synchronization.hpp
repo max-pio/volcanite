@@ -30,7 +30,7 @@
 #include <iostream>
 #endif
 
-/**
+/*
  * A synchronization solution with two design goals:
  * - works without building a DAG: This allows streaming/eager/immediate execution of tasks.
  * - resolve the reusability/modularity problem of binary semaphores: semaphores can only be signaled once. Thus,
@@ -58,14 +58,7 @@
  * valid to reuse these unused semaphores. This is, because we only observe that the semaphore is unused in the current
  * planing state, but we DO NOT KNOW if the planed schedule has already executed. This distinction is important since
  * naive reuse without observed execution may mark paths lower in the DAG as executed if a semaphore is reused for
- * a dispatch inserted further up in the graph as illustrated in the following example:
- *
- * ```
- * TODO(Reiner): notebook page 140 as ASCII art here
- * ```
- *
- *
- * The problem with implicitly observed state:
+ * a dispatch inserted further up in the graph.
  *
  * At this point, the promise to plan execution without a DAG is slightly a lie. We have a path compressed DAG,
  * with a node per timeline semaphore (max concurrently executing submits) and a single edge per node to encode
@@ -75,29 +68,26 @@
  * resolved up to the final planing state of frame N after the fence of the swapchain synchronization is a cheap
  * workaround that does not require a DAG to encode implications at all.
  */
+
 namespace vvv {
 
-/**
- * Checkpoints the current planing state / progress of the schedule.
- *
- * This can be used for fast and cheap observation of execution states, which is required for semaphore reuse.
- */
+
+/// Checkpoints the current planing state / progress of the schedule.
+/// This can be used for fast and cheap observation of execution states, which is required for semaphore reuse.
 typedef std::vector<uint64_t> SemaphoreState;
 
-/**
- * Something that the GPU and CPU can wait for completion. This includes some
- * progress in a commandlist, the completion or submission to the queue.
- *
- * This is a lightweight way to build a dependency graph. The numbers given
- * to each node (`createWaitable`) can be seen as the breath first search number.
- *
- * Note: the fields in this struct should be read as follows: `the `value`-th dispatch
- * since program start is performing work on the `stages` GPU resources`. This
- * statement makes sense since we have a single timeline semaphore for the whole
- * program. So, for example, one could read: `the 13th dispatch since program
- * start is performing work using vertex shaders and fragment shaders.` if
- * `value=13` and `stages=Vk::PipelineStageFlagBits::eVertexShader | Vk::PipelineStageFlagBits::eFragmentShader`.
- */
+/// @brief Something that the GPU and CPU can wait for completion. This includes some
+/// progress in a commandlist, the completion or submission to the queue.
+///
+/// This is a lightweight way to build a dependency graph. The numbers given
+/// to each node (`createWaitable`) can be seen as the breath first search number.\n\n
+///
+/// Note: the fields in this struct should be read as follows: `the `value`-th dispatch
+/// since program start is performing work on the `stages` GPU resources`. This
+/// statement makes sense since we have a single timeline semaphore for the whole
+/// program. So, for example, one could read: `the 13th dispatch since program
+/// start is performing work using vertex shaders and fragment shaders.` if
+/// `value=13` and `stages=Vk::PipelineStageFlagBits::eVertexShader | Vk::PipelineStageFlagBits::eFragmentShader`.
 // TODO(Reiner): interop with binary semaphores makes probably most sense if we track the semaphore along with the
 // amount of times it was signaled. that requires that all submissions were done through the `submit` abstraction
 // of this class. Currently the `submit` abstraction just simplifies the call signature and its usage is optional.
@@ -107,19 +97,19 @@ struct Awaitable {
     size_t semaphoreId;
 
     vk::Semaphore semaphore;
-    //! The GPU workload guarded by the awaitable has finished execution when the actual value of `semaphore` is greater than or equal to `value`.
-    //! The GPU workload is still pending (it has not started execution or is still executing) when the actual value of the `semaphore` is smaller than `value`.
+    /// The GPU workload guarded by the awaitable has finished execution when the actual value of `semaphore` is greater than or equal to `value`.
+    /// The GPU workload is still pending (it has not started execution or is still executing) when the actual value of the `semaphore` is smaller than `value`.
     uint64_t value;
-    //! stages should contain all pipeline stages that are used in the dispatch corresponding to the waitable.
-    //! For example, if the waitable is using compute only, set this to `vk::PipelineStageFlagBits::eCompute`.
-    //! If you are unsure or want to debug, set this to `vk::PipelineStageFlagBits::eAllCommands`.
+    /// stages should contain all pipeline stages that are used in the dispatch corresponding to the waitable.
+    /// For example, if the waitable is using compute only, set this to `vk::PipelineStageFlagBits::eCompute`.
+    /// If you are unsure or want to debug, set this to `vk::PipelineStageFlagBits::eAllCommands`.
     vk::PipelineStageFlags stages;
-    //! Tracks the scheduled timeline semaphores in the instruction stream to optimize timeline semaphore reuse.
+    /// Tracks the scheduled timeline semaphores in the instruction stream to optimize timeline semaphore reuse.
     // TODO(Reiner): there is a way more efficient implementation with filterable interference graphs. See notebook page 142.
     SemaphoreState predecessorPlaningState;
 
-    //! this field is available if awaitable creation and submission were decoupled. The field is
-    //! deleted after submission.
+    /// this field is available if awaitable creation and submission were decoupled. The field is
+    /// deleted after submission.
     std::optional<std::vector<std::shared_ptr<Awaitable>>> awaitBeforeExecution;
 
     SemaphoreState getInclusivePlaningState() const {
@@ -135,16 +125,16 @@ struct Awaitable {
     }
 };
 
-//! This is a hack to support swapchain integration until timeline semaphores are supported in the swapchain API.
-//! Our approach here is, that we allow a binary semaphore to introduce additional dependency edges without
-//! `class Synchronization` performing any tracking for this edge.
-//!
-//! This preserves correctness, since an additional dependency edge will just introduce further serialization
-//! of the parallel workload. Since the driver is allowed to do this at any time, the method is robust against
-//! sequential execution of parallel workloads anyways.
-//!
-//! However, since the edge is not tracked, we may introduce unncessary new timeline semaphores since we are
-//! not aware of the serialization introduced by the dependency edge of the binary semaphore.
+/// This is a hack to support swapchain integration until timeline semaphores are supported in the swapchain API.
+/// Our approach here is, that we allow a binary semaphore to introduce additional dependency edges without
+/// `class Synchronization` performing any tracking for this edge.
+///
+/// This preserves correctness, since an additional dependency edge will just introduce further serialization
+/// of the parallel workload. Since the driver is allowed to do this at any time, the method is robust against
+/// sequential execution of parallel workloads anyways.
+///
+/// However, since the edge is not tracked, we may introduce unncessary new timeline semaphores since we are
+/// not aware of the serialization introduced by the dependency edge of the binary semaphore.
 struct BinaryAwaitable {
     vk::Semaphore semaphore;
     vk::PipelineStageFlags stages;
@@ -240,10 +230,7 @@ public:
     };
 #endif
 
-    /**
-     * Create a new node in the dependency graph
-     * @return
-     */
+    /// Create a new node in the dependency graph
     // TODO(Reiner): there are so many parameters here. use a configuration object to get named arguments.
     // General structure of these call signatures are [actual args] [ legacy shit (awaitBinaryBeforeExecution, signalBinarySemaphore, signalFence) ]
     AwaitableHandle submit(vk::CommandBuffer commandBuffer, vk::Queue queue = static_cast<vk::Queue>(nullptr), AwaitableList awaitBeforeExecution = {},
@@ -252,32 +239,26 @@ public:
     AwaitableHandle submit(vk::CommandBuffer commandBuffer, uint32_t queueFamilyIndex = 0, AwaitableList awaitables = {}, vk::PipelineStageFlags stages = vk::PipelineStageFlagBits::eAllCommands,
                            BinaryAwaitableList awaitBinaryBeforeExecution = {}, vk::Semaphore *signalBinarySemaphore = nullptr, vk::Fence *signalFence = nullptr);
 
-    //! submit a command buffer with a precreated awaitable
+    /// submit a command buffer with a precreated awaitable
     void submit(vk::CommandBuffer commandBuffer, AwaitableHandle dependencies, uint32_t queueFamilyIndex = 0, BinaryAwaitableList awaitBinaryBeforeExecution = {},
                 vk::Semaphore *signalBinarySemaphore = nullptr, vk::Fence *signalFence = nullptr);
     void submit(vk::CommandBuffer commandBuffer, AwaitableHandle dependencies, vk::Queue queue = static_cast<vk::Queue>(nullptr), BinaryAwaitableList awaitBinaryBeforeExecution = {},
                 vk::Semaphore *signalBinarySemaphore = nullptr, vk::Fence *signalFence = nullptr);
 
     void hostWaitOnDevice(AwaitableList waitables, uint64_t maxWaitNanos = UINT64_MAX);
-    //! Create an awaitable that is resolved when all currently planned work is done.
+    /// Create an awaitable that is resolved when all currently planned work is done.
     // AwaitableHandle createAwaitAll();
 
-    /**
-     * Check whether the awaitable has already executed. This will explicitly query the driver for
-     * the execution state.
-     *
-     * @see getKnownExecutionState for a variant that does not query the driver and uses cached state instead.
-     */
+    /// Check whether the awaitable has already executed. This will explicitly query the driver for the execution state.
+    ///
+    /// @see getKnownExecutionState for a variant that does not query the driver and uses cached state instead.
     bool isAwaitableResolved(AwaitableHandle awaitable);
 
     uint64_t getKnownExecutionState(uint32_t semaphoreId) { return m_executionState[semaphoreId]; };
     uint64_t getKnownExecutionState(AwaitableHandle awaitable) { return m_executionState[awaitable->semaphoreId]; };
 
-    /**
-     * Mark a waitable as resolved on the host.
-     *
-     * This can be used to delay work on the GPU until this function is called, colloquially known as 'kicking the GPU'.
-     */
+    /// Mark a waitable as resolved on the host.
+    /// This can be used to delay work on the GPU until this function is called, colloquially known as 'kicking the GPU'.
     void hostSignal(AwaitableHandle waitable);
 
     void markWaitablesAsResolved(AwaitableList waitables);
@@ -287,8 +268,8 @@ public:
     void setExecutionState(const SemaphoreState &executionState);
     void setExecutionState(uint32_t semaphoreId, uint64_t semaphoreValue);
 
-    /** explicitly queries the driver for the execution state. Otherwise execution state is only tracked
-     *  implicitly, e.g. through calls to `hostWaitOnDevice` and others. */
+    /// explicitly queries the driver for the execution state. Otherwise execution state is only tracked
+    ///  implicitly, e.g. through calls to `hostWaitOnDevice` and others.
     void readExecutionState();
 
     void destroySynchronizationPrimitives();

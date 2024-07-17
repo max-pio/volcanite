@@ -34,21 +34,21 @@
 namespace vvv {
 
 
-/** Easy to use managing class for obtaining Compressed Segmentation Volumes (CSGV).
-* The createCompressedSegmentationVolume() method can be used to obtain a CSGV with the given parameters, e.g. for a .hdf5 or .nrrd data set.
-* If force_recompute is false, it will load a previously computed compression from the same location if possible.
-* The overall time to compress a data set is mostly the time to load the original volume from the hard drive, especially in the case of compressed hdf5 files.
-* \n\n
-* Chunked data:\n
-* For large data sets that are split into multiple chunks of data, a formatted path with three {} placeholders and a maximum file index can be passed.
-* The handler then tries to load all chunk files from (0,0,0) to the maximum index (inclusive) where all 'inner' chunks must have a volume dimension which is a
-* multiple of the brick size. Each of these chunks is compressed and exported independently.
-* Afterward, a merging step is carried out to create a single CSGV containing the whole data set.
-* A data set that is not split into chunks can be seen as a data set that consists of only one chunk (0,0,0).
-* For example, "vol_x{}_y{}_z{}" with a maximum index (3,1,4) will compress and merge all chunks [vol_x0_y0_z0, vol_x1_y0_z0, ... vol_x3_y1_z4] into one CSGV.
-* \n\n
-* Operation Frequencies:\n
-* If rANS encoding is applied when compressing, a quick pre-pass for obtaining operation frequency tables is performed.*/
+/// Easy to use managing class for obtaining Compressed Segmentation Volumes (CSGV).
+/// The createCompressedSegmentationVolume() method can be used to obtain a CSGV with the given parameters, e.g. for a .hdf5 or .nrrd data set.
+/// If force_recompute is false, it will load a previously computed compression from the same location if possible.
+/// The overall time to compress a data set is mostly the time to load the original volume from the hard drive, especially in the case of compressed hdf5 files.
+/// \n\n
+/// Chunked data:\n
+/// For large data sets that are split into multiple chunks of data, a formatted path with three {} placeholders and a maximum file index can be passed.
+/// The handler then tries to load all chunk files from (0,0,0) to the maximum index (inclusive) where all 'inner' chunks must have a volume dimension which is a
+/// multiple of the brick size. Each of these chunks is compressed and exported independently.
+/// Afterward, a merging step is carried out to create a single CSGV containing the whole data set.
+/// A data set that is not split into chunks can be seen as a data set that consists of only one chunk (0,0,0).
+/// For example, "vol_x{}_y{}_z{}" with a maximum index (3,1,4) will compress and merge all chunks [vol_x0_y0_z0, vol_x1_y0_z0, ... vol_x3_y1_z4] into one CSGV.
+/// \n\n
+/// Operation Frequencies:\n
+/// If rANS encoding is applied when compressing, a quick pre-pass for obtaining operation frequency tables is performed.
 class CompSegVolHandler {
 
 public:

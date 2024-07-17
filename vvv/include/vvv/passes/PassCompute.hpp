@@ -31,7 +31,7 @@
 
 namespace vvv {
 
-/** This is a typesafe wrapper around the non-typesafe but more flexible `PassComputeDynamic` */
+/// This is a typesafe wrapper around the non-typesafe but more flexible `PassComputeDynamic`
 // template <PassComputeStructure Types> class PassCompute : public virtual MultiBuffering, public virtual WithGpuContext /*: PassComputeDynamic */ {
 //     using UniformSets = decltype(Types::uniformSets)::type;
 //     using StorageImages = decltype(Types::storageImages)::type;
@@ -46,11 +46,7 @@ public:
     //
     // A `vk::CommandBuffer executeCommands()` variant that returns a secondary commandbuffer without an argument could be more ergonomic and efficient, but
     // harder to synchronize correctly. Not sure...
-    /**
-     *
-     * @param commandBuffer
-     * @return
-     */
+
     [[nodiscard]] AwaitableHandle execute(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override = 0;
 
 protected:
@@ -90,15 +86,10 @@ struct SinglePassComputeSettings {
     std::shared_ptr<MultiBuffering> multiBuffering = NoMultiBuffering;
     uint32_t queueFamilyIndex = 0;
     vk::Extent3D workgroupCount = {1, 1, 1};
-    /** set to false to lazily initialize GPU state. You MUST call `allocateResources()` prior to any other API call if this is `false`. */
 };
 
-/**
- * A special variant of a compute pass that can execute in a single submission to the GPU. This is the case if the algorithm does
- * not rely on multiple passes or multiple queues.
- *
- * @tparam Types
- */
+/// A special variant of a compute pass that can execute in a single submission to the GPU. This is the case if the algorithm does
+/// not rely on multiple passes or multiple queues.
 class SinglePassCompute : public PassCompute {
 public:
     template <typename... ShaderArgs>

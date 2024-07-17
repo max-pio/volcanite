@@ -20,12 +20,10 @@ const float PI = 3.1415926535897932384626433832795;
 const float PI_2 = 1.57079632679489661923;
 const float PI_4 = 0.785398163397448309616;
 
-/**
- * Check whether a dispatched thread is out of bounds.
- *
- * This happens when the screen size is not a integer multiple of the workgroup size in a compute dispatch, or if the
- * screen size is uneven in a fragment dispatch causing half of the pixel quad to be out of bounds.
- */
+/// Check whether a dispatched thread is out of bounds.
+///
+/// This happens when the screen size is not a integer multiple of the workgroup size in a compute dispatch, or if the
+/// screen size is uneven in a fragment dispatch causing half of the pixel quad to be out of bounds.
 bool isHelperLane(ivec2 invocationIdx, ivec2 targetSize) {
     return invocationIdx.x >= targetSize.x || invocationIdx.y >= targetSize.y;
 }
@@ -77,4 +75,4 @@ bool isFirstWorkItem() {
     return all(equal(gl_GlobalInvocationID, uvec3(0u)));
 }
 
-#endif /* UTIL_H */
+#endif // UTIL_H

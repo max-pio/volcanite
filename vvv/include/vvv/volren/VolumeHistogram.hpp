@@ -38,7 +38,7 @@ const VolumeHistogramOptions DefaultVolumeHistogramOptions{
 };
 
 // struct ComputePassOptions {
-//     /** increases allocations by multibuffering for swapchain support. You can create multiple independent compute passes as an alternative. */
+//     /// increases allocations by multibuffering for swapchain support. You can create multiple independent compute passes as an alternative.
 //     size_t maxInstanceCount = 1;
 // };
 //
@@ -67,11 +67,7 @@ public:
 
     std::shared_ptr<Texture> texture() const { return m_histogram; }
 
-    /**
-     * Prepare resources for the computation. This may include uploading data, executing layout transitions, etc.
-     *
-     * @param performComputeCommands
-     */
+    /// Prepare resources for the computation. This may include uploading data, executing layout transitions, etc.
     void prepare(const std::function<void(const std::function<void(vk::CommandBuffer)>)> performComputeCommands) {
         if (!m_histogram->areResourcesInitialized()) {
             m_histogram->initResources();

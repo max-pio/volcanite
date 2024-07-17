@@ -21,13 +21,11 @@ namespace vvv {
 
 namespace sfc {
 
-/**
- * I don't want to waste more time on thinking about how to make this usable in an overloading fashion and still having static methods.
+/* I don't want to waste more time on thinking about how to make this usable in an overloading fashion and still having static methods.
  * i.e. be able to replace one object from "CartesianCurve" to "MortonCurve" and use a different curve in a program.
  * static can't be virtual. Maybe create static objects here, for example from structs which inherit from an abstract parent blueprint?
  *
- * All Classes implement methods to convert positions in a brick to
- */
+ * All Classes implement methods to convert positions in a brick to. */
 
 class Cartesian {
 public:
@@ -35,9 +33,7 @@ public:
     static glm::uvec3 i2p(size_t i, glm::uvec3 brick_size) { return {i % brick_size.x, (i / brick_size.x) % brick_size.y, (i / brick_size.x / brick_size.y) % brick_size.z}; }
 };
 
-/**
- * https://fgiesen.wordpress.com/2009/12/13/decoding-morton-codes/
- */
+/// taken from https://fgiesen.wordpress.com/2009/12/13/decoding-morton-codes/
 class Morton2D {
 public:
     // @ToDo add asserts to check limits as for the 3D case!
@@ -67,10 +63,7 @@ private:
     }
 };
 
-/**
- * https://fgiesen.wordpress.com/2009/12/13/decoding-morton-codes/
- * with adaptions for 64 bit
- */
+/// taken from https://fgiesen.wordpress.com/2009/12/13/decoding-morton-codes/with adaptions for 64 bit
 class Morton3D {
 public:
     // the 64 bit variants can work with up to 10 bits per positional component

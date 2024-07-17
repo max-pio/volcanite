@@ -36,15 +36,14 @@ typedef size_t gui_id;
 
 // ToDo: Refactor GuiInterface to ParameterInterface as parameters can be managed with it without having a visible GUI
 
-/**
- * Steps to add a new data or entry type T:
- * (1) create an entry to GuiType enum
- * (2) create add<T>(...) functions for T in GuiElementList class
- * optional: (3) create a GUI_*_CAST define for casting from the BaseGuiEntry to the right derived entry class
- *
- * optional:
- * (3) update the methods to render GUI in the derived classes of GuiInterface to include the new type
- */
+
+// Steps to add a new data or entry type T:
+// (1) create an entry to GuiType enum
+// (2) create add<T>(...) functions for T in GuiElementList class
+// optional: (3) create a GUI_*_CAST define for casting from the BaseGuiEntry to the right derived entry class
+//
+// optional:
+// (3) update the methods to render GUI in the derived classes of GuiInterface to include the new type
 
 #define PROPERTY_REF(F, T, G)                                                                                                                                                                     \
     virtual gui_id F(T *v, const std::string &name = "") { return add<T>(v, name, G); }                                                                                                                \
@@ -66,25 +65,22 @@ typedef size_t gui_id;
 namespace vvv {
 
 
-/**
- * Connection to a (graphical) parameter interface.
- *
- * Can contain multiple GUI windows that are identified by their name. A window is obtained with the get(windowName) method.
- * If a window with that name doesn't exist yet, it is created.
- *
- * Each window contains a number of columns. Each column is a GuiElementList where elements can be added in a sequential manner.
- *
- * Properties are added in a sequential manner to a window using the add[Type] methods which return an unique id corresponding to this GUI element.
- * Each property can be given a name, that is used as its label in the GUI. Seperators can be used to group GUI elements.
- * The gui changes the property either directly through a pointer to the property or with a function pointer to a setter.
- *
- * The interface automatically enters all added properties to a vector of GuiEntries. Base classes should work hand in hand with the
- * rendering window or window framework to display the list or properties, for example by using an explicit Gui engine. In a minimal case,
- * this requires only some kind of "renderGui()" method in the base class, that iterates over all m_windows and their elements in m_entries and display according gui elements.
- *
- * You can use the addCustomCode method to add an entry than runs a lambda function.
- * This can be used for quick prototyping, for example directly adding ImGUI-Code when using the ImGUI backend.
- */
+/// @brief Connection to a (graphical) parameter interface.
+///
+/// Can contain multiple GUI windows that are identified by their name. A window is obtained with the get(windowName) method.
+/// If a window with that name doesn't exist yet, it is created.\n
+/// \n
+/// Each window contains a number of columns. Each column is a GuiElementList where elements can be added in a sequential manner.
+/// Properties are added in a sequential manner to a window using the add[Type] methods which return an unique id corresponding to this GUI element.
+/// Each property can be given a name, that is used as its label in the GUI. Seperators can be used to group GUI elements.
+/// The gui changes the property either directly through a pointer to the property or with a function pointer to a setter.
+/// \n
+/// The interface automatically enters all added properties to a vector of GuiEntries. Base classes should work hand in hand with the
+/// rendering window or window framework to display the list or properties, for example by using an explicit Gui engine. In a minimal case,
+/// this requires only some kind of "renderGui()" method in the base class, that iterates over all m_windows and their elements in m_entries and display according gui elements.
+/// \n
+/// You can use the addCustomCode method to add an entry than runs a lambda function.
+/// This can be used for quick prototyping, for example directly adding ImGUI-Code when using the ImGUI backend.
 class GuiInterface {
 protected:
     enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2, GuiFloatRange, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiAction, GuiLabel, GuiDynamicText, GuiProgress, GuiSeparator, GuiTF1D, GuiTF2D, GuiTFSegmentedVolume, GuiCustomCode };
@@ -230,9 +226,7 @@ public:
 
 protected:
     //  ------------------------------ GUI WINDOW CLASS ------------------------------- //
-    /**;
-     * A GuiWindow contains multiple columns which in turn are lists of Gui elements
-     */
+    /// A GuiWindow contains multiple columns which in turn are lists of Gui elements
     class GuiWindow {
     protected:
         std::string m_name;
@@ -366,20 +360,16 @@ public:
         return true;
     }
 
-    /**
-     * Pass a list of std::pair objects where each pair contains the: 1. window to dock, and 2. docking location.\n
-     * A docking location can either be a name of another window or one of the placeholders "l", "r", "u", "d" for
-     * left, right, up, or down locations of the central window. Docking multiple windows to the same central window
-     * location results in them being placed next to/below each other at this location.
-     */
+    /// Pass a list of std::pair objects where each pair contains the: 1. window to dock, and 2. docking location.\n
+    /// A docking location can either be a name of another window or one of the placeholders "l", "r", "u", "d" for
+    /// left, right, up, or down locations of the central window. Docking multiple windows to the same central window
+    /// location results in them being placed next to/below each other at this location.
     void setDockingLayout(std::vector<std::pair<std::string, std::string>> docking_layout) {
         m_docking_layout = std::move(docking_layout);
     }
 
-    /**
-     * Updates all GUI elements based on the values read from value pointers or getters if the properties where added with getter/setter
-     * function pointers and a getter function pointer was specified.
-     */
+    /// Updates all GUI elements based on the values read from value pointers or getters if the properties where added with getter/setter
+    /// function pointers and a getter function pointer was specified.
     virtual void updateGui() = 0;
 
 };

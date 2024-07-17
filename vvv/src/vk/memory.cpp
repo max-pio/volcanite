@@ -15,18 +15,12 @@
 
 #include "vvv/vk/memory.hpp"
 
-/**
- * Get the index of a memory type that has all the requested property bits set
- *
- * @param typeBits Bit mask with bits set for each memory type supported by the resource to request for (from VkMemoryRequirements)
- * @param properties Bit mask of properties for the memory type to request
- * @param (Optional) memTypeFound Pointer to a bool that is set to true if a matching memory type has been found
- *
- * @return Index of the requested memory type
- *
- * @throw Throws an exception if memTypeFound is null and no memory type could be found that supports the requested properties
- */
-
+/// Get the index of a memory type that has all the requested property bits set
+/// @param typeBits Bit mask with bits set for each memory type supported by the resource to request for (from VkMemoryRequirements)
+/// @param properties Bit mask of properties for the memory type to request
+/// @param (Optional) memTypeFound Pointer to a bool that is set to true if a matching memory type has been found
+/// @return Index of the requested memory type
+/// @throw Throws an exception if memTypeFound is null and no memory type could be found that supports the requested properties
 uint32_t vvv::getMemoryType(vk::PhysicalDeviceMemoryProperties const &memoryProperties, uint32_t typeBits, vk::MemoryPropertyFlags requirementsMask) {
     for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++) {
         if ((typeBits & 1) == 1) {
@@ -68,9 +62,9 @@ size_t vvv::getMemoryHeapSize(vvv::GpuContextRef ctx, vk::MemoryHeapFlagBits req
     return total_heap_memory;
 }
 
-/** Obtains the total heap memory size that this application can use as well as the currently used heap memory size.
- * The remaining available heap memory size is (total size - used size). Both numbers are reported as a number of bytes.
- * @returns pair of the total heap memory in bytes and the currently used heap memory in bytes. */
+/// Obtains the total heap memory size that this application can use as well as the currently used heap memory size.
+/// The remaining available heap memory size is (total size - used size). Both numbers are reported as a number of bytes.
+/// @returns pair of the total heap memory in bytes and the currently used heap memory in bytes. */
 std::pair<size_t, size_t> vvv::getMemoryHeapBudgetAndUsage(vvv::GpuContextRef ctx, vk::MemoryHeapFlagBits requirementMask) {
     // See https://asawicki.info/news_1740_vulkan_memory_types_on_pc_and_how_to_use_them for a description of vendor
     // specific memory types. Keep in mind that these methods do not work 100% of the time, as there are so many nuances
@@ -239,16 +233,8 @@ void vvv::setImageLayout(vk::CommandBuffer const &commandBuffer, vk::Image image
     return commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, nullptr, nullptr, imageMemoryBarrier);
 }
 
-/**
- * Create a buffer
- *
- * The buffer has exclusive sharing mode -- meaning the buffer has to be transfered explicitly between queues.
- *
- * @param size
- * @param usage
- * @param properties
- * @return
- */
+
+/// Create a buffer with exclusive sharing mode -- meaning the buffer has to be transferred explicitly between queues.
 std::pair<vk::Buffer, vk::DeviceMemory> vvv::createBuffer(vvv::GpuContextRef ctx, vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, const char *label) {
     // without this assertion, zero-sized allocations result in a out of memory error
     assert(size > 0 && "vulkan buffers MUST allocate at least one byte");

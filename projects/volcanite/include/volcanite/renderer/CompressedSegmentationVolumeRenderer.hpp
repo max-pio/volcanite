@@ -66,17 +66,17 @@ public:
         ctx->physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
     }
 
-    /** Initializes Descriptorsets and calls pipeline initialization. */
+    /// Initializes Descriptorsets and calls pipeline initialization.
     void initResources(GpuContext *ctx) override;
     void releaseResources() override;
-    /** Initialize everything that depends on shader */
+    /// Initialize everything that depends on shader
     void initShaderResources() override;
     void releaseShaderResources() override;
-    /** Initializes command buffer, renderpass, images and framebuffers */
+    /// Initializes command buffer, renderpass, images and framebuffers
     void initSwapchainResources() override;
     void releaseSwapchain() override;
 
-    /** Releases all GPU states and resources but does not reset the segmentation volume. */
+    /// Releases all GPU states and resources but does not reset the segmentation volume.
     void resetGPU();
 
     void setRenderResolution(vk::Extent2D resolution) {
@@ -94,7 +94,7 @@ public:
         return m_resolution;
     }
 
-    /** We limit the render resolution to max. 4K (4096x2160) or Full-HD. */
+    /// Obtains the rendering resolution from the windowing system but limits it to 4K (4096x2160).
     void updateRenderResolutionFromWSI() {
         // ToDo: remove hardcoded render resolution. Move the WSI dependency to Application / HeadlessRendering or the Renderer class?
         const vk::Extent2D max_resolution = {4096u, 2160u};
@@ -170,28 +170,29 @@ public:
         }
     }
 
-    /** Creates and populates all GPU buffers for the currently set compressed segmentation volume data set.
-     * Blocks until all buffer acquisitions and uploads are finished. */
+    /// Creates and populates all GPU buffers for the currently set compressed segmentation volume data set.
+    /// Blocks until all buffer acquisitions and uploads are finished.
     void initDataSetGPUBuffers();
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
     int getTargetAccumulationFrames() { return m_accum_frames; }
-    /** Will save the renderer state to the path when the renderer is shut down */
+    /// Will save the renderer state to the path when the renderer is shut down
     void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = std::move(path); }
 
-    /** Sets the target cache size for the renderer in MB.
-     * A size of 0 tries to allocate the maximum available GPU memory.
-     * The cache size must be specified before startup to have an effect.
-     * Actual cache size may be lower if less space is needed or not enough GPU memory is available.\n
-     * With palettized_cached set to true, the cache stores palette indices instead of labels. Allows to store larger
-     * portions of the volume in cache at the expense of a performance decrease.*/
+    /// @brief Sets the target cache size for the renderer in MB.
+    ///
+    /// A size of 0 tries to allocate the maximum available GPU memory.
+    /// The cache size must be specified before startup to have an effect.
+    /// Actual cache size may be lower if less space is needed or not enough GPU memory is available.
+    /// @param palettized_cached if true, the cache stores palette indices instead of labels. Allows to store larger
+    /// portions of the volume in cache at the expense of a performance decrease.
     void setCacheParameters(size_t cache_size_MB, bool palettized_cache) { m_target_cache_size_MB = cache_size_MB; m_use_palette_cache = palettized_cache; }
 
 private:
-    /** Fills m_constructed_detail and m_constructed_detail_starts buffers with detail encodings of requested brick
-     * indices in m_detail_requests. Can be executed in a separate thread. Finished execution is indicated by
-     * m_detail_stage being set to DetailAwaitingUpload. */
+    /// Fills m_constructed_detail and m_constructed_detail_starts buffers with detail encodings of requested brick
+    /// indices in m_detail_requests. Can be executed in a separate thread. Finished execution is indicated by
+    /// m_detail_stage being set to DetailAwaitingUpload.
     void updateCPUDetailBuffers();
 
     void printGPUMemoryUsage();

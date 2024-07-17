@@ -27,13 +27,12 @@
 
 namespace vvv {
 
-/** Holds state for a first person camera that characterizes the world to
-* projection space transform completely, except for the aspect ratio. It also
-* provides enough information to update the camera interactively. It does not
-* store any transforms or other redundant information. Such information has
-* to be computed as needed.
-* Our world and camera setup uses a right-handed coordinate system (y is up, x to the right, z pointing out of the plane spanned by xy)
- */
+/// Holds state for a first person camera that characterizes the world to
+/// projection space transform completely, except for the aspect ratio. It also
+/// provides enough information to update the camera interactively. It does not
+/// store any transforms or other redundant information. Such information has
+/// to be computed as needed.  Our world and camera setup uses a right-handed
+/// coordinate system (y is up, x to the right, z pointing out of the plane spanned by xy).
 class Camera {
 public:
     /// If true, this is an orbital (rotate with mouse + scrollwheel) camera instead of the first person controls
@@ -128,11 +127,10 @@ public:
         return ((float)extent.width) / ((float)extent.height);
     }
 
-    /** Register a function that is called whenever the camera is moved or rotated.
-     * Overrides any previously defined callback function.
-     * There is no callback function defined initially.
-     * @param callbackFunction function that is called on camera updates, may be nullptr to remove the current callback function
-     */
+    /// Register a function that is called whenever the camera is moved or rotated.
+    /// Overrides any previously defined callback function.
+    /// There is no callback function defined initially.
+    /// @param callbackFunction function that is called on camera updates, may be nullptr to remove the current callback function
     void registerCameraUpdateCallback(std::function<void()> callbackFunction);
 
     void onCameraUpdate();

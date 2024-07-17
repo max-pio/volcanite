@@ -1,21 +1,3 @@
-//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-// Taken from commit ed028b0 at https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/master/layers/vk_format_utils.h
-// and made to compile by commenting out VK_EXT_ycbcr_2plane_444_formats specific code and inlining header "vk_layer_data.h"
-
 #define VK_LAYER_EXPORT
 
 /* Copyright (c) 2015-2017, 2019-2021 The Khronos Group Inc.

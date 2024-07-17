@@ -81,7 +81,7 @@ private:
 };
 
 template <typename T> struct Buffer::uniform : public Buffer {
-    /** Create a rgba8u texture that can be used for writing in a compute shader and blitting to the graphics queue */
+    /// Create a rgba8u texture that can be used for writing in a compute shader and blitting to the graphics queue
     explicit uniform(GpuContextPtr ctx, const std::string label = "")
         : Buffer(ctx, BufferSettings{.label = label,
                                      .byteSize = sizeof(T),

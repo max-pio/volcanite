@@ -39,13 +39,11 @@ vec3 compute_gradient(ivec3 position)
     return vec3(dx, dy, dz);
 }
 
-/**
- * Visualizes the data of a 3d volume for a 2d transfer function by plotting it into a 2d histogram texture as follows:
- * - the scalar data value varies along the x-axis
- * - the gradient magnitude is ploted along the y-axis
- * - (0,0) is a the top left. Thus, inner homogenous areas will result in large values along the top of the histogram texture.
- *   Transitions/Isosurfaces will be plotted as parabels that open to the top.
- */
+/// Visualizes the data of a 3d volume for a 2d transfer function by plotting it into a 2d histogram texture as follows:
+/// - the scalar data value varies along the x-axis
+/// - the gradient magnitude is ploted along the y-axis
+/// - (0,0) is a the top left. Thus, inner homogenous areas will result in large values along the top of the histogram texture.
+///   Transitions/Isosurfaces will be plotted as parabels that open to the top.
 void main() {
     // TODO(Reiner): this is totally unoptimized, each thread accumulates a single value directly into global memory with a atomic operation
 

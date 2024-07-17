@@ -28,4 +28,4 @@ vec3 phongShading(vec3 colorIn, vec3 normal, vec3 rayDir) {
     return color;
 }
 
-#endif /* SHADING_H */
+#endif // SHADING_H

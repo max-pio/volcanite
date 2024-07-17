@@ -359,12 +359,6 @@ void vvv::DefaultGpuContext::destroySurface() {
     }
 }
 
-/**
- * The physical device is selected according to the following rules in order:
- * 1.) the device with the number specified with the environment variable "VVV_DEVICE"
- * 2.) the first (not blacklisted) discrete GPU
- * 3.) the first (not blacklisted) GPU
- */
 void vvv::DefaultGpuContext::createPhysicalDevice() {
     const auto devices = getInstance().enumeratePhysicalDevices();
 

@@ -137,12 +137,11 @@ struct Shader {
 
     std::vector<DescriptorSetLayout> reflectDescriptorLayouts() const;
 
-    /**
-     * Get the workgroup size by inspecting the shader source.
-     *
-     * Beware: this will falsely return 1x1x1 if the workgroup size is configured through
-     * specialization constants or if the shader is not a compute shader.
-     */
+
+    /// @brief Get the workgroup size by inspecting the shader source.
+    ///
+    /// Beware: this will falsely return 1x1x1 if the workgroup size is configured through
+    /// specialization constants or if the shader is not a compute shader.
     vk::Extent3D reflectWorkgroupSize() const;
 
     vk::ShaderStageFlagBits reflectShaderStage() const;

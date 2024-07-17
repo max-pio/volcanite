@@ -20,13 +20,11 @@
 
 namespace vvv {
 
-/**
- * This render pass implements SSAO and is executed on the graphics queue.
- * It takes depth and world space normals as input images (linked with setInputTextures())
- * and applies ambient occlusion to it.
- * Input images should have the usage flags returned from getInputImageUsageFlags().
- * The result is returned by renderSsao() in a RendererOutput struct.
- */
+/// This render pass implements SSAO and is executed on the graphics queue.
+/// It takes depth and world space normals as input images (linked with setInputTextures())
+/// and applies ambient occlusion to it.
+/// Input images should have the usage flags returned from getInputImageUsageFlags().
+/// The result is returned by renderSsao() in a RendererOutput struct.
 class PassSsao : public SinglePassCompute {
 public:
     enum Algorithm : int { Crytek, Starcraft, Hbao };
@@ -45,11 +43,9 @@ public:
     glm::float32 g_ssaoFalloff = 100.0;                     ///< falloff power factor [only Starcraft]
     glm::int32   g_ssaoNumSteps = 16;                       ///< samples for each horizon [only HBAO]
 
-    /**
-     * Add SSAO settings to the Gui.
-     * @param shaderRecompileCallback if a callback is provided, a selection box for the algorithm is added to the gui.
-     *        When it is used in the gui, the callback needs to call releaseSwapchain(), freeResources(), allocateResources(), initSwapchainResources().
-     */
+    /// Add SSAO settings to the Gui.
+    /// @param shaderRecompileCallback if a callback is provided, a selection box for the algorithm is added to the gui.
+    ///        When it is used in the gui, the callback needs to call releaseSwapchain(), freeResources(), allocateResources(), initSwapchainResources().
     void addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int)>> shaderRecompileCallback = {});
 
     static vk::ImageUsageFlags getInputImageUsageFlags() { return vk::ImageUsageFlagBits::eSampled; }

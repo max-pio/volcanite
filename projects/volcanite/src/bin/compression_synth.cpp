@@ -60,7 +60,7 @@ int compression_synth(int argc, char *argv[]) {
     // configuration -------------------
     int brick_dim = 16;                                                         // size of one brick
     bool force_recompute = false;                                               // do a fresh compression even if there is a precomputed file
-    CompressedSegmentationVolume::RANSMode rANS_mode = vvv::CompressedSegmentationVolume::DOUBLE_TABLE_RANS;  // use no rANS, rANS with one table for everything, or rANS with a second freq. table for the finest LoD
+    RANSMode rANS_mode = RANSMode::DOUBLE_TABLE_RANS;  // use no rANS, rANS with one table for everything, or rANS with a second freq. table for the finest LoD
     unsigned int frequency_pass_subsampling = 8u;                               // only use every n³th block in every 2nd chunk file for computing frequencies
     bool use_detail_separation = false;                                         // split off the operation stream of the finest LoD for on-demand CPU to GPU streaming
     std::string appName = "Synthetic Data Creator";
@@ -188,7 +188,7 @@ int compression_synth(int argc, char *argv[]) {
                     changed = true;
                     code_frequencies[i] = 2ul;
                 }
-                if(rANS_mode == vvv::CompressedSegmentationVolume::DOUBLE_TABLE_RANS && code_frequencies[i+16] == 0ul) {
+                if(rANS_mode == RANSMode::DOUBLE_TABLE_RANS && code_frequencies[i+16] == 0ul) {
                     changed = true;
                     code_frequencies[i+16] = 2ul;                }
             }
@@ -196,7 +196,7 @@ int compression_synth(int argc, char *argv[]) {
                 Logger(WARN) << " set zero frequency to 2 to avoid missing symbols because of frequency pass subsampling.";
         }
     }
-    csgvol->setCompressionOptions64(brick_dim, rANS_mode, false, code_frequencies, code_frequencies + 16);
+    csgvol->setCompressionOptions64(brick_dim, rANS_mode, code_frequencies, code_frequencies + 16);
     if (use_detail_separation)
         csgvol->separateDetail();
     csgvol->compress(volume->data(), volume_dim, true);

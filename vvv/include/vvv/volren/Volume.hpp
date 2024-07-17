@@ -24,7 +24,7 @@
 namespace vvv {
 
 namespace detail {
-    //! check if string `a` ends with `b`
+    /// check if string `a` ends with `b`
     static bool EndsWith(const std::string &a, const std::string &b) {
         if (b.size() > a.size())
             return false;
@@ -41,14 +41,12 @@ template <typename ElementType = uint16_t> struct RangeLimits {
     float maxGrad;
 };
 
-/**
- *
- * Phyisical size determines the bounding box of the volume, while the dimensions determines the number of data samples
- * along each axis within the volume.
- *
- * The volume data is layed out in [z][y][x] order, meaning the x-axis is coalesced/varies fastest, z has the largest stride and varies slowest.
- * The logical data layout uses a right-handed coordinate system where z is the UP axis (height), y the depth and x the width.
- */
+
+/// Phyisical size determines the bounding box of the volume, while the dimensions determines the number of data samples
+/// along each axis within the volume.
+///
+/// The volume data is layed out in [z][y][x] order, meaning the x-axis is coalesced/varies fastest, z has the largest stride and varies slowest.
+/// The logical data layout uses a right-handed coordinate system where z is the UP axis (height), y the depth and x the width.
 // TODO(Reiner): accessor via [] a la vector
 // TODO(Reiner): ElementType independent variant. Its currently a problem to read a format that can hold multiple types, e.g. nrrd. e.g. we could design this independent with typed views
 // TODO(Reiner): compatibility with eigen/numpy
@@ -56,31 +54,30 @@ template <typename ElementType = uint16_t> struct RangeLimits {
 // TODO(Reiner): abstract read-write routines in a way that allows them to be used in Texture, Volume, ...
 template <typename ElementType = uint16_t, typename HolderType = std::vector<ElementType>> class Volume {
 public:
-    /**
-     * Load volumetric data from a open microscopy TIFF file.
-     *
-     * This loader is not standard conformat and only supports the standard
-     * subset required to load the data produced by the in-house built Light
-     * Sheet Microscopes of Neinhaus' Group at the Karlsruhe Institute of
-     * Technology.
-     */
+
+    /// Load volumetric data from a open microscopy TIFF file.
+    ///
+    /// This loader is not standard conformat and only supports the standard
+    /// subset required to load the data produced by the in-house built Light
+    /// Sheet Microscopes of Neinhaus' Group at the Karlsruhe Institute of
+    /// Technology.
     // TODO(Reiner): conditionally compile this part
     static std::shared_ptr<Volume<ElementType, HolderType>> load_ome_tiff(std::string path) { throw std::runtime_error("element holder type combination unsupported for TIFF"); }
 
-    //! A non-standard conformant NRRD reader that is able to read files from https://klacansky.com/open-scivis-datasets/
-    //! @param allowCast By default, an error is thrown if the volume component type and the component type stored in the file mismatch. If set to true, a conversion is attempted instead.
+    /// A non-standard conformant NRRD reader that is able to read files from https://klacansky.com/open-scivis-datasets/
+    /// @param allowCast By default, an error is thrown if the volume component type and the component type stored in the file mismatch. If set to true, a conversion is attempted instead.
     static std::shared_ptr<Volume<ElementType, HolderType>> load_nrrd(std::string path, bool allowCast = true); // { throw std::runtime_error("element holder type combination unsupported for NRRD"); }
     void write_nrrd(std::string path, bool separatePayloadFile = true);
 
-    //! An even more simplified nrrd format for the cellsinsilico volume data that Max hands out to students. Format is: one line "dim_x dim_y dim_z" and one line data type "uint[8|16|32]" followed by payload.
+    /// An even more simplified nrrd format for the cellsinsilico volume data that Max hands out to students. Format is: one line "dim_x dim_y dim_z" and one line data type "uint[8|16|32]" followed by payload.
     static std::shared_ptr<Volume<ElementType, HolderType>> load_volcanite_raw(std::string path, bool allowCast = false);
 
     void write_volcanite_raw(std::string path);
 
-    //! Hdf5 file which is expected to have a 3D array as its first root object which will be loaded as the volume
+    /// Hdf5 file which is expected to have a 3D array as its first root object which will be loaded as the volume
     static std::shared_ptr<Volume<ElementType, HolderType>> load_hdf5(std::string path, bool allowCast = false);
 
-    //! vti file format from the vtk library, but we expect a very precise format: an ImageData file
+    /// vti file format from the vtk library, but we expect a very precise format: an ImageData file
     static std::shared_ptr<Volume<ElementType, HolderType>> load_vti(std::string path, bool allowCast = false);
 
 
@@ -100,16 +97,11 @@ public:
 
     ~Volume() { delete m_texture; }
 
-    /**
-     * Get the single channel, uncompressed volumentric data slice in row major order
-     * @return
-     */
+     /// Get the single channel, uncompressed volumentric data slice in row major order
     char *getDataInRowMajorOrder() { return reinterpret_cast<char *>(m_payload.data()); }
     const char *getDataInRowMajorOrder_const() { return reinterpret_cast<const char *>(m_payload.data()); }
 
-    /**
-     * Get the raw volume data. May be compressed, swizzled, etc.
-     */
+    /// Get the raw volume data. May be compressed, swizzled, etc.
     const char *getRawData_const() const { return reinterpret_cast<const char *>(m_payload.data()); }
     char *getRawData() { return reinterpret_cast<char *>(m_payload.data()); }
 

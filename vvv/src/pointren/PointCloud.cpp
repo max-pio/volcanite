@@ -129,10 +129,9 @@ std::vector<int> vvv::PointCloud::nearestNeighbors() {
 // TODO(Max) move poisson fill method to the utils
 
 // use that here to fill the whole space, then remove points that collide with existing data set points
-/**
- * Fills the spacce with positions based on Bridon's poisson disc sampling algorithm from "Fast Poisson disk sampling in arbitrary dimensions".
- * The positions are NOT yet added to the point cloud but returned as a vector.
- */
+
+/// Fills the spacce with positions based on Bridon's poisson disc sampling algorithm from "Fast Poisson disk sampling in arbitrary dimensions".
+/// The positions are NOT yet added to the point cloud but returned as a vector.
 std::vector<glm::vec4> vvv::PointCloud::poissonFill(float rejectionDist) {
     assert(hasAcceleration());
 
@@ -337,12 +336,10 @@ float vvv::PointCloud::kernelInterpolation(glm::vec3 pos, float radius, const st
     throw std::runtime_error("not implemented yet!");
 }
 
-/**
- * Returns the nearest neighbor located to pos by querying the acceleration structure.
- * @param skipIdenticalPoint will not consider identical points, useful if the neighbor for a point in the data set is requested.
- * @param maxDistance neighbors outside this distance will not be considered
- * @return id of the nearest neighbor or -1 if no neighbor was found within maxDistance
- */
+/// Returns the nearest neighbor located to pos by querying the acceleration structure.
+/// @param skipIdenticalPoint will not consider identical points, useful if the neighbor for a point in the data set is requested.
+/// @param maxDistance neighbors outside this distance will not be considered
+/// @return id of the nearest neighbor or -1 if no neighbor was found within maxDistance
 int vvv::PointCloud::nearestNeighbor(glm::vec4 pos, bool skipIdenticalPoint, float maxDistance, bool stopOnFirstHit) {
 
     if(maxDistance < 0)

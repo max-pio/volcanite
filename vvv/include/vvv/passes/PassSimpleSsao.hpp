@@ -23,11 +23,9 @@
 
 namespace vvv {
 
-/**
- * This is a convenience wrapper for PassSsao and PassBlur.
- * It performs Screen Space Ambient Occlusion based on depth and world space normals, which is then smoothed using PassBlur in bilateral mode.
- * Specity input images using setInputTextures() each frame and call renderSsao().
- */
+/// This is a convenience wrapper for PassSsao and PassBlur.
+/// It performs Screen Space Ambient Occlusion based on depth and world space normals, which is then smoothed using PassBlur in bilateral mode.
+/// Specity input images using setInputTextures() each frame and call renderSsao().
 class PassSimpleSsao : public virtual WithMultiBuffering, public virtual WithGpuContext {
 public:
     using Algorithm = PassSsao::Algorithm;
@@ -48,11 +46,9 @@ public:
 
     virtual RendererOutput renderSsao(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr);
 
-    /**
-     * Add SSAO settings to the Gui.
-     * @param shaderRecompileCallback if a callback is provided, a selection box for the algorithm is added to the gui.
-     *        When it is used in the gui, the callback needs to call releaseSwapchain(), freeResources(), allocateResources(), initSwapchainResources().
-     */
+    /// Add SSAO settings to the Gui.
+    /// @param shaderRecompileCallback if a callback is provided, a selection box for the algorithm is added to the gui.
+    ///        When it is used in the gui, the callback needs to call releaseSwapchain(), freeResources(), allocateResources(), initSwapchainResources().
     virtual void addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int)>> shaderRecompileCallback = {});
 
     // GUI parameters
@@ -71,10 +67,9 @@ private:
     PassBlur m_blurPass;
 };
 
-/**
- * Calculate Ssao, smooth using bilateral filter and multiply AO with a color image.
- * Specity input images using setInputTextures() each frame and call renderSsao().
- */
+
+/// Calculate Ssao, smooth using bilateral filter and multiply AO with a color image.
+/// Specity input images using setInputTextures() each frame and call renderSsao().
 class PassSimpleApplySsao : public PassSimpleSsao {
 public:
     PassSimpleApplySsao(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering,

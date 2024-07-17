@@ -26,8 +26,8 @@
 #include <SPIRV-Reflect/spirv_reflect.h>
 
 namespace vvv {
-/*! Returns the standardized name for the given shader stage, e.g. "vert" or
-        "frag". Only one bit of VkShaderStageFlagBits can be set in the input.*/
+/// Returns the standardized name for the given shader stage, e.g. "vert" or "frag". Only one bit of
+/// VkShaderStageFlagBits can be set in the input.
 std::string get_shader_stage_name(vk::ShaderStageFlagBits stage) {
     switch (stage) {
     case vk::ShaderStageFlagBits::eVertex:

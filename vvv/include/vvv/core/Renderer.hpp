@@ -26,8 +26,7 @@ namespace vvv {
 
 struct RendererOutput {
     Texture *texture;
-    /** the callee has to await these semaphores before he can access the
-        contents of the rendering output */
+    /// the callee has to await these semaphores before he can access the contents of the rendering output.
     vvv::AwaitableList renderingComplete;
 
     // TODO(Reiner): let resources track queue family indices
@@ -36,34 +35,29 @@ struct RendererOutput {
 
 class Renderer {
 public:
-    /**
-     * Schedule work for the next frame in the frame sequence
-     *
-     * @param awaitBeforeExecution A set of semaphores that are signaled when frame should start rendering. the rendering engine MUST await these semaphores.
-     */
+    /// Schedule work for the next frame in the frame sequence
+    /// @param awaitBeforeExecution A set of semaphores that are signaled when frame should start rendering. the rendering engine MUST await these semaphores.
     virtual RendererOutput renderNextFrame(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) = 0;
 
-    /**
-     * Allows the renderer to use `enableInstanceLayer`, `enableDeviceExtension`, `physicalDeviceFeatures` and other configuration methods
-     * on the GPU context to enable layers, extensions and features on the Vulkan context.
-     */
+
+    /// Allows the renderer to use `enableInstanceLayer`, `enableDeviceExtension`, `physicalDeviceFeatures` and other configuration methods
+    /// on the GPU context to enable layers, extensions and features on the Vulkan context.
     virtual void configureExtensionsAndLayersAndFeatures(vvv::GpuContextRwPtr ctx) {};
 
-    /** initialize all resources here that do not depend on the swapchain size or any shaders */
+    /// initialize all resources here that do not depend on the swapchain size or any shaders
     virtual void initResources(vvv::GpuContextRwPtr ctx){};
-    /** initialize your GUI here */
+    /// initialize your GUI here
     virtual void initGui(vvv::GuiInterface * gui){ m_gui_interface = gui; };
-    /** initialize all resources here that depend on shaders */
+    /// initialize all resources here that depend on shaders
     virtual void initShaderResources(){};
-    /** initialize all resources here that depend on the swapchain size (e.g. render targets) */
+    /// initialize all resources here that depend on the swapchain size (e.g. render targets)
     virtual void initSwapchainResources(){};
 
-    /** Release all vulkan resources.
-     *
-     * It is not guaranteed that `releaseSwapchain` is called first.
-     * This method MUST NOT crash when called multiple times. It MUST NOT release any vulkan resources owned by the GpuContext.
-     * It is guaranteed that the object will not be reused after `releaseResources` is called at least once.
-     */
+    /// @brief Release all vulkan resources.
+    ///
+    /// It is not guaranteed that `releaseSwapchain` is called first.
+    /// This method MUST NOT crash when called multiple times. It MUST NOT release any vulkan resources owned by the GpuContext.
+    /// It is guaranteed that the object will not be reused after `releaseResources` is called at least once.
     virtual void releaseResources(){};
     virtual void releaseShaderResources(){};
     virtual void releaseGui(){ m_gui_interface = nullptr; };
@@ -72,11 +66,9 @@ public:
     virtual std::shared_ptr<Camera> getCamera() { return m_camera; }
     virtual void setCamera(std::shared_ptr<Camera> camera) { m_camera = std::move(camera); }
 
-    /**
-     * Writes all rendering and camera parameters in human readable form to the given stream. The Renderer superclass
-     * exports all GUI interface parameters as well as camera parameters.
-     * @return true on success, false otherwise
-     */
+    /// Writes all rendering and camera parameters in human readable form to the given stream. The Renderer superclass
+    /// exports all GUI interface parameters as well as camera parameters.
+    /// @return true on success, false otherwise
     virtual bool writeParameters(std::ostream& out, const std::string& version_string="") const {
         out << "Version " << version_string << std::endl;
         if(!m_camera) {
@@ -100,10 +92,8 @@ public:
         return true;
     }
 
-    /**
-     * Writes all rendering and camera parameters in human readable form to the given file.
-     * @return true on success, false otherwise
-     */
+    /// Writes all rendering and camera parameters in human readable form to the given file.
+    /// @return true on success, false otherwise
     virtual bool writeParameterFile(const std::string& path, const std::string& version_string="") const {
         std::ofstream out(path);
         if(out.is_open()) {
@@ -121,12 +111,10 @@ public:
     }
 
 
-    /**
-     * Reads all rendering and camera parameters from the given stream. The Renderer superclass reads all GUI interface
-     * parameters as well as camera parameters if exported with writeParameters(..).
-     * @param expected_version_string if not empty, reading configurations with a different version will fail
-     * @return true on success, false otherwise
-     */
+    /// Reads all rendering and camera parameters from the given stream. The Renderer superclass reads all GUI interface
+    /// parameters as well as camera parameters if exported with writeParameters(..).
+    /// @param expected_version_string if not empty, reading configurations with a different version will fail
+    /// @return true on success, false otherwise
     virtual bool readParameters(std::istream& in, const std::string& expected_version_string="") {
         std::string tmp;
         in >> tmp; // "Version"
@@ -166,11 +154,9 @@ public:
         return true;
     }
 
-    /**
-     * Reads all rendering and camera parameters from the given path.
-     * If parameters could not be imported from path, the previous parameter state is restored.
-     * @return true if parameters were successfully read from path, false otherwise
-     */
+    /// Reads all rendering and camera parameters from the given path.
+    /// If parameters could not be imported from path, the previous parameter state is restored.
+    /// @return true if parameters were successfully read from path, false otherwise
     virtual bool readParameterFile(const std::string& path, const std::string& expected_version_string= "") {
         // Save old parameters to reload in case of failure
         std::filesystem::path path_backup_config = vvv::Paths::getTempFileWithName("tmp_render_config_params.vcfg");

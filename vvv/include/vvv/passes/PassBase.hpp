@@ -30,70 +30,6 @@
 
 namespace vvv {
 
-// template <class U>
-// class UniformSet : public virtual MultiBuffering, public virtual WithGpuContext {
-//
-// public:
-//    UniformSet(GpuContextPtr ctx, uint32_t copies = 1) : MultiBuffering(copies), WithGpuContext(ctx), m_isUniformSetDirty(copies, true) {}
-//
-//    /**
-//     * Update the value of an option that influences the value of the uniform buffer.
-//     *
-//     * In case you have to do additional work for a specific member, like for example,
-//     * recreate shaders because the uniform also influences a preprocessor macro, just
-//     * override this function for the given member:
-//     *
-//     * ```
-//     * void setUniform(uint32_t* SVGFPass::Iterations, uint32_t value,
-//     * ```
-//     */
-//    template <typename T> void setUniform(T U::*member, T val, bool retainedGpuUpload = true) {
-//        if (m_uniforms.*member != val) {
-//            m_uniforms.*member = val;
-//            std::fill(m_isUniformSetDirty.begin(), m_isUniformSetDirty.end(), true);
-//            // if (isPipelineCreated() && !retainedGpuUpload) {
-//            //     updateUniformDescriptorSet();
-//            // }
-//        }
-//    }
-//
-//    void updateUniformDescriptorSet(idx = getActiveIndex()) {
-//        const Uniform_TransferFunction2D ubo = {
-//            .backgroundOpacity = m_options.backgroundOpacity,
-//            .foregroundOpacity = m_options.foregroundOpacity,
-//            .feathering = m_options.feathering,
-//        };
-//
-//        const auto device = ctx()->getDevice();
-//
-//        void *data = device
-//         .mapMemory(m_uniformBufferMemory, 0, sizeof(ubo), {});
-//        memcpy(data, &ubo, sizeof(ubo));
-//        device.unmapMemory(m_uniformBufferMemory);
-//    }
-//
-//    size_t getUniformSetByteSize() { return sizeof(U); }
-//
-// protected:
-//    void resetUniformsDirtyFlag() { m_isUniformSetDirty = false; }
-//    bool areUniformsDirty() const { return m_isUniformSetDirty; }
-//
-//    virtual void updateUniformDescriptorSet();
-//
-// private:
-//    GpuContextPtr m_ctx;
-//    U m_uniforms;
-//    std::vector<bool> m_isUniformSetDirty;
-//};
-//
-// TODO: maybe make this untyped, and add macros to generate accessors?
-// template <class UniformSets = EmptyEnum, class StorageImages = EmptyEnum, class StorageBuffers = EmptyEnum, class ImageSamplers = EmptyEnum, > struct PassComputeStructure {
-//    type_t<UniformSets> uniformSets;
-//    type_t<StorageImages> storageImages;
-//    type_t<ImageSamplers> imageSamplers;
-//    type_t<StorageBuffers> storageBuffers;
-//};
-
 namespace detail {
 struct BindingState {
     uint32_t setIdx;
@@ -131,11 +67,10 @@ public:
         return m_shaders;
     }
     DescriptorBinding findDescriptorBindingByName(const std::string &name);
-    /**
-     * Creates a texture through reflection (`reflectTexture`) and automatically configures it for usage with this compute pass.
-     * @param name variable name of the texture
-     * @param opts options for reflection
-     */
+
+    /// Creates a texture through reflection (`reflectTexture`) and automatically configures it for usage with this compute pass.
+    /// @param name variable name of the texture
+    /// @param opts options for reflection
     std::shared_ptr<Texture> getTexture(const std::string &name, TextureReflectionOptions opts);
     std::shared_ptr<UniformReflected> getUniformSet(const std::string &name);
 

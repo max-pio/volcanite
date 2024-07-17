@@ -30,9 +30,7 @@ vec4 blend_front_to_back_premultiplied(vec4 accumulator, vec4 new_sample) {
     );
 }
 
-/**
- * Back to front blending, also called the 'over operator'. [Porter & Duff 1984]
- */
+/// Back to front blending, also called the 'over operator'. [Porter & Duff 1984]
 vec4 blend_back_to_front_premultiplied(vec4 accumulator, vec4 new_sample) {
     return vec4(
     accumulator.rgb * (1.0-new_sample.w) + new_sample.rgb,
@@ -40,11 +38,8 @@ vec4 blend_back_to_front_premultiplied(vec4 accumulator, vec4 new_sample) {
     );
 }
 
-/**
- * Back to front blending, also called the 'over operator' for postmultiplied colors.
- *
- * Synonyms for postmultiplied: straight, non-associated color, ...
- */
+/// Back to front blending, also called the 'over operator' for postmultiplied colors.
+/// Synonyms for postmultiplied: straight, non-associated color, ...
 vec4 blend_back_to_front_postmultiplied(vec4 accumulator, vec4 new_sample) {
     return vec4(
     accumulator.rgb * (1.0-new_sample.w) + new_sample.rgb * new_sample.a,
@@ -52,4 +47,4 @@ vec4 blend_back_to_front_postmultiplied(vec4 accumulator, vec4 new_sample) {
     );
 }
 
-#endif /* BLENDING_H */
+#endif // BLENDING_H

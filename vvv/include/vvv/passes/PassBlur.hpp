@@ -20,15 +20,12 @@
 
 namespace vvv {
 
-/**
- * This render pass implements Gaussian blur and is executed on the graphics queue.
- * It takes a input image (linked with setInputTexture()) and blurs it.
- *
- * Optionally, bilateral filtering is supported. Use setInputTexturesBilateral() to specify either depth, normal or both.
- *
- * The input image should have the usage flags returned from getInputImageUsageFlags().
- * The result is returned by renderBlur() in a RendererOutput struct.
- */
+/// @brief This render pass implements Gaussian blur and is executed on the graphics queue.
+///
+/// It takes a input image (linked with setInputTexture()) and blurs it.
+/// Optionally, bilateral filtering is supported. Use setInputTexturesBilateral() to specify either depth, normal or both.
+/// The input image should have the usage flags returned from getInputImageUsageFlags().
+/// The result is returned by renderBlur() in a RendererOutput struct.
 class PassBlur : public PassCompute {
 public:
     enum BilateralMode : uint32_t {

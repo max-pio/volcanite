@@ -35,9 +35,7 @@ namespace vvv {
 
 uint32_t reflectColorAttachmentLocation(vvv::GpuContextPtr ctx, std::string name, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders);
 
-/**
- * Returns name and format of all color output attachments as an ordered vector.
- */
+/// @return name and format of all color output attachments as an ordered vector.
 std::vector<std::pair<std::string, vk::Format>> reflectColorAttachmentInfo(vvv::GpuContextPtr ctx, std::shared_ptr<Shader> shader);
 
 }

@@ -43,17 +43,15 @@ vec4 sampleTransferFunctionUV(float unitRange) {
     return textureLod(SAMPLER_transferFunction1D, lookupPosition, 0);
 }
 
-/**
- * Preintegrates a 1D Transferfunction to a 2D lookup table with the following layout:
- * - scalar_front (`sf`) is on the x-axis and thus varies along the width
- * - scalar_back (`sb`) is on the y-axis and thus varies along the height
- * - (0,0) is a the top left. Note that this implies that the diagonal with sf==sb for homogenous slabs
- *   is stored from top-left to right-bottom
- *
- * This samples the input 1D TF with a constant step size, e.g. the number of steps used
- * for quadrature is variable for each texel in the 2D lookup table since a different
- * interval in the 1D TF is integrated.
- */
+/// Preintegrates a 1D Transferfunction to a 2D lookup table with the following layout:
+/// - scalar_front (`sf`) is on the x-axis and thus varies along the width
+/// - scalar_back (`sb`) is on the y-axis and thus varies along the height
+/// - (0,0) is a the top left. Note that this implies that the diagonal with sf==sb for homogenous slabs
+///   is stored from top-left to right-bottom
+///
+/// This samples the input 1D TF with a constant step size, e.g. the number of steps used
+/// for quadrature is variable for each texel in the 2D lookup table since a different
+/// interval in the 1D TF is integrated.
 void main() {
     // TODO(Reiner): there is a lot of computational overlap between invocations here. Also, each increment
     // of the tableIdx position does twice the work, so the distribution of work to threads in a warp is

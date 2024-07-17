@@ -35,9 +35,8 @@ public:
     // TODO: does not really belong here... camera should be part of the [Renderer](vvv/include/Renderer.cpp), not the WSI
     virtual Camera *getCamera() const = 0;
 
-    /** Number of swapchain images. This is not necessarily the maximal number of images concurrently in flight!
-     * This value MUST be dynamically constant and MAY only chance in conjunction with a call to reinitializeSwapchain.
-     */
+    /// Number of swapchain images. This is not necessarily the maximal number of images concurrently in flight!
+    /// This value MUST be dynamically constant and MAY only chance in conjunction with a call to reinitializeSwapchain.
     uint32_t swapChainImageCount() const {
         return stateSwapchain()->getIndexCount();
     }

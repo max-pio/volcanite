@@ -65,7 +65,7 @@ uint32_t createGraphicsQueues(std::vector<vk::QueueFamilyProperties> const &queu
     return graphicsQueueFamilyIndex;
 }
 
-/*! Create a present and graphics queue, preferring a single queue that can do both */
+/// Create a present and graphics queue, preferring a single queue that can do both
 std::pair<uint32_t, uint32_t> createGraphicsQueues(std::vector<vk::QueueFamilyProperties> const &queueFamilyProperties, vk::PhysicalDevice physicalDevice, vk::SurfaceKHR const &surface,
                                                    std::vector<vk::DeviceQueueCreateInfo> *queueCreateInfos) {
     assert(queueFamilyProperties.size() < std::numeric_limits<uint32_t>::max());
@@ -119,7 +119,7 @@ std::pair<uint32_t, uint32_t> createGraphicsQueues(std::vector<vk::QueueFamilyPr
     throw std::runtime_error("Either no present queue available");
 }
 
-/*! Create dedicated queues for compute and transfer if available. Then try to match the default (graphics) queue. otherwise terminate. */
+/// Create dedicated queues for compute and transfer if available. Then try to match the default (graphics) queue. otherwise terminate.
 vvv::QueueFamilyIndices findQueueFamilyIndices(vk::QueueFlags requestedQueueTypes, std::vector<vk::QueueFamilyProperties> const &familyProps, std::vector<vk::DeviceQueueCreateInfo> *queueCreateInfos,
                                                uint32_t defaultGraphicsQueue) {
 

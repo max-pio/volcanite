@@ -47,9 +47,7 @@ private:
     const std::string CSGV_INFO_TABLE = "csgv_info";
     const std::string ID_COLUMN = "csgv_id";
 
-    /**
-     * Exports preprocessing results to a new database after which it is opened in read mode.
-     */
+    /// Exports preprocessing results to a new database after which it is opened in read mode.
     bool databaseExportAndOpen(const std::string& sqlite_path, const std::vector<uint32_t>& index_to_label,
                                glm::uvec3 volume_dimension, glm::uvec3 chunk_dimension,
                                const std::string& attribute_database, std::string attribute_table,
@@ -243,10 +241,9 @@ public:
         m_label_count = 0;
     }
 
-    /** This database will not contain any real information but will return a label count of uint32_MAX and a single
-     * attribute name "csgv_id". This way it can be used in the csgv renderer which will implicitly map this single
-     * attribute to the voxel labels from the csgv volume.
-     */
+    /// This database will not contain any real information but will return a label count of uint32_MAX and a single
+    /// attribute name "csgv_id". This way it can be used in the csgv renderer which will implicitly map this single
+    /// attribute to the voxel labels from the csgv volume.
     void createDummy() {
         m_db = nullptr;
         //ToDo: could create a in-memory database if we need more dummy functionality (if LIB_SQLITE3 is present)
@@ -258,7 +255,7 @@ public:
 
     bool isDummy() { return !m_attribute_names.empty() && m_db == nullptr; }
 
-    /** Updates the min / max values of the csgv_id dummy attribute, i.e. the volume labels, from the given volume. **/
+    /// Updates the min / max values of the csgv_id dummy attribute, i.e. the volume labels, from the given volume.
     void updateDummyMinMax(const CompressedSegmentationVolume& csgv) {
         uint32_t min_id = ~0u;
         uint32_t max_id = 0u;
@@ -277,12 +274,11 @@ public:
     }
 
 
-    /** If a precomputed CSGV database exists already, it is openend.
-     *  If not, the given (possibly chunked) volume at input_path is preprocessed and the result is stored in a new database.
-     *  In that case, either all three or none of the attribute_* parameters must be provided.
-     *  If they are provided, the label attributes for the CSGV database are imported from the given
-     *  attribute_table in the attribute_database and the attribute_label is used as the key column for voxel labels in the volume file.
-     */
+    /// If a precomputed CSGV database exists already, it is openend.
+    /// If not, the given (possibly chunked) volume at input_path is preprocessed and the result is stored in a new database.
+    /// In that case, either all three or none of the attribute_* parameters must be provided.
+    /// If they are provided, the label attributes for the CSGV database are imported from the given
+    /// attribute_table in the attribute_database and the attribute_label is used as the key column for voxel labels in the volume file.
     void importOrProcessChunkedVolume(const std::string& volume_input_path, const std::string& sqlite_output_path,
                                       const std::string& attribute_database = "", const std::string& attribute_table = "", const std::string& attribute_label = "",
                                       bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u)) {
@@ -315,9 +311,10 @@ public:
 #endif
     }
 
-    /** For a (possibly chunked) volume, the following preprocessing is carried out and exported to a new database:\n
-     * 1. total number of voxels in the volume and the size of the (0,0,0) chunk\n
-     */
+    /// For a (possibly chunked) volume, the following preprocessing is carried out and exported to a new database:\n
+    /// total number of voxels in the volume,\n
+    /// the size of the (0,0,0) chunk and other (inner) chunks match this size\n
+    /// the number of labels and the label to index re-mapping
     void processVolumeAndCreateSqlite(const std::string& sqlite_export_path, const std::string& volume_input_path,
                                       const std::string& attribute_database, const std::string& attribute_table,
                                       const std::string& label_column,
@@ -442,11 +439,9 @@ public:
 #endif
     }
 
-    /**
-     * Returns a mapping of the original volume's labels to new voxel ids that are\n
-     * (1) one continuous space, i.e. [0, N) for N unique labels in the volume\n
-     * (2) ordered along a Morton Z-Curve by their first appearance in the volume
-     */
+    /// Returns a mapping of the original volume's labels to new voxel ids that are\n
+    /// (1) one continuous space, i.e. [0, N) for N unique labels in the volume\n
+    /// (2) ordered along a Morton Z-Curve by their first appearance in the volume
     [[nodiscard]] std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> getLabelRemapping() const {
 #ifdef LIB_SQLITE3
         if(!m_db)
@@ -487,12 +482,9 @@ public:
         return m_label_count;
     }
 
-    /**
-     * Fills the memory area with the float attribute for the given attribute index. The buffer must be large enough
-     * to fit getLabelCount() elements. If maxSize > getLabelCount(), only getLabelCount() elements are written.
-     *
-     * @return the number of written elements
-     */
+    /// Fills the memory area with the float attribute for the given attribute index. The buffer must be large enough
+    /// to fit getLabelCount() elements. If maxSize > getLabelCount(), only getLabelCount() elements are written.
+    /// @return the number of written elements
     size_t getAttribute(int attributeIndex, float* begin, size_t maxSize) {
 #ifdef LIB_SQLITE3
         if(!m_db)

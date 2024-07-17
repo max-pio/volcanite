@@ -102,14 +102,11 @@ const std::map<SpvImageFormat, vk::Format> spvr2vk_format{
 };
 }; // namespace details
 
-/**
- * Derives a texture that can be used for all the given bindings.
- *
- * @throws std::runtime_exception if all names did not match any uniform. note that this will not throw if one variable name does not match any uniform.
- * @throws std::runtime_exception if the descriptors are incompatible.
- * @throws std::runtime_exception if the shaders have incompatible definitions for a given descriptor name.
- * @throws std::runtime_exception if all descriptors are samplers and no format is given in the arguments.
- */
+/// Derives a texture that can be used for all the given bindings.
+/// @throws std::runtime_exception if all names did not match any uniform. note that this will not throw if one variable name does not match any uniform.
+/// @throws std::runtime_exception if the descriptors are incompatible.
+/// @throws std::runtime_exception if the shaders have incompatible definitions for a given descriptor name.
+/// @throws std::runtime_exception if all descriptors are samplers and no format is given in the arguments.
 std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts);
 
 std::vector<std::shared_ptr<Texture>> reflectTextureArray(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts);

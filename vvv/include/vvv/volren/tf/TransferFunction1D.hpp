@@ -29,9 +29,7 @@ namespace vvv {
 enum class ChannelOpacityState { AlphaPremultiplied, PostMultiplied };
 const ChannelOpacityState DefaultChannelOpacityState = ChannelOpacityState::PostMultiplied;
 
-/**
- * A 1D preintegrated transfer function.
- */
+/// A 1D preintegrated transfer function.
 // TODO(Reiner): static specialization for 1D and non-preintegrated TFs
 class TransferFunction1D : public TransferFunction {
 
@@ -41,11 +39,9 @@ public:
     struct solidColor;
     struct linearRamp;
 
-    /**
-     * Create new Transfer Function from discrete values.
-     * @param values array of countValues discrete values to use as transfer function
-     * @param channelOpacityState If PostMultiplied, the values will be pre-multiplied before uploading to the GPU.
-     */
+    /// Create new Transfer Function from discrete values.
+    /// @param values array of countValues discrete values to use as transfer function
+    /// @param channelOpacityState If PostMultiplied, the values will be pre-multiplied before uploading to the GPU.
     TransferFunction1D(vvv::GpuContextPtr ctx, const uint16_t *const values, size_t countValues, ChannelOpacityState channelOpacityState = DefaultChannelOpacityState)
     : TransferFunction(ctx), m_channelOpacityState(channelOpacityState)
     {
@@ -87,7 +83,7 @@ private:
     ChannelOpacityState m_channelOpacityState;
     std::vector<char> m_data;
 
-    /** Additionally consider gradient magnitude */
+    /// Additionally consider gradient magnitude
     //std::shared<TransferFunction2D> to2D(TransferFunction2dOptions opts) { return std::make_shared<TransferFunction2D>(getCtx(), m_data, m_texture, opts); }
     //std::shared<TransferFunction1DPreintegrated> preintegrate() {}
 

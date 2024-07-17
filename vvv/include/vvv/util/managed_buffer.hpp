@@ -31,10 +31,8 @@
 
 namespace vvv {
 
-/**
- * Hash an arbitrary memory block of size byte_size starting at data.
- * @param combine_hash can be initialized with a hash to combine hashes
- */
+/// Hash an arbitrary memory block of size byte_size starting at data.
+/// @param combine_hash can be initialized with a hash to combine hashes
 static size_t hashMemory(const void *data, size_t byte_size, size_t combine_hash = 0) {
     size_t hash = combine_hash;
     auto p = static_cast<const unsigned char *>(data);
@@ -43,15 +41,13 @@ static size_t hashMemory(const void *data, size_t byte_size, size_t combine_hash
     return hash;
 }
 
-/**
- * Manages a buffer for each in flight frame containing max_elements elements of type T. In case of a single uniform this would be 1 element of type Uniform_[...]. In case of a vertex buffer this
- * would be max_vertex_count elements of type glm::vec3. The data and count of elements can be changed using setData(...), but can never be higher than max_elements since it is assumed that device
- * memory is only allocated and assigned at initialization time.
- *
- * This class is purely virtual:
- *   - for single Uniform variables or structs (i.e. small buffers), use the MultiFrameValueBuffer that manages data changes with a hash.
- *   - for arrays of element type T (i.e. large buffers), use the MultiFrameArrayBuffer that manages data changes with a dirty flag.
- */
+/// Manages a buffer for each in flight frame containing max_elements elements of type T. In case of a single uniform this would be 1 element of type Uniform_[...]. In case of a vertex buffer this
+/// would be max_vertex_count elements of type glm::vec3. The data and count of elements can be changed using setData(...), but can never be higher than max_elements since it is assumed that device
+/// memory is only allocated and assigned at initialization time.
+/// \nn
+/// This class is purely virtual:\n
+///   - for single Uniform variables or structs (i.e. small buffers), use the MultiFrameValueBuffer that manages data changes with a hash.\n
+///   - for arrays of element type T (i.e. large buffers), use the MultiFrameArrayBuffer that manages data changes with a dirty flag.\n
 template <typename T> class MultiFrameBuffer {
     static constexpr int MAX_FRAMES_IN_FLIGHT = 3; // TODO(Reiner): read multibuffering info!
 public:
@@ -66,9 +62,8 @@ public:
         }
     }
 
-    /**
-     * Creates a buffer with assigned device memory for a maximum number of max_elements elements.
-     */
+
+    /// Creates a buffer with assigned device memory for a maximum number of max_elements elements.
     virtual void initializeResources(GpuContext *ctx, size_t max_elements, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, const std::string& label) {
         m_ctx = ctx;
         m_label = label;
@@ -107,9 +102,7 @@ public:
     //        }
     //    }
     //
-    //    /**
-    //     * Calls updateDeviceMemory if the frame is flagged dirty and returns the descriptorset for this buffer.
-    //     */
+    //    /// Calls updateDeviceMemory if the frame is flagged dirty and returns the descriptorset for this buffer.
     //    vk::DescriptorSet getDescriptorSet(uint32_t frameinFlightID) {
     //        assert(m_hasDescriptorSets);
     //        updateDeviceMemory(frameinFlightID);
@@ -137,11 +130,9 @@ public:
 
     bool isInitialized() const { return m_initialized; }
 
-    /**
-     * Returns a reference to this buffer. Because of the possible memory updates, it is assumed that all old usages of the buffer are finished when getBuffer is called again.
-     * @param frameInFlightID if assigned, the frameID of the returned GPU buffer. Otherwise, the current frameInFlightID of the WSI is used.
-     * @param updateOnDemand if true, updateDeviceMemory is called to update the GPU memory on demand
-     */
+    /// Returns a reference to this buffer. Because of the possible memory updates, it is assumed that all old usages of the buffer are finished when getBuffer is called again.
+    /// @param frameInFlightID if assigned, the frameID of the returned GPU buffer. Otherwise, the current frameInFlightID of the WSI is used.
+    /// @param updateOnDemand if true, updateDeviceMemory is called to update the GPU memory on demand
     vk::Buffer *getBuffer(uint32_t frameInFlightID = AUTO_FRAME_IN_FLIGHT, bool updateOnDemand = false) {
         assert(m_initialized);
         if(frameInFlightID == AUTO_FRAME_IN_FLIGHT)
@@ -153,15 +144,11 @@ public:
         return &m_buffers[frameInFlightID];
     }
 
-    /**
-     * Updates the device memory for the given frame if the data changed since the last update.
-     */
+    /// Updates the device memory for the given frame if the data changed since the last update.
     virtual void updateDeviceMemoryOnDemand(uint32_t frameInFlightID) = 0;
 
-    /**
-     * Updates the device memory regardless of if the data changed or not.
-    * @param frameInFlightID if assigned, the frameID of the returned GPU buffer. Otherwise, the current frameInFlightID of the WSI is used.
-     */
+    /// Updates the device memory regardless of if the data changed or not.
+    /// @param frameInFlightID if assigned, the frameID of the returned GPU buffer. Otherwise, the current frameInFlightID of the WSI is used.
     virtual void updateDeviceMemoryForced(uint32_t frameInFlightID = AUTO_FRAME_IN_FLIGHT) {
         if (!m_initialized || m_element_count_to_upload == 0)
             return;
@@ -182,14 +169,10 @@ public:
 
     void clearData() { m_element_count_to_upload = 0; }
 
-    /**
-     * Returns the number of elements that should be uploaded, i.e. the last element count passed to setData. The buffer may not yet contain this number of elements until getBuffer was called.
-     */
+    /// Returns the number of elements that should be uploaded, i.e. the last element count passed to setData. The buffer may not yet contain this number of elements until getBuffer was called.
     size_t getElementCount() const { return m_element_count_to_upload; }
 
-    /**
-     * Returns the reserved byte size for the buffer on the device. The used size may be smaller than this but must never be higher.
-     */
+    /// Returns the reserved byte size for the buffer on the device. The used size may be smaller than this but must never be higher.
     vk::DeviceSize getBufferByteSize() const { return m_reservedByteSize; }
 
 protected:
@@ -197,10 +180,8 @@ protected:
 
     GpuContext *m_ctx = nullptr;
     std::string m_label;
-    // data to upload
     const T *m_data_to_upload = nullptr;
     size_t m_element_count_to_upload = 0;
-    // device buffer and memory
     bool m_initialized = false;
     ForEachInFlightFrame<vk::Buffer> m_buffers = {};
     ForEachInFlightFrame<vk::DeviceMemory> m_memories = {};
@@ -211,11 +192,8 @@ protected:
 };
 
 
-
-/**
- * Use this managed multi frame buffer for Uniform variables and structs or more precisely: single elements of type T.
- * Internally, a hash of the uploaded object is used to track if the device memory has to be updated.
- */
+/// Use this managed multi frame buffer for Uniform variables and structs or more precisely: single elements of type T.
+/// Internally, a hash of the uploaded object is used to track if the device memory has to be updated.
 template <typename T> class MultiFrameValueBuffer : public MultiFrameBuffer<T> {
     static constexpr int MAX_FRAMES_IN_FLIGHT = 3; // TODO(Reiner): read multibuffering info!
 public:
@@ -226,18 +204,14 @@ public:
         MultiFrameBuffer<T>::m_data_to_upload = &m_value;
     }
 
-    /**
-     * All following calls to getBuffer will update the buffer memory with ONE element containing the content data. Useful for uniform buffers.
-     */
+    /// All following calls to getBuffer will update the buffer memory with ONE element containing the content data. Useful for uniform buffers.
     void setDataByValue(const T data) {
         m_value = data;
         MultiFrameBuffer<T>::m_element_count_to_upload = 1;
     }
 
-    /**
-     * Computes a hash of the data to upload and updates the device memory if this hash differs from the currently uploaded data.
-     * @param frameInFlightID if assigned, the frameID of the returned GPU buffer. Otherwise, the current frameInFlightID of the WSI is used.
-     */
+    /// Computes a hash of the data to upload and updates the device memory if this hash differs from the currently uploaded data.
+    /// @param frameInFlightID if assigned, the frameID of the returned GPU buffer. Otherwise, the current frameInFlightID of the WSI is used.
     void updateDeviceMemoryOnDemand(uint32_t frameInFlightID = MultiFrameBuffer<T>::AUTO_FRAME_IN_FLIGHT) {
         if(frameInFlightID == MultiFrameBuffer<T>::AUTO_FRAME_IN_FLIGHT)
             frameInFlightID = MultiFrameBuffer<T>::m_ctx->getWsi()->currentInFlightFrameIndex();
@@ -256,10 +230,8 @@ private:
 };
 
 
-/**
- * Use this managed multi frame buffer for arrays containing many elements of type T.
- * Internally, a dirty flag is used to track if the device memory has to be updated.
- */
+/// Use this managed multi frame buffer for arrays containing many elements of type T.
+/// Internally, a dirty flag is used to track if the device memory has to be updated.
 template <typename T> class MultiFrameArrayBuffer : public MultiFrameBuffer<T> {
     static constexpr int MAX_FRAMES_IN_FLIGHT = 3; // TODO(Reiner): read multibuffering info!
 public:
@@ -269,29 +241,21 @@ public:
         m_dirty.resize(MAX_FRAMES_IN_FLIGHT, true);
     }
 
-    /**
-     * All following calls to getBuffer will update the buffer memory with count elements from location data. data must point to a valid location until the next call to setData.
-     */
+    /// All following calls to getBuffer will update the buffer memory with count elements from location data. data must point to a valid location until the next call to setData.
     void setData(const T *data, size_t count) {
         MultiFrameBuffer<T>::m_data_to_upload = data;
         MultiFrameBuffer<T>::m_element_count_to_upload = count;
         setDirty();
     }
 
-    /**
-     * All following calls to getBuffer will update the buffer memory from the vector data. data must exist until the next call to setData.
-     */
+    /// All following calls to getBuffer will update the buffer memory from the vector data. data must exist until the next call to setData.
     void setData(std::vector<T> *data) { setData(data->data(), data->size()); }
 
-    /**
-     * Triggers a forced memory update on the next call to getBuffer(...).
-     */
+    /// Triggers a forced memory update on the next call to getBuffer(...).
     void setDirty() { std::fill(m_dirty.begin(), m_dirty.end(), true); }
 
-    /**
-     * Updates the device memory if the dirty flag was set for this frame in flight, e.g. after calls to setData(...) or setDirty().
-     * @param frameInFlightID if assigned, the frameID of the returned GPU buffer. Otherwise, the current frameInFlightID of the WSI is used.
-     */
+    /// Updates the device memory if the dirty flag was set for this frame in flight, e.g. after calls to setData(...) or setDirty().
+    /// @param frameInFlightID if assigned, the frameID of the returned GPU buffer. Otherwise, the current frameInFlightID of the WSI is used.
     void updateDeviceMemoryOnDemand(uint32_t frameInFlightID = MultiFrameBuffer<T>::AUTO_FRAME_IN_FLIGHT) {
         if(frameInFlightID == MultiFrameBuffer<T>::AUTO_FRAME_IN_FLIGHT)
             frameInFlightID = MultiFrameBuffer<T>::m_ctx->getWsi()->currentInFlightFrameIndex();
