@@ -208,9 +208,23 @@ def write_vti(volume, path_out, dtype=None, as_cell_data=False):
 #                                               UTILITY FUNCTIONS                                                      #
 ########################################################################################################################
 
-def write_volume(volume, path_out, dtype=None):
+def strip_file_extension(path):
+    return os.path.splitext(path)[0]
+
+def guarantee_c_order(_volume):
+    if np.isfortran(_volume):
+        return np.reshape(_volume.flatten(order='F'), _volume.shape)
+    else:
+        return _volume
+
+def write_volume(volume, path_out, dtype=None, guaranteee_c_order=True):
     """Automatically selects the writer for the respective format based on path_out file extension."""
+
+    if guaranteee_c_order:
+        volume = guarantee_c_order(volume)
+
     extension = path_out[(path_out.rfind('.') + 1):].lower()
+
     if extension == "vraw" or extension == "raw":
         write_vraw(volume, path_out, dtype)
     elif extension == "nrrd":
@@ -234,6 +248,7 @@ def write_volume(volume, path_out, dtype=None):
 
 def read_volume(path_in):
     """Automatically selects the reader for the respective format based on path_out file extension."""
+
     extension = path_in[(path_in.rfind('.') + 1):].lower()
     if extension == "vraw" or extension == "raw":
         return read_vraw(path_in)
@@ -302,8 +317,6 @@ def guard_volume_dtype(volume, dtype):
     return volume.astype(dtype)
 
 
-
-
 def convert(path_in, path_out, dtype=None):
     write_volume(read_volume(path_in), path_out, dtype)
 
@@ -328,5 +341,6 @@ def debug_vis(volume, row_count=2, col_count=3, colormap='turbo', print_info=Tru
 
 
 if __name__ == '__main__':
+    convert("/home/maxpio/data/segmented_volumes/Atlas/labels/AutoPET_3ba0277c0c_46623.nii.gz", "/home/maxpio/data/segmented_volumes/Atlas/labels/AutoPET_3ba0277c0c_46623.hdf5")
     exit(0)
 

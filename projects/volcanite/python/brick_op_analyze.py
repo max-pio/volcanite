@@ -71,7 +71,7 @@ def plot_operations(brick_idx):
 
 if __name__ == '__main__':
     # config
-    prefix = "D:/data/cellsinsilico/Big01/000_longer/outdir/nrrd_uint32/cells_frame065_100x100x100.raw_operations"
+    prefix = "./volume.raw_operations"
 
     # load operation and start stream
     opstrm_postfix = "_op.raw"
