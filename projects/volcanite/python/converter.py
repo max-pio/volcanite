@@ -170,7 +170,9 @@ def read_nifti(path_in):
     return np.array(nib.load(path_in).dataobj)
 
 def write_nifti(volume, path_out, dtype=None):
-    raise NotImplementedError("writing nifti files not yet implemented")
+    volume = guard_volume_dtype(volume, dtype)
+    nii_image = nib.Nifti2Image(volume, affine=np.eye(4))
+    nib.save(nii_image, path_out)
 
 # VTI
 def read_vti(path_in):
@@ -217,7 +219,7 @@ def guarantee_c_order(_volume):
     else:
         return _volume
 
-def write_volume(volume, path_out, dtype=None, guaranteee_c_order=True):
+def write_volume(volume, path_out, dtype=None, guaranteee_c_order=True, apply_gzip=False):
     """Automatically selects the writer for the respective format based on path_out file extension."""
 
     if guaranteee_c_order:
@@ -239,10 +241,10 @@ def write_volume(volume, path_out, dtype=None, guaranteee_c_order=True):
         write_numpy(volume, path_out, dtype, False)
     elif extension == "npz":
         write_numpy(volume, path_out, dtype, True)
-    elif path_out.endswith(".nii.gz"):
-        return write_nifti(volume, path_out, dtype)
+    elif extension == "nii" or path_out.endswith("nii.gz"):
+        write_nifti(volume, path_out, dtype)
     elif extension == "vti":
-        return write_vti(volume, path_out, dtype)
+        write_vti(volume, path_out, dtype)
     else:
         raise Exception("unknown segmentation volume file extension " + extension)
 
@@ -341,6 +343,7 @@ def debug_vis(volume, row_count=2, col_count=3, colormap='turbo', print_info=Tru
 
 
 if __name__ == '__main__':
-    convert("/home/maxpio/data/segmented_volumes/Atlas/labels/AutoPET_3ba0277c0c_46623.nii.gz", "/home/maxpio/data/segmented_volumes/Atlas/labels/AutoPET_3ba0277c0c_46623.hdf5")
+    convert("/home/max/data/segmented_volumes/h01/x5y7z7.hdf5", "~/data/segmented_volumes/h01/x5y7z7.nii")
+    convert("/home/max/data/segmented_volumes/h01/x5y7z7.hdf5", "~/data/segmented_volumes/h01/x5y7z7.nii.gz")
     exit(0)
 
