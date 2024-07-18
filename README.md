@@ -27,7 +27,7 @@ Start Volcanite, either providing a path to a segmentation volume as a commandli
 or by using the file dialog to select a volume file.
 Run `./volcanite --help` for a complete list of arguments and commands.
 See [Usage.md](doc/Usage.md#supported-segmentation-volume-file-formats) for a list of currently supported formats.
-You can find a collection of example data sets listed in [Example_Data](doc/ExampleData).
+You can find a collection of example data sets listed in [ExampleData](doc/ExampleData.md).
 
 ## Documentation
 The `doc` directory of this repository contains further information on how to use Volcanite:
