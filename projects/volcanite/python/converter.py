@@ -23,6 +23,7 @@ from vtkmodules.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 import h5py
 import PIL.Image as Image
 import nibabel as nib
+import gzip
 
 import matplotlib.pyplot as plt
 
@@ -219,6 +220,13 @@ def guarantee_c_order(_volume):
     else:
         return _volume
 
+def copy_as_gzip(path_in):
+    """For an input file volume.abc, creates a second file volume.abc.gz compressed with gzip DEFLATE."""
+
+    with open(path_in, 'rb') as file_in, gzip.open(path_in + ".gz", 'wb') as file_out:
+        file_out.writelines(file_in)
+
+
 def write_volume(volume, path_out, dtype=None, guaranteee_c_order=True, apply_gzip=False):
     """Automatically selects the writer for the respective format based on path_out file extension."""
 
@@ -343,7 +351,6 @@ def debug_vis(volume, row_count=2, col_count=3, colormap='turbo', print_info=Tru
 
 
 if __name__ == '__main__':
-    convert("/home/max/data/segmented_volumes/h01/x5y7z7.hdf5", "~/data/segmented_volumes/h01/x5y7z7.nii")
-    convert("/home/max/data/segmented_volumes/h01/x5y7z7.hdf5", "~/data/segmented_volumes/h01/x5y7z7.nii.gz")
+    copy_as_gzip("/home/max/data/segmented_volumes/mouse_cortex/csgv/cortex_full_64.csgv")
     exit(0)
 
