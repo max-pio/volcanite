@@ -1,7 +1,8 @@
 # Usage with Python
 
-Currently, there are no python bindings included, although it should be straightforward to integrate.
-The only way of visualizing python data (e.g. from numpy arrays) with Volcanite is exporting the data to a file from which Volcanite can read it.
+Currently, directly using Volcanite through python is not supported, but python bindings are planned for future releases.
+The only way of visualizing python data (e.g. from numpy arrays) with Volcanite is to export the data to a file from which Volcanite can read it.
+The [converter.py](../projects/volcanite/python/converter.py) file offers import and export for multiple supported file formats.
 
 Voxel byte arrays are in little endian C-order meaning that the X dimension of the array is contiguous in memory.
 For a numpy array, the first index of the volume's shape is denoting the Z dimension of the volume.
@@ -27,7 +28,7 @@ def export_to_nrrd(volume, path_prefix):
         np.ascontiguousarray(volume.astype('uint32')).tofile(file)
 ```
 
-The following example code exports a volume to a simple Volcanite raw format:
+The following example code exports a volume to a simplified Volcanite raw format:
 
 ```python
 import numpy as np
@@ -59,7 +60,7 @@ def read_from_vraw(vraw_path):
 ```
 
 To split a large volume into smaller chunk files, use the following code.
-The chunk size must be a multiple of the brick size (usually 32) that will be used in Volcanite later:
+The chunk size must be a multiple of the brick size (usually 32) that will be used by Volcanite later:
 
 ```python
 def export_chunk_split_vraw(volume, path_prefix, chunk_size):

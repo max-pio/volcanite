@@ -38,7 +38,7 @@ uint _morton_Compact1By1(uint x) {
     return x;
 }
 
-uint morton2Dp2i(uvec3 p) { return (_morton_Part1By1(p.y) << 1) + _morton_Part1By1(p.x); }
+uint morton2Dp2i(uvec2 p) { return (_morton_Part1By1(p.y) << 1) + _morton_Part1By1(p.x); }
 uvec2 morton2Di2p(uint i) { return uvec2(_morton_Compact1By1(i >> 0), _morton_Compact1By1(i >> 1)); }
 
 // 3D ------------------------------------------------------------------------------------------------------------------
@@ -65,8 +65,6 @@ uint _morton_Compact1By2(uint x) {
 
 uint morton3Dp2i(uvec3 p) { return (_morton_Part1By2(p.z) << 2) + (_morton_Part1By2(p.y) << 1) + _morton_Part1By2(p.x); }
 uvec3 morton3Di2p(uint i) { return uvec3(_morton_Compact1By2(i >> 0), _morton_Compact1By2(i >> 1), _morton_Compact1By2(i >> 2)); }
-
-
 
 
 #endif // MORTON_GLSL

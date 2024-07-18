@@ -351,6 +351,5 @@ def debug_vis(volume, row_count=2, col_count=3, colormap='turbo', print_info=Tru
 
 
 if __name__ == '__main__':
-    copy_as_gzip("/home/max/data/segmented_volumes/mouse_cortex/csgv/cortex_full_64.csgv")
     exit(0)
 

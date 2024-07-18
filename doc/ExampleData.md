@@ -1,8 +1,12 @@
 # Example Data Sets
 
-This is a collection of data sets that are available and can be rendered in Volcanite.
+This is a collection of segmentation volume data sets that are freely available and can be rendered in Volcanite.
 For file formats that are not supported by Volcanite, see the [converter.py](converter.py) python script for converting
 formats.
+To download tensorstore volumes or publicly available data sets from BossDB, have a look at the
+[download_cloud_data.py](../projects/volcanite/python/download_cloud_data.py) python scripts.
+
+## Selected Segmentation Volumes
 
 ### Dense Connectomic Reconstruction in Layer 4 of the Somatosensory Cortex
 
@@ -31,17 +35,21 @@ However, for your fist contact with the framework it is recommended to only proc
 |------------------------|--------|--------------------------|--------------------|-------------|
 | 515892 x 356400 x 5293 | ?      | neuroglancer precomputed | 3540.45TB [uint32] | tensorstore |
 
+Note: As Volcanite relies on storing the full compressed volume in main memory - and a significant potion of it in GPU memory -
+the petascale data set exceeds its capabilities. You can however visualize sub-volumes of up to 8000³ voxels, depending on your system. 
+
+*Shapson-Coe A, et al. (2024) A petavoxel fragment of human cerebral cortex reconstructed at nanoscale resolution. Science DOI: 10.1126/science.adk4858*
+
 ## Online Segmentation Volume Collections
 
 ### [BossDB](https://bossdb.org/)
 Browse the [data sets](https://bossdb.org/projects) and filter for `volumetric segmentation`. Data sets can be downloaded [via Python](https://bossdb.org/get-started):
 ```Python
 from intern import array
-
 # Save a cutout to a numpy array in ZYX order:
 bossdb_dataset = array("bossdb://kuan_phelps2020/drosophila_brain_120nm/drBrain_120nm_rec")
-my_cutout = bossdb_dataset[50:60, 1000:1500, 1000:1500]
 print(bossdb_dataset.shape)
+my_cutout = bossdb_dataset[0:720, 1000:2024, 1000:2024]
 ```
 ### [DRYAD](https://datadryad.org/stash)
 ### [Papers With Code](https://paperswithcode.com/datasets)
