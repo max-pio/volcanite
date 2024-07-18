@@ -23,7 +23,9 @@
 #include "stb/stb_image.hpp"
 #include "vvv/util/Paths.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 
 RendererOutput CompressedSegmentationVolumeBrickViewer::renderNextFrame(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore *signalBinarySemaphore) {
@@ -202,4 +204,4 @@ void CompressedSegmentationVolumeBrickViewer::updateUniformDescriptorset() {
     }
 }
 
-} // namespace vvv
+} // namespace volcanite

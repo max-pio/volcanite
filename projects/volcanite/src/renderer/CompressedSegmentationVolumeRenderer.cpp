@@ -28,7 +28,9 @@
 #include "imgui.h"
 #endif
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 
 RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore *signalBinarySemaphore) {
@@ -1159,4 +1161,4 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                     << " / " << static_cast<double>(total_used) / 1024. / 1024. / 1024. << " GB";
     }
 
-} // namespace vvv
+} // namespace volcanite

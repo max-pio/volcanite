@@ -32,7 +32,7 @@
 #include "vvv/volren/Volume.hpp"
 #include "volcanite/compression/CSGVDatabase.hpp"
 
-using namespace vvv;
+using namespace volcanite;
 
 constexpr int RET_SUCCESS = 0;
 constexpr int RET_INVALID_ARG = 1;
@@ -65,7 +65,7 @@ int tryImportRenderConfig(VolcaniteArgs& args, std::shared_ptr<CompressedSegment
     return 0;
 }
 
-int volcanite(int argc, char *argv[]) {
+int volcanite_main(int argc, char *argv[]) {
     // parse command line arguments
     VolcaniteArgs args;
     {
@@ -89,8 +89,8 @@ int volcanite(int argc, char *argv[]) {
     // Also think about the processing of chunked data.. Could it be necessary to still keep the getCSGVFileName and
     // force_recompute logic in the handler for that reason? Or should we create two handlers for chunked / non-chunked?
 
-    std::shared_ptr<vvv::CompressedSegmentationVolume> compressedSegmentationVolume;
-    std::shared_ptr<vvv::CSGVDatabase> csgvDatabase = std::make_shared<vvv::CSGVDatabase>();;
+    std::shared_ptr<volcanite::CompressedSegmentationVolume> compressedSegmentationVolume;
+    std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();;
     // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
     if(args.performCompression()) {
         glm::uvec3 max_chunk_id = glm::uvec3(args.chunk_files[0], args.chunk_files[1], args.chunk_files[2]);
@@ -239,7 +239,7 @@ int volcanite(int argc, char *argv[]) {
         if(csgvDatabase->isDummy())
             csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
 
-        const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
+        const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
         renderer->setCacheParameters(args.cache_size_MB, args.cache_palettized);
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
 
@@ -285,4 +285,4 @@ int volcanite(int argc, char *argv[]) {
     return RET_SUCCESS;
 }
 
-ENTRYPOINT(volcanite)
+ENTRYPOINT(volcanite_main)

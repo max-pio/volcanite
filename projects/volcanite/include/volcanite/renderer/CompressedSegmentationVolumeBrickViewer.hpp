@@ -31,7 +31,9 @@
 #endif
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 
 class CompressedSegmentationVolumeBrickViewer : public Renderer, public WithGpuContext {
@@ -122,4 +124,4 @@ private:
     std::optional<RendererOutput> m_mostRecentFrame = {};
 };
 
-} // namespace vvv
+} // namespace volcanite

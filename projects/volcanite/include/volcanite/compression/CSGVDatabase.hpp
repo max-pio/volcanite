@@ -38,7 +38,9 @@ namespace SQLite {
 }
 #endif
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 class CSGVDatabase {
 
@@ -516,4 +518,4 @@ private:
 };
 
 
-} // namespace vvv
+} // namespace volcanite

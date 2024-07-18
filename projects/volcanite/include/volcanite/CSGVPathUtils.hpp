@@ -20,7 +20,9 @@
 
 #include "vvv/util/Logger.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
     /** Helper function to remove the file extension from a file path, e.g. test.abc -> test.*/
     static std::string stripFileExtension(std::string path) {

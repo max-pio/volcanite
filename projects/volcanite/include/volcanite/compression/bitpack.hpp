@@ -19,7 +19,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace vvv {
+namespace volcanite {
 
 /**
  * Returns the entry_id-th 4 bit entry from the memory block starting at v[start].
@@ -58,4 +58,4 @@ std::vector<uint8_t> convertPacked32bit2PackedByte(const std::vector<uint32_t> &
 std::vector<uint8_t> unpackHalfByte2Byte(std::vector<uint8_t> &v);
 
 
-} // namespace vvv
+} // namespace volcanite

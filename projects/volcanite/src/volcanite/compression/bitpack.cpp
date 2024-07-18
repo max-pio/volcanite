@@ -15,7 +15,7 @@
 
 #include "volcanite/compression/bitpack.hpp"
 
-namespace vvv {
+namespace volcanite {
 
 /**
  * Returns the entry_id-th 4 bit entry from the memory block starting at v[start].
@@ -110,4 +110,4 @@ namespace vvv {
         return out;
     }
 
-} // namespace vvv
+} // namespace volcanite

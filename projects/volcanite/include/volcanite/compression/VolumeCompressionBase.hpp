@@ -27,9 +27,9 @@
 
 #define MULTIGRID_RECURSIVE_CONSTRUCTION
 
-namespace vvv {
+using namespace vvv;
 
-
+namespace volcanite {
 
 class VolumeCompressionBase {
 
@@ -278,4 +278,4 @@ public:
 
 
 
-} // namespace vvv
+} // namespace volcanite

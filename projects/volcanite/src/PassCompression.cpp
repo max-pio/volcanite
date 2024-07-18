@@ -138,7 +138,7 @@ glm::ivec3 morton_decode_3D(glm::uint32 code)
 }
 
 
-void vvv::PassCompression::generate_brick_order() {
+void volcanite::PassCompression::generate_brick_order() {
 
     static constexpr int curve_variants = 1;
     static constexpr bool permute_variants = false;
@@ -192,7 +192,7 @@ void vvv::PassCompression::generate_brick_order() {
 
 }
 
-void vvv::PassCompression::init(std::string path, int brick_size) {
+void volcanite::PassCompression::init(std::string path, int brick_size) {
     assert(isPipelineCreated() && "you must call allocateResources() before initializing the compression parameters!");
     assert(m_path.empty() && "compression was initialized already!");
     assert(!path.empty() && brick_size > 0 && brick_size <= 32);
@@ -234,7 +234,7 @@ void vvv::PassCompression::init(std::string path, int brick_size) {
 
 
 
-vvv::AwaitableHandle vvv::PassCompression::execute(vvv::AwaitableList awaitBeforeExecution, vvv::BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore *signalBinarySemaphore) {
+vvv::AwaitableHandle volcanite::PassCompression::execute(vvv::AwaitableList awaitBeforeExecution, vvv::BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore *signalBinarySemaphore) {
     assert(isPipelineCreated() && "you MUST call 'allocateResources' if the pass was created with lazy state initialization.");
     assert(!m_path.empty() && "you MUST call 'init' and set a correct path before execution.");
 
@@ -413,7 +413,7 @@ vvv::AwaitableHandle vvv::PassCompression::execute(vvv::AwaitableList awaitBefor
     return nullptr;
 }
 
-vvv::AwaitableHandle vvv::PassCompression::verify(vvv::AwaitableList awaitBeforeExecution, vvv::BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore *signalBinarySemaphore) {
+vvv::AwaitableHandle volcanite::PassCompression::verify(vvv::AwaitableList awaitBeforeExecution, vvv::BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore *signalBinarySemaphore) {
     assert(isPipelineCreated() && "you MUST call 'allocateResources' if the pass was created with lazy state initialization.");
     assert(!m_path.empty() && "you MUST call 'init' and set a correct path before execution.");
 
@@ -485,7 +485,7 @@ vvv::AwaitableHandle vvv::PassCompression::verify(vvv::AwaitableList awaitBefore
 }
 
 
-void vvv::PassCompression::squeeze_sequence_buffer(size_t& top_of_sequence_buffer, const int frame, const size_t bricks_per_frame) {
+void volcanite::PassCompression::squeeze_sequence_buffer(size_t& top_of_sequence_buffer, const int frame, const size_t bricks_per_frame) {
     //TODO: change frame and bricks_per_frame to 'first_brick_id' and 'last_brick_id' to allow arbitrary regions instead of whole frames
     size_t entry_read_from = top_of_sequence_buffer;
     for(size_t b = frame * bricks_per_frame; b < (frame + 1) * bricks_per_frame; b++) {

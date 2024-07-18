@@ -23,7 +23,9 @@
 
 #include "ryg_rans/rans_nibble.h"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 #define RANS_ALPHABET_SIZE 16
 
@@ -115,4 +117,4 @@ public:
 
 };
 
-} // namespace vvv
+} // namespace volcanite

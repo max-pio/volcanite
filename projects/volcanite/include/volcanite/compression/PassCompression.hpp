@@ -32,7 +32,9 @@
 
 
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 typedef glm::ivec4 CompressionVerifyErrors;
 
@@ -119,4 +121,4 @@ private:
     } m_gpu;
 };
 
-} // namespace vvv
+} // namespace volcanite

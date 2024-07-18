@@ -19,8 +19,8 @@ from converter import *
 if __name__ == '__main__':
 
     # config
-    path_sg = "/home/maxpio/data/segmented_volumes/mouse_cortex/mapped/chunks/x2y3z2.hdf5"
-    path_gs = "/home/maxpio/data/segmented_volumes/mouse_cortex/mapped/grayscale/x2y3z2.hdf5"
+    path_sg = "./download/example_segmentation.hdf5"
+    path_gs = "./download/example_grayscale.hdf5"
 
     # display segmentation next to grayscale volume
     sg = read_hdf5(path_sg)

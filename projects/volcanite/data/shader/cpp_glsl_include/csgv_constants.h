@@ -28,7 +28,9 @@
     #define DOUBLE_TABLE_RANS 2
 #else
     #define CSGV_UINT uint32_t
-    namespace vvv {
+    using namespace vvv;
+
+namespace volcanite {
         enum RANSMode {NO_RANS=0, SINGLE_TABLE_RANS=1, DOUBLE_TABLE_RANS=2};
     }
 #endif

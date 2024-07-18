@@ -20,7 +20,9 @@
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 class CSGVChunkMerger {
 private:
@@ -353,7 +355,7 @@ public:
         // wait for cleanup
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
-        std::shared_ptr<CompressedSegmentationVolume> full_csgv = std::make_shared<vvv::CompressedSegmentationVolume>();
+        std::shared_ptr<CompressedSegmentationVolume> full_csgv = std::make_shared<volcanite::CompressedSegmentationVolume>();
         bool reimport_success = full_csgv->importFromFile(output_csgv_path, false, true);
         if(!reimport_success)
             throw std::runtime_error("Error re-importing exported merged Compressed Segmentation Volume from " + output_csgv_path);
@@ -363,4 +365,4 @@ public:
 
 };
 
-}   // namespace vvv
+}   // namespace volcanite

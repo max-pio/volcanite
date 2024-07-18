@@ -26,7 +26,9 @@
 #include "vvv/reflection/UniformReflection.hpp"
 #include "vvv/passes/PassCompute.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 
 class HelloVolumeRenderer : public Renderer, public WithGpuContext {
@@ -82,4 +84,4 @@ private:
     std::optional<RendererOutput> m_mostRecentFrame = {};
 };
 
-} // namespace vvv
+} // namespace volcanite

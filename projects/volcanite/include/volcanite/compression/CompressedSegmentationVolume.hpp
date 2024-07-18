@@ -28,7 +28,9 @@
 #include "vvv/util/util.hpp"
 
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 // COMPRESSION
 //
@@ -644,4 +646,4 @@ private:
     std::string m_label = "";
 };
 
-} // namespace vvv
+} // namespace volcanite

@@ -15,7 +15,9 @@
 
 #include "volcanite/compression/rans.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 void SymbolStats::count_freqs(uint8_t const *in, size_t nbytes) {
     for (int i = 0; i < RANS_ALPHABET_SIZE; i++)
@@ -281,4 +283,4 @@ uint32_t RANS::itr_nextSymbol(RansState& rans_state, uint32_t& byte_index,  cons
     return s;
 }
 
-} // namespace vvv
+} // namespace volcanite

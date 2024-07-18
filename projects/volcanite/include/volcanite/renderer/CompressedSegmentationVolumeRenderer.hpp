@@ -30,7 +30,7 @@
 #include "volcanite/renderer/PassCompSegVolRender.hpp"
 #include "volcanite/compression/CSGVDatabase.hpp"
 
-namespace vvv {
+namespace volcanite {
 
 class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuContext {
 
@@ -324,4 +324,4 @@ private:
     std::optional<RendererOutput> m_mostRecentFrame = {};
 };
 
-} // namespace vvv
+} // namespace volcanite

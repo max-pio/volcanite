@@ -21,7 +21,9 @@
 
 #include "glm/gtc/matrix_transform.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 
 RendererOutput HelloVolumeRenderer::renderNextFrame(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore *signalBinarySemaphore) {
@@ -164,4 +166,4 @@ void HelloVolumeRenderer::updateUniformDescriptorset() {
     }
 }
 
-} // namespace vvv
+} // namespace volcanite

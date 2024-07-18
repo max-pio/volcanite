@@ -27,7 +27,7 @@
 #include "volcanite/renderer/HelloVolumeRenderer.hpp"
 
 
-using namespace vvv;
+using namespace volcanite;
 
 int hello_volume_renderer(int argc, char *argv[]) {
 
@@ -42,7 +42,7 @@ int hello_volume_renderer(int argc, char *argv[]) {
 
     // create and run the renderer and interactive application
     // ToDo: create a real dummy data set and use it in the HelloVolumeRenderer
-    const auto renderer = std::make_shared<vvv::HelloVolumeRenderer>();
+    const auto renderer = std::make_shared<volcanite::HelloVolumeRenderer>();
     auto app = Application::create(appName, renderer);
 
     // the application manages one GuiInterface object which contains all GUI elements

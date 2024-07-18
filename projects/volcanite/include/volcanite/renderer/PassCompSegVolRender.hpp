@@ -30,7 +30,9 @@
 
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 
 class PassCompSegVolRender : public PassCompute {
@@ -81,4 +83,4 @@ protected:
     const std::vector<std::string> m_shader_defines;
 };
 
-} // namespace vvv
+} // namespace volcanite

@@ -18,7 +18,9 @@
 #include <glm/glm.hpp>
 #include <stdexcept>
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
     /**
      * Contains lists of 2D pixel indices in an image grid so that the power of two strata are guaranteed to receive one sample after a given power of two number of samples was distributed.
@@ -72,4 +74,4 @@ namespace vvv {
         static const glm::ivec2* haltonNxNVec(int power_of_two) { return asVec(haltonNxN(power_of_two)); }
     };
 
-} // namespace vvv
+} // namespace volcanite

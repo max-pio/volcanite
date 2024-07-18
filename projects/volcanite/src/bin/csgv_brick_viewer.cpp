@@ -27,7 +27,7 @@
 #include "volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp"
 #include <memory>
 
-using namespace vvv;
+using namespace volcanite;
 
 
 int csgv_brick_viewer(int argc, char *argv[]) {
@@ -48,18 +48,18 @@ int csgv_brick_viewer(int argc, char *argv[]) {
     glm::ivec3 volume_dim(volume->dim_x, volume->dim_y, volume->dim_z);
     Logger(INFO) << path + " loaded with dim " << str(volume_dim);
 
-    std::shared_ptr<vvv::CompressedSegmentationVolume> compression = std::make_shared<vvv::CompressedSegmentationVolume>(vvv::CompressedSegmentationVolume());
+    std::shared_ptr<volcanite::CompressedSegmentationVolume> compression = std::make_shared<volcanite::CompressedSegmentationVolume>(volcanite::CompressedSegmentationVolume());
 
     // Perform the encoding
     // we try to load a previously exported Compressed Segmentation Volume for this file if possible, and export the compression otherwise
     // @ToDo does this have to have rANS mode set to NO_RANS?
-    if(!compression->importFromFile(CompressedSegmentationVolume::getCSGVFileName(path, brick_dim, vvv::NO_RANS, false))) {
+    if(!compression->importFromFile(CompressedSegmentationVolume::getCSGVFileName(path, brick_dim, volcanite::NO_RANS, false))) {
         Logger(ERROR) << "Compressed Segmentation Volume file does not yet exist!";
         return 0;
     }
 
     // create and run the interactive Application
-    const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeBrickViewer>();
+    const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeBrickViewer>();
     renderer->setCompressedSegmentationVolume(compression);
     auto app = Application::create(appName, renderer);
 

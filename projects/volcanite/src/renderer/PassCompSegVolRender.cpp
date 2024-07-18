@@ -15,7 +15,9 @@
 
 #include "volcanite/renderer/PassCompSegVolRender.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore* signalBinarySemaphore) {
 

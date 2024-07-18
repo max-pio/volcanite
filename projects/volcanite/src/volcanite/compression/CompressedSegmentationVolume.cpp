@@ -21,7 +21,9 @@
 
 #include "volcanite/compression/bitpack.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 void printBrick(const std::vector<uint32_t> &brick, uint32_t brick_size, int z_step, loglevel log) {
     static const std::string digits[] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F"};
@@ -1365,4 +1367,4 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
         Logger(INFO) << " Prepass Progress 100% in " << std::fixed << std::setprecision(3) << total_seconds << "s";
 }
 
-}; // namespace vvv
+}; // namespace volcanite

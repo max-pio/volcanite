@@ -31,7 +31,9 @@
 
 #define RELABEL_IDS_FROM_CSV_SUFFIX "_relabel.csv"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 
 /// Easy to use managing class for obtaining Compressed Segmentation Volumes (CSGV).
@@ -224,7 +226,7 @@ public:
 
         }
 
-        std::shared_ptr<CompressedSegmentationVolume> csgv = std::make_shared<vvv::CompressedSegmentationVolume>();
+        std::shared_ptr<CompressedSegmentationVolume> csgv = std::make_shared<volcanite::CompressedSegmentationVolume>();
         csgv->setCPUThreadCount(cpu_threads);
         // check if we can load a precomputed compressed segmentation volume
         if (!cfg.force_recompute && csgv->importFromFile(csgv_path, false)) {

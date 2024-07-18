@@ -39,7 +39,7 @@
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "vvv/volren/Volume.hpp"
 
-using namespace vvv;
+using namespace volcanite;
 
 inline std::string vec2str(glm::ivec3 v) {
     std::string out = "[";
@@ -203,7 +203,7 @@ int compression_synth(int argc, char *argv[]) {
 
 #ifdef RUN_APP
     // run the interactive Application
-    const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>();
+    const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>();
     const auto csgv_db = std::make_shared<CSGVDatabase>();
     renderer->setCompressedSegmentationVolume(csgvol, csgv_db);
     auto app = Application::create(appName, renderer);

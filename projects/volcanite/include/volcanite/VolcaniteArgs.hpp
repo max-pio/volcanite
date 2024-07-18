@@ -28,7 +28,9 @@
 // ToDo: Split the rANS-Mode etc into a separate Header / forward decl
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 struct VolcaniteArgs {
 
@@ -318,4 +320,4 @@ public:
     }
 };
 
-} // namespace vvv
+} // namespace volcanite

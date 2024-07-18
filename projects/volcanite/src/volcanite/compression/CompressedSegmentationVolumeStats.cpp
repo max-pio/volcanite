@@ -22,7 +22,9 @@
 
 #include "volcanite/compression/bitpack.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
     void CompressedSegmentationVolume::printBrickInfo(glm::uvec3 brick, loglevel log_level) const {
         if(m_encodings.empty())
@@ -611,4 +613,4 @@ namespace vvv {
 //        fout.close();
     }
 
-} // namespace vvv
+} // namespace volcanite
