@@ -37,32 +37,7 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #include "volcanite/compression/compressed_segmentation_volume.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
 
-struct Ray {
-    vec3 origin;
-    vec3 direction;
-};
-
-struct AABB {
-    vec3 top;
-    vec3 bottom;
-};
-
-
-// Slab method for ray-box intersection
-// @see https://martinopilia.com/posts/2018/09/17/volume-raycasting.html
-// @see http://www.siggraph.org/education/materials/HyperGraph/raytrace/rtinter3.htm
-void ray_box_intersection(const Ray ray, const AABB box, out float t_0, out float t_1)
-{
-    vec3 direction_inv = 1.0 / ray.direction;
-    vec3 t_top = direction_inv * (box.top - ray.origin);
-    vec3 t_bottom = direction_inv * (box.bottom - ray.origin);
-    vec3 t_min = min(t_top, t_bottom);
-    vec2 t = max(t_min.xx, t_min.yz);
-    t_0 = max(0.0, max(t.x, t.y));
-    vec3 t_max = max(t_top, t_bottom);
-    t = min(t_max.xx, t_max.yz);
-    t_1 = min(t.x, t.y);
-}
+#include "ray_box_intersection.glsl"
 
 ivec2 pixelFromInvocationID() {
     // We send out one ray per block of [g_subsampling]*[g_subsampling] pixels
@@ -354,7 +329,7 @@ void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
 
 // ToDo: Use GGX?
 float cook_torrance(const in RayMarchState state, const in vec3 dir_in, const in vec3 dir_out) {
-    // based on https://www.shadertoy.com/view/XsXXDB
+    // TODO: REMOVE FOR THE TIME BEING! based on https://www.shadertoy.com/view/XsXXDB
     // ToDo: we have to be careful with licenses! Shadertoy code is owned by the shader authors if not stated otherwise
     const float roughness = 0.4f;
     const float F0 = 0.8f;

@@ -26,7 +26,7 @@ vec3 colormap_blackwhite(float t) {
     return vec3(t);
 }
 
-// taken from https://www.shadertoy.com/view/WlfXRN
+// taken from CC0 https://www.shadertoy.com/view/WlfXRN
 // fitting polynomials to matplotlib colormaps
 //
 // License CC0 (public domain)
