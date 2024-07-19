@@ -85,7 +85,7 @@ cmake --build . --target volcanite
   }
 }
 ```
-Afterwards you can build the `volcanite` executable.
+Afterward you can build the `volcanite` executable.
 
 ## Headless Builds
 

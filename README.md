@@ -11,11 +11,11 @@ sets at compression rates that generally outperforming other methods.
 
 ## Quick Start
 See the setup guides for [Ubuntu / Debian](doc/Setup.md#ubuntu--debian) or [Windows](doc/Setup.md#ubuntu--debian) respectively for a more detailed description on how to install all dependencies and build Volcanite.
-To install all required and optional dependencies under Ubuntu, use
+To install all required and optional dependencies under Ubuntu, first install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) and use
 ```
 sudo apt install build-essential cmake libglfw3-dev libhdf5-dev libvtk9-dev libtiff-dev libpugixml-dev libsqlite3-dev -y
 ```
-and build the `volcanite` executable with
+Build the `volcanite` executable with
 ```
 mkdir cmake-build-release && cd cmake-build-release
 cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . --target volcanite
