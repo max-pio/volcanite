@@ -55,6 +55,8 @@ option(HEADLESS "Build without GUI and windowing functionality to run only in --
 
 # LIBRARIES ------------------------------------------------------------------------------------------------------------
 
+# TODO: replace shipped libraries with CMake FetchContent calls
+
 # GLM
 add_subdirectory(extern/glm)
 
@@ -69,16 +71,16 @@ if (USE_HDF5_SUPPORT)
     find_package(HDF5)
     if (HDF5_FOUND)
         # set HighFive CMake cache options
-        set(USE_BOOST OFF CACHE BOOL "Enable Boost Support")
-        set(USE_EIGEN OFF CACHE BOOL "Enable Eigen testing")
-        set(USE_XTENSOR OFF CACHE BOOL "Enable xtensor testing")
-        set(USE_OPENCV OFF CACHE BOOL "Enable OpenCV testing")
+        set(USE_BOOST OFF CACHE INTERNAL "")
+        set(USE_EIGEN OFF CACHE INTERNAL "")
+        set(USE_XTENSOR OFF CACHE INTERNAL "")
+        set(USE_OPENCV OFF CACHE INTERNAL "")
         mark_as_advanced(USE_BOOST USE_EIGEN USE_XTENSOR)
 
-        set(HIGHFIVE_UNIT_TESTS OFF CACHE STRING "Enable unit tests (requires Catch2 to be present)")
-        set(HIGHFIVE_EXAMPLES OFF)
-        set(HIGHFIVE_BUILD_DOCS OFF)
-        set(HDF5_PREFER_PARALLEL ON)
+        set(HIGHFIVE_UNIT_TESTS OFF CACHE INTERNAL "")
+        set(HIGHFIVE_EXAMPLES OFF CACHE INTERNAL "")
+        set(HIGHFIVE_BUILD_DOCS OFF CACHE INTERNAL "")
+        set(HDF5_PREFER_PARALLEL ON CACHE INTERNAL "")
         add_subdirectory(extern/HighFive)
     else ()
         message(WARNING "USE_HDF5_SUPPORT was set but hdf5 library could not be found!")
@@ -102,7 +104,7 @@ option(USE_SQLite3 "Includes the SQLite3 library for importing and exporting .sq
 if (USE_SQLite3)
     find_package(SQLite3)
     if (SQLite3_FOUND)
-        set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "Run cpplint.py tool for Google C++ StyleGuide.")
+        set(SQLITECPP_RUN_CPPLINT OFF CACHE INTERNAL "")
         add_subdirectory(extern/SQLiteCpp)
     else ()
         message(WARNING "USE_SQLite3 was set but SQLite3 library could not be found")
@@ -116,6 +118,12 @@ add_library(tclap::tclap ALIAS TCLAP)
 # Add vvv and vvv glfw application libraries
 add_subdirectory(vvv)
 if(NOT HEADLESS)
+    # GLFW for windowing system integration
+    set(GLFW_BUILD_EXAMPLES OFF CACHE INTERNAL "")
+    set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "")
+    set(GLFW_BUILD_DOCS OFF CACHE INTERNAL "")
+    set(GLFW_INSTALL OFF CACHE INTERNAL "")
+    add_subdirectory(extern/glfw)
     add_subdirectory(vvv-glfw-app)
 endif()
 

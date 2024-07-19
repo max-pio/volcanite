@@ -14,7 +14,7 @@ See [Headless Builds](#headless-builds).
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
 3. Install all required packages:
 ```
-sudo apt install build-essential cmake libglfw3-dev -y
+sudo apt install build-essential cmake -y
 ```
 4. Optional: Install optional packages:
 ```
@@ -36,16 +36,25 @@ If your IDE supports generating build files, you can directly open the `CMakeLis
 1. Install recent GPU drivers. This should happen automatically with Windows updates. Otherwise, find them at your GPU vendor webpage.
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
 3. Install [CMake](https://cmake.org/download/) and select "Add CMake to the system PATH".
-4. 
-5. Install the [vcpkg](https://vcpkg.io/en/getting-started) package manager. From the vcpkg install directory, install the required 64 bit packages in a powershell console:
-```
-.\vcpkg install glfw3 --triplet=x64-windows
-```
-6. Optional: Install optional packages:
+4. *Optional: Install packages to support a wider range of volume file formats. 
+   Install the [vcpkg](https://vcpkg.io/en/getting-started) package manager. From the vcpkg install directory, install the optional 64 bit packages in a powershell console:*
 ```
 .\vcpkg install hdf5 vtk tiff sqlite3 --triplet=x64-windows
 ```
-7. Build the project. Choose one of the following, depending on your development environment:
+5. Build the project. Choose one of the following, depending on your development environment:
+
+
+**CMake** Build either using the CMake GUI or by running the following commands in the project root directory:
+```
+mkdir cmake-build-release && cd cmake-build-release
+cmake -DCMAKE_BUILD_TYPE=Release && cmake --build . --target volcanite
+```
+
+If you use vkpcg, you have to pass the toolchain file to CMake with:
+```
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]/scripts/buildsystems/vcpkg.cmake ..
+cmake --build . --target volcanite
+```
 
 **Visual Studio** 
 
@@ -55,29 +64,27 @@ Use MinGW (CLion) or GCC compilers instead.*
 <!--
 * Install [MS Visual Studio](https://visualstudio.microsoft.com/downloads/) 2015 Update 3 or greater and select the tools for C++ desktop development: `MSVC`, `C++-CMake-Tools`, `C++ AddressSanitizer`.
 
-* Integrate vcpkg into Visual Studio with the following command (may require administrator elevation):
+* If you use vcpkg, integrate vcpkg into Visual Studio with the following command (may require administrator elevation):
 ```
 .\vcpkg integrate install
 ```
 * Open the project root folder in Visual Studio and build the `volcanite` executable.
+-->
 
 **Clion**
+Open the `CMakeLists.txt` from the project root with CLion and build the `volcanite` executable.
+
+If you use vcpkg, you must include the toolchain file before building.
 Open the Toolchains settings (File > Settings), and go to the CMake settings (Build, Execution, Deployment > CMake). Finally, in `CMake options`, add the following line:
 ```
 -DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]\scripts\buildsystems\vcpkg.cmake
 ```
-You must add this line to each profile. Then you can open the `CMakeLists.txt` from the project root with CLion and build the `volcanite` executable.
--->
+You must add this line to each profile.
 
-**CMake** Build either using the CMake GUI or by running the following commands in the project root directory:
-```
-mkdir cmake-build-release
-cd cmake-build-release
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]/scripts/buildsystems/vcpkg.cmake .. 
-cmake --build . --target volcanite
-```
+**Visual Studio Code**
+Open the project with CMake Tools and build the `volcanite` executable.
 
-**Visual Studio Code** Add the following to your workspace `settings.json` and open the project with CMake Tools:
+If you use vkpcg, add the following to your workspace `settings.json` before building:
 ```
 {
   "cmake.configureSettings": {
@@ -85,7 +92,6 @@ cmake --build . --target volcanite
   }
 }
 ```
-Afterward you can build the `volcanite` executable.
 
 ## Headless Builds
 
@@ -97,5 +103,4 @@ Volcanite can be built without any windowing system and GUI window dependencies 
 ```
 cmake -DHEADLESS=ON -DCMAKE_BUILD_TYPE=Release .. && cmake --build . --target volcanite
 ```
-In this case, the GLFW library does not have to be present on the system.
 GPU drivers and the Vulkan SDK still need to be available and Volcanite can only be run with the `--headless` argument.

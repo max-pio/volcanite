@@ -31,7 +31,7 @@ target_compile_definitions(libvvvwindow PRIVATE -DVULKAN_HPP_STORAGE_SHARED=1)
 # find other packages
 #set(THREADS_PREFER_PTHREAD_FLAG ON)
 #find_package(Threads REQUIRED)
-find_package(glfw3 REQUIRED)
+#find_package(glfw3 REQUIRED)
 #if(NOT GLFW_FOUND)
 #    # stop the CMake creation if GLFW is not available here
 #    message(FATAL_ERROR "Cannot find required GLFW3 package. Set the CMake option HEADLESS for building without any GUI Application requirements.")
@@ -41,7 +41,8 @@ target_compile_definitions(libvvvwindow PUBLIC -DGLFW=1)
 # link libraries
 target_link_libraries(libvvvwindow
         PUBLIC LibVVV::libvvv
-        PRIVATE ${GLFW_LIBRARIES}
+#        PRIVATE ${GLFW_LIBRARIES}
+        PRIVATE glfw
         PRIVATE ${CMAKE_DL_LIBS}
         PRIVATE tclap::tclap
 #        PRIVATE Threads::Threads

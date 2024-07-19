@@ -15,9 +15,6 @@ If you have questions, feel free to contact [Max Piochowiak](mailto:max.piochowi
 | CMake               | 3.16         | creating project build files         | `cmake`                                                                 |
 | Vulkan SDK          | 1.3          | Vulkan development tools and headers | Download from [https://vulkan.lunarg.com/](https://vulkan.lunarg.com/)  |
 | glslangValidator    | 11:12.2      | SPIR-V shader compiler               | included in drivers, alternative package`glslang-tools`                 |
-| *GLFW               | 3.3.6        | windowing for GLFW application       | `libglfw3-dev`                                                          |
-
-*GLFW is not required when the CMake option `HEADLESS` is set
 
 | Optional Dependency | Min. Version | Usage                                   | Ubuntu / Debian package name  |
 |---------------------|:-------------|-----------------------------------------|-------------------------------|
