@@ -18,29 +18,31 @@
 // import / export, obtaining default parameters, and registering callback functions.
 // The original code can be found at https://github.com/MomentsInGraphics/vulkan_renderer/blob/main/src/camera.h
 
-#include "vvv/core/CameraController.hpp"
+#include "vvv/core/GLFWCameraController.hpp"
 
 #include <GLFW/glfw3.h>
-#include <numbers>
 #include <glm/glm.hpp>
 #ifdef IMGUI
     #include "imgui.h"
 #endif
 
+#include <numbers>
+#include <stdexcept>
+
 namespace vvv {
 
-    double CameraController::s_mouse_scroll_wheel = 0.f;
+    double GLFWCameraController::s_mouse_scroll_wheel = 0.f;
 
-    void CameraController::glfwUpdateScrollWheel(GLFWwindow *window, double xoffset, double yoffset) {
+    void GLFWCameraController::glfwUpdateScrollWheel(GLFWwindow *window, double xoffset, double yoffset) {
         s_mouse_scroll_wheel += yoffset;
     }
 
-    void CameraController::setWindow(GLFWwindow *window) {
+    void GLFWCameraController::setWindow(GLFWwindow *window) {
         m_window = window;
-        glfwSetScrollCallback(m_window, &CameraController::glfwUpdateScrollWheel);
+        glfwSetScrollCallback(m_window, &GLFWCameraController::glfwUpdateScrollWheel);
     }
 
-    void CameraController::updateCamera(bool captureMouse, bool captureKeyboard) {
+    void GLFWCameraController::updateCamera(bool captureMouse, bool captureKeyboard) {
         if (!m_window || !m_camera) {
             throw std::runtime_error("GLFWwindow or camera not set before trying to update camera controller");
         }

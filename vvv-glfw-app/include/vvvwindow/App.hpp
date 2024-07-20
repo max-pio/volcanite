@@ -20,7 +20,8 @@
 #include "vvv/core/DefaultGpuContext.hpp"
 #include "vvv/core/Renderer.hpp"
 #include "vvv/core/Shader.hpp"
-#include "vvv/core/CameraController.hpp"
+
+#include "vvvwindow/GLFWCameraController.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -170,7 +171,7 @@ private:
     vk::Extent2D m_startup_resolution;
     bool m_resources_acquired = false;
     GLFWwindow *m_window = nullptr;
-    vvv::CameraController m_camera_controller;
+    vvv::GLFWCameraController m_camera_controller;
     std::unique_ptr<GuiImgui> m_gui;
 
     struct {

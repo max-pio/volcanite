@@ -26,7 +26,7 @@ class GLFWwindow;
 
 namespace vvv {
 
-    class CameraController {
+    class GLFWCameraController {
 
     private:
         GLFWwindow* m_window;
@@ -37,8 +37,8 @@ namespace vvv {
         static void glfwUpdateScrollWheel(GLFWwindow* window, double xoffset, double yoffset);
 
     public:
-        CameraController() : m_window(nullptr), m_camera(nullptr) {}
-        CameraController(Camera* camera) : m_window(nullptr), m_camera(camera) {}
+        GLFWCameraController() : m_window(nullptr), m_camera(nullptr) {}
+        GLFWCameraController(Camera* camera) : m_window(nullptr), m_camera(camera) {}
 
         void setCamera(Camera* camera) { m_camera = camera; }
         Camera* getCamera() { return m_camera; }

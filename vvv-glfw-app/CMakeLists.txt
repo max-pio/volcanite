@@ -3,6 +3,7 @@ project(vvvwindow VERSION 0.1 DESCRIPTION "GFLW GUI window for VVV applications"
 
 set(HEADERS
         include/vvvwindow/App.hpp
+        include/vvvwindow/GLFWCameraController.hpp
         include/vvvwindow/GuiImgui.hpp
         include/vvvwindow/entrypoint.hpp
         include/vvvwindow/tf/TransferFunction1DWidget.hpp
@@ -12,6 +13,7 @@ set(HEADERS
 
 set(SOURCES
         src/App.cpp
+        src/GLFWCameraController.cpp
         src/GuiImgui.cpp
         src/entrypoint.cpp
         src/tf/TransferFunction1DWidget.cpp
