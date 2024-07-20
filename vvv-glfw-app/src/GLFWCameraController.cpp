@@ -18,7 +18,7 @@
 // import / export, obtaining default parameters, and registering callback functions.
 // The original code can be found at https://github.com/MomentsInGraphics/vulkan_renderer/blob/main/src/camera.h
 
-#include "vvv/core/GLFWCameraController.hpp"
+#include "vvvwindow/GLFWCameraController.hpp"
 
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>

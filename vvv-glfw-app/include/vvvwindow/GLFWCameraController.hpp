@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include "Camera.hpp"
+#include "vvv/core/Camera.hpp"
 
 class GLFWwindow;
 

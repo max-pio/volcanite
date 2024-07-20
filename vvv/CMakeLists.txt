@@ -186,7 +186,7 @@ target_compile_definitions(libvvv PUBLIC -DGLM_ENABLE_EXPERIMENTAL -DGLM_FORCE_D
 
 # link required libraries
 # target_link_libraries(libvvv PUBLIC Vulkan::Vulkan PRIVATE TIFF::TIFF ZLIB::ZLIB PRIVATE pugixml::pugixml PUBLIC glm::glm)
-target_link_libraries(libvvv PUBLIC Vulkan::Vulkan glm::glm-header-only)
+target_link_libraries(libvvv PUBLIC Vulkan::Vulkan glm::glm)
 
 # link optional libraries
 if (OpenMP_CXX_FOUND)

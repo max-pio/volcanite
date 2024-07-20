@@ -118,12 +118,13 @@ add_library(tclap::tclap ALIAS TCLAP)
 # Add vvv and vvv glfw application libraries
 add_subdirectory(vvv)
 if(NOT HEADLESS)
-    # GLFW for windowing system integration
-    set(GLFW_BUILD_EXAMPLES OFF CACHE INTERNAL "")
-    set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "")
-    set(GLFW_BUILD_DOCS OFF CACHE INTERNAL "")
-    set(GLFW_INSTALL OFF CACHE INTERNAL "")
-    add_subdirectory(extern/glfw)
+    find_package(glfw3 REQUIRED)
+#    # GLFW for windowing system integration
+#    set(GLFW_BUILD_EXAMPLES OFF CACHE INTERNAL "")
+#    set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "")
+#    set(GLFW_BUILD_DOCS OFF CACHE INTERNAL "")
+#    set(GLFW_INSTALL OFF CACHE INTERNAL "")
+#    add_subdirectory(extern/glfw)
     add_subdirectory(vvv-glfw-app)
 endif()
 
