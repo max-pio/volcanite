@@ -13,7 +13,7 @@ add_library(tclap::tclap ALIAS TCLAP)
 # extern HighFive simplified hdf5 library if libhdf5-dev is installed
 option(ENABLE_HDF5_SUPPORT  "Includes the hdf5 library for importing and exporting .hdf5 files" OFF)
 if (ENABLE_HDF5_SUPPORT)
-    find_package(HDF5)
+    find_package(HDF5 QUIET)
     if (HDF5_FOUND)
         # set HighFive CMake cache options
         set(USE_BOOST OFF CACHE INTERNAL "")
@@ -28,30 +28,30 @@ if (ENABLE_HDF5_SUPPORT)
         set(HDF5_PREFER_PARALLEL ON CACHE INTERNAL "")
         add_subdirectory(extern/HighFive)
     else ()
-        message(WARNING "ENABLE_HDF5_SUPPORT was set but hdf5 library could not be found!")
+        message(WARNING "ENABLE_HDF5_SUPPORT was set but hdf5 library could not be found.")
     endif ()
 endif ()
 
 # vtk library to load vti volume/image files
 option(ENABLE_VTK_SUPPORT  "Includes the vtk library for importing and exporting .vti files" ON)
 if (ENABLE_VTK_SUPPORT)
-    find_package(VTK COMPONENTS CommonCore IOXML)
+    find_package(VTK COMPONENTS CommonCore IOXML QUIET)
     if (VTK_FOUND)
         # ...
     else ()
-        message(WARNING "USE_VTK_SUPPORT was set but vtk library could not be found!")
+        message(WARNING "ENABLE_VTK_SUPPORT was set but vtk library could not be found.")
     endif ()
 endif ()
 
 # extern SQLiteCpp library if libsqlite3-dev is installed
 option(ENABLE_SQLITE3_SUPPORT "Includes the SQLite3 library for importing and exporting .sqlite files" ON)
 if (ENABLE_SQLITE3_SUPPORT)
-    find_package(SQLite3)
+    find_package(SQLite3 QUIET)
     if (SQLite3_FOUND)
         set(SQLITECPP_RUN_CPPLINT OFF CACHE INTERNAL "")
         add_subdirectory(extern/SQLiteCpp)
     else ()
-        message(WARNING "USE_SQLite3 was set but SQLite3 library could not be found")
+        message(WARNING "ENABLE_SQLITE3_SUPPORT was set but SQLite3 library could not be found.")
     endif ()
 endif ()
 
@@ -60,13 +60,14 @@ add_subdirectory(vvv)
 
 if(NOT HEADLESS)
     # GLFW libraries
-    find_package(glfw3 REQUIRED)
-    #    # GLFW for windowing system integration
-    #    set(GLFW_BUILD_EXAMPLES OFF CACHE INTERNAL "")
-    #    set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "")
-    #    set(GLFW_BUILD_DOCS OFF CACHE INTERNAL "")
-    #    set(GLFW_INSTALL OFF CACHE INTERNAL "")
-    #    add_subdirectory(extern/glfw)
+    # find_package(glfw3 REQUIRED)
+    # GLFW for windowing system integration
+    set(GLFW_BUILD_EXAMPLES OFF CACHE INTERNAL "")
+    set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "")
+    set(GLFW_BUILD_DOCS OFF CACHE INTERNAL "")
+    set(GLFW_INSTALL OFF CACHE INTERNAL "")
+    set(GLFW_BUILD_WAYLAND OFF)
+    add_subdirectory(extern/glfw)
 
     # platform independent file dialogs
     add_subdirectory(extern/portable-file-dialogs)

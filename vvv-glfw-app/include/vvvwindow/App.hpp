@@ -23,11 +23,12 @@
 
 #include "vvvwindow/GLFWCameraController.hpp"
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
 #include <optional>
 #include <thread>
 #include <filesystem>
+
+// forward decl
+class GLFWwindow;
 
 class Application : public vvv::DefaultGpuContext, public vvv::WindowingSystemIntegration, public std::enable_shared_from_this<Application> {
 private:
@@ -93,7 +94,6 @@ public:
     bool isWindowResizable() const override;
 
     vvv::Camera *getCamera() const override { return m_renderer->getCamera().get(); }
-    static void glfwUpdateScrollWheel(GLFWwindow *window, double xoffset, double yoffset);
 
     void processHotKeys();
 
@@ -223,10 +223,7 @@ private:
         ForEachSwapchainImage<vk::Framebuffer> framebuffers = {};
     } m_renderpass;
 
-    static void framebufferResizeCallback(GLFWwindow *window, int _width, int _height) {
-        auto app = reinterpret_cast<Application *>(glfwGetWindowUserPointer(window));
-        app->m_swapchain.pendingRecreation = true;
-    }
+    static void framebufferResizeCallback(GLFWwindow *window, int _width, int _height);
 
     // Recording / Replaying of camera paths
     std::string m_record_file_path;

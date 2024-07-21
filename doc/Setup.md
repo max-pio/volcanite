@@ -14,7 +14,7 @@ See [Headless Builds](#headless-builds).
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
 3. Install all required packages:
 ```
-sudo apt install build-essential cmake -y
+sudo apt install build-essential cmake xorg-dev -y
 ```
 4. Optional: Install optional packages:
 ```
@@ -103,4 +103,17 @@ Volcanite can be built without any windowing system and GUI window dependencies 
 ```
 cmake -DHEADLESS=ON -DCMAKE_BUILD_TYPE=Release .. && cmake --build . --target volcanite
 ```
+In this case, the `xorg-dev` package is not required.
 GPU drivers and the Vulkan SDK still need to be available and Volcanite can only be run with the `--headless` argument.
+
+
+## FAQ
+
+How do I run Volcanite on a system without a GUI (e.g. a headless remote server) or where the `xorg-dev` package is not available?
+* build Volcanite in [headless mode](#headless-builds).
+
+
+I am using Wayland instead of X11 on Linux. How do I build Volcanite?
+* In the default configuration, the GLFW library is only build with X11 support under Linux / Unix.
+  If you run wayland, you need to set the CMake variable `GLFW_BUILD_WAYLAND` to `ON` and install the requried packages
+  for wayland (see [GLFW 3.3 Compile Guide](https://www.glfw.org/docs/3.3/compile_guide.html#compile_deps)). 

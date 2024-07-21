@@ -19,6 +19,9 @@
 #include <vvv/util/Logger.hpp>
 #include <glm/gtx/transform.hpp>
 
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
+
 #ifdef IMGUI
 #include "imgui/imgui.h"
 #include "imgui/implot/implot.h"
@@ -1046,4 +1049,9 @@ bool Application::isWindowResizable() const {
     if(m_window)
         return static_cast<bool>(glfwGetWindowAttrib(m_window, GLFW_RESIZABLE));
     return false;
+}
+
+void Application::framebufferResizeCallback(GLFWwindow *window, int _width, int _height) {
+    auto app = reinterpret_cast<Application *>(glfwGetWindowUserPointer(window));
+    app->m_swapchain.pendingRecreation = true;
 }

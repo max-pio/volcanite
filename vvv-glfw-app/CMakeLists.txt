@@ -43,7 +43,6 @@ target_compile_definitions(libvvvwindow PUBLIC -DGLFW=1)
 # link libraries
 target_link_libraries(libvvvwindow
         PUBLIC LibVVV::libvvv
-#        PRIVATE ${GLFW_LIBRARIES}
         PRIVATE glfw
         PRIVATE ${CMAKE_DL_LIBS}
         PRIVATE tclap::tclap
@@ -56,8 +55,7 @@ else()
 endif()
 
 target_include_directories(libvvvwindow
-        PRIVATE
-        imgui
+        PRIVATE imgui
         PUBLIC
         # include paths depend on installed or build library
         $<INSTALL_INTERFACE:include>
