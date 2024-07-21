@@ -204,7 +204,6 @@ private:
     std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
     float m_factor_ambient = 0.4f;
     float m_ratio_spec_diff = 1.0f;
-    bool m_cook_torrance_shading = true;
     // shading and post processing
     glm::vec4 m_background_color_a = glm::vec4(0.9f, 0.9f, 0.95f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);

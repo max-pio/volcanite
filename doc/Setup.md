@@ -14,11 +14,11 @@ See [Headless Builds](#headless-builds).
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
 3. Install all required packages:
 ```
-sudo apt install build-essential cmake xorg-dev -y
+sudo apt install -y build-essential cmake xorg-dev
 ```
 4. Optional: Install optional packages:
 ```
-sudo apt install libhdf5-dev libvtk9-dev libtiff-dev libpugixml-dev libsqlite3-dev -y
+sudo apt install -y libhdf5-dev libvtk9-dev libtiff-dev libpugixml-dev libsqlite3-dev
 ```
 5. Build the project. Run in project root directory:
 ```

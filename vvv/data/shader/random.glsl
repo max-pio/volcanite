@@ -16,18 +16,24 @@
 #ifndef RANDOM_GLSL
 #define RANDOM_GLSL
 
+#ifndef PI
+    #define PI 3.14159265359f
+#endif
 #ifndef INV_PI
     #define INV_PI 0.3183098861837907f
 #endif
+#ifndef TWO_PI
+    #define TWO_PI 6.28318530718f
+#endif
 #ifndef INV_TWO_PI
-    #define INV_TWO_PI 0.15915494309
+    #define INV_TWO_PI 0.1591549430918953f
 #endif
 
 // NOISE ---------------------------------------------------------------------------------------------------------------
 
 #define USE_PACKED_BLUE_NOISE
 
-// tilable 32x32 blue noise from Christoph Peters (http://momentsingraphics.de/BlueNoise.html)
+// CC0 tilable 32x32 blue noise from Christoph Peters (http://momentsingraphics.de/BlueNoise.html)
 #ifdef USE_PACKED_BLUE_NOISE
 const int _packedBlueNoise32x32[256] = {
 0xf5daa799, 0xe4d2c394, 0x3b23f28c, 0x96f92fd, 0x5f3979f8, 0x3de7be4e, 0x69421272, 0x495fc090, 0xb13957fb, 0x6e174c79,

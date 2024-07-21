@@ -66,4 +66,4 @@ target_include_directories(libvvvwindow
         )
 
 # add data/ folder as target_property to install() by each project
-set_target_properties(libvvvwindow PROPERTIES DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)
+set_target_properties(libvvvwindow PROPERTIES INTERFACE_DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)

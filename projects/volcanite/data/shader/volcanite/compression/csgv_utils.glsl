@@ -36,7 +36,7 @@
     #define TWO_PI 6.28318530718f
 #endif
 #ifndef INV_TWO_PI
-    #define INV_TWO_PI 0.15915494309
+    #define INV_TWO_PI 0.1591549430918953f
 #endif
 
 

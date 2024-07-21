@@ -727,7 +727,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         // bbox is the volume dimension in voxels centered around the origin (if no bbox reduction is applied)
         m_urender_info->setUniform<glm::vec4>("g_bboxMin", glm::vec4(m_bboxMin, 1.f));
         m_urender_info->setUniform<glm::vec4>("g_bboxMax", glm::vec4(m_bboxMax, 1.f));
-        m_urender_info->setUniform<uint32_t>("g_local_shading_enable", m_cook_torrance_shading ? 1 : 0);
         m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
         m_urender_info->setUniform<float>("g_ratio_spec_diff", m_ratio_spec_diff);
         m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? 1 : 0);
@@ -811,7 +810,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
                                 newCamHash);
         newCamHash = hashMemory(&m_max_path_length, sizeof(m_max_path_length), newCamHash);
         newCamHash = hashMemory(&m_max_steps, sizeof(m_max_steps), newCamHash);
-        newCamHash = hashMemory(&m_cook_torrance_shading, sizeof(m_cook_torrance_shading), newCamHash);
         newCamHash = hashMemory(&m_show_normals, sizeof(m_show_normals), newCamHash);
         newCamHash = hashMemory(&m_show_envmap, sizeof(m_show_envmap), newCamHash);
         newCamHash = hashMemory(&m_factor_ambient, sizeof(m_factor_ambient), newCamHash);
@@ -972,7 +970,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_render->addFloat(&m_light_intensity, "Light Intensity", 0.f, 4.f, 0.05f, 2);
     g_render->addDirection(&m_light_direction, "Light Direction");
     g_render->addSeparator();
-    g_render->addBool(&m_cook_torrance_shading, "Local Shading");
     g_render->addFloat(&m_ratio_spec_diff, "Specular / Diffuse Shading Ratio", 0.0f, 1.0f, 0.05f, 2);
     g_render->addSeparator();
     g_render->addBool(&m_global_illumination_enabled, "Global Illumination");

@@ -364,23 +364,15 @@ float cook_torrance(const in RayMarchState state, const in vec3 dir_in, const in
 }
 
 vec3 brdf(const in RayMarchState state, const in vec3 dir_in, const in vec3 dir_out) {
-    if(g_local_shading_enable) {
-        // mix between Lambert and Cook Torrance specular
-        const float specular = cook_torrance(state, dir_in, dir_out);
-        const float diffuse = 1.f;
-        return vec3((1.f - g_ratio_spec_diff) * specular + g_ratio_spec_diff * INV_PI);
-    }
-    else {
-        // constant Lambert
-        return vec3(INV_PI);
-    }
+    // constant Lambert
+    return vec3(INV_PI);
 }
 
 void main() {
     // obtain pixel and fragment coordinates
     ivec2 viewport_size = imageSize(feedbackOut);
 
-    // optional subsampling
+    // contains thread to pixel mapping for optional subsampling
     ivec2 pixel = pixelFromInvocationID();
     if(isHelperLane(pixel, viewport_size))
         return;
@@ -406,13 +398,14 @@ void main() {
     Ray ray = Ray(g_camera_position_world_space, normalize((g_pixel_to_ray_direction_world_space * vec3(pixel + subpixel_offset, 1.0f)).xyz));
     ray.origin = (g_world_to_model_space * vec4(ray.origin, 1.f)).xyz;
     ray.direction = normalize(g_world_to_model_space_dir * ray.direction);
+
     // In world space, we hit a small cuboid (largest dimension is 1) centered around the origin.
-    // We transform this to model space, where each voxel has unit size:
-    // ToDo: voxels having unit size in model space does not work with the voxel_size parameter, no?
+    // We transform this AABB to model space, where each voxel has unit size:
     float t_0, t_1;
     AABB bounding_box = AABB((g_world_to_model_space * vec4((g_bboxMin.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz,
                              (g_world_to_model_space * vec4((g_bboxMax.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz);
     ray_box_intersection(ray, bounding_box, t_0, t_1);
+
     // if we don't hit the data set, we can directly output the background
     if (t_0 >= t_1) {
         if(g_debug_envmap) {
@@ -428,7 +421,6 @@ void main() {
     // For debug views: only color every other pixel in the debug view to get some kind of "transparent" overlay effect
     // As we move this pixel around, the progressive accumulation averages this with the rendered colors.
     bool debug_view_visible = (pixel.x + pixel.y) % 3u != (g_frame % 3u); // < (viewport_size.x + viewport_size.y) / 2u);
-
     // visualize model space coordinates
     if(g_debug_model_space) {
         vec3 pos = ray.origin + t_0 * ray.direction;
@@ -440,7 +432,7 @@ void main() {
         return;
     }
 
-
+    // initialize ray marching state
     RayMarchState state;
     state.rng = float(g_camera_still_frames << 16);
     state.label = INVALID;
@@ -456,7 +448,7 @@ void main() {
     for(state.step = 0; state.step < g_maxSteps; state.step++) {
 
         // single-level DDA traversal step
-//         dda_step(state, ray);
+        // dda_step(state, ray);
         // multi-level DDA traversal step
         {
             // determine size of the coarse traversal voxel in 2^n number of fine-resolution voxels
@@ -468,10 +460,10 @@ void main() {
             if (any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
                 || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz))))
                 dda_voxel_size = 1u;
-            // empty space skipping: move into next brick
+            // empty space skipping: directly step into the next brick
             else if (isEmptySpace(state.voxel))
                 dda_voxel_size = g_brick_size;
-            // normal traversal:
+            // default traversal: step into next voxel in current level-of-detail
             else
                 dda_voxel_size = g_brick_size >> get_inv_lod(state.voxel);
 
@@ -521,14 +513,6 @@ void main() {
         // An sample marked as invalid this way may not alter the framebuffer and skip certain cmoputation steps.
         state.last_label = state.label;
         state.label = get_volume_label(state.voxel, state.depth_valid);
-//        if (!isValid(state.depth_valid)) {
-//            // only allow stepping one brick width further
-//            state.step = int(g_maxSteps - g_brick_size);
-//            state.step = int(g_maxSteps);
-////            state.out_color = isLabelVisible(state.label) ? get_color(state.label) : vec4(0.f);
-////            state.throughput = vec3(0.f);
-////            break;
-//        }
 
 #ifndef NDEBUG
         if(state.label == INVALID){
@@ -579,17 +563,11 @@ void main() {
         vec4 surface_albedo_opacity = getColor(state.label, material);
 
         // ENTER SEMI-TRANSPARENT VOLUME
-        // ToDo: integrate this into the correct path tracing interaction, simplify BRDF sampling e.g. https://boksajak.github.io/files/CrashCourseBRDF.pdf
+        // ToDo: integrate this into the correct path tracing interaction with fresnel term, simplify BRDF sampling e.g. https://boksajak.github.io/files/CrashCourseBRDF.pdf
         if (surface_albedo_opacity.a < 1.f) {
             if(state.last_label != state.label) {
                 // add the contribution of a semi-transparent surface (local shading only)
-                if(false && g_local_shading_enable) {
-                    //if(dot(state.normal, -ray.direction) > 0.f)
-                    state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * surface_albedo_opacity.a * brdf(state, g_light_direction, -ray.direction) * TWO_PI * max(dot(state.normal, g_light_direction), 0.f) * g_light_intensity;
-                }
-                else {
-                    state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * surface_albedo_opacity.a;
-                }
+                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * surface_albedo_opacity.a;
 
                 // throughput is reduced by the opacity of the surface
                 state.throughput *= 1.f - surface_albedo_opacity.a;
@@ -623,7 +601,7 @@ void main() {
             }
 
             // debug: visualize level-of-detail with viridis colormap
-            if (g_debug_lod) { // && debug_view_visible
+            if (g_debug_lod) {
                 uint lod = get_inv_lod(state.voxel);
                 if(lod != INVALID) {
                     surface_albedo_opacity.rgb = (state.out_color.rgb + 3.f * colormap_viridis(float(lod)/float(g_lod_count - 1u))) / 4.f;
@@ -633,10 +611,9 @@ void main() {
             // the first surface hit is the only point for which we want to store our t value in the depth buffer
             // but if we previously stored an INVALID_DEPTH (< 0) at any point, we don't want to overwrite that
             if(state.path_length == 0) {
-                float t = length((state.voxel + state.pos_in_voxel) - ray.origin);
-                state.depth_valid = min(state.depth_valid, t);
+                state.depth_valid = min(state.depth_valid, length((state.voxel + state.pos_in_voxel) - ray.origin));
             }
-            // opacity is always 1 on hit
+            // opacity is always 1 on surface hit
             state.out_color.a = 1.f;
 
             // include ambient lighting factor - not physically based but interpolates between non-shaded and shaded
@@ -656,31 +633,38 @@ void main() {
                 break;
             }
 
-            // store previous direction as the outgoing direction for the BRDF evaluation
-            vec3 brdf_out_direction = -ray.direction;
 
             // advance the path: sample a new direction
             state.path_length++;
-            // g_shadow_pathtracing_ratio controls the ratio between rays sampled in any direction and rays in light direction
-            // this allows user control between direct and indirect illumination
-            if(g_global_illumination_enable && nextRNG(fragCoord, state.rng).x < g_shadow_pathtracing_ratio) {
-                if(g_local_shading_enable) {
-                    // sample the cosine weighted positive hemisphere
-                    ray.direction = sampleCosineWeightedHemisphereVoxel(nextRNG(fragCoord, state.rng).xy, state.normal);
-                    state.throughput /= pdfCosineWeightedHemisphere(ray.direction, state.normal);
-                } else {
-                    ray.direction = sampleUniformHemisphereVoxel(nextRNG(fragCoord, state.rng).xy, state.normal);
-                    state.throughput /= pdfUniformHemisphere(ray.direction, state.normal);
-                }
+
+            // local shading only: break the loop here and do not trace further bounces
+            if (!g_global_illumination_enable) {
+                // apply surface albedo, geometry term and brdf
+                state.throughput *= surface_albedo_opacity.rgb;
+                state.throughput *= max(dot(state.normal, g_light_direction), 0.f);
+                state.throughput *= brdf(state, g_light_direction, -ray.direction) / INV_TWO_PI;
+                break;
+            }
+
+            // store previous direction as the outgoing direction for the BRDF evaluation
+            vec3 brdf_out_direction = -ray.direction;
+
+            // sample new direction for brdf
+            // g_shadow_pathtracing_ratio controls the ratio between rays sampled in any direction and rays traversed
+            // in the light direction. This allows user control between shadow rays and indirect illumination.
+            if(nextRNG(fragCoord, state.rng).x < g_shadow_pathtracing_ratio) {
+                // sample the cosine weighted positive hemisphere
+                ray.direction = sampleCosineWeightedHemisphereVoxel(nextRNG(fragCoord, state.rng).xy, state.normal);
+                state.throughput /= pdfCosineWeightedHemisphere(ray.direction, state.normal);
             }
             else {
-                // sample directly to  directional light
+                // sample directly to directional light
+                // this is also necessary to set the light direction if only local shading is used
                 ray.direction = g_light_direction;
-                // ToDo: get the probabilities right so that this is real next event estimation?. Is it right to treat this as the PDF of uniform hemisphere sampling? Looks okay at least..
-                state.throughput /= pdfUniformHemisphere(ray.direction, state.normal);  // 1/(2*PI)
+                state.throughput /= INV_TWO_PI;
 
-                // check for self shadowing of the current voxel ToDo: should not happen?
-                if (g_global_illumination_enable && dot(state.normal, ray.direction) < 0) {
+                // check for self shadowing of the current voxel
+                if (dot(state.normal, ray.direction) < 0) {
                     state.throughput = vec3(0.f);
                     break;
                 }
@@ -692,22 +676,10 @@ void main() {
                 checkStateAndRay(state, ray, __LINE__);
             #endif
 
-            // surface albedo
+            // apply surface albedo, geometry term and brdf
             state.throughput *= surface_albedo_opacity.rgb;
-            if(g_local_shading_enable) {
-                // geometry term
-                state.throughput *= max(dot(state.normal, ray.direction), 0.f);
-                // brdf
-                state.throughput *= brdf(state, ray.direction, brdf_out_direction);
-            } else {
-                state.throughput /= TWO_PI;
-            }
-
-            // if we do not trace any secondary rays, we can stop the traversal here
-            if(!g_global_illumination_enable) {
-                break;
-            }
-
+            state.throughput *= max(dot(state.normal, ray.direction), 0.f);
+            state.throughput *= brdf(state, ray.direction, brdf_out_direction);
 
             // Russian Roulette (only when this is not a ray to the light source / NEE)
             if(state.path_length != SHADOW_RAY_PATH_LENGTH && state.path_length < g_max_path_length) {
@@ -719,26 +691,22 @@ void main() {
                 state.throughput /= survival_probability;
             }
 
-            // re-init DDA traversal for the shadow ray
+            // re-init DDA traversal for the ray
             ray.origin = state.voxel + state.pos_in_voxel;
             dda_init(state, ray, 0.f);
-        }
 
-        // ray termination
-        if(state.path_length > g_max_path_length) {
-            state.throughput = vec3(0.f);
-            break;
+            // path termination
+            if(state.path_length > g_max_path_length) {
+                state.throughput = vec3(0.f);
+                break;
+            }
         }
     }
-    // we did not find any light source
-    if(state.step >= g_maxSteps || state.path_length == 0)
+    // no light source was found
+    if(state.step >= g_maxSteps)
         state.throughput = vec3(0.f);
 
-    if(g_debug_step_count) {
-        atomicAdd(gpu_raymarch_samples, state.step);
-        atomicAdd(gpu_bbox_hits, 1u);
-    }
-
+    // apply incoming radiance from environment map
     if(g_envmap_enable) {
         ray.direction = normalize(inverse(g_world_to_model_space_dir) * ray.direction);
         state.out_color.rgb += state.throughput * vec3(g_light_intensity) * dummy_envmap(ray.direction);
@@ -747,13 +715,17 @@ void main() {
         state.out_color.rgb += state.throughput * vec3(g_light_intensity);
 
     // ToDo: the background should be added in the csgv_upsample_resolve shader
-    // perform alpha blending with backgroun
+    // perform alpha blending with background
     if(g_debug_envmap)
         state.out_color.rgb = vec3(g_light_intensity) * dummy_envmap(ray.direction) * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
     else
         state.out_color.rgb = get_background_color(fragCoord).rgb * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
 
-
     // write to image
     writePixel(pixel, state.out_color, state.depth_valid);
+
+    if(g_debug_step_count) {
+        atomicAdd(gpu_raymarch_samples, state.step);
+        atomicAdd(gpu_bbox_hits, 1u);
+    }
 }
