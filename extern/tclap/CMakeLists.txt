@@ -19,7 +19,7 @@ set(GENERATED_CONFIG_NAME "TCLAPConfig.h")
 set(GENERATED_CONFIG_BUILD_DIR "${PROJECT_BINARY_DIR}/tclap")
 set(GENERATED_CONFIG_BUILD_PATH "${GENERATED_CONFIG_BUILD_DIR}/${GENERATED_CONFIG_NAME}")
 
-configure_file(config.h.in "${GENERATED_CONFIG_BUILD_PATH}")
+configure_file(config.h.in "${GENERATED_CONFIG_BUILD_PATH}")c
 
 add_library(TCLAP INTERFACE)
 target_include_directories(TCLAP INTERFACE
@@ -39,6 +39,7 @@ if(${CMAKE_VERSION} VERSION_GREATER "3.14")
 	set(OPTIONAL_ARCH_INDEPENDENT "ARCH_INDEPENDENT")
 endif()
 
+include(CMakePackageConfigHelpers)
 write_basic_package_version_file("${CMAKE_CONFIG_VERSION_FILE_NAME}"
     COMPATIBILITY AnyNewerVersion
     ${OPTIONAL_ARCH_INDEPENDENT}

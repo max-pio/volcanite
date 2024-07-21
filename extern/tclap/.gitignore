@@ -1,7 +1,6 @@
 *#
 *.gcda
 *.gcno
-*.in
 *.o
 *.orig
 *.patch

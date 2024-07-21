@@ -88,7 +88,7 @@ function(installExecutable name)
     # search for DATA_DIR property in link_library dependencies
     get_target_property(dependency_libs "${name}" LINK_LIBRARIES)
     foreach(lib IN LISTS dependency_libs)
-        get_target_property(${lib}_data_dir ${lib} DATA_DIR)
+        get_target_property(${lib}_data_dir ${lib} INTERFACE_DATA_DIR)
         if (NOT ${lib}_data_dir STREQUAL ${lib}_data_dir-NOTFOUND)
             list(APPEND data_dirs ${${lib}_data_dir})
         endif()
