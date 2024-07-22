@@ -156,7 +156,7 @@ vec4 getColor(uint label, int material) {
 
     // read attribute, map tfInterval to [0, 1]
     float v = (getAttribute(label, g_materials[material].tfAttributeStart) - g_materials[material].tfIntervalMin)
-                / (g_materials[material].tfIntervalMax - g_materials[material].tfIntervalMin);
+                / (g_materials[material].tfIntervalMax + 1.f - g_materials[material].tfIntervalMin);
     // wrapping mode: 0 = clamp, handled by textureLoD, 1 = repeat
     if(g_materials[material].wrapping == 1) { // repeat
         float interval_length = (g_materials[material].tfIntervalMax - g_materials[material].tfIntervalMin);

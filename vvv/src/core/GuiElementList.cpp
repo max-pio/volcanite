@@ -216,7 +216,7 @@ namespace vvv {
                 }
                 case GuiCombo: {
                     auto e = reinterpret_cast<GuiComboEntry*>(be);
-                    vstr = e->selection ? e->options.at(*e->selection) : "*";
+                    vstr = e->selection ? sanitizeExportString(e->options.at(*e->selection)) : "*";
                     break;
                 }
                 case GuiDynamicText: {
@@ -377,6 +377,7 @@ namespace vvv {
                     auto e = reinterpret_cast<GuiComboEntry*>(be);
                     std::string v;
                     in >> v;
+                    v = sanitizeImportString(v);
                     int option = -1;
                     for(int i = 0; i < e->options.size(); i++) {
                         if(e->options[i] == v) {
