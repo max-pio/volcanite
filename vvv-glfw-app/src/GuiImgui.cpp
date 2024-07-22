@@ -51,10 +51,11 @@ void GuiImgui::renderGui() {
 
 #ifdef _WIN64
         // on windows, the path.c_str() returns a wide char pointer which we have to convert to a const char*
-        std::string unicode_query = vvv::Paths::findDataPath("Quicksand-Medium.ttf").string();
+        std::string unicode_query = vvv::Paths::findDataPath("QuicksandFamily/Quicksand-Medium.ttf").string();
         io.Fonts->AddFontFromFileTTF(unicode_query.c_str(), m_defaultFontSize * m_gui_scaling);
 #else
-        io.Fonts->AddFontFromFileTTF(vvv::Paths::findDataPath("Quicksand-Medium.ttf").c_str(), m_defaultFontSize * m_gui_scaling);
+        io.Fonts->AddFontFromFileTTF(vvv::Paths::findDataPath("QuicksandFamily/Quicksand-Medium.ttf").c_str(),
+                                     m_defaultFontSize * m_gui_scaling);
 #endif
         ImGui_ImplVulkan_CreateFontsTexture();
 
