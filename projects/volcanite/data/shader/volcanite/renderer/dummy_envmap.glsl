@@ -51,7 +51,7 @@ float perlinNoise(vec2 uv, uint repeat_freq) {
     fade(ab.y));
 }
 
-float fractralBrownianPerlin(vec2 uv, int octaves) {
+float fractalBrownianPerlin(vec2 uv, int octaves) {
     float v = 0.f;
 
     float amp = 2.f;
@@ -78,12 +78,12 @@ vec3 dummy_envmap(vec3 dir) {
     vec3 base_color = vec3(0.4f, 0.6f, 1.f);
 
     vec3 c = vec3(0.f);
-    c += mix(vec3(fractralBrownianPerlin(abs(vec2(axz, ay)), 8)), vec3(1.f), dir.y * dir.y * dir.y);
+    c += mix(vec3(fractalBrownianPerlin(abs(vec2(axz, ay)), 8)), vec3(1.f), dir.y * dir.y * dir.y);
     c = mix(c, base_color, ay);
     c = mix(c, light_color, max(dir.x * dir.x * dir.x * max(dir.y + 0.2f, 0.f), 0.f));
     c += vec3(0.3f);
 
-    return clamp(c, vec3(0.f), vec3(1.f));
+    return clamp(c * 1.2f, vec3(0.f), vec3(1.2f));
 }
 
 #endif

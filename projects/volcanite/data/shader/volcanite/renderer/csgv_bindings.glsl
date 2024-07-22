@@ -158,7 +158,6 @@ layout (std140, binding = 10) uniform render_info {
     int g_maxSteps;
     bool g_blue_noise_enable;
     float g_factor_ambient;
-    float g_ratio_spec_diff;
     vec4 g_bboxMin;
     vec4 g_bboxMax;
     float g_opacityThreshold;

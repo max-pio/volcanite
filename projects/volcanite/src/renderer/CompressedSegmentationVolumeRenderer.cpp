@@ -728,7 +728,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<glm::vec4>("g_bboxMin", glm::vec4(m_bboxMin, 1.f));
         m_urender_info->setUniform<glm::vec4>("g_bboxMax", glm::vec4(m_bboxMax, 1.f));
         m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
-        m_urender_info->setUniform<float>("g_ratio_spec_diff", m_ratio_spec_diff);
         m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? 1 : 0);
         m_urender_info->setUniform<float>("g_opacityThreshold",
                                           0.5); // TODO: we have this low opacity treshold to render opaque first hits
@@ -813,7 +812,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         newCamHash = hashMemory(&m_show_normals, sizeof(m_show_normals), newCamHash);
         newCamHash = hashMemory(&m_show_envmap, sizeof(m_show_envmap), newCamHash);
         newCamHash = hashMemory(&m_factor_ambient, sizeof(m_factor_ambient), newCamHash);
-        newCamHash = hashMemory(&m_ratio_spec_diff, sizeof(m_ratio_spec_diff), newCamHash);
         newCamHash = hashMemory(&m_tonemap_enabled, sizeof(m_tonemap_enabled), newCamHash);
         newCamHash = hashMemory(&m_shadow_pathtracing_ratio, sizeof(m_shadow_pathtracing_ratio), newCamHash);
         newCamHash = hashMemory(&m_max_inv_lod, sizeof(m_max_inv_lod), newCamHash);
@@ -874,6 +872,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                            {"Development", "Materials"}});
 
     // General options
+    g_gen->addSeparator();
     g_gen->addVec3([this](glm::vec3 v) { if (glm::all(glm::greaterThan(v, glm::vec3(0.f)))) m_voxel_size = v; },
                    [this]() { return m_voxel_size; }, "Voxel Size", 3);
     g_gen->addFloatRange([this](glm::vec2 v) {m_bboxMin.x = v.x; m_bboxMax.x = v.y;},
@@ -907,6 +906,9 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 #endif
     }, "Screenshot");
     //
+#ifdef IMGUI
+    g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
     g_gen->addAction([this]() {
         std::string file;
         if (!pfd::settings::available()) {
@@ -923,6 +925,9 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         }
 
     }, "Import Parameters");
+#ifdef IMGUI
+    g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
     g_gen->addAction([this]() {
         std::string file;
         if (!pfd::settings::available()) {
@@ -945,7 +950,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_gen->addSeparator();
     g_gen->addDynamicText(&m_gui_device_mem_text);
 
-    // Displaying and render resolution
+    // Display properties and render resolution
     g_dis->addColor(&m_background_color_a, "Background Color A");
     g_dis->addColor(&m_background_color_b, "Background Color B");
     g_dis->addInt(&m_accum_frames, "Accumulation Frames");
@@ -956,8 +961,11 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dis->addDynamicText(&m_gui_resolution_text);
     g_dis->addBool([this](bool b) { if(getCtx()->getWsi()) getCtx()->getWsi()->setWindowResizable(b); }, [this]() { return getCtx()->getWsi() != nullptr && getCtx()->getWsi()->isWindowResizable(); }, "Resizable Window");
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
+#ifdef IMGUI
+    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
-    g_dis->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
+    //g_dis->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
 
     // Materials
     if(m_csgv_db) {
@@ -965,15 +973,59 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     }
 
     // Path Tracing / Rendering
+    static int gui_preset_selection = 0;
+    g_render->addCombo(&gui_preset_selection, {"Local Shading", "Global Shadows", "Ambient Occlusion", "Path Tracing"},
+                       [this](int i) {
+                           // how many frames have to be accumulated so that each pixel received one sample
+                           int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
+                           switch(i) {
+                               // local shading
+                               case 0:
+                                   m_factor_ambient = 0.4f;
+                                   m_light_intensity = 1.f;
+                                   m_global_illumination_enabled = false;
+                                   m_envmap_enabled = false;
+                                   m_accum_frames = frames_for_one_spp * 8; // 8 elem. Halton sequence per pixel
+                                   break;
+                                   // global shadows
+                               case 1:
+                                   m_factor_ambient = 0.4f;
+                                   m_light_intensity = 1.f;
+                                   m_global_illumination_enabled = true;
+                                   m_shadow_pathtracing_ratio = 0.f;
+                                   m_envmap_enabled = false;
+                                   m_accum_frames = frames_for_one_spp * 8; // 8 elem. Halton sequence per pixel
+                                   break;
+                                   // ambient occlusion
+                               case 2:
+                                   m_factor_ambient = 0.4f;
+                                   m_light_intensity = 1.f;
+                                   m_global_illumination_enabled = true;
+                                   m_shadow_pathtracing_ratio = 1.f;
+                                   m_max_path_length = 1;
+                                   m_envmap_enabled = false;
+                                   m_accum_frames = glm::min(frames_for_one_spp * 256, 4096);
+                                   break;
+                                   // path tracing
+                               case 3:
+                                   m_factor_ambient = 0.f;
+                                   m_light_intensity = 1.f;
+                                   m_global_illumination_enabled = true;
+                                   m_shadow_pathtracing_ratio = 1.f;
+                                   m_max_path_length = 32;
+                                   m_envmap_enabled = true;
+                                   m_accum_frames = glm::min(frames_for_one_spp * 1024, 4096);
+                                   break;
+                           }
+                       }, "Rendering Preset");
     g_render->addFloat(&m_factor_ambient, "Constant Color", 0.0f, 1.f, 0.05f, 2);
-    g_render->addBool(&m_envmap_enabled, "Environment Map");
+    g_render->addSeparator();
     g_render->addFloat(&m_light_intensity, "Light Intensity", 0.f, 4.f, 0.05f, 2);
     g_render->addDirection(&m_light_direction, "Light Direction");
     g_render->addSeparator();
-    g_render->addFloat(&m_ratio_spec_diff, "Specular / Diffuse Shading Ratio", 0.0f, 1.0f, 0.05f, 2);
-    g_render->addSeparator();
     g_render->addBool(&m_global_illumination_enabled, "Global Illumination");
     g_render->addFloat(&m_shadow_pathtracing_ratio, "Direct Light / Pathtracing Ratio", 0.f, 1.f, 0.1f, 1);
+    g_render->addBool(&m_envmap_enabled, "Environment Map");
     g_render->addInt(&m_max_path_length, "Path Length", 1, 32, 1);
 
     // Development

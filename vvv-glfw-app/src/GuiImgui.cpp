@@ -98,7 +98,7 @@ void GuiImgui::renderGui() {
                     if(parents.contains(loc)) {
                         ImGui::DockBuilderDockWindow(window.c_str(), parents[loc]);
                     } else {
-                        vvv::Logger(vvv::WARN) << "can not dock to windows that were not already docked elsewhere (can not dock " << window << " to " << loc << ")";
+                        vvv::Logger(vvv::WARN) << "cannot dock to windows that were not already docked elsewhere (cannot dock " << window << " to " << loc << ")";
                         // ToDo: would have to create a new docking node as parent for both window and loc
                     }
                 }
@@ -108,7 +108,7 @@ void GuiImgui::renderGui() {
                     // Otherwise, append next to the existing windows.
                     if (loc == "d") {
                         if (dock_id_down == 0u) {
-                            dock_id_down = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.2f, nullptr, &dockspace_id);
+                            dock_id_down = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.3f, nullptr, &dockspace_id);
                             ImGui::DockBuilderDockWindow(window.c_str(), dock_id_down);
                             parents[window] = dock_id_down;
                         } else {
@@ -130,7 +130,7 @@ void GuiImgui::renderGui() {
                         }
                     } else if (loc == "u") {
                         if (dock_id_up == 0u) {
-                            dock_id_up = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Up, 0.2f, nullptr, &dockspace_id);
+                            dock_id_up = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Up, 0.3f, nullptr, &dockspace_id);
                             ImGui::DockBuilderDockWindow(window.c_str(), dock_id_up);
                             parents[window] = dock_id_up;
                         } else {
