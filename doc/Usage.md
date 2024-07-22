@@ -208,8 +208,9 @@ volcanite [-h] [--version] [--headless] [--threads <int>]
 Volcanite can be run in `--headless` mode to not open the application window.
 This allows executing the renderer on systems without a windowing system or for calling Volcanite from scripts.
 
-If your system does not provide GLFW libraries, you can pass the CMake option `HEADLESS` to the build pipeline to not
-include any windowing functionality in Volcanite altogether (see [Setup.md](Setup.md#headless-builds)).
+If your system does not provide a GUI or the `xorg-dev` library, you can pass the CMake option `HEADLESS` to the build
+pipeline to not include any windowing functionality in Volcanite altogether
+(see [Setup.md](Setup.md#headless-builds)).
 In this case, you will only be able to run Volcanite with `--headless` set.
 
 Useful command line arguments to be used in combination with `--headless` are `-i` to render the input volume to a given

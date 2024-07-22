@@ -174,33 +174,7 @@ public:
 
     /// @discouraged this is a shorthand that drains the GPU pipeline and waits on the host.
     void writeExr(const std::string path) {
-#ifdef TINYEXR_H_
-        // TODO(Reiner): use the lower level API to support more formats
-
-        const auto componentCount = FormatComponentCount(static_cast<VkFormat>(format));
-        assert(componentCount <= 4 && "expecting r, rg, rgb or rgba texture");
-        const auto planeCount = FormatPlaneCount(static_cast<VkFormat>(format));
-        assert(planeCount == 1);
-        assert(FormatIsFloat(static_cast<VkFormat>(format)));
-        assert(FormatElementIsTexel(static_cast<VkFormat>(format)));
-
-        const auto texelSize = FormatTexelSize(static_cast<VkFormat>(format));
-
-        const auto componentSize = texelSize / componentCount;
-
-        const auto isFloat16 = componentSize == 2;
-
-        assert((componentSize == 4 || componentSize == 2) && "expecting either float16 or float32 components!");
-
-        const auto data = download();
-
-        const char *exrErr = nullptr;
-        if (SaveEXR(reinterpret_cast<const float *>(data.data()), width, height, componentCount, /* fp16? */ isFloat16, path.c_str(), &exrErr) != TINYEXR_SUCCESS) {
-            throw std::runtime_error(exrErr);
-        }
-#else
         throw std::runtime_error("texture EXR export is not available because tinyexr implementation is missing.");
-#endif
     }
 
     /// @discouraged this is a shorthand that drains the GPU pipeline and waits on the host.

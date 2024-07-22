@@ -106,6 +106,28 @@ See the [code examples](projects/examples/src/bin) and other existing Volcanite 
       .               .               .                        └─┘ tag 0.1
 ```
 
+## Open Source Libraries and Licenses
+
+The Volcanite code directly includes the following dependencies:
+* [GLFW](https://github.com/glfw/glfw), released under the Zlib license
+* [GLM](https://github.com/g-truc/glm), released under the MIT license
+* [HighFive](https://github.com/BlueBrain/HighFive?tab=readme-ov-file), released under teh BSL-1.0 license
+* [Dear ImGui](https://github.com/ocornut/imgui), released under the MIT license
+* [Portable File Dialogs](https://github.com/samhocevar/portable-file-dialogs), released under the WTFPL license
+* [ryg rANS](https://github.com/rygorous/ryg_rans), released under the CC0 license
+* [SPIRV-Reflect](https://github.com/KhronosGroup/SPIRV-Reflect), released under the Apache-2.0 license
+* [SQLiteC++](https://github.com/SRombauts/SQLiteCpp), released under the MIT license
+* [stb](https://github.com/nothings/stb), released into the public domain via Unlicense
+* [tclap](https://tclap.sourceforge.net/), released under the MIT license
+
+As well as the following assets:
+* [Tileable Blue Noise Textures](http://momentsingraphics.de/BlueNoise.html) released by Christoph Peters under the CC0 license
+* The [Quicksand](https://fonts.google.com/specimen/Quicksand) font released by Andrew Paglinawan under the OFL 1.1 license
+* A collection of colormaps, namely
+  * The [Viridis colormaps](https://bids.github.io/colormap/) released under the CC0 license
+  * The Viridis [GLSL approximations](https://www.shadertoy.com/view/WlfXRN) released by Matt Zucker under the CC0 license
+  * The [coolwarm colormap](https://www.kennethmoreland.com/color-advice/) released by Kenneth Mooreland into the public domain
+
 <!---
 [ToDo]
 

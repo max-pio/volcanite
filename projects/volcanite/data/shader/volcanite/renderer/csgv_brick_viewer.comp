@@ -114,7 +114,7 @@ uint indexOfBrickPos(const uvec3 p) {
 
 vec4 get_color(uint label, vec2 uv) {
     float v1 = float(((8u + label) * g_label_color_mult) % 512u)/ 512.f;
-    return vec4(colormap_turbo(v1), 1.f);
+    return vec4(colormap_plasma(v1), 1.f);
 }
 
 

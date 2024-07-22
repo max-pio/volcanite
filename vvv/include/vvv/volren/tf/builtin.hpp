@@ -41,6 +41,40 @@
 // }
 // ```
 // and data taken form `https://raw.githubusercontent.com/Kitware/ParaView/115d91a15c2f3859c56d1882661b6b8704885c42/Remoting/Views/ColorMaps.json`
+//
+// the original ParaView source containing these colormaps is released under the following license:
+// ---------------------------------------------------------------------------------------------------------------------
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// * Redistributions of source code must retain the above copyright notice,
+//   this list of conditions and the following disclaimer.
+//
+// * Redistributions in binary form must reproduce the above copyright notice,
+//   this list of conditions and the following disclaimer in the documentation
+//   and/or other materials provided with the distribution.
+//
+// * Neither name of Ken Martin, Will Schroeder, or Bill Lorensen nor the names
+//   of any contributors may be used to endorse or promote products derived
+//   from this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ``AS IS''
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+// ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR
+// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Under the terms of Contract
+// DE-AC04-94AL85000, there is a non-exclusive license for use of this work by
+// or on behalf of the U.S. Government. Redistribution and use in source and
+// binary forms, with or without modification, are permitted provided that this
+// Notice and any statement of authorship are reproduced on all copies.
+// ---------------------------------------------------------------------------------------------------------------------
 namespace vvv::colormaps {
 
 const std::vector<float> black_body_radiation{0, 0, 0, 0, 0.4, 0.901960784314, 0, 0, 0.8, 0.901960784314, 0.901960784314, 0, 1, 1, 1, 1};
@@ -314,8 +348,13 @@ const std::vector<float> blue_to_yellow{0, 0.0392156862745, 0.0392156862745, 0.9
 const std::vector<float> haze{-1, 1, 0.835294, 0.996078, -0.00392157, 0.023529, 0.141176, 0.498039, 0.00392157, 0.015686, 0.137255, 0.494118, 1, 0.984314, 0.764706, 0};
 const std::vector<float> hsv{-1, 1, 0, 0, -0.666666, 1, 0, 1, -0.333333, 0, 0, 1, 0, 0, 1, 1, 0.33333, 0, 1, 0, 0.66666, 1, 1, 0, 1, 1, 0, 0};
 
-// automatically generated from python colormaps using the following script:
+// ---------------------------------------------------------------------------------------------------------------------
+
+// viridis, magma, inferno, and plasma by Nathaniel J. Smith, Stefan van der Walt, and (in the case of viridis) Eric
+// Firing are released under a CC0 license https://github.com/BIDS/colormap/blob/master/colormaps.py
+// coolwarm is released under a CC0 license by Kenneth Moreland https://www.kennethmoreland.com/color-advice/
 //
+// automatically generated from matplotlib colormaps using the following script:
 //import matplotlib.pyplot as plt
 //name = 'viridis'
 //precision = 256
@@ -331,7 +370,6 @@ const std::vector<float> hsv{-1, 1, 0, 0, -0.666666, 1, 0, 1, -0.333333, 0, 0, 1
 //    else:
 //        print(f'{pos:.4},{c[0]:.4},{c[1]:.4},{c[2]:.4},', end=' ')
 //print("};")
-
 const std::vector<float> viridis{0.0,0.267,0.004874,0.3294, 0.003922,0.2685,0.009605,0.3354, 0.007843,0.2699,0.01463,0.3414, 0.01176,0.2713,0.01994,0.3473,
                                  0.01569,0.2726,0.02556,0.3531, 0.01961,0.2738,0.0315,0.3589, 0.02353,0.275,0.03775,0.3645, 0.02745,0.276,0.04417,0.3702,
                                  0.03137,0.277,0.05034,0.3757, 0.03529,0.2779,0.05632,0.3812, 0.03922,0.2788,0.06214,0.3866, 0.04314,0.2796,0.06784,0.3919,
@@ -615,9 +653,7 @@ const std::map<std::string, const std::vector<float>&> colormaps = {
     { "hsv", hsv },
 };
 
-/**
- * @brief A subset of colormaps that are considered 'good' in the visualization community
- */
+/// @brief A subset of colormaps that are considered 'good' in the visualization community
 const std::map<std::string, const std::vector<float>&> good_colormaps = {
         { "viridis", viridis},
         { "inferno", inferno},

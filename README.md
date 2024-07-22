@@ -42,6 +42,8 @@ The `doc` directory of this repository contains further information on how to us
 ## License
 If not stated otherwise, the code in this repository uses a GPLv3 license.
 If you require alternative licensing options, please contact the authors.
+The third party open source libraries that Volcanite uses and their licenses are listed in
+[Development.md](doc/Development.md#licenses).  
 
 ## About
 This renderer was created by [Max Piochowiak](https://cg.ivd.kit.edu/piochowiak/staff_index.php) with significant code
