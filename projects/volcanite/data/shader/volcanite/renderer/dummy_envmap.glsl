@@ -37,4 +37,19 @@ vec3 dummy_envmap(vec3 dir) {
     return clamp(c * 1.2f, vec3(0.f), vec3(1.2f));
 }
 
+/// The background is a tilted interpolation between two colors g_background_color_a and g_background_color_b
+/// or displaying the environment map.
+vec4 get_background_color(vec2 fragCoord, vec3 rayDirection) {
+    if(g_debug_envmap) {
+        return vec4(g_light_intensity * dummy_envmap(rayDirection), 1.f);
+    }
+    else {
+        float bgWeight = (fragCoord.x*2.f + (1.f-fragCoord.y)) / 3.f;
+        bgWeight *= bgWeight;
+        vec4 bgColor = g_background_color_a * (1.f - bgWeight) + g_background_color_b * bgWeight;
+        bgColor.rgb *= bgColor.a;
+        return bgColor;
+    }
+}
+
 #endif

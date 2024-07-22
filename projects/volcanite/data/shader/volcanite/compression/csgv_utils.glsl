@@ -144,15 +144,4 @@ vec4 getColor(uint label, int material) {
     return vec4(textureLod(s_transferFunctions[material], v, 0.f).rgb, g_materials[material].opacity);
 }
 
-// Background Color ----------------------------------------------------------------------------------------------------
-
-/// The background is a tilted interpolation between two colors g_background_color_a and g_background_color_b
-vec4 get_background_color(vec2 fragCoord) {
-    float bgWeight = (fragCoord.x*2.f + (1.f-fragCoord.y)) / 3.f;
-    bgWeight *= bgWeight;
-    vec4 bgColor = g_background_color_a * (1.f - bgWeight) + g_background_color_b * bgWeight;
-    bgColor.rgb *= bgColor.a;
-    return bgColor;
-}
-
 #endif // CSGV_UTILS_GLSL

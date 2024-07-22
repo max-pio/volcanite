@@ -132,6 +132,7 @@ layout(std430, binding = 9) buffer restrict detail_requests
 layout (std140, binding = 10) uniform render_info {
     mat4 g_model_to_world_space;
     mat4 g_world_to_model_space;
+    mat3 g_model_to_world_space_dir;
     mat3 g_world_to_model_space_dir;
     float g_world_to_model_space_scaling;
     mat4 g_world_to_projection_space;

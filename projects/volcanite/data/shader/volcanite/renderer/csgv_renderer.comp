@@ -206,21 +206,7 @@ struct RayMarchState {
 
 #define SHADOW_RAY_PATH_LENGTH -1
 
-// checks some state variables and ray origin / direction for inf or nan values. returns false if any are found.
-bool checkStateAndRay(const RayMarchState state, const Ray ray, int line) {
-    if (any(isnan(state.voxel + state.pos_in_voxel)) || any(isinf(state.voxel + state.pos_in_voxel))
-        || (any(isnan(state.pos_in_voxel)) || any(isinf(state.pos_in_voxel)))
-        || (any(isnan(ray.origin)) || any(isinf(ray.origin)))
-        ||  (any(isnan(ray.direction)) || any(isinf(ray.direction)))) {
-            debugPrintfEXT("nan/inf in line %i, step %i   state.pos: %v3f | sub_voxel_pos: %v3f | state.t: %f | state.inv_ray_dir: %v3f | ray %v3f -> %v3f",
-                            line, state.step, state.voxel + state.pos_in_voxel, state.pos_in_voxel,
-                            length((state.voxel + state.pos_in_voxel) - ray.origin),
-                            state.inv_ray_dir, ray.origin, ray.direction);
-        return false;
-    }
-    return true;
-}
-
+#include "csgv_debug.glsl"
 
 void dda_step_multilevel(inout RayMarchState state, const Ray ray, int voxel_size) {
     // Round down to do the traversal in one pseudo-voxel with a size of [voxel_size] many fine-resolution voxels
@@ -262,11 +248,11 @@ void dda_step_multilevel(inout RayMarchState state, const Ray ray, int voxel_siz
     // update normal
     state.normal = vec3(0.f);
     state.normal[axis] = float(-state.step_sign[axis]);
+
+    // DEBUG_check_state_and_ray(state, ray, __LINE__);
 }
 
 void dda_step(inout RayMarchState state, const Ray ray) {
-    checkStateAndRay(state, ray, __LINE__);
-
     // determine distances that t has to change until the ray hits the next voxel edge
     // note: if a ray direction axis is 0, inv_ray_dir is INFTY and step_sign is 1 to yield INFTY which is > all others
     // note: side_dist_t is always positive as inv_ray_dir is negative if and only if step_sign is negative
@@ -296,9 +282,7 @@ void dda_step(inout RayMarchState state, const Ray ray) {
     state.normal = vec3(0.f);
     state.normal[axis] = float(-state.step_sign[axis]);
 
-    if (!checkStateAndRay(state, ray, __LINE__)) {
-        debugPrintfEXT(" step %i ray origin %v3f dir %v3f: axis %i", state.step, ray.origin, ray.direction, axis);
-    }
+    // DEBUG_check_state_and_ray(state, ray, __LINE__);
 }
 
 void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
@@ -327,48 +311,7 @@ void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
         state.step_sign.z = 1;
     }
 
-    checkStateAndRay(state, ray, __LINE__);
-}
-
-// ToDo: Use GGX?
-float cook_torrance(const in RayMarchState state, const in vec3 dir_in, const in vec3 dir_out) {
-    // TODO: REMOVE FOR THE TIME BEING! based on https://www.shadertoy.com/view/XsXXDB
-    // ToDo: we have to be careful with licenses! Shadertoy code is owned by the shader authors if not stated otherwise
-    const float roughness = 0.4f;
-    const float F0 = 0.8f;
-    //
-    vec3 h = normalize(dir_in + dir_out);
-    float NdotL = clamp(dot(state.normal, dir_out), 0.f, 1.f);
-    float NdotH = clamp(dot(state.normal, h), 0.f, 1.f);
-    float NdotV = clamp(dot(state.normal, dir_in), 0., 1.f);
-    float VdotH = clamp(dot(h, dir_in), 0.f, 1.f);
-    float rsq = roughness * roughness;
-
-    // Geometric Attenuation
-    float NH2   = 2.f * NdotH / VdotH;
-    float geo_b = (NH2 * NdotV);
-    float geo_c = (NH2 * NdotL);
-    float geo   = min(1.f, min(geo_b, geo_c));
-
-    // Roughness
-    // Beckmann distribution function
-    float r1 = 1.f / (4.f * rsq * pow(NdotH, 4.f));
-    float r2 = (NdotH * NdotH - 1.f) / (rsq * NdotH * NdotH);
-    float rough = r1 * exp(r2);
-
-    // Fresnel
-    float fres = pow(1.f - VdotH, 5.f);
-    fres *= (1.f - F0);
-    fres += F0;
-
-    float spec = (NdotV * NdotL <= 0.f) ? 0.f : (fres * geo * rough) / (NdotV * NdotL);
-
-    return spec;
-}
-
-vec3 brdf(const in RayMarchState state, const in vec3 dir_in, const in vec3 dir_out) {
-    // constant Lambert
-    return vec3(ONE_OVER_PI);
+    // DEBUG_check_state_and_ray(state, ray, __LINE__);
 }
 
 void main() {
@@ -380,18 +323,7 @@ void main() {
     if (isHelperLane(pixel, viewport_size))
         return;
 
-    // draw rectangles for each level-of-detail: if the volume fits into one of these rectangles it means that the
-    // corresponding LoD will be selected (depends on how many voxels of the finest LoD fit into one pixel)
-    if (g_debug_lod) {
-        for (uint lod = 0; lod < g_lod_count; lod++) {
-            if (any(greaterThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) - 2u)))) {
-                if (all(lessThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) + 2u)))) {
-                    writePixel(pixel, vec4(colormap_viridis(float(g_lod_count - 1u - lod)/float(g_lod_count - 1u)), 1.f), BACKGROUND_DEPTH);
-                    return;
-                }
-            }
-        }
-    }
+    if (DEBUG_vis_lod_rectangles(pixel, g_debug_lod)) return;
 
     // Add a subpixel offset in [0, 1) to perform temporal anti-aliasing
     vec2 subpixel_offset = randomVec3(vec2(pixel.x, pixel.y), float(1347182u + 3721175u * g_camera_still_frames)).xy;
@@ -411,29 +343,16 @@ void main() {
 
     // if we don't hit the data set, we can directly output the background
     if (t_0 >= t_1) {
-        if (g_debug_envmap) {
-            // ToDo: expensive inverse as the matrix may contain scaling. use scaling and transpose(rotation) instead
-            ray.direction = normalize(inverse(g_world_to_model_space_dir) * ray.direction);
-            writePixel(pixel, vec4(g_light_intensity * dummy_envmap(ray.direction), 1.f), BACKGROUND_DEPTH);
-        }
-        else
-            writePixel(pixel, get_background_color(fragCoord), BACKGROUND_DEPTH);
+        ray.direction = normalize(g_model_to_world_space_dir * ray.direction);
+        writePixel(pixel, get_background_color(fragCoord, ray.direction), BACKGROUND_DEPTH);
         return;
     }
 
     // For debug views: only color every other pixel in the debug view to get some kind of "transparent" overlay effect
     // As we move this pixel around, the progressive accumulation averages this with the rendered colors.
     bool debug_view_visible = (pixel.x + pixel.y) % 3u != (g_frame % 3u); // < (viewport_size.x + viewport_size.y) / 2u);
-    // visualize model space coordinates
-    if (g_debug_model_space) {
-        vec3 pos = ray.origin + t_0 * ray.direction;
-        vec3 color = floor(pos) / vec3(g_vol_dim);
-        vec3 borders = vec3(greaterThan(fract(pos), vec3(0.0f))) * vec3(lessThan(fract(pos - vec3(0.0001f)), vec3(0.2f)));
-        if (borders.x + borders.y + borders.z > 0.f)
-            color *= 1.f - 1.f / (t_0 / g_world_to_model_space_scaling * 64.f);
-        writePixel(pixel, vec4(color, 1.f), t_0);
-        return;
-    }
+
+    if (DEBUG_vis_model_space(ray, t_0, pixel, g_debug_model_space)) return;
 
     // initialize ray marching state
     RayMarchState state;
@@ -444,6 +363,7 @@ void main() {
     state.throughput = vec3(1.f);
     state.out_color = vec4(0.f);
     state.depth_valid = BACKGROUND_DEPTH;
+
     // initialize DDA traversal with t_0  offset to prevent aliasing
     dda_init(state, ray, t_0 - 0.01f);
 
@@ -475,40 +395,24 @@ void main() {
         }
 
 #ifndef NDEBUG
-        if (!checkStateAndRay(state, ray, __LINE__)) {
-            state.out_color = vec4(1.f, 0.f, 0.f, 1.f);
-            state.depth_valid = 0.f;
-            break;
-        }
+        DEBUG_check_state_and_ray(state, ray, __LINE__);
 #endif
 
         // out of bounds check
         if (any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
             || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
-            // we may have started out of bounds
-            if (state.path_length > 0 || state.step > 16)
-                break;
+            if (state.path_length == 0 && state.step < 16)
+                continue;
             else
-               continue;
+                break;
         }
 
         // empty space check
         if (isEmptySpace(state.voxel)) {
-//#define VISUALIZE_EMPTY_SPACE
-#ifndef VISUALIZE_EMPTY_SPACE
-            continue;
-#else
-            const float empty_space_opacity = 128.f / float(g_vol_dim.x);
-            state.out_color.rgb += state.throughput * vec3(state.throughput.r, 0.f, 1.f - state.throughput.r) * empty_space_opacity;
-            state.throughput *= 1.f - empty_space_opacity;
-            state.out_color.a = max(state.out_color.a, 1.f - (state.throughput.r + state.throughput.g + state.throughput.b) / 3.f);
+            DEBUG_vis_empty_space_brick(state, false);
             continue;
         } else {
-            const float empty_space_opacity = 32.f / float(g_vol_dim.x);
-            state.out_color.rgb += state.throughput * vec3(1.f - state.throughput.r, state.throughput.r, 0.f) * empty_space_opacity;
-            state.throughput *= 1.f - empty_space_opacity;
-            state.out_color.a = max(state.out_color.a, 1.f - (state.throughput.r + state.throughput.g + state.throughput.b) / 3.f);
-#endif
+            DEBUG_vis_empty_space_voxel(state, false);
         }
 
 
@@ -519,12 +423,7 @@ void main() {
         state.label = get_volume_label(state.voxel, state.depth_valid);
 
 #ifndef NDEBUG
-        if (state.label == INVALID){
-            state.out_color = vec4(1.f, 0.f, 1.f, 1.f);
-            state.depth_valid = 0.f;
-            assert(!isCenterWorkItem(), "get_volume_label returned INVALID. Possible corrupt data in brick cache.");
-            break;
-        }
+        DEBUG_vis_invalid_label(state);
 #endif
 
         // obtain material at the current position
@@ -535,33 +434,9 @@ void main() {
         if (material < 0) {
             continue;
         }
-        else if (debug_view_visible && g_debug_brick_cache) {
-            uvec3 brick = uvec3(state.voxel) / g_brick_size;
-            uvec3 brick_voxel = uvec3(state.voxel) - (brick * g_brick_size);
-            uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
 
-            uint cache_start = g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX];
-            if (cache_start == INVALID || g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] >= g_lod_count) {
-                state.out_color = vec4(1.f, 0.f, 0.f, 1.f);
-                continue;
-            } else if (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < g_lod_count) { // should always be true here
-                uint lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
-                state.out_color.rgb = colormap_viridis(float(lod - 1u)/float(g_lod_count - 2u));
-                if (lod == 0u)
-                    state.out_color.rgb = vec3(1.f, 0.f, 0.f);
-                state.out_color.a = 1.f;
-                state.throughput = vec3(0.f);
-            } else {
-                state.out_color = (state.out_color + 3.f * vec4(0.f, 1.f, 0.2f, 1.f)) / 4.f;
-                state.throughput = vec3(0.f);
-                break;
-            }
-        }
-        else if (g_debug_normals) {
-            state.out_color = vec4(-min(state.normal, vec3(0.f)) * 0.5f + max(state.normal, vec3(0.f)), 1.f);
-            state.throughput = vec3(0.f);
-            break;
-        }
+        DEBUG_vis_normals(state, g_debug_normals);
+        DEBUG_vis_brick_cache(state, !g_debug_normals && debug_view_visible && g_debug_brick_cache);
 
         // obtain surface albedo / volume emission and opacity
         vec4 surface_albedo_opacity = getColor(state.label, material);
@@ -592,24 +467,14 @@ void main() {
         }
         // HIT OPAQUE SURFACE
         else {
-//            // visualize visible brick id
-//            uvec3 brick = uvec3(state.voxel) / g_brick_size;
-//            uint brick_idx = brick_pos2idx(brick, g_brick_count);
-//            state.out_color = vec4(integer2colorlabel(brick_idx, false), 1.f);
-//            break;
-
             // break if this was a shadow ray
             if (state.path_length == SHADOW_RAY_PATH_LENGTH) {
                 state.throughput = vec3(0.f);
                 break;
             }
-            // debug: visualize level-of-detail with viridis colormap
-            if (g_debug_lod) {
-                uint lod = get_inv_lod(state.voxel);
-                if (lod != INVALID) {
-                    surface_albedo_opacity.rgb = (state.out_color.rgb + 3.f * colormap_viridis(float(lod)/float(g_lod_count - 1u))) / 4.f;
-                }
-            }
+
+            DEBUG_vis_brick_idx(state, false);
+            DEBUG_vis_lod(state, surface_albedo_opacity, g_debug_lod);
 
             // the first surface hit is the only point for which we want to store our t value in the depth buffer
             // but if we previously stored an INVALID_DEPTH (< 0) at any point, we don't want to overwrite that
@@ -634,7 +499,6 @@ void main() {
             if (dot(state.throughput, vec3(1.f)) <= 0.f) {
                 break;
             }
-
 
             // advance the path and obtain a new random number for sampling a new direction
             state.path_length++;
@@ -672,9 +536,7 @@ void main() {
                 }
             }
 
-            #ifndef NDEBUG
-                checkStateAndRay(state, ray, __LINE__);
-            #endif
+            // DEBUG_check_state_and_ray(state, ray, __LINE__);
 
             // path termination: local shading traces no further rays, or terminate at max. number of bounces
             if (!g_global_illumination_enable || state.path_length > g_max_path_length)
@@ -696,32 +558,25 @@ void main() {
         }
     }
 
-    // no light source was found
+    DEBUG_count_raymarch_steps(state.step, g_debug_step_count);
+
+    // block all contributions if no light source was found
     if (state.step >= g_maxSteps || state.path_length > g_max_path_length) {
         state.throughput = vec3(0.f);
     }
-    // apply incoming radiance from environment map
+
+    // apply incoming radiance from environment
+    ray.direction = normalize(g_model_to_world_space_dir * ray.direction);
+    if (g_envmap_enable) {
+        state.out_color.rgb += state.throughput * vec3(g_light_intensity) * dummy_envmap(ray.direction);
+    }
     else {
-        if (g_envmap_enable) {
-            ray.direction = normalize(inverse(g_world_to_model_space_dir) * ray.direction);
-            state.out_color.rgb += state.throughput * vec3(g_light_intensity) * dummy_envmap(ray.direction);
-        }
-        else {
-            state.out_color.rgb += state.throughput * vec3(g_light_intensity);
-        }
+        state.out_color.rgb += state.throughput * vec3(g_light_intensity);
     }
 
     // ToDo: the background should be added in the csgv_upsample_resolve shader
-    // perform alpha blending with background
-    if (g_debug_envmap)
-        state.out_color.rgb = vec3(g_light_intensity) * dummy_envmap(ray.direction) * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
-    else
-        state.out_color.rgb = get_background_color(fragCoord).rgb * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
-    // write to image
+    // perform alpha blending with background and write to image
+    state.out_color.rgb = (1.f - state.out_color.a) * get_background_color(fragCoord, ray.direction).rgb
+                          + state.out_color.a * state.out_color.rgb;
     writePixel(pixel, state.out_color, state.depth_valid);
-
-    if (g_debug_step_count) {
-        atomicAdd(gpu_raymarch_samples, state.step);
-        atomicAdd(gpu_bbox_hits, 1u);
-    }
 }
