@@ -116,4 +116,13 @@ How do I run Volcanite on a system without a GUI (e.g. a headless remote server)
 I am using Wayland instead of X11 on Linux. How do I build Volcanite?
 * In the default configuration, the GLFW library is only build with X11 support under Linux / Unix.
   If you run wayland, you need to set the CMake variable `GLFW_BUILD_WAYLAND` to `ON` and install the requried packages
-  for wayland (see [GLFW 3.3 Compile Guide](https://www.glfw.org/docs/3.3/compile_guide.html#compile_deps)). 
+  for wayland (see [GLFW 3.3 Compile Guide](https://www.glfw.org/docs/3.3/compile_guide.html#compile_deps)).
+
+How do I solve an `ErrorOutOfDeviceMemory` error?
+* This error occurs if GPU memory (VRAM) is not sufficient to start the renderer. First, try to close all other
+  applications as these may consume some of the available memory. If this is not sufficient, start Volcanite with the
+  `--stream-lod` and `--cache-packed` arguments (see [Usage.md](Usage.md#command-line-interface) for details) to minimize
+  the required memory. If this is not enough either, your segmentation volume is simply too big to be rendered. Try to
+ render a smaller sub-volume in this case. Have a look at the startup message
+ `Device memory on startup: GPU Memory: used/avail/total GB` to find out how much total memory your GPU has and how much
+ of it is actually available to Volcanite.

@@ -20,16 +20,19 @@
 
 layout (local_size_x = 8, local_size_y = 8) in;
 
-#include "csgv_bindings.glsl"
-
 // includes
 #include "cpp_glsl_include/csgv_constants.h"
+#include "csgv_bindings.glsl"
+
 #include "util.glsl"
-#include "debug_colormaps.glsl"
+#include "ray_box_intersection.glsl"
 #include "morton.glsl"
 #include "random.glsl"
+
+#include "debug_colormaps.glsl"
 #include "brdf_lambert.glsl"
 #include "dummy_envmap.glsl"
+
 // Compressed Segmentation Volume specific: define array containing the encoding (input) as well as the decoding (output)
 #define CSGV_ENCODING_ARRAY g_encoding
 #define CSGV_DETAIL_ARRAY g_detail
@@ -37,8 +40,6 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #define CSGV_READ_ONLY
 #include "volcanite/compression/compressed_segmentation_volume.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
-
-#include "ray_box_intersection.glsl"
 
 ivec2 pixelFromInvocationID() {
     // We send out one ray per block of [g_subsampling]*[g_subsampling] pixels
@@ -106,12 +107,13 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
         if (req_inv_lod > 0u && g_max_inv_lod > 0u) {
             uint palette_size = getBrickPaletteLength(brick_idx);
 
-            // indicate the smaple as invalid (if it is not a homogeneous brick)
+            // indicate the sample as invalid (if it is not a homogeneous brick)
             if (palette_size > 1u)
                 depth_valid = INVALID_DEPTH;
-            // ToDo: this should be a random number from the random state
-            float rnd = hash(uvec3(gl_GlobalInvocationID.xy, g_frame)).r;
-            return  encoding_address.buf[encoding_size - 1u - uint(rnd * rnd * float(palette_size))];
+
+            // read a random palette entry
+            uint random_palette_index = hash_pcg3d(uvec3(gl_GlobalInvocationID.xy, 123851u * g_frame)).r % palette_size;
+            return  encoding_address.buf[encoding_size - 1u - random_palette_index];
         }
 
         // return the first palette entry = coarsests compressed representation of the brick for inv_lod 0
@@ -366,7 +368,7 @@ float cook_torrance(const in RayMarchState state, const in vec3 dir_in, const in
 
 vec3 brdf(const in RayMarchState state, const in vec3 dir_in, const in vec3 dir_out) {
     // constant Lambert
-    return vec3(INV_PI);
+    return vec3(ONE_OVER_PI);
 }
 
 void main() {
@@ -392,7 +394,7 @@ void main() {
     }
 
     // Add a subpixel offset in [0, 1) to perform temporal anti-aliasing
-    vec2 subpixel_offset = hash(uvec3(pixel.x, pixel.y, 1347 + g_camera_still_frames / (g_subsampling * g_subsampling))).xy;
+    vec2 subpixel_offset = randomVec3(vec2(pixel.x, pixel.y), float(1347182u + 3721175u * g_camera_still_frames)).xy;
     vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(viewport_size);
 
     // create view ray in model space
@@ -648,7 +650,7 @@ void main() {
 
                 // sample directly to directional light
                 ray.direction = g_light_direction;
-                state.throughput /= INV_TWO_PI;
+                state.throughput /= ONE_OVER_TWO_PI;
 
                 // check for self shadowing of the current voxel
                 if (dot(state.normal, ray.direction) < 0) {

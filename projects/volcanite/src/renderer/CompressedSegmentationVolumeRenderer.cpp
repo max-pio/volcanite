@@ -439,7 +439,8 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     auto heap_budget_and_usage = getMemoryHeapBudgetAndUsage(*ctx);
     size_t free_heap_size = heap_budget_and_usage.first - heap_budget_and_usage.second;
     if(m_target_cache_size_MB * 1024 * 1024 > free_heap_size) {
-        Logger(WARN) << "not enough GPU memory available to provide target cache size of " << m_target_cache_size_MB << " MB. Using smaller cache.";
+        updateDeviceMemoryUsage();
+        Logger(WARN) << "not enough GPU memory available to provide target cache size of " << m_target_cache_size_MB << " MB. Using smaller cache. " << m_gui_device_mem_text;
         m_target_cache_size_MB = 0;
     }
     // target size of 0 means to allocate as much for the cache as we can (or rather 90% of it to have some leeway)
@@ -487,7 +488,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     Logger(INFO) << "Device memory after initialization: " << m_gui_device_mem_text;
 
 
-    // UPLOAD TO GPU BUFFERS ---------------------------------
+    // UPLOAD TO GPU BUFFERS ----------------------------------
     AwaitableList awaitBeforeExecution;
     std::vector<std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>>> _encoding_upload;
     for(int i = 0; i < split_encoding_count; i++) {
@@ -985,7 +986,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                    m_light_intensity = 1.f;
                                    m_global_illumination_enabled = false;
                                    m_envmap_enabled = false;
-                                   m_accum_frames = frames_for_one_spp * 8; // 8 elem. Halton sequence per pixel
+                                   m_accum_frames = frames_for_one_spp * 8;
                                    break;
                                    // global shadows
                                case 1:
@@ -994,7 +995,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                    m_global_illumination_enabled = true;
                                    m_shadow_pathtracing_ratio = 0.f;
                                    m_envmap_enabled = false;
-                                   m_accum_frames = frames_for_one_spp * 8; // 8 elem. Halton sequence per pixel
+                                   m_accum_frames = frames_for_one_spp * 8;
                                    break;
                                    // ambient occlusion
                                case 2:

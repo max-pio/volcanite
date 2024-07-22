@@ -16,18 +16,76 @@
 #ifndef RANDOM_GLSL
 #define RANDOM_GLSL
 
-#ifndef PI
-    #define PI 3.14159265359f
-#endif
-#ifndef INV_PI
-    #define INV_PI 0.3183098861837907f
-#endif
-#ifndef TWO_PI
-    #define TWO_PI 6.28318530718f
-#endif
-#ifndef INV_TWO_PI
-    #define INV_TWO_PI 0.1591549430918953f
-#endif
+#include "util.glsl"
+#include "pcg_hash.glsl"
+
+// RANDOM NUMBERS ------------------------------------------------------------------------------------------------------
+
+// ToDo: replace stackoverflow code with pcg3D from Jarzynski & Olano (2020) "Hash Functions for GPU Rendering"
+// https://stackoverflow.com/a/52207531/13565664
+//vec3 hash(uvec3 x) {
+//    const uint hash_k = 1103515245U;
+//    x = ((x>>8U)^x.yzx)*hash_k;
+//    x = ((x>>8U)^x.yzx)*hash_k;
+//    x = ((x>>8U)^x.yzx)*hash_k;
+//    return vec3(x)*(1.0/float(0xffffffffU));
+//}
+
+// returns a random normalized 2D direction
+vec2 randomDirection2(uvec2 v) {
+    return normalize(vec2(hash_pcg2d(v)) - vec2(~0u / 2u));
+}
+
+// returns a random vec3 in the [0, 1) interval.
+// xy from thread ID, feedback one of the result components to the next random query as seed
+vec3 randomVec3(const in vec2 xy, const in float seed) {
+    return vec3(hash_pcg3d((uvec3(xy, seed)))) * (1.0/float(0xffffffffU));
+}
+
+// returns a random vec3 in the [0, 1) interval and updates the seed.
+// xy from thread ID, overwrites seed with the .z compontent of the returned RNG value.
+vec3 nextRNG(const in vec2 xy, inout float seed) {
+    vec3 r = vec3(hash_pcg3d(uvec3(xy * 1471.f, seed))) * (1.0/float(0xffffffffU));
+    seed = r.z * float(0xffffffffU);
+    return r;
+}
+
+
+// SAMPLING ------------------------------------------------------------------------------------------------------------
+vec3 sampleUniformSphere(const in vec2 u) {
+    float h = 1.0 - 2.0 * u.x;
+    float r = sqrt(1.0 - h * h);
+    return vec3(r * cos(2.0 * PI * u.y), h, r * sin(2.0 * PI * u.y));
+}
+
+vec3 sampleUniformHemisphereVoxel(const in vec2 u, const in vec3 normal) {
+    vec3 dir = sampleUniformSphere(u);
+    // Assuming that the normal is axis-oriented, we only have to alter the sign of dir's components to project it into
+    // the positive hemisphere. This is the case for surface normals of voxels.
+    // note: sign(dot(n,d)) does not work for the singularities when one component is zero (sign returns 0 instead of 1)
+    //       this is the case for directions from sampleUniformSphere(u) that lie in the xz plane.
+    return dot(normal, dir) < 0.f ? -dir : dir;
+}
+
+float pdfUniformHemisphere(const in vec3 dir, const in vec3 normal) {
+    return ONE_OVER_TWO_PI;
+}
+
+vec3 sampleCosineWeightedHemisphereVoxel(const in vec2 u, in vec3 normal) {
+    float r = sqrt(u.x);
+    float theta = 2.0 * PI * u.y;
+
+    // Assuming that the normal is axis-oriented, the vector (1, 0, 1) is always valid
+    vec3  bitangent = normalize(cross(normal, vec3(1.f, 0.f, 1.f)));
+    vec3  tangent = cross(bitangent, normal);
+
+    return normalize(r * sin(theta) * bitangent + sqrt(1.0 - u.x) * normal + r * cos(theta) * tangent);;
+}
+
+float pdfCosineWeightedHemisphere( const in vec3 dir, const in vec3 normal) {
+    return dot(dir, normal) * ONE_OVER_PI;
+}
+
 
 // NOISE ---------------------------------------------------------------------------------------------------------------
 
@@ -133,75 +191,46 @@ int _packedBlueNoise32x32[1024] = {
 
 // returns a [0,1] value of tileable 32x32 blue noise
 float blueNoise32x32(ivec2 xy) {
-#ifdef USE_PACKED_BLUE_NOISE
+    #ifdef USE_PACKED_BLUE_NOISE
     int index1D = (xy.x % 32) + (xy.y % 32)*32;
     int val = (_packedBlueNoise32x32[index1D / 4] >> ((index1D % 4)*8)) & 0xFF;
     return float(val)/255.f;
-#else
+    #else
     return float(_packedBlueNoise32x32[(xy.x % 32) + (xy.y % 32)*32])/255.f;
-#endif
+    #endif
 }
 
-// RANDOM NUMBERS ------------------------------------------------------------------------------------------------------
-
-// ToDo: replace stackoverflow code with pcg3D from Jarzynski & Olano (2020) "Hash Functions for GPU Rendering"
-// https://stackoverflow.com/a/52207531/13565664
-vec3 hash(uvec3 x) {
-    const uint hash_k = 1103515245U;
-    x = ((x>>8U)^x.yzx)*hash_k;
-    x = ((x>>8U)^x.yzx)*hash_k;
-    x = ((x>>8U)^x.yzx)*hash_k;
-    return vec3(x)*(1.0/float(0xffffffffU));
+float _perlinFade(float v) {
+    return v * v * v * (v * (v * 6.f - 15.f) + 10.f);
 }
 
-// xy from thread ID, feedback one of the result components to the next random query as seed
-vec3 randomVec3(const in vec2 xy, const in float seed) {
-    return hash(uvec3(xy, seed));
+float _perlinNoise(vec2 uv, uint repeat_freq) {
+    uvec2 cell = uvec2(uv);
+    vec2 ab = fract(uv);
+
+    const vec2 ofst[] = vec2[](vec2(0.f, 0.f), vec2(1.f, 0.f), vec2(0.f, 1.f), vec2(1.f, 1.f));
+    float v[4];
+    for (int i = 0; i < 4; i++)
+        v[i] = dot(randomDirection2((cell + uvec2(ofst[i])) % repeat_freq), ab - ofst[i]);
+
+    return mix(mix(v[0], v[1], _perlinFade(ab.x)), mix(v[2], v[3], _perlinFade(ab.x)), _perlinFade(ab.y));
 }
 
-// xy from thread ID, overwrites seed with the .z compontent of the returned RNG value.
-vec3 nextRNG(const in vec2 xy, inout float seed) {
-    vec3 r = hash(uvec3(xy * 1471.f, seed));
-    seed = r.z * float(0xffffffffU);
-    return r;
+float perlinNoise(vec2 uv, int octaves) {
+    // fractal brownian motion
+    float v = 0.f;
+
+    float amp = 2.f;
+    uint freq = 2u;
+    for (int o = 0; o < octaves; o++) {
+        v += amp * _perlinNoise(uv * float(freq), freq);
+
+        amp *= 0.6f;
+        freq *= 2u;
+    }
+
+    return 0.5f + 0.5f * v;
 }
 
-
-// SAMPLING ------------------------------------------------------------------------------------------------------------
-
-vec3 uniformSampleSphere(const in vec2 u) {
-    // For u.x == 0.5, h = 0
-    float h = 1.0 - 2.0 * u.x;
-    float r = sqrt(1.0 - h * h);
-    return vec3(r * cos(2.0 * PI * u.y), h, r * sin(2.0 * PI * u.y));
-}
-
-vec3 sampleUniformHemisphereVoxel(const in vec2 u, const in vec3 normal) {
-    vec3 dir = uniformSampleSphere(u);
-    // Assuming that the normal is axis-oriented, we only have to alter the sign of dir's components to project it into
-    // the positive hemisphere. This is the case for surface normals of voxels.
-    // note: sign(dot(n,d)) does not work for the singularities when one component is zero (sign returns 0 instead of 1)
-    //       this is the case for directions from uniformSampleSphere(u) that llie in the xz plane.
-    return dot(normal, dir) < 0.f ? -dir : dir;
-}
-
-float pdfUniformHemisphere(const in vec3 dir, const in vec3 normal) {
-    return INV_TWO_PI;
-}
-
-vec3 sampleCosineWeightedHemisphereVoxel(const in vec2 u, in vec3 normal) {
-    float r = sqrt(u.x);
-    float theta = 2.0 * PI * u.y;
-
-    // Assuming that the normal is axis-oriented, the vector (1, 0, 1) is always valid
-    vec3  bitangent = normalize(cross(normal, vec3(1.f, 0.f, 1.f)));
-    vec3  tangent = cross(bitangent, normal);
-
-    return normalize(r * sin(theta) * bitangent + sqrt(1.0 - u.x) * normal + r * cos(theta) * tangent);;
-}
-
-float pdfCosineWeightedHemisphere( const in vec3 dir, const in vec3 normal) {
-    return dot(dir, normal) * INV_PI;
-}
 
 #endif // RANDOM_GLSL

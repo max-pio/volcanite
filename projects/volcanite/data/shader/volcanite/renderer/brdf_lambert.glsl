@@ -16,6 +16,7 @@
 #ifndef VOLCANITE_BRDF_LAMBERT_GLSL
 #define VOLCANITE_BRDF_LAMBERT_GLSL
 
+#include "util.glsl"
 #include "random.glsl"
 
 // As a heads up on BRDF implementation, be referred to the "Crash Course in BRDF Implementation" by Jakub Boksansky
@@ -25,7 +26,7 @@
 
 // brdf_eval returns the fraction of reflected light  evaluates the geometry term as well.
 vec3 brdf_eval(vec3 diffuseReflectance, vec3 normal, vec3 dir_in, vec3 dir_out) {
-    return diffuseReflectance * INV_PI * max(dot(normal, dir_out), 0.f);
+    return diffuseReflectance * ONE_OVER_PI * max(dot(normal, dir_out), 0.f);
 }
 
 vec3 brdf_sample(vec3 normal, vec2 u) {
