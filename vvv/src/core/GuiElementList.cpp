@@ -140,15 +140,13 @@ namespace vvv {
         return entry->id;
     }
 
-
-
     std::string sanitizeExportString(std::string s) {
         std::replace(s.begin(), s.end(), ' ', '~');
         return s;
     }
 
     std::string sanitizeImportString(std::string s) {
-        std::replace(s.begin(), s.end(), ' ', '~');
+        std::replace(s.begin(), s.end(), '~', ' ');
         return s;
     }
 
