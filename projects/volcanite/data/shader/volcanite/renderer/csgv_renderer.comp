@@ -28,6 +28,7 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #include "debug_colormaps.glsl"
 #include "morton.glsl"
 #include "random.glsl"
+#include "brdf_lambert.glsl"
 #include "dummy_envmap.glsl"
 // Compressed Segmentation Volume specific: define array containing the encoding (input) as well as the decoding (output)
 #define CSGV_ENCODING_ARRAY g_encoding
@@ -41,7 +42,7 @@ layout (local_size_x = 8, local_size_y = 8) in;
 
 ivec2 pixelFromInvocationID() {
     // We send out one ray per block of [g_subsampling]*[g_subsampling] pixels
-    if(g_subsampling <= 1)
+    if (g_subsampling <= 1)
         return ivec2(gl_GlobalInvocationID.xy);
     else {
         // offset the subsampling pixel with some blue noise
@@ -79,14 +80,14 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
     // tell the other shaders that we can see this brick if it's visibility state is "unknown"
     // but only if this is a valid pixel sample. An invalid sample could be accessing bricks that are actually not visible.
     assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] <= g_lod_count, "we try to access a brick that's flagged as invisible");
-    if(isDepthValid(depth_valid) && req_inv_lod > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > req_inv_lod) {
+    if (isDepthValid(depth_valid) && req_inv_lod > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > req_inv_lod) {
         // if the brick was not requested so far:
-        if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= g_lod_count)
+        if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= g_lod_count)
             g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
         // if we request a finer level than the one that was requested so far:
         // (this should not happen if we instead compute the LOD in the provision shader)
         // ToDo: Compute a requested brick LOD in the provision shader based on the distance brick center <-> camera
-        else if(req_inv_lod > g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD])
+        else if (req_inv_lod > g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD])
             atomicMax(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], req_inv_lod);
     }
 
@@ -102,11 +103,11 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
         uint encoding_size = getBrickEncodingLength(brick_idx);
 
         // if the brick was not decoded, sample a random palette entry
-        if(req_inv_lod > 0u && g_max_inv_lod > 0u) {
+        if (req_inv_lod > 0u && g_max_inv_lod > 0u) {
             uint palette_size = getBrickPaletteLength(brick_idx);
 
             // indicate the smaple as invalid (if it is not a homogeneous brick)
-            if(palette_size > 1u)
+            if (palette_size > 1u)
                 depth_valid = INVALID_DEPTH;
             // ToDo: this should be a random number from the random state
             float rnd = hash(uvec3(gl_GlobalInvocationID.xy, g_frame)).r;
@@ -311,15 +312,15 @@ void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
     // for side_dist_t in the respective axis. This way, the traversal will never step into that direction.
     state.inv_ray_dir = 1.f / ray.direction;
     const float INFINITY = 1.f / 0.f;
-    if(ray.direction.x == 0.f) {
+    if (ray.direction.x == 0.f) {
         state.inv_ray_dir.x = INFINITY;
         state.step_sign.x = 1;
     }
-    if(ray.direction.y == 0.f) {
+    if (ray.direction.y == 0.f) {
         state.inv_ray_dir.y = INFINITY;
         state.step_sign.y = 1;
     }
-    if(ray.direction.z == 0.f) {
+    if (ray.direction.z == 0.f) {
         state.inv_ray_dir.z = INFINITY;
         state.step_sign.z = 1;
     }
@@ -374,12 +375,12 @@ void main() {
 
     // contains thread to pixel mapping for optional subsampling
     ivec2 pixel = pixelFromInvocationID();
-    if(isHelperLane(pixel, viewport_size))
+    if (isHelperLane(pixel, viewport_size))
         return;
 
     // draw rectangles for each level-of-detail: if the volume fits into one of these rectangles it means that the
     // corresponding LoD will be selected (depends on how many voxels of the finest LoD fit into one pixel)
-    if(g_debug_lod) {
+    if (g_debug_lod) {
         for (uint lod = 0; lod < g_lod_count; lod++) {
             if (any(greaterThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) - 2u)))) {
                 if (all(lessThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) + 2u)))) {
@@ -408,7 +409,7 @@ void main() {
 
     // if we don't hit the data set, we can directly output the background
     if (t_0 >= t_1) {
-        if(g_debug_envmap) {
+        if (g_debug_envmap) {
             // ToDo: expensive inverse as the matrix may contain scaling. use scaling and transpose(rotation) instead
             ray.direction = normalize(inverse(g_world_to_model_space_dir) * ray.direction);
             writePixel(pixel, vec4(g_light_intensity * dummy_envmap(ray.direction), 1.f), BACKGROUND_DEPTH);
@@ -422,11 +423,11 @@ void main() {
     // As we move this pixel around, the progressive accumulation averages this with the rendered colors.
     bool debug_view_visible = (pixel.x + pixel.y) % 3u != (g_frame % 3u); // < (viewport_size.x + viewport_size.y) / 2u);
     // visualize model space coordinates
-    if(g_debug_model_space) {
+    if (g_debug_model_space) {
         vec3 pos = ray.origin + t_0 * ray.direction;
         vec3 color = floor(pos) / vec3(g_vol_dim);
         vec3 borders = vec3(greaterThan(fract(pos), vec3(0.0f))) * vec3(lessThan(fract(pos - vec3(0.0001f)), vec3(0.2f)));
-        if(borders.x + borders.y + borders.z > 0.f)
+        if (borders.x + borders.y + borders.z > 0.f)
             color *= 1.f - 1.f / (t_0 / g_world_to_model_space_scaling * 64.f);
         writePixel(pixel, vec4(color, 1.f), t_0);
         return;
@@ -447,6 +448,7 @@ void main() {
     // ray marching loop
     for(state.step = 0; state.step < g_maxSteps; state.step++) {
 
+        // TODO: move the DDA step to the bottom of this loop. Reuse LOD and emptySpace information, remove DDA init eps
         // single-level DDA traversal step
         // dda_step(state, ray);
         // multi-level DDA traversal step
@@ -471,7 +473,7 @@ void main() {
         }
 
 #ifndef NDEBUG
-        if(!checkStateAndRay(state, ray, __LINE__)) {
+        if (!checkStateAndRay(state, ray, __LINE__)) {
             state.out_color = vec4(1.f, 0.f, 0.f, 1.f);
             state.depth_valid = 0.f;
             break;
@@ -479,28 +481,28 @@ void main() {
 #endif
 
         // out of bounds check
-        if(any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
+        if (any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
             || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
             // we may have started out of bounds
-            if(state.path_length > 0 || state.step > 16)
+            if (state.path_length > 0 || state.step > 16)
                 break;
             else
                continue;
         }
 
         // empty space check
-        if(isEmptySpace(state.voxel)) {
+        if (isEmptySpace(state.voxel)) {
 //#define VISUALIZE_EMPTY_SPACE
 #ifndef VISUALIZE_EMPTY_SPACE
             continue;
 #else
-            const float empty_space_opacity = 0.005f;
+            const float empty_space_opacity = 128.f / float(g_vol_dim.x);
             state.out_color.rgb += state.throughput * vec3(state.throughput.r, 0.f, 1.f - state.throughput.r) * empty_space_opacity;
             state.throughput *= 1.f - empty_space_opacity;
             state.out_color.a = max(state.out_color.a, 1.f - (state.throughput.r + state.throughput.g + state.throughput.b) / 3.f);
             continue;
         } else {
-            const float empty_space_opacity = 0.005f;
+            const float empty_space_opacity = 32.f / float(g_vol_dim.x);
             state.out_color.rgb += state.throughput * vec3(1.f - state.throughput.r, state.throughput.r, 0.f) * empty_space_opacity;
             state.throughput *= 1.f - empty_space_opacity;
             state.out_color.a = max(state.out_color.a, 1.f - (state.throughput.r + state.throughput.g + state.throughput.b) / 3.f);
@@ -515,7 +517,7 @@ void main() {
         state.label = get_volume_label(state.voxel, state.depth_valid);
 
 #ifndef NDEBUG
-        if(state.label == INVALID){
+        if (state.label == INVALID){
             state.out_color = vec4(1.f, 0.f, 1.f, 1.f);
             state.depth_valid = 0.f;
             assert(!isCenterWorkItem(), "get_volume_label returned INVALID. Possible corrupt data in brick cache.");
@@ -531,7 +533,7 @@ void main() {
         if (material < 0) {
             continue;
         }
-        else if(debug_view_visible && g_debug_brick_cache) {
+        else if (debug_view_visible && g_debug_brick_cache) {
             uvec3 brick = uvec3(state.voxel) / g_brick_size;
             uvec3 brick_voxel = uvec3(state.voxel) - (brick * g_brick_size);
             uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
@@ -543,7 +545,7 @@ void main() {
             } else if (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < g_lod_count) { // should always be true here
                 uint lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
                 state.out_color.rgb = colormap_viridis(float(lod - 1u)/float(g_lod_count - 2u));
-                if(lod == 0u)
+                if (lod == 0u)
                     state.out_color.rgb = vec3(1.f, 0.f, 0.f);
                 state.out_color.a = 1.f;
                 state.throughput = vec3(0.f);
@@ -565,7 +567,7 @@ void main() {
         // ENTER SEMI-TRANSPARENT VOLUME
         // ToDo: integrate this into the correct path tracing interaction with fresnel term, simplify BRDF sampling e.g. https://boksajak.github.io/files/CrashCourseBRDF.pdf
         if (surface_albedo_opacity.a < 1.f) {
-            if(state.last_label != state.label) {
+            if (state.last_label != state.label) {
                 // add the contribution of a semi-transparent surface (local shading only)
                 state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * surface_albedo_opacity.a;
 
@@ -595,71 +597,56 @@ void main() {
 //            break;
 
             // break if this was a shadow ray
-            if(state.path_length == SHADOW_RAY_PATH_LENGTH) {
+            if (state.path_length == SHADOW_RAY_PATH_LENGTH) {
                 state.throughput = vec3(0.f);
                 break;
             }
-
             // debug: visualize level-of-detail with viridis colormap
             if (g_debug_lod) {
                 uint lod = get_inv_lod(state.voxel);
-                if(lod != INVALID) {
+                if (lod != INVALID) {
                     surface_albedo_opacity.rgb = (state.out_color.rgb + 3.f * colormap_viridis(float(lod)/float(g_lod_count - 1u))) / 4.f;
                 }
             }
 
             // the first surface hit is the only point for which we want to store our t value in the depth buffer
             // but if we previously stored an INVALID_DEPTH (< 0) at any point, we don't want to overwrite that
-            if(state.path_length == 0) {
+            if (state.path_length == 0) {
                 state.depth_valid = min(state.depth_valid, length((state.voxel + state.pos_in_voxel) - ray.origin));
             }
             // opacity is always 1 on surface hit
             state.out_color.a = 1.f;
 
             // include ambient lighting factor - not physically based but interpolates between non-shaded and shaded
-            if(state.path_length == 0) {
+            if (state.path_length == 0) {
                 state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_factor_ambient;
                 state.throughput *= 1.f - g_factor_ambient;
             }
 
             // emission
-            if(g_materials[material].emission > 0.f) {
+            if (g_materials[material].emission > 0.f) {
                 state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_materials[material].emission;
             }
 
-            // early ray termination
-            if(max(state.throughput.x, max(state.throughput.y, state.throughput.z)) <= 0.f) {
-                state.throughput = vec3(0.f);
+            // early ray termination if throughput is zero
+            if (dot(state.throughput, vec3(1.f)) <= 0.f) {
                 break;
             }
 
 
-            // advance the path: sample a new direction
+            // advance the path and obtain a new random number for sampling a new direction
             state.path_length++;
+            vec3 u = nextRNG(fragCoord, state.rng);
 
-            // local shading only: break the loop here and do not trace further bounces
-            if (!g_global_illumination_enable) {
-                // apply surface albedo, geometry term and brdf
-                state.throughput *= surface_albedo_opacity.rgb;
-                state.throughput *= max(dot(state.normal, g_light_direction), 0.f);
-                state.throughput *= brdf(state, g_light_direction, -ray.direction) / INV_TWO_PI;
-                break;
-            }
+            // store previous direction as the incoming direction for the brdf evaluation
+            vec3 brdf_dir_in = -ray.direction;
 
-            // store previous direction as the outgoing direction for the BRDF evaluation
-            vec3 brdf_out_direction = -ray.direction;
+            // either: local shading only: break the loop here and do not trace further bounces
+            //     or: g_shadow_pathtracing_ratio allows to blend between rendering with shadow rays and path tracing
+            //         over the full hemisphere. (this is not real NEE).
+            if (!g_global_illumination_enable || u.z > g_shadow_pathtracing_ratio) {
 
-            // sample new direction for brdf
-            // g_shadow_pathtracing_ratio controls the ratio between rays sampled in any direction and rays traversed
-            // in the light direction. This allows user control between shadow rays and indirect illumination.
-            if(nextRNG(fragCoord, state.rng).x < g_shadow_pathtracing_ratio) {
-                // sample the cosine weighted positive hemisphere
-                ray.direction = sampleCosineWeightedHemisphereVoxel(nextRNG(fragCoord, state.rng).xy, state.normal);
-                state.throughput /= pdfCosineWeightedHemisphere(ray.direction, state.normal);
-            }
-            else {
                 // sample directly to directional light
-                // this is also necessary to set the light direction if only local shading is used
                 ray.direction = g_light_direction;
                 state.throughput /= INV_TWO_PI;
 
@@ -668,21 +655,31 @@ void main() {
                     state.throughput = vec3(0.f);
                     break;
                 }
+
                 // mark this ray as a shadow ray
                 state.path_length = SHADOW_RAY_PATH_LENGTH;
+
+                // apply surface albedo, geometry term and brdf
+                state.throughput *= brdf_eval(surface_albedo_opacity.rgb, state.normal, brdf_dir_in, ray.direction);
+            } else {
+                // sample a new direction and apply brdf to throughtput
+                if (!brdf_eval_indirect(surface_albedo_opacity.rgb, state.normal, brdf_dir_in, u.xy,
+                                        ray.direction, state.throughput)) {
+                    state.throughput = vec3(0.f);
+                    break;
+                }
             }
 
             #ifndef NDEBUG
                 checkStateAndRay(state, ray, __LINE__);
             #endif
 
-            // apply surface albedo, geometry term and brdf
-            state.throughput *= surface_albedo_opacity.rgb;
-            state.throughput *= max(dot(state.normal, ray.direction), 0.f);
-            state.throughput *= brdf(state, ray.direction, brdf_out_direction);
+            // path termination: local shading traces no further rays, or terminate at max. number of bounces
+            if (!g_global_illumination_enable || state.path_length > g_max_path_length)
+                break;
 
             // Russian Roulette (only when this is not a ray to the light source / NEE)
-            if(state.path_length != SHADOW_RAY_PATH_LENGTH && state.path_length < g_max_path_length) {
+            if (state.path_length != SHADOW_RAY_PATH_LENGTH) {
                 float survival_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
                 if (nextRNG(fragCoord, state.rng).x > survival_probability) {
                     state.throughput = vec3(0.f);
@@ -694,37 +691,34 @@ void main() {
             // re-init DDA traversal for the ray
             ray.origin = state.voxel + state.pos_in_voxel;
             dda_init(state, ray, 0.f);
-
-            // path termination
-            if(state.path_length > g_max_path_length) {
-                state.throughput = vec3(0.f);
-                break;
-            }
         }
     }
-    // no light source was found
-    if(state.step >= g_maxSteps)
-        state.throughput = vec3(0.f);
 
-    // apply incoming radiance from environment map
-    if(g_envmap_enable) {
-        ray.direction = normalize(inverse(g_world_to_model_space_dir) * ray.direction);
-        state.out_color.rgb += state.throughput * vec3(g_light_intensity) * dummy_envmap(ray.direction);
+    // no light source was found
+    if (state.step >= g_maxSteps || state.path_length > g_max_path_length) {
+        state.throughput = vec3(0.f);
     }
-    else
-        state.out_color.rgb += state.throughput * vec3(g_light_intensity);
+    // apply incoming radiance from environment map
+    else {
+        if (g_envmap_enable) {
+            ray.direction = normalize(inverse(g_world_to_model_space_dir) * ray.direction);
+            state.out_color.rgb += state.throughput * vec3(g_light_intensity) * dummy_envmap(ray.direction);
+        }
+        else {
+            state.out_color.rgb += state.throughput * vec3(g_light_intensity);
+        }
+    }
 
     // ToDo: the background should be added in the csgv_upsample_resolve shader
     // perform alpha blending with background
-    if(g_debug_envmap)
+    if (g_debug_envmap)
         state.out_color.rgb = vec3(g_light_intensity) * dummy_envmap(ray.direction) * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
     else
         state.out_color.rgb = get_background_color(fragCoord).rgb * (1.f - state.out_color.a) + state.out_color.rgb * state.out_color.a;
-
     // write to image
     writePixel(pixel, state.out_color, state.depth_valid);
 
-    if(g_debug_step_count) {
+    if (g_debug_step_count) {
         atomicAdd(gpu_raymarch_samples, state.step);
         atomicAdd(gpu_bbox_hits, 1u);
     }

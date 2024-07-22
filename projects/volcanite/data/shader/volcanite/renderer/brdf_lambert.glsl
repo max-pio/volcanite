@@ -24,8 +24,8 @@
 // licensed brdf implementation header that accompanies the article.
 
 // brdf_eval returns the fraction of reflected light  evaluates the geometry term as well.
-vec3 brdf_eval(vec3 diffuseReflectance, vec3 normal, vec3 dir_out) {
-    return diffuseReflectance * INV_PI * dot(normal, dir_out);
+vec3 brdf_eval(vec3 diffuseReflectance, vec3 normal, vec3 dir_in, vec3 dir_out) {
+    return diffuseReflectance * INV_PI * max(dot(normal, dir_out), 0.f);
 }
 
 vec3 brdf_sample(vec3 normal, vec2 u) {
@@ -38,10 +38,15 @@ float brdf_pdf(vec3 normal, vec3 dir_out) {
 
 /// samples a random outgoing reflection direction and updates the throughput.
 /// returns true if the ray is reflected succesfully or false if it is consumed by the surface.
-bool brdf_eval_indirect(vec3 diffuseReflectance, vec3 normal, vec2 u, out vec3 dir_out, inout throughput) {
+bool brdf_eval_indirect(vec3 diffuseReflectance, vec3 normal, vec3 dir_in, vec2 u, out vec3 dir_out, inout vec3 throughput) {
+    // sample the geometry term for a new direction
     dir_out = sampleCosineWeightedHemisphereVoxel(u, normal);
-    throughput = throughput * brdf_eval(diffuseReflectance, normal, dir_out) / pdfCosineWeightedHemisphere(dir_out, normal);
-    return dot(normal, dir_out) >= 0.f;
+
+    // apply surface albedo, geometry term and brdf, divided by PDF (terms cancel out)
+    throughput *= diffuseReflectance;
+
+    // if the sampled ray direction would be below the surface or if there is no contribution, end traversal
+    return dot(normal, dir_out) * dot(throughput, vec3(1.f)) >= 0.f;
 }
 
 #endif // VOLDANITE_BRDF_LAMBERT_GLSL

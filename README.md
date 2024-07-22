@@ -10,7 +10,7 @@ sets at compression rates that generally outperforming other methods.
 ![Renderer Preview Image](doc/volcanite_app.jpg)
 
 ## Quick Start
-See the setup guides for [Ubuntu / Debian](doc/Setup.md#ubuntu--debian) or [Windows](doc/Setup.md#ubuntu--debian) respectively for a more detailed description on how to install all dependencies and build Volcanite.
+See the setup guides for [Ubuntu / Debian](doc/Setup.md#ubuntu--debian) or [Windows](doc/Setup.md#ubuntu--debian) respectively for a more detailed description on how to install all dependencies and how to build Volcanite.
 To install all required dependencies under Ubuntu, first install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home), the minimal build packages with
 ```
 sudo apt install -y build-essential cmake xorg-dev
@@ -44,7 +44,7 @@ If not stated otherwise, the code in this repository uses a GPLv3 license.
 If you require alternative licensing options, please contact the authors.
 
 ## About
-This renderer was created at by [Max Piochowiak](https://cg.ivd.kit.edu/piochowiak/staff_index.php) with significant code
+This renderer was created by [Max Piochowiak](https://cg.ivd.kit.edu/piochowiak/staff_index.php) with significant code
 contributions by [Reiner Dolp](https://cg.ivd.kit.edu/english/staff_2590.php). Both are affiliated with Karlsruhe Institute of Technology (KIT).
 You can cite the following publication if you use Volcanite in your projects:
 
