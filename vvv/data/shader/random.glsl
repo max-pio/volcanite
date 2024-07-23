@@ -38,16 +38,16 @@ vec2 randomDirection2(uvec2 v) {
 
 // returns a random vec3 in the [0, 1) interval.
 // xy from thread ID, feedback one of the result components to the next random query as seed
-vec3 randomVec3(const in vec2 xy, const in float seed) {
-    return vec3(hash_pcg3d((uvec3(xy, seed)))) * (1.0/float(0xffffffffU));
+vec3 randomVec3(const ivec2 xy, const in uint seed) {
+    return vec3(hash_pcg3d((uvec3(xy, seed)))) / float(0xffffffffU);
 }
 
 // returns a random vec3 in the [0, 1) interval and updates the seed.
 // xy from thread ID, overwrites seed with the .z compontent of the returned RNG value.
-vec3 nextRNG(const in vec2 xy, inout float seed) {
-    vec3 r = vec3(hash_pcg3d(uvec3(xy * 1471.f, seed))) * (1.0/float(0xffffffffU));
-    seed = r.z * float(0xffffffffU);
-    return r;
+vec3 nextRNG(const in ivec2 xy, inout uint seed) {
+    uvec3 r = hash_pcg3d(uvec3(xy, seed));
+    seed = r.z;
+    return vec3(r) / float(0xffffffffU);
 }
 
 

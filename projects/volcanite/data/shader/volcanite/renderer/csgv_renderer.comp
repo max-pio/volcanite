@@ -182,7 +182,7 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
 
 // all ray marching happens in the same loop to minimize thread divergence
 struct RayMarchState {
-    float rng;          ///< random number generator state
+    uint rng;          ///< random number generator state
     int step;           ///< how many ray marching steps where done so far
 
     // DDA traversal parameter
@@ -326,7 +326,7 @@ void main() {
     if (DEBUG_vis_lod_rectangles(pixel, g_debug_lod)) return;
 
     // Add a subpixel offset in [0, 1) to perform temporal anti-aliasing
-    vec2 subpixel_offset = randomVec3(vec2(pixel.x, pixel.y), float(1347182u + 3721175u * g_camera_still_frames)).xy;
+    vec2 subpixel_offset = randomVec3(pixel, g_camera_still_frames).xy;
     vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(viewport_size);
 
     // create view ray in model space
@@ -356,7 +356,7 @@ void main() {
 
     // initialize ray marching state
     RayMarchState state;
-    state.rng = float(g_camera_still_frames << 16);
+    state.rng = g_camera_still_frames;
     state.label = INVALID;
     state.last_label = INVALID;
     state.path_length = 0;
@@ -502,7 +502,7 @@ void main() {
 
             // advance the path and obtain a new random number for sampling a new direction
             state.path_length++;
-            vec3 u = nextRNG(fragCoord, state.rng);
+            vec3 u = nextRNG(pixel, state.rng);
 
             // store previous direction as the incoming direction for the brdf evaluation
             vec3 brdf_dir_in = -ray.direction;
@@ -545,7 +545,7 @@ void main() {
             // Russian Roulette (only when this is not a ray to the light source / NEE)
             if (state.path_length != SHADOW_RAY_PATH_LENGTH) {
                 float survival_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
-                if (nextRNG(fragCoord, state.rng).x > survival_probability) {
+                if (nextRNG(pixel, state.rng).x > survival_probability) {
                     state.throughput = vec3(0.f);
                     break;
                 }
