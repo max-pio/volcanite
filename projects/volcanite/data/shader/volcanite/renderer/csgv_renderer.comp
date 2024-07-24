@@ -46,9 +46,10 @@ ivec2 pixelFromInvocationID() {
     if (g_subsampling <= 1)
         return ivec2(gl_GlobalInvocationID.xy);
     else {
+        return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + g_subsampling_pixel;
         // offset the subsampling pixel with some blue noise
-        int blueNoiseIdx = g_blue_noise_enable ? int(blueNoise32x32(ivec2(gl_GlobalInvocationID.xy)) * float(g_subsampling * g_subsampling)) : 0;
-        return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + ivec2(mod(g_subsampling_pixel + morton2Di2p(blueNoiseIdx), ivec2(g_subsampling)));
+        // int blueNoiseIdx = g_blue_noise_enable ? int(blueNoise32x32(ivec2(gl_GlobalInvocationID.xy)) * float(g_subsampling * g_subsampling)) : 0;
+        // return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + ivec2(mod(g_subsampling_pixel + morton2Di2p(blueNoiseIdx), ivec2(g_subsampling)));
     }
 }
 
@@ -112,7 +113,7 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
                 depth_valid = INVALID_DEPTH;
 
             // read a random palette entry
-            uint random_palette_index = hash_pcg3d(uvec3(gl_GlobalInvocationID.xy, 123851u * g_frame)).r % palette_size;
+            uint random_palette_index = hash_pcg3d(uvec3(gl_GlobalInvocationID.xy, g_frame)).r % palette_size;
             return  encoding_address.buf[encoding_size - 1u - random_palette_index];
         }
 
@@ -351,16 +352,12 @@ void main() {
                              (g_world_to_model_space * vec4((g_bboxMax.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz);
     ray_box_intersection(ray, bounding_box, t_0, t_1);
 
-    // if we don't hit the data set, we can directly output the background
+    // if the ray does not hit the data set, directly output the background
     if (t_0 >= t_1) {
         ray.direction = normalize(g_model_to_world_space_dir * ray.direction);
         writePixel(pixel, get_background_color(fragCoord, ray.direction), BACKGROUND_DEPTH, invalidGBufferRG8());
         return;
     }
-
-    // For debug views: only color every other pixel in the debug view to get some kind of "transparent" overlay effect
-    // As we move this pixel around, the progressive accumulation averages this with the rendered colors.
-    bool debug_view_visible = (pixel.x + pixel.y) % 3u != (g_frame % 3u); // < (viewport_size.x + viewport_size.y) / 2u);
 
     if (DEBUG_vis_model_space(ray, t_0, pixel, g_debug_model_space)) return;
 
@@ -382,7 +379,7 @@ void main() {
     // ray marching loop
     for(state.step = 0; state.step < g_maxSteps; state.step++) {
 
-        // TODO: move the DDA step to the bottom of this loop. Reuse LOD and emptySpace information, remove DDA init eps
+        // TODO: move the DDA step to the bottom of this loop. Reuse LOD and emptySpace information, remove t_0 offset
         // single-level DDA traversal step
         // dda_step(state, ray);
         // multi-level DDA traversal step
@@ -448,7 +445,7 @@ void main() {
         }
 
         DEBUG_vis_normals(state, g_debug_normals);
-        DEBUG_vis_brick_cache(state, !g_debug_normals && debug_view_visible && g_debug_brick_cache);
+        DEBUG_vis_brick_cache(state, !g_debug_normals && g_debug_brick_cache && (pixel.x + pixel.y) % 2u != (g_frame % 2u));
 
         // obtain surface albedo / volume emission and opacity
         vec4 surface_albedo_opacity = getColor(state.label, material);

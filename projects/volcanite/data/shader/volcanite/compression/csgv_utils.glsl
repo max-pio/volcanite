@@ -156,6 +156,9 @@ uvec2 invalidGBufferRG8() {
 
 /// pack the given attributes in a value that can be stored in an RG8 format
 uvec2 packGBufferRG8(uint label, vec3 normal, float normalized_depth) {
+
+    // a note from the AMD developer performance guide: (https://gpuopen.com/learn/rdna-performance-guide/)
+    // "put highly correlated bits in the Most Significant Bits (MSBs) and noisy data in the Least Significant Bits"
     uvec2 packed = uvec2(0u);
 
     // 3 bits for -/+ {(1,0,0) | (0,1,0) | (0,0,1)} axis-aligned normal
