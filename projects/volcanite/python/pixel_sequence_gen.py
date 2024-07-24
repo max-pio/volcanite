@@ -12,28 +12,52 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+import math
 
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pymorton as pm
+from matplotlib import animation
 
-def generate_pixel_sequence_morton(grid_size):
+
+def reverse_bits(x, bitcount):
+    bits = '{:0{bc}b}'.format(x, bc=bitcount)
+    return int(bits[::-1], 2)
+
+def generate_bitfield_reverse_morton_pixel_sequence(grid_size):
+    bits_per_coord = int(math.log2(grid_size * grid_size))
+
     coords = []
-    n = 1
-    while n <= grid_size:
-        for x in range(n * n):
-            morton_coord = pm.deinterleave2(x)
-            new_coord = [morton_coord[0] * grid_size // n, morton_coord[1] * grid_size // n]
-            if not (new_coord in coords):
-                coords.append(new_coord)
-        n = n*2
+    for x in range(grid_size * grid_size):
+        coords.append(pm.deinterleave2(reverse_bits(x, bits_per_coord)))
     return np.asarray(coords)
 
 def plot_sequence(seq):
     x = seq[:, 0]
     y = seq[:, 1]
     i = range(seq.shape[0])
-    plt.scatter(x, y, c=i, cmap='gray')
+    for j in range(seq.shape[0] - 1):
+        plt.plot([x[j], x[j+1]], [y[j], y[j+1]], c=mpl.colormaps['viridis'](j / seq.shape[0]))
+    plt.scatter(x, y, s=100, c=i, cmap='viridis')
+    plt.show()
+
+def plot_sequence_anim(seq, grid_size):
+    x = seq[:, 0]
+    y = seq[:, 1]
+    indices = list(range(seq.shape[0]))
+
+    fig, ax = plt.subplots()
+    scat = ax.scatter(x[0], y[0], c=indices[0], s=100, cmap='viridis')
+    ax.set(xlim=[0, grid_size], ylim=[0, grid_size], xlabel='X', ylabel='Y')
+    def update(frame):
+        # update the scatter plot:
+        data = np.stack([x[:frame], y[:frame]]).T
+        scat.set_offsets(data)
+        scat.set_array(indices[:frame])
+        return scat
+
+    ani = animation.FuncAnimation(fig=fig, func=update, frames=grid_size * grid_size, interval=80)
     plt.show()
 
 def print_as_cpp_array(seq):
@@ -48,6 +72,8 @@ def print_as_cpp_array(seq):
 
 
 if __name__ == '__main__':
-    seq = generate_pixel_sequence_morton(2)
+    seq = generate_bitfield_reverse_morton_pixel_sequence(2)
+
     print_as_cpp_array(seq)
-    #plot_sequence(seq)
+    # plot_sequence(seq)
+    # plot_sequence_anim(seq, 8)

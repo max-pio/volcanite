@@ -31,6 +31,9 @@ namespace volcanite {
      * remaining three of the four strata that one receives when splitting the image in half in both dimensions.
      * The next (16-4) points put one sample each in the bottom left corner of all strata given by diving the image
      * resolution by 4 in each dimension and so on.
+     *
+     * ADVISED PIXEL SEQUENCE: bitReverseMorton
+     * computed as morton_idx2pos(bitfieldReverse(i)) it is easily invertible, decently low discrepancy.
      **/
     class PixelSequence {
     public:
@@ -80,6 +83,29 @@ namespace volcanite {
                                                  {6,5}, {7,5}, {5,6}, {4,7},
                                                  {5,7}, {7,6}, {6,7}, {7,7}};
 
+        static constexpr int bitReverseMorton1x1[1][2]  = {{0, 0}};
+        static constexpr int bitReverseMorton2x2[4][2]  = {{0,0}, {0,1}, {1,0}, {1,1}};
+        static constexpr int bitReverseMorton4x4[16][2] = {{0,0}, {0,2}, {2,0}, {2,2},
+                                                           {0,1}, {0,3}, {2,1}, {2,3},
+                                                           {1,0}, {1,2}, {3,0}, {3,2},
+                                                           {1,1}, {1,3}, {3,1}, {3,3}};
+        static constexpr int bitReverseMorton8x8[64][2] = {{0,0}, {0,4}, {4,0}, {4,4},
+                                                           {0,2}, {0,6}, {4,2}, {4,6},
+                                                           {2,0}, {2,4}, {6,0}, {6,4},
+                                                           {2,2}, {2,6}, {6,2}, {6,6},
+                                                           {0,1}, {0,5}, {4,1}, {4,5},
+                                                           {0,3}, {0,7}, {4,3}, {4,7},
+                                                           {2,1}, {2,5}, {6,1}, {6,5},
+                                                           {2,3}, {2,7}, {6,3}, {6,7},
+                                                           {1,0}, {1,4}, {5,0}, {5,4},
+                                                           {1,2}, {1,6}, {5,2}, {5,6},
+                                                           {3,0}, {3,4}, {7,0}, {7,4},
+                                                           {3,2}, {3,6}, {7,2}, {7,6},
+                                                           {1,1}, {1,5}, {5,1}, {5,5},
+                                                           {1,3}, {1,7}, {5,3}, {5,7},
+                                                           {3,1}, {3,5}, {7,1}, {7,5},
+                                                           {3,3}, {3,7}, {7,3}, {7,7}};
+
         typedef const int (*pixel_sequence_ptr)[2];
 
         static pixel_sequence_ptr pseudoHilbertNxN(int power_of_two) {
@@ -112,9 +138,25 @@ namespace volcanite {
             }
         }
 
+        static pixel_sequence_ptr bitReverseMortonNxN(int power_of_two) {
+            switch(power_of_two) {
+                case 0:
+                    return PixelSequence::bitReverseMorton1x1;
+                case 1:
+                    return PixelSequence::bitReverseMorton2x2;
+                case 2:
+                    return PixelSequence::bitReverseMorton4x4;
+                case 3:
+                    return PixelSequence::bitReverseMorton8x8;
+                default:
+                    throw std::runtime_error("Cannot provide stratified pixel sequence for power-of-two greater than 3");
+            }
+        }
+
         static const glm::ivec2* asVec(const int sequence[][2]) { return reinterpret_cast<const glm::ivec2*>(sequence); };
         static const glm::ivec2* pseudoHilbertNxNVec(int power_of_two) { return asVec(pseudoHilbertNxN(power_of_two)); }
         static const glm::ivec2* mortonNxNVec(int power_of_two) { return asVec(mortonNxN(power_of_two)); }
+        static const glm::ivec2* bitReverseMortonNxNVec(int power_of_two) { return asVec(bitReverseMortonNxN(power_of_two)); }
     };
 
 } // namespace volcanite

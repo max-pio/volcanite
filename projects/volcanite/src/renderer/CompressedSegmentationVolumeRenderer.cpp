@@ -831,7 +831,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
             m_camHash = newCamHash;
         }
         m_urender_info->setUniform<uint32_t>("g_camera_still_frames", m_framesSinceCameraMove);
-        m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::mortonNxNVec(m_subsampling)[m_framesSinceCameraMove % ((1 << m_subsampling) * (1 << m_subsampling))]);
+        m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::bitReverseMortonNxNVec(m_subsampling)[m_framesSinceCameraMove % ((1 << m_subsampling) * (1 << m_subsampling))]);
         // random seed
         m_urender_info->setUniform<float>("g_random_seed", static_cast<float>(m_frame) / 10000.f);
         m_urender_info->setUniform<uint32_t>("g_swapchain_index", m_pass->getActiveIndex());
