@@ -41,15 +41,22 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #include "volcanite/compression/compressed_segmentation_volume.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
 
+
+ivec2 pixelBlueNoiseOffset() {
+    int blueNoiseIdx = g_blue_noise_enable ? int(blueNoise32x32(ivec2(gl_GlobalInvocationID.xy)) * float(g_subsampling * g_subsampling)) : 0;
+    return ivec2(morton2Di2p(blueNoiseIdx));
+}
+
 ivec2 pixelFromInvocationID() {
     // We send out one ray per block of [g_subsampling]*[g_subsampling] pixels
     if (g_subsampling <= 1)
         return ivec2(gl_GlobalInvocationID.xy);
     else {
-        return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + g_subsampling_pixel;
         // offset the subsampling pixel with some blue noise
-        // int blueNoiseIdx = g_blue_noise_enable ? int(blueNoise32x32(ivec2(gl_GlobalInvocationID.xy)) * float(g_subsampling * g_subsampling)) : 0;
-        // return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + ivec2(mod(g_subsampling_pixel + morton2Di2p(blueNoiseIdx), ivec2(g_subsampling)));
+        return ivec2(gl_GlobalInvocationID.xy * g_subsampling)
+        + ivec2(mod(g_subsampling_pixel + pixelBlueNoiseOffset(), ivec2(g_subsampling)));
+
+        // return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + g_subsampling_pixel;
     }
 }
 

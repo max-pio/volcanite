@@ -33,7 +33,7 @@ namespace volcanite {
      * resolution by 4 in each dimension and so on.
      *
      * ADVISED PIXEL SEQUENCE: bitReverseMorton
-     * computed as morton_idx2pos(bitfieldReverse(i)) it is easily invertible, decently low discrepancy.
+     * computed as morton_idx2pos(bitfieldReverse(i, log2(dimension)) it is invertible and has decent low discrepancy.
      **/
     class PixelSequence {
     public:
@@ -154,6 +154,7 @@ namespace volcanite {
         }
 
         static const glm::ivec2* asVec(const int sequence[][2]) { return reinterpret_cast<const glm::ivec2*>(sequence); };
+
         static const glm::ivec2* pseudoHilbertNxNVec(int power_of_two) { return asVec(pseudoHilbertNxN(power_of_two)); }
         static const glm::ivec2* mortonNxNVec(int power_of_two) { return asVec(mortonNxN(power_of_two)); }
         static const glm::ivec2* bitReverseMortonNxNVec(int power_of_two) { return asVec(bitReverseMortonNxN(power_of_two)); }
