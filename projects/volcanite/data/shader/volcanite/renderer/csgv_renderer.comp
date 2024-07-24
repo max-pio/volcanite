@@ -28,6 +28,7 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #include "ray_box_intersection.glsl"
 #include "morton.glsl"
 #include "random.glsl"
+#include "framebuffer.glsl"
 
 #include "debug_colormaps.glsl"
 #include "brdf_lambert.glsl"
@@ -42,24 +43,6 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #include "volcanite/compression/csgv_utils.glsl"
 
 
-ivec2 pixelBlueNoiseOffset() {
-    int blueNoiseIdx = g_blue_noise_enable ? int(blueNoise32x32(ivec2(gl_GlobalInvocationID.xy)) * float(g_subsampling * g_subsampling)) : 0;
-    return ivec2(morton2Di2p(blueNoiseIdx));
-}
-
-ivec2 pixelFromInvocationID() {
-    // We send out one ray per block of [g_subsampling]*[g_subsampling] pixels
-    if (g_subsampling <= 1)
-        return ivec2(gl_GlobalInvocationID.xy);
-    else {
-        // offset the subsampling pixel with some blue noise
-        return ivec2(gl_GlobalInvocationID.xy * g_subsampling)
-        + ivec2(mod(g_subsampling_pixel + pixelBlueNoiseOffset(), ivec2(g_subsampling)));
-
-        // return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + g_subsampling_pixel;
-    }
-}
-
 uint get_inv_lod(ivec3 voxel) {
     // Ensure the same level-of-detail for all bricks by computing it from the brick's center.
     // Otherwise, different levels-of-detail would be requested for decompression of the same brick.
@@ -71,8 +54,6 @@ uint get_inv_lod(ivec3 voxel) {
     // clamp with a potential user specified max inverse. LoD
     return min(g_lod_count - 1u - uint(clamp(g_lod_bias + findMSB(voxels_per_pixel_at_hit), 0, g_lod_count - 1u)), g_max_inv_lod);
 }
-
-bool isDepthValid(float depth) { return depth >= 0.f; }
 
 /// returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
 uint get_volume_label(ivec3 voxel, inout float depth_valid) {
@@ -150,52 +131,6 @@ bool isEmptySpace(ivec3 voxel) {
     return g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > g_lod_count;  // marked "invisible" by request shader
 }
 
-
-void writePixel(ivec2 pixel, vec4 color, float depth_valid, uvec2 g_buffer_packed) {
-
-    // invalidate any nan samples
-    if (any(isnan(color)) || any(isinf(color)) || isnan(depth_valid) || isinf(depth_valid)) {
-        color = vec4(1.f, 0.f, 1.f, 1.f);
-        depth_valid = -abs(depth_valid);
-    }
-
-    // if subsamplign is enabled, we only render one pixel per [g_subsampling]^2 block
-    ivec2 subpixel;
-    for (subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
-        for (subpixel.x = 0; subpixel.x < g_subsampling; subpixel.x++) {
-            ivec2 opix = (pixel/g_subsampling)*g_subsampling + subpixel;
-            if (g_camera_still_frames == 0u) {
-                // writing other pixel: initialize with 0 and invalid G-Buffer
-                if (any(notEqual(opix, pixel))) {
-                    imageStore(feedbackOut, opix, vec4(0.f));
-                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
-		}
-                // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame (set .a < 0)
-                else
-                    imageStore(feedbackOut, opix, vec4(color.rgb, isDepthValid(depth_valid) ? 1.f :  -1.f));
-            }
-            else {
-                vec4 prev_color = imageLoad(feedbackIn, opix);
-                // writing other pixel: just copy from previous to current frame
-                if (any(notEqual(opix, pixel))) {
-                    imageStore(feedbackOut, opix, prev_color);
-                    // gBuffer remains unchanged
-                }
-                // writing our pixel, but invalid new sample (from not yet decoded brick)
-                else if (!isDepthValid(depth_valid)) {
-                    imageStore(feedbackOut, opix, prev_color.a > 0.f ? prev_color : vec4(color.rgb, -1.f));
-                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
-                }
-                // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
-                // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
-                else {
-                    imageStore(feedbackOut, opix, vec4(color.rgb, 1.f) + (prev_color.a > 0.f ? prev_color : vec4(0.f)));
-                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
-                }
-            }
-        }
-    }
-}
 
 // all ray marching happens in the same loop to minimize thread divergence
 struct RayMarchState {

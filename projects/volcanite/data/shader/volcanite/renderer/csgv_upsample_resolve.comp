@@ -22,6 +22,7 @@ layout (local_size_x = 8, local_size_y = 8) in;
 
 #include "csgv_bindings.glsl"
 #include "util.glsl"
+#include "framebuffer.glsl"
 
 vec3 rgb2srgb(vec3 x) {
     return pow(x, vec3(2.2f));
