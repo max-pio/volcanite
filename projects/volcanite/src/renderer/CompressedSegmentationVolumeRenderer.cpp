@@ -227,6 +227,8 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     // feedback texture ping pong for the inpainting shader
     m_pass->setStorageImage("feedbackIn", *m_feedback_tex[m_frame % 2u]);
     m_pass->setStorageImage("feedbackOut", *m_feedback_tex[1u - (m_frame % 2u)]);
+    // 16 bit packed gBuffer texture storing
+    m_pass->setStorageImage("gBuffer", *m_gBuffer_tex);
 
 
     std::vector<std::shared_ptr<Awaitable>> renderAwaitableList = {};
@@ -651,6 +653,13 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
     }
+    m_gBuffer_tex = m_pass->reflectTexture("gBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    {
+        m_gBuffer_tex->ensureResources();
+        const auto layoutTransformDone = m_gBuffer_tex->setImageLayout(vk::ImageLayout::eGeneral,vk::PipelineStageFlagBits::eAllCommands);
+        reinitDone.push_back(layoutTransformDone);
+    }
+
 
     // write all transfer function samplers once
     for(int m = 0; m < m_materials.size(); m++) {
@@ -675,16 +684,14 @@ void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
         m_mostRecentFrame->texture = nullptr;
         m_mostRecentFrame->renderingComplete = {};
     }
-    if (m_outColor)
-        m_outColor = nullptr;
-    if(m_outDepth)
-        m_outDepth = nullptr;
     if(m_feedback_tex[0])
         m_feedback_tex[0] = nullptr;
     if(m_feedback_tex[1])
         m_feedback_tex[1] = nullptr;
     if (m_inpaintedOutColor)
         m_inpaintedOutColor.reset();// = nullptr;
+    if(m_gBuffer_tex)
+        m_gBuffer_tex = nullptr;
 }
 
 void CompressedSegmentationVolumeRenderer::resetGPU() {
@@ -1167,7 +1174,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         size_t textures = 0ul;
         if (m_feedback_tex[0]) {
             textures += m_feedback_tex[0]->memorySize() + m_feedback_tex[1]->memorySize();
-                      //+ m_outColor->memorySize() + m_outDepth->memorySize();
             for (const auto &t: *m_inpaintedOutColor)
                 textures += t->memorySize();
         }

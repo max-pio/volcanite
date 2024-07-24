@@ -18,7 +18,7 @@ bool DEBUG_vis_lod_rectangles(ivec2 pixel, const bool enabled) {
     for (uint lod = 0; lod < g_lod_count; lod++) {
         if (any(greaterThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) - 2u)))) {
             if (all(lessThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) + 2u)))) {
-                writePixel(pixel, vec4(colormap_viridis(float(g_lod_count - 1u - lod)/float(g_lod_count - 1u)), 1.f), BACKGROUND_DEPTH);
+                writePixel(pixel, vec4(colormap_viridis(float(g_lod_count - 1u - lod)/float(g_lod_count - 1u)), 1.f), BACKGROUND_DEPTH, invalidGBufferRG8());
                 return true;
             }
         }
@@ -49,7 +49,7 @@ bool DEBUG_vis_model_space(Ray ray, float t_0, ivec2 pixel, const bool enabled) 
     vec3 borders = vec3(greaterThan(fract(pos), vec3(0.0f))) * vec3(lessThan(fract(pos - vec3(0.0001f)), vec3(0.2f)));
     if (borders.x + borders.y + borders.z > 0.f)
         color *= 1.f - 1.f / (t_0 / g_world_to_model_space_scaling * 64.f);
-    writePixel(pixel, vec4(color, 1.f), t_0);
+    writePixel(pixel, vec4(color, 1.f), t_0, invalidGBufferRG8());
     return true;
 #endif
 }

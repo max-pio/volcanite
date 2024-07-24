@@ -143,7 +143,7 @@ bool isEmptySpace(ivec3 voxel) {
 }
 
 
-void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
+void writePixel(ivec2 pixel, vec4 color, float depth_valid, uvec2 g_buffer_packed) {
 
     // invalidate any nan samples
     if (any(isnan(color)) || any(isinf(color)) || isnan(depth_valid) || isinf(depth_valid)) {
@@ -157,9 +157,11 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
         for (subpixel.x = 0; subpixel.x < g_subsampling; subpixel.x++) {
             ivec2 opix = (pixel/g_subsampling)*g_subsampling + subpixel;
             if (g_camera_still_frames == 0u) {
-                // writing other pixel: initialize with 0
-                if (any(notEqual(opix, pixel)))
+                // writing other pixel: initialize with 0 and invalid G-Buffer
+                if (any(notEqual(opix, pixel))) {
                     imageStore(feedbackOut, opix, vec4(0.f));
+                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
+		}
                 // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame (set .a < 0)
                 else
                     imageStore(feedbackOut, opix, vec4(color.rgb, isDepthValid(depth_valid) ? 1.f :  -1.f));
@@ -167,14 +169,21 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid) {
             else {
                 vec4 prev_color = imageLoad(feedbackIn, opix);
                 // writing other pixel: just copy from previous to current frame
-                if (any(notEqual(opix, pixel)))
+                if (any(notEqual(opix, pixel))) {
                     imageStore(feedbackOut, opix, prev_color);
+                    // gBuffer remains unchanged
+                }
                 // writing our pixel, but invalid new sample (from not yet decoded brick)
-                else if (!isDepthValid(depth_valid))
+                else if (!isDepthValid(depth_valid)) {
                     imageStore(feedbackOut, opix, prev_color.a > 0.f ? prev_color : vec4(color.rgb, -1.f));
+                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
+                }
                 // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
-                else
+                // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
+                else {
                     imageStore(feedbackOut, opix, vec4(color.rgb, 1.f) + (prev_color.a > 0.f ? prev_color : vec4(0.f)));
+                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
+                }
             }
         }
     }
@@ -197,6 +206,7 @@ struct RayMarchState {
     vec3 normal;        ///< normal at the current position
     uint label;         ///< label at the current position
     uint last_label;    ///< label of the previous position
+    uvec2 packedGBuffer;///< G-Buffer containing validity, label on hit, depth, and normal
 
     // path tracing
     vec4 out_color;     ///< (radiance) color to be written to the color buffer
@@ -344,7 +354,7 @@ void main() {
     // if we don't hit the data set, we can directly output the background
     if (t_0 >= t_1) {
         ray.direction = normalize(g_model_to_world_space_dir * ray.direction);
-        writePixel(pixel, get_background_color(fragCoord, ray.direction), BACKGROUND_DEPTH);
+        writePixel(pixel, get_background_color(fragCoord, ray.direction), BACKGROUND_DEPTH, invalidGBufferRG8());
         return;
     }
 
@@ -363,6 +373,8 @@ void main() {
     state.throughput = vec3(1.f);
     state.out_color = vec4(0.f);
     state.depth_valid = BACKGROUND_DEPTH;
+    state.normal = vec3(0.f);
+    state.packedGBuffer = invalidGBufferRG8();
 
     // initialize DDA traversal with t_0  offset to prevent aliasing
     dda_init(state, ray, t_0 - 0.01f);
@@ -476,10 +488,14 @@ void main() {
             DEBUG_vis_brick_idx(state, false);
             DEBUG_vis_lod(state, surface_albedo_opacity, g_debug_lod);
 
-            // the first surface hit is the only point for which we want to store our t value in the depth buffer
-            // but if we previously stored an INVALID_DEPTH (< 0) at any point, we don't want to overwrite that
+            // The first surface hit is the only point for which we want to store our t value in the depth buffer
+            // but if we previously stored an INVALID_DEPTH (< 0) at any point, it must not be overwritten.
+            // This is also the point where the G-buffer state is set.
             if (state.path_length == 0) {
-                state.depth_valid = min(state.depth_valid, length((state.voxel + state.pos_in_voxel) - ray.origin));
+                float ray_t = length((state.voxel + state.pos_in_voxel) - ray.origin);
+                // TODO: directly write these values to the g-buffer instead of tracking them
+                state.depth_valid = min(state.depth_valid, ray_t);
+                state.packedGBuffer = packGBufferRG8(state.label, state.normal, (ray_t - t_0) / (t_1 - t_0));
             }
             // opacity is always 1 on surface hit
             state.out_color.a = 1.f;
@@ -578,5 +594,5 @@ void main() {
     // perform alpha blending with background and write to image
     state.out_color.rgb = (1.f - state.out_color.a) * get_background_color(fragCoord, ray.direction).rgb
                           + state.out_color.a * state.out_color.rgb;
-    writePixel(pixel, state.out_color, state.depth_valid);
+    writePixel(pixel, state.out_color, state.depth_valid, state.packedGBuffer);
 }

@@ -88,6 +88,7 @@ std::vector<std::shared_ptr<Shader>> PassCompSegVolRender::createShaders() {
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_renderer.comp", .defines= m_shader_defines, .label="csgv_renderer.comp"}, compileErrorCallback),
 //            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_resolve.comp", .defines= m_shader_defines, .label="csgv_resolve.comp"}, compileErrorCallback)
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_upsample_resolve.comp", .defines= m_shader_defines, .label="csgv_upsample_resolve.comp"}, compileErrorCallback)
+//            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_denoise_resolve.comp", .defines= m_shader_defines, .label="csgv_denoise_resolve.comp"}, compileErrorCallback)
             };
 }
 
