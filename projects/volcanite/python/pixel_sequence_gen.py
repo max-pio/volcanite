@@ -25,12 +25,20 @@ def reverse_bits(x, bitcount):
     bits = '{:0{bc}b}'.format(x, bc=bitcount)
     return int(bits[::-1], 2)
 
+def cartesian_2D(x, grid_size):
+    return [x // grid_size, x % grid_size]
+
+def offset(x, o, grid_size):
+    return [(x[0] + o[0]) % grid_size, (x[1] + o[1]) % grid_size]
+
 def generate_bitfield_reverse_morton_pixel_sequence(grid_size):
     bits_per_coord = int(math.log2(grid_size * grid_size))
 
     coords = []
     for x in range(grid_size * grid_size):
-        coords.append(pm.deinterleave2(reverse_bits(x, bits_per_coord)))
+        c_morton = pm.deinterleave2(reverse_bits(x, bits_per_coord))
+        #c_morton = offset(c_morton, (grid_size // 2 - 1, grid_size // 2 - 1), grid_size)
+        coords.append(c_morton)
     return np.asarray(coords)
 
 def plot_sequence(seq):
@@ -42,22 +50,24 @@ def plot_sequence(seq):
     plt.scatter(x, y, s=100, c=i, cmap='viridis')
     plt.show()
 
-def plot_sequence_anim(seq, grid_size):
+def plot_sequence_anim(seq):
     x = seq[:, 0]
     y = seq[:, 1]
     indices = list(range(seq.shape[0]))
 
-    fig, ax = plt.subplots()
-    scat = ax.scatter(x[0], y[0], c=indices[0], s=100, cmap='viridis')
-    ax.set(xlim=[0, grid_size], ylim=[0, grid_size], xlabel='X', ylabel='Y')
-    def update(frame):
-        # update the scatter plot:
-        data = np.stack([x[:frame], y[:frame]]).T
-        scat.set_offsets(data)
-        scat.set_array(indices[:frame])
-        return scat
+    grid_size = int(math.log2(seq.shape[0]))
 
-    ani = animation.FuncAnimation(fig=fig, func=update, frames=grid_size * grid_size, interval=80)
+    fig, ax = plt.subplots()
+    scatter = ax.scatter(x[0], y[0] , s=100)
+    ax.set(xlim=[0, grid_size+1], ylim=[0, grid_size+1], xlabel='X', ylabel='Y')
+    def update(frame):
+        data = np.stack([x[:frame], y[:frame]]).T
+        scatter.set_offsets(data)
+        # scatter.set_array(indices[:frame])
+        scatter.set_color(mpl.colormaps['viridis'](int(256 * math.log2(frame + 1) / grid_size)))
+        return scatter
+
+    ani = animation.FuncAnimation(fig=fig, func=update, frames=seq.shape[0], interval=80)
     plt.show()
 
 def print_as_cpp_array(seq):
@@ -72,8 +82,8 @@ def print_as_cpp_array(seq):
 
 
 if __name__ == '__main__':
-    seq = generate_bitfield_reverse_morton_pixel_sequence(2)
+    seq = generate_bitfield_reverse_morton_pixel_sequence(8)
 
     print_as_cpp_array(seq)
     # plot_sequence(seq)
-    # plot_sequence_anim(seq, 8)
+    plot_sequence_anim(seq)

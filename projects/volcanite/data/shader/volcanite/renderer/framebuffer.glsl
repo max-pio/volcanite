@@ -28,79 +28,35 @@ ivec2 pixelBlueNoiseOffset() {
 }
 
 ivec2 pixelFromInvocationID() {
-
     // We send out one ray per block of [g_subsampling]*[g_subsampling] pixels
-    if (g_subsampling <= 1)
-    return ivec2(gl_GlobalInvocationID.xy);
-    else {
+    if (g_subsampling <= 1) {
+        return ivec2(gl_GlobalInvocationID.xy);
+    } else {
         // offset the subsampling pixel with some blue noise
-        return ivec2(gl_GlobalInvocationID.xy * g_subsampling)
-        + ivec2(mod(g_subsampling_pixel + pixelBlueNoiseOffset(), ivec2(g_subsampling)));
-
         // g_subsampling_pixel is actually just morton_idx2pos(bitfieldReverse(idx % g_subsampling * g_subsampling))
+        return ivec2(gl_GlobalInvocationID.xy * g_subsampling)
+             + ivec2(mod(g_subsampling_pixel + pixelBlueNoiseOffset(), ivec2(g_subsampling)));
 
-        // return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + g_subsampling_pixel;
+//        return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + g_subsampling_pixel;
     }
 }
 
-// returns the samples that this pixel received *after* g_camera_still_frames were rendered
-int pixelSampleCount(ivec2 pixel) {
-//    int samples_of_any_pixel = g_camera_still_frames / (g_subsampling * g_subsampling);
-//    int has_this_pixel_a_sample = morton_pos2idx(bitfieldReverse(g_camera_still_frames - samples_of_any_pixel))
-    return 0;
-}
+// returns the number of samples that this subpixel in the [g_subsampling]^2 block received *after*
+// g_camera_still_frames were rendered.
+//uint pixelSampleCount(ivec2 subpixel) {
+//    // NOTE: THIS IS NOT CORRECT + THE ACTUAL NUMBER OF ACCUMULATED SAMPLES WILL VARY BECAUSE OF INVALID SAMPLES
+//    uint pixel_block_size = (g_subsampling * g_subsampling);
+//
+//    uint guaranteed_samples = g_camera_still_frames / pixel_block_size;
+//    // r samples were already rendered within this pixel block
+//    uint r = g_camera_still_frames - guaranteed_samples * pixel_block_size;
+//    // if the render-index of the sub-block position of pixel is smaller or equal to the current render-index,
+//    // this pixel already received a sample
+//    uint possible_sample = uint(morton2Dp2i(subpixel % g_subsampling) <= (bitfieldReverse(r) >> (33 - findMSB(pixel_block_size))));
+//    return guaranteed_samples + possible_sample;
+//}
 
-
-bool isDepthValid(float depth) { return depth >= 0.f; }
-
-void writePixel(ivec2 pixel, vec4 color, float depth_valid, uvec2 g_buffer_packed) {
-
-    // invalidate any nan samples
-    if (any(isnan(color)) || any(isinf(color)) || isnan(depth_valid) || isinf(depth_valid)) {
-        color = vec4(1.f, 0.f, 1.f, 1.f);
-        depth_valid = -abs(depth_valid);
-    }
-
-    // if subsamplign is enabled, we only render one pixel per [g_subsampling]^2 block
-    ivec2 subpixel;
-    for (subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
-        for (subpixel.x = 0; subpixel.x < g_subsampling; subpixel.x++) {
-            ivec2 opix = (pixel/g_subsampling)*g_subsampling + subpixel;
-            if (g_camera_still_frames == 0u) {
-                // writing other pixel: initialize with 0 and invalid G-Buffer
-                if (any(notEqual(opix, pixel))) {
-                    imageStore(feedbackOut, opix, vec4(0.f));
-                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
-                }
-                // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame (set .a < 0)
-                else
-                imageStore(feedbackOut, opix, vec4(color.rgb, isDepthValid(depth_valid) ? 1.f :  -1.f));
-            }
-            else {
-                vec4 prev_color = imageLoad(feedbackIn, opix);
-                // writing other pixel: just copy from previous to current frame
-                if (any(notEqual(opix, pixel))) {
-                    imageStore(feedbackOut, opix, prev_color);
-                    // gBuffer remains unchanged
-                }
-                // writing our pixel, but invalid new sample (from not yet decoded brick)
-                else if (!isDepthValid(depth_valid)) {
-                    imageStore(feedbackOut, opix, prev_color.a > 0.f ? prev_color : vec4(color.rgb, -1.f));
-                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
-                }
-                // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
-                // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
-                else {
-                    imageStore(feedbackOut, opix, vec4(color.rgb, 1.f) + (prev_color.a > 0.f ? prev_color : vec4(0.f)));
-                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
-                }
-            }
-        }
-    }
-}
-
-
-// GBuffer ----------------------------------------------------------------------------------------
+// G-Buffer and Accumulation Buffer ------------------------------------------------------------------------------------
 
 /// return a value that can be stored in an RG8 format to indicate an invalid G-Buffer entry
 uvec2 invalidGBufferRG8() {
@@ -148,6 +104,55 @@ bool unpackGBufferRG8(uvec2 g_buffer_packed, out uint label, out vec3 normal, ou
     normalized_depth = float(g_buffer_packed.y) / 255.f;
 
     return true;
+}
+
+bool isDepthValid(float depth) { return depth >= 0.f; }
+
+void writePixel(ivec2 pixel, vec4 color, float depth_valid, uvec2 g_buffer_packed) {
+
+    // invalidate any nan samples
+    if (any(isnan(color)) || any(isinf(color)) || isnan(depth_valid) || isinf(depth_valid)) {
+        color = vec4(1.f, 0.f, 1.f, 1.f);
+        depth_valid = -abs(depth_valid);
+    }
+
+    // if subsamplign is enabled, we only render one pixel per [g_subsampling]^2 block
+    ivec2 subpixel;
+    for (subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
+        for (subpixel.x = 0; subpixel.x < g_subsampling; subpixel.x++) {
+            ivec2 opix = (pixel/g_subsampling)*g_subsampling + subpixel;
+            if (g_camera_still_frames == 0u) {
+                // writing other pixel: initialize with 0 and invalid G-Buffer
+                if (any(notEqual(opix, pixel))) {
+                    imageStore(feedbackOut, opix, vec4(0.f));
+                    imageStore(gBuffer, opix, uvec4(invalidGBufferRG8(), 0u, 0u));
+                }
+                // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame (set .a < 0)
+                else {
+                    imageStore(feedbackOut, opix, vec4(color.rgb, isDepthValid(depth_valid) ? 1.f :  -1.f));
+                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
+                }
+            }
+            else {
+                vec4 prev_color = imageLoad(feedbackIn, opix);
+                // writing other pixel: just copy from previous to current frame
+                if (any(notEqual(opix, pixel))) {
+                    imageStore(feedbackOut, opix, prev_color);
+                    // gBuffer remains unchanged
+                }
+                // writing our pixel, but invalid new sample (from not yet decoded brick)
+                else if (!isDepthValid(depth_valid)) {
+                    imageStore(feedbackOut, opix, prev_color.a > 0.f ? prev_color : vec4(color.rgb, -1.f));
+                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
+                }
+                // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
+                else {
+                    imageStore(feedbackOut, opix, vec4(color.rgb, 1.f) + (prev_color.a > 0.f ? prev_color : vec4(0.f)));
+                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
+                }
+            }
+        }
+    }
 }
 
 #endif // VOLCANITE_FRAMEBUFFER_GLSL
