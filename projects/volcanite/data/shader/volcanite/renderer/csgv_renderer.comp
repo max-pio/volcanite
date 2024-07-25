@@ -269,7 +269,7 @@ void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
 
 void main() {
     // obtain pixel and fragment coordinates
-    ivec2 viewport_size = imageSize(feedbackOut);
+    ivec2 viewport_size = imageSize(accumulationOut);
 
     // contains thread to pixel mapping for optional subsampling
     ivec2 pixel = pixelFromInvocationID();
@@ -297,7 +297,7 @@ void main() {
     // if the ray does not hit the data set, directly output the background
     if (t_0 >= t_1) {
         ray.direction = normalize(g_model_to_world_space_dir * ray.direction);
-        writePixel(pixel, get_background_color(fragCoord, ray.direction), BACKGROUND_DEPTH, invalidGBufferRG8());
+        writePixel(pixel, vec4(0.f), BACKGROUND_DEPTH, noHitGBufferRG8());
         return;
     }
 
@@ -313,7 +313,7 @@ void main() {
     state.out_color = vec4(0.f);
     state.depth_valid = BACKGROUND_DEPTH;
     state.normal = vec3(0.f);
-    state.packedGBuffer = invalidGBufferRG8();
+    state.packedGBuffer = noHitGBufferRG8();
 
     // initialize DDA traversal with t_0  offset to prevent aliasing
     dda_init(state, ray, t_0 - 0.01f);
@@ -397,7 +397,7 @@ void main() {
         if (surface_albedo_opacity.a < 1.f) {
             if (state.last_label != state.label) {
                 // add the contribution of a semi-transparent surface (local shading only)
-                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * surface_albedo_opacity.a;
+                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_light_intensity * surface_albedo_opacity.a;
 
                 // throughput is reduced by the opacity of the surface
                 state.throughput *= 1.f - surface_albedo_opacity.a;
@@ -531,7 +531,7 @@ void main() {
 
     // ToDo: the background should be added in the csgv_upsample_resolve shader
     // perform alpha blending with background and write to image
-    state.out_color.rgb = (1.f - state.out_color.a) * get_background_color(fragCoord, ray.direction).rgb
-                          + state.out_color.a * state.out_color.rgb;
+//    state.out_color.rgb = (1.f - state.out_color.a) * get_background_color(fragCoord, ray.direction).rgb
+//                          + state.out_color.a * state.out_color.rgb;
     writePixel(pixel, state.out_color, state.depth_valid, state.packedGBuffer);
 }

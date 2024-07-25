@@ -16,8 +16,8 @@ bool DEBUG_vis_lod_rectangles(ivec2 pixel, const bool enabled) {
         return false;
 
     for (uint lod = 0; lod < g_lod_count; lod++) {
-        if (any(greaterThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) - 2u)))) {
-            if (all(lessThanEqual(abs(ivec2(pixel) - ivec2(imageSize(feedbackOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) + 2u)))) {
+        if (any(greaterThanEqual(abs(ivec2(pixel) - ivec2(imageSize(accumulationOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) - 2u)))) {
+            if (all(lessThanEqual(abs(ivec2(pixel) - ivec2(imageSize(accumulationOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) + 2u)))) {
                 writePixel(pixel, vec4(colormap_viridis(float(g_lod_count - 1u - lod)/float(g_lod_count - 1u)), 1.f), BACKGROUND_DEPTH, invalidGBufferRG8());
                 return true;
             }

@@ -47,7 +47,7 @@ void main() {
         return;
 
     // rgb stores radiance sum, alpha stores number of samples
-    vec4 accum_color = imageLoad(feedbackOut, pixel);
+    vec4 accum_color = imageLoad(accumulationOut, pixel);
 
     if(accum_color.a == 0.f) {
         accum_color = vec4(0.f);
@@ -59,7 +59,7 @@ void main() {
                 for(block_pixel.x = block.x * g_subsampling; block_pixel.x < (block.x + 1) * g_subsampling; block_pixel.x++) {
                     if(any(greaterThanEqual(block_pixel, viewport_size)))
                         continue;
-                    accum_color += imageLoad(feedbackOut, block_pixel);
+                    accum_color += imageLoad(accumulationOut, block_pixel);
                 }
             }
         }

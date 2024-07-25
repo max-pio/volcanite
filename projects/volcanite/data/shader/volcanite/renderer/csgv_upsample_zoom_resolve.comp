@@ -84,7 +84,7 @@ void main() {
         pixel = (pixel - transl) / getInletZoom(pixel, viewport_size) + transl;
 
         if(!isHelperLane(pixel, viewport_size)) {
-            accum_color = imageLoad(feedbackOut, pixel);
+            accum_color = imageLoad(accumulationOut, pixel);
             // account for "invalid" samples of undecoded regions being marked with a negative number
             accum_color.a = abs(accum_color.a);
         }
@@ -105,7 +105,7 @@ void main() {
                 // if no sample is set for the pixel yet, we assume that the color is 0
                 if(!isHelperLane(block_pixel, viewport_size)) {
                     // weight the pixel colors by sample counts
-                    vec4 rgb_samples = imageLoad(feedbackOut, block_pixel);
+                    vec4 rgb_samples = imageLoad(accumulationOut, block_pixel);
                     // we take the abs because invalid samples are marked with a sample count < 0 (usually -1)
                     if(abs(rgb_samples.a) > 0.f) {
                         accum_color.rgb += rgb_samples.rgb / abs(rgb_samples.a);

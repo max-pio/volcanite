@@ -225,10 +225,12 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
     m_pass->setStorageImage("inpaintedOutColor", *m_inpaintedOutColor);
     // feedback texture ping pong for the inpainting shader
-    m_pass->setStorageImage("feedbackIn", *m_feedback_tex[m_frame % 2u]);
-    m_pass->setStorageImage("feedbackOut", *m_feedback_tex[1u - (m_frame % 2u)]);
+    m_pass->setStorageImage("accumulationIn", *m_accumulation_rgba_tex[m_frame % 2u]);
+    m_pass->setStorageImage("accumulationOut", *m_accumulation_rgba_tex[1u - (m_frame % 2u)]);
+    m_pass->setStorageImage("accuSampleCountIn", *m_accumulation_samples_tex[m_frame % 2u]);
+    m_pass->setStorageImage("accuSampleCountOut", *m_accumulation_samples_tex[1u - (m_frame % 2u)]);
     // 16 bit packed gBuffer texture storing
-    m_pass->setStorageImage("gBuffer", *m_gBuffer_tex);
+    m_pass->setStorageImage("gBuffer", *m_g_buffer_tex);
 
 
     std::vector<std::shared_ptr<Awaitable>> renderAwaitableList = {};
@@ -639,9 +641,16 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
 
     // recreate all swapchain image sized textures
     vvv::AwaitableList reinitDone;
-    m_feedback_tex[0] = m_pass->reflectTexture("feedbackIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
-    m_feedback_tex[1] = m_pass->reflectTexture("feedbackOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
-    for (auto & texture : m_feedback_tex) {
+    m_accumulation_rgba_tex[0] = m_pass->reflectTexture("accumulationIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_accumulation_rgba_tex[1] = m_pass->reflectTexture("accumulationOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    for (auto & texture : m_accumulation_rgba_tex) {
+        texture->ensureResources();
+        const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
+        reinitDone.push_back(layoutTransformDone);
+    }
+    m_accumulation_samples_tex[0] = m_pass->reflectTexture("accuSampleCountIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_accumulation_samples_tex[1] = m_pass->reflectTexture("accuSampleCountOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    for (auto & texture : m_accumulation_samples_tex) {
         texture->ensureResources();
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
@@ -653,10 +662,10 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
     }
-    m_gBuffer_tex = m_pass->reflectTexture("gBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_g_buffer_tex = m_pass->reflectTexture("gBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     {
-        m_gBuffer_tex->ensureResources();
-        const auto layoutTransformDone = m_gBuffer_tex->setImageLayout(vk::ImageLayout::eGeneral,vk::PipelineStageFlagBits::eAllCommands);
+        m_g_buffer_tex->ensureResources();
+        const auto layoutTransformDone = m_g_buffer_tex->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
     }
 
@@ -684,14 +693,18 @@ void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
         m_mostRecentFrame->texture = nullptr;
         m_mostRecentFrame->renderingComplete = {};
     }
-    if(m_feedback_tex[0])
-        m_feedback_tex[0] = nullptr;
-    if(m_feedback_tex[1])
-        m_feedback_tex[1] = nullptr;
+    if(m_accumulation_rgba_tex[0])
+        m_accumulation_rgba_tex[0] = nullptr;
+    if(m_accumulation_rgba_tex[1])
+        m_accumulation_rgba_tex[1] = nullptr;
+    if(m_accumulation_samples_tex[0])
+        m_accumulation_samples_tex[0] = nullptr;
+    if(m_accumulation_samples_tex[1])
+        m_accumulation_samples_tex[1] = nullptr;
     if (m_inpaintedOutColor)
         m_inpaintedOutColor.reset();// = nullptr;
-    if(m_gBuffer_tex)
-        m_gBuffer_tex = nullptr;
+    if(m_g_buffer_tex)
+        m_g_buffer_tex = nullptr;
 }
 
 void CompressedSegmentationVolumeRenderer::resetGPU() {
@@ -1172,8 +1185,9 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     void CompressedSegmentationVolumeRenderer::printGPUMemoryUsage() {
 
         size_t textures = 0ul;
-        if (m_feedback_tex[0]) {
-            textures += m_feedback_tex[0]->memorySize() + m_feedback_tex[1]->memorySize();
+        if (m_accumulation_rgba_tex[0]) {
+            textures += m_accumulation_rgba_tex[0]->memorySize() + m_accumulation_rgba_tex[1]->memorySize();
+            textures += m_accumulation_samples_tex[0]->memorySize() + m_accumulation_samples_tex[1]->memorySize();
             for (const auto &t: *m_inpaintedOutColor)
                 textures += t->memorySize();
         }
