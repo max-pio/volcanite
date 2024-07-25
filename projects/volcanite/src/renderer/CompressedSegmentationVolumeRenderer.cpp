@@ -193,7 +193,8 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     }
 
     // just return the last result if only a certain number of frames have to be accumulated
-    if (m_accum_frames > 0 && m_framesSinceCameraMove >= m_accum_frames) {
+    // as the sample count buffer is counting in uint16, the maximum number of accumulation frames can be 65535
+    if ((m_accum_frames > 0 && m_framesSinceCameraMove >= m_accum_frames) || m_framesSinceCameraMove >= 65534u) {
         m_framesSinceCameraMove = m_accum_frames;
         return m_mostRecentFrame.value();
     }
@@ -641,8 +642,8 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
 
     // recreate all swapchain image sized textures
     vvv::AwaitableList reinitDone;
-    m_accumulation_rgba_tex[0] = m_pass->reflectTexture("accumulationIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
-    m_accumulation_rgba_tex[1] = m_pass->reflectTexture("accumulationOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_accumulation_rgba_tex[0] = m_pass->reflectTexture("accumulationIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_accumulation_rgba_tex[1] = m_pass->reflectTexture("accumulationOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     for (auto & texture : m_accumulation_rgba_tex) {
         texture->ensureResources();
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);

@@ -178,8 +178,8 @@ layout (std140, binding = 10) uniform render_info {
 #define BACKGROUND_DEPTH 3.402823466e+38
 #define INVALID_DEPTH -3.402823466e+38
 //layout (binding = 12, rgba32f) uniform restrict image2D outDepth;
-layout (binding = 13, rgba32f) uniform restrict readonly image2D accumulationIn;
-layout (binding = 14, rgba32f) uniform restrict image2D accumulationOut;
+layout (binding = 13, rgba16f) uniform restrict readonly image2D accumulationIn;
+layout (binding = 14, rgba16f) uniform restrict image2D accumulationOut;
 layout (binding = 21, r16ui) uniform restrict readonly uimage2D accuSampleCountIn;
 layout (binding = 22, r16ui) uniform restrict uimage2D accuSampleCountOut;
 
