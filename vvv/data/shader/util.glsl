@@ -1,16 +1,38 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #ifndef UTIL_H
 #define UTIL_H
 
-const float PI = 3.1415926535897932384626433832795;
-const float PI_2 = 1.57079632679489661923;
-const float PI_4 = 0.785398163397448309616;
+#ifndef PI
+    #define PI 3.14159265359f
+#endif
+#ifndef TWO_PI
+    #define TWO_PI 6.28318530718f
+#endif
+#ifndef ONE_OVER_PI
+    #define ONE_OVER_PI 0.3183098861837907f
+#endif
+#ifndef ONE_OVER_TWO_PI
+    #define ONE_OVER_TWO_PI 0.1591549430918953f
+#endif
 
-/**
- * Check whether a dispatched thread is out of bounds.
- *
- * This happens when the screen size is not a integer multiple of the workgroup size in a compute dispatch, or if the
- * screen size is uneven in a fragment dispatch causing half of the pixel quad to be out of bounds.
- */
+/// Check whether a dispatched thread is out of bounds.
+///
+/// This happens when the screen size is not a integer multiple of the workgroup size in a compute dispatch, or if the
+/// screen size is uneven in a fragment dispatch causing half of the pixel quad to be out of bounds.
 bool isHelperLane(ivec2 invocationIdx, ivec2 targetSize) {
     return invocationIdx.x >= targetSize.x || invocationIdx.y >= targetSize.y;
 }
@@ -62,4 +84,24 @@ bool isFirstWorkItem() {
     return all(equal(gl_GlobalInvocationID, uvec3(0u)));
 }
 
-#endif /* UTIL_H */
+int maxComponent(vec3 v) {
+    if (v.x < v.y) {
+        if (v.x < v.z) {
+            return 0;
+        } else {
+            return 2;
+        }
+    } else {
+        if (v.y < v.z) {
+            return 1;
+        } else {
+            return 2;
+        }
+    }
+}
+
+float map(float v, float v_min, float v_max, float new_min, float new_max) {
+    return (v - v_min) / (v_max - v_min) * (new_max - new_min) + new_min;
+}
+
+#endif // UTIL_H

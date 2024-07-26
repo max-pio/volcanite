@@ -1,6 +1,3 @@
-// Taken from commit ed028b0 at https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/master/layers/vk_format_utils.h
-// and made to compile by commenting out VK_EXT_ycbcr_2plane_444_formats specific code and inlining header "vk_layer_data.h"
-
 #define VK_LAYER_EXPORT
 
 /* Copyright (c) 2015-2017, 2019-2021 The Khronos Group Inc.

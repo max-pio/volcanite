@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <string>
@@ -5,13 +20,17 @@
 #include <iostream>
 #include <optional>
 #include <tclap/CmdLine.h>
-#include "portable-file-dialogs.h"
+#ifndef HEADLESS
+    #include "portable-file-dialogs.h"
+#endif
 
 #include "vvv/util/Logger.hpp"
 // ToDo: Split the rANS-Mode etc into a separate Header / forward decl
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 struct VolcaniteArgs {
 
@@ -103,10 +122,12 @@ public:
             ValueArg<std::string> chunkedArg("", "chunked", "Compress chunked segmented volume using formatted <volume> path with inclusive x, y, and z chunk file ranges as: \".*{[0..<xn>]}.*{[0..<yn>]}.*{[0..<zn>]}.*\".", false, "", "xn,yn,zn", cmd);
             ValueArg<uint32_t> subsamplingArg("", "freq-sampling", "Compression prepass acceleration by given factor cubed. Affects strength 1 or 2 only.", false, va.freq_subsampling, "int", cmd);
             ValueArg<uint32_t> threadsArg("", "threads", "Number of CPU threads for (de)compression parallelization.", false, va.threads, "int", cmd);
-            ValuesConstraint<uint32_t> allowedStrength({0u, 1u, 2u});
+            std::vector<uint32_t> _allowedStrength = {0u, 1u, 2u};
+            ValuesConstraint<uint32_t> allowedStrength(_allowedStrength);
             ValueArg<uint32_t> strengthArg("s", "strength", "Compress with more expensive but stronger variable bit-length encoding (1). Use two frequency tables for even stronger compression (2).", false, 2, &allowedStrength);
             cmd.add(strengthArg);
-            ValuesConstraint<uint32_t> allowedBrickSize({8u, 16u, 32u, 64u, 128u});
+            std::vector<uint32_t> _allowedBrickSize = {8u, 16u, 32u, 64u, 128u};
+            ValuesConstraint<uint32_t> allowedBrickSize(_allowedBrickSize);
             ValueArg<uint32_t> bricksizeArg("b", "brick-size", "Compress with given brick size.", false, va.brick_size, &allowedBrickSize);
             cmd.add(bricksizeArg);
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
@@ -168,19 +189,23 @@ public:
             // if no input file was specified, try to open a file dialog
             std::string input_file = expandPath(inputpathArg.getValue());
             if(input_file.empty()) {
+#ifdef HEADLESS
+                throw ArgException("Must provide input file in headless mode", inputpathArg.longID(""));
+#else
                 if(va.headless)
-                    throw ArgException("Must provide input file in headless mode", inputpathArg.longID());
+                    throw ArgException("Must provide input file in headless mode", inputpathArg.longID(""));
                 if (!pfd::settings::available())
-                    throw ArgException("Must provide input file as file dialogs are unavailable", inputpathArg.longID());
+                    throw ArgException("Must provide input file as file dialogs are unavailable", inputpathArg.longID(""));
 
                 // Open a file dialog to choose a file
                 auto selected_file = pfd::open_file("Open Segmentation Volume", pfd::path::home(),
                                                     { "Segmentation Volumes (.csgv .vti .hdf5 .h5 .raw .vraw .nrrd .nhdr)", "*.csgv *.vti *.hdf5 *.h5 *.raw *.vraw *.nrrd *.nhdr", "All Files", "*" });
                 if(selected_file.result().empty()) {
-                    throw ArgException("No input file was provided", inputpathArg.longID());
+                    throw ArgException("No input file was provided", inputpathArg.longID(""));
                 }
 
                 input_file = selected_file.result().at(0);
+#endif
             }
             va.input_file = input_file;
             // some arguments depend on if we import a previously compressed .csgv file..
@@ -197,7 +222,7 @@ public:
                     || input_file.ends_with(".raw") || input_file.ends_with(".vraw")
                     || input_file.ends_with(".hdf5") || input_file.ends_with(".h5")
                     || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {
-                    throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.h5|.raw|.vraw|.nrrd|.nhdr})", inputpathArg.longID());
+                    throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.h5|.raw|.vraw|.nrrd|.nhdr})", inputpathArg.longID(""));
                 }
 
                 if(!va.decompress_export_file.empty()) {
@@ -275,12 +300,12 @@ public:
                             if (pos - last_pos < 3)
                                 throw ArgException(
                                         "Input file path must contain at least one other character between consecutive {} for x,y,z indices in chunked data",
-                                        inputpathArg.longID());
+                                        inputpathArg.longID(""));
                         }
                         if (count != 3)
                             throw ArgException(
                                     "Input file path must contain exactly three placeholders {} for x,y,z indices in chunked data",
-                                    inputpathArg.longID());
+                                    inputpathArg.longID(""));
                     }
                 }
                 va.run_tests = testArg.getValue();
@@ -300,4 +325,4 @@ public:
     }
 };
 
-} // namespace vvv
+} // namespace volcanite

@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <vvv/volren/tf/TransferFunction.hpp>
@@ -9,9 +24,7 @@ class TransferFunction1D;
 class SinglePassCompute;
 class UniformReflected;
 
-/**
- * This 2D-Transfer function uses a fixed color map for x-Values and uses polygons to define regions in the plane with positive opacity.
- */
+/// This 2D-Transfer function uses a fixed color map for x-Values and uses polygons to define regions in the plane with positive opacity.
 class TransferFunction2D : public TransferFunction {
 public:
     TransferFunction2D(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering, uint32_t resolution, uint32_t queue = 0);
@@ -21,7 +34,7 @@ public:
 
     std::string preprocessorLabel() override { return "TRANSFER_FUNCTION_MODE_2D"; }
 
-    //! colormap should already be upload()-ed. You need to call @c upload() on @c TransferFunction2D to apply the new colormap. */
+    /// colormap should already be upload()-ed. You need to call @c upload() on @c TransferFunction2D to apply the new colormap. */
     void setColormapTF(std::shared_ptr<TransferFunction1D> colormap) { m_colormapTF = std::move(colormap); }
 
     /// each polygon is specified with points in range [0-1] and can be in any order. You need to call @c upload() on @c TransferFunction2D to apply the new colormap.

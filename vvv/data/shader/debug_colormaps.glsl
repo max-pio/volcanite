@@ -2,16 +2,11 @@
 #define DEBUG_COLORMAPS_H
 
 
-// A collection of colormap approximations that you can use in your GLSL shaders.
-// Use this only for testing out new stuff / prototyping / debugging since the computations are quite slow.
-// Generally, you should use a texture to lookup color map or transfer function values.
-
 vec3 colormap_blackwhite(float t) {
-    t = clamp(t, 0.f, 1.f);
-    return vec3(t);
+    return vec3(clamp(t, 0.f, 1.f));
 }
 
-// taken from https://www.shadertoy.com/view/WlfXRN
+// taken from CC0 https://www.shadertoy.com/view/WlfXRN
 // fitting polynomials to matplotlib colormaps
 //
 // License CC0 (public domain)
@@ -61,6 +56,7 @@ vec3 colormap_plasma(float t) {
     return c0+t*(c1+t*(c2+t*(c3+t*(c4+t*(c5+t*c6)))));
 }
 
+
 // Copyright 2019 Google LLC.
 // SPDX-License-Identifier: Apache-2.0
 // Polynomial approximation in GLSL for the Turbo colormap
@@ -85,95 +81,6 @@ vec3 colormap_turbo(float t) {
     dot(v4, kGreenVec4) + dot(v2, kGreenVec2),
     dot(v4, kBlueVec4)  + dot(v2, kBlueVec2)
     );
-}
-
-// adapted color map IDL/CB-YIGnBu from https://github.com/kbinani/colormap-shaders
-vec3 colormap_greenblue(float x) {
-    float r;
-    if (x < 0.2523055374622345) {
-        r = (-5.80630393656902E+02 * x - 8.20261301968494E+01) * x + 2.53829637096771E+02;
-    } else if (x < 0.6267540156841278) {
-        r = (((-4.07958939010649E+03 * x + 8.13296992114899E+03) * x - 5.30725139102868E+03) * x + 8.58474724851723E+02) * x + 2.03329669375107E+02;
-    } else if (x < 0.8763731146612115) {
-        r = 3.28717357910916E+01 * x + 8.82117255504255E+00;
-    } else {
-        r = -2.29186583577707E+02 * x + 2.38482038123159E+02;
-    }
-
-    float g;
-    if (x < 0.4578040540218353) {
-        g = ((4.49001704856054E+02 * x - 5.56217473429394E+02) * x + 2.09812296466262E+01) * x + 2.52987561849833E+02;
-    } else {
-        g = ((1.28031059709139E+03 * x - 2.71007279113343E+03) * x + 1.52699334501816E+03) * x - 6.48190622715140E+01;
-    }
-
-    float b;
-    if (x < 0.1239372193813324) {
-        b = (1.10092779856059E+02 * x - 3.41564374557536E+02) * x + 2.17553885630496E+02;
-    } else if (x < 0.7535201013088226) {
-        b = ((((3.86204601547122E+03 * x - 8.79126469446648E+03) * x + 6.80922226393264E+03) * x - 2.24007302003438E+03) * x + 3.51344388740066E+02) * x + 1.56774650431396E+02;
-    } else {
-        b = (((((-7.46693234167480E+06 * x + 3.93327773566702E+07) * x - 8.61050867447971E+07) * x + 1.00269040461745E+08) * x - 6.55080846112976E+07) * x + 2.27664953009389E+07) * x - 3.28811994253461E+06;
-    }
-
-    return clamp(vec3(r, g, b) / 255.f, vec3(0.f), vec3(1.f));
-}
-
-// adapted color map IDL/CB-RdBu from https://github.com/kbinani/colormap-shaders
-vec3 colormap_bluered(float t) {
-    t = 1.f - clamp(t, 0.f, 1.f);
-    float r, g, b;
-
-    if (t < 0.09771832105856419) {
-        r = 7.60263247863246E+02 * t + 1.02931623931624E+02;
-    } else if (t < 0.3017162107441106) {
-        r = (-2.54380938558548E+02 * t + 4.29911571188803E+02) * t + 1.37642085716717E+02;
-    } else if (t < 0.4014205790737471) {
-        r =  8.67103448276151E+01 * t + 2.18034482758611E+02;
-    } else if (t < 0.5019932233215039) {
-        r = -6.15461538461498E+01 * t + 2.77547692307680E+02;
-    } else if (t < 0.5969483882550937) {
-        r = -3.77588522588624E+02 * t + 4.36198819698878E+02;
-    } else if (t < 0.8046060096654594) {
-        r = (-6.51345897546620E+02 * t + 2.09780968434337E+02) * t + 3.17674951640855E+02;
-    } else {
-        r = -3.08431855203590E+02 * t + 3.12956742081421E+02;
-    }
-
-    if (t < 0.09881640500975222) {
-        g = 2.41408547008547E+02 * t + 3.50427350427364E-01;
-    } else if (t < 0.5000816285610199) {
-        g = ((((1.98531871433258E+04 * t - 2.64108262469187E+04) * t + 1.10991785969817E+04) * t - 1.92958444776211E+03) * t + 8.39569642882186E+02) * t - 4.82944517518776E+01;
-    } else if (t < 0.8922355473041534) {
-        g = (((6.16712686949223E+03 * t - 1.59084026055125E+04) * t + 1.45172137257997E+04) * t - 5.80944127411621E+03) * t + 1.12477959061948E+03;
-    } else {
-        g = -5.28313797313699E+02 * t + 5.78459299959206E+02;
-    }
-
-    if (t < 0.1033699568661857) {
-        b = 1.30256410256410E+02 * t + 3.08518518518519E+01;
-    } else if (t < 0.2037526071071625) {
-        b = 3.38458128078815E+02 * t + 9.33004926108412E+00;
-    } else if (t < 0.2973267734050751) {
-        b = (-1.06345054944861E+02 * t + 5.93327252747168E+02) * t - 3.81852747252658E+01;
-    } else if (t < 0.4029109179973602) {
-        b = 6.68959706959723E+02 * t - 7.00740740740798E+01;
-    } else if (t < 0.5006715489526758) {
-        b = 4.87348695652202E+02 * t + 3.09898550724286E+00;
-    } else if (t < 0.6004396902588283) {
-        b = -6.85799999999829E+01 * t + 2.81436666666663E+02;
-    } else if (t < 0.702576607465744) {
-        b = -1.81331701891043E+02 * t + 3.49137263626287E+02;
-    } else if (t < 0.9010407030582428) {
-        b = (2.06124143164576E+02 * t - 5.78166906665595E+02) * t + 5.26198653917172E+02;
-    } else {
-        b = -7.36990769230737E+02 * t + 8.36652307692262E+02;
-    }
-
-	r = clamp(r / 255.0, 0.0, 1.0);
-	g = clamp(g / 255.0, 0.0, 1.0);
-	b = clamp(b / 255.0, 0.0, 1.0);
-	return vec3(r, g, b);
 }
 
 #endif // DEBUG_COLORMAPS_H

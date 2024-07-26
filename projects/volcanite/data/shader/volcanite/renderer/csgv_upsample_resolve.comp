@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_debug_printf : enable
@@ -7,6 +22,8 @@ layout (local_size_x = 8, local_size_y = 8) in;
 
 #include "csgv_bindings.glsl"
 #include "util.glsl"
+#include "framebuffer.glsl"
+#include "dummy_envmap.glsl"
 
 vec3 rgb2srgb(vec3 x) {
     return pow(x, vec3(2.2f));
@@ -22,71 +39,102 @@ vec3 tonemap_ACES(vec3 x)
     return clamp((x*(a*x+b))/(x*(c*x+d)+e), vec3(0.f), vec3(1.f));
 }
 
+
+// inplace alpha blending of pixel_rgba with the background color that is visible for the primary ray through block_pixel
+vec4 blendWithBackground(vec4 pixel_rgba, ivec2 block_pixel) {
+    vec2 subpixel_offset = randomVec3(block_pixel, g_camera_still_frames).xy;
+    vec2 fragCoord = (vec2(block_pixel) + subpixel_offset) / vec2(imageSize(inpaintedOutColor));
+    vec3 viewRayDirection = normalize((g_pixel_to_ray_direction_world_space * vec3(block_pixel + subpixel_offset, 1.0f)).xyz);
+    pixel_rgba = pixel_rgba.a * pixel_rgba + (1.f - pixel_rgba.a) * get_background_color(fragCoord, viewRayDirection);
+    return pixel_rgba;
+}
+
 void main() {
     // obtain pixel and fragment coordinates
     const ivec2 viewport_size = imageSize(inpaintedOutColor);
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
 
     // we output a low resolution image were multiple pixel are merged into one if the image does not have all pixels set yet
+//#define NO_UPSAMPLING
+#ifdef NO_UPSAMPLING
+    const int current_block_size = 1;
+#else
     const int current_block_size = clamp(g_subsampling / (1 << int(log2(sqrt(g_camera_still_frames + 1)))), 1, g_subsampling);
+#endif
     pixel *= current_block_size;
 
     // only one thread per pixel block
-    if(isHelperLane(pixel, viewport_size))
+    if (isHelperLane(pixel, viewport_size))
         return;
 
-    // rgb stores radiance sum, alpha stores number of samples
-    vec4 accum_color = vec4(0.f);
+    // rgb stores radiance sum, alpha stores opacity sum
+    vec4 block_rgba_sum = vec4(0.f);
+    float block_weight_sum = 0.f;
 
-    // after enough frames have passed, the block size is one <=> each pixel has a valid sample
-    if(current_block_size == 1) {
-        accum_color = imageLoad(feedbackOut, pixel);
-        // account for "invalid" samples of undecoded regions being marked with a negative number
-        accum_color.a = abs(accum_color.a);
-    }
-    // otherwise, we compute the average color of the whole block
-    else {
-        // compute an average of all pixels in this
-        ivec2 block_pixel;
-        for(block_pixel.y = pixel.y; block_pixel.y < pixel.y + current_block_size; block_pixel.y++) {
-            for(block_pixel.x = pixel.x; block_pixel.x < pixel.x + current_block_size; block_pixel.x++) {
-                // if no sample is set for the pixel yet, we assume that the color is 0
-                if(!isHelperLane(block_pixel, viewport_size)) {
-                    // weight the pixel colors by sample counts
-                    vec4 rgb_samples = imageLoad(feedbackOut, block_pixel);
-                    // we take the abs because invalid samples are marked with a sample count < 0 (usually -1)
-                    if(abs(rgb_samples.a) > 0.f) {
-                        accum_color.rgb += rgb_samples.rgb / abs(rgb_samples.a);
-                        // store correct sample count
-                        accum_color.a += 1.f;
-                    }
+    // compute an average of all pixels in this pixel block (block size will be 1 after enough frames passed)
+    ivec2 block_pixel;
+    for (block_pixel.y = pixel.y; block_pixel.y < pixel.y + current_block_size; block_pixel.y++) {
+        for (block_pixel.x = pixel.x; block_pixel.x < pixel.x + current_block_size; block_pixel.x++) {
+
+            if (!isHelperLane(block_pixel, viewport_size)) {
+                // check if this pixel did not receive any samples yet
+                if (isInvalidGBufferRG8(imageLoad(gBuffer, block_pixel).rg)) {
+                    continue;
                 }
+
+                // even if there are no "valid" samples in the accumulation, there is at least one sample that is
+                // invalid and will be overwritten later, but that can be gathered in the current resolve pass.
+                uint sample_count = max(imageLoad(accuSampleCountOut, block_pixel).r, 1u);
+                vec4 pixel_rgba = imageLoad(accumulationOut, block_pixel) / float(sample_count);
+
+                //pixel_rgba.rgb = normal;
+
+                // alpha blend color with background
+                pixel_rgba = blendWithBackground(pixel_rgba, block_pixel);
+
+                // all samples are weighted equally yet
+                const float weight = 1.f;
+                block_rgba_sum += weight * pixel_rgba;
+                block_weight_sum += weight;
             }
         }
     }
 
-    // weight by sample count
-    if(accum_color.a > 0.f)
-        accum_color.rgb /= accum_color.a;
+    // weight by summed weight of all included pixels count
+    if (block_weight_sum > 0u) {
+        block_rgba_sum /= float(block_weight_sum);
+    }
 
     // perform tonemapping and color space conversion
-    if(g_tonemap_enable) {
-        accum_color.rgb *= 2.4f; // increase exposure
-        accum_color.rgb = tonemap_ACES(accum_color.rgb);
-        accum_color.rgb = rgb2srgb(accum_color.rgb);
+    if (g_tonemap_enable) {
+        block_rgba_sum.rgb *= 2.4f; // increase exposure
+        block_rgba_sum.rgb = tonemap_ACES(block_rgba_sum.rgb);
+        block_rgba_sum.rgb = rgb2srgb(block_rgba_sum.rgb);
     }
 
     // output to display image
-    if(current_block_size == 1) {
-        imageStore(inpaintedOutColor, pixel, vec4(accum_color.rgb, 1.f));
+    if (current_block_size == 1) {
+        imageStore(inpaintedOutColor, pixel, block_rgba_sum);
     }
     // if the block size is > 1, write to all those pixels
     else {
         ivec2 block_pixel;
         for(block_pixel.y = pixel.y; block_pixel.y < pixel.y + current_block_size; block_pixel.y++) {
             for(block_pixel.x = pixel.x; block_pixel.x < pixel.x + current_block_size; block_pixel.x++) {
-                if(!isHelperLane(block_pixel, viewport_size))
-                imageStore(inpaintedOutColor, block_pixel, vec4(accum_color.rgb, 1.f));
+                if(!isHelperLane(block_pixel, viewport_size)) {
+
+                    // pixels that already received a valid sample use their own sample.
+                    // other pixels obtain the average color of the current pixel block.
+                    if (isInvalidGBufferRG8(imageLoad(gBuffer, block_pixel).rg)) {
+                        imageStore(inpaintedOutColor, block_pixel, vec4(block_rgba_sum.rgb, 1.f));
+                    } else {
+                        uint sample_count = max(imageLoad(accuSampleCountOut, block_pixel).r, 1u);
+                        vec4 pixel_rgba = imageLoad(accumulationOut, block_pixel) / float(sample_count);
+                        imageStore(inpaintedOutColor, block_pixel, blendWithBackground(pixel_rgba, block_pixel));
+                    }
+
+                    // imageStore(inpaintedOutColor, block_pixel, vec4(rgba_sum.rgb, 1.f));
+                }
             }
         }
     }

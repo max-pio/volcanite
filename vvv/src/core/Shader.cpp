@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include <vvv/core/Shader.hpp>
 
 #include <vvv/util/Paths.hpp>
@@ -11,8 +26,8 @@
 #include <SPIRV-Reflect/spirv_reflect.h>
 
 namespace vvv {
-/*! Returns the standardized name for the given shader stage, e.g. "vert" or
-        "frag". Only one bit of VkShaderStageFlagBits can be set in the input.*/
+/// Returns the standardized name for the given shader stage, e.g. "vert" or "frag". Only one bit of
+/// VkShaderStageFlagBits can be set in the input.
 std::string get_shader_stage_name(vk::ShaderStageFlagBits stage) {
     switch (stage) {
     case vk::ShaderStageFlagBits::eVertex:

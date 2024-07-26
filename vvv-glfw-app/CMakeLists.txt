@@ -3,6 +3,7 @@ project(vvvwindow VERSION 0.1 DESCRIPTION "GFLW GUI window for VVV applications"
 
 set(HEADERS
         include/vvvwindow/App.hpp
+        include/vvvwindow/GLFWCameraController.hpp
         include/vvvwindow/GuiImgui.hpp
         include/vvvwindow/entrypoint.hpp
         include/vvvwindow/tf/TransferFunction1DWidget.hpp
@@ -12,6 +13,7 @@ set(HEADERS
 
 set(SOURCES
         src/App.cpp
+        src/GLFWCameraController.cpp
         src/GuiImgui.cpp
         src/entrypoint.cpp
         src/tf/TransferFunction1DWidget.cpp
@@ -31,7 +33,7 @@ target_compile_definitions(libvvvwindow PRIVATE -DVULKAN_HPP_STORAGE_SHARED=1)
 # find other packages
 #set(THREADS_PREFER_PTHREAD_FLAG ON)
 #find_package(Threads REQUIRED)
-find_package(glfw3 REQUIRED)
+#find_package(glfw3 REQUIRED)
 #if(NOT GLFW_FOUND)
 #    # stop the CMake creation if GLFW is not available here
 #    message(FATAL_ERROR "Cannot find required GLFW3 package. Set the CMake option HEADLESS for building without any GUI Application requirements.")
@@ -41,7 +43,7 @@ target_compile_definitions(libvvvwindow PUBLIC -DGLFW=1)
 # link libraries
 target_link_libraries(libvvvwindow
         PUBLIC LibVVV::libvvv
-        PRIVATE ${GLFW_LIBRARIES}
+        PRIVATE glfw
         PRIVATE ${CMAKE_DL_LIBS}
         PRIVATE tclap::tclap
 #        PRIVATE Threads::Threads
@@ -53,8 +55,7 @@ else()
 endif()
 
 target_include_directories(libvvvwindow
-        PRIVATE
-        imgui
+        PRIVATE imgui
         PUBLIC
         # include paths depend on installed or build library
         $<INSTALL_INTERFACE:include>
@@ -65,4 +66,4 @@ target_include_directories(libvvvwindow
         )
 
 # add data/ folder as target_property to install() by each project
-set_target_properties(libvvvwindow PROPERTIES DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)
+set_target_properties(libvvvwindow PROPERTIES INTERFACE_DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)

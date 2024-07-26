@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include "preamble_forward_decls.hpp"
@@ -24,19 +39,16 @@ const bool EnableVulkanValidationLayersByDefault =
 #endif
     ;
 
-/**
- * Queue family indices without presentation queue.
- *
- * If available, compute and transfer will be dedicated queues distinct
- * from the graphics queue.
- *
- * If possible, the present queue will be the same as the graphics queue
- * to reduce queue transfers.
- *
- * Note: it's recommended to retrieve the optional contents with `.value()`
- * instead of dereferencing. the first will throw an exception, the second
- * results in undefined behaviour.
- */
+/// Queue family indices without presentation queue.\n\n
+///
+/// If available, compute and transfer will be dedicated queues distinct
+/// from the graphics queue.
+/// If possible, the present queue will be the same as the graphics queue
+/// to reduce queue transfers.
+///
+/// Note: it's recommended to retrieve the optional contents with `.value()`
+/// instead of dereferencing. the first will throw an exception, the second
+/// results in undefined behaviour.
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphics = {};
     std::optional<uint32_t> compute = {};
@@ -44,7 +56,7 @@ struct QueueFamilyIndices {
     std::optional<uint32_t> present = {};
 };
 
-/** Globally caches created vulkan pipelines. This will speedup pipeline recreations and pipeline creation on application startup. */
+/// Globally caches created vulkan pipelines. This will speedup pipeline recreations and pipeline creation on application startup.
 // TODO(Reiner): actually benchmark this. Note that the official khronos examples cache way more stuff:
 // https://github.com/KhronosGroup/Vulkan-Samples/blob/30e0ef953f9492726945d2042400a3808c8408f5/framework/resource_cache.h
 class GpuPipelineCache {
@@ -58,7 +70,7 @@ protected:
     virtual std::string getPipelineCachePath() { return "vulkan_pipeline_cache.data"; }
 
     void writePipelineCacheToDisk(vk::Device device) {
-        /* Get size of pipeline cache */
+        // Get size of pipeline cache
         auto data = device.getPipelineCacheData(m_pipelineCache);
 
         std::ios_base::sync_with_stdio(false);
@@ -68,7 +80,7 @@ protected:
     }
     void readPipelineCacheFromDisk(vk::Device device) {
 
-        /* Try to read pipeline cache file if exists */
+        // Try to read pipeline cache file if exists
         std::vector<char> pipeline_data;
         vk::PipelineCacheCreateInfo pipelineCacheCreateInfo;
         try {
@@ -102,15 +114,12 @@ struct OpenGLStyleSubmitOptions {
 };
 }; // namespace detail
 
-/**
- * A collection of all vulkan resources that are usually acquired during
- * application initialization.
- *
- * The reference to this class MUST be stable. This allows renderers to internalize
- * a reference to the structure for lifetime management of resources. Methods
- * like `Renderer::initSwapchainResources` should just be understood as events
- * that only announce change for data within the stable class reference.
- */
+/// @brief A collection of all vulkan resources that are usually acquired during application initialization.
+///
+/// The reference to this class MUST be stable. This allows renderers to internalize
+/// a reference to the structure for lifetime management of resources. Methods
+/// like `Renderer::initSwapchainResources` should just be understood as events
+/// that only announce change for data within the stable class reference.
 class GpuContext : public GpuPipelineCache {
 public:
     GpuContext(std::shared_ptr<DebugUtilities> debugUtilities);
@@ -146,7 +155,7 @@ public:
 
     // TODO: maybe the nicer API would be to accept a prebuilt vulkan instance and device here and
     // to execute the DefaultGpuContext initialization if none is given.
-    /** announces that it's safe to call any function on the context. This method is reentrant. */
+    /// announces that it's safe to call any function on the context. This method is reentrant.
     virtual void initContext() {
         const auto device = getDevice();
 
@@ -173,25 +182,18 @@ public:
 
     vk::Queue getQueue(uint32_t queueFamilyIndex = 0) const { return m_queues.at(queueFamilyIndex); }
 
-    /**
-     * Get a primary command buffer for the queue that is automatically released after the work finishes.
-     *
-     * Discouraged API: This is a suboptimal convenience API for research work. Use it for one-off work and similar
-     * convenience APIs that represent a shortcut to get a research prototype running.
-     */
+    /// @brief Get a primary command buffer for the queue that is automatically released after the work finishes.
+    ///
+    /// Discouraged API: This is a suboptimal convenience API for research work. Use it for one-off work and similar
+    /// convenience APIs that represent a shortcut to get a research prototype running.
     vk::CommandBuffer getCommandBuffer(AwaitableHandle awaitable, uint32_t queueFamilyIndex = 0) const; // TODO(Reiner) similarity of the first args to getCommandBuffer is dangerous.
-    /**
-     * Get a command buffer.
-     *
-     * The dependency list `awaitables` is internally copied, you must ensure that the given list of pointers is valid for the whole lifetime of the awaitable.
-     */
+
+    /// @brief Get a command buffer.
+    ///
+    /// The dependency list `awaitables` is internally copied, you must ensure that the given list of pointers is valid for the whole lifetime of the awaitable.
     std::pair<vk::CommandBuffer, AwaitableHandle> getCommandBuffer(AwaitableList awaitables = {}, uint32_t queueFamilyIndex = 0) const;
 
-    /**
-     * Execute some GPU work in the style of OpenGL.
-     *
-     * @return
-     */
+    /// Execute some GPU work in the style of OpenGL.
     vvv::AwaitableHandle executeCommands(std::function<void(vk::CommandBuffer)> writeCommands, detail::OpenGLStyleSubmitOptions opts = {}) const;
 
     virtual vk::Instance getInstance() const = 0;
@@ -209,11 +211,8 @@ public:
     // count of in flight frames?
     std::unique_ptr<Synchronization> sync;
 
-    /**
-     * Methods to interact with the swapchain, resp. windowing system.
-     *
-     * @return `nullptr` if the context is not associated with a windowing system, for example if vulkan is only used for compute work
-     */
+    /// Methods to interact with the swapchain, resp. windowing system.
+    /// @return `nullptr` if the context is not associated with a windowing system, for example if vulkan is only used for compute work
     virtual const WindowingSystemIntegration* getWsi() const { return nullptr; }
 //    virtual std::shared_ptr<const WindowingSystemIntegration> getWsi() const { return nullptr; }
 

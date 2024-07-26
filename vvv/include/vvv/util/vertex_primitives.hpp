@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <vector>
@@ -7,21 +22,18 @@
 namespace vvv
 {
 
-/**
- * VertexPrimitives can be used to generate glm::vec3 arrays of vertices for creating geometric primitives.
- * Primitives have an extension of 1^3 and are centered around (0,0,0) meaning that they lie withing [-0.5, 0.5]^3.
- * transformAll(...) can be used to transform a primitive using a 4x4 transformation matrix.
- *
- * ToDos:
- * - The usage of glm::vec3 wastes one float element and may have alignment problems. We may use a vector of vec4s or simple floats.
- * - These are just vertex vectors. We may use a mesh representation object and/or indexed meshes instead.
- */
+/// @brief VertexPrimitives can be used to generate glm::vec3 arrays of vertices for creating geometric primitives.
+///
+/// Primitives have an extension of 1^3 and are centered around (0,0,0) meaning that they lie withing [-0.5, 0.5]^3.
+/// transformAll(...) can be used to transform a primitive using a 4x4 transformation matrix.
+///
+/// ToDos:\n
+/// - The usage of glm::vec3 wastes one float element and may have alignment problems. We may use a vector of vec4s or simple floats.\n
+/// - These are just vertex vectors. We may use a mesh representation object and/or indexed meshes instead.
 class VertexPrimitives {
 
 public:
-    /**
-     * Transform all vertices of the given vector with the transformation in place.
-     */
+    /// Transform all vertices of the given vector with the transformation in place.
     static void transformAll(std::vector<glm::vec3>& vertices, const glm::mat4 transformation) {
         for(glm::vec3& v : vertices)
             v = glm::vec3(transformation * glm::vec4(v, 1.f));
@@ -106,11 +118,9 @@ public:
 
 private:
 
-    /**
-     * Creates a vector of vec3 elements from a list of floats [x0, y0, z0, x1, y1, z1, x2, ..].
-     * @param vertices Pointer to the coordinate float array.
-     * @param length Single float elements in the array (3x the vertex count).
-     */
+    /// Creates a vector of vec3 elements from a list of floats [x0, y0, z0, x1, y1, z1, x2, ..].
+    /// @param vertices Pointer to the coordinate float array.
+    /// @param length Single float elements in the array (3x the vertex count).
     static std::vector<glm::vec3> createVec3FromFloatList(const glm::float32* vertices, size_t length)
     {
         assert((length % 3) == 0);

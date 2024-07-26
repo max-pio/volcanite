@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <vector>
@@ -7,9 +22,7 @@
 
 namespace vvv {
 
-/**
- * A vectorized representation of a transfer function. Should be rasterized to a `DiscreteTransferFunction` before usage.
- */
+/// A vectorized representation of a transfer function. Should be rasterized to a `DiscreteTransferFunction` before usage.
 class VectorTransferFunction {
 public:
     static const std::vector<float> linearOpacityRamp;
@@ -18,31 +31,29 @@ public:
     std::vector<float> m_controlPointsRgb;
     std::vector<float> m_controlPointsOpacity;
 
-    /**
-     * Create a linearly interpolated transfer function from control points.
-     *
-     * Datagram for the entries in `controlPointsOpacity`:
-     * ```
-     * ┌────────────────────────────────┬─────────────────────────────────┐
-     * │ <float> control point position │ <float> opacity value in [0,1]  │
-     * └────────────────────────────────┴─────────────────────────────────┘
-     * ```
-     *
-     * Datagram for the entries in `controlPointsRgb`:
-     * ```
-     * ┌────────────────────────────────┬───────────┬─────────────┬─────────────┐
-     * │ <float> control point position │ <float> r │  <float> g  │ <float> b   │
-     * └────────────────────────────────┴───────────┴─────────────┴─────────────┘
-     * ```
-     *
-     * The minimal and maximal position of control points may be arbitrary as long as they are monotonically increasing.
-     * Each sequence will be independently remapped to the unit interval automatically.
-     *
-     * Use to control points with an identical position to create a step within the transfer function.
-     *
-     * @param controlPointsRgb
-     * @param controlPointsOpacity
-     */
+    /// @brief Create a linearly interpolated transfer function from control points.
+    ///
+    /// Datagram for the entries in `controlPointsOpacity`:
+    /// ```
+    /// ┌────────────────────────────────┬─────────────────────────────────┐
+    /// │ <float> control point position │ <float> opacity value in [0,1]  │
+    /// └────────────────────────────────┴─────────────────────────────────┘
+    /// ```
+    ///
+    /// Datagram for the entries in `controlPointsRgb`:
+    /// ```
+    /// ┌────────────────────────────────┬───────────┬─────────────┬─────────────┐
+    /// │ <float> control point position │ <float> r │  <float> g  │ <float> b   │
+    /// └────────────────────────────────┴───────────┴─────────────┴─────────────┘
+    /// ```
+    ///
+    /// The minimal and maximal position of control points may be arbitrary as long as they are monotonically increasing.
+    /// Each sequence will be independently remapped to the unit interval automatically.
+    ///
+    /// Use to control points with an identical position to create a step within the transfer function.
+    ///
+    /// @param controlPointsRgb
+    /// @param controlPointsOpacity
     explicit VectorTransferFunction(std::vector<float> controlPointsRgb, std::vector<float> controlPointsOpacity = linearOpacityRamp)
         : m_controlPointsRgb(controlPointsRgb), m_controlPointsOpacity(controlPointsOpacity) {
         assert(!controlPointsRgb.empty() && "expecting at least 2 control points");
@@ -53,24 +64,18 @@ public:
         assert(areControlPointsAreMonotonicallyIncreasing(controlPointsOpacity, 2) && "control point locations of opacity values need to be monotonically increasing");
     };
 
-    /**
-     * Discretize the spline into equidistant samples
-     *
-     * @param width width of the transfer function defining the quality of the discretization
-     * @return
-     */
+    /// Discretize the spline into equidistant samples
+    /// @param width width of the transfer function defining the quality of the discretization
     std::shared_ptr<TransferFunction1D> rasterize(vvv::GpuContextPtr ctx, size_t width) const {
         auto samples = rasterize<uint16_t>(width);
 
         return std::make_shared<TransferFunction1D>(ctx, samples, ChannelOpacityState::PostMultiplied);
     }
 
-    /**
-     * Discretize the spline into equidistant samples
-     *
-     * @param width number of equidistant samples
-     * @return straight/post-multiplied rgba values
-     */
+    /// Discretize the spline into equidistant samples
+    ///
+    /// @param width number of equidistant samples
+    /// @return straight/post-multiplied rgba values
     template <typename T, typename W> std::vector<T> rasterize(W width) const {
         static_assert(std::is_unsigned_v<W>, "width of the rasterized TF must be unsigned integer!" );
         assert(width > 0);

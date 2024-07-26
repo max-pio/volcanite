@@ -1,3 +1,18 @@
+#  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import os
 import string
 
@@ -8,6 +23,7 @@ from vtkmodules.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 import h5py
 import PIL.Image as Image
 import nibabel as nib
+import gzip
 
 import matplotlib.pyplot as plt
 
@@ -155,7 +171,9 @@ def read_nifti(path_in):
     return np.array(nib.load(path_in).dataobj)
 
 def write_nifti(volume, path_out, dtype=None):
-    raise NotImplementedError("writing nifti files not yet implemented")
+    volume = guard_volume_dtype(volume, dtype)
+    nii_image = nib.Nifti2Image(volume, affine=np.eye(4))
+    nib.save(nii_image, path_out)
 
 # VTI
 def read_vti(path_in):
@@ -193,9 +211,30 @@ def write_vti(volume, path_out, dtype=None, as_cell_data=False):
 #                                               UTILITY FUNCTIONS                                                      #
 ########################################################################################################################
 
-def write_volume(volume, path_out, dtype=None):
+def strip_file_extension(path):
+    return os.path.splitext(path)[0]
+
+def guarantee_c_order(_volume):
+    if np.isfortran(_volume):
+        return np.reshape(_volume.flatten(order='F'), _volume.shape)
+    else:
+        return _volume
+
+def copy_as_gzip(path_in):
+    """For an input file volume.abc, creates a second file volume.abc.gz compressed with gzip DEFLATE."""
+
+    with open(path_in, 'rb') as file_in, gzip.open(path_in + ".gz", 'wb') as file_out:
+        file_out.writelines(file_in)
+
+
+def write_volume(volume, path_out, dtype=None, guaranteee_c_order=True, apply_gzip=False):
     """Automatically selects the writer for the respective format based on path_out file extension."""
+
+    if guaranteee_c_order:
+        volume = guarantee_c_order(volume)
+
     extension = path_out[(path_out.rfind('.') + 1):].lower()
+
     if extension == "vraw" or extension == "raw":
         write_vraw(volume, path_out, dtype)
     elif extension == "nrrd":
@@ -210,15 +249,16 @@ def write_volume(volume, path_out, dtype=None):
         write_numpy(volume, path_out, dtype, False)
     elif extension == "npz":
         write_numpy(volume, path_out, dtype, True)
-    elif path_out.endswith(".nii.gz"):
-        return write_nifti(volume, path_out, dtype)
+    elif extension == "nii" or path_out.endswith("nii.gz"):
+        write_nifti(volume, path_out, dtype)
     elif extension == "vti":
-        return write_vti(volume, path_out, dtype)
+        write_vti(volume, path_out, dtype)
     else:
         raise Exception("unknown segmentation volume file extension " + extension)
 
 def read_volume(path_in):
     """Automatically selects the reader for the respective format based on path_out file extension."""
+
     extension = path_in[(path_in.rfind('.') + 1):].lower()
     if extension == "vraw" or extension == "raw":
         return read_vraw(path_in)
@@ -285,8 +325,6 @@ def guard_volume_dtype(volume, dtype):
         volume = volume - vol_max + supported_max
 
     return volume.astype(dtype)
-
-
 
 
 def convert(path_in, path_out, dtype=None):

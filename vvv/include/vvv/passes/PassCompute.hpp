@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <vvv/passes/PassBase.hpp>
@@ -16,7 +31,7 @@
 
 namespace vvv {
 
-/** This is a typesafe wrapper around the non-typesafe but more flexible `PassComputeDynamic` */
+/// This is a typesafe wrapper around the non-typesafe but more flexible `PassComputeDynamic`
 // template <PassComputeStructure Types> class PassCompute : public virtual MultiBuffering, public virtual WithGpuContext /*: PassComputeDynamic */ {
 //     using UniformSets = decltype(Types::uniformSets)::type;
 //     using StorageImages = decltype(Types::storageImages)::type;
@@ -31,11 +46,7 @@ public:
     //
     // A `vk::CommandBuffer executeCommands()` variant that returns a secondary commandbuffer without an argument could be more ergonomic and efficient, but
     // harder to synchronize correctly. Not sure...
-    /**
-     *
-     * @param commandBuffer
-     * @return
-     */
+
     [[nodiscard]] AwaitableHandle execute(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override = 0;
 
 protected:
@@ -75,15 +86,10 @@ struct SinglePassComputeSettings {
     std::shared_ptr<MultiBuffering> multiBuffering = NoMultiBuffering;
     uint32_t queueFamilyIndex = 0;
     vk::Extent3D workgroupCount = {1, 1, 1};
-    /** set to false to lazily initialize GPU state. You MUST call `allocateResources()` prior to any other API call if this is `false`. */
 };
 
-/**
- * A special variant of a compute pass that can execute in a single submission to the GPU. This is the case if the algorithm does
- * not rely on multiple passes or multiple queues.
- *
- * @tparam Types
- */
+/// A special variant of a compute pass that can execute in a single submission to the GPU. This is the case if the algorithm does
+/// not rely on multiple passes or multiple queues.
 class SinglePassCompute : public PassCompute {
 public:
     template <typename... ShaderArgs>

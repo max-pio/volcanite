@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #version 460
 #extension GL_GOOGLE_include_directive : enable
 
@@ -28,17 +43,15 @@ vec4 sampleTransferFunctionUV(float unitRange) {
     return textureLod(SAMPLER_transferFunction1D, lookupPosition, 0);
 }
 
-/**
- * Preintegrates a 1D Transferfunction to a 2D lookup table with the following layout:
- * - scalar_front (`sf`) is on the x-axis and thus varies along the width
- * - scalar_back (`sb`) is on the y-axis and thus varies along the height
- * - (0,0) is a the top left. Note that this implies that the diagonal with sf==sb for homogenous slabs
- *   is stored from top-left to right-bottom
- *
- * This samples the input 1D TF with a constant step size, e.g. the number of steps used
- * for quadrature is variable for each texel in the 2D lookup table since a different
- * interval in the 1D TF is integrated.
- */
+/// Preintegrates a 1D Transferfunction to a 2D lookup table with the following layout:
+/// - scalar_front (`sf`) is on the x-axis and thus varies along the width
+/// - scalar_back (`sb`) is on the y-axis and thus varies along the height
+/// - (0,0) is a the top left. Note that this implies that the diagonal with sf==sb for homogenous slabs
+///   is stored from top-left to right-bottom
+///
+/// This samples the input 1D TF with a constant step size, e.g. the number of steps used
+/// for quadrature is variable for each texel in the 2D lookup table since a different
+/// interval in the 1D TF is integrated.
 void main() {
     // TODO(Reiner): there is a lot of computational overlap between invocations here. Also, each increment
     // of the tableIdx position does twice the work, so the distribution of work to threads in a warp is

@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include "GuiImgui.hpp"
@@ -6,20 +21,24 @@
 #include "vvv/core/Renderer.hpp"
 #include "vvv/core/Shader.hpp"
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
+#include "vvvwindow/GLFWCameraController.hpp"
+
 #include <optional>
 #include <thread>
 #include <filesystem>
+
+// forward decl
+class GLFWwindow;
 
 class Application : public vvv::DefaultGpuContext, public vvv::WindowingSystemIntegration, public std::enable_shared_from_this<Application> {
 private:
     Application(std::string appName, std::shared_ptr<vvv::Renderer> renderer, std::shared_ptr<vvv::DebugUtilities> debugUtilities)
         : DefaultGpuContext({.debugUtilities = debugUtilities, .appName = appName}), m_renderer(renderer),
-        m_gui(std::make_unique<GuiImgui>(this)), m_startup_resolution(1920, 1080)
+        m_camera_controller(), m_gui(std::make_unique<GuiImgui>(this)), m_startup_resolution(1920, 1080)
         {
             // choose a camera controller for the renderer
             m_renderer->setCamera(std::make_shared<vvv::Camera>(true));
+            m_camera_controller.setCamera(&(*m_renderer->getCamera()));
 
             auto video_directory = std::filesystem::absolute("vvv_video");
             if(!std::filesystem::exists(video_directory) && !std::filesystem::create_directory(video_directory)) {
@@ -75,13 +94,6 @@ public:
     bool isWindowResizable() const override;
 
     vvv::Camera *getCamera() const override { return m_renderer->getCamera().get(); }
-    /*! Implements camera controls based on keyboard and mouse input obtained from
-    GLFW.
-    \param camera The camera that will be updated.
-    \param window The window whose input is used for controlling the camera.*/
-    void updateCamera();
-
-    static void glfwUpdateScrollWheel(GLFWwindow *window, double xoffset, double yoffset);
 
     void processHotKeys();
 
@@ -159,8 +171,7 @@ private:
     vk::Extent2D m_startup_resolution;
     bool m_resources_acquired = false;
     GLFWwindow *m_window = nullptr;
-    static double s_mouse_scroll_wheel;
-    double m_mouse_scroll_wheel_previous_frame = 0.f;
+    vvv::GLFWCameraController m_camera_controller;
     std::unique_ptr<GuiImgui> m_gui;
 
     struct {
@@ -212,10 +223,7 @@ private:
         ForEachSwapchainImage<vk::Framebuffer> framebuffers = {};
     } m_renderpass;
 
-    static void framebufferResizeCallback(GLFWwindow *window, int _width, int _height) {
-        auto app = reinterpret_cast<Application *>(glfwGetWindowUserPointer(window));
-        app->m_swapchain.pendingRecreation = true;
-    }
+    static void framebufferResizeCallback(GLFWwindow *window, int _width, int _height);
 
     // Recording / Replaying of camera paths
     std::string m_record_file_path;

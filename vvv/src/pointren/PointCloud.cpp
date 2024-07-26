@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include "vvv/pointren/PointCloud.hpp"
 
 #include <glm/glm.hpp>
@@ -114,10 +129,9 @@ std::vector<int> vvv::PointCloud::nearestNeighbors() {
 // TODO(Max) move poisson fill method to the utils
 
 // use that here to fill the whole space, then remove points that collide with existing data set points
-/**
- * Fills the spacce with positions based on Bridon's poisson disc sampling algorithm from "Fast Poisson disk sampling in arbitrary dimensions".
- * The positions are NOT yet added to the point cloud but returned as a vector.
- */
+
+/// Fills the spacce with positions based on Bridon's poisson disc sampling algorithm from "Fast Poisson disk sampling in arbitrary dimensions".
+/// The positions are NOT yet added to the point cloud but returned as a vector.
 std::vector<glm::vec4> vvv::PointCloud::poissonFill(float rejectionDist) {
     assert(hasAcceleration());
 
@@ -322,12 +336,10 @@ float vvv::PointCloud::kernelInterpolation(glm::vec3 pos, float radius, const st
     throw std::runtime_error("not implemented yet!");
 }
 
-/**
- * Returns the nearest neighbor located to pos by querying the acceleration structure.
- * @param skipIdenticalPoint will not consider identical points, useful if the neighbor for a point in the data set is requested.
- * @param maxDistance neighbors outside this distance will not be considered
- * @return id of the nearest neighbor or -1 if no neighbor was found within maxDistance
- */
+/// Returns the nearest neighbor located to pos by querying the acceleration structure.
+/// @param skipIdenticalPoint will not consider identical points, useful if the neighbor for a point in the data set is requested.
+/// @param maxDistance neighbors outside this distance will not be considered
+/// @return id of the nearest neighbor or -1 if no neighbor was found within maxDistance
 int vvv::PointCloud::nearestNeighbor(glm::vec4 pos, bool skipIdenticalPoint, float maxDistance, bool stopOnFirstHit) {
 
     if(maxDistance < 0)

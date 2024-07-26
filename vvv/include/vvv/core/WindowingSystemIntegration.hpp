@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <vulkan/vulkan.hpp>
@@ -20,9 +35,8 @@ public:
     // TODO: does not really belong here... camera should be part of the [Renderer](vvv/include/Renderer.cpp), not the WSI
     virtual Camera *getCamera() const = 0;
 
-    /** Number of swapchain images. This is not necessarily the maximal number of images concurrently in flight!
-     * This value MUST be dynamically constant and MAY only chance in conjunction with a call to reinitializeSwapchain.
-     */
+    /// Number of swapchain images. This is not necessarily the maximal number of images concurrently in flight!
+    /// This value MUST be dynamically constant and MAY only chance in conjunction with a call to reinitializeSwapchain.
     uint32_t swapChainImageCount() const {
         return stateSwapchain()->getIndexCount();
     }

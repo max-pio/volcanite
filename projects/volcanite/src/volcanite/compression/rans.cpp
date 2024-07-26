@@ -1,6 +1,23 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include "volcanite/compression/rans.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 void SymbolStats::count_freqs(uint8_t const *in, size_t nbytes) {
     for (int i = 0; i < RANS_ALPHABET_SIZE; i++)
@@ -266,4 +283,4 @@ uint32_t RANS::itr_nextSymbol(RansState& rans_state, uint32_t& byte_index,  cons
     return s;
 }
 
-} // namespace vvv
+} // namespace volcanite

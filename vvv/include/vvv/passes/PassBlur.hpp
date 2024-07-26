@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <vvv/core/Renderer.hpp>
@@ -5,15 +20,12 @@
 
 namespace vvv {
 
-/**
- * This render pass implements Gaussian blur and is executed on the graphics queue.
- * It takes a input image (linked with setInputTexture()) and blurs it.
- *
- * Optionally, bilateral filtering is supported. Use setInputTexturesBilateral() to specify either depth, normal or both.
- *
- * The input image should have the usage flags returned from getInputImageUsageFlags().
- * The result is returned by renderBlur() in a RendererOutput struct.
- */
+/// @brief This render pass implements Gaussian blur and is executed on the graphics queue.
+///
+/// It takes a input image (linked with setInputTexture()) and blurs it.
+/// Optionally, bilateral filtering is supported. Use setInputTexturesBilateral() to specify either depth, normal or both.
+/// The input image should have the usage flags returned from getInputImageUsageFlags().
+/// The result is returned by renderBlur() in a RendererOutput struct.
 class PassBlur : public PassCompute {
 public:
     enum BilateralMode : uint32_t {

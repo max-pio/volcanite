@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include "cpp_glsl_include/csgv_constants.h"
 
 // ToDo: control which buffers/images are read- and/or writeonly with defines
@@ -59,6 +74,7 @@ layout(std430, binding = 3) buffer restrict brick_cache_infos
 //              otherwise the cache index where each cache element is (base_element_size) uints large to fit 2x2x2=8 output voxels
 // req_slot:    INVALID nothing to do
 //              otherwise the unique request index in [0, total_number_of_requests_in_this_frame_for_this_lod)
+// ToDo: change to array of structs
     uint g_brick_info[];
 };
 #define BRICK_INFO_REQ_INV_LOD 0
@@ -74,6 +90,7 @@ layout(std430, binding = 4) buffer restrict assign_info
 // - req_counter:         to get request indices starting from 0 per frame (written by request and read by provision and assign)
 // (- potential fourth: max. index that will be able to grab an element from the freeBlockStack)
 // followed by one uint which is the g_cache_top counter pointing to the next free base_element index in g_cache
+// ToDo: change to array of structs
     uint g_assign_info[];
 };
 #define ASSIGN_NEW_BLOCK_START 0
@@ -115,6 +132,7 @@ layout(std430, binding = 9) buffer restrict detail_requests
 layout (std140, binding = 10) uniform render_info {
     mat4 g_model_to_world_space;
     mat4 g_world_to_model_space;
+    mat3 g_model_to_world_space_dir;
     mat3 g_world_to_model_space_dir;
     float g_world_to_model_space_scaling;
     mat4 g_world_to_projection_space;
@@ -140,9 +158,7 @@ layout (std140, binding = 10) uniform render_info {
     int g_max_path_length;
     int g_maxSteps;
     bool g_blue_noise_enable;
-    bool g_local_shading_enable;
     float g_factor_ambient;
-    float g_ratio_spec_diff;
     vec4 g_bboxMin;
     vec4 g_bboxMax;
     float g_opacityThreshold;
@@ -162,8 +178,12 @@ layout (std140, binding = 10) uniform render_info {
 #define BACKGROUND_DEPTH 3.402823466e+38
 #define INVALID_DEPTH -3.402823466e+38
 //layout (binding = 12, rgba32f) uniform restrict image2D outDepth;
-layout (binding = 13, rgba32f) uniform restrict readonly image2D feedbackIn;
-layout (binding = 14, rgba32f) uniform restrict image2D feedbackOut;
+layout (binding = 13, rgba16f) uniform restrict readonly image2D accumulationIn;
+layout (binding = 14, rgba16f) uniform restrict image2D accumulationOut;
+layout (binding = 21, r16ui) uniform restrict readonly uimage2D accuSampleCountIn;
+layout (binding = 22, r16ui) uniform restrict uimage2D accuSampleCountOut;
+
+layout (binding = 20, rg8ui) uniform restrict uimage2D gBuffer;
 layout (binding = 15, rgba8) uniform restrict writeonly image2D inpaintedOutColor;
 
 

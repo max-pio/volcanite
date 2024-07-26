@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <utility>
@@ -14,70 +29,6 @@
 #include <utility>
 
 namespace vvv {
-
-// template <class U>
-// class UniformSet : public virtual MultiBuffering, public virtual WithGpuContext {
-//
-// public:
-//    UniformSet(GpuContextPtr ctx, uint32_t copies = 1) : MultiBuffering(copies), WithGpuContext(ctx), m_isUniformSetDirty(copies, true) {}
-//
-//    /**
-//     * Update the value of an option that influences the value of the uniform buffer.
-//     *
-//     * In case you have to do additional work for a specific member, like for example,
-//     * recreate shaders because the uniform also influences a preprocessor macro, just
-//     * override this function for the given member:
-//     *
-//     * ```
-//     * void setUniform(uint32_t* SVGFPass::Iterations, uint32_t value,
-//     * ```
-//     */
-//    template <typename T> void setUniform(T U::*member, T val, bool retainedGpuUpload = true) {
-//        if (m_uniforms.*member != val) {
-//            m_uniforms.*member = val;
-//            std::fill(m_isUniformSetDirty.begin(), m_isUniformSetDirty.end(), true);
-//            // if (isPipelineCreated() && !retainedGpuUpload) {
-//            //     updateUniformDescriptorSet();
-//            // }
-//        }
-//    }
-//
-//    void updateUniformDescriptorSet(idx = getActiveIndex()) {
-//        const Uniform_TransferFunction2D ubo = {
-//            .backgroundOpacity = m_options.backgroundOpacity,
-//            .foregroundOpacity = m_options.foregroundOpacity,
-//            .feathering = m_options.feathering,
-//        };
-//
-//        const auto device = ctx()->getDevice();
-//
-//        void *data = device
-//         .mapMemory(m_uniformBufferMemory, 0, sizeof(ubo), {});
-//        memcpy(data, &ubo, sizeof(ubo));
-//        device.unmapMemory(m_uniformBufferMemory);
-//    }
-//
-//    size_t getUniformSetByteSize() { return sizeof(U); }
-//
-// protected:
-//    void resetUniformsDirtyFlag() { m_isUniformSetDirty = false; }
-//    bool areUniformsDirty() const { return m_isUniformSetDirty; }
-//
-//    virtual void updateUniformDescriptorSet();
-//
-// private:
-//    GpuContextPtr m_ctx;
-//    U m_uniforms;
-//    std::vector<bool> m_isUniformSetDirty;
-//};
-//
-// TODO: maybe make this untyped, and add macros to generate accessors?
-// template <class UniformSets = EmptyEnum, class StorageImages = EmptyEnum, class StorageBuffers = EmptyEnum, class ImageSamplers = EmptyEnum, > struct PassComputeStructure {
-//    type_t<UniformSets> uniformSets;
-//    type_t<StorageImages> storageImages;
-//    type_t<ImageSamplers> imageSamplers;
-//    type_t<StorageBuffers> storageBuffers;
-//};
 
 namespace detail {
 struct BindingState {
@@ -116,11 +67,10 @@ public:
         return m_shaders;
     }
     DescriptorBinding findDescriptorBindingByName(const std::string &name);
-    /**
-     * Creates a texture through reflection (`reflectTexture`) and automatically configures it for usage with this compute pass.
-     * @param name variable name of the texture
-     * @param opts options for reflection
-     */
+
+    /// Creates a texture through reflection (`reflectTexture`) and automatically configures it for usage with this compute pass.
+    /// @param name variable name of the texture
+    /// @param opts options for reflection
     std::shared_ptr<Texture> getTexture(const std::string &name, TextureReflectionOptions opts);
     std::shared_ptr<UniformReflected> getUniformSet(const std::string &name);
 
@@ -213,7 +163,9 @@ protected:
     //! Creates all shaders that are used in this pass. Shader reflections from this pass are performed on this shader list.
     virtual std::vector<std::shared_ptr<Shader>> createShaders() = 0;
 
-    void createPipelineLayout(uint32_t push_constant_byte_size = 0);
+    virtual std::vector<vk::PushConstantRange> definePushConstantRanges() { return {}; };
+
+    void createPipelineLayout();
 
     //! Creates one (single pass) or more (multi pass) pipelines. At this point, the pipeline layout is already created from the shaders.
     virtual std::vector<vk::Pipeline> createPipelines() = 0;

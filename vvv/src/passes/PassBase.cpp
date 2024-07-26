@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include <vvv/passes/PassBase.hpp>
 
 using namespace vvv;
@@ -309,7 +324,7 @@ void PassBase::createCommandBuffers()  {
     }
 }
 
-void PassBase::createPipelineLayout(uint32_t push_constant_byte_size) {
+void PassBase::createPipelineLayout() {
 
     const auto device = getCtx()->getDevice();
     const auto debug = getCtx()->debugMarker;
@@ -365,14 +380,10 @@ void PassBase::createPipelineLayout(uint32_t push_constant_byte_size) {
     }
 
     vk::PipelineLayoutCreateInfo pipeInfo({}, m_descriptorSetLayouts);
-    vk::PushConstantRange pcr;
-    pcr.offset = 0;
-    pcr.size = push_constant_byte_size;
-    pcr.stageFlags = vk::ShaderStageFlagBits::eCompute;
-    if (push_constant_byte_size > 0)
-    {
-        pipeInfo.pushConstantRangeCount = 1;
-        pipeInfo.pPushConstantRanges = &pcr;
+    std::vector<vk::PushConstantRange> pushConstantRanges = definePushConstantRanges();
+    if (!pushConstantRanges.empty()) {
+        pipeInfo.pushConstantRangeCount = pushConstantRanges.size();
+        pipeInfo.pPushConstantRanges = pushConstantRanges.data();
     }
     m_pipelineLayout = device.createPipelineLayout(pipeInfo);
     debug->setName(m_pipelineLayout, m_label + ".m_pipelineLayout");

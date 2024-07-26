@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <chrono>
@@ -52,9 +67,7 @@ glm::mat4 removeTranslation(glm::mat4 mat);
 
 template <typename T> size_t vectorByteSize(const typename std::vector<T> &vec) { return sizeof(T) * vec.size(); }
 
-/**
- * Constructs a string of a memory consecutive float array with n elements.
- */
+/// Constructs a string of a memory consecutive float array with n elements.
 inline std::string array_string(float* v, int n);
 inline std::string array_string(int* v, int n);
 inline std::string array_string(unsigned int* v, int n);
@@ -72,77 +85,63 @@ std::string str(glm::mat3 v);
 std::string str(glm::mat4 v);
 
 
-/**
- * Converts cartesian coordinates to spherical coordinates.\n
- * spherical components: (0 <= theta <= pi, -pi <= phi <= pi, r >= 0)\n
- * cartesian: z axis points upwards
- */
+/// Converts cartesian coordinates to spherical coordinates.\n
+/// spherical components: (0 <= theta <= pi, -pi <= phi <= pi, r >= 0)\n
+/// cartesian: z axis points upwards
 glm::vec3 spherical2cartesian(const glm::vec3& v);
 
-/**
- * Converts cartesian coordinates to spherical coordinates.
- * spherical components: (0 <= theta <= pi, -pi <= phi <= pi, r >= 0)\n
- * cartesian: z axis points upwards, w is 1
- */
+/// Converts cartesian coordinates to spherical coordinates.
+/// spherical components: (0 <= theta <= pi, -pi <= phi <= pi, r >= 0)\n
+/// cartesian: z axis points upwards, w is 1
 glm::vec4 spherical2cartesian(const glm::vec4& v);
 
-/**
- * Converts spherical coordinates to cartesian coordinates.
- * spherical components: (0 <= theta <= pi, -pi <= phi <= pi, r >= 0)\n
- * cartesian: z axis points upwards
-*/
+
+/// Converts spherical coordinates to cartesian coordinates.
+/// spherical components: (0 <= theta <= pi, -pi <= phi <= pi, r >= 0)\n
+/// cartesian: z axis points upwards
 glm::vec3 cartesian2spherical(const glm::vec3& v);
 
-/**
- * Converts spherical coordinates to cartesian coordinates.
- * spherical components: (0 <= theta <= pi, -pi <= phi <= pi, r >= 0)\n
- * cartesian: z axis points upwards, w is 1
-*/
+/// Converts spherical coordinates to cartesian coordinates.
+/// spherical components: (0 <= theta <= pi, -pi <= phi <= pi, r >= 0)\n
+/// cartesian: z axis points upwards, w is 1
 glm::vec4 cartesian2spherical(const glm::vec4& v);
 
 
 //  ------------------------------------------------------------------------------
 //  STATISTICS
 
-/**
- * Computs a histogram of the vector values with the given bin number. If interpolate is true, values contribute proportionally to their adjacent two bins when they're discretized to the bins.
- * @param values vector to compute the histogram on
- * @param bins number of histogram bins
- * @param interpolate if the discretization of values to bins is interpolated
- * @param min value in values that is mapped to the histogram start
- * @param max value in values that is mapped to the histogram end
- * @return a newly created vector with the histogram counts
- */
+/// Computs a histogram of the vector values with the given bin number. If interpolate is true, values contribute proportionally to their adjacent two bins when they're discretized to the bins.
+/// @param values vector to compute the histogram on
+/// @param bins number of histogram bins
+/// @param interpolate if the discretization of values to bins is interpolated
+/// @param min value in values that is mapped to the histogram start
+/// @param max value in values that is mapped to the histogram end
+/// @return a newly created vector with the histogram counts
 std::vector<float> computeHistogram(const std::vector<float>& values, int bins, bool interpolate, float min, float max);
 
 
 //  ------------------------------------------------------------------------------
 //  TIMING
 
-/**
- * Lightweight (but inaccurate) timer class for measuring elapsed time in seconds using std::chrono::high_resolution_clock. Usage:
- *
- * MiniTimer t;
- * // do stuff..
- * auto seconds_since_creation = t.elapsed();
- */
+/// @brief Lightweight (but inaccurate) timer class for measuring elapsed time in seconds using std::chrono::high_resolution_clock. Usage:
+///
+/// MiniTimer t;\n
+/// // do stuff..\n
+/// auto seconds_since_creation = t.elapsed();
 class MiniTimer {
 public:
     MiniTimer() : m_startTime(std::chrono::high_resolution_clock::now()) {}
     ~MiniTimer() = default;
 
-    /**
-     * Restarts the timer.
-     * @return the time in seconds passed since the object was created or since the last time start was called.
-     */
+    /// Restarts the timer.
+    /// @return the time in seconds passed since the object was created or since the last time start was called.
     double restart() {
         auto ret = elapsed();
         m_startTime = std::chrono::high_resolution_clock::now();
         return ret;
     }
-    /**
-     * @return the time in seconds passed since the object was created or since the last time start was called.
-     */
+
+    /// @return the time in seconds passed since the object was created or since the last time start was called.
     inline double elapsed() { return static_cast<std::chrono::duration<double>>(std::chrono::high_resolution_clock::now() - m_startTime).count(); }
 
     static float getFloatSystemClock() {

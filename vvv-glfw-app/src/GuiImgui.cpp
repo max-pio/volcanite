@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #ifdef IMGUI
 
 #include "vvvwindow/GuiImgui.hpp"
@@ -36,10 +51,11 @@ void GuiImgui::renderGui() {
 
 #ifdef _WIN64
         // on windows, the path.c_str() returns a wide char pointer which we have to convert to a const char*
-        std::string unicode_query = vvv::Paths::findDataPath("Quicksand-Medium.ttf").string();
+        std::string unicode_query = vvv::Paths::findDataPath("QuicksandFamily/Quicksand-Medium.ttf").string();
         io.Fonts->AddFontFromFileTTF(unicode_query.c_str(), m_defaultFontSize * m_gui_scaling);
 #else
-        io.Fonts->AddFontFromFileTTF(vvv::Paths::findDataPath("Quicksand-Medium.ttf").c_str(), m_defaultFontSize * m_gui_scaling);
+        io.Fonts->AddFontFromFileTTF(vvv::Paths::findDataPath("QuicksandFamily/Quicksand-Medium.ttf").c_str(),
+                                     m_defaultFontSize * m_gui_scaling);
 #endif
         ImGui_ImplVulkan_CreateFontsTexture();
 
@@ -83,7 +99,7 @@ void GuiImgui::renderGui() {
                     if(parents.contains(loc)) {
                         ImGui::DockBuilderDockWindow(window.c_str(), parents[loc]);
                     } else {
-                        vvv::Logger(vvv::WARN) << "can not dock to windows that were not already docked elsewhere (can not dock " << window << " to " << loc << ")";
+                        vvv::Logger(vvv::WARN) << "cannot dock to windows that were not already docked elsewhere (cannot dock " << window << " to " << loc << ")";
                         // ToDo: would have to create a new docking node as parent for both window and loc
                     }
                 }
@@ -93,7 +109,7 @@ void GuiImgui::renderGui() {
                     // Otherwise, append next to the existing windows.
                     if (loc == "d") {
                         if (dock_id_down == 0u) {
-                            dock_id_down = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.2f, nullptr, &dockspace_id);
+                            dock_id_down = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.3f, nullptr, &dockspace_id);
                             ImGui::DockBuilderDockWindow(window.c_str(), dock_id_down);
                             parents[window] = dock_id_down;
                         } else {
@@ -115,7 +131,7 @@ void GuiImgui::renderGui() {
                         }
                     } else if (loc == "u") {
                         if (dock_id_up == 0u) {
-                            dock_id_up = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Up, 0.2f, nullptr, &dockspace_id);
+                            dock_id_up = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Up, 0.3f, nullptr, &dockspace_id);
                             ImGui::DockBuilderDockWindow(window.c_str(), dock_id_up);
                             parents[window] = dock_id_up;
                         } else {

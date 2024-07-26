@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <vulkan/vulkan.hpp>
@@ -23,7 +38,7 @@ const VolumeHistogramOptions DefaultVolumeHistogramOptions{
 };
 
 // struct ComputePassOptions {
-//     /** increases allocations by multibuffering for swapchain support. You can create multiple independent compute passes as an alternative. */
+//     /// increases allocations by multibuffering for swapchain support. You can create multiple independent compute passes as an alternative.
 //     size_t maxInstanceCount = 1;
 // };
 //
@@ -52,11 +67,7 @@ public:
 
     std::shared_ptr<Texture> texture() const { return m_histogram; }
 
-    /**
-     * Prepare resources for the computation. This may include uploading data, executing layout transitions, etc.
-     *
-     * @param performComputeCommands
-     */
+    /// Prepare resources for the computation. This may include uploading data, executing layout transitions, etc.
     void prepare(const std::function<void(const std::function<void(vk::CommandBuffer)>)> performComputeCommands) {
         if (!m_histogram->areResourcesInitialized()) {
             m_histogram->initResources();

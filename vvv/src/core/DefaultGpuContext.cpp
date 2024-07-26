@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include <vvv/core/preamble.hpp>
 
 #include <vvv/core/DefaultGpuContext.hpp>
@@ -344,12 +359,6 @@ void vvv::DefaultGpuContext::destroySurface() {
     }
 }
 
-/**
- * The physical device is selected according to the following rules in order:
- * 1.) the device with the number specified with the environment variable "VVV_DEVICE"
- * 2.) the first (not blacklisted) discrete GPU
- * 3.) the first (not blacklisted) GPU
- */
 void vvv::DefaultGpuContext::createPhysicalDevice() {
     const auto devices = getInstance().enumeratePhysicalDevices();
 

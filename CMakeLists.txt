@@ -1,17 +1,18 @@
 cmake_minimum_required(VERSION 3.16)
+
 project(vvv-volcanite VERSION 0.3.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES C CXX)
+
 if (MSVC)
     message(FATAL_ERROR "MSVC compiler is currently not supported as it only provides OpenMP version < 4.5")
 endif (MSVC)
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
 
-# GENERAL BUILD CONFIG -------------------------------------------------------------------------------------------------
+# BUILD SETUP ----------------------------------------------------------------------------------------------------------
 
 # Require out-of-source builds
 file(TO_CMAKE_PATH "${PROJECT_BINARY_DIR}/CMakeLists.txt" LOC_PATH)
 if (EXISTS "${LOC_PATH}")
-    message(FATAL_ERROR "You cannot build in a source directory (or any directory with a CMakeLists.txt file).
-                         Please make a build subdirectory. Feel free to remove CMakeCache.txt and CMakeFiles.")
+    message(FATAL_ERROR "Builds in source directories are permitted. Create a separate build directory.")
 endif ()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/CMake)
@@ -46,91 +47,20 @@ if (ENABLE_ADDRESS_SANITIZER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -g -DLSAN_OPTIONS=verbosity=1:log_threads=1")
 endif()
 
-# enable colored output for Ninja in Linux
-# idea from: https://github.com/darktable-org/darktable/blob/master/CMakeLists.txt
-# https://medium.com/@alasher/colored-c-compiler-output-with-ninja-clang-gcc-10bfe7f2b949
-option (FORCE_COLORED_OUTPUT "Always produce ANSI-colored compiler output, even in ninja (GNU/Clang only)." FALSE)
-if(${FORCE_COLORED_OUTPUT})
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    add_compile_options(-fdiagnostics-color=always)
-  elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    add_compile_options(-fcolor-diagnostics)
-  endif()
-endif()
-
-# we use target folders to organize the copy targets. This allows to hide the targets easier in certain IDEs
+# Use target folders to organize the copy interface targets. This allows to hide the targets easier in certain IDEs.
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-# the makeExecutable is used to create project executables with all CMake and compile dependencies
+# The makeExecutable is used to create project executables with all CMake and compile dependencies
 include(makeExecutable)
 
-# LIBRARIES ------------------------------------------------------------------------------------------------------------
-
+# In headless mode, no windowing system integration is build.
 option(HEADLESS "Build without GUI and windowing functionality to run only in --headless mode." OFF)
 
-# add extern public imgui library
-if(NOT HEADLESS)
-    add_subdirectory(extern/imgui)
-endif()
+# Fetch all dependencies, including the libraries in the ./extern subdirectory.
+include(CMake/Dependencies.cmake)
 
-# add extern HighFive simplified hdf5 library if libhdf5-dev is installed
-# we can not do this in the vvv library cmake as extern/HighFive cannot be added as a subdirectory from there
-option(USE_HDF5_SUPPORT  "Includes the hdf5 library for importing and exporting .hdf5 files" ON)
-if (USE_HDF5_SUPPORT)
-    find_package(HDF5)
-    if (HDF5_FOUND)
-        # set HighFive CMake cache options
-        set(USE_BOOST OFF CACHE BOOL "Enable Boost Support")
-        set(USE_EIGEN OFF CACHE BOOL "Enable Eigen testing")
-        set(USE_XTENSOR OFF CACHE BOOL "Enable xtensor testing")
-        set(USE_OPENCV OFF CACHE BOOL "Enable OpenCV testing")
-        mark_as_advanced(USE_BOOST USE_EIGEN USE_XTENSOR)
-
-        set(HIGHFIVE_UNIT_TESTS OFF CACHE STRING "Enable unit tests (requires Catch2 to be present)")
-        set(HIGHFIVE_EXAMPLES OFF)
-        set(HIGHFIVE_BUILD_DOCS OFF)
-        set(HDF5_PREFER_PARALLEL ON)
-        add_subdirectory(extern/HighFive)
-    else ()
-        message(WARNING "USE_HDF5_SUPPORT was set but hdf5 library could not be found!")
-    endif ()
-endif ()
-
-
-# add vtk library to load vti volume/image files
-option(USE_VTK_SUPPORT  "Includes the vtk library for importing and exporting .vti files" ON)
-if (USE_VTK_SUPPORT)
-    find_package(VTK COMPONENTS CommonCore IOXML)
-    if (VTK_FOUND)
-        # ...
-    else ()
-        message(WARNING "USE_VTK_SUPPORT was set but vtk library could not be found!")
-    endif ()
-endif ()
-
-# add extern SQLiteCpp library if libsqlite3-dev is installed
-# we can not do this in the volcanite project cmake as extern/SQLiteCpp cannot be added as a subdirectory from there
-option(USE_SQLite3 "Includes the SQLite3 library for importing and exporting .sqlite files" ON)
-if (USE_SQLite3)
-    find_package(SQLite3)
-    if (SQLite3_FOUND)
-        set(SQLITECPP_RUN_CPPLINT OFF CACHE BOOL "Run cpplint.py tool for Google C++ StyleGuide.")
-        add_subdirectory(extern/SQLiteCpp)
-    else ()
-        message(WARNING "USE_SQLite3 was set but SQLite3 library could not be found")
-    endif ()
-endif ()
-
-# TCLAP for command line argument parsing (used by multiple subprojects)
-find_package(tclap REQUIRED)
-
-# Add vvv and vvv glfw application libraries
-add_subdirectory(vvv)
-if(NOT HEADLESS)
-    add_subdirectory(vvv-glfw-app)
-endif()
+# PROJECTS  ------------------------------------------------------------------------------------------------------------
 
 option(MAKE_EXAMPLES "Build examples for the VVV Framework" ON)
-
 if (MAKE_EXAMPLES)
     if (HEADLESS)
         message(WARNING "MAKE_EXAMPLES is ON but cannot be used in combination with HEADLESS. Ignoring.")
@@ -139,27 +69,9 @@ if (MAKE_EXAMPLES)
     endif()
 endif()
 
-# add extern rANS encoding library
-add_subdirectory(extern/ryg_rans)
-
-# add extern portable file dialog
-# ToDo: also remove when build in HEADLESS mode?
-add_subdirectory(extern/portable-file-dialogs)
-
-# PROJECTS  ------------------------------------------------------------------------------------------------------------
 
 add_subdirectory(projects/volcanite)
 
-# [DEPRECATED] ToDo: python binding support in CMake files
-#if (SKBUILD)
-#    # to use a local copy, e.g. when you want to make a debug build of pybind:
-#    #add_subdirectory(extern/pybind11)
-#    # to use the version from your package manager:
-#    find_package(pybind11 REQUIRED)
-#    pybind11_add_module(pyvvv_core pyvvv/src/main.cpp)
-#    target_link_libraries(pyvvv_core PRIVATE LibVVV::libvvv LibVVV::libvvvwindow)
-#    install(TARGETS pyvvv_core DESTINATION .)
-#endif ()
 
 # PACKAGING ------------------------------------------------------------------------------------------------------------
 

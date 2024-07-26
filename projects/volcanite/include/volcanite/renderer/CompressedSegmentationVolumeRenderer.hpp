@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <memory>
@@ -15,7 +30,7 @@
 #include "volcanite/renderer/PassCompSegVolRender.hpp"
 #include "volcanite/compression/CSGVDatabase.hpp"
 
-namespace vvv {
+namespace volcanite {
 
 class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuContext {
 
@@ -51,17 +66,17 @@ public:
         ctx->physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
     }
 
-    /** Initializes Descriptorsets and calls pipeline initialization. */
+    /// Initializes Descriptorsets and calls pipeline initialization.
     void initResources(GpuContext *ctx) override;
     void releaseResources() override;
-    /** Initialize everything that depends on shader */
+    /// Initialize everything that depends on shader
     void initShaderResources() override;
     void releaseShaderResources() override;
-    /** Initializes command buffer, renderpass, images and framebuffers */
+    /// Initializes command buffer, renderpass, images and framebuffers
     void initSwapchainResources() override;
     void releaseSwapchain() override;
 
-    /** Releases all GPU states and resources but does not reset the segmentation volume. */
+    /// Releases all GPU states and resources but does not reset the segmentation volume.
     void resetGPU();
 
     void setRenderResolution(vk::Extent2D resolution) {
@@ -79,7 +94,7 @@ public:
         return m_resolution;
     }
 
-    /** We limit the render resolution to max. 4K (4096x2160) or Full-HD. */
+    /// Obtains the rendering resolution from the windowing system but limits it to 4K (4096x2160).
     void updateRenderResolutionFromWSI() {
         // ToDo: remove hardcoded render resolution. Move the WSI dependency to Application / HeadlessRendering or the Renderer class?
         const vk::Extent2D max_resolution = {4096u, 2160u};
@@ -121,7 +136,7 @@ public:
 
 
         if(csgv->getBrickCount().x < csgv->getLodCountPerBrick()) {
-            Logger(WARN) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
+            Logger(DEBUG) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
                          ") in one dimension than there are brick level-of-details (" << csgv->getLodCountPerBrick() <<
                          "). This may break some shaders. Advice: Re-Compress with a smaller brick-size.";
         }
@@ -155,29 +170,32 @@ public:
         }
     }
 
-    /** Creates and populates all GPU buffers for the currently set compressed segmentation volume data set.
-     * Blocks until all buffer acquisitions and uploads are finished. */
+    /// Creates and populates all GPU buffers for the currently set compressed segmentation volume data set.
+    /// Blocks until all buffer acquisitions and uploads are finished.
     void initDataSetGPUBuffers();
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
     int getTargetAccumulationFrames() { return m_accum_frames; }
-    /** Will save the renderer state to the path when the renderer is shut down */
+    /// Will save the renderer state to the path when the renderer is shut down
     void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = std::move(path); }
 
-    /** Sets the target cache size for the renderer in MB.
-     * A size of 0 tries to allocate the maximum available GPU memory.
-     * The cache size must be specified before startup to have an effect.
-     * Actual cache size may be lower if less space is needed or not enough GPU memory is available.\n
-     * With palettized_cached set to true, the cache stores palette indices instead of labels. Allows to store larger
-     * portions of the volume in cache at the expense of a performance decrease.*/
+    /// @brief Sets the target cache size for the renderer in MB.
+    ///
+    /// A size of 0 tries to allocate the maximum available GPU memory.
+    /// The cache size must be specified before startup to have an effect.
+    /// Actual cache size may be lower if less space is needed or not enough GPU memory is available.
+    /// @param palettized_cached if true, the cache stores palette indices instead of labels. Allows to store larger
+    /// portions of the volume in cache at the expense of a performance decrease.
     void setCacheParameters(size_t cache_size_MB, bool palettized_cache) { m_target_cache_size_MB = cache_size_MB; m_use_palette_cache = palettized_cache; }
 
 private:
-    /** Fills m_constructed_detail and m_constructed_detail_starts buffers with detail encodings of requested brick
-     * indices in m_detail_requests. Can be executed in a separate thread. Finished execution is indicated by
-     * m_detail_stage being set to DetailAwaitingUpload. */
+    /// Fills m_constructed_detail and m_constructed_detail_starts buffers with detail encodings of requested brick
+    /// indices in m_detail_requests. Can be executed in a separate thread. Finished execution is indicated by
+    /// m_detail_stage being set to DetailAwaitingUpload.
     void updateCPUDetailBuffers();
+
+    void printGPUMemoryUsage();
 
 private:
     // (gui) parameters:
@@ -185,8 +203,6 @@ private:
     static constexpr uint32_t SEGMENTED_VOLUME_MATERIAL_COUNT = 8;
     std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
     float m_factor_ambient = 0.4f;
-    float m_ratio_spec_diff = 1.0f;
-    bool m_cook_torrance_shading = true;
     // shading and post processing
     glm::vec4 m_background_color_a = glm::vec4(0.9f, 0.9f, 0.95f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
@@ -196,7 +212,7 @@ private:
     bool m_envmap_enabled = false;
     float m_shadow_pathtracing_ratio = 1.0f;
     glm::vec2 m_ambient_occlusion_dist_strength = glm::vec2(15.f, 0.5f);
-    glm::vec3 m_light_direction = glm::vec3(-1.f, 1.f, 0.1f);
+    glm::vec3 m_light_direction = glm::vec3(0.309426f, 0.721995f, 0.618853f);
     float m_light_intensity = 1.f;
     // voxel traversal
     int m_max_path_length = 32;
@@ -232,10 +248,10 @@ private:
     void updateUniformDescriptorset();
 
     std::unique_ptr<PassCompSegVolRender> m_pass = nullptr;
-    std::shared_ptr<Texture> m_feedback_tex[2] = {nullptr, nullptr};
-    std::shared_ptr<Texture> m_outDepth = nullptr;
-    std::shared_ptr<Texture> m_outColor = nullptr;
-    std::shared_ptr<vvv::MultiBufferedResource<std::shared_ptr<Texture>>> m_inpaintedOutColor = nullptr; ///< the output texture and the only resource that is duplicated for each swapchain image
+    std::shared_ptr<Texture> m_accumulation_rgba_tex[2] = {nullptr, nullptr};
+    std::shared_ptr<Texture> m_accumulation_samples_tex[2] = {nullptr, nullptr};
+    std::shared_ptr<Texture> m_g_buffer_tex = nullptr;
+    std::shared_ptr<vvv::MultiBufferedResource<std::shared_ptr<Texture>>> m_inpaintedOutColor = nullptr; // this is the output texture and thus the only resource that we have to duplicate for each swapchain image
     std::shared_ptr<UniformReflected> m_urender_info = nullptr;
     std::shared_ptr<UniformReflected> m_usegmented_volume_info = nullptr;
 
@@ -262,13 +278,13 @@ private:
     std::vector<std::shared_ptr<Buffer>> m_split_encoding_buffers = {};
     std::vector<glm::uvec2> m_split_encoding_buffer_addresses = {};
     std::shared_ptr<Buffer> m_split_encoding_buffer_addresses_buffer = nullptr;
+    std::shared_ptr<Buffer> m_brick_starts_buffer = nullptr;
     //
     std::vector<std::shared_ptr<TransferFunction1D>> m_materialTransferFunctions{SEGMENTED_VOLUME_MATERIAL_COUNT, nullptr};
     const size_t m_max_attribute_buffer_size = ((64ul << 10) << 10);   ///< MB to store different floating point attributes back to back
     std::vector<int> m_attribute_start_position = {-1};                ///< start index in the attribute_buffer for each attribute
     std::shared_ptr<Buffer> m_attribute_buffer = nullptr;              ///< stores attributes back to back
     std::shared_ptr<Buffer> m_materials_buffer = nullptr;              ///< stores the material information
-    std::shared_ptr<Buffer> m_brick_starts_buffer = nullptr;
 
     // detail management
     static constexpr uint32_t m_max_detail_requests_per_frame = 512u;  ///< how many brick_ids can be requested for detail upload per frame (affects the request buffer size)
@@ -297,7 +313,7 @@ private:
     } m_last_gpu_stats = {};
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
 
-    bool m_release_version = false;     // set to true if this is used in a renderer to release. Some parameters are hidden / set to default values in that case.
+    bool m_release_version = false;                                    ///< if this is used in a release where development parameters are hidden
 
     vk::Extent2D m_resolution;
     size_t m_camHash;
@@ -306,4 +322,4 @@ private:
     std::optional<RendererOutput> m_mostRecentFrame = {};
 };
 
-} // namespace vvv
+} // namespace volcanite

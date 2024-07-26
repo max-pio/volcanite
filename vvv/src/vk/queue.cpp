@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include <vvv/vk/queue.hpp>
 
 #include <vvv/util/Logger.hpp>
@@ -50,7 +65,7 @@ uint32_t createGraphicsQueues(std::vector<vk::QueueFamilyProperties> const &queu
     return graphicsQueueFamilyIndex;
 }
 
-/*! Create a present and graphics queue, preferring a single queue that can do both */
+/// Create a present and graphics queue, preferring a single queue that can do both
 std::pair<uint32_t, uint32_t> createGraphicsQueues(std::vector<vk::QueueFamilyProperties> const &queueFamilyProperties, vk::PhysicalDevice physicalDevice, vk::SurfaceKHR const &surface,
                                                    std::vector<vk::DeviceQueueCreateInfo> *queueCreateInfos) {
     assert(queueFamilyProperties.size() < std::numeric_limits<uint32_t>::max());
@@ -104,7 +119,7 @@ std::pair<uint32_t, uint32_t> createGraphicsQueues(std::vector<vk::QueueFamilyPr
     throw std::runtime_error("Either no present queue available");
 }
 
-/*! Create dedicated queues for compute and transfer if available. Then try to match the default (graphics) queue. otherwise terminate. */
+/// Create dedicated queues for compute and transfer if available. Then try to match the default (graphics) queue. otherwise terminate.
 vvv::QueueFamilyIndices findQueueFamilyIndices(vk::QueueFlags requestedQueueTypes, std::vector<vk::QueueFamilyProperties> const &familyProps, std::vector<vk::DeviceQueueCreateInfo> *queueCreateInfos,
                                                uint32_t defaultGraphicsQueue) {
 

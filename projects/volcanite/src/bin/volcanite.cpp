@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include <string>
 #include "vvv/util/Logger.hpp"
 #include "vvv/util/detect_debugger.hpp"
@@ -17,7 +32,7 @@
 #include "vvv/volren/Volume.hpp"
 #include "volcanite/compression/CSGVDatabase.hpp"
 
-using namespace vvv;
+using namespace volcanite;
 
 constexpr int RET_SUCCESS = 0;
 constexpr int RET_INVALID_ARG = 1;
@@ -50,7 +65,7 @@ int tryImportRenderConfig(VolcaniteArgs& args, std::shared_ptr<CompressedSegment
     return 0;
 }
 
-int volcanite(int argc, char *argv[]) {
+int volcanite_main(int argc, char *argv[]) {
     // parse command line arguments
     VolcaniteArgs args;
     {
@@ -74,8 +89,8 @@ int volcanite(int argc, char *argv[]) {
     // Also think about the processing of chunked data.. Could it be necessary to still keep the getCSGVFileName and
     // force_recompute logic in the handler for that reason? Or should we create two handlers for chunked / non-chunked?
 
-    std::shared_ptr<vvv::CompressedSegmentationVolume> compressedSegmentationVolume;
-    std::shared_ptr<vvv::CSGVDatabase> csgvDatabase = std::make_shared<vvv::CSGVDatabase>();;
+    std::shared_ptr<volcanite::CompressedSegmentationVolume> compressedSegmentationVolume;
+    std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();;
     // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
     if(args.performCompression()) {
         glm::uvec3 max_chunk_id = glm::uvec3(args.chunk_files[0], args.chunk_files[1], args.chunk_files[2]);
@@ -225,7 +240,7 @@ int volcanite(int argc, char *argv[]) {
         if(csgvDatabase->isDummy())
             csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
 
-        const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
+        const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
         renderer->setCacheParameters(args.cache_size_MB, args.cache_palettized);
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
 
@@ -259,7 +274,7 @@ int volcanite(int argc, char *argv[]) {
 
             bool vsync = true;  // ToDo: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
             auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
-//            app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
+            app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
             app->setVSync(vsync);
             app->acquireResources();
             tryImportRenderConfig(args, renderer);
@@ -271,4 +286,4 @@ int volcanite(int argc, char *argv[]) {
     return RET_SUCCESS;
 }
 
-ENTRYPOINT(volcanite)
+ENTRYPOINT(volcanite_main)

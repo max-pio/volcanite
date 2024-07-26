@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <memory>
@@ -5,7 +20,9 @@
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 class CSGVChunkMerger {
 private:
@@ -338,7 +355,7 @@ public:
         // wait for cleanup
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
-        std::shared_ptr<CompressedSegmentationVolume> full_csgv = std::make_shared<vvv::CompressedSegmentationVolume>();
+        std::shared_ptr<CompressedSegmentationVolume> full_csgv = std::make_shared<volcanite::CompressedSegmentationVolume>();
         bool reimport_success = full_csgv->importFromFile(output_csgv_path, false, true);
         if(!reimport_success)
             throw std::runtime_error("Error re-importing exported merged Compressed Segmentation Volume from " + output_csgv_path);
@@ -348,4 +365,4 @@ public:
 
 };
 
-}   // namespace vvv
+}   // namespace volcanite

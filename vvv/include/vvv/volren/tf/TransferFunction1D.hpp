@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <vvv/core/preamble.hpp>
@@ -14,9 +29,7 @@ namespace vvv {
 enum class ChannelOpacityState { AlphaPremultiplied, PostMultiplied };
 const ChannelOpacityState DefaultChannelOpacityState = ChannelOpacityState::PostMultiplied;
 
-/**
- * A 1D preintegrated transfer function.
- */
+/// A 1D preintegrated transfer function.
 // TODO(Reiner): static specialization for 1D and non-preintegrated TFs
 class TransferFunction1D : public TransferFunction {
 
@@ -26,11 +39,9 @@ public:
     struct solidColor;
     struct linearRamp;
 
-    /**
-     * Create new Transfer Function from discrete values.
-     * @param values array of countValues discrete values to use as transfer function
-     * @param channelOpacityState If PostMultiplied, the values will be pre-multiplied before uploading to the GPU.
-     */
+    /// Create new Transfer Function from discrete values.
+    /// @param values array of countValues discrete values to use as transfer function
+    /// @param channelOpacityState If PostMultiplied, the values will be pre-multiplied before uploading to the GPU.
     TransferFunction1D(vvv::GpuContextPtr ctx, const uint16_t *const values, size_t countValues, ChannelOpacityState channelOpacityState = DefaultChannelOpacityState)
     : TransferFunction(ctx), m_channelOpacityState(channelOpacityState)
     {
@@ -72,7 +83,7 @@ private:
     ChannelOpacityState m_channelOpacityState;
     std::vector<char> m_data;
 
-    /** Additionally consider gradient magnitude */
+    /// Additionally consider gradient magnitude
     //std::shared<TransferFunction2D> to2D(TransferFunction2dOptions opts) { return std::make_shared<TransferFunction2D>(getCtx(), m_data, m_texture, opts); }
     //std::shared<TransferFunction1DPreintegrated> preintegrate() {}
 

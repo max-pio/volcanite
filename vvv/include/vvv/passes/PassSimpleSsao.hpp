@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <vvv/passes/PassSsao.hpp>
@@ -8,11 +23,9 @@
 
 namespace vvv {
 
-/**
- * This is a convenience wrapper for PassSsao and PassBlur.
- * It performs Screen Space Ambient Occlusion based on depth and world space normals, which is then smoothed using PassBlur in bilateral mode.
- * Specity input images using setInputTextures() each frame and call renderSsao().
- */
+/// This is a convenience wrapper for PassSsao and PassBlur.
+/// It performs Screen Space Ambient Occlusion based on depth and world space normals, which is then smoothed using PassBlur in bilateral mode.
+/// Specity input images using setInputTextures() each frame and call renderSsao().
 class PassSimpleSsao : public virtual WithMultiBuffering, public virtual WithGpuContext {
 public:
     using Algorithm = PassSsao::Algorithm;
@@ -33,11 +46,9 @@ public:
 
     virtual RendererOutput renderSsao(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr);
 
-    /**
-     * Add SSAO settings to the Gui.
-     * @param shaderRecompileCallback if a callback is provided, a selection box for the algorithm is added to the gui.
-     *        When it is used in the gui, the callback needs to call releaseSwapchain(), freeResources(), allocateResources(), initSwapchainResources().
-     */
+    /// Add SSAO settings to the Gui.
+    /// @param shaderRecompileCallback if a callback is provided, a selection box for the algorithm is added to the gui.
+    ///        When it is used in the gui, the callback needs to call releaseSwapchain(), freeResources(), allocateResources(), initSwapchainResources().
     virtual void addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int)>> shaderRecompileCallback = {});
 
     // GUI parameters
@@ -56,10 +67,9 @@ private:
     PassBlur m_blurPass;
 };
 
-/**
- * Calculate Ssao, smooth using bilateral filter and multiply AO with a color image.
- * Specity input images using setInputTextures() each frame and call renderSsao().
- */
+
+/// Calculate Ssao, smooth using bilateral filter and multiply AO with a color image.
+/// Specity input images using setInputTextures() each frame and call renderSsao().
 class PassSimpleApplySsao : public PassSimpleSsao {
 public:
     PassSimpleApplySsao(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering,

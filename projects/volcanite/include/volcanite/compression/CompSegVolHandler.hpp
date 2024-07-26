@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <chrono>
@@ -16,24 +31,26 @@
 
 #define RELABEL_IDS_FROM_CSV_SUFFIX "_relabel.csv"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 
-/** Easy to use managing class for obtaining Compressed Segmentation Volumes (CSGV).
-* The createCompressedSegmentationVolume() method can be used to obtain a CSGV with the given parameters, e.g. for a .hdf5 or .nrrd data set.
-* If force_recompute is false, it will load a previously computed compression from the same location if possible.
-* The overall time to compress a data set is mostly the time to load the original volume from the hard drive, especially in the case of compressed hdf5 files.
-* \n\n
-* Chunked data:\n
-* For large data sets that are split into multiple chunks of data, a formatted path with three {} placeholders and a maximum file index can be passed.
-* The handler then tries to load all chunk files from (0,0,0) to the maximum index (inclusive) where all 'inner' chunks must have a volume dimension which is a
-* multiple of the brick size. Each of these chunks is compressed and exported independently.
-* Afterward, a merging step is carried out to create a single CSGV containing the whole data set.
-* A data set that is not split into chunks can be seen as a data set that consists of only one chunk (0,0,0).
-* For example, "vol_x{}_y{}_z{}" with a maximum index (3,1,4) will compress and merge all chunks [vol_x0_y0_z0, vol_x1_y0_z0, ... vol_x3_y1_z4] into one CSGV.
-* \n\n
-* Operation Frequencies:\n
-* If rANS encoding is applied when compressing, a quick pre-pass for obtaining operation frequency tables is performed.*/
+/// Easy to use managing class for obtaining Compressed Segmentation Volumes (CSGV).
+/// The createCompressedSegmentationVolume() method can be used to obtain a CSGV with the given parameters, e.g. for a .hdf5 or .nrrd data set.
+/// If force_recompute is false, it will load a previously computed compression from the same location if possible.
+/// The overall time to compress a data set is mostly the time to load the original volume from the hard drive, especially in the case of compressed hdf5 files.
+/// \n\n
+/// Chunked data:\n
+/// For large data sets that are split into multiple chunks of data, a formatted path with three {} placeholders and a maximum file index can be passed.
+/// The handler then tries to load all chunk files from (0,0,0) to the maximum index (inclusive) where all 'inner' chunks must have a volume dimension which is a
+/// multiple of the brick size. Each of these chunks is compressed and exported independently.
+/// Afterward, a merging step is carried out to create a single CSGV containing the whole data set.
+/// A data set that is not split into chunks can be seen as a data set that consists of only one chunk (0,0,0).
+/// For example, "vol_x{}_y{}_z{}" with a maximum index (3,1,4) will compress and merge all chunks [vol_x0_y0_z0, vol_x1_y0_z0, ... vol_x3_y1_z4] into one CSGV.
+/// \n\n
+/// Operation Frequencies:\n
+/// If rANS encoding is applied when compressing, a quick pre-pass for obtaining operation frequency tables is performed.
 class CompSegVolHandler {
 
 public:
@@ -212,7 +229,7 @@ public:
 
         }
 
-        std::shared_ptr<CompressedSegmentationVolume> csgv = std::make_shared<vvv::CompressedSegmentationVolume>();
+        std::shared_ptr<CompressedSegmentationVolume> csgv = std::make_shared<volcanite::CompressedSegmentationVolume>();
         csgv->setCPUThreadCount(cpu_threads);
         // check if we can load a precomputed compressed segmentation volume
         if (!cfg.force_recompute && csgv->importFromFile(csgv_path, false)) {

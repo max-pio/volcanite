@@ -151,15 +151,6 @@ add_library(LibVVV::libvvv ALIAS libvvv)
 
 # required packages
 find_package(Vulkan REQUIRED)
-find_package(glm REQUIRED)
-if(NOT TARGET glm::glm AND TARGET glm)
-    # if the modern CMake alias target does not exist, we define it ourselves.
-    add_library(glm::glm ALIAS glm)
-endif()
-
-# [deprecated] old packages
-#find_package(pugixml REQUIRED)
-#find_package(ZLIB REQUIRED) # zlib is used by tinyexr for compression
 
 # optional packages
 find_package(OpenMP)
@@ -191,7 +182,7 @@ target_compile_definitions(libvvv PRIVATE -DVULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
 target_compile_definitions(libvvv PRIVATE -DVULKAN_HPP_STORAGE_SHARED_EXPORT=1)
 target_compile_definitions(libvvv PRIVATE -DVULKAN_HPP_STORAGE_SHARED=1)
 
-target_compile_definitions(libvvv PUBLIC -DGLM_FORCE_DEPTH_ZERO_TO_ONE -DLIB_VVV_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\")
+target_compile_definitions(libvvv PUBLIC -DGLM_ENABLE_EXPERIMENTAL -DGLM_FORCE_DEPTH_ZERO_TO_ONE -DLIB_VVV_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\")
 
 # link required libraries
 # target_link_libraries(libvvv PUBLIC Vulkan::Vulkan PRIVATE TIFF::TIFF ZLIB::ZLIB PRIVATE pugixml::pugixml PUBLIC glm::glm)
@@ -243,4 +234,4 @@ target_include_directories(libvvv
         )
 
 # add data/ folder as target_property to install() by each project
-set_target_properties(libvvv PROPERTIES DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)
+set_target_properties(libvvv PROPERTIES INTERFACE_DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)

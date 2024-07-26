@@ -7,7 +7,7 @@
 
 #include "volcanite/compression/bitpack.hpp"
 
-namespace vvv {
+namespace volcanite {
 
 uint32_t encodingIndexOfNeighbor(const uint32_t index, const int neighbor_i) {
     throw std::runtime_error("not implemented");

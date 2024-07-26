@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #version 460
 #extension GL_GOOGLE_include_directive : enable
 
@@ -24,13 +39,11 @@ vec3 compute_gradient(ivec3 position)
     return vec3(dx, dy, dz);
 }
 
-/**
- * Visualizes the data of a 3d volume for a 2d transfer function by plotting it into a 2d histogram texture as follows:
- * - the scalar data value varies along the x-axis
- * - the gradient magnitude is ploted along the y-axis
- * - (0,0) is a the top left. Thus, inner homogenous areas will result in large values along the top of the histogram texture.
- *   Transitions/Isosurfaces will be plotted as parabels that open to the top.
- */
+/// Visualizes the data of a 3d volume for a 2d transfer function by plotting it into a 2d histogram texture as follows:
+/// - the scalar data value varies along the x-axis
+/// - the gradient magnitude is ploted along the y-axis
+/// - (0,0) is a the top left. Thus, inner homogenous areas will result in large values along the top of the histogram texture.
+///   Transitions/Isosurfaces will be plotted as parabels that open to the top.
 void main() {
     // TODO(Reiner): this is totally unoptimized, each thread accumulates a single value directly into global memory with a atomic operation
 

@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <glm/glm.hpp>
@@ -12,25 +27,23 @@ class GpuContext;
 typedef GpuContext *const GpuContextRwPtr;
 
 
-/**
- * Utilities to (a) assign names to vulkan objects and (b) to label ranges in queues and command buffers with colored labels.
- *
- * Since this is simply a convenience feature for development, this class MUST NOT throw in any failure case.
- * It MUST NOT throw if enabling the extension fails and it MUST NOT throw if any marker type is not supported
- * by the particular implementation. It MUST NOT throw if any method is called without calling `enable` first.
- * In case of any failure, just don't attach the debug marker and fail silently.
- */
+/// @brief Utilities to (a) assign names to vulkan objects and (b) to label ranges in queues and command buffers with colored labels.
+///
+/// Since this is simply a convenience feature for development, this class MUST NOT throw in any failure case.
+/// It MUST NOT throw if enabling the extension fails and it MUST NOT throw if any marker type is not supported
+/// by the particular implementation. It MUST NOT throw if any method is called without calling `enable` first.
+/// In case of any failure, just don't attach the debug marker and fail silently.
 class DebugUtilities {
 public:
-    /** Call once on startup to enable debugging. Subsequent invocations are ignored. */
+    /// Call once on startup to enable debugging. Subsequent invocations are ignored.
     virtual void enable(GpuContextRwPtr ctx) = 0;
 
     // TODO(Reiner): use the vulkan HPP types even for the raw API
     // TODO(Reiner): drop vulkan 1.0 support
 
-    /** Raw object labeling function. Use the convenience methods `setName` instead. */
+    /// Raw object labeling function. Use the convenience methods `setName` instead.
     virtual void setObjectName(VkDevice device, uint64_t object, VkDebugReportObjectTypeEXT objectType, const char *name) const = 0;
-    /** Allows annotation with any object */
+    /// Allows annotation with any object
     virtual void setObjectTag(VkDevice device, uint64_t object, VkDebugReportObjectTypeEXT objectType, uint64_t name, size_t tagSize, const void *tag) const = 0;
 
     virtual void endRegion(VkCommandBuffer cmdBuffer) const = 0;
@@ -83,9 +96,9 @@ public:
         setObjectName(device, (uint64_t) static_cast<VkDescriptorSetLayout>(v), VK_DEBUG_REPORT_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT_EXT, (name + "[DescriptorSetLayout]").c_str());
     }
 
-    /** Check if the extension is enabled, resp. if calling `enable` was successful */
+    /// Check if the extension is enabled, resp. if calling `enable` was successful
     bool isEnabled() const { return active; }
-    /** False if `enable` failed because the debug extension is not available. `false` if `enable` was not yet invoked. */
+    /// False if `enable` failed because the debug extension is not available. `false` if `enable` was not yet invoked.
     bool isExtensionSupported() const { return extensionPresent; }
     virtual std::string extensionName() const = 0;
 

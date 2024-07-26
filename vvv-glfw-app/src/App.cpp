@@ -1,8 +1,26 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include "vvvwindow/App.hpp"
 #include <vvv/vk/destroy.hpp>
 #include <vvv/vk/swapchain.hpp>
 #include <vvv/util/Logger.hpp>
 #include <glm/gtx/transform.hpp>
+
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
 
 #ifdef IMGUI
 #include "imgui/imgui.h"
@@ -16,11 +34,9 @@
 const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 const auto IMAGE_NOT_IN_FLIGHT = std::numeric_limits<size_t>::max();
 
-double Application::s_mouse_scroll_wheel = 0.f;
-
 static void check_vk_result(VkResult err) {
     if (err != 0) {
-        std::cerr << "Vulkan error " << vk::to_string(static_cast<vk::Result>(err));
+        vvv::Logger(vvv::ERROR) << "Vulkan error " << vk::to_string(static_cast<vk::Result>(err));
         if (err < 0) {
             abort();
         }
@@ -117,14 +133,6 @@ void Application::renderFrame() {
     // TODO(Reiner): the sample uses the frameIdx as we do here instead of a swapchain idx??? should not be valid?
     std::array<vk::CommandBuffer, 1> commandBuffers = {commandBuffer};
 
-    //std::vector<vk::Semaphore> graphicsWaitSemaphores(ldrRendererOutput.renderingCompleteSemaphores);
-    //std::vector<vk::PipelineStageFlags> graphicsWaitStages(ldrRendererOutput.renderingCompleteStageMasks);
-    //std::vector<vk::Semaphore> graphicsSignalSemaphores(ldrRendererOutput.usageCompleteSemaphores);
-    //graphicsSignalSemaphores.push_back(m_swapchain.renderCompleteSemaphore[frameIndex]);
-    //vk::SubmitInfo submitInfo(graphicsWaitSemaphores, graphicsWaitStages, commandBuffers, graphicsSignalSemaphores);
-    //m_queues.graphics.submit(submitInfo, m_swapchain.inFlightFences[frameIndex]); // fence signaled on complete
-
-
     // make sure the swapchain allows us to write again. Since we only sync against the blit, we are guaranteed to
     // have the right queue type for `eColorAttachmentOutput`. If the sync against the swapchain would be passed
     // into the inner renderer, this would not be guaranteed. The inner renderer for example, could be compute queue only.
@@ -163,8 +171,7 @@ void Application::renderFrame() {
         break;
     case vk::Result::eSuboptimalKHR:
     case vk::Result::eErrorOutOfDateKHR:
-        // TODO(Reiner): resize swapchain
-        std::cerr << "vk::Queue::presentKHR returned << " << result << " !\n" << std::flush;
+        // vvv::Logger(vvv::ERROR) << "vk::Queue::presentKHR returned << " << result;
         recreateSwapchain();
         break;
     default:
@@ -291,9 +298,11 @@ int Application::exec() {
 #ifdef IMGUI
         if(m_display_imgui)
             m_gui->renderGui();
+        // do not capture mouse or keyboard input if in an imgui window
+        m_camera_controller.updateCamera(!ImGui::GetIO().WantCaptureMouse, !ImGui::GetIO().WantCaptureKeyboard);
+#else
+        m_camera_controller.updateCamera(true, true);
 #endif
-
-        updateCamera();
         processParameterRecording();
         renderFrame();
         processVideoRecording();
@@ -325,20 +334,6 @@ int Application::exec() {
     if (getDevice()) {
         getDevice().waitIdle();
     }
-
-    // ToDo: old: this destroyWindow() here ensures the window is immediately closed, but allows following code
-    // to inspect vulkan state, e.g. download buffers etc, before all GPU state
-    // is destroyed.
-    // ----
-    // Note from Max: this gives segfaults. Destroy the window at the end of releaseResources() instead
-    // When destroying the window here, glfwTerminate() sometimes gives a segfault / a corrupted double linked list
-    // within XCloseDisplay.
-    // Could be: https://github.com/KhronosGroup/Vulkan-LoaderAndValidationLayers/issues/1894
-    // http://www.xfree86.org/4.7.0/DRI11.html suggests that the (GL, but Vulkan here) can register a callback with Xlib.
-    // When the application calls XCloseDisplay, this callback is called and will segfault if the driver had already
-    // been unloaded, which could happen when the Vulkan instance is destroyed. Fix is to destroy the instance after
-    // cleaning up the display connection.
-    // destroyWindow();
 
     return 0;
 }
@@ -434,8 +429,8 @@ void Application::createWindow() {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     m_window = glfwCreateWindow(static_cast<int>(m_startup_resolution.width), static_cast<int>(m_startup_resolution.height), getAppName().c_str(), nullptr, nullptr);
     glfwSetWindowUserPointer(m_window, this);
-    glfwSetScrollCallback(m_window, &Application::glfwUpdateScrollWheel);
     glfwSetFramebufferSizeCallback(m_window, framebufferResizeCallback);
+    m_camera_controller.setWindow(m_window);
 }
 
 void Application::destroyWindow() {
@@ -930,144 +925,6 @@ void Application::processVideoRecording() {
     }
 }
 
-void Application::glfwUpdateScrollWheel(GLFWwindow *window, double xoffset, double yoffset) {
-    s_mouse_scroll_wheel += yoffset;
-}
-
-void Application::updateCamera() {
-    // read scroll wheel value
-    float scrollWheelDelta = s_mouse_scroll_wheel - m_mouse_scroll_wheel_previous_frame;
-    m_mouse_scroll_wheel_previous_frame= s_mouse_scroll_wheel;
-    // do not process mouse input if the pointer is in a GUI window
-    if (ImGui::GetIO().WantCaptureMouse)
-        scrollWheelDelta = 0.f;
-
-    // do not process keyboard input if ImGui obtains text input
-    bool captureKeyboard = !ImGui::GetIO().WantCaptureKeyboard;
-
-    auto camera = getCamera();
-
-    // Figure out how much time has passed since the last invocation
-    static double last_time = 0.0;
-    double now = glfwGetTime();
-    double elapsed_time = (last_time == 0.0) ? 0.0 : (now - last_time);
-    float time_delta = (float)elapsed_time;
-    last_time = now;
-
-    static const float mouse_radians_per_pixel = 1.0f * std::numbers::pi / 1000.0f;
-
-    int left_mouse_state = glfwGetMouseButton(m_window, GLFW_MOUSE_BUTTON_1);
-    int right_mouse_state = glfwGetMouseButton(m_window, GLFW_MOUSE_BUTTON_2);
-    // do not process mouse input if the pointer is in a GUI window
-    if (ImGui::GetIO().WantCaptureMouse) {
-        left_mouse_state = GLFW_RELEASE;
-        right_mouse_state = GLFW_RELEASE;
-    }
-
-    float final_speed = camera->speed * 0.5f;
-    final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 2.0f : 1.0f;
-    final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) ? 0.1f : 1.0f;
-    float step = time_delta * final_speed;
-
-    double mouse_position_double[2];
-    glfwGetCursorPos(m_window, &mouse_position_double[0], &mouse_position_double[1]);
-    float mouse_position[2] = {(float)mouse_position_double[0], (float)mouse_position_double[1]};
-    if (!camera->rotate_camera && (right_mouse_state == GLFW_PRESS || left_mouse_state == GLFW_PRESS)) {
-        camera->rotate_camera = true;
-        camera->rotation_x_0 = camera->rotation_x - mouse_position[1] * mouse_radians_per_pixel;
-        camera->rotation_y_0 = camera->rotation_y - mouse_position[0] * mouse_radians_per_pixel;
-    }
-    // in orbital mode, shift and control can lock rotation axes
-    if (camera->orbital && camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-        camera->rotation_x_0 = camera->rotation_x - mouse_position[1] * mouse_radians_per_pixel;
-    }
-    if (camera->orbital && camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
-        camera->rotation_y_0 = camera->rotation_y - mouse_position[0] * mouse_radians_per_pixel;
-    }
-
-    if ((left_mouse_state == GLFW_RELEASE && right_mouse_state != GLFW_PRESS) || (right_mouse_state == GLFW_RELEASE && left_mouse_state != GLFW_PRESS))
-        camera->rotate_camera = false;
-    if (camera->rotate_camera) {
-        camera->rotation_x = camera->rotation_x_0 + mouse_radians_per_pixel * mouse_position[1];
-        camera->rotation_y = camera->rotation_y_0 + mouse_radians_per_pixel * mouse_position[0];
-        camera->rotation_x = (camera->rotation_x < -std::numbers::pi) ? -std::numbers::pi : camera->rotation_x;
-        camera->rotation_x = (camera->rotation_x > std::numbers::pi) ? std::numbers::pi : camera->rotation_x;
-    }
-
-    // orbital movement
-    if(camera->orbital) {
-        // look at movement
-        float forward = 0.0f, right = 0.0f, vertical = 0.0f;
-        forward += (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
-        forward -= (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
-        right += (glfwGetKey(m_window, GLFW_KEY_D) == GLFW_PRESS) ? step : 0.0f;
-        right -= (glfwGetKey(m_window, GLFW_KEY_A) == GLFW_PRESS) ? step : 0.0f;
-        vertical += (glfwGetKey(m_window, GLFW_KEY_E) == GLFW_PRESS) ? step : 0.0f;
-        vertical -= (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) ? step : 0.0f;
-
-        // transform the look at offset in world space: move with WASD in the xz plane, move the plane up and down with QE
-        glm::vec4 look_at_offset = glm::inverse(camera->get_world_to_view_space()) * glm::vec4(right, 0.f, forward, 0);
-        look_at_offset.y = vertical;
-        glm::vec3 old_position_look_at = camera->position_look_at_world_space;
-        camera->position_look_at_world_space += glm::vec3(look_at_offset);
-
-        // clamp the values s.t. the look at point never leaves the unit cube
-#if 0
-        if(glm::any(glm::lessThan(camera->position_look_at_world_space, glm::vec3(-0.5f))) || glm::any(glm::greaterThan(camera->position_look_at_world_space, glm::vec3(0.5f)))) {
-        camera->position_look_at_world_space = old_position_look_at;
-    }
-#else
-        camera->position_look_at_world_space.x = glm::clamp(camera->position_look_at_world_space.x, -0.5f, 0.5f);
-        camera->position_look_at_world_space.y = glm::clamp(camera->position_look_at_world_space.y, -0.5f, 0.5f);
-        camera->position_look_at_world_space.z = glm::clamp(camera->position_look_at_world_space.z, -0.5f, 0.5f);
-#endif
-
-        if (captureKeyboard && !camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_R)) {
-            camera->rotation_y += 0.01f;
-        }
-        constexpr float pi_eps = std::numbers::pi / 2.f - 0.001f;
-        camera->rotation_x = glm::clamp(camera->rotation_x, -pi_eps, pi_eps);
-
-        camera->orbital_radius -= (scrollWheelDelta / 10.f) * final_speed * camera->orbital_radius;
-        camera->orbital_radius = glm::max(0.001f, camera->orbital_radius);
-        camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
-                camera->orbital_radius * cos(camera->rotation_y) * cos(camera->rotation_x),
-                camera->orbital_radius * sin(camera->rotation_x),
-                camera->orbital_radius * sin(camera->rotation_y) * cos(camera->rotation_x));
-
-        if (forward != 0.f || right != 0.f || vertical != 0.f || scrollWheelDelta != 0.f || camera->rotate_camera) {
-            camera->onCameraUpdate();
-        }
-    }
-    else {
-        // Modify the speed
-        float final_speed = camera->speed * 0.5f;
-        final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 2.0f : 1.0f;
-        final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) ? 0.1f : 1.0f;
-        float step = time_delta * final_speed;
-        // Determine camera movement
-        float forward = 0.0f, right = 0.0f, vertical = 0.0f;
-        if (captureKeyboard) {
-            forward += (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
-            forward -= (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
-            right += (glfwGetKey(m_window, GLFW_KEY_D) == GLFW_PRESS) ? step : 0.0f;
-            right -= (glfwGetKey(m_window, GLFW_KEY_A) == GLFW_PRESS) ? step : 0.0f;
-            vertical += (glfwGetKey(m_window, GLFW_KEY_E) == GLFW_PRESS) ? step : 0.0f;
-            vertical -= (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) ? step : 0.0f;
-        }
-        // Implement camera movement
-        float cos_y = cosf(camera->rotation_y), sin_y = sinf(camera->rotation_y);
-        camera->position_world_space[0] +=  sin_y * forward;
-        camera->position_world_space[0] +=  cos_y * right;
-        camera->position_world_space[2] += -cos_y * forward;
-        camera->position_world_space[2] +=  sin_y * right;
-        camera->position_world_space[1] +=  vertical;
-
-        if (forward != 0.0f || right != 0.0f || vertical != 0.0f || camera->rotate_camera) {
-            camera->onCameraUpdate();
-        }
-    }
-}
 
 #ifdef IMGUI
 
@@ -1192,4 +1049,9 @@ bool Application::isWindowResizable() const {
     if(m_window)
         return static_cast<bool>(glfwGetWindowAttrib(m_window, GLFW_RESIZABLE));
     return false;
+}
+
+void Application::framebufferResizeCallback(GLFWwindow *window, int _width, int _height) {
+    auto app = reinterpret_cast<Application *>(glfwGetWindowUserPointer(window));
+    app->m_swapchain.pendingRecreation = true;
 }

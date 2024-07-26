@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 // ToDo: compression_synth.cpp executable must be updated, e.g. to support HEADLESS mode
 
 #ifndef HEADLESS
@@ -24,7 +39,7 @@
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "vvv/volren/Volume.hpp"
 
-using namespace vvv;
+using namespace volcanite;
 
 inline std::string vec2str(glm::ivec3 v) {
     std::string out = "[";
@@ -45,7 +60,7 @@ int compression_synth(int argc, char *argv[]) {
     // configuration -------------------
     int brick_dim = 16;                                                         // size of one brick
     bool force_recompute = false;                                               // do a fresh compression even if there is a precomputed file
-    CompressedSegmentationVolume::RANSMode rANS_mode = vvv::CompressedSegmentationVolume::DOUBLE_TABLE_RANS;  // use no rANS, rANS with one table for everything, or rANS with a second freq. table for the finest LoD
+    RANSMode rANS_mode = RANSMode::DOUBLE_TABLE_RANS;  // use no rANS, rANS with one table for everything, or rANS with a second freq. table for the finest LoD
     unsigned int frequency_pass_subsampling = 8u;                               // only use every n³th block in every 2nd chunk file for computing frequencies
     bool use_detail_separation = false;                                         // split off the operation stream of the finest LoD for on-demand CPU to GPU streaming
     std::string appName = "Synthetic Data Creator";
@@ -173,7 +188,7 @@ int compression_synth(int argc, char *argv[]) {
                     changed = true;
                     code_frequencies[i] = 2ul;
                 }
-                if(rANS_mode == vvv::CompressedSegmentationVolume::DOUBLE_TABLE_RANS && code_frequencies[i+16] == 0ul) {
+                if(rANS_mode == RANSMode::DOUBLE_TABLE_RANS && code_frequencies[i+16] == 0ul) {
                     changed = true;
                     code_frequencies[i+16] = 2ul;                }
             }
@@ -181,14 +196,14 @@ int compression_synth(int argc, char *argv[]) {
                 Logger(WARN) << " set zero frequency to 2 to avoid missing symbols because of frequency pass subsampling.";
         }
     }
-    csgvol->setCompressionOptions64(brick_dim, rANS_mode, false, code_frequencies, code_frequencies + 16);
+    csgvol->setCompressionOptions64(brick_dim, rANS_mode, code_frequencies, code_frequencies + 16);
     if (use_detail_separation)
         csgvol->separateDetail();
     csgvol->compress(volume->data(), volume_dim, true);
 
 #ifdef RUN_APP
     // run the interactive Application
-    const auto renderer = std::make_shared<vvv::CompressedSegmentationVolumeRenderer>();
+    const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>();
     const auto csgv_db = std::make_shared<CSGVDatabase>();
     renderer->setCompressedSegmentationVolume(csgvol, csgv_db);
     auto app = Application::create(appName, renderer);

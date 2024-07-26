@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 
 #include <vvv/core/Buffer.hpp>
@@ -13,7 +28,9 @@
 #include "imgui.h"
 #endif
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 
 RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore *signalBinarySemaphore) {
@@ -178,7 +195,8 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     }
 
     // just return the last result if only a certain number of frames have to be accumulated
-    if (m_accum_frames > 0 && m_framesSinceCameraMove >= m_accum_frames) {
+    // as the sample count buffer is counting in uint16, the maximum number of accumulation frames can be 65535
+    if ((m_accum_frames > 0 && m_framesSinceCameraMove >= m_accum_frames) || m_framesSinceCameraMove >= 65534u) {
         m_framesSinceCameraMove = m_accum_frames;
         return m_mostRecentFrame.value();
     }
@@ -210,8 +228,12 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
     m_pass->setStorageImage("inpaintedOutColor", *m_inpaintedOutColor);
     // feedback texture ping pong for the inpainting shader
-    m_pass->setStorageImage("feedbackIn", *m_feedback_tex[m_frame % 2u]);
-    m_pass->setStorageImage("feedbackOut", *m_feedback_tex[1u - (m_frame % 2u)]);
+    m_pass->setStorageImage("accumulationIn", *m_accumulation_rgba_tex[m_frame % 2u]);
+    m_pass->setStorageImage("accumulationOut", *m_accumulation_rgba_tex[1u - (m_frame % 2u)]);
+    m_pass->setStorageImage("accuSampleCountIn", *m_accumulation_samples_tex[m_frame % 2u]);
+    m_pass->setStorageImage("accuSampleCountOut", *m_accumulation_samples_tex[1u - (m_frame % 2u)]);
+    // 16 bit packed gBuffer texture storing
+    m_pass->setStorageImage("gBuffer", *m_g_buffer_tex);
 
 
     std::vector<std::shared_ptr<Awaitable>> renderAwaitableList = {};
@@ -424,7 +446,8 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     auto heap_budget_and_usage = getMemoryHeapBudgetAndUsage(*ctx);
     size_t free_heap_size = heap_budget_and_usage.first - heap_budget_and_usage.second;
     if(m_target_cache_size_MB * 1024 * 1024 > free_heap_size) {
-        Logger(WARN) << "not enough GPU memory available to provide target cache size of " << m_target_cache_size_MB << " MB. Using smaller cache.";
+        updateDeviceMemoryUsage();
+        Logger(WARN) << "not enough GPU memory available to provide target cache size of " << m_target_cache_size_MB << " MB. Using smaller cache. " << m_gui_device_mem_text;
         m_target_cache_size_MB = 0;
     }
     // target size of 0 means to allocate as much for the cache as we can (or rather 90% of it to have some leeway)
@@ -472,7 +495,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     Logger(INFO) << "Device memory after initialization: " << m_gui_device_mem_text;
 
 
-    // UPLOAD TO GPU BUFFERS ---------------------------------
+    // UPLOAD TO GPU BUFFERS ----------------------------------
     AwaitableList awaitBeforeExecution;
     std::vector<std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>>> _encoding_upload;
     for(int i = 0; i < split_encoding_count; i++) {
@@ -626,9 +649,16 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
 
     // recreate all swapchain image sized textures
     vvv::AwaitableList reinitDone;
-    m_feedback_tex[0] = m_pass->reflectTexture("feedbackIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
-    m_feedback_tex[1] = m_pass->reflectTexture("feedbackOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
-    for (auto & texture : m_feedback_tex) {
+    m_accumulation_rgba_tex[0] = m_pass->reflectTexture("accumulationIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_accumulation_rgba_tex[1] = m_pass->reflectTexture("accumulationOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    for (auto & texture : m_accumulation_rgba_tex) {
+        texture->ensureResources();
+        const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
+        reinitDone.push_back(layoutTransformDone);
+    }
+    m_accumulation_samples_tex[0] = m_pass->reflectTexture("accuSampleCountIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_accumulation_samples_tex[1] = m_pass->reflectTexture("accuSampleCountOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    for (auto & texture : m_accumulation_samples_tex) {
         texture->ensureResources();
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
@@ -640,6 +670,13 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
     }
+    m_g_buffer_tex = m_pass->reflectTexture("gBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    {
+        m_g_buffer_tex->ensureResources();
+        const auto layoutTransformDone = m_g_buffer_tex->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
+        reinitDone.push_back(layoutTransformDone);
+    }
+
 
     // write all transfer function samplers once
     for(int m = 0; m < m_materials.size(); m++) {
@@ -664,16 +701,18 @@ void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
         m_mostRecentFrame->texture = nullptr;
         m_mostRecentFrame->renderingComplete = {};
     }
-    if (m_outColor)
-        m_outColor = nullptr;
-    if(m_outDepth)
-        m_outDepth = nullptr;
-    if(m_feedback_tex[0])
-        m_feedback_tex[0] = nullptr;
-    if(m_feedback_tex[1])
-        m_feedback_tex[1] = nullptr;
+    if(m_accumulation_rgba_tex[0])
+        m_accumulation_rgba_tex[0] = nullptr;
+    if(m_accumulation_rgba_tex[1])
+        m_accumulation_rgba_tex[1] = nullptr;
+    if(m_accumulation_samples_tex[0])
+        m_accumulation_samples_tex[0] = nullptr;
+    if(m_accumulation_samples_tex[1])
+        m_accumulation_samples_tex[1] = nullptr;
     if (m_inpaintedOutColor)
         m_inpaintedOutColor.reset();// = nullptr;
+    if(m_g_buffer_tex)
+        m_g_buffer_tex = nullptr;
 }
 
 void CompressedSegmentationVolumeRenderer::resetGPU() {
@@ -717,9 +756,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         // bbox is the volume dimension in voxels centered around the origin (if no bbox reduction is applied)
         m_urender_info->setUniform<glm::vec4>("g_bboxMin", glm::vec4(m_bboxMin, 1.f));
         m_urender_info->setUniform<glm::vec4>("g_bboxMax", glm::vec4(m_bboxMax, 1.f));
-        m_urender_info->setUniform<uint32_t>("g_local_shading_enable", m_cook_torrance_shading ? 1 : 0);
         m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
-        m_urender_info->setUniform<float>("g_ratio_spec_diff", m_ratio_spec_diff);
         m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? 1 : 0);
         m_urender_info->setUniform<float>("g_opacityThreshold",
                                           0.5); // TODO: we have this low opacity treshold to render opaque first hits
@@ -753,6 +790,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), voldim / normalized_volume_size), normalized_volume_size / 2.f);
         m_urender_info->setUniform<glm::mat4x4>("g_model_to_world_space", glm::inverse(world_to_model_space));
         m_urender_info->setUniform<glm::mat4x4>("g_world_to_model_space", world_to_model_space);
+        m_urender_info->setUniform<glm::mat3x3>("g_model_to_world_space_dir", glm::mat3(glm::inverse(world_to_model_space)));
         m_urender_info->setUniform<glm::mat3x3>("g_world_to_model_space_dir", glm::mat3(world_to_model_space));
         m_urender_info->setUniform<float>("g_world_to_model_space_scaling", scalingFactor);
         const auto world_to_projection_space = camera->get_world_to_projection_space(m_resolution);
@@ -801,11 +839,9 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
                                 newCamHash);
         newCamHash = hashMemory(&m_max_path_length, sizeof(m_max_path_length), newCamHash);
         newCamHash = hashMemory(&m_max_steps, sizeof(m_max_steps), newCamHash);
-        newCamHash = hashMemory(&m_cook_torrance_shading, sizeof(m_cook_torrance_shading), newCamHash);
         newCamHash = hashMemory(&m_show_normals, sizeof(m_show_normals), newCamHash);
         newCamHash = hashMemory(&m_show_envmap, sizeof(m_show_envmap), newCamHash);
         newCamHash = hashMemory(&m_factor_ambient, sizeof(m_factor_ambient), newCamHash);
-        newCamHash = hashMemory(&m_ratio_spec_diff, sizeof(m_ratio_spec_diff), newCamHash);
         newCamHash = hashMemory(&m_tonemap_enabled, sizeof(m_tonemap_enabled), newCamHash);
         newCamHash = hashMemory(&m_shadow_pathtracing_ratio, sizeof(m_shadow_pathtracing_ratio), newCamHash);
         newCamHash = hashMemory(&m_max_inv_lod, sizeof(m_max_inv_lod), newCamHash);
@@ -816,7 +852,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
             m_camHash = newCamHash;
         }
         m_urender_info->setUniform<uint32_t>("g_camera_still_frames", m_framesSinceCameraMove);
-        m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::haltonNxNVec(m_subsampling)[m_framesSinceCameraMove % ((1 << m_subsampling)*(1 << m_subsampling))]);
+        m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::bitReverseMortonNxNVec(m_subsampling)[m_framesSinceCameraMove % ((1 << m_subsampling) * (1 << m_subsampling))]);
         // random seed
         m_urender_info->setUniform<float>("g_random_seed", static_cast<float>(m_frame) / 10000.f);
         m_urender_info->setUniform<uint32_t>("g_swapchain_index", m_pass->getActiveIndex());
@@ -866,6 +902,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                            {"Development", "Materials"}});
 
     // General options
+    g_gen->addSeparator();
     g_gen->addVec3([this](glm::vec3 v) { if (glm::all(glm::greaterThan(v, glm::vec3(0.f)))) m_voxel_size = v; },
                    [this]() { return m_voxel_size; }, "Voxel Size", 3);
     g_gen->addFloatRange([this](glm::vec2 v) {m_bboxMin.x = v.x; m_bboxMax.x = v.y;},
@@ -879,6 +916,9 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                          "Splitting Plane Z", glm::vec2(0.f), glm::vec2(1.f), glm::vec2(0.01f), 2);
     g_gen->addSeparator();
     g_gen->addAction([this]() {
+#ifdef HEADLESS
+        m_download_frame_to_image_file = "./volcanite_output.png";
+#else
         if (!pfd::settings::available()) {
             Logger(WARN) << "Can not open file dialog for screenshot export. Using default file ./volcanite_output.png";
             m_download_frame_to_image_file = "./volcanite_output.png";
@@ -893,8 +933,12 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             if(!m_download_frame_to_image_file->ends_with(".png"))
                 m_download_frame_to_image_file->append(".png");
         }
+#endif
     }, "Screenshot");
     //
+#ifdef IMGUI
+    g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
     g_gen->addAction([this]() {
         std::string file;
         if (!pfd::settings::available()) {
@@ -911,6 +955,9 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         }
 
     }, "Import Parameters");
+#ifdef IMGUI
+    g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
     g_gen->addAction([this]() {
         std::string file;
         if (!pfd::settings::available()) {
@@ -933,7 +980,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_gen->addSeparator();
     g_gen->addDynamicText(&m_gui_device_mem_text);
 
-    // Displaying and render resolution
+    // Display properties and render resolution
     g_dis->addColor(&m_background_color_a, "Background Color A");
     g_dis->addColor(&m_background_color_b, "Background Color B");
     g_dis->addInt(&m_accum_frames, "Accumulation Frames");
@@ -944,8 +991,11 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dis->addDynamicText(&m_gui_resolution_text);
     g_dis->addBool([this](bool b) { if(getCtx()->getWsi()) getCtx()->getWsi()->setWindowResizable(b); }, [this]() { return getCtx()->getWsi() != nullptr && getCtx()->getWsi()->isWindowResizable(); }, "Resizable Window");
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
+#ifdef IMGUI
+    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
-    g_dis->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
+    //g_dis->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
 
     // Materials
     if(m_csgv_db) {
@@ -953,16 +1003,59 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     }
 
     // Path Tracing / Rendering
+    static int gui_preset_selection = 0;
+    g_render->addCombo(&gui_preset_selection, {"Local Shading", "Global Shadows", "Ambient Occlusion", "Path Tracing"},
+                       [this](int i) {
+                           // how many frames have to be accumulated so that each pixel received one sample
+                           int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
+                           switch(i) {
+                               // local shading
+                               case 0:
+                                   m_factor_ambient = 0.4f;
+                                   m_light_intensity = 1.f;
+                                   m_global_illumination_enabled = false;
+                                   m_envmap_enabled = false;
+                                   m_accum_frames = frames_for_one_spp * 8;
+                                   break;
+                                   // global shadows
+                               case 1:
+                                   m_factor_ambient = 0.4f;
+                                   m_light_intensity = 1.f;
+                                   m_global_illumination_enabled = true;
+                                   m_shadow_pathtracing_ratio = 0.f;
+                                   m_envmap_enabled = false;
+                                   m_accum_frames = frames_for_one_spp * 8;
+                                   break;
+                                   // ambient occlusion
+                               case 2:
+                                   m_factor_ambient = 0.4f;
+                                   m_light_intensity = 1.f;
+                                   m_global_illumination_enabled = true;
+                                   m_shadow_pathtracing_ratio = 1.f;
+                                   m_max_path_length = 1;
+                                   m_envmap_enabled = false;
+                                   m_accum_frames = glm::min(frames_for_one_spp * 256, 4096);
+                                   break;
+                                   // path tracing
+                               case 3:
+                                   m_factor_ambient = 0.f;
+                                   m_light_intensity = 1.f;
+                                   m_global_illumination_enabled = true;
+                                   m_shadow_pathtracing_ratio = 1.f;
+                                   m_max_path_length = 32;
+                                   m_envmap_enabled = true;
+                                   m_accum_frames = glm::min(frames_for_one_spp * 1024, 4096);
+                                   break;
+                           }
+                       }, "Rendering Preset");
     g_render->addFloat(&m_factor_ambient, "Constant Color", 0.0f, 1.f, 0.05f, 2);
-    g_render->addBool(&m_envmap_enabled, "Environment Map");
+    g_render->addSeparator();
     g_render->addFloat(&m_light_intensity, "Light Intensity", 0.f, 4.f, 0.05f, 2);
     g_render->addDirection(&m_light_direction, "Light Direction");
     g_render->addSeparator();
-    g_render->addBool(&m_cook_torrance_shading, "Local Shading");
-    g_render->addFloat(&m_ratio_spec_diff, "Specular / Diffuse Shading Ratio", 0.0f, 1.0f, 0.05f, 2);
-    g_render->addSeparator();
     g_render->addBool(&m_global_illumination_enabled, "Global Illumination");
     g_render->addFloat(&m_shadow_pathtracing_ratio, "Direct Light / Pathtracing Ratio", 0.f, 1.f, 0.1f, 1);
+    g_render->addBool(&m_envmap_enabled, "Environment Map");
     g_render->addInt(&m_max_path_length, "Path Length", 1, 32, 1);
 
     // Development
@@ -1093,9 +1186,58 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
         auto [attr_upload_finished, _attr_staging_buffer] = m_attribute_buffer->uploadWithStagingBuffer(attributes.data(), attributes.size() * sizeof(float), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
         getCtx()->sync->hostWaitOnDevice({attr_upload_finished});
-        // can't just return the awaitable as _attr_staging_buffer can not be freed yet
-        // return {attr_upload_finished};
+        // can't just return the awaitable (return {attr_upload_finished}) as _attr_staging_buffer can not be freed yet
         return {};
     }
 
-} // namespace vvv
+    void CompressedSegmentationVolumeRenderer::printGPUMemoryUsage() {
+
+        size_t textures = 0ul;
+        if (m_accumulation_rgba_tex[0]) {
+            textures += m_accumulation_rgba_tex[0]->memorySize() + m_accumulation_rgba_tex[1]->memorySize();
+            textures += m_accumulation_samples_tex[0]->memorySize() + m_accumulation_samples_tex[1]->memorySize();
+            for (const auto &t: *m_inpaintedOutColor)
+                textures += t->memorySize();
+        }
+
+        size_t uniform_buffers = 0ul;
+        if (m_urender_info) {
+            uniform_buffers += m_urender_info->getByteSize() + m_usegmented_volume_info->getByteSize();
+        }
+
+        size_t materials = 0ul;
+        if (m_materials_buffer) {
+            materials += m_materials_buffer->getByteSize() + m_attribute_buffer->getByteSize();
+            for (const auto &t: m_materialTransferFunctions)
+                materials += t->texture().memorySize();
+        }
+
+        size_t cache = 0ul;
+        if (m_cache_buffer) {
+            cache += m_cache_info_buffer->getByteSize() + m_cache_buffer->getByteSize()
+                   + m_free_stack_buffer->getByteSize() + m_assign_info_buffer->getByteSize()
+                   + (m_detail_requests_buffer ? m_detail_requests_buffer->getByteSize() : 0ul);
+        }
+
+        size_t encoding = 0ul;
+        if (m_brick_starts_buffer) {
+            encoding += m_split_encoding_buffer_addresses_buffer->getByteSize() + m_brick_starts_buffer->getByteSize();
+            for (const auto &b: m_split_encoding_buffers)
+                encoding += b->getByteSize();
+            if (m_detail_buffer) {
+                encoding += m_detail_buffer->getByteSize() + m_detail_starts_buffer->getByteSize();
+            }
+        }
+
+        size_t total_used = getMemoryHeapBudgetAndUsage(*getCtx()).second;
+        Logger(INFO) << "[GPU Memory] " << std::fixed << std::setprecision(3)
+                    << "Framebuffers: " << static_cast<double>(textures) / 1024. / 1024. / 1024. << " GB | "
+                    << "Uniform Buffers: " << static_cast<double>(uniform_buffers) / 1024. / 1024. / 1024. << " GB | "
+                    << "Materials: " << static_cast<double>(materials) / 1024. / 1024. / 1024. << " GB | "
+                    << "Encoding: " << static_cast<double>(encoding) / 1024. / 1024. / 1024. << " GB | "
+                    << "Cache: " << static_cast<double>(cache) / 1024. / 1024. / 1024. << " GB   | "
+                    << " = " << static_cast<double>(textures + uniform_buffers + materials + encoding + cache) / 1024. / 1024. / 1024. << " GB"
+                    << " / " << static_cast<double>(total_used) / 1024. / 1024. / 1024. << " GB";
+    }
+
+} // namespace volcanite

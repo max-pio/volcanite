@@ -1,6 +1,23 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include "volcanite/renderer/PassCompSegVolRender.hpp"
 
-namespace vvv {
+using namespace vvv;
+
+namespace volcanite {
 
 AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore* signalBinarySemaphore) {
 
@@ -80,7 +97,12 @@ std::vector<std::shared_ptr<Shader>> PassCompSegVolRender::createShaders() {
                                 std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_decompress.comp", .defines= m_shader_defines, .label="csgv_decompress.comp"}, compileErrorCallback),
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_renderer.comp", .defines= m_shader_defines, .label="csgv_renderer.comp"}, compileErrorCallback),
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_upsample_resolve.comp", .defines= m_shader_defines, .label="csgv_upsample_resolve.comp"}, compileErrorCallback)
+//            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_denoise_resolve.comp", .defines= m_shader_defines, .label="csgv_denoise_resolve.comp"}, compileErrorCallback)
             };
+}
+
+std::vector<vk::PushConstantRange> PassCompSegVolRender::definePushConstantRanges() {
+    return {};
 }
 
 } // namspace vvv

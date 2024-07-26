@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <vvv/core/preamble_forward_decls.hpp>
@@ -152,9 +167,7 @@ template<> void memcpy_type<glm::mat3>(SpvReflectBlockVariable* member, char* un
 
 }; // namespace details
 
-/**
- * Let's you work with uniform sets without first creating a CPP struct through a stringly-typed API.
- */
+/// Let's you work with uniform sets without first creating a CPP struct through a stringly-typed API.
 class UniformReflected {
 public:
     UniformReflected(const SpvReflectDescriptorBinding *const binding) : m_dirty({}), m_data(binding->block.size), m_binding(binding) {}

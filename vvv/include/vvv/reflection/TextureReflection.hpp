@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <vvv/core/Texture.hpp>
@@ -87,14 +102,11 @@ const std::map<SpvImageFormat, vk::Format> spvr2vk_format{
 };
 }; // namespace details
 
-/**
- * Derives a texture that can be used for all the given bindings.
- *
- * @throws std::runtime_exception if all names did not match any uniform. note that this will not throw if one variable name does not match any uniform.
- * @throws std::runtime_exception if the descriptors are incompatible.
- * @throws std::runtime_exception if the shaders have incompatible definitions for a given descriptor name.
- * @throws std::runtime_exception if all descriptors are samplers and no format is given in the arguments.
- */
+/// Derives a texture that can be used for all the given bindings.
+/// @throws std::runtime_exception if all names did not match any uniform. note that this will not throw if one variable name does not match any uniform.
+/// @throws std::runtime_exception if the descriptors are incompatible.
+/// @throws std::runtime_exception if the shaders have incompatible definitions for a given descriptor name.
+/// @throws std::runtime_exception if all descriptors are samplers and no format is given in the arguments.
 std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts);
 
 std::vector<std::shared_ptr<Texture>> reflectTextureArray(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts);

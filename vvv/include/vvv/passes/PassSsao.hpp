@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <vvv/passes/PassCompute.hpp>
@@ -5,13 +20,11 @@
 
 namespace vvv {
 
-/**
- * This render pass implements SSAO and is executed on the graphics queue.
- * It takes depth and world space normals as input images (linked with setInputTextures())
- * and applies ambient occlusion to it.
- * Input images should have the usage flags returned from getInputImageUsageFlags().
- * The result is returned by renderSsao() in a RendererOutput struct.
- */
+/// This render pass implements SSAO and is executed on the graphics queue.
+/// It takes depth and world space normals as input images (linked with setInputTextures())
+/// and applies ambient occlusion to it.
+/// Input images should have the usage flags returned from getInputImageUsageFlags().
+/// The result is returned by renderSsao() in a RendererOutput struct.
 class PassSsao : public SinglePassCompute {
 public:
     enum Algorithm : int { Crytek, Starcraft, Hbao };
@@ -30,11 +43,9 @@ public:
     glm::float32 g_ssaoFalloff = 100.0;                     ///< falloff power factor [only Starcraft]
     glm::int32   g_ssaoNumSteps = 16;                       ///< samples for each horizon [only HBAO]
 
-    /**
-     * Add SSAO settings to the Gui.
-     * @param shaderRecompileCallback if a callback is provided, a selection box for the algorithm is added to the gui.
-     *        When it is used in the gui, the callback needs to call releaseSwapchain(), freeResources(), allocateResources(), initSwapchainResources().
-     */
+    /// Add SSAO settings to the Gui.
+    /// @param shaderRecompileCallback if a callback is provided, a selection box for the algorithm is added to the gui.
+    ///        When it is used in the gui, the callback needs to call releaseSwapchain(), freeResources(), allocateResources(), initSwapchainResources().
     void addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int)>> shaderRecompileCallback = {});
 
     static vk::ImageUsageFlags getInputImageUsageFlags() { return vk::ImageUsageFlagBits::eSampled; }

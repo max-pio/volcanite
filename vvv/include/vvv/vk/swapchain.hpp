@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 #include <vulkan/vulkan.hpp>
 
@@ -69,10 +84,7 @@ vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &
     return no_vsync_present_mode;
 }
 
-/**
- *
- * Also known as `max concurrently in flight frames` and `frame lag`.
- */
+/// Also known as `max concurrently in flight frames` and `frame lag`.
 uint32_t chooseSwapchainImageCount(const vk::SurfaceCapabilitiesKHR &capabilities) {
     uint32_t imageCount = capabilities.minImageCount + 1;
     if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount) {
@@ -82,7 +94,7 @@ uint32_t chooseSwapchainImageCount(const vk::SurfaceCapabilitiesKHR &capabilitie
     return imageCount;
 }
 
-/** Clamp swap extent to the valid range */
+/// Clamp swap extent to the valid range
 vk::Extent2D chooseSwapExtent(vk::Extent2D extent, const vk::SurfaceCapabilitiesKHR &capabilities) {
     // if (capabilities.currentExtent.width != UINT32_MAX) {
     //    return capabilities.currentExtent;

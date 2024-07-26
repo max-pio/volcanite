@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <vvv/passes/PassBase.hpp>
@@ -43,7 +58,7 @@ struct GraphicsPassConfig {
 };
 
 
-/** This is a typesafe wrapper around the non-typesafe but more flexible `PassComputeDynamic` */
+/// This is a typesafe wrapper around the non-typesafe but more flexible `PassComputeDynamic`
 // template <PassComputeStructure Types> class PassCompute : public virtual MultiBuffering, public virtual WithGpuContext /*: PassComputeDynamic */ {
 //     using UniformSets = decltype(Types::uniformSets)::type;
 //     using StorageImages = decltype(Types::storageImages)::type;
@@ -66,11 +81,7 @@ public:
     //
     // A `vk::CommandBuffer executeCommands()` variant that returns a secondary commandbuffer without an argument could be more ergonomic and efficient, but
     // harder to synchronize correctly. Not sure...
-    /**
-     *
-     * @param commandBuffer
-     * @return
-     */
+
     [[nodiscard]] AwaitableHandle execute(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override {
         assert(isPipelineCreated() && "you must call 'allocateResources' if the pass was created with lazy state initialization.");
         assert(!m_colorAttachmentTextures.empty() && "you must set color attachments before executing a graphics pass.");
@@ -182,9 +193,7 @@ protected:
         : PassBase(ctx, std::move(label), multiBuffering, queueFamilyIndex), m_graphicsPassConfig(std::move(config)) {}
 
 
-    /**
-     * Must be implemented by subclass and is called between commandBuffer.beginRendering(renderInfo) and commandBuffer.endRendering().
-     */
+    /// Must be implemented by subclass and is called between commandBuffer.beginRendering(renderInfo) and commandBuffer.endRendering().
     virtual void draw(vk::CommandBuffer& commandBuffer) = 0;
 
     std::vector<std::shared_ptr<Shader>> createShaders() override {
@@ -200,9 +209,7 @@ protected:
     std::shared_ptr<Shader> getFragmentShader() { return m_shaders.at(1); }
     std::shared_ptr<Shader> getGeometryShader() { return m_shaders.size() > 1 ? m_shaders.at(2) : nullptr; }
 
-    /**
-     * Has to fill out the VertexInputBindingDescription and VertexAttributeDescription vectors by reference.
-     */
+    /// Has to fill out the VertexInputBindingDescription and VertexAttributeDescription vectors by reference.
     virtual void createVertexInputDescriptions(std::vector<vk::VertexInputBindingDescription>& vertexBindingDescriptions, std::vector<vk::VertexInputAttributeDescription>& vertexAttributeDescriptions) = 0;
 
     std::vector<vk::Pipeline> createPipelines() override {

@@ -1,4 +1,19 @@
-// Stolen from https://github.com/MomentsInGraphics/vulkan_renderer/blob/c85c087d0aca99f060818b69f9cbbdffb45c33d8/src/vulkan_basics.h
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+// ToDo: Stolen from https://github.com/MomentsInGraphics/vulkan_renderer/blob/c85c087d0aca99f060818b69f9cbbdffb45c33d8/src/vulkan_basics.h
 
 #pragma once
 #include "preamble.hpp"
@@ -122,12 +137,11 @@ struct Shader {
 
     std::vector<DescriptorSetLayout> reflectDescriptorLayouts() const;
 
-    /**
-     * Get the workgroup size by inspecting the shader source.
-     *
-     * Beware: this will falsely return 1x1x1 if the workgroup size is configured through
-     * specialization constants or if the shader is not a compute shader.
-     */
+
+    /// @brief Get the workgroup size by inspecting the shader source.
+    ///
+    /// Beware: this will falsely return 1x1x1 if the workgroup size is configured through
+    /// specialization constants or if the shader is not a compute shader.
     vk::Extent3D reflectWorkgroupSize() const;
 
     vk::ShaderStageFlagBits reflectShaderStage() const;

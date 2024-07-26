@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include <mutex>
@@ -47,36 +62,26 @@ public:
     size_t size() const { return m_pos.size(); }
 
     // acceleration structure
-    /**
-     * Configures the uniform grid used to accelerate queries.
-     * @param min minimum point position covered by grid
-     * @param max maximum point position covered by grid
-     * @param voxelsize world space size in each dimension of grid voxels
-     */
+    /// Configures the uniform grid used to accelerate queries.
+    /// @param min minimum point position covered by grid
+    /// @param max maximum point position covered by grid
+    /// @param voxelsize world space size in each dimension of grid voxels
     void setAccelerationGrid(glm::vec3 min, glm::vec3 max, float voxelsize);
     bool hasAcceleration() { return m_accelDim.x * m_accelDim.y * m_accelDim.z > 0; }
     void setAccelerationDirty() { m_accelDirty = true; }
-    /**
-     * Updates the acceleration structure if it was marked dirty.
-     */
+    /// Updates the acceleration structure if it was marked dirty.
     void updateAccelerationGrid();
 
     // utility functions
-    /**
-     * Returns the index of the nearest neighbor for every point in this point cloud.
-     */
+    /// Returns the index of the nearest neighbor for every point in this point cloud.
     std::vector<int> nearestNeighbors();
     std::vector<std::vector<int>> kNearestNeighbors(int k);
 
-     /**
-     * Returns a list of poisson sampled positions within the point clouds minimum and maximum dimensions. The positions are not yet added to the point cloud.
-     */
+     /// Returns a list of poisson sampled positions within the point clouds minimum and maximum dimensions. The positions are not yet added to the point cloud.
      std::vector<glm::vec4> poissonFill(float rejectionDist);
 
-     /**
-      * Performs a epanechnikov kernel interpolation with the given kernel radius for the given point attributes.
-      * If no point attributes are specified, the kernel density is returned.
-      */
+     /// Performs a epanechnikov kernel interpolation with the given kernel radius for the given point attributes.
+     /// If no point attributes are specified, the kernel density is returned.
      float kernelInterpolation(glm::vec3 pos, float radius, const std::vector<float>* pointAttributes = nullptr);
 
 
@@ -86,17 +91,13 @@ public:
 
 
      void uploadPositionsToBuffer(Buffer& buffer) const { /*assert(buffer contains vec4)*/ buffer.upload(m_pos); }
-     /**
-      * uploads map from 1D encoded acceleration grid cell to uvec2 buffer which points with (start index, point count) into the acceleration point index array
-      */
+     /// uploads map from 1D encoded acceleration grid cell to uvec2 buffer which points with (start index, point count) into the acceleration point index array
      void uploadAccelerationGridToBuffer(Buffer& buffer) const {
          /*assert(buffer contains uvec2)*/
          assert(!m_accelDirty);
          buffer.upload(m_accelGrid, m_accelDim.x * m_accelDim.y * m_accelDim.z * sizeof(glm::uvec2));
      }
-     /**
-      * * uploads unsigned int map of indices of points in the position array ordered by 1D encoded acceleration grid cell
-      */
+     /// uploads unsigned int map of indices of points in the position array ordered by 1D encoded acceleration grid cell
      void uploadAccelerationIndicesToBuffer(Buffer& buffer) const {
          assert(!m_accelDirty);
          /*assert(buffer contains unsigned int)*/
@@ -138,18 +139,18 @@ private:
     std::mutex m_mutex;
 
     // poisson cache
-    glm::vec4 m_poissonCacheDimDist;       ///< spatial size of the set (xyz) and rejection distance (w)
-    std::vector<glm::vec4> m_poissonCache; ///< points spanning the spatial domain from the cached size (but which may be too close to a data set point)
+    glm::vec4 m_poissonCacheDimDist;        ///< spatial size of the set (xyz) and rejection distance (w)
+    std::vector<glm::vec4> m_poissonCache;  ///< points spanning the spatial domain from the cached size (but which may be too close to a data set point)
 
     // point data
     std::vector<glm::vec4> m_pos;
     // acceleration structure
     bool m_accelDirty;
-    glm::uvec2* m_accelGrid;    /// first: start index of points in the voxel in m_accelIndices, second: number of points inside this voxel
-    std::vector<std::pair<size_t, size_t>> m_accelIndices;  /// first: voxel index in accel grid, second: index of point in m_pos
-    glm::vec3 m_accelMin, m_accelMax;   // minimum and maximum world space positions in the grid
-    glm::ivec3 m_accelDim;  /// x, y, and z dimension of the acceleration grid in voxels
-    float m_accelSize;      /// size of one cell of the acceleration grid (in each dimension)
+    glm::uvec2* m_accelGrid;    ///< first: start index of points in the voxel in m_accelIndices, second: number of points inside this voxel
+    std::vector<std::pair<size_t, size_t>> m_accelIndices;  ///< first: voxel index in accel grid, second: index of point in m_pos
+    glm::vec3 m_accelMin, m_accelMax;                       ///< minimum and maximum world space positions in the grid
+    glm::ivec3 m_accelDim;      ///< x, y, and z dimension of the acceleration grid in voxels
+    float m_accelSize;          ///< size of one cell of the acceleration grid (in each dimension)
 };
 
 

@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include "vvv/util/Logger.hpp"
@@ -11,55 +26,41 @@ namespace vvv
 class PointUtil {
 public:
 
-    /**
-     * Returns a space filling point sets where all points are aligned on a grid with spacing gridSpacing.
-     * @param size the maximum position of points
-     * @param gridSpacing the grid spacing between points
-     * @param stratified if true, the positions are randomized within grid cells
-     * @return a grid aligned point set
-     */
+    /// Returns a space filling point sets where all points are aligned on a grid with spacing gridSpacing.
+    /// @param size the maximum position of points
+    /// @param gridSpacing the grid spacing between points
+    /// @param stratified if true, the positions are randomized within grid cells
+    /// @return a grid aligned point set
     static std::vector<glm::vec4> fillGrid(const glm::vec3 size, float gridSpacing, bool stratified=false);
 
-    /**
-     * Returns a space filling point set where all points are not closer than rejectionDist to their nearest neighbors.
-     * @param size the maximum positions of points
-     * @param rejectionDist the minimum distance between points
-     * @return a poisson disc sampled point set
-     */
+    /// Returns a space filling point set where all points are not closer than rejectionDist to their nearest neighbors.
+    /// @param size the maximum positions of points
+    /// @param rejectionDist the minimum distance between points
+    /// @return a poisson disc sampled point set
     static std::vector<glm::vec4> fillPoisson(const glm::vec3 size, float rejectionDist);
 
 
-    /**
-    * For every point in a, returns the index of the nearest neighbor in b.
-    * @param a Points for which nearest neighbor is searched.
-    * @param b Potential nearest neighbors for points in a.
-    * @param skipIdenticalIDs if point pairs with the same index are ignored. Handy if you want to compute the nearest neighbors within the same point cloud.
-    */
+    /// For every point in a, returns the index of the nearest neighbor in b.
+    /// @param a Points for which nearest neighbor is searched.
+    /// @param b Potential nearest neighbors for points in a.
+    /// @param skipIdenticalIDs if point pairs with the same index are ignored. Handy if you want to compute the nearest neighbors within the same point cloud.
     template<glm::length_t L>
     static std::vector<size_t> nearestNeighbors(const std::vector<glm::vec<L, float, glm::defaultp>>& a, const std::vector<glm::vec<L, float, glm::defaultp>>& b, bool skipIdenticalIDs);
 
-    /**
-     * For every point in a, returns the indices of the k nearest neighbors in b.
-     * @param a Points for which nearest neighbor is searched.
-     * @param b Potential nearest neighbors for points in a.
-     * @param k Number of nearest neighbors to be returned per point.
-     * @param skipIdenticalIDs if point pairs with the same index are ignored. Handy if you want to compute the nearest neighbors within the same point cloud.
-     */
+    /// For every point in a, returns the indices of the k nearest neighbors in b.
+    /// @param a Points for which nearest neighbor is searched.
+    /// @param b Potential nearest neighbors for points in a.
+    /// @param k Number of nearest neighbors to be returned per point.
+    /// @param skipIdenticalIDs if point pairs with the same index are ignored. Handy if you want to compute the nearest neighbors within the same point cloud.
     template<glm::length_t L>
     static std::vector<std::vector<size_t>> kNearestNeighbors(const std::vector<glm::vec<L, float, glm::defaultp>>& a, const std::vector<glm::vec<L, float, glm::defaultp>>& b, int k = 1, bool skipIdenticalIDs = false);
 
-    /**
-     * Transforms all points with the given transformation matrix in place.
-     */
+    /// Transforms all points with the given transformation matrix in place.
     static void transformInPlace(std::vector<glm::vec3>& points, const glm::mat4& transformation);
 
-    /**
-     * Transforms all points with the given transformation matrix in place.
-     */
+    /// Transforms all points with the given transformation matrix in place.
     static void transformInPlace(std::vector<glm::vec4>& points, const glm::mat4& transformation);
-    /**
-     * Copies a new list of positions from a list of indices in another position list. The given position list is not altered.
-     */
+    /// Copies a new list of positions from a list of indices in another position list. The given position list is not altered.
     template<glm::length_t L>
     static std::vector<glm::vec<L, float, glm::defaultp>> indexToPositions(const std::vector<size_t>& indices, const std::vector<glm::vec<L, float, glm::defaultp>>& position_in);
 };
