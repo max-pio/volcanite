@@ -658,6 +658,8 @@ public:
 
     void printBrickInfo(glm::uvec3 brick, loglevel log_level = INFO) const;
 
+    void printBrickEncoding(uint32_t brick_idx) const;
+
     /// A quick way of checking some invariants of CSGV representations to verify the compressed volume.
     /// @return true if no errors are found, false otherwise.
     bool verifyCompression() const;

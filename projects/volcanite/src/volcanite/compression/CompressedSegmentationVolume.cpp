@@ -994,7 +994,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
 
     // write header: 8 chars CMPSGVOL + 4 chars version number
     const char *magic_header = "CMPSGVOL";
-    const char *version = "0013";
+    const char *version = "0014";
     /* VERSION HISTORY
      * 0001: initial version
      * 0002: adds booleans if RLE and rANS are used, as well as frequency tables for rANS
@@ -1004,6 +1004,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
      * 0011: use rANS_mode instead of use_rANS, allow detail separation only with DOUBLE_TABLE_RANS
      * 0012: store max. brick palette size
      * 0013: split encoding buffers
+     * 0014: re-ordered operation codes by occurring frequency to Parent,X,Y,Z,PaletteA,PaletteL,PaletteD
      */
     file.write(magic_header, 8);
     file.write(version, 4);
@@ -1084,9 +1085,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     int _numeric_version = std::stoi(std::string(_version));
 
     // backwards compatibility code:
-    if (std::string(_version) == "0011") {
-        Logger(WARN) << "Reading deprecated csgv file version " << _version << ". May lead to reduced rendering performance.";
-    } else if (std::string(_version) != "0012" && std::string(_version) != "0013") {
+    if (std::string(_version) != "0014") {
         Logger(ERROR) << "Import does not support version " << _version << " of Compressed Segmentation Volume file " << path << ". Skipping.";
         return false;
     }

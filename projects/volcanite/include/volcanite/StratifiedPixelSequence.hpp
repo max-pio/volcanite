@@ -22,21 +22,21 @@ using namespace vvv;
 
 namespace volcanite {
 
-    /**
-     * Contains lists of 2D pixel indices in an image grid so that the power of two strata are guaranteed to receive one
-     * sample after a given power of two number of samples was distributed. Each NxN sequence contains all 2D indices of
-     * an NxN image exactly once. The length of the sequence is (N*N) and no point is contained twice.
-     *
-     * I.e. the first point is always {0,0}. The next (4-1)=3 points put samples in the bottom left corners of the
-     * remaining three of the four strata that one receives when splitting the image in half in both dimensions.
-     * The next (16-4) points put one sample each in the bottom left corner of all strata given by diving the image
-     * resolution by 4 in each dimension and so on.
-     *
-     * ADVISED PIXEL SEQUENCE: bitReverseMorton
-     * computed as morton_idx2pos(bitfieldReverse(i, log2(dimension)) it is invertible and has decent low discrepancy.
-     **/
+    /// Contains lists of 2D pixel indices in an image grid so that the power of two strata are guaranteed to receive one
+    /// sample after a given power of two number of samples was distributed. Each NxN sequence contains all 2D indices of
+    /// an NxN image exactly once. The length of the sequence is (N*N) and no point is contained twice.
+    ///
+    /// I.e. the first point is always {0,0}. The next (4-1)=3 points put samples in the bottom left corners of the
+    /// remaining three of the four strata that one receives when splitting the image in half in both dimensions.
+    /// The next (16-4) points put one sample each in the bottom left corner of all strata given by diving the image
+    /// resolution by 4 in each dimension and so on.
+    ///
+    /// ADVISED PIXEL SEQUENCE: bitReverseMorton
+    /// computed as morton_idx2pos(bitfieldReverse(i, log2(dimension)) it is invertible and has decent low discrepancy.
     class PixelSequence {
     public:
+
+        // TODO: use scrambled sobol sequence, "Practical Hash-based Owen Scrambling" / https://github.com/cessen/sobol_burley
         static constexpr int pseudoHilbert1x1[1][2]  = {{0, 0}};
         static constexpr int pseudoHilbert2x2[4][2]  = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
         static constexpr int pseudoHilbert4x4[16][2] = {{0, 0}, {2, 0}, {2, 2}, {0, 2},

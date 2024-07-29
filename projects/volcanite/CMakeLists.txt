@@ -7,6 +7,7 @@ set(VOLCANITE_HEADERS
         include/volcanite/VolcaniteArgs.hpp
         include/volcanite/StratifiedPixelSequence.hpp
         include/volcanite/compression/bitpack.hpp
+        include/volcanite/compression/BitVector.hpp
         include/volcanite/compression/VolumeCompressionBase.hpp
         data/shader/cpp_glsl_include/csgv_constants.h
         include/volcanite/compression/CompressedSegmentationVolume.hpp

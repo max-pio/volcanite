@@ -42,9 +42,9 @@ namespace volcanite {
 #define NEIGHBOR_X 1u   ///< copy label from x-axis neighbor with different parent node or its parent if not decoded
 #define NEIGHBOR_Y 2u   ///< copy label from x-axis neighbor with different parent node or its parent if not decoded
 #define NEIGHBOR_Z 3u   ///< copy label from x-axis neighbor with different parent node or its parent if not decoded
-#define PALETTE_D 4u    ///< re-read palette label from D+2 entries before the top pointer. D follows in encoding stream.
-#define PALETTE_ADV 5u  ///< read palette label at the palette top pointer and advance the top pointer by 1
-#define PALETTE_LAST 6u ///< re-read palette last palette label, located 1 entry before the top pointer, again
+#define PALETTE_ADV 4u  ///< read palette label at the palette top pointer and advance the top pointer by 1
+#define PALETTE_LAST 5u ///< re-read palette last palette label, located 1 entry before the top pointer, again
+#define PALETTE_D 6u    ///< re-read palette label from D+2 entries before the top pointer. D follows in encoding stream.
 
 #define INVALID 0xFFFFFFFFu    ///< UINT32_MAX all bits set to 1. Denotes undecoded values, invalid labels, errors..
 

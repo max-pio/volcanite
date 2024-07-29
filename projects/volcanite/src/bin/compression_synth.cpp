@@ -77,7 +77,7 @@ int compression_synth(int argc, char *argv[]) {
     uint32_t max_candidate;
 
     std::shared_ptr<Volume<uint32_t>> volume = std::make_shared<Volume<uint32_t>>(1.f, 1.f, 1.f, w, h, d, vk::Format::eR32Uint, w * h * d);
-    std::shared_ptr<vvv::CompressedSegmentationVolume> csgvol = std::make_shared<vvv::CompressedSegmentationVolume>();
+    std::shared_ptr<volcanite::CompressedSegmentationVolume> csgvol = std::make_shared<volcanite::CompressedSegmentationVolume>();
     for(int ppm_i = 0; ppm_i < ppm.size(); ppm_i++) {
         size_t points_per_million = ppm[ppm_i];
         const size_t point_count = static_cast<size_t>(static_cast<float>(w * h * d) / 1000000.f * static_cast<float>(points_per_million));

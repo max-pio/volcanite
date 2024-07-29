@@ -88,6 +88,53 @@ namespace volcanite {
         Logger(log_level) << ss.str();
     }
 
+    void CompressedSegmentationVolume::printBrickEncoding(uint32_t brick_idx) const {
+        if (m_rANS_mode != NO_RANS)
+            throw std::runtime_error("Can only print brick encoding in NO_RANS mode.");
+        if (!m_parallel_decode)
+            throw std::runtime_error("Can only print brick encoding for parallel decoding mode.");
+
+        const uint32_t* brick_encoding = getBrickEncoding(brick_idx);
+        const uint32_t l = getBrickEncodingLength(brick_idx);
+
+        std::stringstream ss;
+        ss << "Brick " << brick_idx << " operation stream:\n";
+
+        const uint32_t ops_per_line = 64;
+
+        uint32_t i = brick_encoding[0];
+        uint32_t voxels_in_inv_lod = 1u;
+        uint32_t op_count[7] = {0u, 0u, 0u, 0u, 0u, 0u, 0u};
+        char op_char[7] = {'.', 'x', 'y', 'z', 'A', 'L', 'D'};
+        for (int inv_lod = 0; inv_lod < getLodCountPerBrick(); inv_lod++) {
+            ss << "[" << inv_lod << "] ";
+            for (int v = 0; v < voxels_in_inv_lod; v++) {
+                uint32_t op = read4Bit(brick_encoding, 0u, i++);
+                if (op < 7u) {
+                    op_count[op]++;
+                    ss << op_char[op];
+                } else {
+                    ss << "#";
+                }
+
+                if (v % ops_per_line == (ops_per_line - 1u) && voxels_in_inv_lod > ops_per_line && v < (voxels_in_inv_lod - 1u))
+                    ss << "\n    ";
+                else if (v % 8 == 7u)
+                    ss << " ";
+            }
+            voxels_in_inv_lod *= 8u;
+            ss << "\n";
+        }
+        ss << "    -----------------------------------------------------------------------\n";
+        ss << "    ";
+        for (int c = 0; c < 7; c++) {
+            ss << op_char[c] << ": " << op_count[c] << "  ";
+        }
+        ss << " | sum: " << (i - brick_encoding[0]);
+
+        Logger(INFO) << ss.str();
+    }
+
     void CompressedSegmentationVolume::decodeBrickWithDebugEncoding(uint32_t brick_idx, uint32_t* output_brick, uint32_t* output_encoding,
                                                      std::vector<glm::uvec4>* output_palette, glm::uvec3 valid_brick_size, int inv_lod) const {
 
