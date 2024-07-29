@@ -39,7 +39,7 @@ void main() {
 
 
     // read the HDR radiance that was accumulated for this pixel so far
-    vec4 pixel_color = imageLoad(feedbackOut, pixel);
+    vec4 pixel_color = imageLoad(accumulationOut, pixel);
     // the alpha channel stores the number of samples this pixel received so far
     //   - a negative value indicates invalid samples that accessed undecoded voxels.
     //   - a value of 0 indicates that the pixel did not receive any samples yet (only occurs with g_subsampling > 1).
@@ -77,7 +77,7 @@ void main() {
                     continue;
 
                 // weight the pixel colors by sample counts
-                vec4 rgb_samples = imageLoad(feedbackOut, block_pixel);
+                vec4 rgb_samples = imageLoad(accumulationOut, block_pixel);
                 // we take the abs because invalid samples are marked with a sample count < 0 (usually -1)
                 if(abs(rgb_samples.a) > 0.f) {
                     // accumulate samples
