@@ -178,11 +178,14 @@ private:
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
     // denoising
-    bool m_denoise = true;
+    bool m_bilateral = false;
+    int m_denoise_filter_kernel_size = 2;
     float m_difference_depth_denoising = 1.0f;
     float m_spatial_sigma = 2.0f;
     float m_depth_sigma = 0.1f;
-    int m_denoise_filter_kernel_size = 2;
+    // svgf
+    bool m_svgf = true;
+    float m_illumination_sigma = 4.0f;
 //     debugging and dev options
     float m_lod_bias = 0.f;
     bool m_show_envmap = false;

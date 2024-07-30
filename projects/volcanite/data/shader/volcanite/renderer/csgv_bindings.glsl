@@ -148,9 +148,12 @@ layout (std140, binding = 10) uniform render_info {
     bool g_debug_step_count;
     uint g_swapchain_index;     // index of this frame in the multiframe swapchain buffer lists
     bool g_denoise;
+    bool g_bilateral;
+    bool g_svgf;
     float g_difference_depth_denoising;
     float g_spatial_sigma;
     float g_depth_sigma;
+    float g_illumination_sigma;
     int g_denoise_filter_kernel_size;
 
 };

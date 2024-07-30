@@ -159,11 +159,13 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid, uvec2 g_buffer_packe
                 // writing other pixel: initialize with 0 and invalid G-Buffer
                 if (any(notEqual(opix, pixel))) {
                     imageStore(feedbackOut, opix, vec4(0.f));
+                    imageStore(denoisingBuffer[0], opix, vec4(0.f));
                     imageStore(gBuffer, opix, uvec4(invalidGBufferRG8(), 0u, 0u));
                 }
                 // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame (set .a < 0)
                 else {
                     imageStore(feedbackOut, opix, vec4(color.rgb, isValid(depth_valid) ? 1.f :  -1.f));
+                    imageStore(denoisingBuffer[0], opix, vec4(color.rgb, isValid(depth_valid) ? 1.f :  -1.f));
                     imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
                 }
             }
@@ -172,16 +174,19 @@ void writePixel(ivec2 pixel, vec4 color, float depth_valid, uvec2 g_buffer_packe
                 // writing other pixel: just copy from previous to current frame
                 if (any(notEqual(opix, pixel))) {
                     imageStore(feedbackOut, opix, prev_color);
+                    imageStore(denoisingBuffer[0], opix, prev_color);
                     // gBuffer remains unchanged
                 }
                 // writing our pixel, but invalid new sample (from not yet decoded brick)
                 else if (!isValid(depth_valid)) {
                     imageStore(feedbackOut, opix, prev_color.a > 0.f ? prev_color : vec4(color.rgb, -1.f));
+                    imageStore(denoisingBuffer[0], opix, prev_color.a > 0.f ? prev_color : vec4(color.rgb, -1.f));
                     imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
                 }
                 // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
                 else {
                     imageStore(feedbackOut, opix, vec4(color.rgb, 1.f) + (prev_color.a > 0.f ? prev_color : vec4(0.f)));
+                    imageStore(denoisingBuffer[0], opix, vec4(color.rgb, 1.f) + (prev_color.a > 0.f ? prev_color : vec4(0.f)));
                     imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
                 }
             }

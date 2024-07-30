@@ -600,10 +600,12 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
         m_urender_info->setUniform<float>("g_ratio_spec_diff", m_ratio_spec_diff);
         m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_denoise", m_denoise ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_bilateral", m_bilateral ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_svgf", m_svgf ? 1 : 0);
         m_urender_info->setUniform<float>("g_difference_depth_denoising", m_difference_depth_denoising);
         m_urender_info->setUniform<float>("g_spatial_sigma", m_spatial_sigma);
         m_urender_info->setUniform<float>("g_depth_sigma", m_depth_sigma);
+        m_urender_info->setUniform<float>("g_illumination_sigma", m_illumination_sigma);
         m_urender_info->setUniform<int>("g_denoise_filter_kernel_size", m_denoise_filter_kernel_size);
         m_urender_info->setUniform<float>("g_opacityThreshold",
                                           0.5); // TODO: we have this low opacity treshold to render opaque first hits
@@ -868,11 +870,13 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addInt(&m_max_steps, "Max DDA Steps", 16, 4096, 16);
     g_dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
     g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
-    g_dev->addBool(&m_denoise, "Denoising");
+    g_dev->addInt(&m_denoise_filter_kernel_size, "Denoise Filter Kernel Size", 0, 10, 1);
+    g_dev->addBool(&m_bilateral, "Bilateral");
     g_dev->addFloat(&m_difference_depth_denoising, "difference depth denoising", 0.0f, 1.f, 0.004, 3);
     g_dev->addFloat(&m_spatial_sigma, "Spatial Sigma", 0.001f, 5.f, 0.01, 2);
     g_dev->addFloat(&m_depth_sigma, "Depth Sigma", 0.001f, 5.f, 0.01, 2);
-    g_dev->addInt(&m_denoise_filter_kernel_size, "Denoise Filter Kernel Size", 0, 10, 1);
+    g_dev->addBool(&m_svgf, "SVGF");
+    g_dev->addFloat(&m_illumination_sigma, "Illumination Sigma", 0.01f, 10.f, 0.01, 2);
     g_dev->addBool(&m_tonemap_enabled, "Tone Mapping");
     g_dev->addSeparator();
     g_dev->addLabel("Debug");
