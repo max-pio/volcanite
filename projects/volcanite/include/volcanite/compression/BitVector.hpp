@@ -218,9 +218,14 @@ class FlatRank {
 
         uint32_t l1_entry = 0u;
         uint32_t l2_entries[BV_STORE_L2_PER_L1] = {0u, 0u, 0u, 0u, 0u};
-        for (int i = 0; i < )
+
+        // TODO: continue from here
     }
-    ~FlatRank() { clear(); }
+
+    ~FlatRank() {
+        delete[] m_data;
+        m_data = nullptr;
+    }
 
     BV_L12Type* getRawData() { return m_data; }
     uint32_t getRawDataSize() { return m_size; }
@@ -229,11 +234,6 @@ class FlatRank {
 public:
     uint32_t rank1(uint32_t index) {
         return ~0u;
-    }
-
-    void clear() {
-        delete[] m_data;
-        m_data = nullptr;
     }
 
 private:
