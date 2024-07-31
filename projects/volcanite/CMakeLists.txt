@@ -48,8 +48,10 @@ function(makeVolcaniteExecutable name)
     installExecutable(${name})
 endfunction()
 
-makeVolcaniteExecutable(compression_synth)
-makeVolcaniteExecutable(csgv_brick_viewer)
+# makeVolcaniteExecutable(compression_synth)
+# makeVolcaniteExecutable(csgv_brick_viewer)
 makeVolcaniteExecutable(volcanite)
+makeVolcaniteExecutable(bitvector_test)
+
 # ToDO: Move the hello_volume_renderer to the examples. And include actual volume rendering in the shader.
-makeVolcaniteExecutable(hello_volume_renderer)
+# makeVolcaniteExecutable(hello_volume_renderer)
