@@ -21,34 +21,43 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <glm/integer.hpp>
 
 namespace volcanite {
 
-/// Words are the bit vector atomic storage unit and store bits in reverse order.
-typedef uint64_t BVWordType;
-/// Bits covered by one word.
-static constexpr uint32_t WORD_BIT_SIZE = sizeof(BVWordType) * 8u;
+// Makes some of the GLSL functions available:
 
-// To stick to the naming conventions, some of the following constants are taken from pasta::bit_vector:
-// (C) 2021 Florian Kurpicz <florian@kurpicz.org>, released under the GPLv3 license
-// https://github.com/pasta-toolbox/bit_vector
-
-/// Bits covered by an L2-block.
-static constexpr uint32_t L2_BIT_SIZE = 512;
-/// Bits covered by an L1-block.
-static constexpr uint32_t L1_BIT_SIZE = 8 * L2_BIT_SIZE;
-
-/// Number of 64-bit words covered by an L2-block.
-static constexpr uint32_t L2_WORD_SIZE = L2_BIT_SIZE / (sizeof(uint64_t) * 8);
-/// Number of 64-bit words covered by an L1-block.
-static constexpr uint32_t L1_WORD_SIZE = L1_BIT_SIZE / (sizeof(uint64_t) * 8);
-
-inline uint32_t rank1(BVWordType value, uint32_t index) {
-    return std::popcount(value << (WORD_BIT_SIZE - index));
+inline uint32_t bitfieldInsert(uint32_t base, uint32_t insert, int offset, int bits) {
+    return glm::bitfieldInsert(base, insert, offset, bits);
+}
+inline uint64_t bitfieldInsert(uint64_t base, uint64_t insert, int offset, int bits) {
+    return glm::bitfieldInsert(base, insert, offset, bits);
+}
+inline uint32_t bitfieldExtract(uint32_t value, int offset, int bits) {
+#ifdef __BMI__
+    return _bextr_u32(value, offset, bits);
+#else
+    return (value >> offset) & ((1u << bits) - 1u);
+#endif
+}
+inline uint64_t bitfieldExtract(uint64_t value, int offset, int bits) {
+#ifdef __BMI__
+    return _bextr_u64(value, offset, bits);
+#else
+    return (value >> offset) & ((1ull << bits) - 1u);
+#endif
+}
+inline uint32_t bitCount(uint32_t value) {
+    return std::popcount(value);
+}
+inline uint32_t bitCount(uint64_t value) {
+    return std::popcount(value);
 }
 
-
-
+/// Words are the bit vector atomic storage unit and store bits in reverse order.
+typedef uint64_t BV_WordType;
+/// Bits covered by one word.
+static constexpr uint32_t WORD_BIT_SIZE = sizeof(BV_WordType) * 8u;
 
 /// A bitvector implementation for wavelet matrices that is close to a C- or GLSL-style implementation.
 /// It supports the rank0, rank1 and access operations.
@@ -70,7 +79,7 @@ public:
                                             m_data(words_for_size(size), bit ? ~0ull : 0ull) {}
 
    [[nodiscard]] uint8_t access(uint32_t index) const {
-       return (m_data[index / WORD_BIT_SIZE] >> index) & 1u;
+       return bitfieldExtract(m_data[index / WORD_BIT_SIZE], static_cast<int>(index % WORD_BIT_SIZE), 1);
     }
 
     void set(uint32_t index, uint8_t bit_value) {
@@ -79,8 +88,8 @@ public:
 
         // https://graphics.stanford.edu/~seander/bithacks.html#ConditionalSetOrClearBitsWithoutBranching
         // the compiler optimizes modulo and division into bit shift instructions (which require fewer cycles)
-        BVWordType mask = 1ull << (index % WORD_BIT_SIZE);
-        m_data[index / WORD_BIT_SIZE] = (m_data[index / WORD_BIT_SIZE] & ~mask) | (-static_cast<BVWordType>(bit_value) & mask);
+        BV_WordType mask = 1ull << (index % WORD_BIT_SIZE);
+        m_data[index / WORD_BIT_SIZE] = (m_data[index / WORD_BIT_SIZE] & ~mask) | (-static_cast<BV_WordType>(bit_value) & mask);
     }
 
     /// Resizes the vector so that it stores size many bits.
@@ -126,8 +135,8 @@ public:
         return ss.str();
     }
 
-    [[nodiscard]] const BVWordType* rawData() const { return &m_data[0]; }
-    [[nodiscard]] uint32_t rawDataSize() const { return words_for_size(m_size); }
+    [[nodiscard]] const BV_WordType* getRawData() const { return &m_data[0]; }
+    [[nodiscard]] uint32_t getRawDataSize() const { return words_for_size(m_size); }
 
 private:
 
@@ -135,9 +144,103 @@ private:
     static inline uint32_t words_for_size(uint32_t size) { return (size + WORD_BIT_SIZE - 1u) / WORD_BIT_SIZE; }
 
     uint32_t m_size;                    ///< number of bits stored in the bit vector
-    std::vector<BVWordType> m_data;     ///< the raw data array storing bits in BVWordType words
+    std::vector<BV_WordType> m_data;     ///< the raw data array storing bits in BVWordType words
 
 };
+
+
+// RANK ACCELERATION STRUCTURE -----------------------------------------------------------------------------------------
+
+// To stick to the naming conventions, some of the following constants and class names are taken from pasta::bit_vector
+// (C) 2021 Florian Kurpicz <florian@kurpicz.org>, released under the GPLv3 license:
+// https://github.com/pasta-toolbox/bit_vector
+
+/// Atomic type that stores one L2-block consisting of 6 L1-blocks.
+/// The 19 LSB store the L1-information. Followed by 5 L2-information (first is implicit 0) ordered from least to most
+/// significant bits using 9 bits each. 19 bits + 5 * 9 bits = 64 bits total. This is enough to address vectors with
+/// 64³ + 32³ + 16³ + 8³ + 4³ + 2³ + 1³ bit entries, i.e. the maximum possible number of operations in a 64³ CSGB brick.
+typedef uint64_t BV_L12Type;
+
+/// Number of L2-blocks that are grouped into one L1-block MINUS ONE. The first L2-block is not stored explicitly.
+static constexpr uint32_t BV_STORE_L2_PER_L1 = 5;
+/// Bits that each stored L1-block takes up in the BV_L12Type
+static constexpr uint32_t BV_STORE_L1_BITS = 19;
+/// Bits that each stored L2-block takes up in the BV_L12Type
+static constexpr uint32_t BV_STORE_L2_BITS = 9;
+
+/// Bits covered by an L2-block.
+static constexpr uint32_t BV_L2_BIT_SIZE = 64;
+/// Bits covered by an L1-block.
+static constexpr uint32_t BV_L1_BIT_SIZE = (BV_STORE_L2_PER_L1 + 1) * BV_L2_BIT_SIZE;
+/// Number of 64-bit words covered by an L2-block.
+static constexpr uint32_t BV_L2_WORD_SIZE = BV_L2_BIT_SIZE / (sizeof(uint64_t) * 8);
+/// Number of 64-bit words covered by an L1-block.
+static constexpr uint32_t BV_L1_WORD_SIZE = BV_L1_BIT_SIZE / (sizeof(uint64_t) * 8);
+
+
+inline uint32_t rank1(BV_WordType value, uint32_t index) {
+    return bitCount(value << (WORD_BIT_SIZE - index));
+}
+
+inline uint32_t getL1Entry(const BV_L12Type& v) {
+    return bitfieldExtract(v, 0, BV_STORE_L1_BITS); // the least significant BV_STORE_L1_BITS store the L1-information
+}
+
+inline uint32_t getL2Entry(const BV_L12Type& v, uint32_t i) {
+    // First L2-information is always zero and not stored explicitly. For i > 0, BV_STORE_L2_BITS bits are stored per
+    // L2-information (e.g. 9 bits per for all except the first one L2-block each). They are ordered in the BV_L12Type
+    // from LSB to MSB, starting after the least significant BV_STORE_L1_BITS bits (e.g. 19) that are used for L1-info.
+    static constexpr uint32_t OFFSET = BV_STORE_L1_BITS - BV_STORE_L2_BITS;
+    return i == 0u ? 0u : bitfieldExtract(v, static_cast<int>(i * BV_STORE_L2_BITS + OFFSET), BV_STORE_L2_BITS);
+}
+
+inline BV_L12Type buildL12Type(uint32_t l1, const uint32_t l2[BV_STORE_L2_PER_L1]) {
+    // L1-information in LSB
+    BV_L12Type entry = l1;
+    // followed by (BV_L2_PER_L1-1) entries for (non-implicit) L2-information
+    #pragma unroll(BV_STORE_L2_PER_L1)
+    for (uint32_t i = 0; i < (BV_STORE_L2_PER_L1); i++)
+        entry |= static_cast<BV_L12Type>(l2[i]) << (BV_STORE_L1_BITS + i * BV_STORE_L2_BITS);
+    return entry;
+}
+
+/// Two-level acceleration structure for rank queries on a (constant) bit vector. Note that this is only valid as long
+/// as the bit vector does not change. The FlatRank structure cannot be updated. If the bit vector changes, you have
+/// to recompute a new FlatRank - which is lightweight enough so that this does not introduce additional overhead.
+class FlatRank {
+
+    FlatRank(const BitVector& bv) {
+        // determine required number of L1-blocks and create array
+        m_size = (bv.size() + BV_L1_BIT_SIZE - 1u) / BV_L1_BIT_SIZE;
+        m_data = new BV_L12Type[m_size];
+
+        // iterate over bv from front to back and create L12 entries on the go
+
+        uint32_t l1_entry = 0u;
+        uint32_t l2_entries[BV_STORE_L2_PER_L1] = {0u, 0u, 0u, 0u, 0u};
+        for (int i = 0; i < )
+    }
+    ~FlatRank() { clear(); }
+
+    BV_L12Type* getRawData() { return m_data; }
+    uint32_t getRawDataSize() { return m_size; }
+
+
+public:
+    uint32_t rank1(uint32_t index) {
+        return ~0u;
+    }
+
+    void clear() {
+        delete[] m_data;
+        m_data = nullptr;
+    }
+
+private:
+    uint32_t m_size;       ///< number of BV_L12Type entries stored, i.e. number of L1-blocks covering the bit vector
+    BV_L12Type* m_data;    ///< array of BV_L12Type entries storing the L1-blocks back to back
+};
+
 
 }
 
