@@ -171,13 +171,21 @@ static constexpr uint32_t BV_STORE_L1_BITS = 19;
 static constexpr uint32_t BV_STORE_L2_BITS = 9;
 
 /// Bits covered by an L2-block.
-static constexpr uint32_t BV_L2_BIT_SIZE = 64;
+static constexpr uint32_t BV_L2_BIT_SIZE = 128;
 /// Bits covered by an L1-block.
 static constexpr uint32_t BV_L1_BIT_SIZE = (BV_STORE_L2_PER_L1 + 1) * BV_L2_BIT_SIZE;
 /// Number of 64-bit words covered by an L2-block.
 static constexpr uint32_t BV_L2_WORD_SIZE = BV_L2_BIT_SIZE / (sizeof(uint64_t) * 8);
 /// Number of 64-bit words covered by an L1-block.
 static constexpr uint32_t BV_L1_WORD_SIZE = BV_L1_BIT_SIZE / (sizeof(uint64_t) * 8);
+
+static_assert(BV_L2_WORD_SIZE > 0u, "L1- and L2-blocks must cover at least one word.");
+static_assert(BV_L1_WORD_SIZE > BV_L2_WORD_SIZE, "L1-blocks must cover more words than L2-blocks.");
+static_assert((BV_L2_BIT_SIZE / BV_WORD_BIT_SIZE) * BV_WORD_BIT_SIZE == BV_L2_BIT_SIZE ,
+              "L2 bit size must be a multiple of the word bit size");
+static_assert((BV_STORE_L2_PER_L1 * BV_STORE_L2_BITS) + BV_STORE_L1_BITS <= (sizeof(BV_L12Type) * 8u),
+              "L12 type not big enough to store all required L1 and L2 block information.");
+
 
 
 inline uint32_t rank1Word(BV_WordType value, uint32_t index) {
@@ -270,9 +278,9 @@ public:
         // ........ ........  bits
         // ┌┐┌┐┌┐┌┐ ┌┐┌┐┌┐┌┐  words
         // └┘└┘└┘└┘ └┘└┘└┘└┘
-        // ┌──┐┌──┐ ┌──┐┌──┐  l2
+        // ┌──┐┌──┐ ┌──┐┌──┐  l2-blocks
         // └──┘└──┘ └──┘└──┘
-        // ┌──────┐ ┌──────┐  l1
+        // ┌──────┐ ┌──────┐  l1-blocks
         // └──────┘ └──────┘
 
         // query L12 acceleration structure
@@ -282,13 +290,13 @@ public:
         // perform bit counts on a word level to count the remaining bits
         uint32_t offset = ((index / BV_WORD_BIT_SIZE) / BV_L2_WORD_SIZE) * BV_L2_WORD_SIZE;
         // fill missing 'full' counted words if BV_L2_WORD_SIZE > 1
-#if BV_L2_WORD_SIZE > 1
-        #pragma unroll(BV_L2_WORD_SIZE - 1)
-        for (uint32_t _w = 0u; _w < BV_L2_WORD_SIZE - 1; _w++) {
-            rank1_res += bitCount(m_bit_vector_data[index / BV_WORD_BIT_SIZE + offset])
-            offset++;
+        if (BV_L2_WORD_SIZE > 1) {
+            #pragma unroll(BV_L2_WORD_SIZE - 1)
+            for (uint32_t _w = 0u; _w < BV_L2_WORD_SIZE - 1; _w++) {
+                rank1_res += bitCount(m_bit_vector_data[index / BV_WORD_BIT_SIZE + offset]);
+                offset++;
+            }
         }
-#endif
         return rank1_res + rank1Word(m_bit_vector_data[offset], index % BV_WORD_BIT_SIZE);
     }
 

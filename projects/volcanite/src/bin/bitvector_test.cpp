@@ -98,6 +98,7 @@ int test_rank(uint32_t size = 100) {
     }
 
     std::cout << std::endl;
+    std::cout << "FlatRank size: " << f.getRawDataSize() * sizeof(f.getRawData()[0]) << " Bytes" << std::endl;
     std::cout << std::endl;
 
     return 0;
