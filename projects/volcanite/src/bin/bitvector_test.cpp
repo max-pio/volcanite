@@ -30,7 +30,7 @@ std::string booleansStr(const std::vector<bool>& bv) {
     std::stringstream ss;
     for (uint32_t i = 0; i < bv.size(); i++) {
         ss << (bv[i] ? '1' : '0');
-        if (i % WORD_BIT_SIZE == WORD_BIT_SIZE - 1u && i <  bv.size() - 1u)
+        if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 1u && i < bv.size() - 1u)
             ss << " ";
     }
     return ss.str();
@@ -66,23 +66,38 @@ int test_set_access(uint32_t size = 100) {
     return 0;
 }
 
-int test_rank() {
-    std::cout << "test: push_back rank1 on word level" << std::endl;
+int test_rank(uint32_t size = 100) {
+    std::cout << "test: push_back rank1 level" << std::endl;
 
     BitVector bitVector;
 
-    for (uint32_t i = 0; i < WORD_BIT_SIZE; i++) {
-        bitVector.push_back(dist(mt) >= 0.5);
+    std::stringstream ss;
+    for (uint32_t i = 0; i < size; i++) {
+        uint8_t bit_value = dist(mt) >= 0.5;
+        ss << (bit_value ? '1' : '0');
+        if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 1u && i < size - 1u)
+            ss << " ";
+        bitVector.push_back(bit_value);
     }
-
+    bitVector.shrink_to_fit();
     std::cout << bitVector.str() << std::endl;
-    for (uint32_t i = 0; i < WORD_BIT_SIZE; i++) {
-        std::cout << "rank1(" << i << ") = " << rank1(bitVector.rawData()[0], i) << "  | ";
-        for (uint32_t n = 0; n < i; n++)
-            std::cout << (bitVector.access(n) ? '1' : '0');
-        std::cout << std::endl;
+
+    for (uint32_t i = 0; i < size; i++) {
+        uint32_t rank = 0u;
+        for(int n=0; n < i; n++) {
+            rank += bitVector.access(n);
+        }
+        std::cout << rank << " ";
+    }
+    std::cout << std::endl;
+
+    FlatRank f(bitVector);
+    for (uint32_t i = 0; i < size; i++) {
+        uint32_t rank = f.rank1(i);
+        std::cout << rank << " ";
     }
 
+    std::cout << std::endl;
     std::cout << std::endl;
 
     return 0;
@@ -90,7 +105,7 @@ int test_rank() {
 
 int bitvector_test(int argc, char *argv[]) {
 
-    test_set_access();
+    //test_set_access();
     test_rank();
 
     return 0;
