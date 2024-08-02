@@ -157,7 +157,7 @@ private:
 // (C) 2021 Florian Kurpicz <florian@kurpicz.org>, released under the GPLv3 license:
 // https://github.com/pasta-toolbox/bit_vector
 
-/// Atomic type that stores one L2-block consisting of 6 L1-blocks.
+/// Atomic type that stores one L1-block. Default configuration: The L1-block contains 6 L2-blocks.
 /// The 19 LSB store the L1-information. Followed by 5 L2-information (first is implicit 0) ordered from least to most
 /// significant bits using 9 bits each. 19 bits + 5 * 9 bits = 64 bits total. This is enough to address vectors with
 /// 64³ + 32³ + 16³ + 8³ + 4³ + 2³ + 1³ bit entries, i.e. the maximum possible number of operations in a 64³ CSGB brick.
@@ -171,7 +171,7 @@ static constexpr uint32_t BV_STORE_L1_BITS = 19;
 static constexpr uint32_t BV_STORE_L2_BITS = 9;
 
 /// Bits covered by an L2-block.
-static constexpr uint32_t BV_L2_BIT_SIZE = 128;
+static constexpr uint32_t BV_L2_BIT_SIZE = 64;
 /// Bits covered by an L1-block.
 static constexpr uint32_t BV_L1_BIT_SIZE = (BV_STORE_L2_PER_L1 + 1) * BV_L2_BIT_SIZE;
 /// Number of 64-bit words covered by an L2-block.
@@ -181,11 +181,14 @@ static constexpr uint32_t BV_L1_WORD_SIZE = BV_L1_BIT_SIZE / (sizeof(uint64_t) *
 
 static_assert(BV_L2_WORD_SIZE > 0u, "L1- and L2-blocks must cover at least one word.");
 static_assert(BV_L1_WORD_SIZE > BV_L2_WORD_SIZE, "L1-blocks must cover more words than L2-blocks.");
-static_assert((BV_L2_BIT_SIZE / BV_WORD_BIT_SIZE) * BV_WORD_BIT_SIZE == BV_L2_BIT_SIZE ,
+static_assert((BV_L2_BIT_SIZE / BV_WORD_BIT_SIZE) * BV_WORD_BIT_SIZE == BV_L2_BIT_SIZE,
               "L2 bit size must be a multiple of the word bit size");
 static_assert((BV_STORE_L2_PER_L1 * BV_STORE_L2_BITS) + BV_STORE_L1_BITS <= (sizeof(BV_L12Type) * 8u),
-              "L12 type not big enough to store all required L1 and L2 block information.");
-
+              "L12 type not big enough to store all bits for the L1 and L2 information.");
+static_assert((1u << BV_STORE_L1_BITS) + (BV_STORE_L2_PER_L1 + 1u) * (1u << BV_STORE_L2_BITS) > 299593u,
+              "L1 bit depth cannot index the maximum possible number of operations in a 64³ brick.");
+static_assert((1u << BV_STORE_L2_BITS) > BV_STORE_L2_PER_L1 * BV_L2_WORD_SIZE * BV_WORD_BIT_SIZE,
+              "L2 bit depth cannot index the maximum possible number of bits within an L1 block.");
 
 
 inline uint32_t rank1Word(BV_WordType value, uint32_t index) {

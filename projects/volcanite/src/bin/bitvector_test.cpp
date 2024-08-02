@@ -66,7 +66,10 @@ int test_set_access(uint32_t size = 100) {
     return 0;
 }
 
-int test_rank(uint32_t size = 100) {
+int test_rank(uint32_t size = 500) {
+
+    int success = 0;
+
     std::cout << "test: push_back rank1 level" << std::endl;
 
     BitVector bitVector;
@@ -81,35 +84,53 @@ int test_rank(uint32_t size = 100) {
     }
     bitVector.shrink_to_fit();
     std::cout << bitVector.str() << std::endl;
+    for (uint32_t i = 0; i < size; i+=3) {
+        std::cout << "|  ";
+    }
+    std::cout << std::endl;
 
-    for (uint32_t i = 0; i < size; i++) {
-        uint32_t rank = 0u;
-        for(int n=0; n < i; n++) {
-            rank += bitVector.access(n);
-        }
-        std::cout << rank << " ";
+
+    for (uint32_t i = 0; i < size; i+=3) {
+        uint32_t ref_rank = 0u;
+        for(int n=0; n < i; n++)
+            ref_rank += bitVector.access(n);
+        std::cout << ref_rank << ((ref_rank < 10u) ? "  " : " ");
     }
     std::cout << std::endl;
 
     FlatRank f(bitVector);
-    for (uint32_t i = 0; i < size; i++) {
+    for (uint32_t i = 0; i < size; i += 1u) {
+        // compute with FlatRank
         uint32_t rank = f.rank1(i);
-        std::cout << rank << " ";
+        // compute reference
+        uint32_t ref_rank = 0u;
+        for(int n=0; n < i; n++)
+            ref_rank += bitVector.access(n);
+        if (ref_rank != rank)
+            success = i+1;
+
+        if (i % 3u == 0u)
+            std::cout << rank << ((rank < 10u) ? "  " : " ");
     }
 
     std::cout << std::endl;
     std::cout << "FlatRank size: " << f.getRawDataSize() * sizeof(f.getRawData()[0]) << " Bytes" << std::endl;
     std::cout << std::endl;
 
-    return 0;
+    return success;
 }
 
 int bitvector_test(int argc, char *argv[]) {
 
-    //test_set_access();
-    test_rank();
+    int success = 0;
 
-    return 0;
+    success = test_set_access();
+    if (success != 0u) return success;
+
+    success = test_rank();
+    if (success != 0u) return success;
+
+    return success;
 }
 
 ENTRYPOINT(bitvector_test)
