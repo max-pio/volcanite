@@ -15,10 +15,12 @@
 
 #include "vvv/headless_entrypoint.hpp"
 #include "volcanite/compression/BitVector.hpp"
+#include "vvv/util/util.hpp"
 
 #include <iostream>
 #include <string>
 #include <random>
+#include <iomanip>
 
 using namespace volcanite;
 
@@ -26,9 +28,22 @@ std::random_device rd;
 std::mt19937 mt(rd());
 std::uniform_real_distribution<double> dist(0., 1.);
 
-std::string booleansStr(const std::vector<bool>& bv) {
+#define STR_BITS_FRONT_BACK 64
+#define STR_PLACEHOLDER " ...   "
+
+std::string str(const std::vector<bool>& bv) {
     std::stringstream ss;
+    bool wrote_dots = false;
     for (uint32_t i = 0; i < bv.size(); i++) {
+
+        if (i >= STR_BITS_FRONT_BACK && i < (bv.size() / BV_WORD_BIT_SIZE) * BV_WORD_BIT_SIZE - STR_BITS_FRONT_BACK) {
+            if (!wrote_dots) {
+                ss << STR_PLACEHOLDER;
+                wrote_dots = true;
+            }
+            continue;
+        }
+
         ss << (bv[i] ? '1' : '0');
         if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 1u && i < bv.size() - 1u)
             ss << " ";
@@ -36,101 +51,202 @@ std::string booleansStr(const std::vector<bool>& bv) {
     return ss.str();
 }
 
-int test_set_access(uint32_t size = 100) {
-    std::cout << "test: set access linear" << std::endl;
-    BitVector bitVector = BitVector(size);
-    std::vector<bool> boolVector(size);
+std::string str(const BitVector& bv) {
+    bool wrote_dots = false;
+    std::stringstream ss;
+    for (uint32_t i = 0; i < bv.size(); i++) {
+        if (i >= STR_BITS_FRONT_BACK && i < (bv.size() / BV_WORD_BIT_SIZE) * BV_WORD_BIT_SIZE - STR_BITS_FRONT_BACK) {
+            if (!wrote_dots) {
+                ss << STR_PLACEHOLDER;
+                wrote_dots = true;
+            }
+            continue;
+        }
 
-    for (uint32_t i = 0; i < size; i++) {
-        boolVector[i] = dist(mt) >= 0.5;
-        bitVector.set(i, boolVector[i]);
+        ss << (bv.access(i) ? '1' : '0');
+        if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 1u && i < bv.size() - 1u)
+            ss << " ";
     }
-    std::cout << booleansStr(boolVector) << std::endl;
-    std::cout << bitVector.str() << std::endl;
+    return ss.str();
+}
 
-    std::cout << std::endl;
+std::string rankStrTicks(const BitVector& bv) {
+    bool wrote_dots = false;
+    std::stringstream ss;
+    for (uint32_t i = 0; i < bv.size(); i += 4u) {
+        if (i >= STR_BITS_FRONT_BACK && i < (bv.size() / BV_WORD_BIT_SIZE) * BV_WORD_BIT_SIZE - STR_BITS_FRONT_BACK) {
+            if (!wrote_dots) {
+                ss << STR_PLACEHOLDER;
+                wrote_dots = true;
+            }
+            continue;
+        }
 
-    std::cout << "test: set access random" << std::endl;
+        ss << "|   ";
+
+        if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 4u && i < bv.size() - 4u) ss << " ";
+    }
+    return ss.str();
+}
+
+std::string rankStrReference(const BitVector& bv) {
+    bool wrote_dots = false;
+    std::stringstream ss;
+    ss << std::setfill(' ') << std::left;
+    uint32_t ref_rank = 0u;
+    for (uint32_t i = 0; i < bv.size(); i += 4u) {
+        if (i >= STR_BITS_FRONT_BACK && i < (bv.size() / BV_WORD_BIT_SIZE) * BV_WORD_BIT_SIZE - STR_BITS_FRONT_BACK) {
+            if (!wrote_dots) {
+                ss << STR_PLACEHOLDER;
+                wrote_dots = true;
+            }
+
+            for (uint32_t n = i; n < i+4; n++)
+                ref_rank += bv.access(n);
+            continue;
+        }
+
+        ss << std::setw(4) << ref_rank;
+        for (uint32_t n = i; n < i+4; n++)
+            ref_rank += bv.access(n);
+
+        if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 4u && i < bv.size() - 4u) ss << " ";
+    }
+    return ss.str();
+}
+
+std::string rankStrFlatRank(const FlatRank& f, const BitVector& bv) {
+    bool wrote_dots = false;
+    std::stringstream ss;
+    ss << std::setfill(' ') << std::left;
+    for (uint32_t i = 0; i < bv.size(); i += 4u) {
+        if (i >= STR_BITS_FRONT_BACK && i < (bv.size() / BV_WORD_BIT_SIZE) * BV_WORD_BIT_SIZE - STR_BITS_FRONT_BACK) {
+            if (!wrote_dots) {
+                ss << STR_PLACEHOLDER;
+                wrote_dots = true;
+            }
+            continue;
+        }
+
+        uint32_t rank = f.rank1(i);
+        ss << std::setw(4) << rank;
+
+        if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 4u && i < bv.size() - 4u) ss << " ";
+    }
+    return ss.str();
+}
+
+std::vector<bool> createRandomBoolVector(uint32_t size = 4000) {
+    std::vector<bool> boolVector(size);
+    for (uint32_t i = 0; i < size; i++)
+        boolVector[i] = dist(mt) >= 0.5;
+    return boolVector;
+}
+
+BitVector createRandomBitVector(uint32_t size = 4000) {
+    BitVector bitVector = BitVector(size);
+    for (uint32_t i = 0; i < size; i++)
+        bitVector.set(i, dist(mt) >= 0.5);
+    return bitVector;
+}
+
+BitVector createBitVectorFromBoolVector(std::vector<bool>& boolVector) {
+    BitVector bitVector = BitVector(boolVector.size());
+    for (uint32_t i = 0; i < boolVector.size(); i++)
+        bitVector.set(i, boolVector[i]);
+    return bitVector;
+}
+
+
+int test_set_access(uint32_t size = 4000) {
+    std::vector<bool> boolVector = createRandomBoolVector(size);
+    BitVector bitVector = BitVector(boolVector);
+
+    // test initial creation from bool vector (linear access)
+    for (uint32_t i = 0u; i < size; i++) {
+        if(boolVector[i] != bitVector.access(i))
+            return static_cast<int>(i)+1;
+    }
+
+    // test after switching bits at random positions (random access)
     for (uint32_t i = 0u; i < size / 2u; i++) {
-        // switch bits at random positions
-        uint32_t random_pos = static_cast<uint32_t>(dist(mt) * size);
-        boolVector[random_pos] = !boolVector[random_pos];
+        auto random_pos = static_cast<uint32_t>(dist(mt) * size);
 
+        boolVector[random_pos] = !boolVector[random_pos];
         bitVector.set(random_pos, boolVector[random_pos]);
     }
-    std::cout << booleansStr(boolVector) << std::endl;
-    std::cout << bitVector.str() << std::endl;
-
-    std::cout << std::endl;
+    for (uint32_t i = 0u; i < size; i++) {
+        if(boolVector[i] != bitVector.access(i))
+            return static_cast<int>(i)+1;
+    }
 
     return 0;
 }
 
-int test_rank(uint32_t size = 640) {
+int test_rank(uint32_t size = 4000) {
+    BitVector bitVector = createRandomBitVector(size);
+    FlatRank f(bitVector);
 
-//    int success = 0;
-//
-//    std::cout << "test: push_back rank1 level" << std::endl;
-//
-//    BitVector bitVector;
-//
-//    std::stringstream ss;
-//    for (uint32_t i = 0; i < size; i++) {
-//        uint8_t bit_value = dist(mt) >= 0.5;
-//        ss << (bit_value ? '1' : '0');
-//        if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 1u && i < size - 1u)
-//            ss << " ";
-//        bitVector.push_back(bit_value);
-//    }
-//    bitVector.shrink_to_fit();
-//    std::cout << bitVector.str() << std::endl;
-//    for (uint32_t i = 0; i < size; i+=3) {
-//        std::cout << "|  ";
-//    }
-//    std::cout << std::endl;
-//
-//
-//    for (uint32_t i = 0; i < size; i+=3) {
-//        uint32_t ref_rank = 0u;
-//        for(int n=0; n < i; n++)
-//            ref_rank += bitVector.access(n);
-//        std::cout << ref_rank << ((ref_rank < 10u) ? "  " : " ");
-//    }
-//    std::cout << std::endl;
-//
-//    FlatRank f(bitVector);
-//    for (uint32_t i = 0; i < size; i += 1u) {
-//        // compute with FlatRank
-//        uint32_t rank = f.rank1(i);
-//        // compute reference
-//        uint32_t ref_rank = 0u;
-//        for(int n=0; n < i; n++)
-//            ref_rank += bitVector.access(n);
-//        if (ref_rank != rank)
-//            success = i+1;
-//
-//        if (i % 3u == 0u)
-//            std::cout << rank << ((rank < 10u) ? "  " : " ");
-//    }
-//
-//    std::cout << std::endl;
-//    std::cout << "FlatRank size: " << f.getRawDataSize() * sizeof(f.getRawData()[0]) << " Bytes" << std::endl;
-//    std::cout << std::endl;
-//
-//    return success;
+    for (uint32_t i = 0; i < size; i += 1u) {
+        // compute with FlatRank
+        uint32_t rank = f.rank1(i);
+
+        // compute reference
+        uint32_t ref_rank = 0u;
+        for(int n=0; n < i; n++)
+            ref_rank += bitVector.access(n);
+
+        if (ref_rank != rank)
+            return static_cast<int>(i)+1;
+    }
+
+    return 0;
 }
+
+void printTest() {
+    constexpr uint32_t size = 4000;
+    auto bv = createRandomBitVector(size);
+    std::cout << "     Bit Vector: " << str(bv) << std::endl;
+    std::cout << "                 " << rankStrTicks(bv) << std::endl;
+    std::cout << "rank1 reference: " << rankStrReference(bv) << std::endl;
+    FlatRank f = FlatRank(bv);
+    std::cout << "rank1 flat rank: " << rankStrFlatRank(f, bv) << std::endl;
+
+    // print some information about the FlatRank structure
+    uint32_t x = 0u;
+    double e = 0.f;
+    for (int runs = 0; runs < 10000; runs++) {
+        vvv::MiniTimer t;
+        for (int i = 0; i < size; i++)
+            x ^= f.rank1(i);
+        e += t.elapsed();
+    }
+    e /= 10000.f;
+    uint32_t max_bv_size = FlatRank::maximumBitVectorSize();
+    std::cout << "FlatRank rank1() in " << e/static_cast<double>(size)*1000.*1000.*1000. << " ns, space overhead is "
+              << FlatRank::overhead() * 100.f << "%, maximum bit vector size is "
+              << FlatRank::maximumBitVectorSize() << " (64³ brick has 299593 entries)"
+              << (x & 1u ? " " : "") // dependency to ensure that f.rank1(i) is not optimized away
+              << std::endl;
+    // L2_PER_L1,L1_BITS,L2_BITS,L2_BIT_SIZE,timing,space
+    std::cout << BV_STORE_L2_PER_L1 << "," << BV_STORE_L1_BITS << "," << BV_STORE_L2_BITS << ","
+              << BV_L2_BIT_SIZE << "," << e/static_cast<double>(size)*1000.*1000.*1000. << ","
+              << FlatRank::overhead() << std::endl;
+    std::cout << std::endl;
+
+
+}
+
+#define TEST(X) {int r = X; std::cout << #X << ": " << r << std::endl; if(r) return r;}
 
 int bitvector_test(int argc, char *argv[]) {
 
-    int success = 0;
+    printTest();
 
-    success = test_set_access();
-    if (success != 0u) return success;
+    TEST(test_set_access())
+    TEST(test_rank())
 
-    success = test_rank();
-    if (success != 0u) return success;
-
-    return success;
+    return 0;
 }
 
 ENTRYPOINT(bitvector_test)

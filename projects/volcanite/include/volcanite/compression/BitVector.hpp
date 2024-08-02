@@ -75,6 +75,11 @@ class BitVector {
 
 public:
     BitVector() : m_size(0u), m_data() {}
+    BitVector(const std::vector<bool>& boolVector) : m_size(boolVector.size()),
+                                                     m_data(words_for_size(boolVector.size())) {
+        for (uint32_t i = 0; i < boolVector.size(); i++)
+            set(i, boolVector[i]);
+    }
     BitVector(uint32_t size) : m_size(size), m_data(words_for_size(size)) {}
 
     BitVector(uint32_t size, uint8_t bit) : m_size(size),
@@ -164,13 +169,13 @@ private:
 typedef uint64_t BV_L12Type;
 
 /// Number of L2-blocks that are grouped into one L1-block MINUS ONE. The first L2-block is not stored explicitly.
-static constexpr uint32_t BV_STORE_L2_PER_L1 = 3;
+static constexpr uint32_t BV_STORE_L2_PER_L1 = 5;
 /// Bits that each stored L1-block takes up in the BV_L12Type
 static constexpr uint32_t BV_STORE_L1_BITS = 19;
 /// Bits that each stored L2-block takes up in the BV_L12Type
-static constexpr uint32_t BV_STORE_L2_BITS = 10;
+static constexpr uint32_t BV_STORE_L2_BITS = 9;
 /// Bits covered by an L2-block.
-static constexpr uint32_t BV_L2_BIT_SIZE = 128;
+static constexpr uint32_t BV_L2_BIT_SIZE = 1 * BV_WORD_BIT_SIZE;
 
 /// Bits covered by an L1-block.
 static constexpr uint32_t BV_L1_BIT_SIZE = (BV_STORE_L2_PER_L1 + 1) * BV_L2_BIT_SIZE;
@@ -186,6 +191,10 @@ static_assert((BV_L2_BIT_SIZE / BV_WORD_BIT_SIZE) * BV_WORD_BIT_SIZE == BV_L2_BI
               "L2 bit size must be a multiple of the word bit size");
 static_assert((BV_STORE_L2_PER_L1 * BV_STORE_L2_BITS) + BV_STORE_L1_BITS <= (sizeof(BV_L12Type) * 8u),
               "L12 type not big enough to store all bits for the L1 and L2 information.");
+static_assert((1u << BV_STORE_L1_BITS) + (BV_STORE_L2_PER_L1 + 1u) * (1u << BV_STORE_L2_BITS) > 37449u,
+              "L12 blocks cannot index the maximum possible number of operations in a 32³ brick.");
+static_assert((1u << BV_STORE_L1_BITS) + (BV_STORE_L2_PER_L1 + 1u) * (1u << BV_STORE_L2_BITS) > 262144u,
+              "L12 blocks cannot index the maximum possible number of operations in the finest 64³ LOD.");
 static_assert((1u << BV_STORE_L1_BITS) + (BV_STORE_L2_PER_L1 + 1u) * (1u << BV_STORE_L2_BITS) > 299593u,
               "L12 blocks cannot index the maximum possible number of operations in a 64³ brick.");
 static_assert((1u << BV_STORE_L2_BITS) > BV_STORE_L2_PER_L1 * BV_L2_WORD_SIZE * BV_WORD_BIT_SIZE,
@@ -242,7 +251,7 @@ public:
         // write the L12 entries from front to back
         uint32_t data_i = 0u;
 
-        while(word < word_count) {
+        while(word + BV_L2_WORD_SIZE < word_count) {
             // gather values for all l2 entries
             #pragma unroll(BV_STORE_L2_PER_L1)
             for (uint32_t _l2 = 0u; _l2 < BV_STORE_L2_PER_L1; _l2++) {
@@ -277,13 +286,13 @@ public:
         m_data = nullptr;
     }
 
-    BV_L12Type* getRawData() { return m_data; }
-    uint32_t getRawDataSize() { return m_size; }
+    [[nodiscard]] const BV_L12Type* getRawData() const { return m_data; }
+    [[nodiscard]] uint32_t getRawDataSize() const { return m_size; }
 
-    uint32_t rank0(uint32_t index) { return index - rank1(index); }
+    [[nodiscard]] uint32_t rank0(uint32_t index) const { return index - rank1(index); }
 
     /// @return the number of 1 bits in the bit vector that occure before index
-    uint32_t rank1(uint32_t index) {
+    [[nodiscard]] uint32_t rank1(uint32_t index) const {
 
         // ........ ........  bits
         // ┌┐┌┐┌┐┌┐ ┌┐┌┐┌┐┌┐  words
