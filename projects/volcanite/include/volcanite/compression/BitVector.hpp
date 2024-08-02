@@ -164,21 +164,22 @@ private:
 typedef uint64_t BV_L12Type;
 
 /// Number of L2-blocks that are grouped into one L1-block MINUS ONE. The first L2-block is not stored explicitly.
-static constexpr uint32_t BV_STORE_L2_PER_L1 = 5;
+static constexpr uint32_t BV_STORE_L2_PER_L1 = 3;
 /// Bits that each stored L1-block takes up in the BV_L12Type
 static constexpr uint32_t BV_STORE_L1_BITS = 19;
 /// Bits that each stored L2-block takes up in the BV_L12Type
-static constexpr uint32_t BV_STORE_L2_BITS = 9;
-
+static constexpr uint32_t BV_STORE_L2_BITS = 10;
 /// Bits covered by an L2-block.
-static constexpr uint32_t BV_L2_BIT_SIZE = 64;
+static constexpr uint32_t BV_L2_BIT_SIZE = 128;
+
 /// Bits covered by an L1-block.
 static constexpr uint32_t BV_L1_BIT_SIZE = (BV_STORE_L2_PER_L1 + 1) * BV_L2_BIT_SIZE;
 /// Number of 64-bit words covered by an L2-block.
-static constexpr uint32_t BV_L2_WORD_SIZE = BV_L2_BIT_SIZE / (sizeof(uint64_t) * 8);
+static constexpr uint32_t BV_L2_WORD_SIZE = BV_L2_BIT_SIZE / BV_WORD_BIT_SIZE;
 /// Number of 64-bit words covered by an L1-block.
-static constexpr uint32_t BV_L1_WORD_SIZE = BV_L1_BIT_SIZE / (sizeof(uint64_t) * 8);
+static constexpr uint32_t BV_L1_WORD_SIZE = BV_L1_BIT_SIZE / BV_WORD_BIT_SIZE;
 
+// check if the configuration leads to any problems
 static_assert(BV_L2_WORD_SIZE > 0u, "L1- and L2-blocks must cover at least one word.");
 static_assert(BV_L1_WORD_SIZE > BV_L2_WORD_SIZE, "L1-blocks must cover more words than L2-blocks.");
 static_assert((BV_L2_BIT_SIZE / BV_WORD_BIT_SIZE) * BV_WORD_BIT_SIZE == BV_L2_BIT_SIZE,
@@ -186,7 +187,7 @@ static_assert((BV_L2_BIT_SIZE / BV_WORD_BIT_SIZE) * BV_WORD_BIT_SIZE == BV_L2_BI
 static_assert((BV_STORE_L2_PER_L1 * BV_STORE_L2_BITS) + BV_STORE_L1_BITS <= (sizeof(BV_L12Type) * 8u),
               "L12 type not big enough to store all bits for the L1 and L2 information.");
 static_assert((1u << BV_STORE_L1_BITS) + (BV_STORE_L2_PER_L1 + 1u) * (1u << BV_STORE_L2_BITS) > 299593u,
-              "L1 bit depth cannot index the maximum possible number of operations in a 64³ brick.");
+              "L12 blocks cannot index the maximum possible number of operations in a 64³ brick.");
 static_assert((1u << BV_STORE_L2_BITS) > BV_STORE_L2_PER_L1 * BV_L2_WORD_SIZE * BV_WORD_BIT_SIZE,
               "L2 bit depth cannot index the maximum possible number of bits within an L1 block.");
 
@@ -224,6 +225,8 @@ class FlatRank {
 
 public:
     FlatRank(const BitVector& bv) {
+        assert(bv.size() < maximumBitVectorSize() && "Bit Vector is too large for FlatRank construction.");
+
         // determine required number of L1-blocks and create array
         m_size = (bv.size() + BV_L1_BIT_SIZE - 1u) / BV_L1_BIT_SIZE;
         m_data = new BV_L12Type[m_size];
@@ -232,7 +235,7 @@ public:
         const uint32_t word_count = bv.getRawDataSize();
 
         uint32_t l1_entry = 0u;
-        uint32_t l2_entries[BV_STORE_L2_PER_L1] = {0u, 0u, 0u, 0u, 0u};
+        uint32_t l2_entries[BV_STORE_L2_PER_L1];
 
         // iterate through the bit vector word by word
         uint32_t word = 0u;
@@ -259,9 +262,13 @@ public:
             m_data[data_i] = buildL12Type(l1_entry, l2_entries);
             data_i++;
 
-            // update l1 tracking
-            if (word < word_count)
-                l1_entry += l2_entries[BV_STORE_L2_PER_L1 - 1u] + bitCount(m_bit_vector_data[word++]);
+            // update L1 tracking by adding bits of next (non-stored) L2-block
+            if (word + BV_L2_WORD_SIZE < word_count) {
+                l1_entry += l2_entries[BV_STORE_L2_PER_L1 - 1u];
+                #pragma unroll(BV_L2_WORD_SIZE)
+                for (uint32_t _w = 0u; _w < BV_L2_WORD_SIZE; _w++)
+                    l1_entry += bitCount(m_bit_vector_data[word++]);
+            }
         }
     }
 
@@ -292,15 +299,21 @@ public:
 
         // perform bit counts on a word level to count the remaining bits
         uint32_t offset = ((index / BV_WORD_BIT_SIZE) / BV_L2_WORD_SIZE) * BV_L2_WORD_SIZE;
-        // fill missing 'full' counted words if BV_L2_WORD_SIZE > 1
+        // fill missing 'full' counted words if L2-blocks cover multiple words
         if (BV_L2_WORD_SIZE > 1) {
-            #pragma unroll(BV_L2_WORD_SIZE - 1)
-            for (uint32_t _w = 0u; _w < BV_L2_WORD_SIZE - 1; _w++) {
-                rank1_res += bitCount(m_bit_vector_data[index / BV_WORD_BIT_SIZE + offset]);
+            for (uint32_t _w = 0u; _w < ((index / BV_WORD_BIT_SIZE) % BV_L2_WORD_SIZE); _w++) {
+                rank1_res += bitCount(m_bit_vector_data[offset]);
                 offset++;
             }
         }
         return rank1_res + rank1Word(m_bit_vector_data[offset], index % BV_WORD_BIT_SIZE);
+    }
+
+    /// @return the overhead that this structure introduces relative to the size of its underlying bit vector
+    static float overhead() { return static_cast<float>(sizeof(BV_L12Type) * 8u) / static_cast<float>(BV_L1_BIT_SIZE); }
+    /// @return the maximum size (in bits) that the underlying bit vector of this structure can have
+    static uint32_t maximumBitVectorSize() {
+        return (1u << BV_STORE_L1_BITS) + (BV_STORE_L2_PER_L1 + 1u) * (1u << BV_STORE_L2_BITS) - 1u;
     }
 
 private:
