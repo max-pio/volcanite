@@ -228,10 +228,10 @@ void printTest() {
               << FlatRank::maximumBitVectorSize() << " (64³ brick has 299593 entries)"
               << (x & 1u ? " " : "") // dependency to ensure that f.rank1(i) is not optimized away
               << std::endl;
-    // L2_PER_L1,L1_BITS,L2_BITS,L2_BIT_SIZE,timing,space
-    std::cout << BV_STORE_L2_PER_L1 << "," << BV_STORE_L1_BITS << "," << BV_STORE_L2_BITS << ","
-              << BV_L2_BIT_SIZE << "," << e/static_cast<double>(size)*1000.*1000.*1000. << ","
-              << FlatRank::overhead() << std::endl;
+//    // L2_PER_L1,L1_BITS,L2_BITS,L2_BIT_SIZE,timing,space
+//    std::cout << BV_STORE_L2_PER_L1 << "," << BV_STORE_L1_BITS << "," << BV_STORE_L2_BITS << ","
+//              << BV_L2_BIT_SIZE << "," << e/static_cast<double>(size)*1000.*1000.*1000. << ","
+//              << FlatRank::overhead() << std::endl;
     std::cout << std::endl;
 
 
