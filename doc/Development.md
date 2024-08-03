@@ -55,22 +55,16 @@ or your dependency is out of date?*
 
 ## Project Structure
 
-The general project structure resembles the vvv library structure:
 ```
 project root
+| volcanite
+|   \_ the volcanite renderers and other volcanite functionality
+| lib
+|   \_ the vulkan and application libraries
 | extern
 |   \_ compile time libraries
-| projects
-|   | examples
-|   |   \_ examples for the vvv framework
-|   | volcanite
-|   \   \_ the volcanite renderers and other volcanite functionality
 | pyvvv
 |   \_ [deprecated] vvv python bindings for using the framework and renderers in python  
-| vvv
-|   \_ common classes and core functionality for GPU renderers that are shared among projects
-| vvv-glfw-app
-|   \_ windowing application to blit render outputs to the screen and to provide GUI and Camera
 ```
 
 The Volcanite project directory has its own [ReadMe](../projects/volcanite/ReadMe.md) with development information about the renderer.
@@ -136,7 +130,6 @@ See also the [Volcanite Project ReadMe](../projects/volcanite/ReadMe.md)
 Notes to include:
 
 * CMake build
-  * setting a VOLCANITE_DEFAULT_DATA_PATH
   * selecting optional libraries
   * packaging / installing
 * VVV Framework
