@@ -25,6 +25,5 @@ compile_commands.json
 
 # vulkan, volcanite and imgui specific ignores
 /imgui.ini
-/volcanite
 /vulkan_pipeline_cache.data
 /projects/volcanite/python/data/*
