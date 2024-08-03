@@ -47,15 +47,16 @@ function(makeExecutable name)
             # WIN32_EXECUTABLE TRUE # this hides the console window. Disabled, because we need to see the console output! maybe re-enable for distribution
             MACOSX_BUNDLE TRUE
             )
-    target_link_libraries(${name} PRIVATE LibVVV::libvvv)
+    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap portable_file_dialogs)
     if(NOT HEADLESS)
         target_link_libraries(${name} PRIVATE LibVVV::libvvvwindow)
     endif()
     target_include_directories(${name} PRIVATE include)
+    target_include_directories(${name} PRIVATE data/shader/cpp_glsl_include)
 
     target_compile_definitions(${name} PRIVATE
             -DVULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1 -DVULKAN_HPP_STORAGE_SHARED=1
-            -DEXECUTABLE_${name}=1)
+            -DEXECUTABLE_${name}=1, -DVOLCANITE_VERSION=\"${CMAKE_PROJECT_VERSION}\")
 
     if(HEADLESS)
         target_compile_definitions(${name} PUBLIC -DHEADLESS=1)

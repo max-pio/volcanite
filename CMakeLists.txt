@@ -70,7 +70,7 @@ if (MAKE_EXAMPLES)
 endif()
 
 
-add_subdirectory(projects/volcanite)
+add_subdirectory(volcanite)
 
 
 # PACKAGING ------------------------------------------------------------------------------------------------------------

@@ -63,11 +63,11 @@ set(VVV_HEADERS
         include/vvv/util/vertex_primitives.hpp
         include/vvv/util/Paths.hpp
 
-        ../extern/SPIRV-Reflect/spirv_reflect.h
-        ../extern/SPIRV-Reflect/include/spirv/unified1/spirv.h
+        ../../extern/SPIRV-Reflect/spirv_reflect.h
+        ../../extern/SPIRV-Reflect/include/spirv/unified1/spirv.h
 
-        ../extern/stb/stb_image.hpp
-        ../extern/stb/stb_image_write.hpp
+        ../../extern/stb/stb_image.hpp
+        ../../extern/stb/stb_image_write.hpp
 
 # ToDo: why are builds breaking on some machines when including tinyexr?
 #        ../extern/tinyexr/tinyexr.hpp
@@ -131,11 +131,9 @@ set(VVV_SOURCES
         src/reader/nrrd.cpp
         src/reader/volcanite_raw.cpp
 
-        ../extern/SPIRV-Reflect/spirv_reflect.cpp
+        ../../extern/SPIRV-Reflect/spirv_reflect.cpp
 
-        ../extern/stb/stb_image.cpp
-# ToDo: why are builds breaking on some machines when including tinyexr?
-#        ../extern/tinyexr/tinyexr.cpp
+        ../../extern/stb/stb_image.cpp
         )
 
 if(HEADLESS)
@@ -228,7 +226,7 @@ target_include_directories(libvvv
         $<INSTALL_INTERFACE:include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../extern>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../extern>
         PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         )
