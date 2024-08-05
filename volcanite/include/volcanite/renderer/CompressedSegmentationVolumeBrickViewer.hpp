@@ -22,7 +22,7 @@
 
 #include "vvv/core/Renderer.hpp"
 #include "vvv/core/Shader.hpp"
-#include "vvv/util/managed_buffer.hpp"
+#include "vvv/util/hash_memory.hpp"
 #include "vvv/reflection/UniformReflection.hpp"
 #include "vvv/passes/PassCompute.hpp"
 
@@ -59,13 +59,17 @@ public:
     void releaseSwapchain() override;
 
     void initGui(vvv::GuiInterface * gui) override {
+        assert(m_compressed_segmentation_volume && "must set CSGV data set before starting csgv brick viewer");
+        glm::uvec3 brick_count = m_compressed_segmentation_volume->getBrickCount();
+        uint32_t brick_size = m_compressed_segmentation_volume->getBrickSize();
+
         auto g = gui->get("Compressed Segmentation Volume Brick Visualizer");
         g->addColor(&m_background_color_a, "Background Color A");
         g->addColor(&m_background_color_b, "Background Color B");
-        g->addInt(&m_brick_id.x, "Brick X");
-        g->addInt(&m_brick_id.y, "Brick Y");
-        g->addInt(&m_brick_id.z, "Brick Z");
-        g->addInt(&m_brick_slice, "Brick Slice", 0, 15, 1);
+        g->addInt(&m_brick_id.x, "Brick X", 0, brick_count.x - 1, 1);
+        g->addInt(&m_brick_id.y, "Brick Y", 0, brick_count.y - 1, 1);
+        g->addInt(&m_brick_id.z, "Brick Z", 0, brick_count.z - 1, 1);
+        g->addInt(&m_brick_slice, "Brick Slice", 0, brick_size - 1, 1);
         g->addInt(&m_label_color_mult, "Label Color Cycle", 1, 100000, 5);
         g->addBool(&m_show_label_bits, "Show Label Bits");
         g->addCombo(&m_show_code_mode, {"All", "New Palette", "Flat"}, [this](int v) { m_show_code_mode = v; });

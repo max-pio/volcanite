@@ -104,8 +104,9 @@ public:
                                 }
                             }
                         }
-                        // find most frequent label in child elements and check if they're constant
-                        // ToDo: could be sped up with https://towardsdatascience.com/countless-3d-vectorized-2x-downsampling-of-labeled-volume-images-using-python-and-numpy-59d686c2f75
+                        // find most frequent label in child elements and check if they're constant. This could be sped
+                        // up, e.g. see https://towardsdatascience.com/countless-3d-vectorized-2x-downsampling-of-labeled-volume-images-using-python-and-numpy-59d686c2f75
+                        // but is not a performance bottleneck at the moment.
                         uint32_t max_ocurrences = 0u;
                         uint32_t max_label = 0xFFFFFFFF;
                         bool constant = true;
@@ -210,8 +211,6 @@ public:
     }
 
     static bool isHomogeneousBrick(const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, const glm::uvec3 brick_start, const glm::uvec3 brick_dim) {
-        // TODO could this be sped up with a Summed Volume Table?
-
         if((brick_dim.x == 1 && brick_dim.y == 1 && brick_dim.z == 1) || glm::any(glm::greaterThanEqual(brick_start, volume_dim)))
             return true;
 

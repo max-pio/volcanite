@@ -75,8 +75,9 @@ public:
     std::shared_ptr<UniformReflected> getUniformSet(const std::string &name);
 
     // these can be generalized to any class, move to own abstract thingy
-    // TODO: we probably want multibufferingCopy to support `MULTIBUFFERING_CURRENT_ACTIVE_COPY` (default) and `MULTIBUFFERING_ALL_COPIES`,
-    // we could use negative numbers to indicates this.
+    //
+    // Probably want multibufferingCopy to support `MULTIBUFFERING_CURRENT_ACTIVE_COPY` (default) and
+    // `MULTIBUFFERING_ALL_COPIES`. Could use negative numbers to indicates this.
 
     void setImageSampler(uint32_t setIdx, uint32_t bindingIdx, Texture &texture, vk::ImageLayout layout = vk::ImageLayout::eUndefined, bool atActiveIndex = true);
     void setImageSamplerArray(uint32_t setIdx, uint32_t bindingIdx, uint32_t arrayElement, Texture &texture, vk::ImageLayout layout = vk::ImageLayout::eUndefined, bool atActiveIndex = true);
@@ -130,14 +131,6 @@ public:
     // is to cache the hash itself, e.g. store it and only recompute it when a resource changes. The advantage is
     // that we do not have to make N copies of the resource. We can use the same descriptor set for all in-flight
     // frames.
-    //
-    // TODO(Reiner): the last approach seems most promising from a resource recycling and memory overhead perspective.
-
-    //    ResourceId newResource(bool initiallyDirty = true) {
-    //        const auto idx = m_isDirty.size();
-    //        m_isDirty.push_back(initiallyDirty ? m_allDirtyMask : 0 /* allCleanMask */);
-    //        return idx;
-    //    }
 
     [[nodiscard]] std::string getLabel() const { return m_label; }
     [[nodiscard]] uint32_t getQueueFamilyIndex() const { return m_queueFamilyIndex; }
@@ -176,12 +169,12 @@ protected:
     std::vector<vk::Pipeline> m_pipelines = {};
     vk::PipelineLayout m_pipelineLayout = nullptr;
     vk::DescriptorPool m_descriptorPool = nullptr;
-    vk::CommandPool m_commandPool = nullptr; // TODO(Reiner): a commandPool for the whole context would be enough and more efficient, right?
+    vk::CommandPool m_commandPool = nullptr;
 
     std::map<uint32_t, size_t> m_descriptorSetNumberToIdx = {};
     std::vector<vk::DescriptorSetLayout> m_descriptorSetLayouts = {};
     std::unique_ptr<MultiBufferedResource<std::vector<vk::DescriptorSet>>> m_descriptorSets = {};
-    std::vector<std::map<uint32_t, detail::BindingState>> m_descriptorSetWrites = {}; // indexed as [m_descriptorSetNumberToIdx[set_number]][binding] // TODO(Reiner): this update mechanic is so dumb
+    std::vector<std::map<uint32_t, detail::BindingState>> m_descriptorSetWrites = {};
     std::unique_ptr<MultiBufferedResource<vk::CommandBuffer>> m_commandBuffer;
 
     std::vector<std::shared_ptr<Shader>> m_shaders = {};

@@ -39,7 +39,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
         bool materialChanged = false;
         bool colormapChanged = false;
 
-        // ToDo: collapsable child for materials
+        // make child collapsable child
         ImGui::BeginChild(id++,  ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize() * 19.0f), true, ImGuiWindowFlags_MenuBar);
 
         // Text field to give the material a name
@@ -133,7 +133,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
             ImGui::NextColumn();
 
             ImGui::PushID(id++);
-            // ToDo: add PNG import for colormaps?
+            // TODO: add PNG import for colormaps, store samples in VectorColormap, im-/export full VectorColormap
             std::string types[] = {"Solid Color", "Divergent Colormap", "Precomputed Colormap", "PNG Import"};
             if (ImGui::BeginCombo("", types[d.type].c_str())) {
                 for (int i = 0; i < 3; i++) {

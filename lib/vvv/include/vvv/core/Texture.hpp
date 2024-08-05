@@ -24,7 +24,6 @@
 #include "vvv/vk/memory.hpp"
 
 #include "stb/stb_image_write.hpp"
-// ToDo: include tinyexr for SaveEXR again
 //#include "tinyexr/tinyexr.hpp"
 #include "vvv/util/util.hpp"
 
@@ -322,8 +321,7 @@ public:
     bool areResourcesInitialized() { return sampler != static_cast<vk::Sampler>(nullptr); }
 
 private:
-    /// Make sure all textures are downloadable to the CPU.
-    // TODO(Reiner): does this have performance implications?
+    /// Make sure all textures are downloadable to the CPU. (performance implications?)
     static vk::ImageUsageFlags defaultUsage(vk::ImageUsageFlags usage) { return usage | vk::ImageUsageFlagBits::eTransferSrc; }
 
     void checkGpuSupport() const;

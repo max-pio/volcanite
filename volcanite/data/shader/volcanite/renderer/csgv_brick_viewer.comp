@@ -37,7 +37,6 @@ layout (set = 0, binding = 7) uniform sampler2D SAMPLER_encoding_icons;
 
 #include "util.glsl"
 #include "debug_colormaps.glsl"
-#include "transfer_function.glsl"
 #include "random.glsl"
 #include "morton.glsl"
 
@@ -89,7 +88,7 @@ layout(std430, set = 0, binding = 8) buffer readonly palette
 
 layout(std430, set = 0, binding = 6) buffer readonly brickPos
 {
-    uvec4 g_enumBrickPos[];   // enumeration of all brick_size^3 positions inside a brick TODO: store this more efficiently
+    uvec4 g_enumBrickPos[];   // enumeration of all brick_size^3 positions inside a brick
 };
 
 const ivec3 neighbor[8][3] = {{ivec3(-1, 0, 0), ivec3(0, -1, 0), ivec3(0, 0, -1)},
@@ -208,8 +207,6 @@ void main() {
 
     // draw the slice (if we have to)
     if(lod_hit >= 0) {
-        // TODO: don't use this f***ing g_decoded array from the CPU. fill it here in the shader in every frame instead! with the methods above! better sanity check, easier access over get_volume_label(pos)-like
-        // TODO: Max wtf are you talking about? just use it as is, it's okay
         uint label = g_decoded[lod_hit * (g_brick_size * g_brick_size * g_brick_size) + (indexOfBrickPos(brick_voxel) / lod_width3) * lod_width3];
         vec2 voxel_uv = fract(local * float(g_brick_size) / float(lod_width));
         color = get_color(label, voxel_uv);

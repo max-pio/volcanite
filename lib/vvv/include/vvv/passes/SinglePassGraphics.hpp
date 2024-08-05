@@ -87,10 +87,6 @@ public:
         assert(!m_colorAttachmentTextures.empty() && "you must set color attachments before executing a graphics pass.");
         assert((!m_graphicsPassConfig.depthAttachmentFormat.has_value() || m_depthAttachmentTexture) && "you must add depth textures as attachments if a depth attachment format is specified.");
 
-        // TODO(Reiner): we could make commandBuffer/queue optional and just use the default queue (family index 0)
-        // that we get from the GpuContext. This is safe and simplifies the API when we only work on a single thread and do not care
-        // about async compute or high performance transfers
-
         vk::ClearValue colorClear = {};
         colorClear.color.setFloat32(std::array<float, 4>({0.f, 0.f, 0.f, 0.f}));
         vk::ClearValue depthClear = {};
@@ -162,7 +158,6 @@ public:
         m_depthAttachmentTexture = std::move(depth);
     }
 
-    // TODO Why do we have THAT many reflection methods (one/many names, multibuffering yes/no, init resources yes/no...). Reduce this!
     [[nodiscard]] std::shared_ptr<Texture> reflectColorAttachment(vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts) const {
         if(opts.format.has_value()) {
             for (const auto &n : names) {

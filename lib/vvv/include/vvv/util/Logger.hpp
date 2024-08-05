@@ -30,13 +30,17 @@ namespace vvv {
 
 template<typename T>
 std::string arrayToString(const T* data, size_t count, const std::string& delimiter=",") {
-    assert(count <= 1024 && "won't concat more than 1024 array elements into one string");
     std::stringstream ss("");
+    bool dots = count > 1024;
+    if (dots)
+        count = 1024;
     for (int i = 0; i < count; i++) {
         ss << data[i];
         if (i < count-1)
             ss << delimiter;
     }
+    if (dots)
+        ss << "...";
     return ss.str();
 }
 
@@ -56,7 +60,7 @@ public:
     }
 
 #ifdef _WIN64
-    // todo: not a great fix to work around the ERROR = 0 define in wingdi.h (windows.h)
+    // TODO: not a great work around for the ERROR = 0 define in wingdi.h (windows.h)
     explicit Logger(int level, bool overwriteWithNextLine = false) {
         if(level == 0)
             m_msglevel = ERROR;

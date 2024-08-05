@@ -29,8 +29,6 @@ set(VVV_HEADERS
         include/vvv/passes/PassBlur.hpp
         include/vvv/passes/PassSimpleSsao.hpp
 
-        include/vvv/pointren/PointCloud.hpp
-
         include/vvv/reflection/GraphicsPipelineReflection.hpp
         include/vvv/reflection/TextureReflection.hpp
         include/vvv/reflection/UniformReflection.hpp
@@ -42,7 +40,6 @@ set(VVV_HEADERS
         include/vvv/volren/tf/builtin.hpp
         include/vvv/volren/tf/color.hpp
         include/vvv/volren/Volume.hpp
-        include/vvv/volren/VolumeHistogram.hpp
 
         include/vvv/vk/debug_marker.hpp
         include/vvv/vk/destroy.hpp
@@ -54,9 +51,8 @@ set(VVV_HEADERS
 
         include/vvv/util/csv_utils.hpp
         include/vvv/util/Logger.hpp
-        include/vvv/util/PointUtils.hpp
         include/vvv/util/detect_debugger.hpp
-        include/vvv/util/managed_buffer.hpp
+        include/vvv/util/hash_memory.hpp
         include/vvv/util/random_gpu.hpp
         include/vvv/util/space_filling_curves.hpp
         include/vvv/util/util.hpp
@@ -68,9 +64,6 @@ set(VVV_HEADERS
 
         ../../extern/stb/stb_image.hpp
         ../../extern/stb/stb_image_write.hpp
-
-# ToDo: why are builds breaking on some machines when including tinyexr?
-#        ../extern/tinyexr/tinyexr.hpp
         )
 
 if(HEADLESS)
@@ -101,16 +94,12 @@ set(VVV_SOURCES
         src/passes/PassBlur.cpp
         src/passes/PassSimpleSsao.cpp
 
-        src/pointren/PointCloud.cpp
-
         src/reflection/GraphicsPipelineReflection.cpp
         src/reflection/UniformReflection.cpp
         src/reflection/TextureReflection.cpp
 
         src/volren/tf/VectorTransferFunction.cpp
-        src/volren/tf/TransferFunction2D.cpp
         src/volren/Volume.cpp
-        src/volren/VolumeHistogram.cpp
 
         src/vk/debug_marker.cpp
         src/vk/format_utils.cpp
@@ -119,7 +108,6 @@ set(VVV_SOURCES
 
         src/util/csv_utils.cpp
         src/util/Logger.cpp
-        src/util/PointUtils.cpp
         src/util/detect_debugger.cpp
         src/util/random_gpu.cpp
         src/util/util.cpp

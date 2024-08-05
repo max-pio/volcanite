@@ -77,12 +77,10 @@ DescriptorBinding PassBase::findDescriptorBindingByName(const std::string &name)
 }
 
 void PassBase::setImageSampler(uint32_t setIdx, uint32_t bindingIdx, Texture &texture, vk::ImageLayout layout, bool atActiveIndex) {
-    // TODO: batching into a single write with multiple sets, does that improve perf?
     updateDescriptorSetsImage(setIdx, bindingIdx, texture, vk::DescriptorType::eCombinedImageSampler, layout, atActiveIndex);
 }
 
 void PassBase::setImageSamplerArray(uint32_t setIdx, uint32_t bindingIdx, uint32_t arrayElement, Texture &texture, vk::ImageLayout layout, bool atActiveIndex) {
-    // TODO: batching into a single write with multiple sets, does that improve perf?
     updateDescriptorSetsImageArray(setIdx, bindingIdx, arrayElement, texture, vk::DescriptorType::eCombinedImageSampler, layout, atActiveIndex);
 }
 
@@ -97,8 +95,6 @@ void PassBase::setImageSamplerArray(const std::string &name, uint32_t arrayEleme
 }
 
 void PassBase::setImageSampler(uint32_t setIdx, uint32_t bindingIdx, MultiBufferedResource<std::shared_ptr<Texture>> &textures, vk::ImageLayout layout) {
-    // TODO: array element support
-    // TODO: batching into a single write with multiple sets, does that improve perf?
     updateDescriptorSetsImage(setIdx, bindingIdx, textures, vk::DescriptorType::eCombinedImageSampler, layout);
 }
 
@@ -298,8 +294,7 @@ void PassBase::setUniformBuffer(uint32_t setIdx, uint32_t bindingIdx, UniformRef
 
     m_descriptorSetWrites[m_descriptorSetNumberToIdx[setIdx]][bindingIdx] = state;
 
-    // rebind the pointer to the persistent storage location
-    // TODO(Reiner): rewrite this code. its outrageous
+    // rebind the pointer to the persistent storage location (terrible code)
     for (uint32_t i = 0; i < getIndexCount(); i++) {
         m_descriptorSetWrites[m_descriptorSetNumberToIdx[setIdx]][bindingIdx].writeOp[i].pBufferInfo =
                 &m_descriptorSetWrites[m_descriptorSetNumberToIdx[setIdx]][bindingIdx].uniformBufferInfo[i];
@@ -335,7 +330,8 @@ void PassBase::createPipelineLayout() {
         auto layouts = shader->reflectDescriptorLayouts();
         for (auto &layout : layouts) {
             size_t index = m_descriptorSetLayouts.size();
-            // TODO: we currently set all descriptors at the beginning of the multistage pass. check overlapping bindings for compatibility here, or allow a per shader descriptor set.
+            // could check overlapping bindings for compatibility here, or allow a per shader descriptor set.
+            // we currently set all descriptors at the beginning of the multistage pass.
             if (m_descriptorSetNumberToIdx.contains(layout.set_number)) {
                 continue;
             }

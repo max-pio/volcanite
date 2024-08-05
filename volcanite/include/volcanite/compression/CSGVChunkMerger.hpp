@@ -78,9 +78,9 @@ public:
     std::shared_ptr<CompressedSegmentationVolume> mergeCompressedSegmentationVolumeChunksFromFiles(const std::string& output_csgv_path,
                                                                                                           const std::string& input_csgv_template_path,
                                                                                                           glm::ivec3 max_input_csgv_index) {
-        // ToDo: make target_uints_per_split_encoding a parameter for merging or obtain it from the first input chunk?
-        // target a size of ~1GB per split encoding vector
-        uint32_t target_uints_per_split_encoding = 268435456u;
+        // TODO: make target_uints_per_split_encoding a parameter for merging or obtain it from the first input chunk
+        // target a size of ~2GB per split encoding vector
+        uint32_t target_uints_per_split_encoding = 536870912u;
 
         Logger(INFO, true) << "Merging Compressed Segmentation Volume chunk files 0%";
 
@@ -347,7 +347,8 @@ public:
         // reimport complete CSGV file
         Logger(INFO) << "Merging Compressed Segmentation Volume chunk files 100%. complete volume size " << str(complete_volume_dim) << "                ";
 
-        // ToDo: only if detail separation takes too long to perform on every load, perform detail separation if requested and overwrite output file with separated detail
+        // TODO: only if detail separation takes too long to perform on every import of the merged volume,
+        //  perform detail separation here if requested and overwrite output file with separated detail.
 
         // everything is complete. we can clean up the tmp files and return the merged compressed segmentation volume after loading it from the hard drive
         std::filesystem::remove(brickstarts_path);

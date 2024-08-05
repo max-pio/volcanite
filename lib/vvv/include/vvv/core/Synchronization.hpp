@@ -88,9 +88,10 @@ typedef std::vector<uint64_t> SemaphoreState;
 /// program. So, for example, one could read: `the 13th dispatch since program
 /// start is performing work using vertex shaders and fragment shaders.` if
 /// `value=13` and `stages=Vk::PipelineStageFlagBits::eVertexShader | Vk::PipelineStageFlagBits::eFragmentShader`.
-// TODO(Reiner): interop with binary semaphores makes probably most sense if we track the semaphore along with the
+//
+// interop with binary semaphores makes probably most sense if we track the semaphore along with the
 // amount of times it was signaled. that requires that all submissions were done through the `submit` abstraction
-// of this class. Currently the `submit` abstraction just simplifies the call signature and its usage is optional.
+// of this class. Currently, the `submit` abstraction just simplifies the call signature and its usage is optional.
 // I think that would make binary semaphores identical to timeline semaphores apart from the fact that they can only
 // be signaled/used in one child.
 struct Awaitable {
@@ -105,7 +106,6 @@ struct Awaitable {
     /// If you are unsure or want to debug, set this to `vk::PipelineStageFlagBits::eAllCommands`.
     vk::PipelineStageFlags stages;
     /// Tracks the scheduled timeline semaphores in the instruction stream to optimize timeline semaphore reuse.
-    // TODO(Reiner): there is a way more efficient implementation with filterable interference graphs. See notebook page 142.
     SemaphoreState predecessorPlaningState;
 
     /// this field is available if awaitable creation and submission were decoupled. The field is
@@ -140,7 +140,6 @@ struct BinaryAwaitable {
     vk::PipelineStageFlags stages;
 };
 
-// TODO(Reiner): we want Awaitable to be readonly (const), but thats tricky to type correctly
 typedef std::shared_ptr<Awaitable> AwaitableHandle;
 typedef std::vector<AwaitableHandle> AwaitableList;
 
@@ -231,7 +230,6 @@ public:
 #endif
 
     /// Create a new node in the dependency graph
-    // TODO(Reiner): there are so many parameters here. use a configuration object to get named arguments.
     // General structure of these call signatures are [actual args] [ legacy shit (awaitBinaryBeforeExecution, signalBinarySemaphore, signalFence) ]
     AwaitableHandle submit(vk::CommandBuffer commandBuffer, vk::Queue queue = static_cast<vk::Queue>(nullptr), AwaitableList awaitBeforeExecution = {},
                            vk::PipelineStageFlags stages = vk::PipelineStageFlagBits::eAllCommands, BinaryAwaitableList awaitBinaryBeforeExecution = {}, vk::Semaphore *signalBinarySemaphore = nullptr,

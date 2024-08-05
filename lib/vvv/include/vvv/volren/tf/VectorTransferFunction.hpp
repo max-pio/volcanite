@@ -109,7 +109,7 @@ public:
                 float lowerValue = m_controlPointsOpacity[lower + 1];
                 float upperValue = m_controlPointsOpacity[upper + 1];
 
-                // TODO(Reiner): use some spline. paraview/vtk for example uses hermite splines
+                // Could use spline interpolation. Paraview/vtk for example uses hermite splines.
                 float a = (lowerPosition == upperPosition) ? 0.5 : (samplePosition - lowerPosition) / (upperPosition - lowerPosition);
                 return lowerValue * (1.0 - a) + upperValue * a;
             }

@@ -654,7 +654,7 @@ template <typename Key, int N = 1> class small_unordered_set : public small_cont
 
 // For the given data key, look up the layer_data instance from given layer_data_map
 template <typename DATA_T> DATA_T *GetLayerDataPtr(void *data_key, small_unordered_map<void *, DATA_T *, 2> &layer_data_map) {
-    /* TODO: We probably should lock here, or have caller lock */
+    // TODO: should lock here, or have caller lock
     DATA_T *&got = layer_data_map[data_key];
 
     if (got == nullptr) {
@@ -672,7 +672,7 @@ template <typename DATA_T> void FreeLayerDataPtr(void *data_key, small_unordered
 // For the given data key, look up the layer_data instance from given layer_data_map
 template <typename DATA_T> DATA_T *GetLayerDataPtr(void *data_key, std::unordered_map<void *, DATA_T *> &layer_data_map) {
     DATA_T *debug_data;
-    /* TODO: We probably should lock here, or have caller lock */
+    // TODO: should lock here, or have caller lock
     auto got = layer_data_map.find(data_key);
 
     if (got == layer_data_map.end()) {

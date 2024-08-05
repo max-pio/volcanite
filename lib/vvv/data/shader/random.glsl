@@ -21,16 +21,6 @@
 
 // RANDOM NUMBERS ------------------------------------------------------------------------------------------------------
 
-// ToDo: replace stackoverflow code with pcg3D from Jarzynski & Olano (2020) "Hash Functions for GPU Rendering"
-// https://stackoverflow.com/a/52207531/13565664
-//vec3 hash(uvec3 x) {
-//    const uint hash_k = 1103515245U;
-//    x = ((x>>8U)^x.yzx)*hash_k;
-//    x = ((x>>8U)^x.yzx)*hash_k;
-//    x = ((x>>8U)^x.yzx)*hash_k;
-//    return vec3(x)*(1.0/float(0xffffffffU));
-//}
-
 // returns a random normalized 2D direction
 vec2 randomDirection2(uvec2 v) {
     return normalize(vec2(hash_pcg2d(v)) - vec2(~0u / 2u));

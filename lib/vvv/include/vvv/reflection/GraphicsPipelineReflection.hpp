@@ -27,11 +27,9 @@
 
 namespace vvv {
 
-// it's not so simple or even impossible to reflect vertex shader input because bindings and alignments can have arbitrary structure
+// reflecting vertex shader inputs is not simple because bindings and alignments can have arbitrary structures
 //std::vector<vk::VertexInputBindingDescription> reflectVertexInputBindingDescriptions(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders);
 //std::vector<vk::VertexInputAttributeDescription> reflectVertexAttributeDescriptions(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders);
-
-// TODO if it's just about attachments: move to TextureReflection
 
 uint32_t reflectColorAttachmentLocation(vvv::GpuContextPtr ctx, std::string name, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders);
 

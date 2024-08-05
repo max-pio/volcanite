@@ -7,7 +7,6 @@ set(HEADERS
         include/vvvwindow/GuiImgui.hpp
         include/vvvwindow/entrypoint.hpp
         include/vvvwindow/tf/TransferFunction1DWidget.hpp
-        include/vvvwindow/tf/TransferFunction2DWidget.hpp
         include/vvvwindow/tf/TransferFunctionSegmentedVolumeWidget.hpp
         )
 
@@ -17,7 +16,6 @@ set(SOURCES
         src/GuiImgui.cpp
         src/entrypoint.cpp
         src/tf/TransferFunction1DWidget.cpp
-        src/tf/TransferFunction2DWidget.cpp
         src/tf/TransferFunctionSegmentedVolumeWidget.cpp
         )
 

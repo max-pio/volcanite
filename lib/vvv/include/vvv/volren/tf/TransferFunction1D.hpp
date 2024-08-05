@@ -29,8 +29,6 @@ namespace vvv {
 enum class ChannelOpacityState { AlphaPremultiplied, PostMultiplied };
 const ChannelOpacityState DefaultChannelOpacityState = ChannelOpacityState::PostMultiplied;
 
-/// A 1D preintegrated transfer function.
-// TODO(Reiner): static specialization for 1D and non-preintegrated TFs
 class TransferFunction1D : public TransferFunction {
 
 public:
@@ -82,11 +80,6 @@ public:
 private:
     ChannelOpacityState m_channelOpacityState;
     std::vector<char> m_data;
-
-    /// Additionally consider gradient magnitude
-    //std::shared<TransferFunction2D> to2D(TransferFunction2dOptions opts) { return std::make_shared<TransferFunction2D>(getCtx(), m_data, m_texture, opts); }
-    //std::shared<TransferFunction1DPreintegrated> preintegrate() {}
-
 };
 
 

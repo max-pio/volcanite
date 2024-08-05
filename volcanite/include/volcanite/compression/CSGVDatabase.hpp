@@ -99,7 +99,7 @@ private:
             }
             // Add attributes from existing database
             else {
-                // ToDo: allow attribute_database to be a csv filepath and import from csv instead
+                // TODO: allow attribute_database to be a csv filepath and import from csv instead
                 if(attribute_database.ends_with(".csv"))
                     throw std::runtime_error("Importing attributes from CSV files is not yet supported!");
 
@@ -248,9 +248,9 @@ public:
     /// attribute to the voxel labels from the csgv volume.
     void createDummy() {
         m_db = nullptr;
-        //ToDo: could create a in-memory database if we need more dummy functionality (if LIB_SQLITE3 is present)
+        //TODO: could create an in-memory database if we need more dummy functionality (if LIB_SQLITE3 is present)
         // m_db =  std::make_unique<SQLite::Database>(":memory:", SQLite::OPEN_MEMORY);
-        m_label_count = ~0u;    // uint32 Max ToDo: find the maximum palette label within a volume input file
+        m_label_count = ~0u;    // uint32 Max TODO: find the maximum palette label within a volume input file
         m_attribute_names = {"csgv_id"};
         m_attribute_minmax = {glm::vec2(0.f, static_cast<float>(m_label_count))};
     }

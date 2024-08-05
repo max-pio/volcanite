@@ -41,7 +41,6 @@ struct HeadFeaturesKhr {
 /// that only announce change for data within the stable class reference.
 class DefaultGpuContext : public GpuContext {
 public:
-    // TODO(Reiner): move appname to debug utilities or at least to GpuContext
     DefaultGpuContext(GpuContextOptions const opts) : GpuContext(opts.debugUtilities) {
         m_builder.appName = opts.appName;
         m_builder.enableDebug = opts.enableDebug;

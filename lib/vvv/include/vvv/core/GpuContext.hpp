@@ -57,7 +57,7 @@ struct QueueFamilyIndices {
 };
 
 /// Globally caches created vulkan pipelines. This will speedup pipeline recreations and pipeline creation on application startup.
-// TODO(Reiner): actually benchmark this. Note that the official khronos examples cache way more stuff:
+// Note that the official khronos examples cache way more stuff:
 // https://github.com/KhronosGroup/Vulkan-Samples/blob/30e0ef953f9492726945d2042400a3808c8408f5/framework/resource_cache.h
 class GpuPipelineCache {
 public:
@@ -66,7 +66,6 @@ public:
     virtual void destroyPipelineCache(vk::Device device) { VK_DEVICE_DESTROY(device, m_pipelineCache); }
 
 protected:
-    // TODO(Reiner): there has to be a better place for this :)
     virtual std::string getPipelineCachePath() { return "vulkan_pipeline_cache.data"; }
 
     void writePipelineCacheToDisk(vk::Device device) {
@@ -153,8 +152,6 @@ public:
         sync = nullptr;
     }
 
-    // TODO: maybe the nicer API would be to accept a prebuilt vulkan instance and device here and
-    // to execute the DefaultGpuContext initialization if none is given.
     /// announces that it's safe to call any function on the context. This method is reentrant.
     virtual void initContext() {
         const auto device = getDevice();
@@ -186,7 +183,7 @@ public:
     ///
     /// Discouraged API: This is a suboptimal convenience API for research work. Use it for one-off work and similar
     /// convenience APIs that represent a shortcut to get a research prototype running.
-    vk::CommandBuffer getCommandBuffer(AwaitableHandle awaitable, uint32_t queueFamilyIndex = 0) const; // TODO(Reiner) similarity of the first args to getCommandBuffer is dangerous.
+    vk::CommandBuffer getCommandBuffer(AwaitableHandle awaitable, uint32_t queueFamilyIndex = 0) const;
 
     /// @brief Get a command buffer.
     ///
@@ -201,12 +198,9 @@ public:
     virtual vk::PhysicalDevice getPhysicalDevice() const = 0;
     virtual QueueFamilyIndices const &getQueueFamilyIndices() const = 0;
 
-    // TODO(Reiner): but this behind a getter
     std::shared_ptr<DebugUtilities> debugMarker;
 
-    // TODO(Reiner): a single semaphore is not enough for multibuffering, right? we force
-    // full serialization of in sequence generated frames. So, we need semaphores in the
-    // count of in flight frames?
+    // TODO: a single semaphore might not enough for multibuffering
     std::unique_ptr<Synchronization> sync;
 
     /// Methods to interact with the swapchain, resp. windowing system.

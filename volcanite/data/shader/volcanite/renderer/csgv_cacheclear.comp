@@ -65,7 +65,7 @@ void main() {
 
 
     // reset cache info
-    g_brick_info[brick_idx * 4u + BRICK_INFO_REQ_INV_LOD] = INVALID; // ToDo: for a "garbage collection" we would overwrite this to directly re-assign all required blocks
+    g_brick_info[brick_idx * 4u + BRICK_INFO_REQ_INV_LOD] = INVALID; // for a "garbage collection" we would overwrite this to directly re-assign all required blocks
     g_brick_info[brick_idx * 4u + BRICK_INFO_CUR_INV_LOD] = INVALID;
     g_brick_info[brick_idx * 4u + BRICK_INFO_CACHE_INDEX] = INVALID;
     g_brick_info[brick_idx * 4u + BRICK_INFO_REQ_SLOT] = INVALID;

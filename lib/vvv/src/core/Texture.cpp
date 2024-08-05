@@ -43,7 +43,7 @@ void Texture::initResources() {
 
     const auto memReqs = m_ctx->getDevice().getImageMemoryRequirements(image);
     const auto memType = getMemoryType(*m_ctx, memReqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
-    const vk::MemoryAllocateInfo memAllocInfo(memReqs.size, memType); // TODO(Reiner): use a  memory allocator
+    const vk::MemoryAllocateInfo memAllocInfo(memReqs.size, memType);
     deviceMemory = m_ctx->getDevice().allocateMemory(memAllocInfo);
     m_ctx->getDevice().bindImageMemory(image, deviceMemory, 0);
 
@@ -168,10 +168,10 @@ void Texture::checkGpuSupport() const {
     }
 }
 
-// TODO: move to staging buffer
 void Texture::capture(vk::CommandBuffer commandBuffer, vvv::Buffer const &stagingBuffer, vk::PipelineStageFlags destinationStage) {
 
-    // TODO(Reiner): there is nothing that prevents us from supporting more usage types. e.g. sampled buffers could be read using a blit pass to a staging buffer with eTransferSrc set.
+    // there is nothing that prevents us from supporting more usage types. e.g. sampled buffers could be read using a
+    // blit pass to a staging buffer with eTransferSrc set.
     // if (!(usage & vk::ImageUsageFlagBits::eTransferSrc)) {
     //    throw std::runtime_error("texture does not support transfer");
     //}
@@ -195,7 +195,7 @@ void Texture::upload(vk::CommandBuffer commandBuffer, vvv::Buffer const &staging
     vk::MemoryRequirements memoryRequirements = device.getBufferMemoryRequirements(staging.getBuffer());
     void *data = device.mapMemory(staging.getMemory(), 0, memoryRequirements.size, vk::MemoryMapFlags());
 
-    // TODO(Reiner): memcpy here, we could also just load the data directly into this instead of loading into CPU memory using `Volume`
+    // instead of loading into CPU memory using `Volume` + memcpy, could also just load the data directly into this
     const auto memSizeTexture = memorySize();
     std::memcpy(data, rawData, memSizeTexture);
 

@@ -240,7 +240,7 @@ std::filesystem::path Shader::compileGlslShader(const GlslShaderRequest& request
 
     std::ostringstream cmd;
 
-    // TODO(Reiner): escape things
+    // note: nothing here is escaped!s
     cmd << vvv::shader_compiler_executable
         << " --client vulkan100"                                 // Vulkan SPIR-V semantics
         << " --target-env spirv1.5"                              // 1.5 is default for vulkan 1.2

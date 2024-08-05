@@ -22,7 +22,7 @@
 
 #include "vvv/core/Renderer.hpp"
 #include "vvv/core/Shader.hpp"
-#include "vvv/util/managed_buffer.hpp"
+#include "vvv/util/hash_memory.hpp"
 #include "vvv/reflection/UniformReflection.hpp"
 #include "vvv/passes/PassCompute.hpp"
 
@@ -96,7 +96,7 @@ public:
 
     /// Obtains the rendering resolution from the windowing system but limits it to 4K (4096x2160).
     void updateRenderResolutionFromWSI() {
-        // ToDo: remove hardcoded render resolution. Move the WSI dependency to Application / HeadlessRendering or the Renderer class?
+        // TODO: remove hardcoded render resolution or expose it in the GUI
         const vk::Extent2D max_resolution = {4096u, 2160u};
 
         auto wsi = getCtx()->getWsi();

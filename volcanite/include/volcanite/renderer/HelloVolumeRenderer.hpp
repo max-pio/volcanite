@@ -22,7 +22,7 @@
 
 #include "vvv/core/Renderer.hpp"
 #include "vvv/core/Shader.hpp"
-#include "vvv/util/managed_buffer.hpp"
+#include "vvv/util/hash_memory.hpp"
 #include "vvv/reflection/UniformReflection.hpp"
 #include "vvv/passes/PassCompute.hpp"
 

@@ -12,6 +12,9 @@
 //
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
+// This class uses Morton index computation code by Fabian Giesen. Original code can be found at
+// https://fgiesen.wordpress.com/2009/12/13/decoding-morton-codes/
 
 #pragma once
 
@@ -33,10 +36,10 @@ public:
     static glm::uvec3 i2p(size_t i, glm::uvec3 brick_size) { return {i % brick_size.x, (i / brick_size.x) % brick_size.y, (i / brick_size.x / brick_size.y) % brick_size.z}; }
 };
 
-/// taken from https://fgiesen.wordpress.com/2009/12/13/decoding-morton-codes/
+// TODO: add asserts for position / index limits that can be indexed using 2D / 3D Morton codes in 32 or 64 bit
+
 class Morton2D {
 public:
-    // @ToDo add asserts to check limits as for the 3D case!
     static uint32_t p2i(glm::uvec2 p) { return (Part1By1(p.y) << 1) + Part1By1(p.x); }
 
     static glm::uvec2 i2p(uint32_t i) { return glm::uvec2(Compact1By1(i >> 0), Compact1By1(i >> 1)); }
@@ -63,7 +66,6 @@ private:
     }
 };
 
-/// taken from https://fgiesen.wordpress.com/2009/12/13/decoding-morton-codes/with adaptions for 64 bit
 class Morton3D {
 public:
     // the 64 bit variants can work with up to 10 bits per positional component

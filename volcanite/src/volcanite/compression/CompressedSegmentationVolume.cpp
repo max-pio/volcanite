@@ -148,7 +148,7 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
     out[0] = out_i;                 // LoD start position
     out[header_size - 1] = 0u; // palette start position (from back)
     uint32_t muligrid_lod_start = multigrid.size() - 1;
-    if (multigrid[muligrid_lod_start].constant_subregion) {             //isHomogeneousBrick(volume, volume_dim, glm::uvec3(0u), {brick_size, brick_size, brick_size})) {Z
+    if (multigrid[muligrid_lod_start].constant_subregion) {
         write4Bit(out, 0u, out_i++, PALETTE_ADV | STOP_BIT);
     }
     else {
@@ -323,7 +323,7 @@ float CompressedSegmentationVolume::separateDetail() {
     // Handle one brick after another, splitting encoding arrays if necessary:
     m_detail_encodings.resize(1);
     m_detail_encodings.back().resize(split_detail_encoding_sizes.at(0));
-    // ToDo: it would be possible to process all split encoding arrays in parallel, but woudl drastically increase tmp memory
+    // TODO: it is possible to process all split encoding arrays in parallel, but would drastically increase memory
     for(uint32_t brick_idx = 0u; brick_idx < brick_idx_count; brick_idx++) {
 
         uint32_t detail_start = m_detail_starts[brick_idx];
@@ -521,7 +521,7 @@ bool CompressedSegmentationVolume::verifyCompression() const {
                     {
                         if(is_ok) {
                             Logger(ERROR) << "Found errors for brick " << str(brick) << " #" << brick_pos2idx(brick, getBrickCount()) << ":\n" << error.str() << "---";
-                            // ToDo: loglevel ERROR does not work on windows. this workaround outputs to INFO in that case (ERROR is defined as 0 in windows.h)
+                            // TODO: loglevel ERROR does not work on windows. workaround outputs to INFO in that case
                             printBrickInfo(brick, vvv::loglevel(ERROR));
                             is_ok = false;
                         }
@@ -973,7 +973,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
         return;
     }
     try {
-        // ToDo: if the path is only one file in root it has no parent_path() which causes an invalid argument
+        // TODO: if the path is only one file in root it has no parent_path() which causes an invalid argument
         std::filesystem::create_directories(std::filesystem::path(path).parent_path());
     } catch(const std::filesystem::filesystem_error& e) {
         throw std::runtime_error("Filesystem error: could not create parent directories for path " + std::filesystem::path(path).string());
@@ -1247,7 +1247,7 @@ void CompressedSegmentationVolume::freqEncodeBrick(const std::vector<uint32_t>& 
             // if the whole subtree from here has this parent_value, we can set a stop sign and fill the whole brick area of the subtree
             // note that grid nodes outside the volume are by definition also homogeneous
             if (lod_width >= 1 && multigrid[muligrid_lod_start +
-                    voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].constant_subregion) { //lod_width > 1 && isHomogeneousBrick(volume, volume_dim, volume_pos, {lod_width, lod_width, lod_width})) {
+                    voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].constant_subregion) {
                 operation = STOP_BIT;
             }
             // determine operation for the next entry

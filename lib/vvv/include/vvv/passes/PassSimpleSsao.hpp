@@ -25,7 +25,7 @@ namespace vvv {
 
 /// This is a convenience wrapper for PassSsao and PassBlur.
 /// It performs Screen Space Ambient Occlusion based on depth and world space normals, which is then smoothed using PassBlur in bilateral mode.
-/// Specity input images using setInputTextures() each frame and call renderSsao().
+/// Specify input images using setInputTextures() each frame and call renderSsao().
 class PassSimpleSsao : public virtual WithMultiBuffering, public virtual WithGpuContext {
 public:
     using Algorithm = PassSsao::Algorithm;

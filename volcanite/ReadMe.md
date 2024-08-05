@@ -49,7 +49,7 @@ In general, our temporal accumulation allows us to
 * draw a different number of samples per pixel (including 0) between different pixels in the same frame,
 * progressively accumulate path traced lighting or ambient occlusion over time,
 * perform temporal anti-aliasing, and
-* perform volumetric Monte-Carlo path tracing (currently not implemented).
+* perform volumetric Monte-Carlo path tracing
 
 
 #### Relevant Publications
@@ -57,4 +57,5 @@ In general, our temporal accumulation allows us to
 * [Shading Atlas Streaming](https://www.tugraz.at/institute/icg/research/team-steinberger/research-projects/sas), Mueller et al. 2018. Transactions on Graphics (Proc. SIGASIA)
 * [Monte Carlo Methods for Volumetric Light Transport](https://jannovak.info/publications/VolumeSTAR/index.html), Novák et al. 2018. Computer Graphics Forum (Proc. EG)
 * [A Fast Voxel Traversal Algorithm for Ray Tracing](http://www.cse.yorku.ca/~amana/research/grid.pdf), Amanatides and Woo 1987, (Proc. EG)
-* [A Survey of Temporal Antialiasing Techniques](http://behindthepixels.io/assets/files/TemporalAA.pdf), Yang et al. 2020. Computer Graphics Forum (Proc. EG)
+<!-- * [A Survey of Temporal Antialiasing Techniques](http://behindthepixels.io/assets/files/TemporalAA.pdf), Yang et al. 2020. Computer Graphics Forum (Proc. EG)
+-->

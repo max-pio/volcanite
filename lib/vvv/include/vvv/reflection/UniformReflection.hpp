@@ -181,7 +181,7 @@ public:
         // sanity checks
         if (!details::is_spvr_type<T&>(member)) {
             std::ostringstream err;
-            // TODO(Reiner): this stringification of T does not seem to work as expected.
+            // this stringification of T does only work with certain compilers
             err << "type mismatch for <" << memberName << ">. Host expected <" << typeid(T).name() << ">, but shader has other.";
             throw std::runtime_error(err.str());
         }
@@ -197,7 +197,7 @@ public:
         // sanity checks
         if (sizeof(T) != member->size || !details::is_spvr_type<T&>(member)) {
             std::ostringstream err;
-            // TODO(Reiner): this stringification of T does not seem to work as expected.
+            // this stringification of T only works with certain compilers
             err << "type mismatch for <" << memberName << ">. Host expected <" << typeid(T).name() << ">, but shader has other.";
             throw std::runtime_error(err.str());
         }
@@ -260,7 +260,8 @@ private:
         throw std::runtime_error("unknown member <" + memberName + ">");
     }
 
-    template <typename T> using MultiBuffered = std::vector<T>; // TODO(Reiner): @deprecated, use MultiBuffering on Wsi instead
+    /// @deprecated use MultiBuffering on Wsi instead
+    template <typename T> using MultiBuffered = std::vector<T>;
 
     std::vector<char> m_data;
     MultiBuffered<std::shared_ptr<Buffer>> m_dataGpu;

@@ -19,7 +19,6 @@
 // header loading the whole library, a `#include <vvv/vvv.hpp>` should be
 // enough to start working with the library.
 
-// TODO(Reiner): move these into a `core` folder/namespace
 #include <vvv/core/GpuContext.hpp>
 #include <vvv/config.hpp>
 

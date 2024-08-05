@@ -179,7 +179,6 @@ void vvv::DefaultGpuContext::createInstance() {
         Logger(DEBUG) << (is_instance_layer_supported(layer) ? "    [x] " : "    [ ] ") << layer;
     }
 
-    // TODO(Reiner): app and engine version
     vk::ApplicationInfo applicationInfo(m_builder.appName.c_str(), 1, m_builder.appName.c_str(), 1, VK_API_VERSION_1_3);
 
     vk::InstanceCreateInfo instanceCreateInfo({}, &applicationInfo, instanceLayers, extensions);
@@ -469,6 +468,5 @@ void vvv::DefaultGpuContext::createLogicalDevice() {
 }
 
 void vvv::DefaultGpuContext::destroyLogicalDevice() {
-    // TODO(Reiner): debugMarker->destroy(this);
     VK_DESTROY(m_gpu.device)
 }

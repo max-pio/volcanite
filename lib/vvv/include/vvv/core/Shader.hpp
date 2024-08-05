@@ -12,8 +12,11 @@
 //
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-// ToDo: Stolen from https://github.com/MomentsInGraphics/vulkan_renderer/blob/c85c087d0aca99f060818b69f9cbbdffb45c33d8/src/vulkan_basics.h
+//
+// This class contains code from the vulkan_basics.h from "MyToyRenderer" by Christoph Peters which was released under
+// the GPLv3 License. Our adaptions include an added switch between orbital and translational camera modes, file
+// import / export, obtaining default parameters, and registering callback functions.
+// The original code can be found at https://github.com/MomentsInGraphics/vulkan_renderer/blob/main/src/vulkan_basics.h
 
 #pragma once
 #include "preamble.hpp"
@@ -98,9 +101,6 @@ using ShaderCompileErrorCallback = std::function<ShaderCompileErrorCallbackActio
 
 
 //! Bundles a Vulkan shader module with its SPIRV code
-// TODO: currently assumes a single entry point, which does not work for ray tracing shaders.
-// probably best to add an optional argument to every reflection api method that specifies the entry point
-// and chooses the default/first entry point if not given.
 struct Shader {
 
     //! The size of the compiled SPIRV code in bytes
@@ -122,7 +122,6 @@ struct Shader {
     vk::PipelineShaderStageCreateInfo *pipelineShaderStageCreateInfo(vvv::GpuContextPtr ctx);
     vk::ShaderModule shaderModule(vvv::GpuContextPtr ctx);
 
-    // TODO(Reiner): call this in the destructor
     void destroyModule(vk::Device device) {
         if (m_shaderModule != static_cast<decltype(m_shaderModule)>(nullptr)) {
             device.destroy(m_shaderModule);
@@ -207,8 +206,10 @@ struct Shader {
     }
 
 
-    // TODO: it's not that simple to reflect vertex input because the layout of the bindings / vertex data on the host side is indifferent to the layout locations inside vertex shaders
     std::optional<SpvReflectInterfaceVariable const *const> tryRawReflectInputByName(const std::string& name) const {
+        // it's not that simple to reflect vertex input because the layout of the bindings / vertex data on the host
+        // side is indifferent to the layout locations inside vertex shaders
+
         uint32_t count = 0;
         auto ret = m_reflection->EnumerateInputVariables(&count, nullptr);
         assert(ret == SPV_REFLECT_RESULT_SUCCESS);

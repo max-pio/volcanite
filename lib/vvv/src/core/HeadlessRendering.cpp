@@ -33,7 +33,6 @@ static void check_vk_result(VkResult err) {
 static void check_vk_result(vk::Result err) { check_vk_result(static_cast<VkResult>(err)); }
 
 void HeadlessRendering::recreateSwapchain() {
-    // TODO(Reiner): use new API, otherwise not well defined
     getDevice().waitIdle();
 
     // Note: this is conservative: destroy the swapchain and everything that might depend on it
@@ -63,14 +62,13 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames
         return nullptr;
     }
 
-    // ToDo: decouple HeadlessRendering::exec in an initialization method and multiple render calls, respect m_pendingRecreation
+    // TODO: decouple HeadlessRendering::exec in an initialization method and multiple render calls, respect m_pendingRecreation
     // e.g.: hr.init(); hr.setRenderResolution(400, 400); hr.renderToFile(120); hr.setRenderParametersFromFile(path); auto output = hr.render(60);
 
     RendererOutput rendererOutput = {nullptr, {}};
     MiniTimer timer;
     for (size_t frame_idx = 0; frame_idx < number_of_frames; frame_idx++) {
         // render one frame after the other = wait for the last renderingComplete to finish
-        // ToDo: should we use MultiBuffering in headless mode as well?
         rendererOutput = renderFrame({rendererOutput.renderingComplete});
 
         if(frameFinishedCallback) {
@@ -135,7 +133,6 @@ void HeadlessRendering::releaseResources() {
     const auto device = getDevice();
 
     if (device) {
-        // TODO(Reiner): use sync to resolve waiting counting semaphores
         device.waitIdle();
     }
 

@@ -17,7 +17,6 @@
 #pragma once
 
 #include <vvv/volren/tf/VectorTransferFunction.hpp>
-#include <vvv/volren/tf/TransferFunction2D.hpp>
 #include <vvv/volren/tf/SegmentedVolumeMaterial.hpp>
 #include <vvv/util/Logger.hpp>
 
@@ -36,10 +35,9 @@ typedef size_t gui_id;
 
 // ToDo: Refactor GuiInterface to ParameterInterface as parameters can be managed with it without having a visible GUI
 
-
 // Steps to add a new data or entry type T:
 // (1) create an entry to GuiType enum
-// (2) create add<T>(...) functions for T in GuiElementList class
+// (2s) create add<T>(...) functions for T in GuiElementList class
 // optional: (3) create a GUI_*_CAST define for casting from the BaseGuiEntry to the right derived entry class
 //
 // optional:
@@ -83,7 +81,7 @@ namespace vvv {
 /// This can be used for quick prototyping, for example directly adding ImGUI-Code when using the ImGUI backend.
 class GuiInterface {
 protected:
-    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2, GuiFloatRange, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiAction, GuiLabel, GuiDynamicText, GuiProgress, GuiSeparator, GuiTF1D, GuiTF2D, GuiTFSegmentedVolume, GuiCustomCode };
+    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2, GuiFloatRange, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiAction, GuiLabel, GuiDynamicText, GuiProgress, GuiSeparator, GuiTF1D, GuiTFSegmentedVolume, GuiCustomCode };
 
     // ------------------------------- GUI ENTRIES ------------------------------------ //
 public:
@@ -117,16 +115,6 @@ public:
         std::any widgetData = {};
     };
 
-    struct GuiTF2DEntry : BaseGuiEntry {
-        TransferFunction2D *value = nullptr;
-        Texture *histogramTexture = nullptr;
-        glm::vec2 *histogramMin = nullptr;
-        glm::vec2 *histogramMax = nullptr;
-        bool *histogramChanged = nullptr;
-        std::function<void()> onChanged = {};
-        std::any widgetData = {};
-    };
-
     struct GuiTFSegmentedVolumeEntry : BaseGuiEntry {
         std::vector<SegmentedVolumeMaterial> *materials = {};
         std::function<void(int)> onChanged = {};
@@ -142,7 +130,7 @@ public:
         };
         std::vector<ColorMapConfig> colormapConfig = {};
         // additional widget data
-        std::any widgetData = {};   // ToDo: any is not nice
+        std::any widgetData = {};
 
     private:
         static std::vector<std::string> availableColormaps;
@@ -207,7 +195,6 @@ public:
 
         // vvv types
         virtual gui_id addTF1D(VectorTransferFunction* tf, std::vector<float> *histogram = nullptr, float *histMin = nullptr, float *histMax = nullptr, std::function<void()> onChanged = nullptr);
-        virtual gui_id addTF2D(TransferFunction2D* tf, Texture* histogramTexture, bool* histogramChanged = nullptr, std::function<void()> onChanged = nullptr, glm::vec2* histogramMin = nullptr, glm::vec2* histogramMax = nullptr);
         virtual gui_id addTFSegmentedVolume(std::vector<SegmentedVolumeMaterial>* materials, const std::vector<std::string>& attributeNames, const std::vector<glm::vec2>& attributeMinMax, std::function<void(int)> onChanged = nullptr, const std::string& name = "");
 
         // special types and grouping

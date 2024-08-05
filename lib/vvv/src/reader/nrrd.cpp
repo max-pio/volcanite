@@ -17,24 +17,19 @@
 
 #include <vulkan/vulkan.hpp>
 
-// TODO(Reiner): use vvv/util/Logger for messages
-
 #include <cmath>
 #include <fstream>
-#include <iostream>
 #include <sstream>
 
 namespace vvv {
 
 bool is_valid_physical_size(float v) { return v > 0.f && std::isfinite(v); }
 
-template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std::string formatLabel, size_t bitwidth, vk::Format gpuFormat) {
+template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(const std::string& url, const std::string& formatLabel, size_t bitwidth, vk::Format gpuFormat) {
 
     std::ifstream nrrd(url, std::ios_base::in | std::ios_base::binary);
     if (!nrrd.is_open()) {
-        std::ostringstream err;
-        err << "unable to open NRRD file at: " << url << "\n";
-        throw std::runtime_error(err.str());
+        throw std::runtime_error("unable to open NRRD file at: " + url);
     }
 
     // read dimension
@@ -59,7 +54,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
             break;
         }
 
-        if (line.size() == 0) {
+        if (line.empty()) {
             // empty line, end of header
             break;
         }
@@ -89,13 +84,11 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
             throw std::runtime_error("invalid header in line" + std::to_string(lineNum) + ": " + line);
         }
 
-        // TODO: trim space
         const auto fieldName = line.substr(0, sep);
         const auto fieldValue = line.substr(sep + sepChars.size(), line.size() - sep - sepChars.size());
 
         if (fieldName == "dimension") {
-            // TODO: check the whole fieldValue is read/parsed,
-            // TODO: check out of range
+            // TODO: check the whole fieldValue is read/parsed, and check for out of range
             const auto dim = std::stoul(fieldValue, nullptr, 10);
             if (dim != 3) {
                 nrrd.close();
@@ -160,7 +153,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
         const bool isRelative = !detachedPayload.value().empty() && detachedPayload.value()[0] != '/';
 
         if (isRelative) {
-            std::string directory = "";
+            std::string directory;
             const size_t last_slash_idx = url.rfind('/');
             if (std::string::npos != last_slash_idx) {
                 directory = url.substr(0, last_slash_idx + 1);
@@ -171,9 +164,8 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
         nrrd = std::ifstream(detachedPayload.value(), std::ios_base::in | std::ios_base::binary);
 
         if (!nrrd.is_open()) {
-            std::ostringstream err;
-            err << "unable to open detached payload of NRRD file <" << url << "> at <" << detachedPayload.value() << ">";
-            throw std::runtime_error(err.str());
+            throw std::runtime_error("unable to open detached payload of NRRD file <" + url
+                                     + "> at <" + detachedPayload.value() + ">");
         }
     }
 
@@ -182,23 +174,22 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(std::string url, std
 
     if (!nrrd) {
         nrrd.close();
-        throw std::runtime_error("only " + std::to_string(nrrd.gcount()) + " bytes of expected " + std::to_string(byte_size) + " bytes could be read from NRRD file.");
+        throw std::runtime_error("only " + std::to_string(nrrd.gcount()) + " bytes of expected "
+                                 + std::to_string(byte_size) + " bytes could be read from NRRD file.");
     }
 
     nrrd.close();
     return std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, img_width, img_height, img_depth, gpuFormat, payload);
 }
 
-template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::string url, std::string formatLabel, vk::Format gpuFormat) {
+template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(const std::string& url, const std::string& formatLabel, vk::Format gpuFormat) {
 
     std::ifstream nrrd(url, std::ios_base::in | std::ios_base::binary);
     if (!nrrd.is_open()) {
-        std::ostringstream err;
-        err << "unable to open NRRD file at: " << url << "\n";
-        throw std::runtime_error(err.str());
+        throw std::runtime_error("unable to open NRRD file at: " + url);
     }
 
-    // TODO(Max): read fields with key/value pairs from nrrd file
+    // TODO: read fields with key/value pairs from nrrd file
     // read dimension
     uint64_t img_width = 0;
     uint64_t img_height = 0;
@@ -224,7 +215,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::strin
             break;
         }
 
-        if (line.size() == 0) {
+        if (line.empty()) {
             // empty line, end of header
             break;
         }
@@ -252,13 +243,11 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::strin
             throw std::runtime_error("invalid header in line" + std::to_string(lineNum) + ": " + line);
         }
 
-        // TODO: trim space
         const auto fieldName = line.substr(0, sep);
         const auto fieldValue = line.substr(sep + sepChars.size(), line.size() - sep - sepChars.size());
 
         if (fieldName == "dimension") {
-            // TODO: check the whole fieldValue is read/parsed,
-            // TODO: check out of range
+            // TODO: check the whole fieldValue is read/parsed, and check for out of range
             const auto dim = std::stoul(fieldValue, nullptr, 10);
             if (dim != 3) {
                 nrrd.close();
@@ -269,7 +258,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::strin
                 payloadTy = fieldValue;
                 payloadComponentSize = 4;
                 minVal = std::numeric_limits<uint32_t>::min();
-                maxVal = std::numeric_limits<uint32_t>::max();
+                maxVal = static_cast<float>(std::numeric_limits<uint32_t>::max());
             } else if (fieldValue == "uint16") {
                 payloadTy = fieldValue;
                 payloadComponentSize = 2;
@@ -297,7 +286,6 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::strin
         } else if (fieldName == "data file") {
             detachedPayload = fieldValue;
         } else if (fieldName == "sizes") {
-            // TODO: check for end of line
             std::istringstream sizes(fieldValue);
             sizes >> img_width >> img_height >> img_depth;
         } else if (fieldName == "spacings") {
@@ -348,9 +336,8 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(std::strin
         nrrd = std::ifstream(detachedPayload.value(), std::ios_base::in | std::ios_base::binary);
 
         if (!nrrd.is_open()) {
-            std::ostringstream err;
-            err << "unable to open detached payload of NRRD file <" << url << "> at <" << detachedPayload.value() << ">";
-            throw std::runtime_error(err.str());
+            throw std::runtime_error("unable to open detached payload of NRRD file <" + url
+                                     + "> at <" + detachedPayload.value() + ">");
         }
     }
 

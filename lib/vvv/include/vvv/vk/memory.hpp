@@ -36,7 +36,6 @@ std::pair<size_t, size_t> getMemoryHeapBudgetAndUsage(vvv::GpuContextRef ctx, vk
 void setImageLayout(vk::CommandBuffer const &commandBuffer, vk::Image image, vk::Format format, vk::ImageLayout oldImageLayout, vk::ImageLayout newImageLayout,
                     vk::PipelineStageFlags destinationStage = vk::PipelineStageFlags());
 
-// TODO(Reiner): there is quite some code in the codebase that is not yet using this helper
 std::pair<vk::Buffer, vk::DeviceMemory> createBuffer(vvv::GpuContextRef ctx, vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, const char *label = nullptr);
 
 } // namespace vvv

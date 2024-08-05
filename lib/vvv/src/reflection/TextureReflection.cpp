@@ -15,6 +15,10 @@
 
 #include <vvv/reflection/TextureReflection.hpp>
 
+// possible extension:
+// there is a `accessed` flag on bindings. Could this be used to skip or ignore bindings that are not accessed?
+// could generally derive a lot more things from the reflection api
+
 namespace vvv {
 
 std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts) {
@@ -27,8 +31,6 @@ std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<c
     bool used = false;
 
     for (const auto &shader : shaders) {
-        // TODO(Reiner): there is a `accessed` flag on bindings. not sure how it works... but we could probably
-        // skip or ignore bindings that are not accessed...
         for (int j = 0; j < names.size(); ++j) {
             const auto binding_ = shader->tryRawReflectBindingByName(names.data()[j]);
 
@@ -43,7 +45,7 @@ std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<c
 
             const auto binding_dim = details::spvr2vvv_Dimensions.at(binding->image.dim);
 
-            // TODO(Reiner): we can derive a lot more things here :)
+            // a lot more can be derived here!
             if (binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
                 usage |= vk::ImageUsageFlagBits::eSampled;
             } else if (binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
@@ -102,8 +104,6 @@ std::vector<std::shared_ptr<Texture>> reflectTextureArray(vvv::GpuContextPtr ctx
     bool used = false;
 
     for (const auto &shader : shaders) {
-        // TODO(Reiner): there is a `accessed` flag on bindings. not sure how it works... but we could probably
-        // skip or ignore bindings that are not accessed...
         for (int j = 0; j < names.size(); ++j) {
             const auto binding_ = shader->tryRawReflectBindingByName(names.data()[j]);
 
@@ -118,7 +118,6 @@ std::vector<std::shared_ptr<Texture>> reflectTextureArray(vvv::GpuContextPtr ctx
 
             const auto binding_dim = details::spvr2vvv_Dimensions.at(binding->image.dim);
 
-            // TODO(Reiner): we can derive a lot more things here :)
             if (binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
                 usage |= vk::ImageUsageFlagBits::eSampled;
             } else if (binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
@@ -163,8 +162,8 @@ std::vector<std::shared_ptr<Texture>> reflectTextureArray(vvv::GpuContextPtr ctx
         throw std::runtime_error("texture reflection, unable to derive image format, specify one explicitly");
     }
 
-    // create a flattened 1D array containing all textures
-    // ToDo: store the texture array index in a more useful way instead of just in the string label?
+    // create a flattened 1D array containing all textures.
+    // could store the texture array index in a more useful way instead of just in the string label.
     uint32_t number_of_textures = 1;
     for (int i = 0; i < array_dims_count; i++)
         number_of_textures *= array_dims[i];
@@ -190,7 +189,6 @@ std::vector<std::shared_ptr<Texture>> reflectTextureArray(vvv::GpuContextPtr ctx
     return textures;
 }
 
-// TODO(Max) pull this upwards inside one unified method where colorAttachments and textures can be reflected in one command
 std::shared_ptr<Texture> reflectColorAttachment(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts) {
     vk::ImageUsageFlags usage = opts.usage | vk::ImageUsageFlagBits::eColorAttachment;
     auto format = opts.format;

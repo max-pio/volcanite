@@ -22,7 +22,7 @@ void Buffer::createBuffer(vk::BufferUsageFlags bufferUsage, vk::MemoryPropertyFl
     const auto device = m_ctx->getDevice();
 
     // create a staging buffer
-    // TODO(Reiner): this should be cached and reused either explicitly or using a memory allocator. The probability that this has the same dimension for subsequent calls is very high for 3d+t
+    // this could be cached and reused either explicitly or using a memory allocator.
 
     // const auto textureBufferMemorySize = memorySize();
     m_buffer = device.createBuffer(vk::BufferCreateInfo(vk::BufferCreateFlags(), m_byteSize, bufferUsage));

@@ -30,19 +30,24 @@
 // forward decl
 class GLFWwindow;
 
-class Application : public vvv::DefaultGpuContext, public vvv::WindowingSystemIntegration, public std::enable_shared_from_this<Application> {
+namespace vvv {
+
+/// GLFW windowing application displaying renderer parameters using Dear ImGUI.
+/// The code here is heavily deprecated and should use modern Vulkan 1.3 VK_KHR_DYNAMIC_RENDERING or even better:
+/// modernize and use the GraphicsPass abstraction.
+class Application : public DefaultGpuContext, public WindowingSystemIntegration, public std::enable_shared_from_this<Application> {
 private:
-    Application(std::string appName, std::shared_ptr<vvv::Renderer> renderer, std::shared_ptr<vvv::DebugUtilities> debugUtilities)
+    Application(std::string appName, std::shared_ptr<Renderer> renderer, std::shared_ptr<DebugUtilities> debugUtilities)
         : DefaultGpuContext({.debugUtilities = debugUtilities, .appName = appName}), m_renderer(renderer),
         m_camera_controller(), m_gui(std::make_unique<GuiImgui>(this)), m_startup_resolution(1920, 1080)
         {
             // choose a camera controller for the renderer
-            m_renderer->setCamera(std::make_shared<vvv::Camera>(true));
+            m_renderer->setCamera(std::make_shared<Camera>(true));
             m_camera_controller.setCamera(&(*m_renderer->getCamera()));
 
             auto video_directory = std::filesystem::absolute("vvv_video");
             if(!std::filesystem::exists(video_directory) && !std::filesystem::create_directory(video_directory)) {
-                vvv::Logger(vvv::WARN) << "Could not create non-existing video export directory " << video_directory;
+                Logger(WARN) << "Could not create non-existing video export directory " << video_directory;
             }
             else {
                 m_record_file_path = video_directory.generic_string() + "/vvv_record_file.rec";
@@ -51,13 +56,11 @@ private:
         };
 
 public:
-    [[nodiscard]] static std::shared_ptr<Application> create(std::string appName, std::shared_ptr<vvv::Renderer> renderer, float guiScaling = 1.f, std::shared_ptr<vvv::DebugUtilities> debugUtilities = {}) {
+    [[nodiscard]] static std::shared_ptr<Application> create(std::string appName, std::shared_ptr<Renderer> renderer, float guiScaling = 1.f, std::shared_ptr<DebugUtilities> debugUtilities = {}) {
         // Not using std::make_shared<Best> because the c'tor is private.
         return std::shared_ptr<Application>(new Application(appName, renderer, debugUtilities));
     }
 
-    // TODO: we used to return a std::shared_ptr<const WindowingSystemIntegration> here and return shared_from_this();
-    // but this was super unsafe as it would not work if the object is not yet a shared ptr (throwing std::bad_weak_ptr)
     const WindowingSystemIntegration* getWsi() const override { return this; }
 
     /**
@@ -93,7 +96,7 @@ public:
     void setWindowResizable(bool resizable) const override;
     bool isWindowResizable() const override;
 
-    vvv::Camera *getCamera() const override { return m_renderer->getCamera().get(); }
+    Camera *getCamera() const override { return m_renderer->getCamera().get(); }
 
     void processHotKeys();
 
@@ -116,7 +119,7 @@ public:
     /**
      * @return an GuiInterface to which GUI controlled properties can be added in a sequential manner.
      */
-    vvv::GuiInterface *getGui() const { return m_gui.get(); }
+    GuiInterface *getGui() const { return m_gui.get(); }
 
 
 
@@ -131,8 +134,9 @@ protected:
 private:
     static void errorCallback(int error, const char *description) { std::cerr << "GLFW Error " << error << ": " << description << std::flush; }
 
-    // TODO(Reiner): @deprecated, use MultiBuffering on Wsi instead
+    /// @deprecated use MultiBuffering instead
     template <typename T> using ForEachSwapchainImage = std::vector<T>;
+    /// @deprecated use MultiBuffering instead
     template <typename T> using ForEachInFlightFrame = std::vector<T>;
 
 
@@ -163,15 +167,15 @@ private:
     void recreateInnerRenderingEngine();
 
     void renderFrame();
-    void renderFrameRecordCommands(vk::CommandBuffer, vvv::RendererOutput const &ldrRendererOutput);
-    void updateBlitDescriptorSet(const vvv::RendererOutput &output, uint32_t inFlightFrameIdx);
+    void renderFrameRecordCommands(vk::CommandBuffer, RendererOutput const &ldrRendererOutput);
+    void updateBlitDescriptorSet(const RendererOutput &output, uint32_t inFlightFrameIdx);
 
-    std::shared_ptr<vvv::Renderer> m_renderer;
+    std::shared_ptr<Renderer> m_renderer;
 
     vk::Extent2D m_startup_resolution;
     bool m_resources_acquired = false;
     GLFWwindow *m_window = nullptr;
-    vvv::GLFWCameraController m_camera_controller;
+    GLFWCameraController m_camera_controller;
     std::unique_ptr<GuiImgui> m_gui;
 
     struct {
@@ -194,7 +198,7 @@ private:
         ForEachInFlightFrame<vk::Semaphore> presentCompleteSemaphore;
         ForEachInFlightFrame<vk::Semaphore> blitToSwapchainImageComplete;
         ForEachInFlightFrame<vk::Semaphore> renderCompleteSemaphore;
-        ForEachInFlightFrame<vvv::AwaitableHandle> frameInFlightAwaitable;
+        ForEachInFlightFrame<AwaitableHandle> frameInFlightAwaitable;
         //! points to the Awaitable index in `frameInFlightAwaitable`, which is the frame that uses this image. Can also be IMAGE_NOT_IN_FLIGHT
         ForEachSwapchainImage<size_t> imageInFlightFrame;
 
@@ -212,8 +216,8 @@ private:
         ForEachInFlightFrame<vk::DescriptorSet> descSet;
         ForEachInFlightFrame<std::optional<vk::DescriptorImageInfo>> lastImageDescriptor;
 
-        vvv::Shader *shaderVertex = nullptr;
-        vvv::Shader *shaderFragment = nullptr;
+        Shader *shaderVertex = nullptr;
+        Shader *shaderFragment = nullptr;
 
         vk::PipelineCache pipelineCache = nullptr;
         vk::PipelineLayout pipelineLayout = nullptr;
@@ -256,3 +260,5 @@ private:
     //-------------- end imgui
 #endif
 };
+
+} // namespace vvv

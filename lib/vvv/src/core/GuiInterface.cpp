@@ -47,7 +47,7 @@ namespace vvv {
                 mat.tf->m_controlPointsRgb[7] = d.color[0].b;
                 break;
             case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFDivergent:
-                // @ToDo implement actual Divergent Colormap computation from their paper
+                // TODO: color interpolation for diverging color maps should happen in CIELAB space.
                 if(mat.tf->m_controlPointsRgb.size() != 12) {
                     mat.tf->m_controlPointsRgb.resize(12);
                 }

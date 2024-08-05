@@ -192,7 +192,6 @@ template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::strin
         expected_vtk_type = VTK_UNSIGNED_LONG;
     else
         throw std::runtime_error("Data type " + formatLabel + " not yet supported for .vti import");
-    // ToDo: add more VTK_ types
 
     if(vti_data->GetDataType() != expected_vtk_type) {
         throw std::runtime_error("Expected .vti data type " + formatLabel + " (vtkType " + std::to_string(expected_vtk_type) + ") but got vtkType " + std::to_string(vti_data->GetDataType()));
@@ -203,12 +202,11 @@ template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::strin
     for (int & img_dim : img_dims) img_dim = img_dim - 1;
 
     // copy the data
-    // ToDo: can we do this faster? e.g. using strict typing, accessors etc. https://www.kitware.com/c11-for-range-support-in-vtk/
     std::vector<T> payload(img_dims[0] * img_dims[1] * img_dims[2]);
     const auto range = vtk::DataArrayValueRange<1>(vti_data);
     std::copy(range.cbegin(), range.cend(), payload.begin());
 
-    // ToDo: Actually, the physical size would be a property in the vti data!
+    // TODO: read physical size from the vti data property
     float max_dim = static_cast<float>(std::max(img_dims[0], std::max(img_dims[1], img_dims[2])));
     float physical_size_x = static_cast<float>(img_dims[0]) / max_dim;
     float physical_size_y = static_cast<float>(img_dims[1]) / max_dim;

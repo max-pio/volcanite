@@ -17,7 +17,7 @@
 
 namespace vvv {
     std::shared_ptr<UniformReflected> reflectUniformSet(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, const std::string& name) {
-        // TODO(Reiner): check uniforms for compatibility
+        // note: uniforms are not checked for compatibility
         for (const auto &shader : shaders) {
             const auto binding_ = shader->tryRawReflectBindingByName(name);
 

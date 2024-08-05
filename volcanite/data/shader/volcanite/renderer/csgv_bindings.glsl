@@ -15,14 +15,14 @@
 
 #include "cpp_glsl_include/csgv_constants.h"
 
-// ToDo: control which buffers/images are read- and/or writeonly with defines
+// TODO: control which buffers/images are read- and/or writeonly with defines
 
 layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict EncodingRef
 {
     uint buf[];
 };
 
-// ToDo: use push constants for camera parameters and uniform buffers for things that change rarely
+// TODO: use push constants for camera parameters and uniform buffers for things that change rarely
 
 layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uvec3 g_vol_dim;                // xyz dimension of the original volume
@@ -45,7 +45,7 @@ layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uint g_request_buffer_capacity; // the size of the request buffer
     uint g_detail_buffer_dirty;     // 0 if we can read from the detail buffer, 1 if the detail buffer is dirty
     uint g_brick_idx_to_enc_vector; // dividing the brick index by this number yields its encoding vector index
-    uvec2 g_detail_buffer_address;  // ToDo: split detail encodings as well
+    uvec2 g_detail_buffer_address;
 };
 
 
@@ -74,7 +74,7 @@ layout(std430, binding = 3) buffer restrict brick_cache_infos
 //              otherwise the cache index where each cache element is (base_element_size) uints large to fit 2x2x2=8 output voxels
 // req_slot:    INVALID nothing to do
 //              otherwise the unique request index in [0, total_number_of_requests_in_this_frame_for_this_lod)
-// ToDo: change to array of structs
+// TODO: change g_brick_info to array of structs
     uint g_brick_info[];
 };
 #define BRICK_INFO_REQ_INV_LOD 0
@@ -90,7 +90,7 @@ layout(std430, binding = 4) buffer restrict assign_info
 // - req_counter:         to get request indices starting from 0 per frame (written by request and read by provision and assign)
 // (- potential fourth: max. index that will be able to grab an element from the freeBlockStack)
 // followed by one uint which is the g_cache_top counter pointing to the next free base_element index in g_cache
-// ToDo: change to array of structs
+// TODO: change g_assign_info to array of structs
     uint g_assign_info[];
 };
 #define ASSIGN_NEW_BLOCK_START 0
@@ -161,7 +161,6 @@ layout (std140, binding = 10) uniform render_info {
     float g_factor_ambient;
     vec4 g_bboxMin;
     vec4 g_bboxMax;
-    float g_opacityThreshold;
     uint g_camera_still_frames;
     ivec2 g_subsampling_pixel;
     float g_random_seed;

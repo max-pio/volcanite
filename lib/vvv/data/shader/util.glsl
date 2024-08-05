@@ -71,7 +71,7 @@ vec3 hsv2rgb(vec3 c)
 
 vec3 integer2colorlabel(uint id, bool linear) {
     if(linear)
-    return vec3(id%256, (id/256)%256, (id/65536)%256)/255.f;
+        return vec3(id%256, (id/256)%256, (id/65536)%256)/255.f;
     id *= 17;
     return hsv2rgb(vec3(float(id % 256) / 255.f, float((id/256)%128)/255.f + 0.5f, 0.375f + float((id/32768)%64)/255.f));
 }
@@ -84,21 +84,28 @@ bool isFirstWorkItem() {
     return all(equal(gl_GlobalInvocationID, uvec3(0u)));
 }
 
-int maxComponent(vec3 v) {
-    if (v.x < v.y) {
-        if (v.x < v.z) {
-            return 0;
-        } else {
-            return 2;
-        }
-    } else {
-        if (v.y < v.z) {
+int argmin(vec3 v) {
+    if (v.y < v.x) {
+        if (v.y < v.z)
             return 1;
-        } else {
+    } else {
+        if (v.z < v.x)
             return 2;
-        }
     }
+    return 0;
 }
+
+int argmax(vec3 v) {
+    if (v.y > v.x) {
+        if (v.y > v.z)
+            return 1;
+    } else {
+        if (v.z > v.x)
+            return 2;
+    }
+    return 0;
+}
+
 
 float map(float v, float v_min, float v_max, float new_min, float new_max) {
     return (v - v_min) / (v_max - v_min) * (new_max - new_min) + new_min;

@@ -43,7 +43,7 @@ void _RansDecAdvanceSymbol(inout uint r, in EncodingRef enc_start, inout uint by
         do {
             // read the next byte from our uint32 array
             uint shift = 8 * (idx % 4);
-            // ToDo: use bitfieldExtract instead of manual bit selection
+            // TODO: use bitfieldExtract instead of manual bit selection
             uint byte = (enc_start.buf[idx / 4] >> shift) & 0xFFu;
             x = (x << 8) | byte;
             idx++;

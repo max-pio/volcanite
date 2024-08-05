@@ -207,14 +207,14 @@ vvv::QueueFamilyIndices findQueueFamilyIndices(vk::PhysicalDevice physicalDevice
     if (surface == static_cast<vk::SurfaceKHR>(nullptr)) {
         familyIndices.graphics = createGraphicsQueues(queueFamilyProperties, physicalDevice, queueCreateInfos);
     } else {
-        // TODO: this can be generalized to a createJointQueue() and createAnyQueue()/createFirstQueue
+        // this can be generalized to a createJointQueue() and createAnyQueue()/createFirstQueue
         const auto [graphics, present] = createGraphicsQueues(queueFamilyProperties, physicalDevice, surface, queueCreateInfos);
 
         familyIndices.graphics = graphics;
         familyIndices.present = present;
     }
 
-    // TODO: this can be simplified to a createDedicatedQueue()
+    // this can be simplified to a createDedicatedQueue()
     const auto dedicated = findQueueFamilyIndices(vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eTransfer, queueFamilyProperties, queueCreateInfos, familyIndices.graphics.value());
     familyIndices.compute = dedicated.compute;
     familyIndices.transfer = dedicated.transfer;

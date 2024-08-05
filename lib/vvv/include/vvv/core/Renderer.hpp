@@ -29,7 +29,7 @@ struct RendererOutput {
     /// the callee has to await these semaphores before he can access the contents of the rendering output.
     vvv::AwaitableList renderingComplete;
 
-    // TODO(Reiner): let resources track queue family indices
+    // TODO: let resources track queue family indices
     uint32_t queueFamilyIndex = 0;
 };
 

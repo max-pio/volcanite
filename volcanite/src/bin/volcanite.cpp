@@ -80,15 +80,6 @@ int volcanite_main(int argc, char *argv[]) {
     if(!vvv::debuggerIsAttached() && !args.verbose)
         Logger::s_minLevel = INFO;
 
-    // ToDo: we *could* check here if a previously compressed csgv with the correct parameters lies next to the input volume
-    // In that case, set the input file to that csgv and set args.compress_export_file = "".
-    // For comrpession, we can also try to export the csgv file to the location of the input volume, if writing there is possible,
-    // and use the tmp directory only as a fallback.
-    // (see getCSGVFileName in CompSegVolHandler). Move all output file logic from CompSegVolHandler either here
-    // or into a spearate method in CompSegVolHandler.
-    // Also think about the processing of chunked data.. Could it be necessary to still keep the getCSGVFileName and
-    // force_recompute logic in the handler for that reason? Or should we create two handlers for chunked / non-chunked?
-
     std::shared_ptr<volcanite::CompressedSegmentationVolume> compressedSegmentationVolume;
     std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();;
     // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
@@ -210,7 +201,7 @@ int volcanite_main(int argc, char *argv[]) {
     }
 
     if(args.performDecompression()) {
-        // ToDo add decompression
+        // TODO: add decompression
         Logger(ERROR) << "decompression not yet supported";
         return RET_NOT_SUPPORTED;
     }
@@ -261,9 +252,8 @@ int volcanite_main(int argc, char *argv[]) {
             renderEngine->releaseResources();
         }
 
-        // only start the application if we are not in headless mode
-        // ToDo: the #ifndef HEADLESS must be moved above the screenshot file rendering path, right? HEADLESS CMake option implies that we do not have any rendering/Vulkan capability
 #ifndef HEADLESS
+        // only start the application if we are not in headless mode
         if (!args.headless) {
             // export the state of the renderer next to the csgv volume when the app is closed
             if(!args.performCompression())
@@ -271,7 +261,7 @@ int volcanite_main(int argc, char *argv[]) {
             else if(!args.compress_export_file.empty())
                 renderer->saveConfigOnShutdown(stripFileExtension(args.compress_export_file) + ".vcfg");
 
-            bool vsync = true;  // ToDo: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
+            bool vsync = true;  // TODO: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
             auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
             app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
             app->setVSync(vsync);

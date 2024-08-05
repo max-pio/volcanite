@@ -35,6 +35,6 @@ typedef GpuContext const &GpuContextRef;
 typedef GpuContext const *const GpuContextPtr;
 typedef GpuContext *const GpuContextRwPtr;
 class PassBase;
-class PassCompute; // TODO(Max) can we remove forward declarations for PassCompute and PassGraphics if PassBase is listed here?
+class PassCompute;
 class SinglePassGraphics;
 }; // namespace vvv

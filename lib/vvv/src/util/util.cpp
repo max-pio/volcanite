@@ -99,7 +99,7 @@ std::vector<float> vvv::computeHistogram(const std::vector<float>& values, int b
         return histogram;
     }
 
-    // ToDo(Max) parallelize histogram computation with OpenMP and custom "sum" reduction for histogram array
+    // could parallelize histogram computation with OpenMP and custom "sum" reduction for histogram array
     // #pragma omp parallel for default(none) shared(values, histogram, bins, min, max)
     for(int i = 0; i < values.size(); i++)
     {

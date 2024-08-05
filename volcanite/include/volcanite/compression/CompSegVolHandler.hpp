@@ -56,39 +56,7 @@ class CompSegVolHandler {
 public:
     CompSegVolHandler() = default;
 
-    static bool tryGetEmptyIDsFromFile(std::string url, std::unordered_set<uint32_t> &empty_ids) {
-        std::ifstream nrrd(url, std::ios_base::in | std::ios_base::binary);
-        if (!nrrd.is_open()) {
-            Logger(ERROR) << " you can provide a file " << url << " containing one label ID per line to set these labels to zero / invisible.";
-            return false;
-        }
-
-        empty_ids.clear();
-
-        std::string line;
-        // ToDo: replace empty IDs csv with a list containing one label entry per line. all those are set to zero.
-        // first line contains csv header
-        if (!std::getline(nrrd, line)) {
-            nrrd.close();
-            throw std::runtime_error("unexpected end of file in " + url);
-        }
-        // read all other lines containing [cellid],[celltype]
-        uint32_t type, cell_id;
-        while (std::getline(nrrd, line)) {
-            auto pos = line.rfind(',');
-            cell_id = static_cast<uint32_t>(std::stol(line.substr(0, pos)));
-            type = static_cast<uint32_t>(std::stol(line.substr(pos + 1, std::string::npos)));
-
-            // empty is type <= 6
-            if (type == 3 || type == 4)
-                empty_ids.insert(cell_id);
-        }
-
-        nrrd.close();
-        return true;
-    }
-
-    static bool relabelVoxelsFromCSV(std::string url, std::unordered_map<uint32_t, uint32_t> &type_per_id) {
+       static bool relabelVoxelsFromCSV(std::string url, std::unordered_map<uint32_t, uint32_t> &type_per_id) {
         std::ifstream nrrd(url, std::ios_base::in | std::ios_base::binary);
         if (!nrrd.is_open()) {
             return false;
@@ -120,7 +88,6 @@ public:
                                            const std::shared_ptr<std::unordered_map<uint32_t, uint32_t>>& label_remapping = nullptr,
                                            uint32_t cpu_threads = std::thread::hardware_concurrency()) {
         if (path.ends_with(".vraw") || path.ends_with(".raw")) {
-            // ToDo: volcanite raw files should not end with .raw
             if(path.ends_with(".raw"))
                 Logger(WARN) << "trying to open .raw file " << path << " as Volcanite raw (.vraw).";
             volume = Volume<uint32_t>::load_volcanite_raw(path);
@@ -180,7 +147,6 @@ public:
         bool run_tests = false;
         bool export_stats_per_chunk = false;
         bool verbose = true;
-        std::string* latex_table_out_entry = nullptr;   // ToDo: remove latex_table_out_entry
     };
 
     static std::shared_ptr<CompressedSegmentationVolume> createCompressedSegmentationVolume(const std::string& volume_input_path,
@@ -269,7 +235,8 @@ public:
                 freq_file.close();
             } else {
                 Logger(DEBUG) << "operation frequency prepass:";
-                // @ToDo: remove hardcoded frequency subsampling (+2) on a chunk level?
+                // note: this is a hardcoded frequency subsampling (1/8th of all chunks) on a chunk level. Ccompression
+                // time is dominated by file i/o and reading fewer chunks makes everything much faster.
                 for (int z = 0; z <= cfg.max_file_index.z; z+=2) {
                     for (int y = 0; y <= cfg.max_file_index.y; y+=2) {
                         for (int x = 0; x <= cfg.max_file_index.x; x+=2) {
@@ -409,20 +376,6 @@ public:
             csgv->setCPUThreadCount(cpu_threads);
         }
 
-        // ToDo: should we remove the functionality to create a latex table entry for scientific writing?
-        // create a latex table entry with the format | CR (%) | Time (s) | GB/s | encoded GB |
-        if(cfg.latex_table_out_entry) {
-            std::stringstream ss;
-            ss << std::fixed << std::setprecision(3);
-            ss << csgv->getCompressionRatio() << "\\% & " << (total_freq_prepass_seconds + total_encoding_seconds) << " & ";
-            size_t total_volume_byte_size =
-                csgv->getVolumeDim().x * csgv->getVolumeDim().y * csgv->getVolumeDim().z * sizeof(uint32_t) * (cfg.max_file_index.x + 1) *
-                                            (cfg.max_file_index.y + 1) * (cfg.max_file_index.z + 1);
-            ss << (static_cast<float>(total_volume_byte_size) / 1000.f / 1000.f / 1000.f / (total_freq_prepass_seconds + total_encoding_seconds)) << " & ";
-            ss << csgv->getCompressedSizeInBytes() / 1000.f / 1000.f / 1000.f;
-            *cfg.latex_table_out_entry = ss.str();
-        }
-
         // create a log file
         if(create_log_file) {
             std::ofstream file(csgv->getCSGVFileName(csgv_path) + ".log", std::ios_base::out);
@@ -470,7 +423,6 @@ public:
                 std::filesystem::remove(s);
         }
 
-        // ToDo: remove detail separation at this point. It should only be a method of the csgv volume after creation as it is only needed for rendering on certain systems.
         if(cfg.use_detail_separation) {
             csgv->separateDetail();
         }

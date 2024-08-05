@@ -33,13 +33,12 @@ typedef GpuContext *const GpuContextRwPtr;
 /// It MUST NOT throw if enabling the extension fails and it MUST NOT throw if any marker type is not supported
 /// by the particular implementation. It MUST NOT throw if any method is called without calling `enable` first.
 /// In case of any failure, just don't attach the debug marker and fail silently.
+///
+/// note: This class still contains some Vulkan 1.0 support that is no longer required.
 class DebugUtilities {
 public:
     /// Call once on startup to enable debugging. Subsequent invocations are ignored.
     virtual void enable(GpuContextRwPtr ctx) = 0;
-
-    // TODO(Reiner): use the vulkan HPP types even for the raw API
-    // TODO(Reiner): drop vulkan 1.0 support
 
     /// Raw object labeling function. Use the convenience methods `setName` instead.
     virtual void setObjectName(VkDevice device, uint64_t object, VkDebugReportObjectTypeEXT objectType, const char *name) const = 0;

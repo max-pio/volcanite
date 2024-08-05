@@ -25,7 +25,7 @@
 #endif
 
 #include "vvv/util/Logger.hpp"
-// ToDo: Split the rANS-Mode etc into a separate Header / forward decl
+// TODO: Split the rANS-Mode etc into a separate Header / forward decl
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
 using namespace vvv;
@@ -110,10 +110,11 @@ public:
     static std::optional<VolcaniteArgs> parseArguments(int argc, char *argv[]) {
         VolcaniteArgs va;
 
-        // ToDo: update to TCLAP Version 1.4 to be able to group rendering and compression parameters with AnyOf, EitherOf?
         using namespace TCLAP;
         try {
             CmdLine cmd(getHelpString(), ' ', getVolcaniteVersionString());
+
+            // could include TCLAP grouping here using AnyOf, EitherOf
 
             // compression arguments
             ValueArg<std::string> decompresspathArg("d", "decompress", "Export the decompressed volume to given file.", false, va.decompress_export_file, "file", cmd);

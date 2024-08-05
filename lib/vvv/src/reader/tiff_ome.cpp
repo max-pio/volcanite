@@ -82,8 +82,6 @@ template<> std::shared_ptr<vvv::Volume<uint32_t>> vvv::Volume<uint32_t>::load_om
         throw std::invalid_argument("TIFF image exceeds maximum allowed size");
     }
 
-    // TODO: catch all possible errors in this xml lib
-
     pugi::xml_document doc;
     pugi::xml_parse_result result = doc.load_string(image_description);
 
@@ -126,11 +124,9 @@ template<> std::shared_ptr<vvv::Volume<uint32_t>> vvv::Volume<uint32_t>::load_om
     assert(directroysize == (stripsize * stripcount));
 
     do {
-        // TODO(Reiner): in theory, the stripsize might change between directories, right?
         for (tstrip_t strip = 0; strip < stripcount; strip++) {
             TIFFReadEncodedStrip(tif, strip, buf, (tsize_t)-1);
             const size_t offset = stripsize * strip + dircount * directroysize;
-            // TODO(Reiner): is it valid to use a cpp allocated buffer as first argument?
             _TIFFmemcpy(payload.data() + offset, buf, stripsize);
         }
         dircount++;

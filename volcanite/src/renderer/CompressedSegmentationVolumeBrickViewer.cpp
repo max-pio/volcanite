@@ -31,7 +31,10 @@ namespace volcanite {
 RendererOutput CompressedSegmentationVolumeBrickViewer::renderNextFrame(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore *signalBinarySemaphore) {
     assert(m_usegmented_volume_info && m_urender_info && m_compressed_segmentation_volume && "CompressedSegmentationVolumeBrickViewer data missing!");
 
-    // upload point cloud buffers if the point cloud changed
+    // GUI allows setting arbitrary brick indices -> clamp
+    m_brick_id = glm::clamp(m_brick_id, {0, 0, 0},
+                            glm::ivec3(m_compressed_segmentation_volume->getBrickCount()) - glm::ivec3(1, 1, 1));
+
     if(m_data_changed) {
         // wait until all previous frames are processed
         getCtx()->getDevice().waitIdle();
@@ -57,14 +60,13 @@ RendererOutput CompressedSegmentationVolumeBrickViewer::renderNextFrame(Awaitabl
             std::vector<glm::uvec4>* pal_ptr = nullptr;
             if(lod == lod_count - 1)
                 pal_ptr = &tmp_palette;
-            m_compressed_segmentation_volume->decompressBrickTo(&tmp.data()[lod * (brick_size * brick_size * brick_size)], m_brick_id, lod, &tmp.data()[(lod_count + lod) * (brick_size * brick_size * brick_size)], pal_ptr);
+            m_compressed_segmentation_volume->decompressBrickTo(&tmp[lod * (brick_size * brick_size * brick_size)], m_brick_id, lod, &tmp[(lod_count + lod) * (brick_size * brick_size * brick_size)], pal_ptr);
         }
         assert(m_cache_buffer && tmp.size() <= m_cache_buffer->getByteSize() / sizeof(uint32_t));
         assert(m_palette_buffer && tmp_palette.size() <= m_palette_buffer->getByteSize() / sizeof(uint32_t));
         m_cache_buffer->upload(tmp);
         m_palette_buffer->upload(tmp_palette);
         getCtx()->getDevice().waitIdle();
-        Logger(DEBUG) << " updated brick buffer for visualization";
         m_current_decoded_brick = m_brick_id;
     }
 
@@ -91,7 +93,7 @@ void CompressedSegmentationVolumeBrickViewer::initResources(GpuContext *ctx) {
     const constexpr size_t MAX_VOL_SIZE = (1000 * 1024*1024); // enough for our biggest data set 1000^3 in compressed form
     m_brick_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeBrickViewer.m_brick_start_buffer", .byteSize = (MAX_VOL_SIZE / 4096)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer});
     m_encoding_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeBrickViewer.m_encoding_buffer", .byteSize = (MAX_VOL_SIZE / 2)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer});
-    const constexpr size_t CACHE_SIZE_BYTE = (2 * 8 * 16 * 16 * 16 * sizeof(uint32_t)); // 8 LOD levels for 16*16*16 brick_size * 2 because after the brick values, we also store the encoding
+    const constexpr size_t CACHE_SIZE_BYTE = (2 * 7 * 64 * 64 * 64 * sizeof(uint32_t)); // 8 LOD levels for 16*16*16 brick_size * 2 because after the brick values, we also store the encoding
     m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeBrickViewer.m_cache_buffer", .byteSize = CACHE_SIZE_BYTE, .usage = vk::BufferUsageFlagBits::eStorageBuffer});
     m_palette_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeBrickViewer.m_palette_buffer", .byteSize = sizeof(glm::uvec4) * 1024, .usage = vk::BufferUsageFlagBits::eStorageBuffer});
     m_enumbrickpos_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeBrickViewer.m_enumbrickpos_buffer", .byteSize = sizeof(glm::uvec4)*32*32*32, .usage = vk::BufferUsageFlagBits::eStorageBuffer});

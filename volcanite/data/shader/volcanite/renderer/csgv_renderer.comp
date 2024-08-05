@@ -76,7 +76,7 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
             g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
         // if we request a finer level than the one that was requested so far:
         // (this should not happen if we instead compute the LOD in the provision shader)
-        // ToDo: Compute a requested brick LOD in the provision shader based on the distance brick center <-> camera
+        // TODO: Compute requested brick LOD in the provision shader based on the distance brick center <-> camera?
         else if (req_inv_lod > g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD])
             atomicMax(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], req_inv_lod);
     }
@@ -111,7 +111,7 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
     }
     // read the voxel from the brick in the cache (with the currently decoded LOD)
     else {
-        // ToDo: we do not change the depth_valid validity here even though we do NOT check if we request an LOD that differs from what is currently decoded for the brick
+        // TODO: depth_valid validity is not changed here even if the requested LOD differs from currently decoded LOD
 #ifdef PALETTE_CACHE
         return readCSGVPaletteBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX], brick_idx);
 #else
@@ -321,7 +321,7 @@ void main() {
     // ray marching loop
     for(state.step = 0; state.step < g_maxSteps; state.step++) {
 
-        // TODO: move the DDA step to the bottom of this loop. Reuse LOD and emptySpace information, remove t_0 offset
+        // TODO: move DDA step to the bottom of this loop. Reuse LOD and emptySpace information, remove t_0 offset, pass LOD to get_volume_label
         // single-level DDA traversal step
         // dda_step(state, ray);
         // multi-level DDA traversal step
@@ -393,7 +393,7 @@ void main() {
         vec4 surface_albedo_opacity = getColor(state.label, material);
 
         // ENTER SEMI-TRANSPARENT VOLUME
-        // ToDo: integrate this into the correct path tracing interaction with fresnel term, simplify BRDF sampling e.g. https://boksajak.github.io/files/CrashCourseBRDF.pdf
+        // TODO: integrate this into the correct path tracing interaction with fresnel term, simplify BRDF sampling e.g. https://boksajak.github.io/files/CrashCourseBRDF.pdf
         if (surface_albedo_opacity.a < 1.f) {
             if (state.last_label != state.label) {
                 // add the contribution of a semi-transparent surface (local shading only)
@@ -529,9 +529,5 @@ void main() {
         state.out_color.rgb += state.throughput * vec3(g_light_intensity);
     }
 
-    // ToDo: the background should be added in the csgv_upsample_resolve shader
-    // perform alpha blending with background and write to image
-//    state.out_color.rgb = (1.f - state.out_color.a) * get_background_color(fragCoord, ray.direction).rgb
-//                          + state.out_color.a * state.out_color.rgb;
     writePixel(pixel, state.out_color, state.depth_valid, state.packedGBuffer);
 }

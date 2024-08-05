@@ -12,6 +12,9 @@
 //
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
+// This file contains large parts of the CC0 licensed rANS implementation by Fabian Giesen, see
+// https://github.com/rygorous/ryg_rans
 
 #pragma once
 

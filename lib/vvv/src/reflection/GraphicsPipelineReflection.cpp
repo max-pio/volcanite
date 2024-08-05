@@ -64,7 +64,6 @@ std::vector<std::pair<std::string, vk::Format>> reflectColorAttachmentInfo(vvv::
     std::vector<std::pair<std::string, vk::Format>> result = {};
     const auto outputs = shader->reflectOutputs();
     for(const auto& out : outputs) {
-        // TODO(Max) is the assumption right that the locations will be returned in ascending order?
         assert(out->location == lastLocation+1);
         lastLocation = static_cast<int>(out->location);
         result.emplace_back(out->name, details::spvr_refl2vk_format.at(out->format));

@@ -43,7 +43,6 @@ void main() {
     // stacks
     // - if a brick is no longer visible but held an element in cache, it was freed and added to the free_block_stack
 
-    // ToDo: could do this in ONE thread only and do a for-loop over all LoDs. This could guarantee to allocate smaller/coarser LoDs even if finer LoDs would increase the cache_top too high
     // find out for which lod we compute everything
     // invocation 0 = LoD 1 which is the coarsest that we handle and uses stores 2x2x2 output voxels in cache (= one base element)
     uint inv_lod = gl_GlobalInvocationID.x + 1u;

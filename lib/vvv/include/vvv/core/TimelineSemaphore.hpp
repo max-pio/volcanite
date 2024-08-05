@@ -37,7 +37,6 @@ public:
     vk::Semaphore getHandle() const { return m_semaphore; }
 
     void initResources(vk::Device device) {
-        // TODO(Reiner): ensure that a deallocate/init sequence on an existing timeline semaphore class instance is in sync with `m_nextId`. Currently they get out of sync.
         if (m_device != static_cast<vk::Device>(nullptr)) {
             return;
         }

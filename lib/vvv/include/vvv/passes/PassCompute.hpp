@@ -118,11 +118,6 @@ public:
 
     [[nodiscard]] AwaitableHandle execute(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override {
         assert(isPipelineCreated() && "you MUST call 'allocateResources' if the pass was created with lazy state initialization.");
-
-        // TODO(Reiner): we could make commandBuffer/queue optional and just use the default queue (family index 0)
-        // that we get from the GpuContext. This is safe and simplifies the API when we only work on a single thread and do not care
-        // about async compute or high performance transfers
-
         // updateUniformBufferMemory(getActiveIndex());
 
         auto &commandBuffer = m_commandBuffer->getActive();

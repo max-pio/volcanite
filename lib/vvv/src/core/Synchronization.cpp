@@ -17,11 +17,6 @@
 #include <vvv/core/Synchronization.hpp>
 #include <vvv/util/Logger.hpp>
 
-// TODO(Reiner): to clean this up, we first have to add stageMask to the planing state, so instead of tracking the dispatch instruction, we should track (dispatch, mask), first ordered by dispatch,
-// then mask. We could go a step further and track (dispatch, commandBufferInstr, mask)
-// TODO(Reiner): implement the filtered inference graph to get rid of the memory overhead
-// TODO(Reiner): get rid off the predecessors in Awaitable. its unnecessary and prevents us from implementing something like "createAvaitable(planingStateVector)"
-
 namespace vvv {
 
 AwaitableHandle Synchronization::submit(vk::CommandBuffer commandBuffer, vk::Queue queue, AwaitableList awaitBeforeExecution, vk::PipelineStageFlags stages,
@@ -103,7 +98,7 @@ void Synchronization::submit_(vk::CommandBuffer commandBuffer, AwaitableHandle c
 
 void Synchronization::readExecutionState() {
     for (int j = 0; j < m_semaphore.size(); ++j) {
-        const auto value = device().getSemaphoreCounterValue(m_semaphore[j]->getHandle()); // TODO(Reiner), move this to the timeline semaphore class
+        const auto value = device().getSemaphoreCounterValue(m_semaphore[j]->getHandle());
         setExecutionState(j, value);
     }
 }
@@ -210,9 +205,8 @@ AwaitableHandle Synchronization::createAwaitable_(AwaitableHandle *predecessors,
 
     // Note: this case is automatically correctly treated by the else branch.
     //} else {
-    // TODO(Reiner): these invariants should always be relative to the observed execution state as already noted above
     // writing it this way instead of iterating over `predecessorPlaningState` will first ignore colors that
-    // are not yet used on the current downward path, thus forcing a more uniform color selection. TODO(Reiner): is this true? how does this affect optimality of the algorithm?
+    // are not yet used on the current downward path, thus forcing a more uniform color selection.
     for (int j = 0; j < predecessorsSize; ++j) {
         const auto semaphoreStateOnCurrentDownwardPath = predecessorPlaningState[predecessors[j]->semaphoreId];
         const auto semaphoreStateOnGlobalDownwardPath = m_semaphore[predecessors[j]->semaphoreId]->getPlaningState();
@@ -261,7 +255,7 @@ AwaitableHandle Synchronization::createAwaitable_(AwaitableHandle *predecessors,
     std::optional<std::vector<AwaitableHandle>> awaitBeforeExecution = std::nullopt;
 
     if (persistPredecessors) {
-        // TODO(Reiner): this seems to drop constness without an error???
+        // this seems to drop const without an error?
         awaitBeforeExecution = std::vector(predecessors, predecessors + predecessorsSize);
     }
 
@@ -297,7 +291,7 @@ size_t Synchronization::createAnotherSemaphore() {
 }
 
 void Synchronization::destroySynchronizationPrimitives() {
-    // TODO(Reiner): await all semaphores to not crash the gpu
+    // TODO: await all semaphores to not crash the gpu
     m_executionState.clear();
     m_semaphore.clear();
 }

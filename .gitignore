@@ -12,6 +12,7 @@ compile_commands.json
 **/__pycache__/*
 **/python/config/*
 **/.idea/*
+**/python/internal/*
 
 # operating system and IDE specific ignores
 /.idea*

@@ -44,19 +44,6 @@ namespace vvv {
         m_entries.push_back(entry);
         return entry->id;
     }
-    gui_id GuiInterface::GuiElementList::addTF2D(TransferFunction2D* tf, Texture* histogramTexture, bool* histogramChanged, std::function<void()> onChanged, glm::vec2* histogramMin , glm::vec2* histogramMax) {
-        auto entry = new GuiTF2DEntry();
-        entry->id = m_id_counter++;
-        entry->type = GuiTF2D;
-        entry->value = tf;
-        entry->histogramTexture = histogramTexture;
-        entry->histogramMin = histogramMin;
-        entry->histogramMax = histogramMax;
-        entry->histogramChanged = histogramChanged;
-        entry->onChanged = std::move(onChanged);
-        m_entries.push_back(entry);
-        return entry->id;
-    }
 
     gui_id  GuiInterface::GuiElementList::addTFSegmentedVolume(std::vector<SegmentedVolumeMaterial> *materials, const std::vector<std::string>& attributeNames, const std::vector<glm::vec2>& attributeMinMax, std::function<void(int)> onChanged, const std::string& name) {
         auto entry = new GuiTFSegmentedVolumeEntry();
@@ -170,8 +157,7 @@ namespace vvv {
             std::string vstr;
 
             switch (be->type) {
-                case GuiTF1D:
-                case GuiTF2D: {
+                case GuiTF1D: {
                     Logger(WARN) << "Exporting transfer functions not yet supported!";
                     break;
                 }
@@ -195,21 +181,21 @@ namespace vvv {
                 case GuiFloatRange: {
                     auto value = gui_get(GUI_CAST(be, glm::vec2));
                     for(int i = 0; i < 2; i++)
-                        vstr += std::to_string(value[i]) + (i < 2 ? " " : "");
+                        vstr += std::to_string(value[i]) + (i < 1 ? " " : "");
                     break;
                 }
                 case GuiVec3:
                 case GuiDirection: {
                     auto value = gui_get(GUI_CAST(be, glm::vec3));
                     for(int i = 0; i < 3; i++)
-                        vstr += std::to_string(value[i]) + (i < 3 ? " " : "");
+                        vstr += std::to_string(value[i]) + (i < 2 ? " " : "");
                     break;
                 }
                 case GuiVec4:
                 case GuiColor: {
                     auto value = gui_get(GUI_CAST(be, glm::vec4));
                     for(int i = 0; i < 4; i++)
-                        vstr += std::to_string(value[i]) + (i < 4 ? " " : "");
+                        vstr += std::to_string(value[i]) + (i < 3 ? " " : "");
                     break;
                 }
                 case GuiCombo: {
@@ -302,9 +288,8 @@ namespace vvv {
                 case GuiCustomCode:
                     break;
 
-                case GuiTF1D:
-                case GuiTF2D: {
-                    Logger(WARN) << "Importing transfer functions not yet supported!";
+                case GuiTF1D: {
+                    Logger(WARN) << "Importing transfer functions not yet supported.";
                     break;
                 }
                 case GuiBool: {

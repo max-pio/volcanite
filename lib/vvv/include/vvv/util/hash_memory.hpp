@@ -13,28 +13,18 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#version 460
-#extension GL_GOOGLE_include_directive : enable
+#pragma once
 
-layout (local_size_x = 8, local_size_y = 8) in;
+namespace vvv {
 
-layout (set = 0, binding = 1, rgba8) uniform restrict writeonly image2D IMAGE_out;
-
-layout (std140, row_major, set = 0, binding = 2) uniform options {
-    uint g_frameIdx;
-};
-
-#include "util.glsl"
-
-
-void main() {
-
-    ivec2 tableSize = imageSize(IMAGE_out);
-    ivec2 threadId = ivec2(gl_GlobalInvocationID.xy);
-
-    if (isHelperLane(threadId, tableSize)) {
-        return;
+/// Hash an arbitrary memory block of size byte_size starting at data.
+/// @param combine_hash can be initialized with a hash to combine hashes
+    static size_t hashMemory(const void *data, size_t byte_size, size_t combine_hash = 0) {
+        size_t hash = combine_hash;
+        auto p = static_cast<const unsigned char *>(data);
+        for (size_t i = 0; i < byte_size; i++)
+            hash = (std::hash < unsigned char > {}(p[i]) ^ (std::rotl<size_t>(hash, 1)));
+        return hash;
     }
 
-    imageStore(IMAGE_out, threadId, vec4(sin(float(g_frameIdx)*0.001)*0.5+0.5, 0.0, 0.0, 1.0));
-}
+} // namespace vvv

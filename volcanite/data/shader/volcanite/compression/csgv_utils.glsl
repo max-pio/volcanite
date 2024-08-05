@@ -122,7 +122,6 @@ vec4 getColor(uint label, int material) {
     // wrapping mode: 0 = clamp, handled by textureLoD, 1 = repeat
     if(g_materials[material].wrapping == 1) { // repeat
         float interval_length = (g_materials[material].tfIntervalMax - g_materials[material].tfIntervalMin);
-        // ToDo:  visible for small tfMax - tfMin differences
         v = fract(v) * (interval_length + 1.f) / interval_length;
     }
 

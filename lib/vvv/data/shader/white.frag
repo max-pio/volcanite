@@ -12,11 +12,6 @@
 //
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// This class contains code from the Camera implementation by Christoph Peters "MyToyRenderer" which was released under
-// the GPLv3 License. Our adaptions include an added switch between orbital and translational camera modes, file
-// import / export, obtaining default parameters, and registering callback functions.
-// The original code can be found at https://github.com/MomentsInGraphics/vulkan_renderer/blob/main/src/camera.h
 
 #version 450
 

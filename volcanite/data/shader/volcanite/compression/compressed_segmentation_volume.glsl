@@ -87,7 +87,7 @@ uint readCSGVPaletteBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, c
  * @param decoded_inv_lod the state of the brick in CSGV_DECODING_ARRAY *must* be a full decoding up to this inv_lod
  * @param brick_voxel the coordinate of the lookup voxel on the *finest* lod, even if the lookup is for a coarser lod */
 uint readCSGVBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, const uint brick_start_base_element) {
-    // ToDo: why pass the decoded_inv_lod and the decoded_brick_star_base_element? just pass the brick_idx and read it from the cache info here
+    // TODO: why pass decoded_inv_lod and decoded_brick_start_base_element? pass the brick_idx and read cache info here
     uint lod_width = g_brick_size >> decoded_inv_lod;
     return readEntryFromCache(brick_start_base_element * g_cache_base_element_uints,
                               (_cache_pos2idx(brick_voxel) / (lod_width * lod_width * lod_width)));

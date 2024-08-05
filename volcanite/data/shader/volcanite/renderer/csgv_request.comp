@@ -96,7 +96,7 @@ void main() {
 #ifndef NDEBUG
     // the coarsest LoD 0 must not be requested! we can just read it from the first palette entry during rendering so
     // we don't do anything here.
-    // ToDo: we could assign the label from the palette to the brick here directly to not be required to read g_encoding in the renderer
+    // TODO: could assign the label from palette to brick directly to not be required to read g_encoding in the renderer
     if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == 0u) {
         assert(false, "requesting LoD 0 is not allowed!");
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = g_lod_count;

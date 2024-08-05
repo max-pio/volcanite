@@ -120,9 +120,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         getCtx()->sync->hostWaitOnDevice({material_upload_finished}); // have to wait here, otherwise the upload_staging buffer is freed immediately
     }
 
-    // ToDo: add timeout to hostWaitOnDevice and stop execution if it occurs
-    // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts finished)
-    getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution);
+    // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts
+    // finished). Times out after 30 seconds and throws an exception.
+    getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 30 * 1000000000ull);
 
     // if a screenshot export was requested, we do this here
     if(m_download_frame_to_image_file.has_value() && m_mostRecentFrame.has_value()) {
@@ -174,7 +174,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             if (detail_request_count > 0u)
                 m_detail_stage = DetailAwaitingCPUConstruction;
         } else {
-            // ToDo: download the cache_usage also if we don't use detail separation
+            // TODO: download the cache_usage also if we don't use detail separation
         }
     }
 
@@ -235,20 +235,14 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
 
     std::vector<std::shared_ptr<Awaitable>> renderAwaitableList = {};
-    // we just check the awaitables in the shader now! ToDo: do we??
-//    if(m_detail_starts_staging.first)
-//        renderAwaitableList.push_back(m_detail_starts_staging.first);
-//    if(m_detail_staging.first)
-//        renderAwaitableList.push_back(m_detail_staging.first);
-
     const auto renderingFinished = m_pass->execute(renderAwaitableList, awaitBinaryAwaitableList, signalBinarySemaphore);
     
     if(m_detail_stage == DetailAwaitingCPUConstruction) {
         assert(!m_constructed_detail.empty() && "trying to construct detail buffers but detail buffer has no capacity");
-        // ToDo: m_detail_update_required = check if current and previous detail indices changed
-        // ToDo: use remaining space in g_detail to store the perviously requested bricks (move to right)? would need one dummy element in between to make the detail_starts[i+1]-[i] size query possible
-        //      can we use a ring buffer for that?
-        // ToDo: do all the CPU work in another thread so not to block rendering
+        // TODO: m_detail_update_required = check if current and previous detail indices changed
+        // TODO: use remaining space in g_detail to store the previously requested bricks. would need one dummy element
+        //  in between to make the detail_starts[i+1]-[i] size query possible. Could use a ring buffer.
+        // TODO: do *all* the CPU work for detail construction in another thread so nothing blocks the rendering
 
         uint32_t detail_request_count = std::min(m_detail_requests[m_max_detail_requests_per_frame], m_max_detail_requests_per_frame);
         bool detail_update_required = false;
@@ -342,9 +336,9 @@ void CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers() {
 #endif
 
     // GPU upload can only start if all current rendering is finished and is thus dispatched in the render loop
-    // ToDo: GPU upload *can* take place during rendering but not during decompression stages. Do a more fine grained sync.
+    // TODO: GPU upload *can* take place during rendering but not during decompression stages. sync more precisely.
     m_detail_stage = DetailAwaitingUpload;
-//    Logger(DEBUG) << " CPU detail construction in " << detail_construction_timer.elapsed() * 1000.f << " ms.";
+    // Logger(DEBUG) << " CPU detail construction in " << detail_construction_timer.elapsed() * 1000.f << " ms.";
 }
 
 void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
@@ -477,7 +471,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
         Logger(DEBUG) << "Target cache size is bigger than required to store all LoDs of all bricks. Limitting size.";
         m_target_cache_size_MB = maximum_req_cache_size_MB;
     }
-    // ToDo: could use the BufferDeviceAddress extension for the cache buffer as well to support caches > 4 GB.
+    // TODO: could use the BufferDeviceAddress extension for the cache buffer as well to support caches > 4 GB.
     //  In shaders, cache idx is measured in # base_element where one base_element is ~4 to 16 bytes large.
     //  Would only have to adapt the (cache_idx * g_cache_base_element_uints) in csgv_assign.
     if(m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
@@ -574,11 +568,12 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     assert(getCtx() != nullptr && "renderer needs a valid GPU context");
     assert(m_compressed_segmentation_volume && "can't render without a CompressedSegmentationVolume");
 
-    // @ToDo: the shader code being dependent on data set properties means that we need to re-init shader resources on data set changes
+    // TODO: the shader code being dependent on data set properties like rANS tables means that we
+    //  1. need to re-init shader resources on data set changes
+    //  2. cannot pre-compile shaders
     std::vector<std::string> shader_defines;
     if(m_compressed_segmentation_volume->isUsingRANS()) {
         shader_defines.push_back("USE_RANS");
-        // @ToDo the rANS symbol tables should not be compile time definition as it prohibits using precompiled shaders for release builds
         shader_defines.push_back("RANS_SYMBOL_TABLE=" + m_compressed_segmentation_volume->getGLSLSymbolArrayStringRANS());
         if(m_compressed_segmentation_volume->isUsingDetailFreq())
             shader_defines.push_back("USE_RANS_DOUBLE_TABLE");
@@ -751,13 +746,11 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<glm::vec4>("g_bboxMax", glm::vec4(m_bboxMax, 1.f));
         m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
         m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? 1 : 0);
-        m_urender_info->setUniform<float>("g_opacityThreshold",
-                                          0.5); // TODO: we have this low opacity treshold to render opaque first hits
         m_urender_info->setUniform<glm::vec3>("g_camera_position_world_space", camera->position_world_space);
         m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
         // the g_voxels_per_pixel_per_dist determines how many voxels an image pixel footprint overlaps for a camera distance
         float voxels_per_pixel_at_near = scalingFactor / float(m_resolution.height);
-        // ToDo: make g_voxels_per_pixel_per_dist vec3 and account for anisotropic voxel sizes
+        // TODO: account for anisotropic voxel sizes
         m_urender_info->setUniform<float>("g_voxels_per_pixel_per_dist", glm::tan(this->getCamera()->vertical_fov) * voxels_per_pixel_at_near);
 
         // debug
@@ -769,13 +762,12 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<uint32_t>("g_debug_normals", m_show_normals ? 1 : 0);
 
         // Transformation matrices:
-        // ToDo: use push constants for camera related changes and upload uniforms only on demand
+        // TODO: use push constants for camera related changes and upload uniforms only on demand
         // In world space, everything should be a cuboid with the largest dimension being one, centered around the origin.
         // In model space, one voxel must be a unit cube. The normalization transform scales this down to world space [-0.5, 0.5]^3
         glm::mat4 world_to_model_space;
-        // ToDo: generalize switching model space axes in the GUI as axes selector [xyz, xzy, yxz, ...]) and remove the hacky fix
-//        // hacky fix for switching axes for the mouse cortex
-//        if(m_compressed_segmentation_volume->getVolumeDim().x > 2000) {
+        // TODO: generalize switching model space axes in the GUI as axes selector [xyz, xzy, yxz, ...]) and remove the hacky fix
+//        if (switch axes) {
 //            glm::mat4 _world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), glm::vec3(scalingFactor)), glm::vec3(normalized_volume_size / 2.f));
 //            world_to_model_space = glm::mat4(_world_to_model_space[0], _world_to_model_space[2], _world_to_model_space[1], _world_to_model_space[3]);
 //        }
@@ -1107,7 +1099,8 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     }
 
     vvv::AwaitableList CompressedSegmentationVolumeRenderer::updateAttributeBuffers() {
-        // ToDo: this whole thing could be cleaned up. Encapsulate attribute / material / data buffers in another struct or class at least. And see the notes regarding the attribute upload below.
+        // TODO: attribute upload could be cleaned up. Encapsulate attribute / material / data buffers in another struct
+        //  or class at least. And see the notes regarding the attribute upload below.
         if(!m_csgv_db)
             throw std::runtime_error("Missing csgv database at attribute buffer creation.");
 
@@ -1150,9 +1143,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         if(requiredSlots > numberOfSlots)
             throw::std::runtime_error("attribute buffer is not large enough with " + std::to_string(numberOfSlots) + " out of " + std::to_string(requiredSlots) + " required slots");
 
-        // store all attributes back to back
-        // ToDo: upload attributes independently from another instead of as one large buffer?
-        // ToDo: only upload the number of requried Slots (would need to re-pack attributes each frame) instead of all slots?
+        // store all attributes back to back (uploads the full buffer every time)
         std::vector<float> attributes(numberOfSlots * m_csgv_db->getLabelCount());
 
         // put attributes in available slots

@@ -52,7 +52,6 @@ void main() {
     if(accum_color.a == 0.f) {
         accum_color = vec4(0.f);
         if(g_subsampling > 1) {
-            // @todo bad inpainting, make this a pull push algorithm etc.
             ivec2 block = (pixel / g_subsampling);
             ivec2 block_pixel;
             for(block_pixel.y = block.y * g_subsampling; block_pixel.y < (block.y + 1) * g_subsampling; block_pixel.y++) {

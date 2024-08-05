@@ -18,7 +18,6 @@
 #include "vvvwindow/GuiImgui.hpp"
 
 #include "vvvwindow/tf/TransferFunction1DWidget.hpp"
-#include "vvvwindow/tf/TransferFunction2DWidget.hpp"
 #include "vvvwindow/tf/TransferFunctionSegmentedVolumeWidget.hpp"
 
 #include "vvv/core/GpuContext.hpp"
@@ -43,7 +42,7 @@ void GuiImgui::renderGui() {
     constexpr float gui_scaling_eps = 0.2f;
     const bool updateGuiScaling = abs(m_gui_scaling - m_current_gui_scaling) > gui_scaling_eps;
     if(updateGuiScaling || m_firstCall) {
-        // TODO: if this is called a second time, i.e. a second font is rasterized, some Vulkan image object is not destroyed
+        // if this is called a second time, i.e. a second font is rasterized, some Vulkan image object is not destroyed
         if(!m_firstCall)
             vvv::Logger(vvv::WARN) << "Rescaling the GUI leads to undestroyed Vulkan objects from ImGUI font rasterization!";
         ImGuiIO& io = ImGui::GetIO(); (void)io;
@@ -100,7 +99,7 @@ void GuiImgui::renderGui() {
                         ImGui::DockBuilderDockWindow(window.c_str(), parents[loc]);
                     } else {
                         vvv::Logger(vvv::WARN) << "cannot dock to windows that were not already docked elsewhere (cannot dock " << window << " to " << loc << ")";
-                        // ToDo: would have to create a new docking node as parent for both window and loc
+                        // would have to create a new docking node as parent for both window and loc..
                     }
                 }
                 else {
@@ -199,11 +198,6 @@ void GuiImgui::renderGui() {
                 case GuiTF1D: {
                     auto e = reinterpret_cast<GuiTF1DEntry*>(be);
                     renderGuiTF1D(*e);
-                    break;
-                }
-                case GuiTF2D: {
-                    auto e = reinterpret_cast<GuiTF2DEntry*>(be);
-                    renderGuiTF2D(*e, getCtx());
                     break;
                 }
                 case GuiTFSegmentedVolume: {

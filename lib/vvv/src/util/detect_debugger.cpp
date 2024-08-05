@@ -15,7 +15,8 @@
 
 #include "vvv/util/detect_debugger.hpp"
 
-// TODO(Reiner): test windows support
+// did not yet test windows support!
+
 #ifndef _WIN32
 
 #include <fcntl.h>

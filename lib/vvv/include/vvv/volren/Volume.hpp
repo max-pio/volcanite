@@ -47,12 +47,16 @@ template <typename ElementType = uint16_t> struct RangeLimits {
 ///
 /// The volume data is layed out in [z][y][x] order, meaning the x-axis is coalesced/varies fastest, z has the largest stride and varies slowest.
 /// The logical data layout uses a right-handed coordinate system where z is the UP axis (height), y the depth and x the width.
-// TODO(Reiner): accessor via [] a la vector
-// TODO(Reiner): ElementType independent variant. Its currently a problem to read a format that can hold multiple types, e.g. nrrd. e.g. we could design this independent with typed views
-// TODO(Reiner): compatibility with eigen/numpy
-// TODO(Reiner): decouple CPU and GPU memory. e.g. add a place a la torch, or make it possible to drop a location within the class
-// TODO(Reiner): abstract read-write routines in a way that allows them to be used in Texture, Volume, ...
 template <typename ElementType = uint16_t, typename HolderType = std::vector<ElementType>> class Volume {
+
+    // possible extension:
+    // accessor via [] a la vector
+    // ElementType independent variant. Currently problematic to read a format that can hold multiple types, e.g. NRRD.
+    //   could design this independent with typed views
+    // compatibility with eigen/numpy
+    // decouple CPU and GPU memory. e.g. add a place a la torch, or make it possible to drop a location within the class
+    // abstract read-write routines in a way that allows them to be used in Texture, Volume, ...
+
 public:
 
     /// Load volumetric data from a open microscopy TIFF file.
@@ -61,7 +65,6 @@ public:
     /// subset required to load the data produced by the in-house built Light
     /// Sheet Microscopes of Neinhaus' Group at the Karlsruhe Institute of
     /// Technology.
-    // TODO(Reiner): conditionally compile this part
     static std::shared_ptr<Volume<ElementType, HolderType>> load_ome_tiff(std::string path) { throw std::runtime_error("element holder type combination unsupported for TIFF"); }
 
     /// A non-standard conformant NRRD reader that is able to read files from https://klacansky.com/open-scivis-datasets/
@@ -223,7 +226,6 @@ public:
 };
 
 template <typename T> struct HomogenousCube : public Volume<T> {
-    // TODO(Reiner): is there some reasonable way to autoderive vk::Format from T?
     HomogenousCube(uint32_t dim_x, uint32_t dim_y, uint32_t dim_z, T payload, vk::Format format) : Volume<T>(1, 1, 1, dim_x, dim_y, dim_z, format, dim_x * dim_y * dim_z, payload) {}
     HomogenousCube(T payload, vk::Format format) : HomogenousCube(1, 1, 1, payload, format) {}
 };
