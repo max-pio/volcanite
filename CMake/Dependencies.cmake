@@ -56,7 +56,7 @@ if (ENABLE_SQLITE3_SUPPORT)
 endif ()
 
 # Vulkan framework vvv for basic Vulkan integration
-add_subdirectory(vvv)
+add_subdirectory(lib/vvv)
 
 if(NOT HEADLESS)
     # GLFW libraries
@@ -76,6 +76,6 @@ if(NOT HEADLESS)
     add_subdirectory(extern/imgui)
 
     # GLFW application
-    add_subdirectory(vvv-glfw-app)
+    add_subdirectory(lib/vvv-glfw-app)
 endif()
 

@@ -1,4 +1,8 @@
 # Volcanite Segmentation Volume Renderer
+
+![version](https://img.shields.io/badge/version-0.4.0-blue) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+<a href=https://www.doi.org/10.1109/TVCG.2023.3326573><img src="https://img.shields.io/badge/doi-10.1109/TVCG.2023.3326573-blue?logo=ieee&logoColor=white"/></a>
+
 Volcanite is a GPU renderer for segmentation volumes implemented using C++ and the Vulkan API.
 Segmentation volumes are voxel data sets that store an integer object label per voxel.
 These volumes are commonly used in fields like connectomics, material science, computational biology, medicine, among others.
@@ -8,6 +12,7 @@ Apart from interactively or non-interactively visualizing segmentation volumes, 
 sets at compression rates that generally outperforming other methods.
 
 ![Renderer Preview Image](doc/volcanite_app.jpg)
+<sup>Data Set from Emerging Tumor Development by Simulating Single-cell Events, Rosenbauer J., Berghoff M., Schug A. (2020) bioRxiv</sup>
 
 ## Quick Start
 See the setup guides for [Ubuntu / Debian](doc/Setup.md#ubuntu--debian) or [Windows](doc/Setup.md#ubuntu--debian) respectively for a more detailed description on how to install all dependencies and how to build Volcanite.
@@ -42,10 +47,13 @@ The `doc` directory of this repository contains further information on how to us
 ## License
 If not stated otherwise, the code in this repository uses a GPLv3 license.
 If you require alternative licensing options, please contact the authors.
+The third party open source libraries that Volcanite uses and their licenses are listed in
+[Development.md](doc/Development.md#licenses).  
 
 ## About
-This renderer was created by [Max Piochowiak](https://cg.ivd.kit.edu/piochowiak/staff_index.php) with significant code
-contributions by [Reiner Dolp](https://cg.ivd.kit.edu/english/staff_2590.php). Both are affiliated with Karlsruhe Institute of Technology (KIT).
+Volcanite was created by [Max Piochowiak](https://cg.ivd.kit.edu/piochowiak/staff_index.php) with significant code
+contributions by [Reiner Dolp](https://cg.ivd.kit.edu/english/staff_2590.php). Additional contributions by Fabian
+Schiekel, Patrick Jaberg, and Mirco Werner. All contributors are affiliated with Karlsruhe Institute of Technology (KIT).
 You can cite the following publication if you use Volcanite in your projects:
 
 ```bibtex

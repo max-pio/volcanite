@@ -1,10 +1,11 @@
 # Volcanite Setup Guide
 
 Most of the dependencies are included as header only libraries.
-Only the Vulkan SDK, CMake and the GLFW libraries have to be installed.
+Only the Vulkan SDK and CMake have to be installed.
+On Linux, the xorg libraries have to be additionally provided for the windowing system integration.
 
-Note: If your system does not provide any windowing (e.g. a remote server without a desktop environment) or the GLFW libraries
-are not available, you can build the Volcanite project with the CMake option `HEADLESS` set. 
+Note: If your system does not provide any windowing (e.g. a remote server without a desktop environment) or the xorg
+libraries are not available, you can build the Volcanite project with the CMake option `HEADLESS` set. 
 See [Headless Builds](#headless-builds).
 
 ## Ubuntu / Debian
