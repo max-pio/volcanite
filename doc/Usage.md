@@ -5,7 +5,7 @@ The latter is especially useful for automating tasks or rendering images on remo
 
 ## Supported Segmentation Volume File Formats
 
-See the [Python](Python.md) readme and [converter.py](../projects/volcanite/python/converter.py) for converting
+See the [Python](Python.md) readme and [converter.py](../volcanite/python/converter.py) for converting
 file types that are not listed here into Volcanite compatible formats using Python.
 
 * **Volcanite RAW**

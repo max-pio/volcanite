@@ -1,10 +1,10 @@
 # Example Data Sets
 
 This is a collection of segmentation volume data sets that are freely available and can be rendered in Volcanite.
-For file formats that are not supported by Volcanite, see the [converter.py](../projects/volcanite/python/converter.py) python script for converting
+For file formats that are not supported by Volcanite, see the [converter.py](../volcanite/python/converter.py) python script for converting
 formats.
 To download tensorstore volumes or publicly available data sets from BossDB, have a look at the
-[download_cloud_data.py](../projects/volcanite/python/download_cloud_data.py) python scripts.
+[download_cloud_data.py](../volcanite/python/download_cloud_data.py) python scripts.
 
 ## Selected Segmentation Volumes
 
