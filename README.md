@@ -1,4 +1,8 @@
 # Volcanite Segmentation Volume Renderer
+
+![version](https://img.shields.io/badge/version-0.4.0-blue) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+<a href=https://www.doi.org/10.1109/TVCG.2023.3326573><img src="https://img.shields.io/badge/doi-10.1109/TVCG.2023.3326573-blue?logo=ieee&logoColor=white"/></a>
+
 Volcanite is a GPU renderer for segmentation volumes implemented using C++ and the Vulkan API.
 Segmentation volumes are voxel data sets that store an integer object label per voxel.
 These volumes are commonly used in fields like connectomics, material science, computational biology, medicine, among others.
@@ -8,7 +12,7 @@ Apart from interactively or non-interactively visualizing segmentation volumes, 
 sets at compression rates that generally outperforming other methods.
 
 ![Renderer Preview Image](doc/volcanite_app.jpg)
-<sup>Data Set from Emerging Tumor Development by Simulating Single-cell Events, Rosenbauer J., Berghoff M., Schug A. (2020)</sup>
+<sup>Data Set from Emerging Tumor Development by Simulating Single-cell Events, Rosenbauer J., Berghoff M., Schug A. (2020) bioRxiv</sup>
 
 ## Quick Start
 See the setup guides for [Ubuntu / Debian](doc/Setup.md#ubuntu--debian) or [Windows](doc/Setup.md#ubuntu--debian) respectively for a more detailed description on how to install all dependencies and how to build Volcanite.
