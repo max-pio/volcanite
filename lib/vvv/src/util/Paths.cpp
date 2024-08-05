@@ -35,8 +35,10 @@ namespace vvv {
 std::vector<std::filesystem::path> Paths::dataPaths;
 bool Paths::useSourcePaths;
 
-// source: https://www.fluentcpp.com/2017/04/21/how-to-split-a-string-in-c/ (Solution 1.3)
 std::vector<std::string> split(const std::string& s, char delimiter) {
+    // method from range-v3, released under the Boost Software License
+    // https://github.com/ericniebler/range-v3/blob/master/test/view/split.cpp
+
    std::vector<std::string> tokens;
    std::string token;
    std::istringstream tokenStream(s);

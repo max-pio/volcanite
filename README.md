@@ -8,6 +8,7 @@ Apart from interactively or non-interactively visualizing segmentation volumes, 
 sets at compression rates that generally outperforming other methods.
 
 ![Renderer Preview Image](doc/volcanite_app.jpg)
+<sup>Data Set from Emerging Tumor Development by Simulating Single-cell Events, Rosenbauer J., Berghoff M., Schug A. (2020)</sup>
 
 ## Quick Start
 See the setup guides for [Ubuntu / Debian](doc/Setup.md#ubuntu--debian) or [Windows](doc/Setup.md#ubuntu--debian) respectively for a more detailed description on how to install all dependencies and how to build Volcanite.
