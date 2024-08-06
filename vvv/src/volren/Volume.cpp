@@ -1,1 +1,0 @@
-// Note: the individual format reader methods are implemented in separate files in the `reader/` folder.
