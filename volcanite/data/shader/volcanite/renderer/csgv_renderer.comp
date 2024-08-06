@@ -1,0 +1,537 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+// includes
+#include "cpp_glsl_include/csgv_constants.h"
+#include "csgv_bindings.glsl"
+
+#include "util.glsl"
+#include "ray_box_intersection.glsl"
+#include "morton.glsl"
+#include "random.glsl"
+#include "framebuffer.glsl"
+
+#include "debug_colormaps.glsl"
+#include "brdf_lambert.glsl"
+#include "dummy_envmap.glsl"
+
+// Compressed Segmentation Volume specific: define array containing the encoding (input) as well as the decoding (output)
+#define CSGV_ENCODING_ARRAY g_encoding
+#define CSGV_DETAIL_ARRAY g_detail
+#define CSGV_DECODING_ARRAY g_cache
+#define CSGV_READ_ONLY
+#ifdef CSGV_PARALLEL_DECODE
+    #include "volcanite/compression/compressed_segmentation_volume_parallel.glsl"
+#else
+    #include "volcanite/compression/compressed_segmentation_volume.glsl"
+#endif
+#include "volcanite/compression/csgv_utils.glsl"
+
+
+uint get_inv_lod(ivec3 voxel) {
+    // Ensure the same level-of-detail for all bricks by computing it from the brick's center.
+    // Otherwise, different levels-of-detail would be requested for decompression of the same brick.
+    vec3 brick_center_world_space = (g_model_to_world_space * vec4((vec3(0.5f) + vec3(voxel / int(g_brick_size))) * g_brick_size, 1.f)).xyz;
+    float dist = length(brick_center_world_space - g_camera_position_world_space) + (float(g_brick_size)/g_world_to_model_space_scaling);
+
+    // use the MSB as a fast log2 (rounding down to int anyways)
+    int voxels_per_pixel_at_hit = int(g_voxels_per_pixel_per_dist * dist);
+    // clamp with a potential user specified max inverse. LoD
+    return min(g_lod_count - 1u - uint(clamp(g_lod_bias + findMSB(voxels_per_pixel_at_hit), 0, g_lod_count - 1u)), g_max_inv_lod);
+}
+
+/// returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
+uint get_volume_label(ivec3 voxel, inout float depth_valid) {
+    assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
+
+    uvec3 brick = uvec3(voxel) / g_brick_size;
+    uvec3 brick_voxel = uvec3(voxel) - (brick * g_brick_size);
+    uint brick_idx = brick_pos2idx(brick, g_brick_count);
+    uint brick_info_pos = brick_idx * 4u;
+
+    // compute optimal LOD for the center of this brick
+    uint req_inv_lod = get_inv_lod(voxel);
+
+    // tell the other shaders that we can see this brick if it's visibility state is "unknown"
+    // but only if this is a valid pixel sample. An invalid sample could be accessing bricks that are actually not visible.
+    assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] <= g_lod_count, "we try to access a brick that's flagged as invisible");
+    if (isDepthValid(depth_valid) && req_inv_lod > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > req_inv_lod) {
+        // if the brick was not requested so far:
+        if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= g_lod_count)
+            g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
+        // if we request a finer level than the one that was requested so far:
+        // (this should not happen if we instead compute the LOD in the provision shader)
+        // TODO: Compute requested brick LOD in the provision shader based on the distance brick center <-> camera?
+        else if (req_inv_lod > g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD])
+            atomicMax(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], req_inv_lod);
+    }
+
+    // find the current LOD
+    uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
+    assert(cur_inv_lod != 0u, "BRICK_INFO_CUR_INV_LOD should never be zero");
+
+    // special case for coarsest LOD: we can do the lookup at the first palette element for LOD_Max
+    // or if the brick is not yet decoded
+    if (req_inv_lod == 0u || cur_inv_lod >= g_lod_count) {
+
+        EncodingRef encoding_address = getBrickEncodingRef(brick_idx);
+        uint encoding_size = getBrickEncodingLength(brick_idx);
+
+        // if the brick was not decoded, sample a random palette entry
+        if (req_inv_lod > 0u && g_max_inv_lod > 0u) {
+            uint palette_size = getBrickPaletteLength(brick_idx);
+
+            // indicate the sample as invalid (if it is not a homogeneous brick)
+            if (palette_size > 1u)
+                depth_valid = INVALID_DEPTH;
+
+            // read a random palette entry
+            uint random_palette_index = hash_pcg3d(uvec3(gl_GlobalInvocationID.xy, g_frame)).r % palette_size;
+            return  encoding_address.buf[encoding_size - 1u - random_palette_index];
+        }
+
+        // return the first palette entry = coarsests compressed representation of the brick for inv_lod 0
+        // we could alternatively perform a small linear search for the first *visible* label here
+        return  encoding_address.buf[encoding_size - 1u];
+    }
+    // read the voxel from the brick in the cache (with the currently decoded LOD)
+    else {
+        // TODO: depth_valid validity is not changed here even if the requested LOD differs from currently decoded LOD
+#ifdef PALETTE_CACHE
+        return readCSGVPaletteBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX], brick_idx);
+#else
+        return readCSGVBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX]);
+#endif
+    }
+}
+
+
+bool isEmptySpace(ivec3 voxel) {
+    assertf(all(greaterThanEqual(voxel, ivec3(0))) && all(lessThan(voxel, g_vol_dim)), "empty space request for invalid voxel %v3i", voxel);
+
+    uvec3 brick = uvec3(voxel / g_brick_size);
+    uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
+
+    // if the brick contains nothing visible, it is empty space
+    return g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > g_lod_count;  // marked "invisible" by request shader
+}
+
+
+// all ray marching happens in the same loop to minimize thread divergence
+struct RayMarchState {
+    uint rng;          ///< random number generator state
+    int step;           ///< how many ray marching steps where done so far
+
+    // DDA traversal parameter
+    ivec3 step_sign;    ///< voxel step direction per axis, either -1 or 1
+    vec3 inv_ray_dir;   ///< t distance required for one unit voxel step along each axis
+    // the DDA position is split into integer voxel and sub-voxel position to avoid numerical floating point problems
+    ivec3 voxel;        ///< current voxel of the DDA ray marching position
+    vec3 pos_in_voxel;  ///< sub-voxel position of the DDA position in [0,1)^3
+
+    // shading and G-Buffer
+    float depth_valid;  ///< depth to be written to the depth buffer. negative depth indicates an invalid sample
+    vec3 normal;        ///< normal at the current position
+    uint label;         ///< label at the current position
+    uint last_label;    ///< label of the previous position
+    uvec2 packedGBuffer;///< G-Buffer containing validity, label on hit, depth, and normal
+
+    // path tracing
+    vec4 out_color;     ///< (radiance) color to be written to the color buffer
+    vec3 throughput;    ///< accumulated throughput (albedo/pi * 2pi * geometry term * brdf [+ volumetric attenuation])
+    int path_length;    ///< number of path segments (= bounces), initialized with 0 for the view ray
+};
+
+#define SHADOW_RAY_PATH_LENGTH -1
+
+#include "csgv_debug.glsl"
+
+void dda_step_multilevel(inout RayMarchState state, const Ray ray, int voxel_size) {
+    // Round down to do the traversal in one pseudo-voxel with a size of [voxel_size] many fine-resolution voxels
+    // To avoid handling negative voxels, assume normal voxel size 1 in that case. Altneratively, we would have to use
+    // floating point and floor the coarse position. e.g. integer div. maps (-1, 0, 0) with voxel_size 2 to (0, 0, 0)
+    assert(voxel_size == 1 || !any(lessThan(state.voxel, ivec3(0))), "multi-level DDA voxel size must be 1 for voxel positions < 0");
+
+    ivec3 big_voxel = state.voxel / voxel_size;
+    vec3 pos_in_big_voxel = (vec3(state.voxel % voxel_size) + state.pos_in_voxel) / float(voxel_size);
+
+    // determine distances that t has to change until the ray hits the next voxel edge
+    // note: if a ray direction axis is 0, inv_ray_dir is INFTY and step_sign is 1 to yield INFTY which is > all others
+    // note: side_dist_t is always positive as inv_ray_dir is negative if and only if step_sign is negative
+    vec3 side_dist_t = state.inv_ray_dir * ( max(state.step_sign, vec3(0.f)) - pos_in_big_voxel );
+
+    assertf(all(greaterThanEqual(side_dist_t, vec3(0.f))) || !any(isnan(side_dist_t)), "next_t nan/negative: %v3f", side_dist_t);
+
+    // get axis along which to step as mask[argmin(next_t)] = 1
+    // note: lessThanEqual(min(side_dist.yzx)..) computations can produce masks with multiple 1 entries.
+    int axis = 0;
+    if (side_dist_t.z < side_dist_t.x && side_dist_t.z < side_dist_t.y)
+        axis = 2;
+    else if (side_dist_t.y < side_dist_t.x && side_dist_t.y < side_dist_t.z)
+        axis = 1;
+
+    assertf(ray.direction[axis] != 0.f && !isinf(side_dist_t[axis]), "step along invalid axis. side_dist_t: %v3f", side_dist_t);
+
+    // advance voxel along the selcted axis
+    big_voxel[axis] += state.step_sign[axis];
+
+    // update sub-voxel position
+    pos_in_big_voxel = fract(pos_in_big_voxel + (side_dist_t[axis] * ray.direction));
+    const float ONE_MINUS_EPSILON = 0.9999999f;
+    pos_in_big_voxel[axis] = max(-state.step_sign[axis], 0.f) * ONE_MINUS_EPSILON;
+
+    state.voxel = big_voxel * voxel_size + ivec3(floor(pos_in_big_voxel * voxel_size));
+    state.pos_in_voxel = fract(pos_in_big_voxel * voxel_size);
+
+    // update normal
+    state.normal = vec3(0.f);
+    state.normal[axis] = float(-state.step_sign[axis]);
+
+    // DEBUG_check_state_and_ray(state, ray, __LINE__);
+}
+
+void dda_step(inout RayMarchState state, const Ray ray) {
+    // determine distances that t has to change until the ray hits the next voxel edge
+    // note: if a ray direction axis is 0, inv_ray_dir is INFTY and step_sign is 1 to yield INFTY which is > all others
+    // note: side_dist_t is always positive as inv_ray_dir is negative if and only if step_sign is negative
+    vec3 side_dist_t = state.inv_ray_dir * ( max(state.step_sign, vec3(0.f)) - state.pos_in_voxel );
+
+    assertf(all(greaterThanEqual(side_dist_t, vec3(0.f))) || !any(isnan(side_dist_t)), "next_t nan/negative: %v3f", side_dist_t);
+
+    // get axis along which to step as mask[argmin(next_t)] = 1
+    // note: lessThanEqual(min(side_dist.yzx)..) computations can produce masks with multiple 1 entries.
+    int axis = 0;
+    if (side_dist_t.z < side_dist_t.x && side_dist_t.z < side_dist_t.y)
+        axis = 2;
+    else if (side_dist_t.y < side_dist_t.x && side_dist_t.y < side_dist_t.z)
+        axis = 1;
+
+    assertf(ray.direction[axis] != 0.f && !isinf(side_dist_t[axis]), "step along invalid axis. side_dist_t: %v3f", side_dist_t);
+
+    // advance voxel along the selcted axis
+    state.voxel[axis] += state.step_sign[axis];
+
+    // update sub-voxel position
+    state.pos_in_voxel = fract(state.pos_in_voxel + (side_dist_t[axis] * ray.direction));
+    const float ONE_MINUS_EPSILON = 0.9999999f;
+    state.pos_in_voxel[axis] = max(-state.step_sign[axis], 0.f) * ONE_MINUS_EPSILON;
+
+    // update normal
+    state.normal = vec3(0.f);
+    state.normal[axis] = float(-state.step_sign[axis]);
+
+    // DEBUG_check_state_and_ray(state, ray, __LINE__);
+}
+
+void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
+    vec3 init_raypos = ray.origin + t_0 * ray.direction;
+    state.voxel = ivec3(floor(init_raypos));
+    state.pos_in_voxel = init_raypos - state.voxel;
+
+    state.step_sign = ivec3(ray.direction.x >= 0.f ? 1 : -1,
+                            ray.direction.y >= 0.0 ? 1 : -1,
+                            ray.direction.z >= 0.0 ? 1 : -1);
+
+    // ray.direction may be zero somewhere. set inv_ray_dir and step_sign so that dda_step will yield positive infinity
+    // for side_dist_t in the respective axis. This way, the traversal will never step into that direction.
+    state.inv_ray_dir = 1.f / ray.direction;
+    const float INFINITY = 1.f / 0.f;
+    if (ray.direction.x == 0.f) {
+        state.inv_ray_dir.x = INFINITY;
+        state.step_sign.x = 1;
+    }
+    if (ray.direction.y == 0.f) {
+        state.inv_ray_dir.y = INFINITY;
+        state.step_sign.y = 1;
+    }
+    if (ray.direction.z == 0.f) {
+        state.inv_ray_dir.z = INFINITY;
+        state.step_sign.z = 1;
+    }
+
+    // DEBUG_check_state_and_ray(state, ray, __LINE__);
+}
+
+void main() {
+    // obtain pixel and fragment coordinates
+    ivec2 viewport_size = imageSize(accumulationOut);
+
+    // contains thread to pixel mapping for optional subsampling
+    ivec2 pixel = pixelFromInvocationID();
+    if (isHelperLane(pixel, viewport_size))
+        return;
+
+    if (DEBUG_vis_lod_rectangles(pixel, g_debug_lod)) return;
+
+    // Add a subpixel offset in [0, 1) to perform temporal anti-aliasing
+    vec2 subpixel_offset = randomVec3(pixel, g_camera_still_frames).xy;
+    vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(viewport_size);
+
+    // create view ray in model space
+    Ray ray = Ray(g_camera_position_world_space, normalize((g_pixel_to_ray_direction_world_space * vec3(pixel + subpixel_offset, 1.0f)).xyz));
+    ray.origin = (g_world_to_model_space * vec4(ray.origin, 1.f)).xyz;
+    ray.direction = normalize(g_world_to_model_space_dir * ray.direction);
+
+    // In world space, we hit a small cuboid (largest dimension is 1) centered around the origin.
+    // We transform this AABB to model space, where each voxel has unit size:
+    float t_0, t_1;
+    AABB bounding_box = AABB((g_world_to_model_space * vec4((g_bboxMin.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz,
+                             (g_world_to_model_space * vec4((g_bboxMax.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz);
+    ray_box_intersection(ray, bounding_box, t_0, t_1);
+
+    // if the ray does not hit the data set, directly output the background
+    if (t_0 >= t_1) {
+        ray.direction = normalize(g_model_to_world_space_dir * ray.direction);
+        writePixel(pixel, vec4(0.f), BACKGROUND_DEPTH, noHitGBufferRG8());
+        return;
+    }
+
+    if (DEBUG_vis_model_space(ray, t_0, pixel, g_debug_model_space)) return;
+
+    // initialize ray marching state
+    RayMarchState state;
+    state.rng = g_camera_still_frames;
+    state.label = INVALID;
+    state.last_label = INVALID;
+    state.path_length = 0;
+    state.throughput = vec3(1.f);
+    state.out_color = vec4(0.f);
+    state.depth_valid = BACKGROUND_DEPTH;
+    state.normal = vec3(0.f);
+    state.packedGBuffer = noHitGBufferRG8();
+
+    // initialize DDA traversal with t_0  offset to prevent aliasing
+    dda_init(state, ray, t_0 - 0.01f);
+
+    // ray marching loop
+    for(state.step = 0; state.step < g_maxSteps; state.step++) {
+
+        // TODO: move DDA step to the bottom of this loop. Reuse LOD and emptySpace information, remove t_0 offset, pass LOD to get_volume_label
+        // single-level DDA traversal step
+        // dda_step(state, ray);
+        // multi-level DDA traversal step
+        {
+            // determine size of the coarse traversal voxel in 2^n number of fine-resolution voxels
+            uint dda_voxel_size;
+
+            // edge cases not handled in multi-level DDA:
+            //  - internal integer division does not handle negative voxel coordinates
+            //  - upper volume borders may lie in the middle of a coarse voxel
+            if (any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
+                || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz))))
+                dda_voxel_size = 1u;
+            // empty space skipping: directly step into the next brick
+            else if (isEmptySpace(state.voxel))
+                dda_voxel_size = g_brick_size;
+            // default traversal: step into next voxel in current level-of-detail
+            else
+                dda_voxel_size = g_brick_size >> get_inv_lod(state.voxel);
+
+            dda_step_multilevel(state, ray, int(dda_voxel_size));
+        }
+
+#ifndef NDEBUG
+        DEBUG_check_state_and_ray(state, ray, __LINE__);
+#endif
+
+        // out of bounds check
+        if (any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
+            || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
+            if (state.path_length == 0 && state.step < 16)
+                continue;
+            else
+                break;
+        }
+
+        // empty space check
+        if (isEmptySpace(state.voxel)) {
+            DEBUG_vis_empty_space_brick(state, false);
+            continue;
+        } else {
+            DEBUG_vis_empty_space_voxel(state, false);
+        }
+
+
+        // sampling (read value at pos from previously decoded volume segments in brick cache) or return a
+        // placeholder label if not yet decoded, in which case the depth_valid will be set to INVALID_DEPTH.
+        // An sample marked as invalid this way may not alter the framebuffer and skip certain cmoputation steps.
+        state.last_label = state.label;
+        state.label = get_volume_label(state.voxel, state.depth_valid);
+
+#ifndef NDEBUG
+        DEBUG_vis_invalid_label(state);
+#endif
+
+        // obtain material at the current position
+        int material = getMaterial(state.label);
+
+        // continue traversal if this is not a visible label
+        // material < 0 <=> !isLabelVisible(state.label)
+        if (material < 0) {
+            continue;
+        }
+
+        DEBUG_vis_normals(state, g_debug_normals);
+        DEBUG_vis_brick_cache(state, !g_debug_normals && g_debug_brick_cache && (pixel.x + pixel.y) % 2u != (g_frame % 2u));
+
+        // obtain surface albedo / volume emission and opacity
+        vec4 surface_albedo_opacity = getColor(state.label, material);
+
+        // ENTER SEMI-TRANSPARENT VOLUME
+        // TODO: integrate this into the correct path tracing interaction with fresnel term, simplify BRDF sampling e.g. https://boksajak.github.io/files/CrashCourseBRDF.pdf
+        if (surface_albedo_opacity.a < 1.f) {
+            if (state.last_label != state.label) {
+                // add the contribution of a semi-transparent surface (local shading only)
+                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_light_intensity * surface_albedo_opacity.a;
+
+                // throughput is reduced by the opacity of the surface
+                state.throughput *= 1.f - surface_albedo_opacity.a;
+                // update pixel alpha
+                state.out_color.a = max(state.out_color.a, surface_albedo_opacity.a);
+            }
+
+            // emission and absorption from homogeneous volume (ignoring scattering!)
+//            // find distance the ray will travel in the next step
+//            float next_t = dot(vec3(lessThanEqual(state.next_t.xyz, min(state.next_t.yzx, state.next_t.zxy))), state.next_t);
+//            // compute transmittance of homogeneous voluem segment
+//            vec3 transmittance = exp(-surface_albedo_opacity.a * abs(next_t - state.t) * (1.f - surface_albedo_opacity.rgb));
+//            // update opacity (computed over inverse opacity = transmittance)
+//            state.out_color.a = max(state.out_color.a, 1.f - ((1.f - state.out_color.a) * (transmittance.r + transmittance.g + transmittance.b)/3.f));
+//            // add volume emission
+//            state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * (1.f - transmittance);
+//            state.throughput *= transmittance;
+        }
+        // HIT OPAQUE SURFACE
+        else {
+            // break if this was a shadow ray
+            if (state.path_length == SHADOW_RAY_PATH_LENGTH) {
+                state.throughput = vec3(0.f);
+                break;
+            }
+
+            DEBUG_vis_brick_idx(state, false);
+            DEBUG_vis_lod(state, surface_albedo_opacity, g_debug_lod);
+
+            // The first surface hit is the only point for which we want to store our t value in the depth buffer
+            // but if we previously stored an INVALID_DEPTH (< 0) at any point, it must not be overwritten.
+            // This is also the point where the G-buffer state is set.
+            if (state.path_length == 0) {
+                float ray_t = length((state.voxel + state.pos_in_voxel) - ray.origin);
+                // TODO: directly write these values to the g-buffer instead of tracking them
+                state.depth_valid = min(state.depth_valid, ray_t);
+                state.packedGBuffer = packGBufferRG8(state.label, state.normal, (ray_t - t_0) / (t_1 - t_0));
+            }
+            // opacity is always 1 on surface hit
+            state.out_color.a = 1.f;
+
+            // include ambient lighting factor - not physically based but interpolates between non-shaded and shaded
+            if (state.path_length == 0) {
+                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_factor_ambient;
+                state.throughput *= 1.f - g_factor_ambient;
+            }
+
+            // emission
+            if (g_materials[material].emission > 0.f) {
+                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_materials[material].emission;
+            }
+
+            // early ray termination if throughput is zero
+            if (dot(state.throughput, vec3(1.f)) <= 0.f) {
+                break;
+            }
+
+            // advance the path and obtain a new random number for sampling a new direction
+            state.path_length++;
+            vec3 u = nextRNG(pixel, state.rng);
+
+            // store previous direction as the incoming direction for the brdf evaluation
+            vec3 brdf_dir_in = -ray.direction;
+
+            // either: local shading only: break the loop here and do not trace further bounces
+            //     or: g_shadow_pathtracing_ratio allows to blend between rendering with shadow rays and path tracing
+            //         over the full hemisphere. (this is not real NEE).
+            if (!g_global_illumination_enable || u.z > g_shadow_pathtracing_ratio) {
+
+                // sample directly to directional light
+                ray.direction = g_light_direction;
+                state.throughput /= ONE_OVER_TWO_PI;
+
+                // check for self shadowing of the current voxel
+                if (dot(state.normal, ray.direction) < 0) {
+                    state.throughput = vec3(0.f);
+                    break;
+                }
+
+                // mark this ray as a shadow ray
+                state.path_length = SHADOW_RAY_PATH_LENGTH;
+
+                // apply surface albedo, geometry term and brdf
+                state.throughput *= brdf_eval(surface_albedo_opacity.rgb, state.normal, brdf_dir_in, ray.direction);
+            } else {
+                // sample a new direction and apply brdf to throughtput
+                if (!brdf_eval_indirect(surface_albedo_opacity.rgb, state.normal, brdf_dir_in, u.xy,
+                                        ray.direction, state.throughput)) {
+                    state.throughput = vec3(0.f);
+                    break;
+                }
+            }
+
+            // DEBUG_check_state_and_ray(state, ray, __LINE__);
+
+            // path termination: local shading traces no further rays, or terminate at max. number of bounces
+            if (!g_global_illumination_enable || state.path_length > g_max_path_length)
+                break;
+
+            // Russian Roulette (only when this is not a ray to the light source / NEE)
+            if (state.path_length != SHADOW_RAY_PATH_LENGTH) {
+                float survival_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
+                if (nextRNG(pixel, state.rng).x > survival_probability) {
+                    state.throughput = vec3(0.f);
+                    break;
+                }
+                state.throughput /= survival_probability;
+            }
+
+            // re-init DDA traversal for the ray
+            ray.origin = state.voxel + state.pos_in_voxel;
+            dda_init(state, ray, 0.f);
+        }
+    }
+
+    DEBUG_count_raymarch_steps(state.step, g_debug_step_count);
+
+    // block all contributions if no light source was found
+    if (state.step >= g_maxSteps || state.path_length > g_max_path_length) {
+        state.throughput = vec3(0.f);
+    }
+
+    // apply incoming radiance from environment
+    ray.direction = normalize(g_model_to_world_space_dir * ray.direction);
+    if (g_envmap_enable) {
+        state.out_color.rgb += state.throughput * vec3(g_light_intensity) * dummy_envmap(ray.direction);
+    }
+    else {
+        state.out_color.rgb += state.throughput * vec3(g_light_intensity);
+    }
+
+    writePixel(pixel, state.out_color, state.depth_valid, state.packedGBuffer);
+}
