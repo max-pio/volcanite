@@ -171,6 +171,15 @@ layout (std140, binding = 10) uniform render_info {
     bool g_debug_lod;
     bool g_debug_step_count;
     uint g_swapchain_index;     // index of this frame in the multiframe swapchain buffer lists
+    bool g_denoise;
+    bool g_bilateral_enable;
+    bool g_svgf_enable;
+    float g_difference_depth_denoising;
+    float g_spatial_sigma;
+    float g_depth_sigma;
+    float g_illumination_sigma;
+    int g_denoise_filter_kernel_size;
+
 };
 
 //layout (binding = 11, rgba8) uniform restrict image2D outColor;
@@ -183,6 +192,7 @@ layout (binding = 21, r16ui) uniform restrict readonly uimage2D accuSampleCountI
 layout (binding = 22, r16ui) uniform restrict uimage2D accuSampleCountOut;
 
 layout (binding = 20, rg8ui) uniform restrict uimage2D gBuffer;
+layout(binding = 23, rgba32f) uniform image2D denoisingBuffer[2];
 layout (binding = 15, rgba8) uniform restrict writeonly image2D inpaintedOutColor;
 
 
@@ -206,3 +216,9 @@ layout(std430, binding = 18) buffer restrict readonly materials
 };
 
 layout(binding = 19) uniform sampler1D s_transferFunctions[SEGMENTED_VOLUME_MATERIAL_COUNT];
+
+
+layout(push_constant) uniform restrict readonly PushConstants
+{
+    uint denoising_iteration; // denoising iteration variable for ping pong svgf-buffer
+} pc;

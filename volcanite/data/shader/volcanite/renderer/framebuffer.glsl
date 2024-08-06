@@ -199,6 +199,7 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec2 g_buffer_pa
 
             // half float range rounds to intinity from 65520 onwards -> clamp
             imageStore(accumulationOut, opix, min(accumulated_rgba, 65519.f));
+            imageStore(denoisingBuffer[0], opix, min(accumulated_rgba, 65519.f));
         }
     }
 }

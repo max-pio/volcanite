@@ -233,6 +233,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     // 16 bit packed gBuffer texture storing
     m_pass->setStorageImage("gBuffer", *m_g_buffer_tex);
 
+    // ping pong texture for svgf
+    m_pass->setStorageImageArray("denoisingBuffer", 0, *m_denoise_tex[0], vk::ImageLayout::eGeneral, false);
+    m_pass->setStorageImageArray("denoisingBuffer", 1, *m_denoise_tex[1], vk::ImageLayout::eGeneral, false);
 
     std::vector<std::shared_ptr<Awaitable>> renderAwaitableList = {};
     const auto renderingFinished = m_pass->execute(renderAwaitableList, awaitBinaryAwaitableList, signalBinarySemaphore);
@@ -651,6 +654,12 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
     }
+    m_denoise_tex = m_pass->reflectTextureArray("denoisingBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    for (auto & texture : m_denoise_tex) {
+        texture->ensureResources();
+        const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
+        reinitDone.push_back(layoutTransformDone);
+    }
     m_inpaintedOutColor = m_pass->reflectTextures(
         "inpaintedOutColor", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8B8A8Unorm, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     for (auto& texture : *m_inpaintedOutColor){
@@ -697,6 +706,10 @@ void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
         m_accumulation_samples_tex[0] = nullptr;
     if(m_accumulation_samples_tex[1])
         m_accumulation_samples_tex[1] = nullptr;
+    if(m_denoise_tex[0])
+        m_denoise_tex[0] = nullptr;
+    if(m_denoise_tex[1])
+        m_denoise_tex[1] = nullptr;
     if (m_inpaintedOutColor)
         m_inpaintedOutColor.reset();// = nullptr;
     if(m_g_buffer_tex)
@@ -746,6 +759,15 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<glm::vec4>("g_bboxMax", glm::vec4(m_bboxMax, 1.f));
         m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
         m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_bilateral_enable", m_bilateral_enabled ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_svgf_enable", m_svgf_enabled ? 1 : 0);
+        m_urender_info->setUniform<float>("g_difference_depth_denoising", m_difference_depth_denoising);
+        m_urender_info->setUniform<float>("g_spatial_sigma", m_spatial_sigma);
+        m_urender_info->setUniform<float>("g_depth_sigma", m_depth_sigma);
+        m_urender_info->setUniform<float>("g_illumination_sigma", m_illumination_sigma);
+        m_urender_info->setUniform<int>("g_denoise_filter_kernel_size", m_denoise_filter_kernel_size);
+//        m_urender_info->setUniform<float>("g_opacityThreshold",
+//                                          0.5); // TODO: we have this low opacity treshold to render opaque first hits
         m_urender_info->setUniform<glm::vec3>("g_camera_position_world_space", camera->position_world_space);
         m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
         // the g_voxels_per_pixel_per_dist determines how many voxels an image pixel footprint overlaps for a camera distance
@@ -878,7 +900,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     GuiInterface::GuiElementList* g_render = gui->get("Rendering");
     GuiInterface::GuiElementList* g_dev = gui->get("Development");
     // we create an invisible GUI window to export all parameters but keep them hidden from the user
-    gui->getWindow("Development")->setVisible(!m_release_version);
+    gui->getWindow("Development")->setVisible(true);//!m_release_version);
     // specify a docking layout for the windows
     gui->setDockingLayout({{"General", "d"},
                            {"Rendering", "d"},
@@ -1047,6 +1069,15 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addInt(&m_max_steps, "Max DDA Steps", 16, 1 << 16u, 16);
     g_dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
     g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
+    g_dev->addInt(&m_denoise_filter_kernel_size, "Denoise Filter Kernel Size", 0, 10, 1);
+    g_dev->addSeparator();
+    g_dev->addLabel("Denoising");
+    g_dev->addBool(&m_bilateral_enabled, "Bilateral Filter");
+    g_dev->addFloat(&m_difference_depth_denoising, "difference depth denoising", 0.0f, 1.f, 0.004, 3);
+    g_dev->addFloat(&m_spatial_sigma, "Spatial Sigma", 0.001f, 5.f, 0.01, 2);
+    g_dev->addFloat(&m_depth_sigma, "Depth Sigma", 0.001f, 5.f, 0.01, 2);
+    g_dev->addBool(&m_svgf_enabled, "À-Trous Filter");
+    g_dev->addFloat(&m_illumination_sigma, "Illumination Sigma", 0.01f, 10.f, 0.01, 2);
     g_dev->addBool(&m_tonemap_enabled, "Tone Mapping");
     g_dev->addSeparator();
     g_dev->addLabel("Debug");
