@@ -173,7 +173,7 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
         for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i += lod_width * lod_width * lod_width) {
             // we don't store any operations for a grid node that would lie completely outside the volume
             // if this is problematic, and we would like to always handle a full brick, we could output anything here and thus just write STOP_BIT.
-            brick_pos = enumBrickPos(i, m_brick_size);
+            brick_pos = enumBrickPos(i);
             volume_pos = start + brick_pos;
             if (glm::any(glm::greaterThanEqual(volume_pos, volume_dim)))
                 continue;
@@ -575,7 +575,7 @@ void CompressedSegmentationVolume::decodeBrick(uint32_t brick_idx, uint32_t* out
 
         for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i += index_step) {
             // if a grid node is completely outside the volume (i.e. it's first element is not within the volume) we skip it as it won't have any entries in the encoding
-            if (glm::any(glm::greaterThanEqual(enumBrickPos(i, m_brick_size), valid_brick_size)))
+            if (glm::any(glm::greaterThanEqual(enumBrickPos(i), valid_brick_size)))
                 continue;
 
             // every 8th element (we span 2*2*2=8 elements of the coarse LOD above), we fetch the new parent
@@ -599,11 +599,11 @@ void CompressedSegmentationVolume::decodeBrick(uint32_t brick_idx, uint32_t* out
             if (operation_lsb == PARENT)
                 output_brick[i] = parent_value;
             else if (operation_lsb == NEIGHBOR_X)
-                output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i, m_brick_size), child_index, lod_width, m_brick_size, 0);
+                output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i), child_index, lod_width, m_brick_size, 0);
             else if (operation_lsb == NEIGHBOR_Y)
-                output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i, m_brick_size), child_index, lod_width, m_brick_size, 1);
+                output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i), child_index, lod_width, m_brick_size, 1);
             else if (operation_lsb == NEIGHBOR_Z)
-                output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i, m_brick_size), child_index, lod_width, m_brick_size, 2);
+                output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i), child_index, lod_width, m_brick_size, 2);
             else if (operation_lsb == PALETTE_ADV) { // read palette entry and advance palette pointer to the next entry
                 output_brick[i] = brick_palette[paletteE--];
             }
@@ -818,6 +818,8 @@ void CompressedSegmentationVolume::decompressLOD(int target_lod, std::vector<uin
     const glm::uvec3 brickCount = getBrickCount();
     int inv_lod = getLodCountPerBrick() - 1u - target_lod;
     assert(inv_lod >= 0);
+    if (m_parallel_decode)
+       Logger(WARN) << "call parallelDecompressLOD() for CSGV that are compressed with parallel_decode enabled.";
 
     // this would run in parallel on the GPU later!
     glm::uvec3 brick_pos;
@@ -838,15 +840,17 @@ void CompressedSegmentationVolume::decompressLOD(int target_lod, std::vector<uin
 #ifndef NO_BRICK_DECODE_INDEX_REMAP
                 // decode brick
                 decodeBrick(brick_idx, brick_cache[thread_id].data(), glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u), glm::uvec3(m_brick_size)), inv_lod);
+
                 // fill output array with decoded brick entries
                 for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i++) {
-                    glm::uvec3 out_pos = brick_pos * m_brick_size + enumBrickPos(i, m_brick_size);
+                    glm::uvec3 out_pos = brick_pos * m_brick_size + enumBrickPos(i);
                     if (glm::all(glm::lessThan(out_pos, m_volume_dim))) {
                         out[voxel_pos2idx(out_pos, m_volume_dim)] = brick_cache[thread_id][i];
                     }
                 }
 #else
-                decodeBrick(brick_idx, &(out[pos2idx(brick_pos * m_brick_size, m_volume_dim)]), glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u), glm::uvec3(m_brick_size)), inv_lod);
+                    decodeBrick(brick_idx, &(out[pos2idx(brick_pos * m_brick_size, m_volume_dim)]),
+                                glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u), glm::uvec3(m_brick_size)), inv_lod);
 #endif
             }
         }
@@ -899,7 +903,10 @@ bool CompressedSegmentationVolume::testLOD(const std::vector<uint32_t> &volume, 
     for (uint32_t width = 2; width <= m_brick_size; width *= 2) {
         timer.restart();
         Logger(INFO, true) << "Decode LOD " << lod << " with block width " << width;
-        decompressLOD(lod, out);
+        if (m_parallel_decode)
+            parallelDecompressLOD(lod, out);
+        else
+            decompressLOD(lod, out);
         Logger(INFO) << "Decode LOD " << lod << " with block width " << width << " in " << timer.elapsed() << "s done. Test:";
         if (volume.size() != out.size()) {
             Logger(ERROR) << "Compressed in and out sizes don't match";
@@ -1226,7 +1233,7 @@ void CompressedSegmentationVolume::freqEncodeBrick(const std::vector<uint32_t>& 
         for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i += lod_width * lod_width * lod_width) {
             // we don't store any operations for grid nodes that would lie completely outside the volume
             // if this is problematic, and we would like to always handle a full brick, we could output anything here and thus just write STOP_BIT.
-            brick_pos = enumBrickPos(i, m_brick_size);
+            brick_pos = enumBrickPos(i);
             volume_pos = start + brick_pos;
             if (glm::any(glm::greaterThanEqual(volume_pos, volume_dim)))
                 continue;

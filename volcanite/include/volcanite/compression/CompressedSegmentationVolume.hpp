@@ -116,11 +116,13 @@ private:
     /// Because of how we encode the LODs, this enumeration is required to always be in an "octree manner".
     /// Iterating over it with a step size of 2*2*2=8 should land on all start points of 2x2x2 bricks in the Octree and so on.
     /// Morton and Hilbert curves for example satisfy this criterion.
-    static inline glm::uvec3 enumBrickPos(uint32_t i, uint32_t brick_size) {
+    static inline glm::uvec3 enumBrickPos(uint32_t i) {
+        // TODO: rename enumBrickPos to cache_idx2dpos
         return sfc::Morton3D::i2p(i);
     }
 
     static inline glm::uint32_t indexOfBrickPos(const glm::uvec3& p) {
+        // TODO: rename indexOfBrickPos to cache_pos2idx
         return sfc::Morton3D::p2i(p);
     }
 
@@ -228,6 +230,16 @@ public:
     /// @param inv_lod the LOD until which to decompress, or rather, the decompression iterations. 0 is the coarsest and log2(brick_size) is the original / finest level.
     void decodeBrick(uint32_t brick_idx, uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const;
 
+    /// Decodes a single voxel from the brick encoding. Requires parallel_decoding to be enabled for random acccess
+    /// within a brick.
+    /// @param output_i the voxel's brick encoding index within the target inverse lod
+    /// @param target_inv_lod the target inverse level-of-detail of the voxel to decode
+    /// @param brick_encoding uint32 pointer to the start of the brick encoding
+    /// @param brick_encoding_length the length in uint32 elements of the brick encoding
+    /// @returns the label of the brick voxel corresponding to the brick encoding index output_i
+    uint32_t decompressCSGVBrickVoxel(const uint32_t output_i, const uint32_t target_inv_lod, const glm::uvec3 valid_brick_size,
+                                      const uint32_t* brick_encoding, const uint32_t brick_encoding_length) const;
+
     /// Decompresses a single brick in parallel.
     /// @param brick_idx is used to read the begin and endpoint of the encoding from the brick_starts buffer.
     /// @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
@@ -279,12 +291,16 @@ public:
     void decompressLOD(int target_lod, std::vector<uint32_t>& out) const;
 
     /// Decompresses the full volume up to a certain LoD into the vector out, parallelizing over the output voxels in the bricks.
+    /// Only available with parallel_decode enabled.
     void parallelDecompressLOD(int target_lod, std::vector<uint32_t>& out) const;
 
     std::shared_ptr<std::vector<uint32_t>> decompress() override {
         std::shared_ptr<std::vector<uint32_t>> out = std::make_shared<std::vector<uint32_t>>();
         out->resize(static_cast<size_t>(m_volume_dim.x) * m_volume_dim.y * m_volume_dim.z);
-        decompressLOD(0, *out);
+        if (m_parallel_decode)
+            parallelDecompressLOD(0, *out);
+        else
+            decompressLOD(0, *out);
         return out;
     }
 

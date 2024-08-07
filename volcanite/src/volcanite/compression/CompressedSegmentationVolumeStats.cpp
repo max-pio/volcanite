@@ -191,7 +191,7 @@ namespace volcanite {
 
             for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i += index_step) {
                 // if a grid node is completely outside the volume (i.e. it's first element is not within the volume) we skip it as it won't have any entries in the encoding
-                if (glm::any(glm::greaterThanEqual(enumBrickPos(i, m_brick_size), valid_brick_size)))
+                if (glm::any(glm::greaterThanEqual(enumBrickPos(i), valid_brick_size)))
                     continue;
 
                 // every 8th element (we span 2*2*2=8 elements of the coarse LOD above), we fetch the new parent
@@ -217,11 +217,11 @@ namespace volcanite {
                 if (operation_lsb == PARENT)
                     output_brick[i] = parent_value;
                 else if (operation_lsb == NEIGHBOR_X)
-                    output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i, m_brick_size), child_index, lod_width, m_brick_size, 0);
+                    output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i), child_index, lod_width, m_brick_size, 0);
                 else if (operation_lsb == NEIGHBOR_Y)
-                    output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i, m_brick_size), child_index, lod_width, m_brick_size, 1);
+                    output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i), child_index, lod_width, m_brick_size, 1);
                 else if (operation_lsb == NEIGHBOR_Z)
-                    output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i, m_brick_size), child_index, lod_width, m_brick_size, 2);
+                    output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i), child_index, lod_width, m_brick_size, 2);
                 else if (operation_lsb == PALETTE_ADV) { // read palette entry and advance palette pointer to the next entry
                     output_brick[i] = brick_palette[paletteE--];
                     if(output_palette) {
@@ -268,7 +268,7 @@ namespace volcanite {
         uint32_t total = brick_size * brick_size * brick_size;
         std::vector<glm::uvec4> v(total);
         for(int i = 0; i < v.size(); i++)
-            v[i] = glm::uvec4(enumBrickPos(i, brick_size), 0u);
+            v[i] = glm::uvec4(enumBrickPos(i), 0u);
         return v;
     }
 
@@ -341,7 +341,7 @@ namespace volcanite {
 //
 //            for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i += index_step) {
 //                // if a grid node is completely outside the volume (i.e. it's first element is not within the volume) we skip it as it won't have any entries in the encoding
-//                if (glm::any(glm::greaterThanEqual(enumBrickPos(i, m_brick_size), valid_brick_size)))
+//                if (glm::any(glm::greaterThanEqual(enumBrickPos(i), valid_brick_size)))
 //                    continue;
 //
 //                // every 8th element (we span 2*2*2=8 elements of the coarse LOD above), we fetch the new parent
@@ -367,11 +367,11 @@ namespace volcanite {
 //                if (operation_lsb == PARENT)
 //                    output_brick[i] = parent_value;
 //                else if (operation_lsb == NEIGHBOR_X)
-//                    output_brick[i] = valueOfNeighbor(output_brick.data(), enumBrickPos(i, m_brick_size), child_index, lod_width, m_brick_size, 0);
+//                    output_brick[i] = valueOfNeighbor(output_brick.data(), enumBrickPos(i), child_index, lod_width, m_brick_size, 0);
 //                else if (operation_lsb == NEIGHBOR_Y)
-//                    output_brick[i] = valueOfNeighbor(output_brick.data(), enumBrickPos(i, m_brick_size), child_index, lod_width, m_brick_size, 1);
+//                    output_brick[i] = valueOfNeighbor(output_brick.data(), enumBrickPos(i), child_index, lod_width, m_brick_size, 1);
 //                else if (operation_lsb == NEIGHBOR_Z)
-//                    output_brick[i] = valueOfNeighbor(output_brick.data(), enumBrickPos(i, m_brick_size), child_index, lod_width, m_brick_size, 2);
+//                    output_brick[i] = valueOfNeighbor(output_brick.data(), enumBrickPos(i), child_index, lod_width, m_brick_size, 2);
 //                else if (operation_lsb == PALETTE_ADV) { // read palette entry and advance palette pointer to the next entry
 //                    output_brick[i] = m_encoding[paletteE--];
 //                    statistics["palette_lod_" + std::to_string(lod) + "_size"] += 1.f;

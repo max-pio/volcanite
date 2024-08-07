@@ -115,9 +115,10 @@ void fillCSGVBrick(const uint decoded_brick_start_uint, const uint inv_lod, cons
 }
 
 /** number of PALETTE_ADV occurrences before enc_operation_index. */
-uint rank_palette_adv(uint header_size, uint enc_operation_index) {
+uint rank_palette_adv(uint enc_operation_index) {
     // TODO: good lord this is expensive if we do it without an O(1) rank
     uint occurrences = 0u;
+    const uint header_size = CSGV_SHARED_MEMORY_BRICK_ENCODING[0];
     for(uint entry_id = header_size; entry_id <= enc_operation_index; entry_id++) {
         if ((_readOperationFromEncoding(entry_id) & 7u) == PALETTE_ADV)
         occurrences++;
@@ -184,7 +185,7 @@ void decompressCSGVVoxelSharedMemory(const uint output_i, const uint brick_encod
 
         // at this point, the current operation accesses the palette: write the resulting palette entry
         // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
-        uint palette_index = rank_palette_adv(CSGV_SHARED_MEMORY_BRICK_ENCODING[0], enc_operation_index - 1u);
+        uint palette_index = rank_palette_adv(enc_operation_index - 1u);
         // the actual palette index may be offset depending on the operation
         if (operation_lsb == PALETTE_LAST) {
             palette_index--;
