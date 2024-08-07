@@ -47,7 +47,7 @@ function(makeExecutable name)
             # WIN32_EXECUTABLE TRUE # this hides the console window. Disabled, because we need to see the console output! maybe re-enable for distribution
             MACOSX_BUNDLE TRUE
             )
-    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap portable_file_dialogs)
+    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap portable_file_dialogs pasta_wavelet_tree)
     if(NOT HEADLESS)
         target_link_libraries(${name} PRIVATE LibVVV::libvvvwindow)
     endif()

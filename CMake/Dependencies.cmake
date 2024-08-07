@@ -6,6 +6,9 @@ add_subdirectory(extern/glm)
 # extern rANS encoding library
 add_subdirectory(extern/ryg_rans)
 
+# extern Pasta Wavelet Tree
+add_subdirectory(extern/wavelet_tree)
+
 # extern TCLAP for command line argument parsing
 add_subdirectory(extern/tclap)
 add_library(tclap::tclap ALIAS TCLAP)
