@@ -72,7 +72,7 @@ public:
     uint32_t brick_size = 32;
     RANSMode rANS_mode = RANSMode::DOUBLE_TABLE_RANS;
     uint32_t freq_subsampling = 8;      // n^3 factor for subsampling bricks for frequency table computation with rANS
-    bool parallel_decoding = false;     // use in-brick parallelism for decompression and encode accordingly
+    bool random_access = false;         // encode bricks so that they support random access within a brick
 
     bool run_tests = false;
     bool export_stats = false;
@@ -133,7 +133,7 @@ public:
             cmd.add(bricksizeArg);
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
-            SwitchArg parallelDecodeArg("p", "parallel-decode", "Use in-brick parallelism for decompression and encode accordingly.", cmd);
+            SwitchArg randomAccessArg("r", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
 
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
@@ -167,7 +167,7 @@ public:
             va.decompress_export_file = expandPath(decompresspathArg.getValue());
             va.compress_export_file = expandPath(compresspathArg.getValue());
             va.export_stats = statsArg.getValue();
-            va.parallel_decoding = parallelDecodeArg.getValue();
+            va.random_access = randomAccessArg.getValue();
             // rendering arguments
             va.rendering_config_file = expandPath(renderconfigArg.getValue());
             va.screenshot_output_file = expandPath(imageArg.getValue());
@@ -184,8 +184,8 @@ public:
             va.stream_lod = streamlodArg.getValue();
             va.cache_size_MB = cacheSizeMBArg.getValue();
             va.cache_palettized = cachePalettizedArg.getValue();
-            if(va.cache_palettized && va.parallel_decoding)
-                throw ArgException(cachePalettizedArg.longID() + " can not be used in combination with " + parallelDecodeArg.longID(), cachePalettizedArg.longID());
+            if(va.cache_palettized && va.random_access)
+                throw ArgException(cachePalettizedArg.longID() + " can not be used in combination with " + randomAccessArg.longID(), cachePalettizedArg.longID());
             va.show_development_gui = devArg.getValue();
             // if no input file was specified, try to open a file dialog
             std::string input_file = expandPath(inputpathArg.getValue());

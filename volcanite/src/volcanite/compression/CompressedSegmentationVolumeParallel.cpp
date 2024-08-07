@@ -17,7 +17,7 @@ uint32_t encodingIndexOfNeighbor(const uint32_t index, const int neighbor_i) {
 // HEADER                 ENCODING:
 // 4bit_encoding_start[0, 1, .. L-1], palette_start[0, 1 .. L], 4bit_encoding_padded_to32bit[0, 1, .. L], 32bit_palette[L, .., 1, 0]
 //       header_size*8 ᒧ                always zero ᒧ  ∟ .. one  ∟ palette size
-uint32_t CompressedSegmentationVolume::encodeBrickForParallelDecode(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out, const glm::uvec3 start, const glm::uvec3 volume_dim) {
+uint32_t CompressedSegmentationVolume::encodeBrickForRandomAccess(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out, glm::uvec3 start, glm::uvec3 volume_dim) {
     std::vector<uint32_t> palette;
     palette.reserve(32);
     glm::uvec3 volume_pos, brick_pos;
@@ -36,7 +36,7 @@ uint32_t CompressedSegmentationVolume::encodeBrickForParallelDecode(const std::v
     std::vector<MultiGridNode> multigrid;
     constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size);
 
-    // ToDo: parallel encoding does not support stop bits yet
+    // ToDo: random access encoding does not support stop bits yet
     for (MultiGridNode &node: multigrid)
         node.constant_subregion = false;
 
@@ -121,7 +121,7 @@ uint32_t CompressedSegmentationVolume::encodeBrickForParallelDecode(const std::v
             else if (palette.back() == value)
                 operation |= PALETTE_LAST;
             else {
-                // Parallel encoding does not use the palette delta operation
+                // Random access encoding does not use the palette delta operation
                 // reuse the n-X palette value where 0 < X < 17
 //                uint32_t palette_delta = static_cast<uint32_t>(std::find(palette.rbegin(), palette.rend(), value) - palette.rbegin());
 //                if(m_use_palette_delta && palette_delta < 17u && palette_delta < palette.size()) {
@@ -196,8 +196,8 @@ uint32_t CompressedSegmentationVolume::decompressCSGVBrickVoxel(const uint32_t o
                                                                 const glm::uvec3 valid_brick_size,
                                                                 const uint32_t* brick_encoding,
                                                                 const uint32_t brick_encoding_length) const {
-    assert(m_parallel_decode &&
-            "Random access voxel decompression within a brick is only available with parallel decoding enabled.");
+    assert(m_random_access &&
+            "Random access voxel decompression within a brick is only available with random access enabled.");
 
     // Start by reading the operations in the target inverse LoD's encoding:
     uint32_t inv_lod = target_inv_lod;
@@ -212,7 +212,7 @@ uint32_t CompressedSegmentationVolume::decompressCSGVBrickVoxel(const uint32_t o
 
     assert(enc_operation_index < brick_encoding_length * 8u && "brick encoding out of bounds read");
     // ToDo: handle stop bits
-    assert((operation & STOP_BIT) == 0u && "stop bit not yet supported in parallel decode");
+    assert((operation & STOP_BIT) == 0u && "stop bit not yet supported with random access");
 
     // follow the chain of operations from the current output voxel up to an operation that accesses the palette
     {
@@ -256,7 +256,7 @@ uint32_t CompressedSegmentationVolume::decompressCSGVBrickVoxel(const uint32_t o
         if (operation_lsb == PALETTE_LAST) {
             palette_index--;
         }
-        assert(operation_lsb != PALETTE_D && "palette delta operation not supported in parallel decode");
+        assert(operation_lsb != PALETTE_D && "palette delta operation not supported with random access");
         //assert(palette_index < getBrickPaletteLength(brick_idx), "obtained wrong palette index");
 
         // Write to the index in the output array. The output array's positions are in Morton order.
@@ -265,7 +265,7 @@ uint32_t CompressedSegmentationVolume::decompressCSGVBrickVoxel(const uint32_t o
 }
 
 void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint32_t* output_brick, glm::uvec3 valid_brick_size, int target_inv_lod) const {
-    assert(m_parallel_decode && "parallel brick decompression is only supported when parallel_decode is set");
+    assert(m_random_access && "parallel brick decompression is only supported when parallel_decode is set");
     assert(m_rANS_mode == NO_RANS && "parallel decode does not work using rANS");
     // ToDo: support detail separation, stop bits, and palette delta operations in parallelDecodeBrick
     assert(!m_separate_detail && "detail separation not yet supported in parallelDecodeBrick");
@@ -308,8 +308,8 @@ void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint3
 
 
 void CompressedSegmentationVolume::parallelDecompressLOD(int target_lod, std::vector<uint32_t>& out) const {
-    if (!m_parallel_decode)
-        throw std::runtime_error("Parallel decompression requires previous compression with parallel_decode enabled.");
+    if (!m_random_access)
+        throw std::runtime_error("Parallel decompression requires previous compression with random access enabled.");
 
     const glm::uvec3 brickCount = getBrickCount();
     uint32_t inv_lod = getLodCountPerBrick() - 1u - target_lod;
@@ -345,7 +345,7 @@ void CompressedSegmentationVolume::parallelDecompressLOD(int target_lod, std::ve
 
 
 
-void CompressedSegmentationVolume::freqEncodeBrickForParallelDecode(const std::vector<uint32_t>& volume, size_t* brick_freq, glm::uvec3 start, glm::uvec3 volume_dim, bool detail_freq) const {
+void CompressedSegmentationVolume::freqEncodeBrickForRandomAccess(const std::vector<uint32_t>& volume, size_t* brick_freq, glm::uvec3 start, glm::uvec3 volume_dim, bool detail_freq) const {
     throw std::runtime_error("rANS compression is not supported for in-brick parallel decoding.");
 }
 

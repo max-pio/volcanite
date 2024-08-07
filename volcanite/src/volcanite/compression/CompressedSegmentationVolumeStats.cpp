@@ -91,8 +91,8 @@ namespace volcanite {
     void CompressedSegmentationVolume::printBrickEncoding(uint32_t brick_idx) const {
         if (m_rANS_mode != NO_RANS)
             throw std::runtime_error("Can only print brick encoding in NO_RANS mode.");
-        if (!m_parallel_decode)
-            throw std::runtime_error("Can only print brick encoding for parallel decoding mode.");
+        if (!m_random_access)
+            throw std::runtime_error("Can only print brick encoding with random access.");
 
         const uint32_t* brick_encoding = getBrickEncoding(brick_idx);
         const uint32_t l = getBrickEncodingLength(brick_idx);
@@ -432,7 +432,7 @@ namespace volcanite {
         std::vector<std::map<std::string, float>> statistics(brickCount.x * brickCount.y * brickCount.z);
 
         glm::uvec3 brick_pos;
-#pragma omp parallel for num_threads(m_cpu_threads) default(none) private(brick_pos) shared(brickCount, statistics)
+        #pragma omp parallel for num_threads(m_cpu_threads) default(none) private(brick_pos) shared(brickCount, statistics)
         for (uint32_t z = 0; z < brickCount.z; z++) {
             unsigned int thread_id = omp_get_thread_num();
             brick_pos.z = z; // we need that for omp...

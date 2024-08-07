@@ -199,19 +199,20 @@ private:
     /// @return number of uint32_t elements written to out.
     uint32_t encodeBrick(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out, glm::uvec3 start, glm::uvec3 volume_dim);
 
-    /// Encodes a single brick from given start with size brick_size in the volume to the out vector for in-brick parallel decompression.
+    /// Encodes a single brick from given start with size brick_size in the volume to the out vector for in-brick random
+    /// access. This allows in-brick parallel decoding.
     /// @param volume the labeled voxel volume to encode.
     /// @param out must have enough space reserved for adding all elements.
     /// @param start the start position of the brick. Should be a multiple of the configured brick size.
     /// @param volume_dim the volume size in voxels in each dimension
     /// @return number of uint32_t elements written to out
-    uint32_t encodeBrickForParallelDecode(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out, glm::uvec3 start, glm::uvec3 volume_dim);
+    uint32_t encodeBrickForRandomAccess(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out, glm::uvec3 start, glm::uvec3 volume_dim);
 
     /// Computes operation frequencies and detail operation frequencies (the latter offset by 16) for the brick into the given brick_freq[32] array.
     void freqEncodeBrick(const std::vector<uint32_t>& volume, size_t* brick_freq, glm::uvec3 start, glm::uvec3 volume_dim, bool detail_freq) const;
 
     /// Computes operation frequencies and detail operation frequencies (the latter offset by 16) for the brick into the given brick_freq[32] array.
-    void freqEncodeBrickForParallelDecode(const std::vector<uint32_t>& volume, size_t* brick_freq, glm::uvec3 start, glm::uvec3 volume_dim, bool detail_freq) const;
+    void freqEncodeBrickForRandomAccess(const std::vector<uint32_t>& volume, size_t* brick_freq, glm::uvec3 start, glm::uvec3 volume_dim, bool detail_freq) const;
 
 
 public:
@@ -230,7 +231,7 @@ public:
     /// @param inv_lod the LOD until which to decompress, or rather, the decompression iterations. 0 is the coarsest and log2(brick_size) is the original / finest level.
     void decodeBrick(uint32_t brick_idx, uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const;
 
-    /// Decodes a single voxel from the brick encoding. Requires parallel_decoding to be enabled for random acccess
+    /// Decodes a single voxel from the brick encoding. Requires random_access to be enabled for random acccess
     /// within a brick.
     /// @param output_i the voxel's brick encoding index within the target inverse lod
     /// @param target_inv_lod the target inverse level-of-detail of the voxel to decode
@@ -297,7 +298,7 @@ public:
     std::shared_ptr<std::vector<uint32_t>> decompress() override {
         std::shared_ptr<std::vector<uint32_t>> out = std::make_shared<std::vector<uint32_t>>();
         out->resize(static_cast<size_t>(m_volume_dim.x) * m_volume_dim.y * m_volume_dim.z);
-        if (m_parallel_decode)
+        if (m_random_access)
             parallelDecompressLOD(0, *out);
         else
             decompressLOD(0, *out);
@@ -452,7 +453,7 @@ public:
     [[nodiscard]] bool isUsingRANS() const { return m_rANS_mode == SINGLE_TABLE_RANS || m_rANS_mode == DOUBLE_TABLE_RANS; }
     [[nodiscard]] bool isUsingDetailFreq() const { return m_rANS_mode == DOUBLE_TABLE_RANS; }
     [[nodiscard]] bool isUsingSeparateDetail() const { return m_separate_detail; }
-    [[nodiscard]] bool isUsingParallelDecode() const { return m_parallel_decode; }
+    [[nodiscard]] bool isUsingParallelDecode() const { return m_random_access; }
 
     /// returns the maximum number of uint32 palette entries that any brick in the volume contains.
     [[nodiscard]] uint32_t getMaxBrickPaletteCount() const { return m_max_brick_palette_count; };
@@ -463,7 +464,8 @@ public:
 
     /// Sets the options for the compression step. If using rANS, a frequency table as a uint32_t[16] array must be given for the base.
     /// If using detail separation (use_detail) and rANS, an additional frequency table must be given for the detail buffer.
-    void setCompressionOptions(uint32_t brick_size, RANSMode rANS_mode,  bool parallel_decoding,
+    /// @param random_access if true, encodes in a format that supports in-brick random access
+    void setCompressionOptions(uint32_t brick_size, RANSMode rANS_mode,  bool random_access,
                                const uint32_t* code_frequencies = nullptr, const uint32_t* detail_code_frequencies = nullptr) {
         if(!m_encodings.empty()) {
             Logger(WARN) << "CompressedSegmentationVolume was already compressed. Clearing old data on new config.";
@@ -472,12 +474,12 @@ public:
 
         if(!(brick_size > 0 && !(brick_size & (brick_size - 1))))
             throw std::runtime_error("Brick size must be a power of two greater than zero!");
-        if(parallel_decoding && rANS_mode != NO_RANS)
-            throw std::runtime_error("Parallel Decoding only works without rANS");
+        if(random_access && rANS_mode != NO_RANS)
+            throw std::runtime_error("Random access encoding only works without rANS");
 
         m_brick_size = brick_size;
         m_rANS_mode = rANS_mode;
-        m_parallel_decode = parallel_decoding;
+        m_random_access = random_access;
 
         if(isUsingRANS()) {
             if(code_frequencies == nullptr)
@@ -496,7 +498,8 @@ public:
     /// Sets the options for the compression step. If using rANS, a 64 bit frequency table as a size_t[16] array must be given for the base.
     /// If an additional frequency table must be given for the finest LoD if rANS is used in double table mode.
     /// Detail separation (splitting off the operation stream of the finest LoD in a separated compressed file.
-    void setCompressionOptions64(uint32_t brick_size, RANSMode rANS_mode, bool parallel_decoding,
+    /// @param random_access if true, encodes in a format that supports in-brick random access
+    void setCompressionOptions64(uint32_t brick_size, RANSMode rANS_mode, bool random_access,
                                  const size_t* code_frequencies = nullptr, const size_t* detail_code_frequencies = nullptr) {
         if(!m_encodings.empty()) {
             Logger(WARN) << "CompressedSegmentationVolume was already compressed. Clearing old data on new config.";
@@ -505,12 +508,12 @@ public:
 
         if(!(brick_size > 0 && !(brick_size & (brick_size - 1))))
             throw std::runtime_error("Brick size must be a power of two greater than zero!");
-        if(parallel_decoding && rANS_mode != NO_RANS)
-            throw std::runtime_error("Parallel Decoding only works without rANS");
+        if(random_access && rANS_mode != NO_RANS)
+            throw std::runtime_error("Random access encoding only works without rANS");
 
         m_brick_size = brick_size;
         m_rANS_mode = rANS_mode;
-        m_parallel_decode = parallel_decoding;
+        m_random_access = random_access;
 
         if(isUsingRANS()) {
             if(code_frequencies == nullptr)
@@ -696,7 +699,7 @@ private:
     RANS m_rans;
     RANS m_detail_rans;
     RANSMode m_rANS_mode;
-    bool m_parallel_decode = false;                 ///< decompresses with in-brick parallelism and encodes bricks accordingly
+    bool m_random_access = false;                   ///< encoding supports random access within a brick
     bool m_separate_detail;
     uint32_t m_max_brick_palette_count;             ///< max. palette length of any brick as a number of label entries
 
