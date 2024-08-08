@@ -178,6 +178,7 @@ layout (std140, binding = 10) uniform render_info {
     float g_spatial_sigma;
     float g_depth_sigma;
     float g_illumination_sigma;
+    float g_denoise_fade_sigma;
     int g_denoise_filter_kernel_size;
 
 };
@@ -221,4 +222,5 @@ layout(binding = 19) uniform sampler1D s_transferFunctions[SEGMENTED_VOLUME_MATE
 layout(push_constant) uniform restrict readonly PushConstants
 {
     uint denoising_iteration; // denoising iteration variable for ping pong svgf-buffer
+    float denoising_heuristic; // heuristic for fade because image converges
 } pc;

@@ -74,8 +74,15 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
         commandBuffer.dispatch(m_workgroupCount[INPAINTING].width, m_workgroupCount[INPAINTING].height, m_workgroupCount[INPAINTING].depth);
         commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
     }
+//    {
+//        // calculate heuristic for denoise fade
+//        float heuristic = 0.f;
+//        m_framesSinceCameraMove;
+//        PushConstants pushConstants{.denoising_heuristic=heuristic};
+//        commandBuffer.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants),
+//                                    &pushConstants);
+//    }
     getCtx()->debugMarker->endRegion(commandBuffer); // denoising
-
     getCtx()->debugMarker->endRegion(commandBuffer); // total_renderer
     commandBuffer.end();
     return getCtx()->sync->submit(commandBuffer, m_queueFamilyIndex, awaitBeforeExecution, vk::PipelineStageFlagBits::eAllCommands, awaitBinaryAwaitableList, signalBinarySemaphore);

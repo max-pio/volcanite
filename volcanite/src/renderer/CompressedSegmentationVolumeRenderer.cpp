@@ -765,6 +765,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<float>("g_spatial_sigma", m_spatial_sigma);
         m_urender_info->setUniform<float>("g_depth_sigma", m_depth_sigma);
         m_urender_info->setUniform<float>("g_illumination_sigma", m_illumination_sigma);
+        m_urender_info->setUniform<float>("g_denoise_fade_sigma", m_denoise_fade_sigma);
         m_urender_info->setUniform<int>("g_denoise_filter_kernel_size", m_denoise_filter_kernel_size);
 //        m_urender_info->setUniform<float>("g_opacityThreshold",
 //                                          0.5); // TODO: we have this low opacity treshold to render opaque first hits
@@ -1078,6 +1079,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addFloat(&m_depth_sigma, "Depth Sigma", 0.001f, 5.f, 0.01, 2);
     g_dev->addBool(&m_svgf_enabled, "À-Trous Filter");
     g_dev->addFloat(&m_illumination_sigma, "Illumination Sigma", 0.01f, 10.f, 0.01, 2);
+    g_dev->addFloat(&m_denoise_fade_sigma, "Denoise Fade Sigma", 0.00f, 10.f, 0.01, 2);
     g_dev->addBool(&m_tonemap_enabled, "Tone Mapping");
     g_dev->addSeparator();
     g_dev->addLabel("Debug");

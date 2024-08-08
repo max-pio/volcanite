@@ -232,6 +232,7 @@ private:
     // svgf
     bool m_svgf_enabled = true;
     float m_illumination_sigma = 4.0f;
+    float m_denoise_fade_sigma = 1.f;
 //     debugging and dev options
     float m_lod_bias = 0.f;
     bool m_show_envmap = false;

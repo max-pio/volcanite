@@ -218,6 +218,15 @@ void main() {
         accum_rgba.rgb = rgb2srgb(accum_rgba.rgb);
     }
 
+    if (pc.denoising_iteration == max_denoising_iterations) {
+        // calculate fade for denoiser
+        float fade = g_denoise_fade_sigma / sqrt(g_camera_still_frames);
+        fade = min(fade, 1.f);
+        uint sample_count_block = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
+        vec4 color = imageLoad(accumulationOut, pixel) / float(sample_count_block);
+        accum_rgba.rgb = mix(color.rgb, accum_rgba.rgb, fade);
+    }
+
     // output to display image
     imageStore(inpaintedOutColor, pixel, blendWithBackground(accum_rgba, pixel));
     // store color for next iteration

@@ -70,7 +70,8 @@ public:
 
 protected:
     struct PushConstants {
-        uint32_t denoising_iteration;
+        uint32_t denoising_iteration; // denoising iteration variable for ping pong svgf-buffer
+        float denoising_heuristic; // heuristic for fade because image converges
     };
 
     std::vector<std::shared_ptr<Shader>> createShaders() override;
