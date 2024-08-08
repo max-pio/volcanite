@@ -142,7 +142,7 @@ uint32_t CompressedSegmentationVolume::encodeBrick(const std::vector<uint32_t>& 
     // we handle this here because it allows us to skip some special handling (for example checking if the palette is empty) in the following loop
     // in theory, we could start with a finer level here too and skip the first levels (= Carsten's original idea)
     out[0] = out_i;                 // LoD start position
-    out[header_size - 1] = 0u;      // palette start position (from back)
+    out[lod_count] = 0u;            // palette start position (from back)
     uint32_t muligrid_lod_start = multigrid.size() - 1;
     if (multigrid[muligrid_lod_start].constant_subregion) {
         write4Bit(out, 0u, out_i++, PALETTE_ADV | STOP_BIT);
