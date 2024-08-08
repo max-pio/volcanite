@@ -211,13 +211,6 @@ void main() {
         }
     }
 
-    // perform tonemapping and color space conversion
-    if(g_tonemap_enable && pc.denoising_iteration == max_denoising_iterations) {
-        accum_rgba.rgb *= 2.4f; // increase exposure
-        accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb);
-        accum_rgba.rgb = rgb2srgb(accum_rgba.rgb);
-    }
-
     if (pc.denoising_iteration == max_denoising_iterations) {
         // calculate fade for denoiser
         float fade = g_denoise_fade_sigma / sqrt(g_camera_still_frames);
@@ -225,6 +218,13 @@ void main() {
         uint sample_count_block = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
         vec4 color = imageLoad(accumulationOut, pixel) / float(sample_count_block);
         accum_rgba.rgb = mix(color.rgb, accum_rgba.rgb, fade);
+    }
+
+    // perform tonemapping and color space conversion
+    if(g_tonemap_enable && pc.denoising_iteration == max_denoising_iterations) {
+        accum_rgba.rgb *= 2.4f; // increase exposure
+        accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb);
+        accum_rgba.rgb = rgb2srgb(accum_rgba.rgb);
     }
 
     // output to display image
