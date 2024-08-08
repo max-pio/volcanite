@@ -24,7 +24,7 @@
 
 #include "VolumeCompressionBase.hpp"
 #include "csgv_constants.h" // in data/shader/cpp_glsl_include
-#include "volcanite/compression/rans.hpp"
+#include "volcanite/compression/pack_rans.hpp"
 #include "vvv/util/util.hpp"
 
 
@@ -608,6 +608,19 @@ public:
     ///////////////////////////////////////////////////////////////////
     [[nodiscard]] std::vector<std::map<std::string, float>> gatherBrickStatistics() const;
 
+    /// Exports a human readable back-to-back list of the center brick operation stream as hex codes.
+    /// The CSGV must not use any stream compression (i.e. no rANS encoding).
+    void exportSingleBrickOperationsHex(const std::string& path) const;
+
+    /// Exports back-to-back lists of brick operations to two files [path]_op.raw and [path]_op_starts.raw.\n
+    /// The output depends on the compression mode. If the CSGV uses rANS:\n
+    /// - op.raw contains back-to-back lists of the rANS compressed operation streams.\n
+    /// - op_starts.raw stores two uint32 numbers per brick:\n
+    /// If the CSGV does not use rANS:\n
+    /// - op.raw stores back-to-back operation lists of the bricks using one unsigned char per operation code.\n
+    /// - op_starts.raw stores two uint32 numbers per brick: the index (in 4 bit elements) of the brick's first
+    /// operation and the zero-indexed position of the first operations within the brick at which the fines LoD starts.\n
+    /// The op_starts.raw ends with one last dummy entry containing the total size of entries on op.raw and a zero.
     void exportAllBrickOperations(const std::string& path) const;
     void exportBrickOperationsToCSV(const std::string& path, uint32_t brick_idx) const;
 
@@ -700,6 +713,7 @@ private:
     RANS m_detail_rans;
     RANSMode m_rANS_mode;
     bool m_random_access = false;                   ///< encoding supports random access within a brick
+
     bool m_separate_detail;
     uint32_t m_max_brick_palette_count;             ///< max. palette length of any brick as a number of label entries
 

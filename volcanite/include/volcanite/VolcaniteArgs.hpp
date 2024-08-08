@@ -133,7 +133,7 @@ public:
             cmd.add(bricksizeArg);
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
-            SwitchArg randomAccessArg("r", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
+            SwitchArg randomAccessArg("p", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
 
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);

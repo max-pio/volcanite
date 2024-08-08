@@ -15,9 +15,10 @@
 
 
 /*
-This is an adaption of the ryg_rans implementation of rANS encoding released by Fabian Giesen in the public domain (CC0 license).
-In principle, it slightly adapts the eixsting code for rANS encoding to operate on packed 4 bit operation codes, i.e. integers of 4 bit precision.
-Most parts of the file - including original comments - remain unchanged from the rans_byte implementation given in the repository.
+This is an adaption of the ryg_rans implementation of rANS encoding released by Fabian Giesen in the public domain
+(CC0 license). In principle, it slightly adapts the eixsting code for rANS encoding to operate on packed 4 bit operation
+codes, i.e. integers of 4 bit precision. Most parts of the file - including original comments - remain unchanged from
+the rans_byte implementation given in the repository.
         https://github.com/rygorous/ryg_rans
         http://fgiesen.wordpress.com/
  */

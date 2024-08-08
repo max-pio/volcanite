@@ -20,7 +20,7 @@
 #include <unordered_set>
 #include <thread>
 
-#include "volcanite/compression/bitpack.hpp"
+#include "volcanite/compression/pack_nibble.hpp"
 
 using namespace vvv;
 
@@ -453,16 +453,33 @@ namespace volcanite {
         return statistics;
     }
 
-    /** Exports back-to-back lists of brick operations to two files [path]_op.raw and [path]_op_starts.raw.\n
-     * The output depends on the compression mode. If the CSGV uses rANS:\n
-     * - op.raw contains back-to-back lists of the rANS compressed operation streams.\n
-     * - op_starts.raw stores two uint32 numbers per brick:\n
-     * If the CSGV does not use rANS:\n
-     * - op.raw stores back-to-back operation lists of the bricks using one unsigned char per operation code.\n
-     * - op_starts.raw stores two uint32 numbers per brick: the index (in 4 bit elements) of the brick's first
-     * operation and the zero-indexed position of the first operations within the brick at which the fines LoD starts.\n
-     * The op_starts.raw ends with one last dummy entry containing the total size of entries on op.raw and a zero.
-     * */
+
+    void CompressedSegmentationVolume::exportSingleBrickOperationsHex(const std::string& path) const {
+        const uint32_t brick_idx = getBrickIndexCount() / 2;
+
+        std::ofstream fout(path, std::ios::out);
+        if(!fout.is_open())
+            throw std::runtime_error("Could not open file " + path + ".txt");
+
+        const uint32_t* encoding = getBrickEncoding(brick_idx);
+        if (m_rANS_mode == NO_RANS) {
+            uint32_t start4bit = encoding[0]; // first entry of header is the lod start in number of 4 bit entries
+            uint32_t end4bit = (getBrickEncodingLength(brick_idx) - getBrickPaletteLength(brick_idx)) * 8; // (total brick size - palette size) * 8
+
+            for (uint32_t i = start4bit; i < end4bit; i++) {
+                unsigned char operation = read4Bit(encoding, 0, i);
+                if (operation >= 16)
+                    throw std::runtime_error("4 bit operation must be < 16");
+
+                char hex_code = (operation < 10) ? ('0' + operation) : ('A' + (operation - 10));
+                fout << hex_code;
+            }
+        }
+        fout.close();
+
+        Logger(INFO) << "exported csgv operations of center brick as hex codes to" << path;
+    }
+
     void CompressedSegmentationVolume::exportAllBrickOperations(const std::string& path) const {
         if(m_encodings.empty() || m_separate_detail)
             throw std::runtime_error("Compress the volume without detail separation first before exporting brick operations!");
@@ -474,7 +491,7 @@ namespace volcanite {
 
         std::ofstream fout(path + "_op.raw", std::ios::out | std::ios::binary);
         if(!fout.is_open())
-            throw std::runtime_error("Could not open file " + path + ".raw");
+            throw std::runtime_error("Could not open file " + path + "_op.raw");
         std::ofstream bs_out(path + "_op_starts.raw", std::ios::out | std::ios::binary);
         if(!bs_out.is_open())
             throw std::runtime_error("Could not open file " + path + "_starts.raw");
@@ -485,7 +502,8 @@ namespace volcanite {
         const uint32_t brickCount = getBrickIndexCount();
         const uint32_t lod_count = getLodCountPerBrick();
         uint32_t top_pointer = 0;
-        for (uint32_t brick_idx = 0; brick_idx < brickCount; brick_idx++) {
+//        for (uint32_t brick_idx = 0; brick_idx < brickCount; brick_idx++) {
+        for (uint32_t brick_idx = getBrickIndexCount() / 2; brick_idx < getBrickIndexCount() / 2 + 1; brick_idx++) {
             const uint32_t* encoding = getBrickEncoding(brick_idx);
             if (m_rANS_mode == NO_RANS) {
                 uint32_t start4bit = encoding[0]; // first entry of header is the lod start in number of 4 bit entries

@@ -19,7 +19,7 @@
 #include <sstream>
 #include <thread>
 
-#include "volcanite/compression/bitpack.hpp"
+#include "volcanite/compression/pack_nibble.hpp"
 
 using namespace vvv;
 

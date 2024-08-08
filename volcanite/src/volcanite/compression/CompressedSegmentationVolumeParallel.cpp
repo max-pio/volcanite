@@ -5,7 +5,7 @@
 #include <unordered_set>
 #include <thread>
 
-#include "volcanite/compression/bitpack.hpp"
+#include "volcanite/compression/pack_nibble.hpp"
 
 namespace volcanite {
 
@@ -44,7 +44,7 @@ uint32_t CompressedSegmentationVolume::encodeBrickForRandomAccess(const std::vec
     // we handle this here because it allows us to skip some special handling (for example checking if the palette is empty) in the following loop
     // in theory, we could start with a finer level here too and skip the first levels (= Carsten's original idea)
     out[0] = out_i;                 // LoD start position
-    out[header_size - 1] = 0u; // palette start position (from back)
+    out[lod_count] = 0u;            // palette start position (from back)
     uint32_t muligrid_lod_start = multigrid.size() - 1;
     if (multigrid[muligrid_lod_start].constant_subregion) {             //isHomogeneousBrick(volume, volume_dim, glm::uvec3(0u), {brick_size, brick_size, brick_size})) {Z
         write4Bit(out, 0u, out_i++, PALETTE_ADV | STOP_BIT);
@@ -142,26 +142,28 @@ uint32_t CompressedSegmentationVolume::encodeBrickForRandomAccess(const std::vec
         }
 
 
-        if(m_rANS_mode == DOUBLE_TABLE_RANS) {
-            // pack all previous levels via rANS encoding if we're at the second last LoD (last LoD of non-detail encoding)
-            // NOTE: the old out_i and header starts count in number of elements. the following out_i counts in 4bit
-            if (current_inv_lod == lod_count - 2u) {
-                out_i = m_rans.packRANS(out, out[0], out_i);
-                // the detail encoding has to start at a new 32bit element (which is guaranteed by our rANS output)
-                assert(out_i % 8u == 0u && "next element after rANS output should start at a new uint32_t element");
-            }
-            // pack the detail (=finest LOD) via rANS encoding.
-            // We have a separate rANS encoder here because the detail level does not use stop bits => different operation frequencies
-            else if (in_detail_lod) {
-                out_i = m_detail_rans.packRANS(out, out[current_inv_lod], out_i);
-            }
+//        if(m_rANS_mode == DOUBLE_TABLE_HUFFMAN_WT) {
+//            throw std::runtime_error("DOUBLE_TABLE_HUFFMAN_WT not implemented yet");
+//            // pack all previous levels via rANS encoding if we're at the second last LoD (last LoD of non-detail encoding)
+//            // NOTE: the old out_i and header starts count in number of elements. the following out_i counts in 4bit
+//            if (current_inv_lod == lod_count - 2u) {
+//                out_i = m_rans.packRANS(out, out[0], out_i);
+//                // the detail encoding has to start at a new 32bit element (which is guaranteed by our rANS output)
+//                assert(out_i % 8u == 0u && "next element after rANS output should start at a new uint32_t element");
+//            }
+//            // pack the detail (=finest LOD) via rANS encoding.
+//            // We have a separate rANS encoder here because the detail level does not use stop bits => different operation frequencies
+//            else if (in_detail_lod) {
+//                out_i = m_detail_rans.packRANS(out, out[current_inv_lod], out_i);
+//            }
         }
         current_inv_lod++;
     }
 
     // if we did not apply the rANS packing before, because we are only using a single freq. table, we do it here
-    if(m_rANS_mode == SINGLE_TABLE_RANS)
-        out_i = m_rans.packRANS(out, out[0], out_i);
+//    if(m_rANS_mode == WT)
+//        out_i = m_rans.packRANS(out, out[0], out_i);
+
 
 
     // last entry of our header stores the palette size

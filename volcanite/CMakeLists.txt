@@ -6,7 +6,7 @@ set(VOLCANITE_HEADERS
         include/volcanite/CSGVPathUtils.hpp
         include/volcanite/VolcaniteArgs.hpp
         include/volcanite/StratifiedPixelSequence.hpp
-        include/volcanite/compression/bitpack.hpp
+        include/volcanite/compression/pack_nibble.hpp
         include/volcanite/compression/BitVector.hpp
         include/volcanite/compression/VolumeCompressionBase.hpp
         data/shader/cpp_glsl_include/csgv_constants.h
@@ -14,18 +14,19 @@ set(VOLCANITE_HEADERS
         include/volcanite/compression/CompSegVolHandler.hpp
         include/volcanite/compression/CSGVChunkMerger.hpp
         include/volcanite/compression/CSGVDatabase.hpp
-        include/volcanite/compression/rans.hpp
+        include/volcanite/compression/pack_rans.hpp
+        include/volcanite/compression/wavelet_matrix.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp
         include/volcanite/renderer/PassCompSegVolRender.hpp
         )
 
 set(VOLCANITE_SOURCES
-        src/volcanite/compression/bitpack.cpp
+        src/volcanite/compression/pack_nibble.cpp
         src/volcanite/compression/CompressedSegmentationVolume.cpp
         src/volcanite/compression/CompressedSegmentationVolumeStats.cpp
         src/volcanite/compression/CompressedSegmentationVolumeParallel.cpp
-        src/volcanite/compression/rans.cpp
+        src/volcanite/compression/pack_rans.cpp
         src/renderer/CompressedSegmentationVolumeRenderer.cpp
         src/renderer/CompressedSegmentationVolumeBrickViewer.cpp
         src/renderer/PassCompSegVolRender.cpp

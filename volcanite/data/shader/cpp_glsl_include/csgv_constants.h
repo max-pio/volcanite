@@ -21,18 +21,38 @@
 
 // Compressed Segmentation Volume Constants ----------------------------------------------------------------------------
 
+// stream compression mode bit flags
+#define DOUBLE_ENCODING_BIT 1u
+#define RANS_BIT 2u
+#define WT_BIT 4u
+#define HUFFMAN_WT_BIT 8u
+
 #ifdef GL_core_profile
     #define CSGV_UINT uint
     #define NO_RANS 0
-    #define SINGLE_TABLE_RANS 1
-    #define DOUBLE_TABLE_RANS 2
+    #define SINGLE_TABLE_RANS 2
+    #define DOUBLE_TABLE_RANS 3
 #else
     #define CSGV_UINT uint32_t
     using namespace vvv;
 
 namespace volcanite {
-        enum RANSMode {NO_RANS=0, SINGLE_TABLE_RANS=1, DOUBLE_TABLE_RANS=2};
-    }
+        // TODO: rename RANSMode to StreamCompression as it is not only rANS anymore
+        // TODO: change NO_RANS to NONE, SINGLE_TABLE_RANS=1 to =2, DOUBLE_TABLE_RANS=2 to =3
+        enum RANSMode {NO_RANS=0,
+                       SINGLE_TABLE_RANS=1, DOUBLE_TABLE_RANS=2,
+                       WT=4, HUFFMAN_WT=8, DOUBLE_TABLE_HUFFMAN_WT=9};
+
+        // Bit Flags
+        //
+        // config:
+        // double encoder (start new encoder for the finest LOD): bit 0 (1)
+        //
+        // mutually exclusive:
+        // rANS: bit 1 (2)
+        // wavelet tree: bit 2 (4)
+        // Huffman wavelet tree: bit 3 (8)
+}
 #endif
 
 // 1000 most significant bit stores stop bit:

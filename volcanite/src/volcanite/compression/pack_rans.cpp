@@ -16,7 +16,7 @@
 // This file contains large parts of the CC0 licensed rANS implementation by Fabian Giesen, see
 // https://github.com/rygorous/ryg_rans
 
-#include "volcanite/compression/rans.hpp"
+#include "volcanite/compression/pack_rans.hpp"
 
 using namespace vvv;
 

@@ -12,6 +12,9 @@
 //
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
+// This class is partially based on code from the pasta-toolkit BitVector implementation by Florian Kurpicz which is
+// licensed under the GPLv3 license. https://github.com/pasta-toolbox/bit_vector
 
 #pragma once
 
@@ -169,13 +172,13 @@ private:
 typedef uint64_t BV_L12Type;
 
 /// Number of L2-blocks that are grouped into one L1-block MINUS ONE. The first L2-block is not stored explicitly.
-static constexpr uint32_t BV_STORE_L2_PER_L1 = 5;
+static constexpr uint32_t BV_STORE_L2_PER_L1 = 4;
 /// Bits that each stored L1-block takes up in the BV_L12Type
 static constexpr uint32_t BV_STORE_L1_BITS = 19;
 /// Bits that each stored L2-block takes up in the BV_L12Type
-static constexpr uint32_t BV_STORE_L2_BITS = 9;
+static constexpr uint32_t BV_STORE_L2_BITS = 11;
 /// Bits covered by an L2-block.
-static constexpr uint32_t BV_L2_BIT_SIZE = 1 * BV_WORD_BIT_SIZE;
+static constexpr uint32_t BV_L2_BIT_SIZE = 4 * BV_WORD_BIT_SIZE;
 
 /// Bits covered by an L1-block.
 static constexpr uint32_t BV_L1_BIT_SIZE = (BV_STORE_L2_PER_L1 + 1) * BV_L2_BIT_SIZE;
