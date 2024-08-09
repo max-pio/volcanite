@@ -179,6 +179,7 @@ layout (std140, binding = 10) uniform render_info {
     float g_depth_sigma;
     float g_illumination_sigma;
     float g_denoise_fade_sigma;
+    bool g_denoise_fade_enable;
     int g_denoise_filter_kernel_size;
 
 };

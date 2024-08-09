@@ -98,13 +98,15 @@ void main() {
     const int current_block_size = clamp(g_subsampling / (1 << int(log2(sqrt(g_camera_still_frames + 1)))), 1, g_subsampling);
 
     // only one thread per pixel block
-    if(isHelperLane(pixel, viewport_size))
-    return;
+    if (isHelperLane(pixel, viewport_size))
+        return;
+
+    if (g_bilateral_enable && pc.denoising_iteration != max_denoising_iterations)
+        return;
 
     // read the HDR radiance that was accumulated for this pixel so far
-    uint sample_count = pc.denoising_iteration == 0 ? max(imageLoad(accuSampleCountOut, pixel).r, 1u) : 1u;
+    // needs normalization based on sample count
     vec4 pixel_color = g_svgf_enable ? imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel) : imageLoad(accumulationOut, pixel);
-    pixel_color /= float(sample_count);
 
     // unpack the G-Buffer for the pixel
     float normalized_depth;
@@ -113,118 +115,131 @@ void main() {
     uvec2 g_buffer_packed = imageLoad(gBuffer, pixel).rg;
     bool valid = unpackGBufferRG8(g_buffer_packed, label_hash, normal, normalized_depth);
 
+    if (!valid) return;
+
     vec4 accum_rgba = vec4(0.f);
-    if ((g_bilateral_enable || g_svgf_enable) && valid) {
-        ivec2 block_pixel;
-        float weight = 1.f;
-        float normalization  = 0.f;
-        if (g_bilateral_enable) {
-            // bilateral denoising
-            // based on the difference between normal and depth values
-            for (int xx = -g_denoise_filter_kernel_size; xx < g_denoise_filter_kernel_size; xx++) {
-                for (int yy = -g_denoise_filter_kernel_size; yy < g_denoise_filter_kernel_size; yy++) {
-                    block_pixel = pixel + ivec2(xx, yy);
-                    if (isHelperLane(block_pixel, viewport_size))
-                        continue;
-                    // unpack gBuffer
-                    float normalized_depth_temp;
-                    vec3 normal_temp;
-                    uint label_hash_temp;
-                    uvec2 g_buffer_packed_temp = imageLoad(gBuffer, block_pixel).rg;
-                    if (!unpackGBufferRG8(g_buffer_packed_temp, label_hash_temp, normal_temp, normalized_depth_temp)) continue;
+    ivec2 block_pixel;
+    float weight = 1.f;
+    float normalization  = 0.f;
+    if (g_bilateral_enable) {
+        // bilateral denoising
+        // based on the difference between normal and depth values
 
-                    // weight the pixel colors by sample counts
-                    uint sample_count_block = max(imageLoad(accuSampleCountOut, block_pixel).r, 1u);
-                    vec4 rgba_block = imageLoad(accumulationOut, block_pixel) / float(sample_count_block);
+        uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
+        pixel_color /= float(sample_count);
 
-                    if (any(notEqual(normal, normal_temp))) continue;
-                    if (abs(float(normalized_depth) - float(normalized_depth_temp)) + 0.001f > g_difference_depth_denoising) continue;
+        for (int xx = -g_denoise_filter_kernel_size; xx < g_denoise_filter_kernel_size; xx++) {
+            for (int yy = -g_denoise_filter_kernel_size; yy < g_denoise_filter_kernel_size; yy++) {
+                block_pixel = pixel + ivec2(xx, yy);
+                if (isHelperLane(block_pixel, viewport_size))
+                    continue;
+                // unpack gBuffer
+                float normalized_depth_temp;
+                vec3 normal_temp;
+                uint label_hash_temp;
+                uvec2 g_buffer_packed_temp = imageLoad(gBuffer, block_pixel).rg;
+                if (!unpackGBufferRG8(g_buffer_packed_temp, label_hash_temp, normal_temp, normalized_depth_temp)) continue;
 
-                    float spatial_gaussian = 1.f;
-                    if (g_spatial_sigma > 0)
-                        spatial_gaussian = gaussian(length(vec2(xx, yy)), g_spatial_sigma);
+                // weight the pixel colors by sample counts
+                uint sample_count_block = max(imageLoad(accuSampleCountOut, block_pixel).r, 1u);
+                vec4 rgba_block = imageLoad(accumulationOut, block_pixel) / float(sample_count_block);
 
-                    float depth_gaussian = 1.f;
-                    if (g_depth_sigma > 0)
-                        depth_gaussian.r = gaussian((pixel_color.r + pixel_color.g + pixel_color.b) - (rgba_block.r + rgba_block.g + rgba_block.b), g_depth_sigma);
+                if (all(equal(normal_temp, vec3(0.f))) || any(notEqual(normal, normal_temp))) continue;
+                if (abs(float(normalized_depth) - float(normalized_depth_temp)) + 0.001f > g_difference_depth_denoising) continue;
+
+                float spatial_gaussian = 1.f;
+                if (g_spatial_sigma > 0)
+                    spatial_gaussian = gaussian(length(vec2(xx, yy)), g_spatial_sigma);
+
+                float depth_gaussian = 1.f;
+                if (g_depth_sigma > 0)
+                    depth_gaussian.r = gaussian((pixel_color.r + pixel_color.g + pixel_color.b) - (rgba_block.r + rgba_block.g + rgba_block.b), g_depth_sigma);
 //                            depth_gaussian.r = gaussian(length(pixel_color.rgb - rgb_samples.rgb), g_depth_sigma);
 
-                    float weight = spatial_gaussian * depth_gaussian;
+                float weight = spatial_gaussian * depth_gaussian;
 
-                    accum_rgba += rgba_block * weight;
-                    normalization += weight;
-                }
+                accum_rgba += rgba_block * weight;
+                normalization += weight;
             }
-        } else if (g_svgf_enable) {
-            // svgf
-            // for now only À-Trous filter w/o any variance estimation or temporal accumulation
-            const float EPS = 0.01f;
-            const vec3 kernel_weights = { 1.f, 2.f / 3.f, 1.f / 6.f };
+        }
+    } else if (g_svgf_enable) {
+        // svgf
+        // for now only À-Trous filter w/o any variance estimation or temporal accumulation
+        const float EPS = 0.01f;
+        const vec3 kernel_weights = { 1.f, 2.f / 3.f, 1.f / 6.f };
 //            const float var = computeVarianceCenter(pixel, viewport_size);
 
-            const int step_size = int(pow(2, int(pc.denoising_iteration)));
+        const int step_size = int(pow(2, int(pc.denoising_iteration)));
 
 //            const float phi_Lillumination = g_illumination_sigma * sqrt(var) + EPS;
-            const float phi_Lillumination = 1.f; // unnused for now
-            const float phi_depth = max(normalized_depth, 1e-8) * step_size;
+        const float phi_Lillumination = 1.f; // unnused for now
+        const float phi_depth = max(normalized_depth, 1e-8) * step_size;
 
-            for (int yy = -g_denoise_filter_kernel_size; yy <= g_denoise_filter_kernel_size; yy++) {
-                for (int xx = -g_denoise_filter_kernel_size; xx <= g_denoise_filter_kernel_size; xx++) {
-                    block_pixel = pixel + ivec2(xx, yy) * step_size;
+        for (int yy = -g_denoise_filter_kernel_size; yy <= g_denoise_filter_kernel_size; yy++) {
+            for (int xx = -g_denoise_filter_kernel_size; xx <= g_denoise_filter_kernel_size; xx++) {
+                block_pixel = pixel + ivec2(xx, yy) * step_size;
 
-                    if (isHelperLane(block_pixel, viewport_size))
-                        continue;
+                if (isHelperLane(block_pixel, viewport_size))
+                    continue;
 
-                    float normalized_depth_temp;
-                    vec3 normal_temp;
-                    uint label_hash_temp;
-                    uvec2 g_buffer_packed_temp = imageLoad(gBuffer, block_pixel).rg;
-                    if (!unpackGBufferRG8(g_buffer_packed_temp, label_hash_temp, normal_temp, normalized_depth_temp)) continue;
+                float normalized_depth_temp;
+                vec3 normal_temp;
+                uint label_hash_temp;
+                uvec2 g_buffer_packed_temp = imageLoad(gBuffer, block_pixel).rg;
+                if (!unpackGBufferRG8(g_buffer_packed_temp, label_hash_temp, normal_temp, normalized_depth_temp)) continue;
 
-                    // weight the pixel colors by sample counts
-                    uint sample_count_block = pc.denoising_iteration == 0 ? max(imageLoad(accuSampleCountOut, block_pixel).r, 1u) : 1u;
-                    vec4 rgba_block = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], block_pixel) / float(sample_count_block);
+                // weight the pixel colors by sample counts
+                uint sample_count_block = pc.denoising_iteration == 0 ? max(imageLoad(accuSampleCountOut, block_pixel).r, 1u) : 1u;
+                vec4 rgba_block = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], block_pixel) / float(sample_count_block);
 
-                    // we have quantized normals, so we have either (+/-) 90 or (+/-) 180 degree angles
-                    // -> abs(cos) therefore weightN is either 0 or 1
-                    if (any(notEqual(normal, normal_temp)) || all(equal(normal_temp, vec3(0.f)))) continue;
-                    if (label_hash_temp != label_hash) continue;
+                // we have quantized normals, so we have either (+/-) 90 or (+/-) 180 degree angles
+                // -> abs(cos) therefore weightN is either 0 or 1
+                if (any(notEqual(normal, normal_temp)) || all(equal(normal_temp, vec3(0.f)))) continue;
+                if (label_hash_temp != label_hash) continue;
 
-                    const float kernel = kernel_weights[abs(xx)] * kernel_weights[abs(yy)];
-                    const float w = computeWeight(normalized_depth, normalized_depth_temp, phi_depth,
-                    luminance(imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel).xyz),
-                    luminance(imageLoad(denoisingBuffer[pc.denoising_iteration % 2], block_pixel).xyz), phi_Lillumination);
+                const float kernel = kernel_weights[abs(xx)] * kernel_weights[abs(yy)];
+                const float w = computeWeight(normalized_depth, normalized_depth_temp, phi_depth,
+                luminance(imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel).xyz),
+                luminance(imageLoad(denoisingBuffer[pc.denoising_iteration % 2], block_pixel).xyz), phi_Lillumination);
 
-                    weight = w * kernel;
-                    accum_rgba += rgba_block * weight;
-                    normalization += weight;
-                }
+                weight = w * kernel;
+                accum_rgba += rgba_block * weight;
+                normalization += weight;
             }
         }
-
-        if (normalization  > 0.f)
-            accum_rgba.rgba /= normalization;
-
-        if (pixel.x + pixel.y < int((viewport_size.x + viewport_size.y) / 2.5) && pc.denoising_iteration == max_denoising_iterations) {
-            uint sample_count_block = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
-            accum_rgba = imageLoad(accumulationOut, pixel) / float(sample_count_block);
-        }
+    } else {
+        // no denoising
+        uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
+        accum_rgba = pixel_color / float(sample_count);
     }
+
+    if (normalization > 0.f)
+        accum_rgba.rgba /= normalization;
+
+    // debug
+    if (pixel.x + pixel.y < int((viewport_size.x + viewport_size.y) / 2.5) && pc.denoising_iteration == max_denoising_iterations) {
+        uint sample_count_block = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
+        accum_rgba = imageLoad(accumulationOut, pixel) / float(sample_count_block);
+    }
+
 
     if (pc.denoising_iteration == max_denoising_iterations) {
-        // calculate fade for denoiser
-        float fade = g_denoise_fade_sigma / sqrt(g_camera_still_frames);
-        fade = min(fade, 1.f);
-        uint sample_count_block = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
-        vec4 color = imageLoad(accumulationOut, pixel) / float(sample_count_block);
-        accum_rgba.rgb = mix(color.rgb, accum_rgba.rgb, fade);
-    }
+        // perform all post process effects only in the last iteation
+        if (g_denoise_fade_enable) {
+            // calculate fade for denoiser
+            float fade = g_denoise_fade_sigma / sqrt(max(g_camera_still_frames, 1.f));
+            fade = min(fade, 1.f);
+            uint sample_count_block = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
+            vec4 color = imageLoad(accumulationOut, pixel) / float(sample_count_block);
+            accum_rgba.rgb = mix(color.rgb, accum_rgba.rgb, fade);
+        }
 
-    // perform tonemapping and color space conversion
-    if(g_tonemap_enable && pc.denoising_iteration == max_denoising_iterations) {
-        accum_rgba.rgb *= 2.4f; // increase exposure
-        accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb);
-        accum_rgba.rgb = rgb2srgb(accum_rgba.rgb);
+        // perform tonemapping and color space conversion
+        if(g_tonemap_enable) {
+            accum_rgba.rgb *= 2.4f; // increase exposure
+            accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb);
+            accum_rgba.rgb = rgb2srgb(accum_rgba.rgb);
+        }
     }
 
     // output to display image
