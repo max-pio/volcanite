@@ -192,6 +192,10 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         m_usegmented_volume_info->upload(m_pass->getActiveIndex());
     }
 
+    // TODO: half float precision for the accumulation buffer only allows for 2048 single samples per pixel
+    if (m_accum_frames / (1u << 2 * m_subsampling) > 2048)
+        m_accum_frames = 2048;
+
     // just return the last result if only a certain number of frames have to be accumulated
     // as the sample count buffer is counting in uint16, the maximum number of accumulation frames can be 65535
     if ((m_accum_frames > 0 && m_framesSinceCameraMove >= m_accum_frames) || m_framesSinceCameraMove >= 65534u) {
