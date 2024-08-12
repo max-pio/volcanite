@@ -281,7 +281,7 @@ void main() {
     // À-trous feedback to next denoising iteration kernel in HDR
     if (pc.denoising_iteration < LAST_DENOISING_ITERATION) {
         // mark pixels from a filter step that did not receive a single rendered sample with a negative alpha value
-        if (weight_sum < 0.f)
+        if (weight_sum <= 0.f)
             accum_rgba.a = -1.f;
 
         // store color for next iteration
