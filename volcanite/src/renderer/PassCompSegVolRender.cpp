@@ -63,11 +63,9 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
     // denoising
     getCtx()->debugMarker->beginRegion(commandBuffer, "denoising", glm::vec4(0.f, 0.f, 1.f, 1.f));
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, m_pipelines.at(INPAINTING));
-    static constexpr int svgf_passes = 3;
-    for (uint32_t i = 0; i < svgf_passes; i++) {
+    for (uint32_t i = 0; i < DENOISING_ITERATIONS; i++) {
         PushConstants pushConstants{.denoising_iteration=i};
         commandBuffer.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants), &pushConstants);
-//        executeCommands(commandBuffer, INPAINTING);
         if (hasDescriptors()) {
             commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_pipelineLayout, 0, m_descriptorSets->getActive(), nullptr);
         }

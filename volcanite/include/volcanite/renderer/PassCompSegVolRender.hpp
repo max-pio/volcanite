@@ -47,6 +47,8 @@ public:
         INPAINTING = 5
     };
 
+    static constexpr int DENOISING_ITERATIONS = 3;
+
     PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering, std::vector<std::string> shaderDefines = {}, vk::ImageUsageFlags outputImageUsage = {},
                             const std::string& label = "PassCompSegVolRender")
         : PassCompute(ctx, label, multiBuffering, ctx->getQueueFamilyIndices().graphics.value()), WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_shader_defines(shaderDefines) {}

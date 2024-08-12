@@ -587,6 +587,7 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
     if(m_use_palette_cache)
         shader_defines.push_back("PALETTE_CACHE");
+    shader_defines.push_back("LAST_DENOISING_ITERATION=" + std::to_string(PassCompSegVolRender::DENOISING_ITERATIONS - 1));
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if(getCtx()->getWsi())
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), shader_defines);
@@ -654,6 +655,7 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
     }
+    // TODO: use 16 bit precision for denoising buffer
     m_denoise_tex = m_pass->reflectTextureArray("denoisingBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     for (auto & texture : m_denoise_tex) {
         texture->ensureResources();
@@ -766,10 +768,9 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<float>("g_depth_sigma", m_depth_sigma);
         m_urender_info->setUniform<float>("g_illumination_sigma", m_illumination_sigma);
         m_urender_info->setUniform<float>("g_denoise_fade_sigma", m_denoise_fade_sigma);
-        m_urender_info->setUniform<uint_fast32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
-        m_urender_info->setUniform<int>("g_denoise_filter_kernel_size", m_denoise_filter_kernel_size);
-//        m_urender_info->setUniform<float>("g_opacityThreshold",
-//                                          0.5); // TODO: we have this low opacity treshold to render opaque first hits
+        m_urender_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
+        m_urender_info->setUniform<int>("g_denoise_filter_kernel_size", m_svgf_enabled ?
+                                            glm::min(3, m_denoise_filter_kernel_size) : m_denoise_filter_kernel_size);
         m_urender_info->setUniform<glm::vec3>("g_camera_position_world_space", camera->position_world_space);
         m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
         // the g_voxels_per_pixel_per_dist determines how many voxels an image pixel footprint overlaps for a camera distance

@@ -232,8 +232,9 @@ private:
     // svgf
     bool m_svgf_enabled = true;
     float m_illumination_sigma = 4.0f;
+    bool m_denoise_fade_enabled = true;
     float m_denoise_fade_sigma = 1.f;
-//     debugging and dev options
+    // debugging and dev options
     float m_lod_bias = 0.f;
     bool m_show_envmap = false;
     bool m_show_normals = false;
@@ -246,17 +247,6 @@ private:
     bool m_clear_accum_every_frame = false;
     int m_accum_frames = 16;
     int m_max_inv_lod = 6;
-    // denoising
-    bool m_bilateral_enabled = false;
-    int m_denoise_filter_kernel_size = 2;
-    float m_difference_depth_denoising = 1.0f;
-    float m_spatial_sigma = 2.0f;
-    float m_depth_sigma = 0.1f;
-    // svgf
-    bool m_svgf_enabled = true;
-    float m_illumination_sigma = 4.0f;
-    bool m_denoise_fade_enabled = true;
-    float m_denoise_fade_sigma = 1.f;
     // utility
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text;
