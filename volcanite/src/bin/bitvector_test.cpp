@@ -14,8 +14,10 @@
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "vvv/headless_entrypoint.hpp"
-#include "volcanite/compression/BitVector.hpp"
 #include "vvv/util/util.hpp"
+#include "volcanite/compression/wavelet_tree/BitVector.hpp"
+#include "volcanite/compression/pack_nibble.hpp"
+#include "volcanite/compression/wavelet_tree/WaveletMatrix.hpp"
 
 #include <iostream>
 #include <string>
@@ -157,8 +159,16 @@ BitVector createBitVectorFromBoolVector(std::vector<bool>& boolVector) {
     return bitVector;
 }
 
+std::vector<uint32_t> createRandomNibbleVector(uint32_t size = 4000) {
+    std::vector<uint32_t> v((size + 7) / 8); // 8 nibbles (half bytes) in uint32
+    for (uint32_t i = 0; i < size; i++) {
+        write4Bit(v, 0, i, static_cast<uint32_t>(dist(mt) * 16u));
+    }
+    return v;
+}
 
-int test_set_access(uint32_t size = 4000) {
+
+int test_bv_set_access(uint32_t size = 4000) {
     std::vector<bool> boolVector = createRandomBoolVector(size);
     BitVector bitVector = BitVector(boolVector);
 
@@ -183,7 +193,7 @@ int test_set_access(uint32_t size = 4000) {
     return 0;
 }
 
-int test_rank(uint32_t size = 4000) {
+int test_bv_rank(uint32_t size = 4000) {
     BitVector bitVector = createRandomBitVector(size);
     FlatRank f(bitVector);
 
@@ -203,8 +213,76 @@ int test_rank(uint32_t size = 4000) {
     return 0;
 }
 
-void printTest() {
-    constexpr uint32_t size = 4000;
+int test_wm() {
+    auto v4bit = createRandomNibbleVector();
+    WaveletMatrix m(v4bit.data(), 0, v4bit.size() * 8);
+
+
+    for (int i = 0; i < v4bit.size() * 8; i++) {
+        // access
+        uint32_t ref_access = read4Bit(v4bit, 0, i);
+        if (m.access(i) != ref_access) {
+            Logger(ERROR) << m.access(i) << " instead of " << ref_access;
+            return i + 1;
+        }
+
+        // rank
+        for (uint32_t s = 0; s < WM_ALPHABET_SIZE; s++) {
+            uint32_t ref_rank = 0u;
+            for (int n = 0; n < i; n++) {
+                if (read4Bit(v4bit, 0, n) == s)
+                    ref_rank++;
+            }
+            if (ref_rank != m.rank(i, s))
+                return -(i+1);
+
+        }
+
+    }
+    return 0;
+}
+
+void printWMTest() {
+    constexpr uint32_t size = 32*32*32 + 16*16*16 + 8*8*8 + 4*4*4 + 2*2*2 + 1;
+    auto v4bit = createRandomNibbleVector(size);
+    WaveletMatrix m(v4bit.data(), 0, size);
+
+    // print some information about the WM structure
+    constexpr int TIMER_RUN_COUNT = 10;
+    vvv::MiniTimer t;
+    uint32_t x = 0u;
+    double e_rank = 0.f;
+    for (int runs = 0; runs < TIMER_RUN_COUNT; runs++) {
+        t.restart();
+        for (int i = 0; i < size; i++)
+            x ^= m.rank(i, i % 16u);
+        e_rank += t.elapsed();
+    }
+    e_rank /= TIMER_RUN_COUNT;
+    double e_access = 0.f;
+    for (int runs = 0; runs < TIMER_RUN_COUNT; runs++) {
+        t.restart();
+        for (int i = 0; i < size; i++)
+            x ^= m.access(i);
+        e_access += t.elapsed();
+    }
+    e_access /= TIMER_RUN_COUNT;
+    uint32_t byte_size = m.getByteSize();
+    std::cout << "Wavelet Matrix rank() in " << e_rank / static_cast<double>(size) * 1000. * 1000. * 1000. << " ns,"
+              << " access in " << e_access / static_cast<double>(size) * 1000. * 1000. * 1000. << " ns,"
+              << "space overhead is "
+              << (static_cast<double>(byte_size) / (v4bit.size() * 4.) * 100.f) << "% compared to 4 bits per entry"
+              << (x & 1u ? " " : "") // dependency to ensure that f.rank1(i) is not optimized away
+              << std::endl;
+    //    // L2_PER_L1,L1_BITS,L2_BITS,L2_BIT_SIZE,timing,space
+    //    std::cout << BV_STORE_L2_PER_L1 << "," << BV_STORE_L1_BITS << "," << BV_STORE_L2_BITS << ","
+    //              << BV_L2_BIT_SIZE << "," << e/static_cast<double>(size)*1000.*1000.*1000. << ","
+    //              << FlatRank::overhead() << std::endl;
+    std::cout << std::endl;
+}
+
+void printBVTest() {
+    constexpr uint32_t size = 64*64*64;
     auto bv = createRandomBitVector(size);
     std::cout << "     Bit Vector: " << str(bv) << std::endl;
     std::cout << "                 " << rankStrTicks(bv) << std::endl;
@@ -241,10 +319,12 @@ void printTest() {
 
 int bitvector_test(int argc, char *argv[]) {
 
-    printTest();
+//    printBVTest();
+    printWMTest();
 
-    TEST(test_set_access())
-    TEST(test_rank())
+//    TEST(test_bv_set_access())
+//    TEST(test_bv_rank())
+    TEST(test_wm())
 
     return 0;
 }

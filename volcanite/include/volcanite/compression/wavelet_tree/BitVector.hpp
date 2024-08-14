@@ -89,7 +89,8 @@ public:
                                             m_data(words_for_size(size), bit ? ~0ull : 0ull) {}
 
    [[nodiscard]] uint8_t access(uint32_t index) const {
-       return bitfieldExtract(m_data[index / BV_WORD_BIT_SIZE], static_cast<int>(index % BV_WORD_BIT_SIZE), 1);
+        assert(index / BV_WORD_BIT_SIZE < m_data.size() && "bit vector access out of bounds");
+        return bitfieldExtract(m_data[index / BV_WORD_BIT_SIZE], static_cast<int>(index % BV_WORD_BIT_SIZE), 1);
     }
 
     void set(uint32_t index, uint8_t bit_value) {
@@ -145,7 +146,8 @@ public:
         return ss.str();
     }
 
-    [[nodiscard]] const BV_WordType* getRawData() const { return &m_data[0]; }
+    [[nodiscard]] const BV_WordType* getRawDataConst() const { return &m_data[0]; }
+    [[nodiscard]] BV_WordType* getRawData() { return &m_data[0]; }
     [[nodiscard]] uint32_t getRawDataSize() const { return words_for_size(m_size); }
 
 private:
@@ -179,6 +181,11 @@ static constexpr uint32_t BV_STORE_L1_BITS = 19;
 static constexpr uint32_t BV_STORE_L2_BITS = 11;
 /// Bits covered by an L2-block.
 static constexpr uint32_t BV_L2_BIT_SIZE = 4 * BV_WORD_BIT_SIZE;
+
+// some reasonable configurations:
+// 5 19 9 1     (fastest, 16,67% overhead)
+// 4 19 11 4    (2x as slow, 5% overhead)
+// 3 19 12 8    (3x as slow, 3.125% overhead)
 
 /// Bits covered by an L1-block.
 static constexpr uint32_t BV_L1_BIT_SIZE = (BV_STORE_L2_PER_L1 + 1) * BV_L2_BIT_SIZE;
@@ -217,12 +224,13 @@ inline uint32_t getL2Entry(const BV_L12Type& v, uint32_t i) {
     // L2-information (e.g. 9 bits per for all except the first one L2-block each). They are ordered in the BV_L12Type
     // from LSB to MSB, starting after the least significant BV_STORE_L1_BITS bits (e.g. 19) that are used for L1-info.
     static constexpr uint32_t OFFSET = BV_STORE_L1_BITS - BV_STORE_L2_BITS;
-    return i == 0u ? 0u : bitfieldExtract(v, static_cast<int>(i * BV_STORE_L2_BITS + OFFSET), BV_STORE_L2_BITS);
+    return i ? bitfieldExtract(v, static_cast<int>(i * BV_STORE_L2_BITS + OFFSET), BV_STORE_L2_BITS) : 0u;
 }
 
 inline BV_L12Type buildL12Type(uint32_t l1, const uint32_t l2[BV_STORE_L2_PER_L1]) {
     // L1-information in LSB
     BV_L12Type entry = l1;
+    assert(l1 < (1u << BV_STORE_L1_BITS) && "l1 value is too large to be stored in L12 block");
     // followed by (BV_L2_PER_L1-1) entries for (non-implicit) L2-information
     #pragma unroll(BV_STORE_L2_PER_L1)
     for (uint32_t i = 0; i < (BV_STORE_L2_PER_L1); i++)
@@ -240,10 +248,11 @@ public:
         assert(bv.size() < maximumBitVectorSize() && "Bit Vector is too large for FlatRank construction.");
 
         // determine required number of L1-blocks and create array
-        m_size = (bv.size() + BV_L1_BIT_SIZE - 1u) / BV_L1_BIT_SIZE;
+        // store (up to) one more element than necessary to allow rank(text_size) queries
+        m_size = bv.size() / BV_L1_BIT_SIZE + 1u;
         m_data = new BV_L12Type[m_size];
 
-        m_bit_vector_data = bv.getRawData();
+        m_bit_vector_data = bv.getRawDataConst();
         const uint32_t word_count = bv.getRawDataSize();
 
         uint32_t l1_entry = 0u;
@@ -254,9 +263,9 @@ public:
         // write the L12 entries from front to back
         uint32_t data_i = 0u;
 
-        while(word + BV_L2_WORD_SIZE < word_count) {
+        while(word < word_count) {
             // gather values for all l2 entries
-            #pragma unroll(BV_STORE_L2_PER_L1)
+            #pragma unroll
             for (uint32_t _l2 = 0u; _l2 < BV_STORE_L2_PER_L1; _l2++) {
 
                 // L2-entries store the number of ones before each entry WITHIN the L1-block.
@@ -275,13 +284,18 @@ public:
             data_i++;
 
             // update L1 tracking by adding bits of next (non-stored) L2-block
-            if (word + BV_L2_WORD_SIZE < word_count) {
-                l1_entry += l2_entries[BV_STORE_L2_PER_L1 - 1u];
-                #pragma unroll(BV_L2_WORD_SIZE)
-                for (uint32_t _w = 0u; _w < BV_L2_WORD_SIZE; _w++)
+            l1_entry += l2_entries[BV_STORE_L2_PER_L1 - 1u];
+            #pragma unroll(BV_L2_WORD_SIZE)
+            for (uint32_t _w = 0u; _w < BV_L2_WORD_SIZE; _w++) {
+                if (word < word_count)
                     l1_entry += bitCount(m_bit_vector_data[word++]);
             }
         }
+
+        // add one last dummy entry if the bit vector length is evenly dividable by the covered bit count
+        // to support rank(text_size) queries.
+        if (data_i < m_size)
+            m_data[data_i] = buildL12Type(l1_entry, l2_entries);
     }
 
     ~FlatRank() {
@@ -306,8 +320,10 @@ public:
         // └──────┘ └──────┘
 
         // query L12 acceleration structure
+        assert(index / BV_L1_BIT_SIZE < m_size && "accessing index out of flat rank range");
         BV_L12Type l12 = m_data[index / BV_L1_BIT_SIZE];
-        uint32_t rank1_res = getL1Entry(l12) + getL2Entry(l12, (index % BV_L1_BIT_SIZE) / BV_L2_BIT_SIZE);
+        uint32_t rank1_res = getL1Entry(l12);
+        rank1_res += getL2Entry(l12, (index % BV_L1_BIT_SIZE) / BV_L2_BIT_SIZE);
 
         // perform bit counts on a word level to count the remaining bits
         uint32_t offset = ((index / BV_WORD_BIT_SIZE) / BV_L2_WORD_SIZE) * BV_L2_WORD_SIZE;
@@ -318,6 +334,8 @@ public:
                 offset++;
             }
         }
+        // if this is a rank(text_size) query, the inlining of the function lead to the potential out of bounds
+        // access bv[offset] being ignored.
         return rank1_res + rank1Word(m_bit_vector_data[offset], index % BV_WORD_BIT_SIZE);
     }
 

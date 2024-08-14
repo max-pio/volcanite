@@ -156,7 +156,7 @@ uint32_t CompressedSegmentationVolume::encodeBrickForRandomAccess(const std::vec
 //            else if (in_detail_lod) {
 //                out_i = m_detail_rans.packRANS(out, out[current_inv_lod], out_i);
 //            }
-        }
+//        }
         current_inv_lod++;
     }
 

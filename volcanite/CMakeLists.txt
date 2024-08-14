@@ -15,6 +15,7 @@ set(VOLCANITE_HEADERS
         include/volcanite/compression/pack_nibble.hpp
         include/volcanite/compression/pack_rans.hpp
         include/volcanite/compression/pack_wavelet_matrix.hpp
+        include/volcanite/compression/wavelet_tree/bit_reversal_permutation.hpp
         include/volcanite/compression/wavelet_tree/BitVector.hpp
         include/volcanite/compression/wavelet_tree/WaveletMatrix.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp
