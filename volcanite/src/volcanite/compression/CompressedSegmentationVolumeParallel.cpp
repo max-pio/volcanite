@@ -110,6 +110,7 @@ uint32_t CompressedSegmentationVolume::encodeBrickForRandomAccess(const std::vec
                 operation = STOP_BIT;
             }
             // determine operation for the next entry
+            [[likely]]
             if (value == parent_value)
                 operation |= PARENT;
             else if (valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 0) == value)
