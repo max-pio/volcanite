@@ -142,9 +142,6 @@ class WaveletMatrix {
             }
         }
 
-        static uint32_t access(uint32_t* v, uint32_t start, uint32_t entry_id);
-        static uint32_t rank(uint32_t* v, uint32_t start, uint32_t entry_id, uint32_t s);
-
         [[nodiscard]] uint32_t access(uint32_t position) const {
             assert(position < m_text_size && "accessing symbol position out of bounds of wavelet matrix");
             uint32_t result = 0u;
