@@ -22,12 +22,14 @@
 namespace volcanite {
 
     /// Replaces all 4 bit elements between start4bit (including) and end4bit (excluding) in in_packed with a
-    /// wavelet matrix encoded bytestream.
+    /// wavelet matrix encoded bytestream. Updates the brick header's start position at v[0] to point to the beginning
+    /// of the FlatRank acceleration of the WaveletMatrix stream. The new layout is:\n
+    /// [old header] [text size] [4x ones before level] [4x zeros in level] | 64b[flat rank] 64b[bit vectors]
     /// The first 4 bit element start4bit must be the first position in a 32bit memory location.
     /// @return the new end4bit endpoint measured in number of 4 bit elements
-    uint32_t packWaveletMatrix(std::vector<uint32_t> &v, std::size_t start4bit, std::size_t end4bit) {
+    uint32_t packWaveletMatrix(uint32_t* v, std::size_t start4bit, std::size_t end4bit) {
         // Construct a temporary WaveletMatrix Object from the input stream
-        WaveletMatrix wm(v.data(), start4bit, end4bit);
+        WaveletMatrix wm(v, start4bit, end4bit);
 
         // --- brick header extension ---
         uint32_t out_i = start4bit / 8u; // count in 32 bit instead of 4 bit elements
@@ -41,6 +43,8 @@ namespace volcanite {
 
         // keep track of end4bit
         end4bit = out_i * 8;
+        // update header so that v[0] points to the start of the flat rank
+        v[0] = end4bit;
 
         // ---- 64 bit encoding begins ----
         uint64_t* v64 = reinterpret_cast<uint64_t*>(&v[out_i]);
@@ -102,10 +106,11 @@ namespace volcanite {
 
     // WAVELET MATRIX ACCESS AND RANK ==================================================================================
 
-    uint32_t accessWMSymbol(uint32_t position, uint32_t text_size,
-                            const uint64_t* bit_vector, const uint64_t* flat_rank,
-                            const uint32_t ones_before_level[4], const uint32_t zeros_on_level[4]) {
+    uint32_t wm_access(uint32_t position, uint32_t text_size,
+                       const uint64_t* bit_vector, const uint64_t* flat_rank,
+                       const uint32_t ones_before_level[4], const uint32_t zeros_on_level[4]) {
         // see: volcanite/compression/wavelet_tree/WaveletMatrix.hpp WaveletMatrix::access()
+
         assert(position < text_size && "accessing symbol position out of bounds of wavelet matrix");
         uint32_t result = 0u;
         bool bit = _bv_access(position, bit_vector);
@@ -127,10 +132,11 @@ namespace volcanite {
         return result;
     }
 
-    uint32_t rankWSSymbol(uint32_t position, uint32_t symbol, int32_t text_size,
-                          const uint64_t* bit_vector, const uint64_t* flat_rank,
-                          const uint32_t ones_before_level[4], const uint32_t zeros_on_level[4]) {
+    uint32_t wm_rank(uint32_t position, uint32_t symbol, int32_t text_size,
+                     const uint64_t* bit_vector, const uint64_t* flat_rank,
+                     const uint32_t ones_before_level[4], const uint32_t zeros_on_level[4]) {
         // see: volcanite/compression/wavelet_tree/WaveletMatrix.hpp WaveletMatrix::rank()
+        assert(position <= text_size && "rank for symbol position out of bounds of wavelet matrix");
 
         size_t interval_start = 0;
         uint64_t bit_mask = 1ULL << (WM_LEVELS - 1);

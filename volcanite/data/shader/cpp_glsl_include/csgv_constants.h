@@ -41,7 +41,7 @@ namespace volcanite {
         // TODO: change NO_RANS to NONE, SINGLE_TABLE_RANS=1 to =2, DOUBLE_TABLE_RANS=2 to =3
         enum RANSMode {NO_RANS=0,
                        SINGLE_TABLE_RANS=1, DOUBLE_TABLE_RANS=2,
-                       WT=4, HUFFMAN_WT=8, DOUBLE_TABLE_HUFFMAN_WT=9};
+                       WAVELET_MATRIX=4, HUFFMAN_WM=8, DOUBLE_TABLE_HUFFMAN_WM=9};
 
         // Bit Flags
         //

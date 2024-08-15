@@ -232,14 +232,27 @@ public:
     void decodeBrick(uint32_t brick_idx, uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const;
 
     /// Decodes a single voxel from the brick encoding. Requires random_access to be enabled for random acccess
-    /// within a brick.
+    /// within a brick. Must be used with a plain 4 bit encoding.
     /// @param output_i the voxel's brick encoding index within the target inverse lod
     /// @param target_inv_lod the target inverse level-of-detail of the voxel to decode
     /// @param brick_encoding uint32 pointer to the start of the brick encoding
     /// @param brick_encoding_length the length in uint32 elements of the brick encoding
     /// @returns the label of the brick voxel corresponding to the brick encoding index output_i
-    uint32_t decompressCSGVBrickVoxel(const uint32_t output_i, const uint32_t target_inv_lod, const glm::uvec3 valid_brick_size,
+    uint32_t decompressCSGVBrickVoxel(const uint32_t output_i, const uint32_t target_inv_lod,
+                                      const glm::uvec3 valid_brick_size,
                                       const uint32_t* brick_encoding, const uint32_t brick_encoding_length) const;
+
+    /// Decodes a single voxel from the brick encoding. Requires random_access to be enabled for random acccess
+    /// within a brick. Must be used with Wavelet Matrix encoding.
+    /// @param output_i the voxel's brick encoding index within the target inverse lod
+    /// @param target_inv_lod the target inverse level-of-detail of the voxel to decode
+    /// @param brick_encoding uint32 pointer to the start of the brick encoding
+    /// @param brick_encoding_length the length in uint32 elements of the brick encoding
+    /// @returns the label of the brick voxel corresponding to the brick encoding index output_i
+    uint32_t decompressCSGVBrickVoxelWM(const uint32_t output_i, const uint32_t target_inv_lod,
+                                        const glm::uvec3 valid_brick_size,
+                                        const uint32_t* brick_encoding, const uint32_t brick_encoding_length) const;
+
 
     /// Decompresses a single brick in parallel.
     /// @param brick_idx is used to read the begin and endpoint of the encoding from the brick_starts buffer.

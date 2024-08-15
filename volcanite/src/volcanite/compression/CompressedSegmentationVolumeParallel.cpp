@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
 #include <map>
@@ -6,6 +21,7 @@
 #include <thread>
 
 #include "volcanite/compression/pack_nibble.hpp"
+#include "volcanite/compression/pack_wavelet_matrix.hpp"
 
 namespace volcanite {
 
@@ -46,7 +62,7 @@ uint32_t CompressedSegmentationVolume::encodeBrickForRandomAccess(const std::vec
     out[0] = out_i;                 // LoD start position
     out[lod_count] = 0u;            // palette start position (from back)
     uint32_t muligrid_lod_start = multigrid.size() - 1;
-    if (multigrid[muligrid_lod_start].constant_subregion) {             //isHomogeneousBrick(volume, volume_dim, glm::uvec3(0u), {brick_size, brick_size, brick_size})) {Z
+    if (multigrid[muligrid_lod_start].constant_subregion) {
         write4Bit(out, 0u, out_i++, PALETTE_ADV | STOP_BIT);
     }
     else {
@@ -69,8 +85,6 @@ uint32_t CompressedSegmentationVolume::encodeBrickForRandomAccess(const std::vec
         uint32_t lod_dim = (m_brick_size/lod_width);
         uint32_t parent_multigrid_lod_start = muligrid_lod_start;
         muligrid_lod_start -= lod_dim * lod_dim * lod_dim;
-
-        bool in_detail_lod = (m_rANS_mode == DOUBLE_TABLE_RANS) && (current_inv_lod == lod_count - 1u);
 
         for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i += lod_width * lod_width * lod_width) {
             // we don't store any operations for a grid node that would lie completely outside the volume
@@ -154,18 +168,17 @@ uint32_t CompressedSegmentationVolume::encodeBrickForRandomAccess(const std::vec
 //            }
 //            // pack the detail (=finest LOD) via rANS encoding.
 //            // We have a separate rANS encoder here because the detail level does not use stop bits => different operation frequencies
-//            else if (in_detail_lod) {
+//            else if (current_inv_lod == lod_count - 1u) {
 //                out_i = m_detail_rans.packRANS(out, out[current_inv_lod], out_i);
 //            }
 //        }
         current_inv_lod++;
     }
 
-    // if we did not apply the rANS packing before, because we are only using a single freq. table, we do it here
-//    if(m_rANS_mode == WT)
-//        out_i = m_rans.packRANS(out, out[0], out_i);
-
-
+    // wavelet matrix packing
+    if (m_rANS_mode == WAVELET_MATRIX) {
+        out_i = packWaveletMatrix(out.data(), out[0], out_i);
+    }
 
     // last entry of our header stores the palette size
     out[header_size - 1u] = palette.size();
@@ -195,14 +208,88 @@ uint32_t rank_palette_adv(const uint32_t* brick_encoding, uint32_t enc_operation
     return occurrences;
 }
 
+uint32_t CompressedSegmentationVolume::decompressCSGVBrickVoxelWM(const uint32_t output_i, const uint32_t target_inv_lod,
+                                                                  const glm::uvec3 valid_brick_size,
+                                                                  const uint32_t* brick_encoding,
+                                                                  const uint32_t brick_encoding_length) const {
+    assert(m_random_access &&
+                   "Random access voxel decompression within a brick is only available with random access enabled.");
+    assert(m_rANS_mode == WAVELET_MATRIX && "CSGV is not using Wavelet Matrix encoding");
+
+    // Start by reading the operations in the target inverse LoD's encoding:
+    uint32_t inv_lod = target_inv_lod;
+    // operation index within in the current inv. LoD, starting at the target LoD
+    uint32_t inv_lod_op_i = output_i;
+    // corresponding voxel position within the inv. LoD
+    glm::uvec3 inv_lod_voxel = enumBrickPos(inv_lod_op_i);
+
+    // obtain encoding operation read index (4 bit)
+    uint32_t enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
+    uint32_t operation = read4Bit(brick_encoding, 0u, enc_operation_index);
+
+    assert(enc_operation_index < brick_encoding_length * 8u && "brick encoding out of bounds read");
+    // ToDo: handle stop bits
+    assert((operation & STOP_BIT) == 0u && "stop bit not yet supported with random access");
+
+    // follow the chain of operations from the current output voxel up to an operation that accesses the palette
+    {
+        uint32_t operation_lsb = operation & 7u; // extract least significant 3 bits
+
+        // equal to (operation_lsb != PALETTE_LAST && operation_lsb != PALETTE_ADV && operation_lsb != PALETTE_D)
+        while (operation_lsb < 4u) {
+            // find the read position for the next operation along the chain
+            if (operation_lsb == PARENT) {
+                // read from the parent in the next iteration
+                inv_lod--;
+                inv_lod_op_i /= 8u;
+                inv_lod_voxel = enumBrickPos(inv_lod_op_i);
+            }
+                // operation_lsb is NEIGHBOR_X, NEIGHBOR_Y, or NEIGHBOR_Z:
+            else {
+                // read from a neighbor in the next iteration
+                const uint32_t neighbor_index = operation_lsb - NEIGHBOR_X; // X: 0, Y: 1, Z: 2
+                const uint32_t child_index = inv_lod_op_i % 8u;
+
+                inv_lod_voxel += neighbor[child_index][neighbor_index];
+                inv_lod_op_i = indexOfBrickPos(inv_lod_voxel);
+
+                // ToDo: may be able to remove this later! for neighbors with later indices, we have to copy from its parent instead
+                if (any(greaterThan(neighbor[child_index][neighbor_index], glm::ivec3(0)))) {
+                    inv_lod--;
+                    inv_lod_op_i /= 8u;
+                    inv_lod_voxel = enumBrickPos(inv_lod_op_i);
+                }
+            }
+
+            // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
+            enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
+            operation_lsb = read4Bit(brick_encoding, 0u, enc_operation_index) & 7u;
+        }
+
+        // at this point, the current operation accesses the palette: write the resulting palette entry
+        // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
+        uint32_t palette_index = rank_palette_adv(brick_encoding, enc_operation_index - 1u);
+        // the actual palette index may be offset depending on the operation
+        if (operation_lsb == PALETTE_LAST) {
+            palette_index--;
+        }
+        assert(operation_lsb != PALETTE_D && "palette delta operation not supported with random access");
+        //assert(palette_index < getBrickPaletteLength(brick_idx), "obtained wrong palette index");
+
+        // Write to the index in the output array. The output array's positions are in Morton order.
+        return brick_encoding[brick_encoding_length - 1u - palette_index];
+    }
+}
+
 uint32_t CompressedSegmentationVolume::decompressCSGVBrickVoxel(const uint32_t output_i, const uint32_t target_inv_lod,
                                                                 const glm::uvec3 valid_brick_size,
                                                                 const uint32_t* brick_encoding,
                                                                 const uint32_t brick_encoding_length) const {
     assert(m_random_access &&
             "Random access voxel decompression within a brick is only available with random access enabled.");
+    assert(m_rANS_mode == NO_RANS && "CSGV not in plain 4 bit encoding mode");
 
-    // Start by reading the operations in the target inverse LoD's encoding:
+                   // Start by reading the operations in the target inverse LoD's encoding:
     uint32_t inv_lod = target_inv_lod;
     // operation index within in the current inv. LoD, starting at the target LoD
     uint32_t inv_lod_op_i = output_i;
@@ -279,9 +366,9 @@ void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint3
     const uint32_t *brick_encoding = getBrickEncoding(brick_idx);
 
     // first, set the whole brick to INVALID, so we know later which elements and LOD blocks were already processed
-    #pragma omp parallel for default(none) shared(m_brick_size, output_brick)
-    for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i++)
-        output_brick[i] = INVALID;
+    // #pragma omp parallel for default(none) shared(m_brick_size, output_brick)
+    // for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i++)
+    //    output_brick[i] = INVALID;
 
     const uint32_t output_voxel_count = 1u << (3u * target_inv_lod);
     const uint32_t target_brick_size = 1u << target_inv_lod;

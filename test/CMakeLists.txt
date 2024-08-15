@@ -31,3 +31,4 @@ macro(makeTest name)
 endmacro(makeTest)
 
 makeTest(csgv_test)
+makeTest(csgv_random_access_test)
