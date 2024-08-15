@@ -112,6 +112,7 @@ public:
     size_t memorySize() const { return size() * sizeof(ElementType); }
 
     HolderType &data() { return m_payload; }
+    const HolderType &dataConst() const { return m_payload; }
 
     inline bool isElementInBounds(size_t x, size_t y, size_t z) const { return x < dim_x && y < dim_y && z < dim_z; }
     inline bool isElementInBounds(int x, int y, int z) const { return x < dim_x && y < dim_y && z < dim_z; }
@@ -174,9 +175,9 @@ public:
         return limits;
     }
 
-    inline void setElement(size_t x, size_t y, size_t z, ElementType v) { m_payload[z * (dim_x * dim_y) + y * dim_z + x] = v; }
+    inline void setElement(size_t x, size_t y, size_t z, ElementType v) { m_payload[z * (dim_x * dim_y) + y * dim_x + x] = v; }
 
-    inline void setElement(int x, int y, int z, ElementType v) { m_payload[z * (dim_x * dim_y) + y * dim_z + x] = v; }
+    inline void setElement(int x, int y, int z, ElementType v) { m_payload[z * (dim_x * dim_y) + y * dim_x + x] = v; }
 
     bool isTextureInitialized() const { return m_texture != nullptr; }
 

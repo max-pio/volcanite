@@ -673,7 +673,6 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     m_detail_encodings.clear();
     m_detail_starts.clear();
 
-
     if(verbose)
         Logger(INFO, true) << " Progress 0.0%";
     MiniTimer progressTimer;
@@ -1308,7 +1307,16 @@ void CompressedSegmentationVolume::freqEncodeBrick(const std::vector<uint32_t>& 
 }
 
 void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<uint32_t>& volume, glm::uvec3 volume_dim, size_t freq_out[32], uint32_t subsampling_factor, bool detail_freq, bool verbose) {
-    assert(m_brick_size > 0u && "brick size must be a power of 2 > 0");
+    // check brick size
+    // use a default brick size of 32 if nothing was configured for this pass before
+    if (m_brick_size == 0u)
+        m_brick_size = 32u;
+    assert(std::popcount(m_brick_size) == 1u && "brick size must be a power of 2 > 0");
+
+    // the frequency pass is carried out over plain 4 bit operation encodings
+    RANSMode old_rANS_mode = m_rANS_mode;
+    m_rANS_mode = NO_RANS;
+
     m_volume_dim = volume_dim;
     glm::uvec3 brickCount = getBrickCount();
     if(verbose) {
@@ -1381,6 +1389,25 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
         }
     }
 
+    // prevent accidentally counting a zero frequency for rare symbols due to subsampling
+    if(subsampling_factor > 1u) {
+        bool changed = false;
+        for(int i = 0; i < 16; i++) {
+            if (freq_out[i] == 0ul) {
+                changed = true;
+                freq_out[i] = 1ul;
+            }
+            if(detail_freq && freq_out[i + 16] == 0ul) {
+                changed = true;
+                freq_out[i + 16] = 1ul;
+            }
+        }
+        if (changed)
+            Logger(WARN) << " set zero symbol frequency to 1 to avoid missing symbols due to frequency pass subsampling.";
+    }
+
+    // reset rANS mode to previously configured value
+    m_rANS_mode = old_rANS_mode;
 
     float total_seconds = totalTimer.elapsed();
     m_last_total_freq_prepass_seconds = total_seconds;
