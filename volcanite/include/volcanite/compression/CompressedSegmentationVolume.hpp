@@ -25,6 +25,7 @@
 #include "VolumeCompressionBase.hpp"
 #include "csgv_constants.h" // in data/shader/cpp_glsl_include
 #include "volcanite/compression/pack_rans.hpp"
+#include "volcanite/compression/pack_wavelet_matrix.hpp"
 #include "vvv/util/util.hpp"
 
 
@@ -238,9 +239,9 @@ public:
     /// @param brick_encoding uint32 pointer to the start of the brick encoding
     /// @param brick_encoding_length the length in uint32 elements of the brick encoding
     /// @returns the label of the brick voxel corresponding to the brick encoding index output_i
-    uint32_t decompressCSGVBrickVoxel(const uint32_t output_i, const uint32_t target_inv_lod,
+    static uint32_t decompressCSGVBrickVoxel(const uint32_t output_i, const uint32_t target_inv_lod,
                                       const glm::uvec3 valid_brick_size,
-                                      const uint32_t* brick_encoding, const uint32_t brick_encoding_length) const;
+                                      const uint32_t* brick_encoding, const uint32_t brick_encoding_length) ;
 
     /// Decodes a single voxel from the brick encoding. Requires random_access to be enabled for random acccess
     /// within a brick. Must be used with Wavelet Matrix encoding.
@@ -249,9 +250,10 @@ public:
     /// @param brick_encoding uint32 pointer to the start of the brick encoding
     /// @param brick_encoding_length the length in uint32 elements of the brick encoding
     /// @returns the label of the brick voxel corresponding to the brick encoding index output_i
-    uint32_t decompressCSGVBrickVoxelWM(const uint32_t output_i, const uint32_t target_inv_lod,
+    static uint32_t decompressCSGVBrickVoxelWM(const uint32_t output_i, const uint32_t target_inv_lod,
                                         const glm::uvec3 valid_brick_size,
-                                        const uint32_t* brick_encoding, const uint32_t brick_encoding_length) const;
+                                        const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
+                                        const WMBrickHeader& wm_header) ;
 
 
     /// Decompresses a single brick in parallel.
@@ -487,7 +489,7 @@ public:
 
         if(!(brick_size > 0 && !(brick_size & (brick_size - 1))))
             throw std::runtime_error("Brick size must be a power of two greater than zero!");
-        if(random_access && rANS_mode != NO_RANS)
+        if(random_access && rANS_mode != NO_RANS && rANS_mode != WAVELET_MATRIX)
             throw std::runtime_error("Random access encoding only works without rANS");
 
         m_brick_size = brick_size;
@@ -521,7 +523,7 @@ public:
 
         if(!(brick_size > 0 && !(brick_size & (brick_size - 1))))
             throw std::runtime_error("Brick size must be a power of two greater than zero!");
-        if(random_access && rANS_mode != NO_RANS)
+        if(random_access && rANS_mode != NO_RANS && rANS_mode != WAVELET_MATRIX)
             throw std::runtime_error("Random access encoding only works without rANS");
 
         m_brick_size = brick_size;

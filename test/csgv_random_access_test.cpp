@@ -21,7 +21,7 @@ using namespace volcanite;
 
 int main() {
 
-    // create dummy segmentation volume
+    // create dummy segmentation volume (must be dividable by brick size for random access decoding)
     glm::uvec3 dim = {128, 64, 160};
     const auto volume = createDummySegmentationVolume(dim);
 
@@ -32,13 +32,13 @@ int main() {
         if (!csgv.test(volume.dataConst(), dim, true))
             return 1;
     }
-//    csgv.clear();
-//    {
-//        Logger(INFO) << "Random Access 4 Bit";
-//        csgv.setCompressionOptions64(32, WAVELET_MATRIX, true);
-//        if (!csgv.test(volume.dataConst(), dim, true))
-//            return 1;
-//    }
+    csgv.clear();
+    {
+        Logger(INFO) << "Random Access Wavelet Matrix";
+        csgv.setCompressionOptions64(32, WAVELET_MATRIX, true);
+        if (!csgv.test(volume.dataConst(), dim, true))
+            return 2;
+    }
 
 
     return 0;

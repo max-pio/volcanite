@@ -308,7 +308,7 @@ public:
 
     [[nodiscard]] uint32_t rank0(uint32_t index) const { return index - rank1(index); }
 
-    /// @return the number of 1 bits in the bit vector that occure before index
+    /// @return the number of 1 bits in the bit vector that occur before index
     [[nodiscard]] uint32_t rank1(uint32_t index) const {
 
         // ........ ........  bits

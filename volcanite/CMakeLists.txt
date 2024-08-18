@@ -45,6 +45,7 @@ set(VOLCANITE_SOURCES
         src/volcanite/compression/CompressedSegmentationVolumeParallel.cpp
         src/volcanite/compression/pack_nibble.cpp
         src/volcanite/compression/pack_rans.cpp
+        src/volcanite/compression/pack_wavelet_matrix.cpp
         src/volcanite/compression/wavelet_tree/prefix_counting.cpp
         src/volcanite/compression/wavelet_tree/WaveletMatrix.cpp
         src/renderer/CompressedSegmentationVolumeRenderer.cpp

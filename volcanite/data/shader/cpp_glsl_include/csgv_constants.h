@@ -59,6 +59,7 @@ namespace volcanite {
 #define STOP_BIT 8u     ///< 1000 MSB bit, stops the hierarchical traversal into finer nodes as they are all constant
 // #XXX least significant 3 bits store operation:
 #define PARENT 0u       ///< copy label from parent node
+// the following must be true: neighbor_z = neighbor_y+1 = neighbor_x+2
 #define NEIGHBOR_X 1u   ///< copy label from x-axis neighbor with different parent node or its parent if not decoded
 #define NEIGHBOR_Y 2u   ///< copy label from x-axis neighbor with different parent node or its parent if not decoded
 #define NEIGHBOR_Z 3u   ///< copy label from x-axis neighbor with different parent node or its parent if not decoded

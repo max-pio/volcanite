@@ -177,7 +177,7 @@ uint32_t CompressedSegmentationVolume::encodeBrickForRandomAccess(const std::vec
 
     // wavelet matrix packing
     if (m_rANS_mode == WAVELET_MATRIX) {
-        out_i = packWaveletMatrix(out.data(), out[0], out_i);
+        out_i = packWaveletMatrix(out.data(), out[0], out_i, lod_count);
     }
 
     // last entry of our header stores the palette size
@@ -196,12 +196,12 @@ uint32_t CompressedSegmentationVolume::encodeBrickForRandomAccess(const std::vec
     return out_i; // we return the number of uint32_t elements that we used
 }
 
-/// @return the number of PALETTE_ADV occurrences before enc_operation_index. */
-uint32_t rank_palette_adv(const uint32_t* brick_encoding, uint32_t enc_operation_index) {
-    // TODO: good lord this is expensive if we do it without an O(1) rank
+/// Dummy method to replace the rank operation for querying palette indices when a plain 4 bit encoding is used.
+/// @return the number of PALETTE_ADV occurrences before enc_operation_index.
+uint32_t rank_palette_adv_4bit(const uint32_t* brick_encoding, uint32_t enc_operation_index) {
     uint32_t occurrences = 0u;
     const uint32_t header_size = brick_encoding[0];
-    for(uint32_t entry_id = header_size; entry_id <= enc_operation_index; entry_id++) {
+    for(uint32_t entry_id = header_size; entry_id < enc_operation_index; entry_id++) {
         if ((read4Bit(brick_encoding, 0u, entry_id) & 7u) == PALETTE_ADV)
             occurrences++;
     }
@@ -211,7 +211,8 @@ uint32_t rank_palette_adv(const uint32_t* brick_encoding, uint32_t enc_operation
 uint32_t CompressedSegmentationVolume::decompressCSGVBrickVoxelWM(const uint32_t output_i, const uint32_t target_inv_lod,
                                                                   const glm::uvec3 valid_brick_size,
                                                                   const uint32_t* brick_encoding,
-                                                                  const uint32_t brick_encoding_length) const {
+                                                                  const uint32_t brick_encoding_length,
+                                                                  const WMBrickHeader& wm_header) {
     assert(m_random_access &&
                    "Random access voxel decompression within a brick is only available with random access enabled.");
     assert(m_rANS_mode == WAVELET_MATRIX && "CSGV is not using Wavelet Matrix encoding");
@@ -225,7 +226,7 @@ uint32_t CompressedSegmentationVolume::decompressCSGVBrickVoxelWM(const uint32_t
 
     // obtain encoding operation read index (4 bit)
     uint32_t enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
-    uint32_t operation = read4Bit(brick_encoding, 0u, enc_operation_index);
+    uint32_t operation = wm_access(enc_operation_index, wm_header);
 
     assert(enc_operation_index < brick_encoding_length * 8u && "brick encoding out of bounds read");
     // ToDo: handle stop bits
@@ -263,12 +264,12 @@ uint32_t CompressedSegmentationVolume::decompressCSGVBrickVoxelWM(const uint32_t
 
             // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
             enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
-            operation_lsb = read4Bit(brick_encoding, 0u, enc_operation_index) & 7u;
+            operation_lsb = wm_access(enc_operation_index, wm_header) & 7u;
         }
 
         // at this point, the current operation accesses the palette: write the resulting palette entry
         // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
-        uint32_t palette_index = rank_palette_adv(brick_encoding, enc_operation_index - 1u);
+        uint32_t palette_index = wm_rank(enc_operation_index, PALETTE_ADV, wm_header);
         // the actual palette index may be offset depending on the operation
         if (operation_lsb == PALETTE_LAST) {
             palette_index--;
@@ -284,7 +285,7 @@ uint32_t CompressedSegmentationVolume::decompressCSGVBrickVoxelWM(const uint32_t
 uint32_t CompressedSegmentationVolume::decompressCSGVBrickVoxel(const uint32_t output_i, const uint32_t target_inv_lod,
                                                                 const glm::uvec3 valid_brick_size,
                                                                 const uint32_t* brick_encoding,
-                                                                const uint32_t brick_encoding_length) const {
+                                                                const uint32_t brick_encoding_length) {
     assert(m_random_access &&
             "Random access voxel decompression within a brick is only available with random access enabled.");
     assert(m_rANS_mode == NO_RANS && "CSGV not in plain 4 bit encoding mode");
@@ -341,7 +342,7 @@ uint32_t CompressedSegmentationVolume::decompressCSGVBrickVoxel(const uint32_t o
 
         // at this point, the current operation accesses the palette: write the resulting palette entry
         // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
-        uint32_t palette_index = rank_palette_adv(brick_encoding, enc_operation_index - 1u);
+        uint32_t palette_index = rank_palette_adv_4bit(brick_encoding, enc_operation_index);
         // the actual palette index may be offset depending on the operation
         if (operation_lsb == PALETTE_LAST) {
             palette_index--;
@@ -356,7 +357,7 @@ uint32_t CompressedSegmentationVolume::decompressCSGVBrickVoxel(const uint32_t o
 
 void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint32_t* output_brick, glm::uvec3 valid_brick_size, int target_inv_lod) const {
     assert(m_random_access && "parallel brick decompression is only supported when parallel_decode is set");
-    assert(m_rANS_mode == NO_RANS && "parallel decode does not work using rANS");
+    assert(m_rANS_mode != SINGLE_TABLE_RANS && m_rANS_mode != DOUBLE_TABLE_RANS && "parallel decode does not work using rANS");
     // ToDo: support detail separation, stop bits, and palette delta operations in parallelDecodeBrick
     assert(!m_separate_detail && "detail separation not yet supported in parallelDecodeBrick");
     assert(target_inv_lod < getLodCountPerBrick() && "not enough LoDs in a brick to process target inv. LoD");
@@ -376,18 +377,30 @@ void CompressedSegmentationVolume::parallelDecodeBrick(uint32_t brick_idx, uint3
     // output array is filled in an á-trous manner. A target_brick_size < m_brick_size will leave gaps in the output brick.
     const uint32_t output_index_step = (m_brick_size / target_brick_size) * (m_brick_size / target_brick_size) * (m_brick_size / target_brick_size);
 
+    // gather all information required for decoding symbols from a wavelet matrix encoding
+    WMBrickHeader wm_brick_header;
+    if (m_rANS_mode == WAVELET_MATRIX) {
+        wm_brick_header = getWMBrickHeaderFromEncoding(brick_encoding, getHeaderSize());
+    }
+
     // m_cpu_threads many threads go through the Morton indexing order from front to back. The threads work on the next
     // following items in parallel. read_offset is the index of the first thread 0.
     //
     // Of course, we could directly parallelize over the number of output voxels in a for loop here, but:
     // on a GPU m_cpu_threads should be equal to the number of threads in a warp allowing us to do vulkan subgroup optimizations
-    #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(output_index_step, output_voxel_count, target_inv_lod, brick_encoding, output_brick, target_brick_size, brick_encoding_length)
+    #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(output_index_step, output_voxel_count, target_inv_lod, brick_encoding, output_brick, target_brick_size, brick_encoding_length, wm_brick_header)
     {
         uint32_t output_i = omp_get_thread_num();
         while (output_i < output_voxel_count) {
-            output_brick[output_index_step * output_i] =
-                    decompressCSGVBrickVoxel(output_i, target_inv_lod, glm::uvec3(m_brick_size),
-                                             brick_encoding, brick_encoding_length);
+            if (m_rANS_mode == NO_RANS) {
+                output_brick[output_index_step * output_i] =
+                        decompressCSGVBrickVoxel(output_i, target_inv_lod, glm::uvec3(m_brick_size),
+                                                 brick_encoding, brick_encoding_length);
+            } else if (m_rANS_mode == WAVELET_MATRIX) {
+                output_brick[output_index_step * output_i] =
+                        decompressCSGVBrickVoxelWM(output_i, target_inv_lod, glm::uvec3(m_brick_size),
+                                                  brick_encoding, brick_encoding_length, wm_brick_header);
+            }
 
             // #pragma omp barrier
             output_i += omp_get_num_threads();
