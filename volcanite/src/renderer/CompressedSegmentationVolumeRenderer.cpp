@@ -570,31 +570,19 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     assert(getCtx() != nullptr && "renderer needs a valid GPU context");
     assert(m_compressed_segmentation_volume && "can't render without a CompressedSegmentationVolume");
 
-    // TODO: the shader code being dependent on data set properties like rANS tables means that we
-    //  1. need to re-init shader resources on data set changes
-    //  2. cannot pre-compile shaders
-    std::vector<std::string> shader_defines;
-    if(m_compressed_segmentation_volume->isUsingRANS()) {
-        shader_defines.push_back("USE_RANS");
-        shader_defines.push_back("RANS_SYMBOL_TABLE=" + m_compressed_segmentation_volume->getGLSLSymbolArrayStringRANS());
-        if(m_compressed_segmentation_volume->isUsingDetailFreq())
-            shader_defines.push_back("USE_RANS_DOUBLE_TABLE");
-    }
-    if(m_compressed_segmentation_volume->isUsingSeparateDetail()) {
-        shader_defines.push_back("SEPARATE_DETAIL");
-    }
+    // the shader code is dependent on data set properties like operation frequency tables
+    std::vector<std::string> shader_defines = m_compressed_segmentation_volume->getGLSLDefines();
     shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
     if(m_use_palette_cache)
         shader_defines.push_back("PALETTE_CACHE");
-    if(m_compressed_segmentation_volume->isUsingParallelDecode()) {
-        shader_defines.push_back("CSGV_PARALLEL_DECODE");
-        shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
-    }
+    shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if(getCtx()->getWsi())
-        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), shader_defines, m_compressed_segmentation_volume->isUsingParallelDecode());
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), shader_defines,
+                                                        m_compressed_segmentation_volume->isUsingRandomAccess());
     else
-        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, shader_defines, m_compressed_segmentation_volume->isUsingParallelDecode());
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, shader_defines,
+                                                        m_compressed_segmentation_volume->isUsingRandomAccess());
     m_pass->allocateResources();
     m_urender_info = m_pass->getUniformSet("render_info");
     m_usegmented_volume_info = m_pass->getUniformSet("segmented_volume_info");

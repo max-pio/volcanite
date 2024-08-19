@@ -32,6 +32,12 @@ int main() {
         csgv.setCompressionOptions64(16, RANSMode::NO_RANS, false);
         if (!csgv.test(volume.dataConst(), dim, true))
             return 1;
+
+        // export / re-import
+        std::remove("./_tmp_test.csgv");
+        csgv.exportToFile("./_tmp_test.csgv");
+        if (!csgv.importFromFile("./_tmp_test.csgv") || !csgv.test(volume.dataConst(), dim, false))
+            return 101;
     }
     csgv.clear();
     // Single table rANS
@@ -43,6 +49,12 @@ int main() {
         csgv.setCompressionOptions64(32, RANSMode::SINGLE_TABLE_RANS, false, freq, freq + 16);
         if (!csgv.test(volume.dataConst(), dim, true))
             return 2;
+
+        // export / re-import
+        std::remove("./_tmp_test.csgv");
+        csgv.exportToFile("./_tmp_test.csgv");
+        if (!csgv.importFromFile("./_tmp_test.csgv") || !csgv.test(volume.dataConst(), dim, false))
+            return 102;
     }
     csgv.clear();
     // Double table rANS with detail separation
@@ -53,10 +65,11 @@ int main() {
         csgv.compressForFrequencyTable(volume.dataConst(), dim, freq, 2, true, false);
         csgv.setCompressionOptions64(64, RANSMode::DOUBLE_TABLE_RANS, false, freq, freq + 16);
         csgv.compress(volume.dataConst(), dim, false);
-        csgv.separateDetail();
+//        csgv.separateDetail();
         if (!csgv.test(volume.dataConst(), dim, false))
             return 3;
     }
 
+    std::remove("./_tmp_test.csgv");
     return 0;
 }

@@ -34,7 +34,6 @@
     #define DOUBLE_TABLE_RANS 3
 #else
     #define CSGV_UINT uint32_t
-    using namespace vvv;
 
 namespace volcanite {
         // TODO: rename RANSMode to StreamCompression as it is not only rANS anymore

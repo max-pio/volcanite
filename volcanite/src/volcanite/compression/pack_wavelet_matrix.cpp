@@ -129,7 +129,6 @@ namespace volcanite {
     uint32_t wm_access(uint32_t position, const WMBrickHeader& wm_header) {
         // see: volcanite/compression/wavelet_tree/WaveletMatrix.hpp WaveletMatrix::access()
 
-        assert(position < text_size && "accessing symbol position out of bounds of wavelet matrix");
         uint32_t result = 0u;
         bool bit = _bv_access(position, wm_header.bv);
         for (int level = 0; level < WM_LEVELS; ++level) {
@@ -152,7 +151,6 @@ namespace volcanite {
 
     uint32_t wm_rank(uint32_t position, uint32_t symbol, const WMBrickHeader& wm_header) {
         // see: volcanite/compression/wavelet_tree/WaveletMatrix.hpp WaveletMatrix::rank()
-        assert(position <= text_size && "rank for symbol position out of bounds of wavelet matrix");
 
         size_t interval_start = 0;
         uint64_t bit_mask = 1ULL << (WM_LEVELS - 1);

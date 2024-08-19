@@ -21,8 +21,13 @@ set(VOLCANITE_HEADERS
         include/volcanite/CSGVPathUtils.hpp
         include/volcanite/VolcaniteArgs.hpp
         include/volcanite/StratifiedPixelSequence.hpp
-        include/volcanite/compression/VolumeCompressionBase.hpp
         data/shader/cpp_glsl_include/csgv_constants.h
+        include/volcanite/compression/VolumeCompressionBase.hpp
+        include/volcanite/compression/encoder/CSGVBrickEncoder.hpp
+        include/volcanite/compression/encoder/CSGVSerialBrickEncoder.hpp
+        include/volcanite/compression/encoder/NibbleEncoder.hpp
+        include/volcanite/compression/encoder/RangeANSEncoder.hpp
+        include/volcanite/compression/encoder/WaveletMatrixEncoder.hpp
         include/volcanite/compression/CompressedSegmentationVolume.hpp
         include/volcanite/compression/CompSegVolHandler.hpp
         include/volcanite/compression/CSGVChunkMerger.hpp
@@ -40,6 +45,11 @@ set(VOLCANITE_HEADERS
         )
 
 set(VOLCANITE_SOURCES
+        src/volcanite/compression/encoder/CSGVBrickEncoder.cpp
+        src/volcanite/compression/encoder/CSGVSerialBrickEncoder.cpp
+        src/volcanite/compression/encoder/NibbleEncoder.cpp
+        src/volcanite/compression/encoder/RangeANSEncoder.cpp
+        src/volcanite/compression/encoder/WaveletMatrixEncoder.cpp
         src/volcanite/compression/CompressedSegmentationVolume.cpp
         src/volcanite/compression/CompressedSegmentationVolumeStats.cpp
         src/volcanite/compression/CompressedSegmentationVolumeParallel.cpp

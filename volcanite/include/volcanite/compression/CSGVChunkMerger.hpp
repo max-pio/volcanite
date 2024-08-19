@@ -18,7 +18,8 @@
 #include <memory>
 
 #include "volcanite/CSGVPathUtils.hpp"
-#include "volcanite/compression/CompressedSegmentationVolume.hpp"
+//#include "volcanite/compression/CompressedSegmentationVolume.hpp"
+#include "volcanite/compression/memory_mapping.hpp"
 
 using namespace vvv;
 
@@ -53,7 +54,7 @@ private:
         glm::uvec3 chunk_pos = output_brick / bricks_in_chunk;
         glm::uvec3 brick_in_chunk = output_brick - chunk_pos * bricks_in_chunk;
         uint32_t chunk_idx = sfc::Cartesian::p2i(chunk_pos, chunk_count);
-        uint32_t brick_idx_in_chunk = CompressedSegmentationVolume::brick_pos2idx(brick_in_chunk, chunks[chunk_idx].getBrickCount());
+        uint32_t brick_idx_in_chunk = brick_pos2idx(brick_in_chunk, chunks[chunk_idx].getBrickCount());
         // return encoding start address and length in uint entries
         *encoding = chunks[chunk_idx].getBrickEncoding(brick_idx_in_chunk);
         *encoding_length = chunks[chunk_idx].getBrickEncodingLength(brick_idx_in_chunk);
@@ -201,7 +202,7 @@ public:
         for(uint32_t brick_idx = 0u; brick_idx < total_brick_count; brick_idx++) {
 
             // get encoding and encoding length of next output brick
-            glm::uvec3 output_brick = CompressedSegmentationVolume::brick_idx2pos(brick_idx, brick_count);
+            glm::uvec3 output_brick = brick_idx2pos(brick_idx, brick_count);
             const uint32_t* brick_encoding;
             uint32_t brick_encoding_size;
             getEncodingForOutputBrick(output_brick, &brick_encoding, &brick_encoding_size);
@@ -290,7 +291,7 @@ public:
             // similar to CompressedSegmentationVolume::exportToFile(..)
             // write header: 8 chars CMPSGVOL + 4 chars version number
             const char *magic_header = "CMPSGVOL";
-            const char *version = "0013";
+            const char *version = "0014";
             file.write(magic_header, 8);
             file.write(version, 4);
 
@@ -299,13 +300,13 @@ public:
             file.write(reinterpret_cast<char *>(&complete_volume_dim), sizeof(glm::uvec3));
             file.write(reinterpret_cast<char *>(&rANS_mode), sizeof(RANSMode)); // since 0011
             file.write(reinterpret_cast<char *>(&max_brick_palette_count), sizeof(uint32_t));
-            if(rANS_mode != NO_RANS) {  // since 0002
+            if (rANS_mode == SINGLE_TABLE_RANS || rANS_mode == DOUBLE_TABLE_RANS) {  // since 0002
                 for (int i = 0; i < 16; i++)
                     file.write(reinterpret_cast<char *>(&complete_frequency_table[i]), sizeof(uint32_t));
-            }
-            if(rANS_mode == DOUBLE_TABLE_RANS) {
-                for (int i = 0; i < 16; i++)
-                    file.write(reinterpret_cast<char *>(&complete_detail_frequency_table[i]), sizeof(uint32_t));
+                if (rANS_mode == DOUBLE_TABLE_RANS) {
+                    for (int i = 0; i < 16; i++)
+                        file.write(reinterpret_cast<char *>(&complete_detail_frequency_table[i]), sizeof(uint32_t));
+                }
             }
             file.write(reinterpret_cast<char *>(&brick_idx_to_enc_vector), sizeof(uint32_t)); // since 0013
 
