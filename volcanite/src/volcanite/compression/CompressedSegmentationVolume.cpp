@@ -71,124 +71,110 @@ void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, RA
         throw std::runtime_error("No CSGB brick encoder for given encoding mode available.");
     }
     m_encoder->setCPUThreadCount(m_cpu_threads);
+    m_encoder->setDecodeWithSeparateDetail(m_separate_detail);
 }
 
 float CompressedSegmentationVolume::separateDetail() {
     if (m_random_access)
         throw std::runtime_error("Detail separation and random access cannot be combined.");
 
-    throw std::runtime_error("SeparateDetail not yet implemented!");
-//    if(!m_detail_encodings.empty() || m_separate_detail)
-//        throw std::runtime_error("Detail separation was already performed!");
-//    if(m_encodings.empty())
-//        throw std::runtime_error("Segmentation volume is not yet compressed! Call compress() before performing detail separation.");
-//    if(m_encoding_mode != DOUBLE_TABLE_RANS)
-//        throw std::runtime_error("Detail separation can only be used in combination with rANS in double table mode!");
-//
-//    const uint32_t brick_idx_count = getBrickIndexCount();
-//    const uint32_t lod_count = getLodCountPerBrick();
-//    const uint32_t header_size = getHeaderSize();
-//
-//    // First, construct the detail_starts buffer in a simple sequential pass and keep track of detail encoding sizes:
-//    std::vector<uint32_t> split_detail_encoding_sizes(1, 0u);
-//    uint32_t currentDetailStart = 0u;
-//    m_detail_starts.resize(brick_idx_count + 1);
-//    for(size_t i = 0; i < brick_idx_count; i++) {
-//        // Write the current "brick start" before the possible splitting of encodings as it is the "previous brick end"
-//        m_detail_starts[i] = currentDetailStart;
-//
-//        // if a new split encoding starts, restart index counter and keep track of the previous detail array size
-//        if(i / m_brick_idx_to_enc_vector >= split_detail_encoding_sizes.size()) {
-//            split_detail_encoding_sizes.back() = currentDetailStart;
-//            split_detail_encoding_sizes.push_back(0u);
-//            currentDetailStart = 0u;
-//        }
-//
-//        const uint32_t* base_encoding = getBrickEncoding(i);
-//        // brick detail size: brick encoding size       - palette size      - detail LOD start
-//        currentDetailStart += getBrickEncodingLength(i) - getBrickPaletteLength(i) - base_encoding[lod_count - 1u] / 8;
-//    }
-//    split_detail_encoding_sizes.back() = currentDetailStart;
-//    m_detail_starts[brick_idx_count] = currentDetailStart;
-//
-//    // Second, cut the operation encoding arrays apart und update brick headers / base encoding starts.
-//    // The same brick_idx to split (detail) encoding vector is used for base and detail encodings.
-//    // Handle one brick after another, splitting encoding arrays if necessary:
-//    m_detail_encodings.resize(1);
-//    m_detail_encodings.back().resize(split_detail_encoding_sizes.at(0));
-//    // TODO: it is possible to process all split encoding arrays in parallel, but would drastically increase memory
-//    for(uint32_t brick_idx = 0u; brick_idx < brick_idx_count; brick_idx++) {
-//
-//        // TODO: handle separateDetail on a brick level in the CSGVBrickEncoder classes
-//
-//        uint32_t detail_start = m_detail_starts[brick_idx];
-//        // Check if we have to start a new split encoding "vector" before writing the next brick's encoding.
-//        if(brick_idx / m_brick_idx_to_enc_vector > m_detail_encodings.size() - 1u) {
-//            // start a new detail encoding array
-//            m_detail_encodings.emplace_back(split_detail_encoding_sizes.at(brick_idx / m_brick_idx_to_enc_vector));
-//            detail_start = 0u;
-//        }
-//        uint32_t detail_encoding_size = m_detail_starts[brick_idx+1] - detail_start;
-//
-//        // operate directly on the current brick base encoding array
-//        uint32_t* mut_encoding = m_encodings[brick_idx / m_brick_idx_to_enc_vector].data();
-//        uint32_t old_brick_start = getBrickStart(brick_idx);
-//        uint32_t old_brick_encoding_size = getBrickEncodingLength(brick_idx);
-//        uint32_t palette_size = getBrickPaletteLength(brick_idx);
-//
-//        // changes for one brick's encoding:
-//        // - one uint32 element is removed from the header (LoD start position of the detail) --> now in m_detail_starts
-//        // - the operation stream is shortened by the detail level's encoding --> now in m_detail_encodings
-//        // to ensure that the base encodings are packed tight again, encodings are moved to the front
-//
-//        // determine the new output position of this brick in the base encoding output array (overwriting old content)
-//        // we are only allowed to read from m_brick_starts[i], m_brick_starts[i+1] is undefined!
-//        uint32_t* new_base_encoding_start = mut_encoding + old_brick_start         // old start position of the brick
-//                                            - detail_start                              // uint32 elements that were removed from the base encoding
-//                                            - (brick_idx % m_brick_idx_to_enc_vector);  // uint32 elements that were removed from the header
-//
-//        uint32_t* old_brick_encoding = mut_encoding + old_brick_start;
-//        // length (in uint32 elements) of the operation stream of base levels only
-//        size_t base_op_stream_length = mut_encoding[old_brick_start + lod_count - 1] / 8 - header_size;
-//
-//        // copy the detail encoding to the detail buffer
-//        memcpy(&(m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).at(detail_start)), old_brick_encoding + header_size + base_op_stream_length, detail_encoding_size * sizeof(uint32_t));
-//
-//        // copy the first part of the header (LOD starts from 0 to L-2 without the detail level), to the base encoding buffer.
-//        // the header is missing one element (start pos. of the detail layer) now, so we have to adjust the lod start entries.
-//        memmove(new_base_encoding_start, old_brick_encoding, (lod_count - 1u) * sizeof(uint32_t));
-//        for(int l = 0; l < (lod_count - 1u); l++)
-//            new_base_encoding_start[l] -= 8u;
-//        // move the palette part of the encoding header one element to the front (because the encoding_start entry for the detail buffer is now missing in between)
-//        memmove(new_base_encoding_start + (lod_count - 1u), old_brick_encoding + lod_count, (lod_count + 1u) * sizeof(uint32_t));
-//        // move the base encoding
-//        memmove(new_base_encoding_start + (header_size - 1u), old_brick_encoding + header_size, base_op_stream_length * sizeof(uint32_t));
-//        // move the palette
-//        memmove(new_base_encoding_start + (header_size - 1u) + base_op_stream_length, old_brick_encoding + header_size + base_op_stream_length + detail_encoding_size, palette_size * sizeof(uint32_t));
-//
-//        // Update brick start index: The brick start entries move to the front. In addition to the detail encoding,
-//        // brick headers are missing one element (detail LoD start) each. Up to brick brick_idx, these sum up to
-//        // (brick_idx % m_brick_idx_to_enc_vector). If a new split encoding was started here, we store the previous
-//        // brick end. Thus subtract all m_brick_idx_to_enc_vector missing header elements from the previous encoding:
-//        if(brick_idx > 0 && brick_idx % m_brick_idx_to_enc_vector == 0) {
-//            m_brick_starts[brick_idx] = m_brick_starts[brick_idx] - m_detail_starts[brick_idx] - m_brick_idx_to_enc_vector;
-//            // the previous split encoding array was processed: shrink it down to a tight fit
-//            m_encodings.at((brick_idx - 1u) / m_brick_idx_to_enc_vector).resize(m_brick_starts[brick_idx]);
-//        } else {
-//            m_brick_starts[brick_idx] = m_brick_starts[brick_idx] - m_detail_starts[brick_idx] - brick_idx % m_brick_idx_to_enc_vector;
-//        }
-//    }
-//    // store end index of brick starts
-//    m_brick_starts[brick_idx_count] = m_brick_starts[brick_idx_count] - m_detail_starts[brick_idx_count] - (brick_idx_count % m_brick_idx_to_enc_vector);
-//    m_separate_detail = true;
-//    // shrink last encoding buffer
-//    m_encodings.back().resize(m_brick_starts[brick_idx_count]);
-//
-//    if(!verifyCompression())
-//        throw std::runtime_error("Corrupt CSGV after detail separation");
-//
-//    // return the ratio of detail encoding size to total encoding size
-//    return (static_cast<float>(m_detail_starts[brick_idx_count]) / static_cast<float>(m_brick_starts[brick_idx_count] + m_detail_starts[brick_idx_count]));
+    if(!m_detail_encodings.empty() || m_separate_detail)
+        throw std::runtime_error("Detail separation was already performed!");
+    if(m_encodings.empty())
+        throw std::runtime_error("Segmentation volume is not yet compressed! Call compress() before performing detail separation.");
+    if(m_encoding_mode != DOUBLE_TABLE_RANS)
+        throw std::runtime_error("Detail separation can only be used in combination with rANS in double table mode!");
+
+    const uint32_t brick_idx_count = getBrickIndexCount();
+
+    // First, construct the detail_starts buffer in a simple sequential pass and keep track of detail encoding sizes:
+    std::vector<uint32_t> split_detail_encoding_sizes(1, 0u);
+    uint32_t currentDetailStart = 0u;
+    m_detail_starts.resize(brick_idx_count + 1);
+    for (size_t i = 0; i < brick_idx_count; i++) {
+        // Write the current "brick start" before the possible splitting of encodings as it is the "previous brick end"
+        m_detail_starts[i] = currentDetailStart;
+
+        // if a new split encoding starts, restart index counter and keep track of the previous detail array size
+        if (i / m_brick_idx_to_enc_vector >= split_detail_encoding_sizes.size()) {
+            split_detail_encoding_sizes.back() = currentDetailStart;
+            split_detail_encoding_sizes.push_back(0u);
+            currentDetailStart = 0u;
+        }
+
+        // the encoder specifies how many uint32_t elements are required to store this brick's detail encoding
+        currentDetailStart += m_encoder->getDetailLengthBeforeSeparation(getBrickEncoding(i), getBrickEncodingLength(i));
+
+        // TODO: just separate the detail encoding here, let it return the number of uint32s needed? handle split encodings.
+    }
+    split_detail_encoding_sizes.back() = currentDetailStart;
+    m_detail_starts[brick_idx_count] = currentDetailStart;
+
+    // Second, cut the operation encoding arrays apart und update brick headers / base encoding starts.
+    // The same brick_idx to split (detail) encoding vector is used for base and detail encodings.
+    // Handle one brick after another, splitting encoding arrays if necessary:
+    m_detail_encodings.resize(1);
+    m_detail_encodings.back().resize(split_detail_encoding_sizes.at(0));
+
+    // the first brick always starts at the first entry
+    m_brick_starts[0] = 0u;
+    uint32_t next_old_brick_start = getBrickStart(0);
+    uint32_t next_old_brick_length = getBrickEncodingLength(0);
+    // note: it is possible to process all split encoding arrays in parallel, but this would drastically increase memory
+    uint32_t currentBaseEncodingStart = 0u;
+    for (uint32_t brick_idx = 0u; brick_idx < brick_idx_count; brick_idx++) {
+
+        uint32_t detail_start = m_detail_starts[brick_idx];
+        // Check if we have to start a new split encoding "vector" before writing the next brick's encoding.
+        if (brick_idx / m_brick_idx_to_enc_vector > m_detail_encodings.size() - 1u) {
+            // start a new detail encoding array
+            m_detail_encodings.emplace_back(split_detail_encoding_sizes.at(brick_idx / m_brick_idx_to_enc_vector));
+            detail_start = 0u;
+        }
+        uint32_t detail_encoding_size = m_detail_starts[brick_idx+1] - detail_start;
+
+        // operate directly on the current brick base encoding array
+        uint32_t* mut_encoding = m_encodings[brick_idx / m_brick_idx_to_enc_vector].data();
+
+        // changes for one brick's encoding:
+        // - one uint32 element is removed from the header (LoD start position of the detail) --> now in m_detail_starts
+        // - the operation stream is shortened by the detail level's encoding --> now in m_detail_encodings
+        // to ensure that the base encodings are packed tight again, encodings are moved to the front
+
+        // determine the new output position of this brick in the base encoding output array (overwriting old content)
+        // we are only allowed to read from m_brick_starts[i], m_brick_starts[i+1] is undefined!
+        uint32_t* new_base_encoding_start = mut_encoding + currentBaseEncodingStart;
+
+        uint32_t op_base_encoding_length = m_encoder->separateDetail(mut_encoding + next_old_brick_start,
+                                                                     next_old_brick_length,
+                                                                     new_base_encoding_start,
+                                                                     &(m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).at(detail_start)));
+
+        currentBaseEncodingStart += op_base_encoding_length;
+        // update the brick end (= overwrite the next brick's start)
+        next_old_brick_start = getBrickStart(brick_idx);
+        next_old_brick_length = getBrickEncodingLength(brick_idx);
+        m_brick_starts[brick_idx+1] = currentBaseEncodingStart;
+
+        // if this is the first brick in a split encoding array:
+        // the previous split encoding array was processed completely: shrink it down to a tight fit
+        if (brick_idx > 0 && brick_idx % m_brick_idx_to_enc_vector == 0) {
+            m_encodings.at((brick_idx - 1u) / m_brick_idx_to_enc_vector).resize(m_brick_starts[brick_idx]);
+            currentBaseEncodingStart = op_base_encoding_length;
+        }
+    }
+    // shrink last encoding buffer
+    m_encodings.back().resize(m_brick_starts[brick_idx_count]);
+
+    if (!verifyCompression()) {
+        throw std::runtime_error("Corrupt CSGV after detail separation");
+    }
+
+    m_separate_detail = true;
+    m_encoder->setDecodeWithSeparateDetail(true);
+
+    // return the ratio of detail encoding size to total encoding size
+    return (static_cast<float>(m_detail_starts[brick_idx_count]) / static_cast<float>(m_brick_starts[brick_idx_count] + m_detail_starts[brick_idx_count]));
 }
 
 bool CompressedSegmentationVolume::verifyCompression() const {
