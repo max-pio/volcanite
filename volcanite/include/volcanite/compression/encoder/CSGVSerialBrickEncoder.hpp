@@ -55,12 +55,14 @@ public:
     /// @returns the new base encoding size in numbers of uint32
     virtual uint32_t separateDetail(const uint32_t* brick_encoding, uint32_t brick_encoding_length,
                                 uint32_t* base_encoding_out, uint32_t* detail_encoding_out) const override {
+
+        // obtain brick information before the content is overwritten:
         const uint32_t header_size = getHeaderSize();
         const uint32_t lod_count = getLodCountPerBrick();
-
+        const uint32_t palette_size = brick_encoding[getPaletteSizeHeaderIndex()];
         // length (in uint32 elements) of the operation stream of base levels only
-        uint32_t base_op_stream_length = brick_encoding[lod_count - 1] / 8 - header_size;
-        uint32_t detail_encoding_size = getDetailLengthBeforeSeparation(brick_encoding, brick_encoding_length);
+        const uint32_t base_op_stream_length = brick_encoding[lod_count - 1] / 8 - header_size;
+        const uint32_t detail_encoding_size = getDetailLengthBeforeSeparation(brick_encoding, brick_encoding_length);
 
         // copy the detail encoding to the detail buffer
         memcpy(detail_encoding_out, brick_encoding + header_size + base_op_stream_length, detail_encoding_size * sizeof(uint32_t));
@@ -69,20 +71,20 @@ public:
         // the header is missing one element (start pos. of the detail layer) now, so we have to adjust the lod start entries.
         memmove(base_encoding_out, brick_encoding, (lod_count - 1u) * sizeof(uint32_t));
         for(int l = 0; l < (lod_count - 1u); l++)
-            detail_encoding_out[l] -= 8u;
+            base_encoding_out[l] -= 8u;
         // move the palette part of the encoding header one element to the front
         // (because the encoding_start entry for the detail buffer is now missing in between)
-        memmove(detail_encoding_out + (lod_count - 1u),
+        memmove(base_encoding_out + (lod_count - 1u),
                 brick_encoding + lod_count,
                 (lod_count + 1u) * sizeof(uint32_t));
         // move the base encoding
-        memmove(detail_encoding_out + (header_size - 1u),
+        memmove(base_encoding_out + (header_size - 1u),
                 brick_encoding + header_size,
                 base_op_stream_length * sizeof(uint32_t));
         // move the palette
-        memmove(detail_encoding_out + (header_size - 1u) + base_op_stream_length,
+        memmove(base_encoding_out + (header_size - 1u) + base_op_stream_length,
                 brick_encoding + header_size + base_op_stream_length + detail_encoding_size,
-                brick_encoding[getPaletteSizeHeaderIndex()] * sizeof(uint32_t));
+                palette_size * sizeof(uint32_t));
 
         // Return new base encoding size, used to update the brick start index:
         // In addition to the detail encoding, brick headers are missing one element (detail LoD start) each.
@@ -92,12 +94,8 @@ public:
     /// @returns number of uint32_t elements that will be stored for this brick's detail level after detail separation.
     virtual uint32_t getDetailLengthBeforeSeparation(const uint32_t* brick_encoding,
                                                      const uint32_t brick_encoding_length) const override{
-
-        assert(brick_encoding[0] == getHeaderSize());
         const uint32_t palette_length = brick_encoding[getPaletteSizeHeaderIndex()];
         const uint32_t header_and_base_level_length = brick_encoding[getLodCountPerBrick() - 1u] / 8;
-        assert(header_and_base_level_length + palette_length <= brick_encoding_length);
-        // total length - encoding of base levels - palette length
         return brick_encoding_length
                 - header_and_base_level_length
                 - palette_length;
@@ -118,7 +116,7 @@ public:
 
     void verifyBrickCompression(const uint32_t* brick_encoding, uint32_t brick_encoding_length,
                                 const uint32_t* detail_encoding, uint32_t detail_encoding_length,
-                                std::stringstream &error) const override;
+                                std::ostream &error) const override;
 
     /// Helper method to gather statistics for one single brick. Same as decodeBrick but also:
     /// Unpacks the encoding for the given brick at a given LOD where a value of INVALID is written to octree entries/voxels that are not encoded because a STOP label occurred in a higher level.

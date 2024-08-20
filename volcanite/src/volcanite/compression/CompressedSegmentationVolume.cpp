@@ -118,9 +118,11 @@ float CompressedSegmentationVolume::separateDetail() {
 
     // the first brick always starts at the first entry
     m_brick_starts[0] = 0u;
+    // keeping track of the start and end of the next brick is required, as brick ends (= next brick's start) contents
+    // are overwritten on the go.
     uint32_t next_old_brick_start = getBrickStart(0);
     uint32_t next_old_brick_length = getBrickEncodingLength(0);
-    // note: it is possible to process all split encoding arrays in parallel, but this would drastically increase memory
+    // note: it is possible to process all split encoding arrays in parallel, but this would increase memory load
     uint32_t currentBaseEncodingStart = 0u;
     for (uint32_t brick_idx = 0u; brick_idx < brick_idx_count; brick_idx++) {
 
@@ -136,42 +138,37 @@ float CompressedSegmentationVolume::separateDetail() {
         // operate directly on the current brick base encoding array
         uint32_t* mut_encoding = m_encodings[brick_idx / m_brick_idx_to_enc_vector].data();
 
-        // changes for one brick's encoding:
-        // - one uint32 element is removed from the header (LoD start position of the detail) --> now in m_detail_starts
-        // - the operation stream is shortened by the detail level's encoding --> now in m_detail_encodings
-        // to ensure that the base encodings are packed tight again, encodings are moved to the front
-
         // determine the new output position of this brick in the base encoding output array (overwriting old content)
-        // we are only allowed to read from m_brick_starts[i], m_brick_starts[i+1] is undefined!
         uint32_t* new_base_encoding_start = mut_encoding + currentBaseEncodingStart;
-
         uint32_t op_base_encoding_length = m_encoder->separateDetail(mut_encoding + next_old_brick_start,
                                                                      next_old_brick_length,
                                                                      new_base_encoding_start,
                                                                      &(m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).at(detail_start)));
 
         currentBaseEncodingStart += op_base_encoding_length;
-        // update the brick end (= overwrite the next brick's start)
-        next_old_brick_start = getBrickStart(brick_idx);
-        next_old_brick_length = getBrickEncodingLength(brick_idx);
+        // read the next brick information before updating the brick end (= overwrite the next brick's start)
+        if (brick_idx < brick_idx_count - 1u) {
+            next_old_brick_start = getBrickStart(brick_idx + 1);
+            next_old_brick_length = getBrickEncodingLength(brick_idx + 1);
+        }
         m_brick_starts[brick_idx+1] = currentBaseEncodingStart;
 
         // if this is the first brick in a split encoding array:
         // the previous split encoding array was processed completely: shrink it down to a tight fit
         if (brick_idx > 0 && brick_idx % m_brick_idx_to_enc_vector == 0) {
             m_encodings.at((brick_idx - 1u) / m_brick_idx_to_enc_vector).resize(m_brick_starts[brick_idx]);
-            currentBaseEncodingStart = op_base_encoding_length;
+            currentBaseEncodingStart = 0u;
         }
     }
     // shrink last encoding buffer
     m_encodings.back().resize(m_brick_starts[brick_idx_count]);
 
+    m_separate_detail = true;
+    m_encoder->setDecodeWithSeparateDetail(true);
+
     if (!verifyCompression()) {
         throw std::runtime_error("Corrupt CSGV after detail separation");
     }
-
-    m_separate_detail = true;
-    m_encoder->setDecodeWithSeparateDetail(true);
 
     // return the ratio of detail encoding size to total encoding size
     return (static_cast<float>(m_detail_starts[brick_idx_count]) / static_cast<float>(m_brick_starts[brick_idx_count] + m_detail_starts[brick_idx_count]));
@@ -326,6 +323,9 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
                     encoded_element_count[thread_id] = m_encoder->encodeBrickForRandomAccess(volume, encodedBrick[thread_id], brick * m_brick_size, m_volume_dim);
                 else
                     encoded_element_count[thread_id] = m_encoder->encodeBrick(volume, encodedBrick[thread_id], brick * m_brick_size, m_volume_dim);
+
+                assert(encoded_element_count[thread_id] < encodedBrick[thread_id].size()
+                        && "Buffer overflow for encoded brick.");
             }
         }
 
@@ -431,6 +431,8 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
 
     m_last_total_encoding_seconds = static_cast<float>(totalTimer.elapsed());
     Logger(INFO) << " Progress 100% in " << std::fixed << std::setprecision(3) << m_last_total_encoding_seconds << "s (" << (static_cast<float>(volume.size()) / m_last_total_encoding_seconds / 1000000.f) << " million voxels/second) " << getEncodingInfoString();
+
+    assert(verifyCompression() && "Compression did produce invalid encodings.");
 }
 
 //#define NO_BRICK_DECODE_INDEX_REMAP

@@ -26,7 +26,7 @@ namespace {
                                                     dim[0] * dim[1] * dim[2]);
         memset(volume.data().data(), 0, dim[0] * dim[1] * dim[2] * sizeof(uint32_t));
 
-        const int number_of_areas = static_cast<int>((dim[0] * dim[1] * dim[2] + 999u) / 8192u);
+        const int number_of_areas = static_cast<int>((dim[0] * dim[1] * dim[2] + 8192u - 1u) / 8192u);
         for (int i = 0; i < number_of_areas; i++) {
             uint32_t label = randomUint();
             uint32_t w = randomUint() % 32 + 1;
@@ -46,6 +46,21 @@ namespace {
                     }
                 }
             }
+        }
+
+        return volume;
+    }
+
+    /// returns a segmentation volume where each voxel has a different label
+    Volume <uint32_t> createWorstCaseSegmentationVolume(glm::uvec3 dim = {100, 100, 100}) {
+        Volume <uint32_t> volume = Volume<uint32_t>(1.f, 1.f, 1.f, dim[0], dim[1], dim[2], vk::Format::eR32Uint,
+                                                    dim[0] * dim[1] * dim[2]);
+
+        uint32_t* raw_voxels = volume.data().data();
+
+        #pragma omp parallel for default(none) shared(raw_voxels, dim)
+        for (size_t v = 0; v < dim[0] * dim[1] * dim[2]; v++) {
+            raw_voxels[v] = v;
         }
 
         return volume;

@@ -83,7 +83,7 @@ uint32_t CSGVSerialBrickEncoder::valueOfNeighbor(const uint32_t* brick, const gl
 
 void CSGVSerialBrickEncoder::verifyBrickCompression(const uint32_t* brick_encoding, uint32_t brick_encoding_length,
                                                     const uint32_t* detail_encoding, uint32_t detail_encoding_length,
-                                                    std::stringstream &error) const {
+                                                    std::ostream &error) const {
 
     uint32_t header_size = getHeaderSize();
     uint32_t lod_count = getLodCountPerBrick();

@@ -109,7 +109,7 @@ public:
     /// Messages must be passed to error if and only if errors are found for this brick.
     virtual void verifyBrickCompression(const uint32_t* brick_encoding, uint32_t brick_encoding_length,
                                         const uint32_t* brick_detail_encoding, uint32_t brick_detail_encoding_length,
-                                        std::stringstream& error) const {
+                                        std::ostream& error) const {
         // TODO: missing compression verification with wavelet matrix brick encoder
     };
 

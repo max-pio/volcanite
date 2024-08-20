@@ -19,6 +19,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <string>
+#include <sstream>
 #include <stdexcept>
 #include <map>
 #include <thread>
@@ -148,7 +149,18 @@ class CSGVBrickEncoder {
     /// Messages must be passed to error if and only if errors are found for this brick.
     virtual void verifyBrickCompression(const uint32_t* brick_encoding, uint32_t brick_encoding_length,
                                         const uint32_t* brick_detail_encoding, uint32_t brick_detail_encoding_length,
-                                        std::stringstream& error) const = 0;
+                                        std::ostream& error) const = 0;
+
+    /// A quick way of checking some invariants of CSGV representations to verify the compressed volume.
+    /// @returns true if the brick is valid, false otherwise
+    virtual bool verifyBrickCompression(const uint32_t* brick_encoding, uint32_t brick_encoding_length,
+                                        const uint32_t* brick_detail_encoding,
+                                        uint32_t brick_detail_encoding_length) const {
+        std::stringstream ss;
+        verifyBrickCompression(brick_encoding, brick_encoding_length,
+                               brick_detail_encoding, brick_detail_encoding_length, ss);
+        return ss.str().empty();
+    };
 
     /// Helper method to gather statistics for one single brick. Same as decodeBrick but also:
     /// Unpacks the encoding for the given brick at a given LOD where a value of INVALID is written to octree entries/voxels that are not encoded because a STOP label occurred in a higher level.

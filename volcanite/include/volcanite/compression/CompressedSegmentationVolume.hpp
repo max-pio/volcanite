@@ -530,8 +530,8 @@ private:
     uint32_t m_brick_size;                          ///< brick size of each dimension in voxels, must be power of 2
     glm::uvec3 m_volume_dim;                        ///< xyz dimensions of the original volume in voxels
     std::vector<std::vector<uint32_t>> m_encodings; ///< contains all encodings for all bricks split up by brick id into several vectors
-    // TODO: add user parameter to set a target size per encoding vector in MB
-    const uint32_t m_target_uints_per_split_encoding = 536870912u; /// targeted max. number of uint32 elements per encoding vector (536870912u -> 2 GB)
+    // TODO: add user parameter to set a target size per encoding vector in MB. Pass a config struct to setCompressionOptions(..)
+    uint32_t m_target_uints_per_split_encoding = 536870912u; /// targeted max. number of uint32 elements per encoding vector (536870912u -> 2 GB)
     uint32_t m_brick_idx_to_enc_vector = ~0u;       ///< dividing 1D brick idx by this value maps to split encoding vector index.
     std::vector<uint32_t> m_brick_starts;           ///< points to indices in m_encoding
     std::vector<std::vector<uint32_t>> m_detail_encodings; /// contains the finest LoDs of all bricks if detail separation is enabled

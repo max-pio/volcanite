@@ -13,8 +13,6 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#pragma once
-
 #include "volcanite/compression/encoder/WaveletMatrixEncoder.hpp"
 #include "volcanite/compression/VolumeCompressionBase.hpp"
 #include "volcanite/compression/pack_nibble.hpp"
