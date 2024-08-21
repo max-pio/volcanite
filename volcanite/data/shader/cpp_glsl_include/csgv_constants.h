@@ -38,9 +38,9 @@
 namespace volcanite {
         // TODO: rename RANSMode to StreamCompression as it is not only rANS anymore
         // TODO: change NO_RANS to NONE, SINGLE_TABLE_RANS=1 to =2, DOUBLE_TABLE_RANS=2 to =3
-        enum RANSMode {NO_RANS=0,
-                       SINGLE_TABLE_RANS=1, DOUBLE_TABLE_RANS=2,
-                       WAVELET_MATRIX=4, HUFFMAN_WM=8, DOUBLE_TABLE_HUFFMAN_WM=9};
+        enum EncodingMode {NIBBLE_ENC=0,
+                       SINGLE_TABLE_RANS_ENC=1, DOUBLE_TABLE_RANS_ENC=2,
+                       WAVELET_MATRIX_ENC=4, HUFFMAN_WM_ENC=8, DOUBLE_TABLE_HUFFMAN_WM_ENC=9};
 
         // Bit Flags
         //
@@ -67,7 +67,6 @@ namespace volcanite {
 #define PALETTE_D 6u    ///< re-read palette label from D+2 entries before the top pointer. D follows in encoding stream.
 
 #define INVALID 0xFFFFFFFFu    ///< UINT32_MAX all bits set to 1. Denotes undecoded values, invalid labels, errors..
-
 
 // Material Constants --------------------------------------------------------------------------------------------------
 #define LABEL_AS_ATTRIBUTE 0xFFFFFFFFu

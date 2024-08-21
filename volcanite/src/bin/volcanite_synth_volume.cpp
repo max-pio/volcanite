@@ -72,9 +72,9 @@ int volcanite_synth_volume_main(int argc, char *argv[]) {
     auto volume = createDummySegmentationVolume(volume_dim);
 
     size_t operation_freq[32];
-    compressedSegmentationVolume->setCompressionOptions64(32, NO_RANS, false);
+    compressedSegmentationVolume->setCompressionOptions64(32, NIBBLE_ENC, false);
     compressedSegmentationVolume->compressForFrequencyTable(volume.dataConst(), volume_dim, operation_freq, 2, true, false);
-    compressedSegmentationVolume->setCompressionOptions64(32, DOUBLE_TABLE_RANS, false, operation_freq, operation_freq + 16);
+    compressedSegmentationVolume->setCompressionOptions64(32, DOUBLE_TABLE_RANS_ENC, false, operation_freq, operation_freq + 16);
     compressedSegmentationVolume->compress(volume.dataConst(), volume_dim, false);
 
 

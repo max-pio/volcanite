@@ -22,15 +22,15 @@ namespace volcanite {
 class RangeANSEncoder : public CSGVSerialBrickEncoder {
 
 public:
-    RangeANSEncoder(uint32_t brick_size, RANSMode encoding_mode,
+    RangeANSEncoder(uint32_t brick_size, EncodingMode encoding_mode,
                     const uint32_t code_frequencies[16], const uint32_t detail_code_frequencies[16])
             : CSGVSerialBrickEncoder(brick_size, encoding_mode) {
-        if (encoding_mode != SINGLE_TABLE_RANS && encoding_mode != DOUBLE_TABLE_RANS)
+        if (encoding_mode != SINGLE_TABLE_RANS_ENC && encoding_mode != DOUBLE_TABLE_RANS_ENC)
             throw std::runtime_error("NibbleEncoder must be used with SINGLE_TABLE_RANS or DOUBLE_TABLE_RANS"
                                      " encoding mode.");
 
         m_rans.recomputeFrequencyTables(code_frequencies);
-        if(encoding_mode == DOUBLE_TABLE_RANS) {
+        if(encoding_mode == DOUBLE_TABLE_RANS_ENC) {
             if (detail_code_frequencies == nullptr)
                 throw std::runtime_error("Detail code frequencies must be given if using double table rANS encoding!");
             m_detail_rans.recomputeFrequencyTables(detail_code_frequencies);
@@ -46,7 +46,7 @@ public:
     }
 
     [[nodiscard]] std::vector<uint32_t> getCurrentDetailFrequencyTable() const {
-        if (m_encoding_mode != DOUBLE_TABLE_RANS)
+        if (m_encoding_mode != DOUBLE_TABLE_RANS_ENC)
             throw std::runtime_error("Can't get a detail frequency table from a Compressed Segmentation Volume that's not using rANS in double table mode.");
         std::vector<uint32_t> freq(16);
         m_detail_rans.copyCurrentFrequencyTableTo(freq.data());
@@ -58,7 +58,7 @@ public:
     /// @returns a list of shader defines used during decoding which are passed to the shader compilation stage
     [[nodiscard]] virtual std::vector<std::string> getGLSLDefines() const override {
         std::vector<std::string> defines = {"USE_RANS"};
-        if(m_encoding_mode == DOUBLE_TABLE_RANS)
+        if(m_encoding_mode == DOUBLE_TABLE_RANS_ENC)
             defines.push_back("USE_RANS_DOUBLE_TABLE");
 
         // build frequency table string
@@ -66,7 +66,7 @@ public:
         ss << "RANS_SYMBOL_TABLE=uvec3[34](";
         ss << m_rans.getGLSLSymbolArrayString();
         ss << ",";
-        if(m_encoding_mode == DOUBLE_TABLE_RANS) {
+        if(m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
             ss << m_detail_rans.getGLSLSymbolArrayString();
         } else {
             // just some dummy entries so the shader compiles..

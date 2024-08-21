@@ -70,7 +70,7 @@ public:
     std::string decompress_export_file; // !empty = perform decompression to file       both can be set!
     std::string segmented_volume_file;
     uint32_t brick_size = 32;
-    RANSMode rANS_mode = RANSMode::DOUBLE_TABLE_RANS;
+    EncodingMode rANS_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC;
     uint32_t freq_subsampling = 8;      // n^3 factor for subsampling bricks for frequency table computation with rANS
     bool random_access = false;         // encode bricks so that they support random access within a brick
 
@@ -268,7 +268,7 @@ public:
 
                 // compression arguments
                 va.brick_size = bricksizeArg.getValue();
-                const RANSMode _strengths[] = {NO_RANS, SINGLE_TABLE_RANS, DOUBLE_TABLE_RANS};
+                const EncodingMode _strengths[] = {NIBBLE_ENC, SINGLE_TABLE_RANS_ENC, DOUBLE_TABLE_RANS_ENC};
                 va.rANS_mode = _strengths[strengthArg.getValue()];
                 va.freq_subsampling = subsamplingArg.getValue();
                 va.threads = threadsArg.getValue();

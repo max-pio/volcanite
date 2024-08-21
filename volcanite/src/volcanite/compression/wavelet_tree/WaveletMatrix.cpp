@@ -22,9 +22,9 @@
 
 namespace volcanite {
 
-WaveletMatrix::WaveletMatrix(uint32_t *op_stream_in, uint32_t start4bit, uint32_t end4bit)
-                                : m_text_size(end4bit - start4bit),
-                                m_bv(m_text_size * WM_LEVELS, 0u) {
+WaveletMatrix::WaveletMatrix(const uint32_t *op_stream_in, uint32_t start4bit, uint32_t end4bit)
+                                : WaveletMatrixBase(op_stream_in, start4bit, end4bit),
+                                  m_bv(m_text_size * WM_LEVELS), m_zeros_on_level(), m_ones_before() {
     // construct the concatenated bit vector
     prefix_counting(op_stream_in, start4bit, end4bit, m_bv);
     // construct flat rank acceleration structure over the bit vector

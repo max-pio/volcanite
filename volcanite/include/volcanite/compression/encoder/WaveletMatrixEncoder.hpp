@@ -23,10 +23,10 @@ namespace volcanite {
 class WaveletMatrixEncoder : public CSGVBrickEncoder {
 
 public:
-    WaveletMatrixEncoder(uint32_t brick_size, RANSMode encoding_mode)
+    WaveletMatrixEncoder(uint32_t brick_size, EncodingMode encoding_mode)
             : CSGVBrickEncoder(brick_size, encoding_mode) {
-        if (encoding_mode != WAVELET_MATRIX)
-            throw std::runtime_error("WaveletMatrixEncoder must be used with WAVELET_MATRIX encoding mode.");
+        if (encoding_mode != WAVELET_MATRIX_ENC && encoding_mode != HUFFMAN_WM_ENC)
+            throw std::runtime_error("WaveletMatrixEncoder must be used with (Huffman) WAVELET_MATRIX encoding mode.");
     }
 
     // SERIAL ENCODING -------------------------------------------------------------------------------------------------

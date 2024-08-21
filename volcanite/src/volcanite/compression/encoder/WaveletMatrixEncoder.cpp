@@ -167,7 +167,10 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
     }
 
     // wavelet matrix packing
-    out_i = packWaveletMatrix(out.data(), out[0], out_i, lod_count);
+    if (m_encoding_mode == WAVELET_MATRIX_ENC)
+        out_i = packWaveletMatrix(out.data(), out[0], out_i, lod_count);
+    else if (m_encoding_mode == HUFFMAN_WM_ENC)
+        out_i = packWaveletMatrixHuffman(out.data(), out[0], out_i, lod_count);
 
     // last entry of our header stores the palette size
     out[header_size - 1u] = palette.size();

@@ -40,7 +40,7 @@ private:
     glm::uvec3 chunk_dimension = {0u, 0u, 0u};
     glm::uvec3 bricks_in_chunk = {0u, 0u, 0u};
     uint32_t brick_size = 0u;
-    RANSMode rANS_mode = NO_RANS;
+    EncodingMode rANS_mode = NIBBLE_ENC;
     std::vector<uint32_t> complete_frequency_table = {};
     std::vector<uint32_t> complete_detail_frequency_table = {};
 
@@ -117,20 +117,20 @@ public:
                     return nullptr;
                 }
                 bricks_in_chunk = (chunk_dimension + brick_size - glm::uvec3(1u)) / brick_size;
-                rANS_mode = chunks[0].getRANSMode();
-                if (rANS_mode != NO_RANS)
+                rANS_mode = chunks[0].getEncodingMode();
+                if (rANS_mode != NIBBLE_ENC)
                     complete_frequency_table = chunks[0].getCurrentFrequencyTable();
-                if(rANS_mode == DOUBLE_TABLE_RANS)
+                if(rANS_mode == DOUBLE_TABLE_RANS_ENC)
                     complete_detail_frequency_table = chunks[0].getCurrentDetailFrequencyTable();
             } else {
                 // check if chunk CSGV use the same compression parameters
-                if (rANS_mode != chunks[0].getRANSMode()) {
+                if (rANS_mode != chunks[0].getEncodingMode()) {
                     Logger(ERROR)
                             << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunks must use same rANS mode.";
                     return nullptr;
                 }
-                if ((rANS_mode != NO_RANS && complete_frequency_table != chunks[c].getCurrentFrequencyTable()) ||
-                    (rANS_mode == DOUBLE_TABLE_RANS &&
+                if ((rANS_mode != NIBBLE_ENC && complete_frequency_table != chunks[c].getCurrentFrequencyTable()) ||
+                    (rANS_mode == DOUBLE_TABLE_RANS_ENC &&
                      complete_detail_frequency_table != chunks[c].getCurrentDetailFrequencyTable())) {
                     Logger(ERROR)
                             << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunks must use same rANS frequency tables.";
@@ -298,12 +298,12 @@ public:
             // write general info
             file.write(reinterpret_cast<char *>(&brick_size), sizeof(uint32_t));
             file.write(reinterpret_cast<char *>(&complete_volume_dim), sizeof(glm::uvec3));
-            file.write(reinterpret_cast<char *>(&rANS_mode), sizeof(RANSMode)); // since 0011
+            file.write(reinterpret_cast<char *>(&rANS_mode), sizeof(EncodingMode)); // since 0011
             file.write(reinterpret_cast<char *>(&max_brick_palette_count), sizeof(uint32_t));
-            if (rANS_mode == SINGLE_TABLE_RANS || rANS_mode == DOUBLE_TABLE_RANS) {  // since 0002
+            if (rANS_mode == SINGLE_TABLE_RANS_ENC || rANS_mode == DOUBLE_TABLE_RANS_ENC) {  // since 0002
                 for (int i = 0; i < 16; i++)
                     file.write(reinterpret_cast<char *>(&complete_frequency_table[i]), sizeof(uint32_t));
-                if (rANS_mode == DOUBLE_TABLE_RANS) {
+                if (rANS_mode == DOUBLE_TABLE_RANS_ENC) {
                     for (int i = 0; i < 16; i++)
                         file.write(reinterpret_cast<char *>(&complete_detail_frequency_table[i]), sizeof(uint32_t));
                 }

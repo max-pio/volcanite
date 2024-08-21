@@ -28,18 +28,24 @@ int main() {
     CompressedSegmentationVolume csgv;
     {
         Logger(INFO) << "Random Access 4 Bit";
-        csgv.setCompressionOptions64(32, NO_RANS, true);
+        csgv.setCompressionOptions64(32, NIBBLE_ENC, true);
         if (!csgv.test(volume.dataConst(), dim, true))
             return 1;
     }
     csgv.clear();
     {
         Logger(INFO) << "Random Access Wavelet Matrix";
-        csgv.setCompressionOptions64(32, WAVELET_MATRIX, true);
+        csgv.setCompressionOptions64(32, WAVELET_MATRIX_ENC, true);
         if (!csgv.test(volume.dataConst(), dim, true))
             return 2;
     }
-
+    csgv.clear();
+    {
+        Logger(INFO) << "Random Access Huffman Wavelet Matrix";
+        csgv.setCompressionOptions64(32, HUFFMAN_WM_ENC, true);
+        if (!csgv.test(volume.dataConst(), dim, true))
+            return 2;
+    }
 
     return 0;
 }

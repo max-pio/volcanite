@@ -198,7 +198,7 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
         uint32_t parent_multigrid_lod_start = muligrid_lod_start;
         muligrid_lod_start -= lod_dim * lod_dim * lod_dim;
 
-        bool in_detail_lod = (m_encoding_mode == DOUBLE_TABLE_RANS) && (current_inv_lod == lod_count - 1u);
+        bool in_detail_lod = (m_encoding_mode == DOUBLE_TABLE_RANS_ENC) && (current_inv_lod == lod_count - 1u);
 
         for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i += lod_width * lod_width * lod_width) {
             // we don't store any operations for a grid node that would lie completely outside the volume
@@ -273,7 +273,7 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
         }
 
 
-        if(m_encoding_mode == DOUBLE_TABLE_RANS) {
+        if(m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
             // pack all previous levels via rANS encoding if we're at the second last LoD (last LoD of non-detail encoding)
             // NOTE: the old out_i and header starts count in number of elements. the following out_i counts in 4bit
             if (current_inv_lod == lod_count - 2u) {
@@ -291,7 +291,7 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
     }
 
     // if we did not apply the rANS packing before, because we are only using a single freq. table, we do it here
-    if(m_encoding_mode == SINGLE_TABLE_RANS)
+    if(m_encoding_mode == SINGLE_TABLE_RANS_ENC)
         out_i = m_rans.packRANS(out, out[0], out_i);
 
 
@@ -324,7 +324,7 @@ void CSGVSerialBrickEncoder::decodeBrick(const uint32_t* brick_encoding, const u
     // first: read the header (= first header entry is the start positions of the inv. LoD 0)
     uint32_t lod_count = getLodCountPerBrick();
     ReadState readState = {.idxE=brick_encoding[0], .in_detail_lod=false};
-    if(m_encoding_mode != NO_RANS) {
+    if(m_encoding_mode != NIBBLE_ENC) {
         // idxE counts in bytes for rANS state instead of number of 4 bit entries
         readState.idxE = (readState.idxE / 8) * 4;
         m_rans.itr_initDecoding(readState.rans_state, readState.idxE, brick_encoding);
@@ -342,7 +342,7 @@ void CSGVSerialBrickEncoder::decodeBrick(const uint32_t* brick_encoding, const u
     for (int lod = 0; lod <= inv_lod; lod++) {
 
         // check if we ran into the detail layer and change the readState accordingly
-        if(m_encoding_mode == DOUBLE_TABLE_RANS && lod == lod_count - 1) {
+        if(m_encoding_mode == DOUBLE_TABLE_RANS_ENC && lod == lod_count - 1) {
             readState.in_detail_lod = true;
             if(m_separate_detail) {
                 // we now read from the separated detail encoding buffer
@@ -432,7 +432,7 @@ void CSGVSerialBrickEncoder::decodeBrickWithDebugEncoding(const uint32_t* brick_
     // first: read the header (= first header entry is the start positions of the inv. LoD 0)
     uint32_t lod_count = getLodCountPerBrick();
     ReadState readState = {.idxE=brick_encoding[0], .in_detail_lod=false};
-    if(m_encoding_mode != NO_RANS) {
+    if(m_encoding_mode != NIBBLE_ENC) {
         // idxE counts in bytes for rANS state instead of number of 4 bit entries
         readState.idxE = (readState.idxE / 8) * 4;
         m_rans.itr_initDecoding(readState.rans_state, readState.idxE, brick_encoding);
@@ -459,7 +459,7 @@ void CSGVSerialBrickEncoder::decodeBrickWithDebugEncoding(const uint32_t* brick_
             output_palette->at(lod) = glm::uvec4(output_palette->size());
 
         // check if we ran into the detail layer and change the readState accordingly
-        if(m_encoding_mode == DOUBLE_TABLE_RANS && lod == lod_count - 1) {
+        if(m_encoding_mode == DOUBLE_TABLE_RANS_ENC && lod == lod_count - 1) {
             readState.in_detail_lod = true;
             if(m_separate_detail) {
                 // we now read from the separated detail encoding buffer

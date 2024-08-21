@@ -336,7 +336,7 @@ namespace volcanite {
             throw std::runtime_error("Could not open file " + path + ".txt");
 
         const uint32_t* encoding = getBrickEncoding(brick_idx);
-        if (m_encoding_mode == NO_RANS) {
+        if (m_encoding_mode == NIBBLE_ENC) {
             uint32_t start4bit = encoding[0]; // first entry of header is the lod start in number of 4 bit entries
             uint32_t end4bit = (getBrickEncodingLength(brick_idx) - getBrickPaletteLength(brick_idx)) * 8; // (total brick size - palette size) * 8
 
@@ -379,7 +379,7 @@ namespace volcanite {
 //        for (uint32_t brick_idx = 0; brick_idx < brickCount; brick_idx++) {
         for (uint32_t brick_idx = getBrickIndexCount() / 2; brick_idx < getBrickIndexCount() / 2 + 1; brick_idx++) {
             const uint32_t* encoding = getBrickEncoding(brick_idx);
-            if (m_encoding_mode == NO_RANS) {
+            if (m_encoding_mode == NIBBLE_ENC) {
                 uint32_t start4bit = encoding[0]; // first entry of header is the lod start in number of 4 bit entries
                 uint32_t end4bit = (getBrickEncodingLength(brick_idx) - getBrickPaletteLength(brick_idx)) * 8; // (total brick size - palette size) * 8
 
@@ -441,10 +441,10 @@ namespace volcanite {
         bs_out.close();
 
         Logger(INFO) << "exported " << (DUMMY_DATA_OUTPUT ? "DUMMY " : "")
-                            << "csgv operations as " << ((m_encoding_mode == NO_RANS) ? " 4 bit codes " : " rANS stream")
+                            << "csgv operations as " << ((m_encoding_mode == NIBBLE_ENC) ? " 4 bit codes " : " rANS stream")
                             <<  "to " << path << "_op.raw and [*]_op_starts.raw";
 
-        if(m_encoding_mode == NO_RANS) {
+        if(m_encoding_mode == NIBBLE_ENC) {
             // IMPORT OF 4BIT OPERATION STREAM:
             std::ifstream raw_in(path + "_op.raw", std::ios::in | std::ios::binary);
             std::ifstream bs_in(path + "_op_starts.raw", std::ios::in | std::ios::binary);

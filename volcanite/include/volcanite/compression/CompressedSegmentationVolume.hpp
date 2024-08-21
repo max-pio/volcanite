@@ -164,7 +164,7 @@ public:
 
 public:
     explicit CompressedSegmentationVolume() : VolumeCompressionBase(), m_brick_size(0u), m_encodings(), m_brick_idx_to_enc_vector(~0u), m_brick_starts(), m_detail_encodings(), m_detail_starts(), m_volume_dim(-1),
-                                              m_encoding_mode(NO_RANS), m_separate_detail(false), m_cpu_threads(std::thread::hardware_concurrency()), m_max_brick_palette_count(0) {}
+                                              m_encoding_mode(NIBBLE_ENC), m_separate_detail(false), m_cpu_threads(std::thread::hardware_concurrency()), m_max_brick_palette_count(0) {}
 
     ~CompressedSegmentationVolume() { clear(); }
 
@@ -338,12 +338,12 @@ public:
     /// encoding array index.
     [[nodiscard]] uint32_t getBrickIdxToEncVectorMapping() const { return m_brick_idx_to_enc_vector; }
 
-    [[nodiscard]] RANSMode getRANSMode() const { return m_encoding_mode; }
-    [[nodiscard]] bool isUsingRANS() const { return m_encoding_mode == SINGLE_TABLE_RANS || m_encoding_mode == DOUBLE_TABLE_RANS; }
-    [[nodiscard]] bool isUsingDetailFreq() const { return m_encoding_mode == DOUBLE_TABLE_RANS; }
+    [[nodiscard]] EncodingMode getEncodingMode() const { return m_encoding_mode; }
+    [[nodiscard]] bool isUsingRANS() const { return m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC; }
+    [[nodiscard]] bool isUsingDetailFreq() const { return m_encoding_mode == DOUBLE_TABLE_RANS_ENC; }
     [[nodiscard]] bool isUsingSeparateDetail() const { return m_separate_detail; }
     [[nodiscard]] bool isUsingRandomAccess() const { return m_random_access; }
-    [[nodiscard]] bool isUsingWaveletMatrix() const { return m_encoding_mode == WAVELET_MATRIX; }
+    [[nodiscard]] bool isUsingWaveletMatrix() const { return m_encoding_mode == WAVELET_MATRIX_ENC; }
 
     /// returns the maximum number of uint32 palette entries that any brick in the volume contains.
     [[nodiscard]] uint32_t getMaxBrickPaletteCount() const { return m_max_brick_palette_count; };
@@ -351,14 +351,14 @@ public:
     /// Sets the options for the compression step. If using rANS, a frequency table as a uint32_t[16] array must be given for the base.
     /// If using detail separation (use_detail) and rANS, an additional frequency table must be given for the detail buffer.
     /// @param random_access if true, encodes in a format that supports in-brick random access
-    void setCompressionOptions(uint32_t brick_size, RANSMode encoding_mode, bool random_access,
+    void setCompressionOptions(uint32_t brick_size, EncodingMode encoding_mode, bool random_access,
                                const uint32_t* code_frequencies = nullptr, const uint32_t* detail_code_frequencies = nullptr);
 
     /// Sets the options for the compression step. If using rANS, a 64 bit frequency table as a size_t[16] array must be given for the base.
     /// If an additional frequency table must be given for the finest LoD if rANS is used in double table mode.
     /// Detail separation (splitting off the operation stream of the finest LoD in a separated compressed file.
     /// @param random_access if true, encodes in a format that supports in-brick random access
-    void setCompressionOptions64(uint32_t brick_size, RANSMode encoding_mode, bool random_access,
+    void setCompressionOptions64(uint32_t brick_size, EncodingMode encoding_mode, bool random_access,
                                  const size_t* code_frequencies = nullptr, const size_t* detail_code_frequencies = nullptr) {
         setCompressionOptions(brick_size, encoding_mode, random_access,
                           code_frequencies ? normalizeCodeFrequencies(code_frequencies).data() : nullptr,
@@ -368,10 +368,10 @@ public:
     ///////////////////////////////////////////////////////////////////
     ///                   file export / import                      ///
     ///////////////////////////////////////////////////////////////////
-    static std::string getCSGVFileName(const std::string& filepath, uint32_t brick_size, RANSMode rANS_mode, bool separate_detail, const std::string& filetype= ".csgv") {
-        if(separate_detail && rANS_mode != DOUBLE_TABLE_RANS)
+    static std::string getCSGVFileName(const std::string& filepath, uint32_t brick_size, EncodingMode rANS_mode, bool separate_detail, const std::string& filetype= ".csgv") {
+        if(separate_detail && rANS_mode != DOUBLE_TABLE_RANS_ENC)
             throw std::runtime_error("Detail separation can only be used when using rANS in double table mode!");
-        std::string rANS_str = (rANS_mode == SINGLE_TABLE_RANS ? "_rANS" : (rANS_mode == DOUBLE_TABLE_RANS ? "_rANS2" : ""));
+        std::string rANS_str = (rANS_mode == SINGLE_TABLE_RANS_ENC ? "_rANS" : (rANS_mode == DOUBLE_TABLE_RANS_ENC ? "_rANS2" : ""));
         return filepath.substr(0, filepath.rfind('.')) + "_bs" + std::to_string(brick_size) + rANS_str + (separate_detail ? "_ds" : "") + filetype;
     }
     std::string getCSGVFileName(const std::string& filepath, const std::string filetype= ".csgv") { return getCSGVFileName(filepath, m_brick_size, m_encoding_mode, m_separate_detail, filetype); }
@@ -538,7 +538,7 @@ private:
     std::vector<uint32_t> m_detail_starts;          ///< points to indices m_detail_encodings
 
     std::unique_ptr<CSGVBrickEncoder> m_encoder = {};    ///< encodes single bricks with a certain encoding method
-    RANSMode m_encoding_mode;
+    EncodingMode m_encoding_mode;
     std::vector<uint32_t> m_frequency_table;        ///< operation frequencies within all, or within the base levels
     std::vector<uint32_t> m_detail_frequency_table; ///< operation frequencies within the detail level
     bool m_random_access = false;                   ///< encoding supports random access within a brick

@@ -22,8 +22,8 @@ namespace volcanite {
 class NibbleEncoder : public CSGVSerialBrickEncoder {
 
 public:
-    NibbleEncoder(uint32_t brick_size, RANSMode encoding_mode) : CSGVSerialBrickEncoder(brick_size, encoding_mode) {
-        if (encoding_mode != NO_RANS)
+    NibbleEncoder(uint32_t brick_size, EncodingMode encoding_mode) : CSGVSerialBrickEncoder(brick_size, encoding_mode) {
+        if (encoding_mode != NIBBLE_ENC)
             throw std::runtime_error("NibbleEncoder must be used with NO_RANS encoding mode.");
     }
 
