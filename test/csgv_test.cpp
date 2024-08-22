@@ -61,9 +61,9 @@ int main() {
     {
         Logger(INFO) << "TEST: DOUBLE TABLE RANS, DETAIL SEPARATION";
         size_t freq[32];
-        csgv.setCompressionOptions64(32, NO_RANS, false);
+        csgv.setCompressionOptions64(32, NIBBLE_ENC, false);
         csgv.compressForFrequencyTable(volume.dataConst(), dim, freq, 2, true, false);
-        csgv.setCompressionOptions64(64, RANSMode::DOUBLE_TABLE_RANS, false, freq, freq + 16);
+        csgv.setCompressionOptions64(64, EncodingMode::DOUBLE_TABLE_RANS_ENC, false, freq, freq + 16);
         csgv.compress(volume.dataConst(), dim, false);
         csgv.separateDetail();
         if (!csgv.test(volume.dataConst(), dim, false))

@@ -27,7 +27,7 @@ using namespace vvv;
 
 namespace volcanite {
 
-void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, RANSMode encoding_mode,
+void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, EncodingMode encoding_mode,
                                                          bool random_access,
                                                          const uint32_t* code_frequencies,
                                                          const uint32_t* detail_code_frequencies) {
@@ -49,11 +49,12 @@ void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, RA
     m_encoding_mode = encoding_mode;
     m_random_access = random_access;
 
+    // TODO: replace with switch / case
     // set up the respective brick encoder
-    if (m_encoding_mode == NO_RANS) {
+    if (m_encoding_mode == NIBBLE_ENC) {
         m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode);
     }
-    else if (m_encoding_mode == SINGLE_TABLE_RANS || m_encoding_mode == DOUBLE_TABLE_RANS) {
+    else if (m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
         if(code_frequencies == nullptr)
             throw std::runtime_error("Operation frequencies must be given if using rANS.");
         if(random_access)
@@ -62,10 +63,10 @@ void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, RA
         // normalize the symbol frequencies and setup encoder
         m_encoder = std::make_unique<RangeANSEncoder>(m_brick_size, m_encoding_mode,
                                     normalizeCodeFrequencies(code_frequencies).data(),
-                                    (m_encoding_mode == DOUBLE_TABLE_RANS)
+                                    (m_encoding_mode == DOUBLE_TABLE_RANS_ENC)
                                     ? normalizeCodeFrequencies(detail_code_frequencies).data()
                                     : nullptr);
-    } else if (m_encoding_mode == WAVELET_MATRIX) {
+    } else if (m_encoding_mode == WAVELET_MATRIX_ENC || m_encoding_mode == HUFFMAN_WM_ENC) {
         m_encoder = std::make_unique<WaveletMatrixEncoder>(m_brick_size, m_encoding_mode);
     } else {
         throw std::runtime_error("No CSGB brick encoder for given encoding mode available.");
@@ -82,7 +83,7 @@ float CompressedSegmentationVolume::separateDetail() {
         throw std::runtime_error("Detail separation was already performed!");
     if(m_encodings.empty())
         throw std::runtime_error("Segmentation volume is not yet compressed! Call compress() before performing detail separation.");
-    if(m_encoding_mode != DOUBLE_TABLE_RANS)
+    if(m_encoding_mode != DOUBLE_TABLE_RANS_ENC)
         throw std::runtime_error("Detail separation can only be used in combination with rANS in double table mode!");
 
     const uint32_t brick_idx_count = getBrickIndexCount();
@@ -657,7 +658,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
     // write general info
     file.write(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
     file.write(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
-    file.write(reinterpret_cast<char *>(&m_encoding_mode), sizeof(RANSMode)); // since 0011
+    file.write(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode)); // since 0011
     file.write(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t)); // since 012
     if (isUsingRANS()) {  // since 0002
         auto freq_table = getCurrentFrequencyTable();
@@ -738,7 +739,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     // read the general data set info
     fin.read(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
     fin.read(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
-    fin.read(reinterpret_cast<char *>(&m_encoding_mode), sizeof(RANSMode));
+    fin.read(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode));
     if (_numeric_version >= 12)
         fin.read(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t));
     else
@@ -838,8 +839,8 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
     assert(std::popcount(m_brick_size) == 1u && "brick size must be a power of 2 > 0");
 
     // the frequency pass is carried out over plain 4 bit operation encodings
-    RANSMode old_rANS_mode = m_encoding_mode;
-    m_encoding_mode = NO_RANS;
+    EncodingMode old_rANS_mode = m_encoding_mode;
+    m_encoding_mode = NIBBLE_ENC;
 
     m_volume_dim = volume_dim;
     glm::uvec3 brickCount = getBrickCount();

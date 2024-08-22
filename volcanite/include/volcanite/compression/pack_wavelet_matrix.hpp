@@ -15,9 +15,10 @@
 
 #pragma once
 
+#include <glm/glm.hpp>
 #include <cstdint>
 #include <vector>
-#include "volcanite/compression/wavelet_tree/WaveletMatrix.hpp"
+#include "volcanite/compression/wavelet_tree/BitVector.hpp"
 
 namespace volcanite {
 
@@ -28,7 +29,6 @@ namespace volcanite {
         const BV_L12Type* fr;          ///< L12 flat rank acceleration structure
         const BV_WordType* bv;         ///< bit vector containing bit vectors of all wavelet matrix levels concatenated
     };
-
 
     /// @param base_header_size the number of initial uint32 header elements that are not WM specific
     WMBrickHeader getWMBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size);
@@ -47,5 +47,37 @@ namespace volcanite {
 
     uint32_t wm_access(uint32_t position, const WMBrickHeader& wm_header);
     uint32_t wm_rank(uint32_t position, uint32_t symbol, const WMBrickHeader& wm_header);
+
+
+    // ===============================================================================================================//
+    //                                          HUFFMAN WAVELET MATRIX                                                //
+    // ===============================================================================================================//
+
+
+    struct WMHBrickHeader {
+        uint32_t text_size;            ///< symbols in the encoding stream
+        uint32_t ones_before_level[5]; ///< number of ones before each level in the wavelet matrix
+        glm::uvec4 level_starts_1_to_4;///< bit vector level starts for levels 1,2,3, and 4. L0 is always 0, L5 undef.
+        const BV_L12Type* fr;          ///< L12 flat rank acceleration structure
+        const BV_WordType* bv;         ///< bit vector containing bit vectors of all wavelet matrix levels concatenated
+    };
+
+    /// @param base_header_size the number of initial uint32 header elements that are not WM specific
+    WMHBrickHeader getWMHBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size);
+
+    /// Replaces all 4 bit elements between start4bit (including) and end4bit (excluding) in in_packed with a
+    /// wavelet matrix encoded bytestream. Updates the brick header's start position at v[0] to point to the beginning
+    /// of the FlatRank acceleration of the WaveletMatrix stream. The new layout is:\n
+    /// [old header] [text size] [4x ones before level] [4x zeros in level] | 64b[flat rank] 64b[bit vectors]
+    /// The first 4 bit element start4bit must be the first position in a 32bit memory location.
+    /// The first lod_count header entries are adapted to store the start indices of LODs as operation counts with
+    /// v[0] = 0 being the start operation count of the first LOD.
+    /// @return the new end4bit endpoint measured in number of 4 bit elements
+    uint32_t packWaveletMatrixHuffman(uint32_t* v, std::size_t start4bit, std::size_t end4bit, uint32_t lod_count);
+
+    // WAVELET MATRIX ACCESS AND RANK ==================================================================================
+
+    uint32_t wm_huffman_access(uint32_t position, const WMHBrickHeader& wm_header);
+    uint32_t wm_huffman_rank(uint32_t position, uint32_t symbol, const WMHBrickHeader& wm_header);
 
 }

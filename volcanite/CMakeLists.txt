@@ -37,7 +37,9 @@ set(VOLCANITE_HEADERS
         include/volcanite/compression/pack_wavelet_matrix.hpp
         include/volcanite/compression/wavelet_tree/bit_reversal_permutation.hpp
         include/volcanite/compression/wavelet_tree/BitVector.hpp
+        include/volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp
         include/volcanite/compression/wavelet_tree/WaveletMatrix.hpp
+        include/volcanite/compression/wavelet_tree/WaveletMatrixBase.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp
         include/volcanite/renderer/PassCompSegVolRender.hpp
@@ -57,6 +59,7 @@ set(VOLCANITE_SOURCES
         src/volcanite/compression/pack_rans.cpp
         src/volcanite/compression/pack_wavelet_matrix.cpp
         src/volcanite/compression/wavelet_tree/prefix_counting.cpp
+        src/volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.cpp
         src/volcanite/compression/wavelet_tree/WaveletMatrix.cpp
         src/renderer/CompressedSegmentationVolumeRenderer.cpp
         src/renderer/CompressedSegmentationVolumeBrickViewer.cpp

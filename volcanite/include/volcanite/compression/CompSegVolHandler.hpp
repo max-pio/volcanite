@@ -136,7 +136,7 @@ public:
 
     struct CSGVCompressionConfig {
         int brick_dim = 32;
-        RANSMode rANS_mode = DOUBLE_TABLE_RANS;
+        EncodingMode rANS_mode = DOUBLE_TABLE_RANS_ENC;
         bool parallel_decoding = false;
         std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> label_remapping = nullptr;
         uint32_t cpu_threads = 0u;
@@ -157,7 +157,7 @@ public:
             cpu_threads = std::thread::hardware_concurrency();
 
 
-        if(cfg.use_detail_separation && cfg.rANS_mode != DOUBLE_TABLE_RANS)
+        if(cfg.use_detail_separation && cfg.rANS_mode != DOUBLE_TABLE_RANS_ENC)
             throw std::runtime_error("Detail separation can only be used in combination with double table rANS!");
         if(cfg.freq_subsampling == 0u)
             throw std::runtime_error("Frequency subsampling must be at least 1 (= no subsampling)!");
@@ -220,7 +220,7 @@ public:
         glm::uvec3 complete_volume_dim(0u);
         std::vector<size_t> code_frequencies(16, 0u);
         std::vector<size_t> detail_code_frequencies(16, 0u);
-        if (cfg.rANS_mode != NO_RANS) {
+        if (cfg.rANS_mode != NIBBLE_ENC) {
             // We may have a precomputed frequency table.
             // As operation frequencies do not change between rANS in single table or no rANS mode, we could use the same filename to store precomputed freq. tables in both cases.
             std::string freq_path = CompressedSegmentationVolume::getCSGVFileName(csgv_path, cfg.brick_dim, cfg.rANS_mode, false, ".cfrq");
@@ -250,8 +250,8 @@ public:
                             volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
 
                             size_t tmp_code_frequencies[32];
-                            csgv->setCompressionOptions(cfg.brick_dim, NO_RANS, cfg.parallel_decoding);
-                            csgv->compressForFrequencyTable(volume->data(), volume_dim, tmp_code_frequencies, cfg.freq_subsampling, cfg.rANS_mode == DOUBLE_TABLE_RANS, false);
+                            csgv->setCompressionOptions(cfg.brick_dim, NIBBLE_ENC, cfg.parallel_decoding);
+                            csgv->compressForFrequencyTable(volume->data(), volume_dim, tmp_code_frequencies, cfg.freq_subsampling, cfg.rANS_mode == DOUBLE_TABLE_RANS_ENC, false);
                             for (int i = 0; i < 16; i++) {
                                 code_frequencies[i] += tmp_code_frequencies[i];
                                 detail_code_frequencies[i] += tmp_code_frequencies[i+16];
