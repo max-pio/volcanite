@@ -100,7 +100,7 @@ void CSGVSerialBrickEncoder::verifyBrickCompression(const uint32_t* brick_encodi
     // check encoding starts being in ascending order
     // note: the header count the number of entries, except the last entry when using double table rANS
     // for which this entry refers to the raw 4 bit index at which the detail encoding starts AFTER packing the earlier LoDs
-    for(int l = 1; l < header_start_lods - (detail_encoding ? 1 : 0); l++) {
+    for(int l = 1; l < header_start_lods - (m_encoding_mode == DOUBLE_TABLE_RANS_ENC ? 1 : 0); l++) {
         long distance = static_cast<long>(brick_encoding[l]) - static_cast<long>(brick_encoding[l - 1]);
         if(distance < 0l) {
             error << "  encoding starts are not in ascending order (distance " << distance << " for LoD " << l << ")\n";

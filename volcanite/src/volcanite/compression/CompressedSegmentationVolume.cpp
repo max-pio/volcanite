@@ -647,7 +647,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
      * 0003: allows separating the detail buffer
      * 0004: remove RLE flag
      * 0010: paper release version
-     * 0011: use rANS_mode instead of use_rANS, allow detail separation only with DOUBLE_TABLE_RANS
+     * 0011: use encoding_mode instead of use_rANS, allow detail separation only with DOUBLE_TABLE_RANS
      * 0012: store max. brick palette size
      * 0013: split encoding buffers
      * 0014: re-ordered operation codes by occurring frequency to Parent,X,Y,Z,PaletteA,PaletteL,PaletteD
@@ -814,7 +814,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     if(verbose)
         Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim)
                       << " voxels and " << str(getBrickCount()) << " = " << getBrickIndexCount()
-                      << " [b=" << m_brick_size << ",s=" << m_encoding_mode << "]"
+                      << " [b=" << m_brick_size << ",e=" << EncodingMode_STR(m_encoding_mode) << "]"
                       << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
 
     if(verify) {

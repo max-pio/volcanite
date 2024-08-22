@@ -36,11 +36,9 @@
     #define CSGV_UINT uint32_t
 
 namespace volcanite {
-        // TODO: rename RANSMode to StreamCompression as it is not only rANS anymore
-        // TODO: change NO_RANS to NONE, SINGLE_TABLE_RANS=1 to =2, DOUBLE_TABLE_RANS=2 to =3
         enum EncodingMode {NIBBLE_ENC=0,
-                       SINGLE_TABLE_RANS_ENC=1, DOUBLE_TABLE_RANS_ENC=2,
-                       WAVELET_MATRIX_ENC=4, HUFFMAN_WM_ENC=8, DOUBLE_TABLE_HUFFMAN_WM_ENC=9};
+                           SINGLE_TABLE_RANS_ENC=1, DOUBLE_TABLE_RANS_ENC=2,
+                           WAVELET_MATRIX_ENC=4, HUFFMAN_WM_ENC=8, DOUBLE_TABLE_HUFFMAN_WM_ENC=9};
 
         // Bit Flags
         //
@@ -51,6 +49,57 @@ namespace volcanite {
         // rANS: bit 1 (2)
         // wavelet tree: bit 2 (4)
         // Huffman wavelet tree: bit 3 (8)
+
+        static constexpr const char* EncodingMode_STR(EncodingMode e) {
+            switch (e) {
+                case NIBBLE_ENC:
+                    return "Nibble";
+                    break;
+                case SINGLE_TABLE_RANS_ENC:
+                    return "rANS";
+                    break;
+                case DOUBLE_TABLE_RANS_ENC:
+                    return "rANS-DT";
+                    break;
+                case WAVELET_MATRIX_ENC:
+                    return "WaveletMatrix";
+                    break;
+                case HUFFMAN_WM_ENC:
+                    return "HuffmanWaveletMatrix";
+                    break;
+                case DOUBLE_TABLE_HUFFMAN_WM_ENC:
+                    return "HuffmanWaveletMatrix-DT";
+                    break;
+                default:
+                    return "INVALID_ENC_MODE";
+            }
+        }
+
+
+    static constexpr const char* EncodingMode_ShortSTR(EncodingMode e) {
+        switch (e) {
+            case NIBBLE_ENC:
+                return "nb";
+                break;
+            case SINGLE_TABLE_RANS_ENC:
+                return "r1";
+                break;
+            case DOUBLE_TABLE_RANS_ENC:
+                return "r2";
+                break;
+            case WAVELET_MATRIX_ENC:
+                return "wm";
+                break;
+            case HUFFMAN_WM_ENC:
+                return "w1";
+                break;
+            case DOUBLE_TABLE_HUFFMAN_WM_ENC:
+                return "w2";
+                break;
+            default:
+                return "##";
+        }
+    }
 }
 #endif
 
