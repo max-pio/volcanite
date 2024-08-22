@@ -183,8 +183,8 @@ namespace volcanite {
     //                                          HUFFMAN WAVELET MATRIX                                                //
     // ===============================================================================================================//
 
-    inline uint32_t getFlatRankEntriesHuffman(uint32_t text_size) {
-        return (text_size * HWM_LEVELS) / BV_L1_BIT_SIZE + 1u;
+    inline uint32_t getFlatRankEntriesHuffman(uint32_t bit_vector_size) {
+        return bit_vector_size / BV_L1_BIT_SIZE + 1u;
     }
 
     inline uint32_t wmh_getLevelStart(uint32_t level, const glm::uvec4& level_starts_1_to_4) {
@@ -208,8 +208,8 @@ namespace volcanite {
         // --- brick header extension ---
         uint32_t out_i = start4bit / 8u; // count in 32 bit instead of 4 bit elements
         // (overwrite header start indices, LOD 0) ?
-        // uint32_t text size | 5x uint32 ones before level | 5x uint32 zeros in level | 5x bit vector level starts
-        v[out_i++] = wm.getTextSize();
+        // uint32_t bit.vec. size | 5x uint32 ones before level | 5x uint32 zeros in level | 5x bit vector level starts
+        v[out_i++] = wm.getBitVector()->size();
         for (int _i = 0; _i < 5; _i++)
             v[out_i++] = wm.getOnesBeforeLevel()[_i];
         for (int _i = 0; _i < 4; _i++)
@@ -230,6 +230,7 @@ namespace volcanite {
 
         // FlatRank
         const BV_L12Type* fr = wm.getFlatRank()->getRawData();
+        assert(wm.getFlatRank()->getRawDataSize() == getFlatRankEntriesHuffman(v[start4bit / 8u]) && "Flat rank size does not match expected size.");
         for (uint32_t _i = 0u; _i < wm.getFlatRank()->getRawDataSize(); _i++) {
             v64[out_i++] = fr[_i];
         }
@@ -245,7 +246,7 @@ namespace volcanite {
 
     /// @param base_header_size the number of initial uint32 header elements that are not WM specific
     WMHBrickHeader getWMHBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size) {
-        return {.text_size=v[base_header_size],
+        return {.bit_vector_size=v[base_header_size],
                 .ones_before_level={v[base_header_size + 1], v[base_header_size + 2],
                                     v[base_header_size + 3], v[base_header_size + 4],  v[base_header_size + 5]},
                 .level_starts_1_to_4={v[base_header_size + 6],  v[base_header_size + 7],
@@ -263,6 +264,7 @@ namespace volcanite {
         // ANY 1 bit directly terminates the canonical huffman code and the symbol is the position of this bit.
         for (uint32_t level = 0; level < HWM_LEVELS; level++) {
             if (_bv_access(position, wm_header.bv)) {
+                assert(position != 0u || level == 4u && "first operation in stream must be 4u (PALETTE_ADV).");
                 return level;
             } else {
                 // TODO: we should not use the inverted CHC but the normal CHC, interpret 1 as left and 0 as right

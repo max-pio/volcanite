@@ -202,6 +202,7 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxelWM(const uint32_t output_
     glm::uvec3 inv_lod_voxel = enumBrickPos(inv_lod_op_i);
 
     // obtain encoding operation read index (4 bit)
+    assert(brick_encoding[0] == 0u && "First operation in the opstrem must have start index 0.");
     uint32_t enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
     uint32_t operation = wm_access(enc_operation_index, wm_header);
 
@@ -219,6 +220,7 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxelWM(const uint32_t output_
             if (operation_lsb == PARENT) {
                 // read from the parent in the next iteration
                 inv_lod--;
+                assert(inv_lod <= target_inv_lod && "LOD chasing overflow for Huffman Wavelet Matrix decoding.");
                 inv_lod_op_i /= 8u;
                 inv_lod_voxel = enumBrickPos(inv_lod_op_i);
             }
@@ -274,10 +276,10 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxelWMHuffman(const uint32_t 
     glm::uvec3 inv_lod_voxel = enumBrickPos(inv_lod_op_i);
 
     // obtain encoding operation read index (4 bit)
+    assert(brick_encoding[0] == 0u && "First operation in the opstrem must have start index 0.");
     uint32_t enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
     uint32_t operation = wm_huffman_access(enc_operation_index, wm_header);
 
-    assert(enc_operation_index < brick_encoding_length * 8u && "brick encoding out of bounds read");
     // ToDo: handle stop bits
     assert((operation & STOP_BIT) == 0u && "stop bit not yet supported with random access");
 
@@ -311,6 +313,8 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxelWMHuffman(const uint32_t 
                     inv_lod_voxel = enumBrickPos(inv_lod_op_i);
                 }
             }
+
+            assert(enc_operation_index < wm_header.level_starts_1_to_4[0] && "brick encoding out of bounds read");
 
             // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
             enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
