@@ -38,10 +38,10 @@ HuffmanWaveletMatrix::HuffmanWaveletMatrix(const uint32_t *op_stream_in, uint32_
     size_t prev_zeros = 0;
     for (size_t i = 0; i < HWM_LEVELS; ++i) {
         // rank0(N) for N=text_size is undefined, query rank0(N-1) + access(N-1) instead
-        size_t const total_zeros = m_fr->rank0((i + 1) * m_text_size);
-        m_zeros_on_level[i] = total_zeros - prev_zeros;
-        prev_zeros = total_zeros;
-        m_ones_before[i] = m_fr->rank1(i * m_text_size);
+        // size_t const total_zeros = m_fr->rank0(m_level_starts[i+1]);
+        // m_zeros_on_level[i] = total_zeros - prev_zeros;
+        // prev_zeros = total_zeros;
+        m_ones_before[i] = m_fr->rank1(m_level_starts[i]);
     }
 }
 

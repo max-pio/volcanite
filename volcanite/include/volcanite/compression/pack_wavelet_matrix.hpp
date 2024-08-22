@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <glm/glm.hpp>
 #include <cstdint>
 #include <vector>
 #include "volcanite/compression/wavelet_tree/BitVector.hpp"
@@ -56,14 +57,13 @@ namespace volcanite {
     struct WMHBrickHeader {
         uint32_t text_size;            ///< symbols in the encoding stream
         uint32_t ones_before_level[5]; ///< number of ones before each level in the wavelet matrix
-        uint32_t zeros_on_level[5];    ///< number of zeros within each level in the wavelet matrix
+        glm::uvec4 level_starts_1_to_4;///< bit vector level starts for levels 1,2,3, and 4. L0 is always 0, L5 undef.
         const BV_L12Type* fr;          ///< L12 flat rank acceleration structure
         const BV_WordType* bv;         ///< bit vector containing bit vectors of all wavelet matrix levels concatenated
     };
 
-
     /// @param base_header_size the number of initial uint32 header elements that are not WM specific
-    WMBrickHeader getWMHBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size);
+    WMHBrickHeader getWMHBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size);
 
     /// Replaces all 4 bit elements between start4bit (including) and end4bit (excluding) in in_packed with a
     /// wavelet matrix encoded bytestream. Updates the brick header's start position at v[0] to point to the beginning
@@ -77,7 +77,7 @@ namespace volcanite {
 
     // WAVELET MATRIX ACCESS AND RANK ==================================================================================
 
-    uint32_t wm_huffman_access(uint32_t position, const WMBrickHeader& wm_header);
-    uint32_t wm_huffman_rank(uint32_t position, uint32_t symbol, const WMBrickHeader& wm_header);
+    uint32_t wm_huffman_access(uint32_t position, const WMHBrickHeader& wm_header);
+    uint32_t wm_huffman_rank(uint32_t position, uint32_t symbol, const WMHBrickHeader& wm_header);
 
 }

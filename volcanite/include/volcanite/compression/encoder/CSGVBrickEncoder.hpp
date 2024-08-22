@@ -187,7 +187,9 @@ class CSGVBrickEncoder {
 
     /// If set to true, the decoding stages assume separated detail buffers. separateDetail() must be have been applied
     /// on any previously encoded brick before further decoding. Otherwise, the decoder will produce false results.
-    void setDecodeWithSeparateDetail(bool decode_with_separate_detail) { m_separate_detail = decode_with_separate_detail; }
+    virtual void setDecodeWithSeparateDetail(bool decode_with_separate_detail) {
+        m_separate_detail = decode_with_separate_detail;
+    }
 
 protected:
     // configuration

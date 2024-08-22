@@ -37,7 +37,7 @@ void volcanite::prefix_counting(const uint32_t *op_stream_in, uint32_t start4bit
     // the bit_blocks that are constructed are uint64 currently. for other word sizes, generalize the construction.
     static_assert(BV_WORD_BIT_SIZE == sizeof(uint64_t) * 8u, "Prefix counting wavelet matrix construction unable to"
                                                              " handle bit vector word size.");
-    assert(bit_vector_out.size() == (end4bit - start4bit) * HWM_LEVELS && "bit vector has non-fitting capacity for construction");
+    assert(bit_vector_out.size() == (end4bit - start4bit) * WM_LEVELS && "bit vector has non-fitting capacity for construction");
 
     using HistType = std::array<uint32_t, WM_ALPHABET_SIZE>;
 

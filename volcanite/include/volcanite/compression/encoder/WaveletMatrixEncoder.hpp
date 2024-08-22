@@ -29,6 +29,11 @@ public:
             throw std::runtime_error("WaveletMatrixEncoder must be used with (Huffman) WAVELET_MATRIX encoding mode.");
     }
 
+    void setDecodeWithSeparateDetail(bool decode_with_separate_detail) override {
+        if (decode_with_separate_detail)
+            throw std::logic_error("WaveletMatrixEncoder does not support detail separation.");
+    }
+
     // SERIAL ENCODING -------------------------------------------------------------------------------------------------
 
     /// Encodes a single brick from given start with size brick_size in the volume to the out vector.
@@ -37,7 +42,9 @@ public:
     /// @param start the start position of the brick. Should be a multiple of the configured brick size.
     /// @param volume_dim the volume size in voxels in each dimension
     /// @return number of uint32_t elements written to out.
-    [[nodiscard]] virtual uint32_t encodeBrick(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out, glm::uvec3 start, glm::uvec3 volume_dim) const override {
+    [[nodiscard]] virtual uint32_t
+    encodeBrick(const std::vector<uint32_t> &volume, std::vector<uint32_t> &out, glm::uvec3 start,
+                glm::uvec3 volume_dim) const override {
         return encodeBrickForRandomAccess(volume, out, start, volume_dim);
     }
 
@@ -46,10 +53,11 @@ public:
     /// @param brick_encoding_length length of the brick encoding memory region in number of uint32 elements.
     /// @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
     /// @param valid_brick_size is used to clamp used voxels for border bricks. Values outside are undefined.
-    /// @param inv_lod the LOD until which to decompress, or rather, the decompression iterations. 0 is the coarsest and log2(brick_size) is the original / finest level.
-    virtual void decodeBrick(const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
-                             const uint32_t* brick_detail_encoding, const uint32_t brick_detail_encoding_length,
-                             uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const override {
+    /// @param inv_lod the LOD until which to decompress, or rather, the decompression iterations. 0 is the coarsest
+    ///                and log2(brick_size) is the original / finest level.
+    virtual void decodeBrick(const uint32_t *brick_encoding, const uint32_t brick_encoding_length,
+                             const uint32_t *brick_detail_encoding, const uint32_t brick_detail_encoding_length,
+                             uint32_t *output_brick, glm::uvec3 valid_brick_size, int inv_lod) const override {
         throw std::runtime_error("Serial decoding of wavelet matrix encoded bricks is not yet implemented.");
     }
 
@@ -62,8 +70,8 @@ public:
     /// @param start the start position of the brick. Should be a multiple of the configured brick size.
     /// @param volume_dim the volume size in voxels in each dimension
     /// @return number of uint32_t elements written to out
-    [[nodiscard]] virtual uint32_t encodeBrickForRandomAccess(const std::vector<uint32_t>& volume,
-                                                              std::vector<uint32_t>& out, glm::uvec3 start,
+    [[nodiscard]] virtual uint32_t encodeBrickForRandomAccess(const std::vector<uint32_t> &volume,
+                                                              std::vector<uint32_t> &out, glm::uvec3 start,
                                                               glm::uvec3 volume_dim) const override;
 
     /// Decodes a single voxel from the brick encoding. Requires random_access to be enabled for random access
@@ -74,7 +82,7 @@ public:
     /// @param brick_encoding_length the length in uint32 elements of the brick encoding
     /// @returns the label of the brick voxel corresponding to the brick encoding index output_i
     virtual uint32_t decompressCSGVBrickVoxel(const uint32_t output_i, const uint32_t target_inv_lod,
-                                              const glm::uvec3 valid_brick_size, const uint32_t* brick_encoding,
+                                              const glm::uvec3 valid_brick_size, const uint32_t *brick_encoding,
                                               const uint32_t brick_encoding_length) const override;
 
     /// Decompresses a single brick in parallel.
@@ -83,13 +91,13 @@ public:
     /// @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
     /// @param valid_brick_size is used to clamp used voxels for border bricks. Values outside are undefined.
     /// @param target_inv_lod the LOD until which to decompress. 0 is the coarsest and log2(brick_size) is the original / finest level.
-    virtual void parallelDecodeBrick(const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
-                                     uint32_t* output_brick, glm::uvec3 valid_brick_size,
+    virtual void parallelDecodeBrick(const uint32_t *brick_encoding, const uint32_t brick_encoding_length,
+                                     uint32_t *output_brick, glm::uvec3 valid_brick_size,
                                      int target_inv_lod) const override;
 
     // VARIABLE BIT-LENGTH ENCODING ------------------------------------------------------------------------------------
 
-    void freqEncodeBrickForRandomAccess(const std::vector<uint32_t>& volume, size_t* brick_freq,
+    void freqEncodeBrickForRandomAccess(const std::vector<uint32_t> &volume, size_t *brick_freq,
                                         glm::uvec3 start, glm::uvec3 volume_dim, bool detail_freq) const override {
         throw std::runtime_error("freq encoding for random access not yet implemented");
     }
@@ -107,9 +115,9 @@ public:
 
     /// A quick way of checking some invariants of CSGV representations to verify the compressed volume.
     /// Messages must be passed to error if and only if errors are found for this brick.
-    virtual void verifyBrickCompression(const uint32_t* brick_encoding, uint32_t brick_encoding_length,
-                                        const uint32_t* brick_detail_encoding, uint32_t brick_detail_encoding_length,
-                                        std::ostream& error) const {
+    virtual void verifyBrickCompression(const uint32_t *brick_encoding, uint32_t brick_encoding_length,
+                                        const uint32_t *brick_detail_encoding, uint32_t brick_detail_encoding_length,
+                                        std::ostream &error) const {
         // TODO: missing compression verification with wavelet matrix brick encoder
     };
 
@@ -119,23 +127,32 @@ private:
     inline uint32_t getMaxOperationsInBrick() const {
         return getMaxOperationsUpToInvLoD(getLodCountPerBrick() - 1u);
     }
+
     /// Returns the number of operations in a brick (one per output voxel) when no stop bits are used up to inv. LoD
     inline uint32_t getMaxOperationsUpToInvLoD(uint32_t inv_lod) const {
         // ignoring stop bits:
         // a brick contains 1 operation for the coarsest LoD, 2*2*2=8 for the next LoD, 4*4*4=64 for the next loD, ...
         // For the first N inverse LoDs this results in a total number of operations of
         //     SUM_0^N (2^n)^3  = 1/7 (8^(i+1) - 1)
-        return ((1u << 3u*(inv_lod+1u)) - 1u)/7u;
+        return ((1u << 3u * (inv_lod + 1u)) - 1u) / 7u;
     }
 
-    uint32_t decompressCSGVBrickVoxelWM(const uint32_t output_i, const uint32_t target_inv_lod,
-                                        const glm::uvec3 valid_brick_size,
-                                        const uint32_t* brick_encoding,
-                                        const uint32_t brick_encoding_length,
-                                        const WMBrickHeader& wm_header) const;
+    static uint32_t decompressCSGVBrickVoxelWM(const uint32_t output_i, const uint32_t target_inv_lod,
+                                               const glm::uvec3 valid_brick_size,
+                                               const uint32_t *brick_encoding,
+                                               const uint32_t brick_encoding_length,
+                                               const WMBrickHeader &wm_header);
+
+
+    static uint32_t decompressCSGVBrickVoxelWMHuffman(const uint32_t output_i, const uint32_t target_inv_lod,
+                                                      const glm::uvec3 valid_brick_size,
+                                                      const uint32_t *brick_encoding,
+                                                      const uint32_t brick_encoding_length,
+                                                      const WMHBrickHeader &wm_header);
 
     /// returns the size of the header at the beginning of each brick measured in uint32 entries.
-    [[nodiscard]] uint32_t getHeaderSize() const { return getLodCountPerBrick() * 2 + (m_separate_detail ? 0 : 1); }
+    [[nodiscard]] uint32_t getHeaderSize() const { return getLodCountPerBrick() * 2 + 1; }
+
 };
 
 } // namespace volcanite

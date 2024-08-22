@@ -62,7 +62,7 @@ class HuffmanWaveletMatrix : public WaveletMatrixBase {
 protected:
     BitVector m_bv;                          ///< Wavelet matrix bit vectors of all 4 levels concatenated.
     FlatRank* m_fr;                          ///< Flat rank L12-block acceleration structure for rank operations.
-    uint32_t m_zeros_on_level[HWM_LEVELS];    ///< Number of zeros in each level of the wavelet matrix.
+    // uint32_t m_zeros_on_level[HWM_LEVELS];    ///< Number of zeros in each level of the wavelet matrix.
     uint32_t m_ones_before[HWM_LEVELS];       ///< Number of ones before each level of the wavelet matrix.
     uint32_t m_level_starts[HWM_LEVELS+1];   ///< Bit index in the concatenated bit vector at which each level starts
 
@@ -74,7 +74,7 @@ public:
                                                   {4, 8},  // 0001 000 NEIGHBOR_Z
                                                   {5, 16}, // 00001 00 PALETTE_ADV
                                                   {5, 0}}; // 00000 00 PALETTE_LAST
-    static constexpr uint32_t CHC2SYMBOL(const uint32_t code) { return 4u - glm::findMSB(code); }
+    static uint32_t CHC2SYMBOL(const uint32_t code) { return 4u - glm::findMSB(code); }
 
     // ATTENTION: this encoder assumes that the chc are obtained with Golomb/Rice coding with M=1 for all symbols except
     // the last two., i.e. can only contain zeros as prefix before its LSB as:
@@ -96,8 +96,12 @@ public:
     [[nodiscard]] const FlatRank* getFlatRank() const override { return m_fr; }
 
     [[nodiscard]] uint32_t getLevels() const override { return HWM_LEVELS; };
-    [[nodiscard]] const uint32_t* getZerosInLevel() const override { return &m_zeros_on_level[0]; }
+    [[nodiscard]] const uint32_t* getZerosInLevel() const override {
+        throw std::runtime_error("HuffmanWaveletMatrix does not provide zeros_on_level");
+        // return &m_zeros_on_level[0];
+    }
     [[nodiscard]] const uint32_t* getOnesBeforeLevel() const override { return &m_ones_before[0]; }
+    [[nodiscard]] const uint32_t* getLevelStarts() const { return &m_level_starts[0]; }
 
     [[nodiscard]] size_t getByteSize() const override {
         size_t bytes = (4 + 3*HWM_LEVELS) * sizeof(uint32_t)           // ones_bef, zeros_on_lvl, lvl_starts, text_size

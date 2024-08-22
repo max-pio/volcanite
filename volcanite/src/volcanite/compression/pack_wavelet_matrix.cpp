@@ -23,6 +23,9 @@ namespace volcanite {
 
     // HELPER FUNCTIONS FOR BIT VECTOR ACCESS AND RANK =================================================================
 
+    inline uint32_t _bv_access(uint32_t index, const uint64_t* bv) {
+        return bitfieldExtract(bv[index / BV_WORD_BIT_SIZE], static_cast<int>(index % BV_WORD_BIT_SIZE), 1);
+    }
 
     inline uint32_t getFlatRankEntries(uint32_t text_size) {
         return (text_size * WM_LEVELS) / BV_L1_BIT_SIZE + 1u;
@@ -113,10 +116,6 @@ namespace volcanite {
         return end4bit + out_i * 16;
     }
 
-    inline uint32_t _bv_access(uint32_t index, const uint64_t* bv) {
-        return bitfieldExtract(bv[index / BV_WORD_BIT_SIZE], static_cast<int>(index % BV_WORD_BIT_SIZE), 1);
-    }
-
     /// @param base_header_size the number of initial uint32 header elements that are not WM specific
     WMBrickHeader getWMBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size) {
         return {.text_size=v[base_header_size],
@@ -184,6 +183,15 @@ namespace volcanite {
     //                                          HUFFMAN WAVELET MATRIX                                                //
     // ===============================================================================================================//
 
+    inline uint32_t getFlatRankEntriesHuffman(uint32_t text_size) {
+        return (text_size * HWM_LEVELS) / BV_L1_BIT_SIZE + 1u;
+    }
+
+    inline uint32_t wmh_getLevelStart(uint32_t level, const glm::uvec4& level_starts_1_to_4) {
+        level--; // Force overflow for level 0 (uint). Will be optimized away for any getLevelStart(level+1) call.
+        // For L0, 0 is correct. For L5 (complete bit vector size), may return any value as it is never used.
+        return level < 4 ? level_starts_1_to_4[level] : 0u;
+    }
 
     /// Replaces all 4 bit elements between start4bit (including) and end4bit (excluding) in in_packed with a
     /// wavelet matrix encoded bytestream. Updates the brick header's start position at v[0] to point to the beginning
@@ -200,12 +208,12 @@ namespace volcanite {
         // --- brick header extension ---
         uint32_t out_i = start4bit / 8u; // count in 32 bit instead of 4 bit elements
         // (overwrite header start indices, LOD 0) ?
-        // uint32_t text size | 4x uint32 ones before level | 4x uint32 zeros in level
+        // uint32_t text size | 5x uint32 ones before level | 5x uint32 zeros in level | 5x bit vector level starts
         v[out_i++] = wm.getTextSize();
-        for (int _i = 0; _i < 4; _i++)
+        for (int _i = 0; _i < 5; _i++)
             v[out_i++] = wm.getOnesBeforeLevel()[_i];
         for (int _i = 0; _i < 4; _i++)
-            v[out_i++] = wm.getZerosInLevel()[_i];
+            v[out_i++] = wm.getLevelStarts()[_i+1]; // first start is always 0
 
         // keep track of end4bit
         end4bit = out_i * 8;
@@ -236,61 +244,56 @@ namespace volcanite {
     }
 
     /// @param base_header_size the number of initial uint32 header elements that are not WM specific
-    WMBrickHeader getWMHBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size) {
+    WMHBrickHeader getWMHBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size) {
         return {.text_size=v[base_header_size],
                 .ones_before_level={v[base_header_size + 1], v[base_header_size + 2],
-                                    v[base_header_size + 3], v[base_header_size + 4]},
-                .zeros_on_level={v[base_header_size + 5], v[base_header_size + 6],
-                                 v[base_header_size + 7], v[base_header_size + 8]},
-                .fr = reinterpret_cast<const BV_L12Type*>(v + base_header_size + 9),
-                .bv = reinterpret_cast<const BV_L12Type*>(v + base_header_size + 9
-                                                          + (sizeof(BV_L12Type)/sizeof(uint32_t)) * getFlatRankEntries(v[base_header_size]))
-        };
+                                    v[base_header_size + 3], v[base_header_size + 4],  v[base_header_size + 5]},
+                .level_starts_1_to_4={v[base_header_size + 6],  v[base_header_size + 7],
+                                      v[base_header_size + 8],  v[base_header_size + 9]},
+                .fr = reinterpret_cast<const BV_L12Type*>(v + base_header_size + 10),
+                .bv = reinterpret_cast<const BV_L12Type*>(v + base_header_size + 10
+                              + (sizeof(BV_L12Type)/sizeof(uint32_t)) * getFlatRankEntriesHuffman(v[base_header_size]))
+                };
     }
 
-    uint32_t wm_huffman_access(uint32_t position, const WMBrickHeader& wm_header) {
+    uint32_t wm_huffman_access(uint32_t position, const WMHBrickHeader& wm_header) {
         // see: volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp HuffmanWaveletMatrix::access()
 
-        uint32_t result = 0u;
-        bool bit = _bv_access(position, wm_header.bv);
-        for (int level = 0; level < WM_LEVELS; ++level) {
-            result <<= 1;
-            size_t const ones_before = _fr_rank1(position, wm_header.bv, wm_header.fr) - wm_header.ones_before_level[level];
-            if (bit) {
-                result |= 1ULL;
-                position =
-                        (level + 1) * wm_header.text_size + wm_header.zeros_on_level[level] + ones_before;
+        // due to the assumptions for the canonical Huffman codes used in the wavelet matrix,
+        // ANY 1 bit directly terminates the canonical huffman code and the symbol is the position of this bit.
+        for (uint32_t level = 0; level < HWM_LEVELS; level++) {
+            if (_bv_access(position, wm_header.bv)) {
+                return level;
             } else {
-                size_t const zeros_before =
-                        (position - (level * wm_header.text_size)) - ones_before;
-                position = (level + 1) * wm_header.text_size + zeros_before;
+                // TODO: we should not use the inverted CHC but the normal CHC, interpret 1 as left and 0 as right
+                //  in the wavelet matrix to optimize the rank0 / rank1 queries
+                uint32_t const ones_before = _fr_rank1(position, wm_header.bv, wm_header.fr) - wm_header.ones_before_level[level];
+                uint32_t const zeros_before = (position - wmh_getLevelStart(level, wm_header.level_starts_1_to_4)) - ones_before;
+                position = wmh_getLevelStart(level + 1, wm_header.level_starts_1_to_4) + zeros_before;
             }
-            if (level < WM_LEVELS - 1u)
-                bit = _bv_access(position, wm_header.bv);
         }
-        return result;
+        return 5u;
     }
 
-    uint32_t wm_huffman_rank(uint32_t position, uint32_t symbol, const WMBrickHeader& wm_header) {
+    uint32_t wm_huffman_rank(uint32_t position, uint32_t symbol, const WMHBrickHeader& wm_header) {
         // see: volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp HuffmanWaveletMatrix::rank()
 
         size_t interval_start = 0;
-        uint64_t bit_mask = 1ULL << (WM_LEVELS - 1);
-        for (size_t level = 0; level < WM_LEVELS && position > 0; ++level) {
-            size_t const ones_before_interval = _fr_rank1(interval_start, wm_header.bv, wm_header.fr);
-            size_t const ones_before_position =
-                    _fr_rank1(interval_start + position, wm_header.bv, wm_header.fr) - ones_before_interval;
-            size_t const ones_in_interval =
-                    ones_before_interval - wm_header.ones_before_level[level];
-            if (symbol & bit_mask) {
-                position = ones_before_position;
-                interval_start = ((level + 1) * wm_header.text_size) + wm_header.zeros_on_level[level] +
-                                 ones_in_interval;
+        const HuffmanCode chc = HuffmanWaveletMatrix::SYMBOL2CHC[symbol];
+        uint32_t bit_mask = 1ULL << (HuffmanCode::CHC_BIT_SIZE - 1);
+        for (uint32_t level = 0; level < chc.length && position > 0; ++level) {
+            uint32_t const ones_before_interval = _fr_rank1(interval_start, wm_header.bv, wm_header.fr);
+            uint32_t const ones_before_position = _fr_rank1(interval_start + position, wm_header.bv, wm_header.fr) - ones_before_interval;
+            // due to the assumptions for the canonical Huffman codes used in the wavelet matrix,
+            // ANY 1 bit directly terminates the canonical huffman code and the symbol is the position of this bit.
+            if (chc.bit_code & bit_mask) {
+                return ones_before_position;
             } else {
                 position = position - ones_before_position;
-                interval_start =
-                        ((level + 1) * wm_header.text_size) +
-                        (interval_start - (level * wm_header.text_size) - ones_in_interval);
+                // TODO: ones_before_level could become an uvec4 if we exclude this case for level == chc.length-1
+                size_t const ones_in_interval = ones_before_interval - wm_header.ones_before_level[level];
+                interval_start = wmh_getLevelStart(level + 1, wm_header.level_starts_1_to_4)
+                        + (interval_start - wmh_getLevelStart(level, wm_header.level_starts_1_to_4) - ones_in_interval);
             }
             bit_mask >>= 1;
         }
