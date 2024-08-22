@@ -65,9 +65,6 @@ set(VOLCANITE_SOURCES
 
 makeLibrary(libvolcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
 
-makeExecutable(bitvector_test)
-installExecutable(bitvector_test)
-
 makeExecutable(csgv_brick_viewer)
 installExecutable(csgv_brick_viewer)
 
