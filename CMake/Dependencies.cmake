@@ -26,7 +26,7 @@ add_subdirectory(extern/tclap)
 add_library(tclap::tclap ALIAS TCLAP)
 
 # extern HighFive simplified hdf5 library if libhdf5-dev is installed
-option(ENABLE_HDF5_SUPPORT  "Includes the hdf5 library for importing and exporting .hdf5 files" OFF)
+option(ENABLE_HDF5_SUPPORT  "Includes the hdf5 library for importing and exporting .hdf5 files" ON)
 if (ENABLE_HDF5_SUPPORT)
     find_package(HDF5 QUIET)
     if (HDF5_FOUND)

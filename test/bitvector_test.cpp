@@ -315,18 +315,15 @@ void printBVTest() {
 
 }
 
-#define TEST(X) {int r = X; std::cout << #X << ": " << r << std::endl; if(r) return r;}
+int main (int argc, char *argv[]) {
 
-int bitvector_test(int argc, char *argv[]) {
+    // printBVTest();
+    // printWMTest();
 
-//    printBVTest();
-    printWMTest();
-
-//    TEST(test_bv_set_access())
-//    TEST(test_bv_rank())
-    TEST(test_wm())
-
-    return 0;
+    if (test_bv_set_access())
+        return 1;
+    else if (test_bv_rank())
+        return 2;
+    else if (test_wm())
+        return 3;
 }
-
-ENTRYPOINT(bitvector_test)

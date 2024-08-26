@@ -369,12 +369,12 @@ public:
     ///                   file export / import                      ///
     ///////////////////////////////////////////////////////////////////
     static std::string getCSGVFileName(const std::string& filepath, uint32_t brick_size, EncodingMode rANS_mode, bool separate_detail, const std::string& filetype= ".csgv") {
-        if(separate_detail && rANS_mode != DOUBLE_TABLE_RANS_ENC)
-            throw std::runtime_error("Detail separation can only be used when using rANS in double table mode!");
-        std::string rANS_str = (rANS_mode == SINGLE_TABLE_RANS_ENC ? "_rANS" : (rANS_mode == DOUBLE_TABLE_RANS_ENC ? "_rANS2" : ""));
-        return filepath.substr(0, filepath.rfind('.')) + "_bs" + std::to_string(brick_size) + rANS_str + (separate_detail ? "_ds" : "") + filetype;
+        return filepath.substr(0, filepath.rfind('.')) + "_bs" + std::to_string(brick_size)
+                                + "_" + EncodingMode_ShortSTR(rANS_mode) + (separate_detail ? "_ds" : "") + filetype;
     }
-    std::string getCSGVFileName(const std::string& filepath, const std::string filetype= ".csgv") { return getCSGVFileName(filepath, m_brick_size, m_encoding_mode, m_separate_detail, filetype); }
+    std::string getCSGVFileName(const std::string& filepath, const std::string filetype= ".csgv") {
+        return getCSGVFileName(filepath, m_brick_size, m_encoding_mode, m_separate_detail, filetype);
+    }
     bool importFromFile(const std::string& path, bool verbose = true, bool verify = true);
     void exportToFile(const std::string& path, bool verbose = true);
 

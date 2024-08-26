@@ -145,9 +145,8 @@ void volcanite::prefix_counting_huffman(const uint32_t *op_stream_in, uint32_t s
                 // obtain the inverted canonical Huffman code for the symbol
                 auto const symbol = volcanite::read4Bit(op_stream_in, 0, text_it);
                 assert(symbol < HWM_ALPHABET_SIZE && "symbol is higher than the alphabet size");
-                const auto &[length, code] = HuffmanWaveletMatrix::SYMBOL2CHC[symbol];
-
-                bit_block |= (code & mask) << shift_first_right;
+                const HuffmanCode chc = HuffmanWaveletMatrix::SYMBOL2CHC[symbol];
+                bit_block |= (chc.bit_code & mask) << shift_first_right;
             }
             raw_bv[raw_bv_pos++] = bit_block;
         }
@@ -155,9 +154,12 @@ void volcanite::prefix_counting_huffman(const uint32_t *op_stream_in, uint32_t s
         uint64_t bit_block = 0ULL;
         size_t const remainder = end4bit - text_it;
         for (size_t i = 0; i < remainder; ++i) {
-            auto const symbol = volcanite::read4Bit(op_stream_in, 0, text_it + i);
             bit_block >>= 1;
-            bit_block |= (symbol & mask) << shift_first_right;
+
+            auto const symbol = volcanite::read4Bit(op_stream_in, 0, text_it + i);
+            assert(symbol < HWM_ALPHABET_SIZE && "symbol is higher than the alphabet size");
+            const HuffmanCode chc = HuffmanWaveletMatrix::SYMBOL2CHC[symbol];
+            bit_block |= (chc.bit_code & mask) << shift_first_right;
         }
         if (remainder > 0) [[likely]] {
             bit_block >>= (BV_WORD_BIT_SIZE - remainder);

@@ -69,10 +69,10 @@ protected:
 public:
     /// bit inverted canonical Huffman codes for the 6 operations
     static constexpr HuffmanCode SYMBOL2CHC[6] = {{1, 1},  // 1 000000 PARENT
-                                                  {2, 2},  // 01 00000 NEIGHBOR_X
-                                                  {3, 4},  // 001 0000 NEIGHBOR_Y
-                                                  {4, 8},  // 0001 000 NEIGHBOR_Z
-                                                  {5, 16}, // 00001 00 PALETTE_ADV
+                                                  {2, 1},  // 01 00000 NEIGHBOR_X
+                                                  {3, 1},  // 001 0000 NEIGHBOR_Y
+                                                  {4, 1},  // 0001 000 NEIGHBOR_Z
+                                                  {5, 1},  // 00001 00 PALETTE_ADV
                                                   {5, 0}}; // 00000 00 PALETTE_LAST
     static uint32_t CHC2SYMBOL(const uint32_t code) { return 4u - glm::findMSB(code); }
 

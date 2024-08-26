@@ -30,5 +30,9 @@ macro(makeTest name)
     add_test(NAME ${name}  COMMAND ${name} ${ARGN})
 endmacro(makeTest)
 
+
 makeTest(csgv_test)
+
+makeTest(bitvector_test)
+makeTest(wavelet_matrix_test)
 makeTest(csgv_random_access_test)

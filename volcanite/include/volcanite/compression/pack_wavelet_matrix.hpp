@@ -55,7 +55,7 @@ namespace volcanite {
 
 
     struct WMHBrickHeader {
-        uint32_t text_size;            ///< symbols in the encoding stream
+        uint32_t bit_vector_size;      ///< total number of bits in all concatenated bit vectors (not the text_size!)
         uint32_t ones_before_level[5]; ///< number of ones before each level in the wavelet matrix
         glm::uvec4 level_starts_1_to_4;///< bit vector level starts for levels 1,2,3, and 4. L0 is always 0, L5 undef.
         const BV_L12Type* fr;          ///< L12 flat rank acceleration structure
