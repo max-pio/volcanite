@@ -22,6 +22,7 @@ set(VOLCANITE_HEADERS
         include/volcanite/VolcaniteArgs.hpp
         include/volcanite/StratifiedPixelSequence.hpp
         data/shader/cpp_glsl_include/csgv_constants.h
+        include/volcanite/benchmark/CSGVBenchmarkPass.hpp
         include/volcanite/compression/VolumeCompressionBase.hpp
         include/volcanite/compression/encoder/CSGVBrickEncoder.hpp
         include/volcanite/compression/encoder/CSGVSerialBrickEncoder.hpp
@@ -47,6 +48,7 @@ set(VOLCANITE_HEADERS
         )
 
 set(VOLCANITE_SOURCES
+        src/volcanite/benchmark/CSGVBenchmarkPass.cpp
         src/volcanite/compression/encoder/CSGVBrickEncoder.cpp
         src/volcanite/compression/encoder/CSGVSerialBrickEncoder.cpp
         src/volcanite/compression/encoder/NibbleEncoder.cpp
@@ -68,14 +70,14 @@ set(VOLCANITE_SOURCES
 
 makeLibrary(libvolcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
 
-makeExecutable(bitvector_test)
-installExecutable(bitvector_test)
-
 makeExecutable(csgv_brick_viewer)
 installExecutable(csgv_brick_viewer)
 
 makeExecutable(volcanite)
 installExecutable(volcanite)
+
+makeExecutable(csgv_benchmark)
+installExecutable(csgv_benchmark)
 
 makeExecutable(volcanite_synth_volume)
 installExecutable(volcanite_synth_volume)

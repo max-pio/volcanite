@@ -80,7 +80,7 @@ uint readCSGVPaletteBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, c
 uint readCSGVBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, const uint brick_start_base_element) {
     // ToDo: why pass the decoded_inv_lod and the decoded_brick_star_base_element? just pass the brick_idx and read it from the cache info here
     uint lod_width = g_brick_size >> decoded_inv_lod;
-    return readEntryFromCache(brick_start_base_element * g_cache_base_element_uints,
+    return readEntryFromCache(brick_start_base_element,
                               (_cache_pos2idx(brick_voxel) / (lod_width * lod_width * lod_width)));
 }
 #endif // ifdef PALETTE_CACHE

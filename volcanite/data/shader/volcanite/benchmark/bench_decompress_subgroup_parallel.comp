@@ -5,7 +5,7 @@
 #extension GL_KHR_shader_subgroup_basic : require
 
 #ifndef SUBGROUP_SIZE
-    #define SUBGROUP_SIZE 64
+#define SUBGROUP_SIZE 64
 #endif
 
 // TODO: instead of invoking brick_idx_count * SUBGROUP_SIZE for .x, invoke .x=SUBGROUP_SIZE, .y=brick_idx_count?
@@ -13,7 +13,7 @@
 layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
 
 
-#include "csgv_bindings.glsl"
+#include "volcanite/benchmark/bench_bindings.glsl"
 
 #include "util.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
@@ -28,52 +28,31 @@ shared uint[MAX_BRICK_ENCODING_32BIT_LENGTH] s_brick_encoding;
 void main() {
     assert(gl_NumSubgroups == 1, "decompression assumes exactly one subgroup per workgroup");
     assert(gl_SubgroupSize == SUBGROUP_SIZE && gl_WorkGroupSize.x == SUBGROUP_SIZE && gl_WorkGroupSize.y == 1u
-            && gl_WorkGroupSize.z == 1u, "decompression assumes workgroup size equal to the subgroup size");
+    && gl_WorkGroupSize.z == 1u, "decompression assumes workgroup size equal to the subgroup size");
 
     // one workgroup decompresses one brick
     const uint workgroup_thread_id = gl_LocalInvocationID.x;
     const uint workgroup_size = gl_WorkGroupSize.x;
 
-    const uint brick_idx = gl_WorkGroupID.x;
+    const uint brick_idx = gl_WorkGroupID.x + pc.brick_idx_offset;
     const uvec3 brick = brick_idx2pos(brick_idx, g_brick_count);
-    const uint brick_info_pos = brick_idx * 4u;
     if (isHelperLane(brick, g_brick_count))
         return;
 
-    // if this brick has a valid request slot, it requests decompression. Otherwise, it can be ignored.
-    if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] == INVALID) {
-        return;
-    }
+    // TODO: could also configure LOD via push constants
+    const int target_inv_lod = g_max_inv_lod;
 
-    // obtain requested inv_lod and previously assigned cache_idx
-    const uint target_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
-    assert(0 < target_inv_lod && target_inv_lod < g_lod_count, "brick has slot index but requests zero or invalid lod");
-    const uint cache_idx = g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX];
-
-    barrier();
-
-    // reset the requested LOD. the renderer will have to flag everything visible again
-    if (workgroup_thread_id == 0u) {
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = max(g_lod_count, g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]);
-    }
-
-    // decompression requested for brick, but brick could not receive a free cache region
-    if (cache_idx == INVALID) {
-        if (workgroup_thread_id == 0u) {
-            g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = INVALID;
-            g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = INVALID;
-        }
-        return;
-    }
+    // obtain the bricks start index in the cache buffer
+    const uint decoded_brick_start_uint = gl_GlobalInvocationID.x * g_cache_uints_per_brick;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //                  perform the decompression of the brick into the previously assigned cache region              //
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     #ifdef SEPARATE_DETAIL
-        assert(false, "Parallel decompression does not support detail separation yet");
-        // assert(!(target_inv_lod == g_lod_count - 1U
-        //        && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_idx] == g_detail_starts[brick_idx+1])),
-        //        "detail buffers marked dirty but the provision shader requested detail decoding");
+    assert(false, "Parallel decompression does not support detail separation yet");
+    // assert(!(target_inv_lod == g_lod_count - 1U
+    //        && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_idx] == g_detail_starts[brick_idx+1])),
+    //        "detail buffers marked dirty but the provision shader requested detail decoding");
     #endif
     // 1. copy brick encoding to shared memory
     // TODO: care about detail encoding! should be glued to the back of the same region
@@ -88,9 +67,8 @@ void main() {
     barrier();
 
     // 2. iterate over output voxels of brick (cache positions) for the requested LOD and decompress each one in parallel
-    const uint decoded_brick_start_uint = cache_idx * g_cache_base_element_uints;
     const uint output_voxel_count = 1u << (3u * target_inv_lod);
-    const uint target_brick_size = 1u << target_inv_lod;
+
     // The workgroup_size many work items iterate through the Morton indexing order from front to back.
     // The threads work on the next following items in parallel.
     //
@@ -101,15 +79,7 @@ void main() {
     while (output_i < output_voxel_count) {
         decompressCSGVVoxelSharedMemory(output_i, brick_encoding_length, uvec3(g_brick_size),
                                         target_inv_lod, decoded_brick_start_uint);
-        // barrier()
+        // barrier() // more cache coherence by barrier? probalby not
         output_i += workgroup_size;
-    }
-
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    // the brick was successfuly decompressed into the cache into the requested inverse LOD, the request can be removed.
-    if (workgroup_thread_id == 0u) {
-        g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = target_inv_lod;
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = INVALID;
     }
 }

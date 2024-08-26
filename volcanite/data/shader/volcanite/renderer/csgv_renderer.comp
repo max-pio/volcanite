@@ -31,6 +31,7 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #include "framebuffer.glsl"
 
 #include "debug_colormaps.glsl"
+#include "csgv_materials.glsl"
 #include "brdf_lambert.glsl"
 #include "dummy_envmap.glsl"
 
@@ -45,7 +46,6 @@ layout (local_size_x = 8, local_size_y = 8) in;
     #include "volcanite/compression/compressed_segmentation_volume.glsl"
 #endif
 #include "volcanite/compression/csgv_utils.glsl"
-
 
 uint get_inv_lod(ivec3 voxel) {
     // Ensure the same level-of-detail for all bricks by computing it from the brick's center.
@@ -117,9 +117,9 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
     else {
         // TODO: depth_valid validity is not changed here even if the requested LOD differs from currently decoded LOD
 #ifdef PALETTE_CACHE
-        return readCSGVPaletteBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX], brick_idx);
+        return readCSGVPaletteBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * g_cache_base_element_uints, brick_idx);
 #else
-        return readCSGVBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX]);
+        return readCSGVBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * g_cache_base_element_uints);
 #endif
     }
 }

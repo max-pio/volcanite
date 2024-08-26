@@ -462,12 +462,12 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
             brick_cache_size_in_lod *= 2*2*2;
             maximum_req_cache_size_MB += brick_cache_size_in_lod;
         }
-        // number o bricks
-        auto brick_count = m_compressed_segmentation_volume->getBrickCount();
-        maximum_req_cache_size_MB *= brick_count.x * brick_count.y * brick_count.z;
+        maximum_req_cache_size_MB *=  m_compressed_segmentation_volume->getBrickIndexCount();
         // convert from #uints to MB
         maximum_req_cache_size_MB *= sizeof(uint32_t);
         maximum_req_cache_size_MB = static_cast<size_t>(std::ceil(static_cast<double>(maximum_req_cache_size_MB) / 1024. / 1024));
+
+        // TODO: include m_cache_base_element_uints and/or m_cache_indices_per_uint when computing required cache size
     }
     if(m_target_cache_size_MB > maximum_req_cache_size_MB) {
         Logger(DEBUG) << "Target cache size is bigger than required to store all LoDs of all bricks. Limitting size.";
@@ -574,7 +574,7 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     std::vector<std::string> shader_defines = m_compressed_segmentation_volume->getGLSLDefines();
     shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
     if(m_use_palette_cache)
-        shader_defines.push_back("PALETTE_CACHE");
+        shader_defines.emplace_back("PALETTE_CACHE");
     shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if(getCtx()->getWsi())
