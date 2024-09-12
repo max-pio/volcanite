@@ -267,6 +267,23 @@ void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
     // DEBUG_check_state_and_ray(state, ray, __LINE__);
 }
 
+// Lense model and code based on Ray Tracing Gems 2
+// TODO (Max) What about license here??
+Ray generate_thin_lens_ray(const Ray pinhole_ray, const ivec2 pixel, const vec2 pixelN, const vec2 rand) {
+    vec2 lens_offset = sampleUniformDisc(pixel, g_camera_still_frames);
+    float focused = g_image_plane * g_focal_length / (g_focal_length - g_image_plane);
+
+    // dot product projects the ray behind the camera, when z is neg therefore the focus_point and image is behind the camera
+    vec3 focus_point = pinhole_ray.direction * (focused / dot(pinhole_ray.direction , vec3(0.f, 0.f, pinhole_ray.direction.z > 0 ? -1.f : 1.f)));
+//    vec3 focus_point = pinhole_ray.direction * (focused / dot(pinhole_ray.direction , vec3(0.f, 0.f, -1.f)));
+    float circle_of_confusion_radius = g_focal_length / (2.f * g_f_stop);
+
+    vec3 origin = vec3(1.f, 0.f, 0.f) * (lens_offset.x * circle_of_confusion_radius) + vec3(0.f, 1.f, 0.f) * (lens_offset.y * circle_of_confusion_radius);
+
+    return Ray(origin, normalize(focus_point - origin));
+}
+
+
 void main() {
     // obtain pixel and fragment coordinates
     ivec2 viewport_size = imageSize(accumulationOut);
@@ -286,6 +303,15 @@ void main() {
     Ray ray = Ray(g_camera_position_world_space, normalize((g_pixel_to_ray_direction_world_space * vec3(pixel + subpixel_offset, 1.0f)).xyz));
     ray.origin = (g_world_to_model_space * vec4(ray.origin, 1.f)).xyz;
     ray.direction = normalize(g_world_to_model_space_dir * ray.direction);
+
+    if (g_dof_enable) {
+        const vec2 pixelN = fragCoord * 2.f - 1; // map pixel in [-1, 1]^2
+        ray = generate_thin_lens_ray(ray, ivec2(pixel + subpixel_offset), pixelN, randomVec3(pixel, g_camera_still_frames).xy); // in camera space -> transform to model space
+
+        ray.origin = (g_world_to_model_space * vec4(ray.origin + g_camera_position_world_space, 1.f)).xyz;
+        ray.direction = normalize(g_world_to_model_space_dir * ray.direction);
+    }
+
 
     // In world space, we hit a small cuboid (largest dimension is 1) centered around the origin.
     // We transform this AABB to model space, where each voxel has unit size:

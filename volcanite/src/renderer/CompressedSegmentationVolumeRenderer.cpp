@@ -771,6 +771,16 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
         m_urender_info->setUniform<int>("g_denoise_filter_kernel_size", m_svgf_enabled ?
                                             glm::min(3, m_denoise_filter_kernel_size) : m_denoise_filter_kernel_size);
+        m_urender_info->setUniform<uint_fast32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_dof_enable", m_dof_enabled ? 1 : 0);
+        m_urender_info->setUniform<float>("g_aperture", m_focal_length / m_f_stop);
+        m_urender_info->setUniform<float>("g_image_plane", m_focal_distance * m_focal_length
+                                                                          / abs(m_focal_distance - m_focal_length)); // distance from sensor to lens
+        m_urender_info->setUniform<float>("g_f_stop", m_f_stop);
+        m_urender_info->setUniform<float>("g_focal_length", m_focal_length);
+        m_urender_info->setUniform<float>("g_focal_distance", m_focal_distance);
+//        m_urender_info->setUniform<float>("g_opacityThreshold",
+//                                          0.5); // TODO: we have this low opacity treshold to render opaque first hits
         m_urender_info->setUniform<glm::vec3>("g_camera_position_world_space", camera->position_world_space);
         m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
         // the g_voxels_per_pixel_per_dist determines how many voxels an image pixel footprint overlaps for a camera distance
@@ -1083,6 +1093,13 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 //    g_dev->addFloat(&m_illumination_sigma, "Illumination Sigma", 0.01f, 10.f, 0.01, 2); // unnused for now
     g_dev->addBool(&m_denoise_fade_enabled, "Fade Denoiser Out");
     g_dev->addFloat(&m_denoise_fade_sigma, "Denoise Fade Sigma", 0.00f, 10.f, 0.01, 2);
+    g_dev->addSeparator();
+    g_dev->addLabel("DOF");
+    g_dev->addBool(&m_dof_enabled, "Depth Of Field");
+    g_dev->addFloat(&m_f_stop, "F-Stop", 0.01f, 10.f, 0.01, 2);
+    g_dev->addFloat(&m_focal_length, "Focal Length", 0.001f, 2.f, 0.001, 3);
+    g_dev->addFloat(&m_focal_distance, "Focal Distance", 0.01f, 10.f, 0.01, 2);
+    g_dev->addSeparator();
     g_dev->addBool(&m_tonemap_enabled, "Tone Mapping");
     g_dev->addSeparator();
     g_dev->addLabel("Debug");

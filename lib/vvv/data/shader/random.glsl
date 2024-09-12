@@ -42,6 +42,13 @@ vec3 nextRNG(const in ivec2 xy, inout uint seed) {
 
 
 // SAMPLING ------------------------------------------------------------------------------------------------------------
+vec2 sampleUniformDisc(const in ivec2 pixel, const in uint g_camera_still_frames) {
+    vec2 rnd = randomVec3(pixel, g_camera_still_frames).xy;
+    float r = sqrt(rnd.x);
+    float theta = TWO_PI * rnd.y;
+    return vec2(r * cos(theta), r * sin(theta));
+}
+
 vec3 sampleUniformSphere(const in vec2 u) {
     float h = 1.0 - 2.0 * u.x;
     float r = sqrt(1.0 - h * h);

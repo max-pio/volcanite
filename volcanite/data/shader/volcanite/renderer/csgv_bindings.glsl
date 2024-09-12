@@ -137,6 +137,7 @@ layout (std140, binding = 10) uniform render_info {
     float g_world_to_model_space_scaling;
     mat4 g_world_to_projection_space;
     mat4 g_projection_to_world_space;
+    mat3 g_projection_to_world_space_dir;
     mat4 g_projection_to_view_space;
     mat4 g_view_to_world_space;
     mat4 g_world_to_view_space;
@@ -181,7 +182,12 @@ layout (std140, binding = 10) uniform render_info {
     float g_denoise_fade_sigma;
     bool g_denoise_fade_enable;
     int g_denoise_filter_kernel_size;
-
+    bool g_dof_enable;
+    float g_aperture;
+    float g_image_plane;
+    float g_f_stop;
+    float g_focal_length;
+    float g_focal_distance;
 };
 
 //layout (binding = 11, rgba8) uniform restrict image2D outColor;

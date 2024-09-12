@@ -247,6 +247,11 @@ private:
     bool m_clear_accum_every_frame = false;
     int m_accum_frames = 16;
     int m_max_inv_lod = 6;
+    // dof
+    bool m_dof_enabled = true;
+    float m_f_stop = 7.72f;
+    float m_focal_length = 0.181f; // distance from lens to focal point
+    float m_focal_distance = 1.13f; // distance from lens to focal plane
     // utility
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text;
