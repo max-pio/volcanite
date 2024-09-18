@@ -95,8 +95,8 @@ int volcanite_main(int argc, char *argv[]) {
 
         // we open a precomputed csgv database for this volume if it exists or create it otherwise
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),
-                .rANS_mode = args.rANS_mode,
-                .parallel_decoding = args.random_access,
+                .encoding_mode = args.encoding_mode,
+                .random_access = args.random_access,
                 .label_remapping = nullptr,
                 .cpu_threads = args.threads,
                 .use_detail_separation = args.stream_lod,
@@ -166,15 +166,30 @@ int volcanite_main(int argc, char *argv[]) {
     DefaultGpuContext ctx;
     ctx.enableDeviceExtension("VK_EXT_memory_budget");
     ctx.physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
+    ctx.physicalDeviceFeaturesV12().setHostQueryReset(true);
     ctx.createGpuContext();
-    CSGVBenchmarkPass benchmark(&(*compressedSegmentationVolume), &ctx);
+    CSGVBenchmarkPass benchmark(&(*compressedSegmentationVolume), &ctx,
+                                args.random_access, args.cache_size_MB, args.cache_palettized);
 
-    std::shared_ptr<Awaitable> awaitable;
-    awaitable = benchmark.execute();
+    std::shared_ptr<Awaitable> awaitable = benchmark.execute();
     ctx.sync->hostWaitOnDevice({awaitable});
+
+    double execution_time = 0.f;
+    do {
+        execution_time = benchmark.getExecutionTimeMS();
+    } while (execution_time == 0.f);
+
+    size_t volume_size_byte = compressedSegmentationVolume->getVolumeDim().x
+                              * compressedSegmentationVolume->getVolumeDim().y
+                              * compressedSegmentationVolume->getVolumeDim().z
+                              * sizeof(uint32_t);
+    Logger(INFO) << "GPU decompression time: " << execution_time << " ms ("
+                 << (static_cast<double>(volume_size_byte) / 1000. / 1000. / 1000.) / (execution_time / 1000.)
+                 << " GB/s).";
 
     benchmark.freeResources();
     return RET_SUCCESS;
 }
 
 ENTRYPOINT(volcanite_main)
+

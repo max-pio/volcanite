@@ -37,10 +37,6 @@ namespace volcanite {
 class CSGVBenchmarkPass : public PassCompute {
 
     public:
-        enum CSGVBenchmarkStage {
-            DECOMPRESSION = 0,
-        };
-
         CSGVBenchmarkPass(CompressedSegmentationVolume* csgv, GpuContextPtr ctx,
                              bool parallel_decode = false,
                              uint32_t cache_size_MB = 1024, bool palette_cache = false,
@@ -84,6 +80,7 @@ class CSGVBenchmarkPass : public PassCompute {
                 m_bricks_per_execution = brick_idx_count;
                 m_cache_bytes = required_cache_bytes;
             }
+            m_execution_iterations = (brick_idx_count + m_bricks_per_execution - 1u) / m_bricks_per_execution;
 
             if (m_parallel_decode) {
                 const uint32_t subgroup_size = getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize;
@@ -97,13 +94,57 @@ class CSGVBenchmarkPass : public PassCompute {
 
             // create and bind buffers
             initDataSetGPUBuffers();
+
+            // initialize timing queries
+            m_time_stamps = std::vector<uint64_t>(2 * m_execution_iterations, 0);
+            auto device_limits = getCtx()->getPhysicalDevice().getProperties().limits;
+            m_timestamp_period = device_limits.timestampPeriod;
+            if (m_timestamp_period == 0.f)
+                throw std::runtime_error("The selected device does not support timestamp queries.");
+            if (!device_limits.timestampComputeAndGraphics)
+                throw std::runtime_error("The queue might not support time stamps.");
+            vk::QueryPoolCreateInfo query_pool_info{};
+            query_pool_info.queryType = vk::QueryType::eTimestamp;
+            query_pool_info.queryCount = static_cast<uint32_t>(m_time_stamps.size());
+            auto query_pool_res = getCtx()->getDevice().createQueryPool(query_pool_info);
+            if (query_pool_res)
+                m_query_pool_timestamps = query_pool_res;
         }
 
         void initDataSetGPUBuffers();
         void freeResources() override;
 
 
-    AwaitableHandle execute(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override;
+        AwaitableHandle execute(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override;
+
+        /// Returns the execution time for decompressing the whole volume in milliseconds.
+        /// Returns -1 if the result could not be queried.
+        /// Returns 0 if the result is not yet available.
+        /// @returns the GPU decompression time in milliseconds
+        [[nodiscard]] double getExecutionTimeMS() {
+            std::vector<uint64_t> time_stamp_avail(m_time_stamps.size() * 2);
+            auto query_res = device().getQueryPoolResults(m_query_pool_timestamps, 0, m_time_stamps.size(),
+                                                      time_stamp_avail.size() * sizeof(uint64_t), time_stamp_avail.data(),
+                                                      2 * sizeof(uint64_t), vk::QueryResultFlagBits::e64 | vk::QueryResultFlagBits::eWithAvailability);
+            if (query_res != vk::Result::eSuccess) {
+                Logger(WARN) << "Could not query time stamp.";
+                return -1.f;
+            }
+
+            for (int i = 0; i < m_time_stamps.size(); i++) {
+                // return 0 if one of the timestamps is not available
+                if (time_stamp_avail[i*2 + 1] == 0u)
+                    return 0u;
+                m_time_stamps[i] = time_stamp_avail[i*2];
+            }
+
+            // convert execution times to milliseconds
+            double total_time_ms = 0.;
+            for (int i = 0; i < m_execution_iterations; i++) {
+                total_time_ms += static_cast<double>(m_time_stamps[2*i + 1] - m_time_stamps[2*i]) * m_timestamp_period / 1000000.;
+            }
+            return total_time_ms;
+        }
 
     protected:
 
@@ -118,6 +159,7 @@ class CSGVBenchmarkPass : public PassCompute {
         std::vector<std::string> m_shader_defines;   ///< defines that are passed on to shader compilation
         bool m_parallel_decode = false;              ///< if decompression is parallelized within one brick
         uint32_t m_bricks_per_execution;             ///< how many bricks can be decompressed in one execution
+        uint32_t m_execution_iterations;             ///< how many executions are requried to decode all bricks
         vk::Extent3D m_decompression_workgroup_size = {0u, 0u, 0u};
         size_t m_cache_bytes = 1024 * 1024 * 1024;   ///< cache size in bytes
 
@@ -138,6 +180,11 @@ class CSGVBenchmarkPass : public PassCompute {
         std::shared_ptr<Buffer> m_detail_starts_buffer = nullptr;
         std::shared_ptr<Buffer> m_detail_buffer = nullptr;
         glm::uvec2 m_detail_buffer_address = {};
+
+        // timing
+        float m_timestamp_period;
+        std::vector<uint64_t> m_time_stamps;
+        vk::QueryPool m_query_pool_timestamps;
 };
 
 } // namespace volcanite

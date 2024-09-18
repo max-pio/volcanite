@@ -21,26 +21,34 @@ namespace volcanite {
 
     AwaitableHandle CSGVBenchmarkPass::execute(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore* signalBinarySemaphore) {
 
+        Logger(INFO) << "GPU decompression with a cache size of " << m_cache_bytes / 1000 / 1000 << "MB in "
+                     << m_execution_iterations << " iterations.";
+
         // fill command buffer
         auto &commandBuffer = m_commandBuffer->getActive();
         commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
+        commandBuffer.resetQueryPool(m_query_pool_timestamps, 0, static_cast<uint32_t>(m_time_stamps.size()));
+
         // Each execution decompresses brick_per_exeuction many bricks into the cache. If the cache is not large enough
         // to fit all bricks at once, multiple executions are required.
         const uint32_t brick_idx_count = m_csgv->getBrickIndexCount();
-        for (uint32_t brick_idx_offset = 0; brick_idx_offset + m_bricks_per_execution < brick_idx_count; brick_idx_offset += m_bricks_per_execution) {
-            PushConstants pc{.brick_idx_offset = brick_idx_offset};
+        for (int i = 0; i < m_execution_iterations; i++) {
+            PushConstants pc{.brick_idx_offset = i * m_bricks_per_execution};
             commandBuffer.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants), &pc);
 
-            // decompress all bricks that are handled within this exeuction
-            // TODO: measure timing, e.g. https://stackoverflow.com/questions/67358235/how-to-measure-execution-time-of-vulkan-pipeline
             getCtx()->debugMarker->beginRegion(commandBuffer, "decompress", glm::vec4(0.f, 1.f, 0.f, 1.f));
             commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, m_pipelines.at(0)); // each compute shader has one pipeline
             if (hasDescriptors()) {
                 commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_pipelineLayout, 0, m_descriptorSets->getActive(), nullptr);
             }
+
+            // dispatch decompression of bricks and measure runtime
+            commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eTopOfPipe, m_query_pool_timestamps, 2*i);
             commandBuffer.dispatch(m_decompression_workgroup_size.width, m_decompression_workgroup_size.height, m_decompression_workgroup_size.depth);
-            // add a barrier so that all executions finish writing to the cache
+            commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, m_query_pool_timestamps, 2*i + 1);
+
+            // barrier so that all executions finish writing to the cache
             commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
                                           vk::PipelineStageFlagBits::eComputeShader, {},
                                           {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)},
@@ -79,7 +87,7 @@ namespace volcanite {
         // create detail encoding buffers
         uint32_t m_detail_capacity = 0u; // measured in number of uints
         if(m_csgv->isUsingSeparateDetail()) {
-            throw std::runtime_error("CSGV benchmark does not support detail separation yet. Implement buffer it in initDataSetGPUBuffers().");
+            throw std::runtime_error("CSGV benchmark does not support detail separation yet. Implement buffer in initDataSetGPUBuffers().");
 //            bool detail_buffer_fits_whole_detail = false;
 //            size_t complete_detail_size = 0;
 //            for(const auto& d : *m_csgv->getAllDetails())
@@ -198,6 +206,7 @@ namespace volcanite {
     }
 
     void CSGVBenchmarkPass::freeResources() {
+        VK_DEVICE_DESTROY(device(), m_query_pool_timestamps);
         m_usegmented_volume_info = nullptr;
         m_cache_buffer = nullptr;
         for (auto& b : m_split_encoding_buffers)
