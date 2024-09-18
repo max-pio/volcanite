@@ -27,6 +27,7 @@ layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 #include "cpp_glsl_include/csgv_constants.h"
 #include "util.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
+#include "volcanite/renderer/csgv_materials.glsl"
 
 bool pushFreeBlockStack(uint inv_lod, uint value) {
     uint pos = atomicAdd(g_free_block_stacks[(g_lod_count - 1u) * g_free_stack_capacity + (inv_lod - 1u)], 1u);

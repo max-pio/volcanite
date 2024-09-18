@@ -141,7 +141,7 @@ namespace volcanite {
 
 
         // UPLOAD TO GPU BUFFERS ----------------------------------
-        AwaitableList awaitBeforeExecution;
+        AwaitableList awaitBeforeExecution = {};
         std::vector<std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>>> _encoding_upload;
         for(int i = 0; i < split_encoding_count; i++) {
             _encoding_upload.emplace_back(

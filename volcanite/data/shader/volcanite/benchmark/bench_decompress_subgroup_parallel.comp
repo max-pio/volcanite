@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_debug_printf : enable
@@ -5,7 +20,7 @@
 #extension GL_KHR_shader_subgroup_basic : require
 
 #ifndef SUBGROUP_SIZE
-#define SUBGROUP_SIZE 64
+    #define SUBGROUP_SIZE 64
 #endif
 
 // TODO: instead of invoking brick_idx_count * SUBGROUP_SIZE for .x, invoke .x=SUBGROUP_SIZE, .y=brick_idx_count?
@@ -23,6 +38,7 @@ layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
 #define MAX_BRICK_ENCODING_32BIT_LENGTH 12288
 shared uint[MAX_BRICK_ENCODING_32BIT_LENGTH] s_brick_encoding;
 
+#include "volcanite/compression/encoder_serial.glsl"
 #include "volcanite/compression/compressed_segmentation_volume_parallel.glsl"
 
 void main() {
@@ -35,12 +51,12 @@ void main() {
     const uint workgroup_size = gl_WorkGroupSize.x;
 
     const uint brick_idx = gl_WorkGroupID.x + pc.brick_idx_offset;
-    const uvec3 brick = brick_idx2pos(brick_idx, g_brick_count);
-    if (isHelperLane(brick, g_brick_count))
+    if (isHelperLane(brick_idx, g_brick_idx_count))
         return;
+    const uvec3 brick = brick_idx2pos(brick_idx, g_brick_count);
 
     // TODO: could also configure LOD via push constants
-    const int target_inv_lod = g_max_inv_lod;
+    const uint target_inv_lod = g_max_inv_lod;
 
     // obtain the bricks start index in the cache buffer
     const uint decoded_brick_start_uint = gl_GlobalInvocationID.x * g_cache_uints_per_brick;
@@ -58,11 +74,18 @@ void main() {
     // TODO: care about detail encoding! should be glued to the back of the same region
     EncodingRef global_brick_encoding = getBrickEncodingRef(brick_idx);
     const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
+    assertf(brick_encoding_length > 0u, " length is zero brick starts %v4u", uvec4(workgroup_thread_id, brick_idx, g_brick_starts[brick_idx], g_brick_starts[brick_idx+1]));
     assert(brick_encoding_length < MAX_BRICK_ENCODING_32BIT_LENGTH, "shared memory brick encoding buffer is too small");
     // TODO: copying one uvec4 with each thread is still coalescing and much faster!
     for (uint e = workgroup_thread_id; e < brick_encoding_length; e += workgroup_size) {
         s_brick_encoding[e] = global_brick_encoding.buf[e];
     }
+
+
+    // some validation of the brick encoding:
+    if (!verifyBrickCompressionShared(0, brick_encoding_length))
+        return;
+
     memoryBarrierShared();
     barrier();
 

@@ -32,6 +32,7 @@ uint brick_pos2idx(const uvec3 brick_idx, const uvec3 brick_count) {
 }
 
 uvec3 brick_idx2pos(const uint brick_idx, const uvec3 brick_count) {
+    assert(all(brick_idx < brick_count), "brick_idx out of bounds");
     return uvec3(brick_idx % brick_count.x,
                  (brick_idx / brick_count.x) % brick_count.y,
                  (brick_idx / brick_count.x / brick_count.y) % brick_count.z);

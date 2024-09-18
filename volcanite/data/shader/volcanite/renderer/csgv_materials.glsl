@@ -16,6 +16,8 @@
 #ifndef CSGV_MATERIALS_GLSL
 #define CSGV_MATERIALS_GLSL
 
+#include "volcanite/compression/csgv_utils.glsl"
+
 // Shading Materials ---------------------------------------------------------------------------------------------------
 float getAttribute(uint label, uint attributeStart) {
     // attributeStart > valid buffer size means that we use the voxel label direclty (csgv_id)
