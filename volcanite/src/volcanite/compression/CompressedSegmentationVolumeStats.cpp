@@ -91,8 +91,8 @@ namespace volcanite {
 
     void CompressedSegmentationVolume::printBrickEncoding(uint32_t brick_idx) const {
         throw std::runtime_error("not adapted for CSGVBrickEncoding refactor.");
-//        if (m_encoding_mode != NO_RANS)
-//            throw std::runtime_error("Can only print brick encoding in NO_RANS mode.");
+//        if (m_encoding_mode != NIBBLE_ENC)
+//            throw std::runtime_error("Can only print brick encoding in NIBBLE_ENC mode.");
 //        if (!m_random_access)
 //            throw std::runtime_error("Can only print brick encoding with random access.");
 //
@@ -176,7 +176,7 @@ namespace volcanite {
 //        uint32_t child_index;    // index of all children with the same coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
 //
 //        ReadState readState = {.idxE=m_encoding[beginE], .in_detail_lod=false};
-//        if(m_rANS_mode != NO_RANS) {
+//        if(m_rANS_mode != NIBBLE_ENC) {
 //            readState.idxE = (beginE + readState.idxE / 8) * 4;
 //            m_rans.itr_initDecoding(readState.rans_state, readState.idxE, m_encoding.data());
 //        }
@@ -513,7 +513,7 @@ namespace volcanite {
 
     void CompressedSegmentationVolume::exportBrickOperationsToCSV(const std::string& path, uint32_t brick_idx) const {
 //
-//        if(m_encodings.empty() || m_rANS_mode != NO_RANS || m_separate_detail)
+//        if(m_encodings.empty() || m_rANS_mode != NIBBLE_ENC || m_separate_detail)
 //            throw std::runtime_error("Compress the volume without rANS encoding and without detail separation first before exporting brick codes!");
 //        uint32_t lod_count = getLodCountPerBrick();
 //        uint32_t beginE = m_brick_starts[brick_idx];

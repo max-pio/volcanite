@@ -28,11 +28,11 @@ layout (local_size_x = 4, local_size_y = 4, local_size_z = 2) in;
 #include "volcanite/compression/csgv_utils.glsl"
 
 uint popFreeBlockStack(uint inv_lod) {
-    uint pos = atomicAdd(g_free_block_stacks[(g_lod_count - 1u) * g_free_stack_capacity + (inv_lod - 1u)], uint(-1)) - 1u;
+    uint pos = atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], uint(-1)) - 1u;
     if(pos > g_free_stack_capacity) {
         // no element on stack for us
         //assert(false, "couldn't pop from block stack because it is empty - or the counter was invalid");
-        atomicAdd(g_free_block_stacks[(g_lod_count - 1u) * g_free_stack_capacity + (inv_lod - 1u)], 1u);
+        atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], 1u);
         return INVALID;
     }
     else {
@@ -47,14 +47,14 @@ void main() {
     // (the other elements we will try to fetch from the freeBlockStack)
     //
     // cache element ownership
-    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < g_lod_count) <=> the brick still owns a cache element
+    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick still owns a cache element
     // - REQ_SLOT < INVALID <=> the brick needs a cache element <=> the REQ_SLOT is a valid entry for its REQ_LOD
     // - REQ_SLOT < INVALID => BRICK_INFO_INDEX == INVALID
     // - the ASSIGN_REQUESTED_BLOCKS for each LoD contains the number of requested blocks for this LoD.
     // - all SLOT indices < ASSIGN_REQUESTED_BLOCKS are uniquely assigned to one block each
     // visibility
-    // - BRICK_INFO_REQ_INV_LOD < g_lod_count means the brick is visible in renderer AND had visible palette entries in the frame before
-    // - BRICK_INFO_REQ_INV_LOD = g_lod_count means the brick contains visible labels in its palette
+    // - BRICK_INFO_REQ_INV_LOD < LOD_COUNT means the brick is visible in renderer AND had visible palette entries in the frame before
+    // - BRICK_INFO_REQ_INV_LOD = LOD_COUNT means the brick contains visible labels in its palette
     // - (BRICK_INFO_REQ_INV_LOD > g_loc_count) means that the brick is guaranteed to be invisible
     //
     // after this shader execution:
@@ -68,17 +68,17 @@ void main() {
 
     // do some debug checks
     if(!isHelperLane(brick, uvec3(1u))) {
-        const uint cache_top = (g_lod_count - 1u) * ASSIGN_ELEMS_PER_LOD;
+        const uint cache_top = (LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD;
         assertf(g_assign_info[cache_top] <= g_cache_capacity, "cache counter is over capacity!", g_assign_info[cache_top]);
     }
 
     const uint brick_idx = brick_pos2idx(brick, g_brick_count);
     const uint brick_info_pos = brick_idx * 4u;
-    assert(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < g_lod_count)), "brick CUR_INV_LOD or INDEX are corrupted");
+    assert(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)), "brick CUR_INV_LOD or INDEX are corrupted");
 
 
     // track how many bricks are decoded of each LOD
-    if(g_debug_step_count && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]  > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < g_lod_count) {
+    if(g_debug_step_count && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]  > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < LOD_COUNT) {
         atomicAdd(gpu_blocks_in_cache[g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] - 1u], 1u);
     }
 
@@ -90,7 +90,7 @@ void main() {
 
     const uint inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
     const uint elemSizeInCache = 1u << (3u * (inv_lod - 1u)); // number of base elements we need for storing one element of this LoD in g_cache
-    assert(0 < inv_lod && inv_lod < g_lod_count, "brick has slot index but requests zero or invalid lod");
+    assert(0 < inv_lod && inv_lod < LOD_COUNT, "brick has slot index but requests zero or invalid lod");
 
     // now find us an index in the cache
     uint cache_idx = INVALID;

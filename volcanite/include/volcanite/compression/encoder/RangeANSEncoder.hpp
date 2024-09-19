@@ -57,9 +57,7 @@ public:
 
     /// @returns a list of shader defines used during decoding which are passed to the shader compilation stage
     [[nodiscard]] virtual std::vector<std::string> getGLSLDefines() const override {
-        std::vector<std::string> defines = {"USE_RANS"};
-        if(m_encoding_mode == DOUBLE_TABLE_RANS_ENC)
-            defines.push_back("USE_RANS_DOUBLE_TABLE");
+        std::vector<std::string> defines = CSGVSerialBrickEncoder::getGLSLDefines();
 
         // build frequency table string
         std::stringstream ss;

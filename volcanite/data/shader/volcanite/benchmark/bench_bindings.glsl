@@ -28,10 +28,8 @@ layout(push_constant) uniform restrict readonly PushConstants
 // TODO: most of these could be compile time constants
 layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uvec3 g_vol_dim;                // xyz dimension of the original volume
-    uint g_brick_size;              // power of 2 size along one axis of the bricks
     uvec3 g_brick_count;            // number of bricks in each xyz dimension for the encoded volume
     uint g_brick_idx_count;         // number of brick indicies (brick_count.x * .y * .z)
-    uint g_lod_count;               // number of lod levels per brick
 //
     uint g_max_inv_lod;             // max. inv LOD that we would decode / traverse
     uint g_cache_uints_per_brick;   // size in uints of a cache memory region that stores all output voxels of a brick

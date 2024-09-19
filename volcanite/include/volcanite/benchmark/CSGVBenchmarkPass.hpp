@@ -50,8 +50,10 @@ class CSGVBenchmarkPass : public PassCompute {
             // obtain shader compilation and execution parameters
             m_shader_defines.emplace_back("SUBGROUP_SIZE=" + std::to_string(
                                                 getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
-            if(m_use_palette_cache)
+            if (m_use_palette_cache)
                 m_shader_defines.emplace_back("PALETTE_CACHE");
+            if (m_parallel_decode)
+                m_shader_defines.emplace_back("RANDOM_ACCESS");
 
             // check how many bits are required to store cache indices
             if(m_use_palette_cache) {

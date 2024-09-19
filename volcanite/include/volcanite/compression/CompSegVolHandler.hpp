@@ -223,6 +223,7 @@ public:
         glm::uvec3 complete_volume_dim(0u);
         std::vector<size_t> code_frequencies(16, 0u);
         std::vector<size_t> detail_code_frequencies(16, 0u);
+        // TODO: Generalize variable bit-length encoding frequency table computation
         if (cfg.encoding_mode == SINGLE_TABLE_RANS_ENC || cfg.encoding_mode == DOUBLE_TABLE_RANS_ENC) {
             // We may have a precomputed frequency table.
             // As operation frequencies do not change between rANS in single table or no rANS mode, we could use the same filename to store precomputed freq. tables in both cases.

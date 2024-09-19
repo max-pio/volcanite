@@ -109,7 +109,7 @@ public:
     [[nodiscard]] virtual uint32_t getPaletteSizeHeaderIndex() const { return getHeaderSize() - 1u; }
 
     /// @returns a list of shader defines used during decoding which are passed to the shader compilation stage
-    [[nodiscard]] virtual std::vector<std::string> getGLSLDefines() const { return {"WAVELET_MATRIX"}; }
+    [[nodiscard]] virtual std::vector<std::string> getGLSLDefines() const { return CSGVBrickEncoder::getGLSLDefines(); }
 
     // DEBUGGING AND STATISTICS ----------------------------------------------------------------------------------------
 

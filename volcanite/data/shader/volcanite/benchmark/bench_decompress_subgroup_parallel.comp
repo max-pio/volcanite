@@ -38,8 +38,11 @@ layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
 #define MAX_BRICK_ENCODING_32BIT_LENGTH 12288
 shared uint[MAX_BRICK_ENCODING_32BIT_LENGTH] s_brick_encoding;
 
-#include "volcanite/compression/encoder_serial.glsl"
-#include "volcanite/compression/compressed_segmentation_volume_parallel.glsl"
+#ifndef RANDOM_ACCESS
+    STATIC_ASSERT(subgroup_parallel_decoding_requires_RANDOM_ACCESS);
+#endif
+
+#include "volcanite/compression/compressed_segmentation_volume.glsl"
 
 void main() {
     assert(gl_NumSubgroups == 1, "decompression assumes exactly one subgroup per workgroup");
@@ -66,7 +69,7 @@ void main() {
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     #ifdef SEPARATE_DETAIL
     assert(false, "Parallel decompression does not support detail separation yet");
-    // assert(!(target_inv_lod == g_lod_count - 1U
+    // assert(!(target_inv_lod == LOD_COUNT - 1U
     //        && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_idx] == g_detail_starts[brick_idx+1])),
     //        "detail buffers marked dirty but the provision shader requested detail decoding");
     #endif
@@ -82,10 +85,6 @@ void main() {
     }
 
 
-    // some validation of the brick encoding:
-    if (!verifyBrickCompressionShared(0, brick_encoding_length))
-        return;
-
     memoryBarrierShared();
     barrier();
 
@@ -100,7 +99,7 @@ void main() {
     // With a workgroup_size equal to the subgroup size, optimization like vulkan subgroup operations are posssible.
     uint output_i = workgroup_thread_id;
     while (output_i < output_voxel_count) {
-        decompressCSGVVoxelSharedMemory(output_i, brick_encoding_length, uvec3(g_brick_size),
+        decompressCSGVVoxelSharedMemory(output_i, brick_encoding_length, uvec3(BRICK_SIZE),
                                         target_inv_lod, decoded_brick_start_uint);
         // barrier() // more cache coherence by barrier? probalby not
         output_i += workgroup_size;

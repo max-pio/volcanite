@@ -50,21 +50,21 @@ layout (local_size_x = 8, local_size_y = 8) in;
 uint get_inv_lod(ivec3 voxel) {
     // Ensure the same level-of-detail for all bricks by computing it from the brick's center.
     // Otherwise, different levels-of-detail would be requested for decompression of the same brick.
-    vec3 brick_center_world_space = (g_model_to_world_space * vec4((vec3(0.5f) + vec3(voxel / int(g_brick_size))) * g_brick_size, 1.f)).xyz;
-    float dist = length(brick_center_world_space - g_camera_position_world_space) + (float(g_brick_size)/g_world_to_model_space_scaling);
+    vec3 brick_center_world_space = (g_model_to_world_space * vec4((vec3(0.5f) + vec3(voxel / int(BRICK_SIZE))) * BRICK_SIZE, 1.f)).xyz;
+    float dist = length(brick_center_world_space - g_camera_position_world_space) + (float(BRICK_SIZE)/g_world_to_model_space_scaling);
 
     // use the MSB as a fast log2 (rounding down to int anyways)
     int voxels_per_pixel_at_hit = int(g_voxels_per_pixel_per_dist * dist);
     // clamp with a potential user specified max inverse. LoD
-    return min(g_lod_count - 1u - uint(clamp(g_lod_bias + findMSB(voxels_per_pixel_at_hit), 0, g_lod_count - 1u)), g_max_inv_lod);
+    return min(LOD_COUNT - 1u - uint(clamp(g_lod_bias + findMSB(voxels_per_pixel_at_hit), 0, LOD_COUNT - 1u)), g_max_inv_lod);
 }
 
 /// returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
 uint get_volume_label(ivec3 voxel, inout float depth_valid) {
     assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
 
-    uvec3 brick = uvec3(voxel) / g_brick_size;
-    uvec3 brick_voxel = uvec3(voxel) - (brick * g_brick_size);
+    uvec3 brick = uvec3(voxel) / BRICK_SIZE;
+    uvec3 brick_voxel = uvec3(voxel) - (brick * BRICK_SIZE);
     uint brick_idx = brick_pos2idx(brick, g_brick_count);
     uint brick_info_pos = brick_idx * 4u;
 
@@ -73,10 +73,10 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
 
     // tell the other shaders that we can see this brick if it's visibility state is "unknown"
     // but only if this is a valid pixel sample. An invalid sample could be accessing bricks that are actually not visible.
-    assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] <= g_lod_count, "we try to access a brick that's flagged as invisible");
+    assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] <= LOD_COUNT, "we try to access a brick that's flagged as invisible");
     if (isDepthValid(depth_valid) && req_inv_lod > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > req_inv_lod) {
         // if the brick was not requested so far:
-        if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= g_lod_count)
+        if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT)
             g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
         // if we request a finer level than the one that was requested so far:
         // (this should not happen if we instead compute the LOD in the provision shader)
@@ -91,7 +91,7 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
 
     // special case for coarsest LOD: we can do the lookup at the first palette element for LOD_Max
     // or if the brick is not yet decoded
-    if (req_inv_lod == 0u || cur_inv_lod >= g_lod_count) {
+    if (req_inv_lod == 0u || cur_inv_lod >= LOD_COUNT) {
 
         EncodingRef encoding_address = getBrickEncodingRef(brick_idx);
         uint encoding_size = getBrickEncodingLength(brick_idx);
@@ -128,11 +128,11 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
 bool isEmptySpace(ivec3 voxel) {
     assertf(all(greaterThanEqual(voxel, ivec3(0))) && all(lessThan(voxel, g_vol_dim)), "empty space request for invalid voxel %v3i", voxel);
 
-    uvec3 brick = uvec3(voxel / g_brick_size);
+    uvec3 brick = uvec3(voxel / BRICK_SIZE);
     uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
 
     // if the brick contains nothing visible, it is empty space
-    return g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > g_lod_count;  // marked "invisible" by request shader
+    return g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > LOD_COUNT;  // marked "invisible" by request shader
 }
 
 
@@ -341,10 +341,10 @@ void main() {
                 dda_voxel_size = 1u;
             // empty space skipping: directly step into the next brick
             else if (isEmptySpace(state.voxel))
-                dda_voxel_size = g_brick_size;
+                dda_voxel_size = BRICK_SIZE;
             // default traversal: step into next voxel in current level-of-detail
             else
-                dda_voxel_size = g_brick_size >> get_inv_lod(state.voxel);
+                dda_voxel_size = BRICK_SIZE >> get_inv_lod(state.voxel);
 
             dda_step_multilevel(state, ray, int(dda_voxel_size));
         }

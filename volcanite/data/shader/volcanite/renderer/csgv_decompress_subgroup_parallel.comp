@@ -48,14 +48,14 @@ void main() {
 
     // obtain requested inv_lod and previously assigned cache_idx
     const uint target_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
-    assert(0 < target_inv_lod && target_inv_lod < g_lod_count, "brick has slot index but requests zero or invalid lod");
+    assert(0 < target_inv_lod && target_inv_lod < LOD_COUNT, "brick has slot index but requests zero or invalid lod");
     const uint cache_idx = g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX];
 
     barrier();
 
     // reset the requested LOD. the renderer will have to flag everything visible again
     if (workgroup_thread_id == 0u) {
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = max(g_lod_count, g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]);
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = max(LOD_COUNT, g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]);
     }
 
     // decompression requested for brick, but brick could not receive a free cache region
@@ -72,7 +72,7 @@ void main() {
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     #ifdef SEPARATE_DETAIL
         assert(false, "Parallel decompression does not support detail separation yet");
-        // assert(!(target_inv_lod == g_lod_count - 1U
+        // assert(!(target_inv_lod == LOD_COUNT - 1U
         //        && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_idx] == g_detail_starts[brick_idx+1])),
         //        "detail buffers marked dirty but the provision shader requested detail decoding");
     #endif
@@ -85,11 +85,6 @@ void main() {
     for (uint e = workgroup_thread_id; e < brick_encoding_length; e += workgroup_size) {
         s_brick_encoding[e] = global_brick_encoding.buf[e];
     }
-
-    // some validation of the brick encoding:
-    if (!verifyBrickCompressionShared(0, brick_encoding_length))
-        return;
-
 
     memoryBarrierShared();
     barrier();
@@ -106,7 +101,7 @@ void main() {
     // With a workgroup_size equal to the subgroup size, optimization like vulkan subgroup operations are posssible.
     uint output_i = workgroup_thread_id;
     while (output_i < output_voxel_count) {
-        decompressCSGVVoxelSharedMemory(output_i, brick_encoding_length, uvec3(g_brick_size),
+        decompressCSGVVoxelSharedMemory(output_i, brick_encoding_length, uvec3(BRICK_SIZE),
                                         target_inv_lod, decoded_brick_start_uint);
         // barrier()
         output_i += workgroup_size;

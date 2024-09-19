@@ -29,75 +29,84 @@
 
 #ifdef GL_core_profile
     #define CSGV_UINT uint
-    #define NO_RANS 0
-    #define SINGLE_TABLE_RANS 2
-    #define DOUBLE_TABLE_RANS 3
+    #define NIBBLE_ENC 0
+    #define SINGLE_TABLE_RANS_ENC 1
+    #define DOUBLE_TABLE_RANS_ENC 2
+    #define WAVELET_MATRIX_ENC 4
+    #define HUFFMAN_WM_ENC 8
+    #define DOUBLE_TABLE_HUFFMAN_WM_ENC 9
 #else
     #define CSGV_UINT uint32_t
 
 namespace volcanite {
-        enum EncodingMode {NIBBLE_ENC=0,
-                           SINGLE_TABLE_RANS_ENC=1, DOUBLE_TABLE_RANS_ENC=2,
-                           WAVELET_MATRIX_ENC=4, HUFFMAN_WM_ENC=8, DOUBLE_TABLE_HUFFMAN_WM_ENC=9};
+    enum EncodingMode {NIBBLE_ENC=0,
+                       SINGLE_TABLE_RANS_ENC=1, DOUBLE_TABLE_RANS_ENC=2,
+                       WAVELET_MATRIX_ENC=4, HUFFMAN_WM_ENC=8, DOUBLE_TABLE_HUFFMAN_WM_ENC=9};
 
-        // Bit Flags
-        //
-        // config:
-        // double encoder (start new encoder for the finest LOD): bit 0 (1)
-        //
-        // mutually exclusive:
-        // rANS: bit 1 (2)
-        // wavelet tree: bit 2 (4)
-        // Huffman wavelet tree: bit 3 (8)
+    // Bit Flags
+    //
+    // config:
+    // double encoder (start new encoder for the finest LOD): bit 0 (1)
+    //
+    // mutually exclusive:
+    // rANS: bit 1 (2)
+    // wavelet tree: bit 2 (4)
+    // Huffman wavelet tree: bit 3 (8)
 
-        static constexpr const char* EncodingMode_STR(EncodingMode e) {
-            switch (e) {
-                case NIBBLE_ENC:
-                    return "Nibble";
-                    break;
-                case SINGLE_TABLE_RANS_ENC:
-                    return "rANS";
-                    break;
-                case DOUBLE_TABLE_RANS_ENC:
-                    return "rANS-DT";
-                    break;
-                case WAVELET_MATRIX_ENC:
-                    return "WaveletMatrix";
-                    break;
-                case HUFFMAN_WM_ENC:
-                    return "HuffmanWaveletMatrix";
-                    break;
-                case DOUBLE_TABLE_HUFFMAN_WM_ENC:
-                    return "HuffmanWaveletMatrix-DT";
-                    break;
-                default:
-                    return "INVALID_ENC_MODE";
-            }
+    static constexpr const char* EncodingMode_STR(EncodingMode e) {
+        switch (e) {
+            case NIBBLE_ENC:
+                return "Nibble";
+            case SINGLE_TABLE_RANS_ENC:
+                return "rANS";
+            case DOUBLE_TABLE_RANS_ENC:
+                return "rANS-DT";
+            case WAVELET_MATRIX_ENC:
+                return "WaveletMatrix";
+            case HUFFMAN_WM_ENC:
+                return "HuffmanWaveletMatrix";
+            case DOUBLE_TABLE_HUFFMAN_WM_ENC:
+                return "HuffmanWaveletMatrix-DT";
+            default:
+                throw std::runtime_error("Unknown encoding mode");
         }
+    }
 
+    static constexpr const char* EncodingMode_DefineSTR(EncodingMode e) {
+        switch (e) {
+            case NIBBLE_ENC:
+                return "NIBBLE_ENC";
+            case SINGLE_TABLE_RANS_ENC:
+                return "SINGLE_TABLE_RANS_ENC";
+            case DOUBLE_TABLE_RANS_ENC:
+                return "DOUBLE_TABLE_RANS_ENC";
+            case WAVELET_MATRIX_ENC:
+                return "WAVELET_MATRIX_ENC";
+            case HUFFMAN_WM_ENC:
+                return "HUFFMAN_WM_ENC";
+            case DOUBLE_TABLE_HUFFMAN_WM_ENC:
+                return "DOUBLE_TABLE_HUFFMAN_WM_ENC";
+            default:
+                throw std::runtime_error("Unknown encoding mode");
+        }
+    }
 
     static constexpr const char* EncodingMode_ShortSTR(EncodingMode e) {
         switch (e) {
             case NIBBLE_ENC:
                 return "nb";
-                break;
             case SINGLE_TABLE_RANS_ENC:
                 return "r1";
-                break;
             case DOUBLE_TABLE_RANS_ENC:
                 return "r2";
-                break;
             case WAVELET_MATRIX_ENC:
                 return "wm";
-                break;
             case HUFFMAN_WM_ENC:
                 return "w1";
-                break;
             case DOUBLE_TABLE_HUFFMAN_WM_ENC:
                 return "w2";
-                break;
             default:
-                return "##";
+                throw std::runtime_error("Unknown encoding mode");
         }
     }
 }

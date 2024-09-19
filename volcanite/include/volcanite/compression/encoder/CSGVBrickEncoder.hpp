@@ -141,7 +141,15 @@ class CSGVBrickEncoder {
     [[nodiscard]] virtual uint32_t getPaletteSizeHeaderIndex() const = 0;
 
     /// @returns a list of shader defines used during decoding which are passed to the shader compilation stage
-    [[nodiscard]] virtual std::vector<std::string> getGLSLDefines() const { return {}; }
+    [[nodiscard]] virtual std::vector<std::string> getGLSLDefines() const {
+        std::vector<std::string> defines{"ENCODING_MODE=" + std::to_string(m_encoding_mode),
+                                         "BRICK_SIZE=" + std::to_string(m_brick_size),
+                                         "LOD_COUNT=" + std::to_string(getLodCountPerBrick()),
+                                         "PALETTE_SIZE_HEADER_INDEX=" + std::to_string(getPaletteSizeHeaderIndex())};
+        if (m_separate_detail)
+            defines.emplace_back("SEPARATE_DETAIL");
+        return defines;
+    }
 
     // DEBUGGING AND STATISTICS ----------------------------------------------------------------------------------------
 

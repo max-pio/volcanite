@@ -31,9 +31,7 @@ layout(std140, set=0, binding=0) uniform segmented_volume_info {
     vec3 g_physical_vol_dim;        // physical volume size: g_vol_dim * g_voxel_size
     vec3 g_normalized_volume_size;  // world space size of the volume (usually ~1m^3 with the largest dim being 1)
     uint g_vol_max_label;           // maximum label in the segmented volume
-    uint g_brick_size;              // power of 2 size along one axis of the bricks
     uvec3 g_brick_count;            // number of bricks in each xyz dimension for the encoded volume
-    uint g_lod_count;               // number of lod levels per brick
     uint g_frame;                   // current frame of the rendering
 //
     uint g_max_inv_lod;             // max. inv LOD that we would decode / traverse
@@ -84,7 +82,7 @@ layout(std430, binding = 3) buffer restrict brick_cache_infos
 
 layout(std430, binding = 4) buffer restrict assign_info
 {
-// for (g_lod_count-1) LoDs, 3 entries:
+// for (LOD_COUNT-1) LoDs, 3 entries:
 // - new_blocks_start:    start of region in cache for new elements (written by provision and read by assign)
 // - new_blocks_count:    number of newly allocated elements in cache
 // - req_counter:         to get request indices starting from 0 per frame (written by request and read by provision and assign)
@@ -100,7 +98,7 @@ layout(std430, binding = 4) buffer restrict assign_info
 
 layout(std430, binding = 5) buffer restrict free_block_stacks
 {
-// (g_lod_count-1) stacks storing up to g_free_stack_capacity elements, followed by lod_count stack_top counters in reverse
+// (LOD_COUNT-1) stacks storing up to g_free_stack_capacity elements, followed by lod_count stack_top counters in reverse
 // [g_free_stack_capacity elements for L1, ... g_free_stack_capacity elements for L(N-1), L1_top, ... L(N-1)_top]
     uint g_free_block_stacks[];
 };

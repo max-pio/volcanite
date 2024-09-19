@@ -24,7 +24,7 @@ class NibbleEncoder : public CSGVSerialBrickEncoder {
 public:
     NibbleEncoder(uint32_t brick_size, EncodingMode encoding_mode) : CSGVSerialBrickEncoder(brick_size, encoding_mode) {
         if (encoding_mode != NIBBLE_ENC)
-            throw std::runtime_error("NibbleEncoder must be used with NO_RANS encoding mode.");
+            throw std::runtime_error("NibbleEncoder must be used with NIBBLE_ENC encoding mode.");
     }
 
     // RANDOM ACCESS DECODING ------------------------------------------------------------------------------------------
@@ -64,7 +64,9 @@ public:
     // COMPONENT AND SHADER INTERFACE ----------------------------------------------------------------------------------
 
     /// @returns a list of shader defines used during decoding which are passed to the shader compilation stage
-    [[nodiscard]] virtual std::vector<std::string> getGLSLDefines() const { return {}; }
+    [[nodiscard]] virtual std::vector<std::string> getGLSLDefines() const {
+        return CSGVBrickEncoder::getGLSLDefines();
+    }
 
 
 protected:

@@ -170,10 +170,8 @@ namespace volcanite {
         // upload the segmentation volume uniform
         m_usegmented_volume_info = getUniformSet("segmented_volume_info");
         m_usegmented_volume_info->setUniform<glm::uvec3>("g_vol_dim", m_csgv->getVolumeDim());
-        m_usegmented_volume_info->setUniform<uint32_t>("g_brick_size", m_csgv->getBrickSize());
         m_usegmented_volume_info->setUniform<glm::uvec3>("g_brick_count", m_csgv->getBrickCount());
         m_usegmented_volume_info->setUniform<uint32_t>("g_brick_idx_count", m_csgv->getBrickIndexCount());
-        m_usegmented_volume_info->setUniform<uint32_t>("g_lod_count", m_csgv->getLodCountPerBrick());
         m_usegmented_volume_info->setUniform<uint32_t>("g_max_inv_lod", m_csgv->getLodCountPerBrick() - 1u); // remove
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_uints_per_brick", m_cache_uints_per_brick);
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_indices_per_uint", m_cache_indices_per_uint);

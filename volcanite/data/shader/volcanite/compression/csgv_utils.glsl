@@ -26,6 +26,9 @@
     #define assertf(X, S, P) if(!(X)) debugPrintfEXT(S, P)
 #endif
 
+#define STATIC_FAIL(S) {static_assert_fail S}
+
+
 // Memory Access and Indexing Utilities --------------------------------------------------------------------------------
 uint brick_pos2idx(const uvec3 brick_idx, const uvec3 brick_count) {
     return brick_idx.x + brick_count.x * (brick_idx.y + brick_count.y * brick_idx.z);
@@ -78,16 +81,8 @@ EncodingRef getBrickEncodingRef(uint brick_idx) {
     return EncodingRef(bufferAddressAdd(g_encoding_buffer_addresses[brick_idx / g_brick_idx_to_enc_vector], getBrickStart(brick_idx)));
 }
 
-uint getPaletteSizeHeaderIndex() {
-#ifdef SEPARATE_DETAIL
-    return 2u * g_lod_count - 1u;
-#else
-    return 2u * g_lod_count;
-#endif
-}
-
 uint getBrickPaletteLength(uint brick_idx) {
-    return getBrickEncodingRef(brick_idx).buf[getPaletteSizeHeaderIndex()];
+    return getBrickEncodingRef(brick_idx).buf[PALETTE_SIZE_HEADER_INDEX];
 }
 
 #ifdef SEPARATE_DETAIL
