@@ -141,14 +141,16 @@ private:
                                                const glm::uvec3 valid_brick_size,
                                                const uint32_t *brick_encoding,
                                                const uint32_t brick_encoding_length,
-                                               const WMBrickHeader &wm_header);
+                                               const WMBrickHeader& wm_header,
+                                               const BV_WordType* bit_vector);
 
 
     static uint32_t decompressCSGVBrickVoxelWMHuffman(const uint32_t output_i, const uint32_t target_inv_lod,
                                                       const glm::uvec3 valid_brick_size,
                                                       const uint32_t *brick_encoding,
                                                       const uint32_t brick_encoding_length,
-                                                      const WMHBrickHeader &wm_header);
+                                                      const WMHBrickHeader &wm_header,
+                                                      const BV_WordType* bit_vector);
 
     /// returns the size of the header at the beginning of each brick measured in uint32 entries.
     [[nodiscard]] uint32_t getHeaderSize() const { return getLodCountPerBrick() * 2 + 1; }
