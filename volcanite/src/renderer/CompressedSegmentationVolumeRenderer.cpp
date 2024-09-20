@@ -23,9 +23,11 @@
 
 #include "glm/gtc/matrix_transform.hpp"
 
-#include "portable-file-dialogs.h"
+#ifndef HEADLESS
+    #include "portable-file-dialogs.h"
+#endif
 #ifdef IMGUI
-#include "imgui.h"
+    #include "imgui.h"
 #endif
 
 using namespace vvv;
@@ -921,6 +923,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 #endif
     }, "Screenshot");
     //
+#ifndef HEADLESS
 #ifdef IMGUI
     g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
@@ -961,8 +964,8 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
         writeParameterFile(file, VOLCANITE_VERSION);
     }, "Export Parameters");
-    //
     g_gen->addSeparator();
+#endif    // not HEADLESS
     g_gen->addDynamicText(&m_gui_device_mem_text);
 
     // Display properties and render resolution
