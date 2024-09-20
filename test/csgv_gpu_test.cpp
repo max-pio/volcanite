@@ -17,59 +17,100 @@
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/utility/segmentation_volume_synthesis.hpp"
 
+#include "vvv/core/DefaultGpuContext.hpp"
+#include "volcanite/benchmark/CSGVBenchmarkPass.hpp"
+
 using namespace volcanite;
+using namespace vvv;
 
 int main() {
 
-    // create dummy segmentation volume
-    glm::uvec3 dim = {100, 80, 95};
-    const auto volume = createDummySegmentationVolume(dim);
+    const uint32_t cache_size_mb = 16;
+
+    // create GPU context
+    Logger(INFO, true) << "Create GPU context..";
+    DefaultGpuContext ctx;
+    ctx.enableDeviceExtension("VK_EXT_memory_budget");
+    ctx.physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
+    ctx.physicalDeviceFeaturesV12().setHostQueryReset(true);
+    ctx.createGpuContext();
+    Logger(INFO) << "Create GPU context (ok)";
 
     CompressedSegmentationVolume csgv;
-//    // Plain 4 bit per operation encoding
-//    {
-//        Logger(INFO) << "TEST: NO RANS";
-//        csgv.setCompressionOptions64(16, RANSMode::NIBBLE_ENC, false);
-//        if (!csgv.test(volume.dataConst(), dim, true))
-//            return 1;
-//
-//        // export / re-import
-//        std::remove("./_tmp_test.csgv");
-//        csgv.exportToFile("./_tmp_test.csgv");
-//        if (!csgv.importFromFile("./_tmp_test.csgv") || !csgv.test(volume.dataConst(), dim, false))
-//            return 101;
-//    }
-//    csgv.clear();
-//    // Single table rANS
-//    {
-//        Logger(INFO) << "TEST: RANS";
-//        size_t freq[32];
-//        csgv.setCompressionOptions64(32, NIBBLE_ENC, false);
-//        csgv.compressForFrequencyTable(volume.dataConst(), dim, freq, 2, false, false);
-//        csgv.setCompressionOptions64(32, RANSMode::SINGLE_TABLE_RANS, false, freq, freq + 16);
-//        if (!csgv.test(volume.dataConst(), dim, true))
-//            return 2;
-//
-//        // export / re-import
-//        std::remove("./_tmp_test.csgv");
-//        csgv.exportToFile("./_tmp_test.csgv");
-//        if (!csgv.importFromFile("./_tmp_test.csgv") || !csgv.test(volume.dataConst(), dim, false))
-//            return 102;
-//    }
-//    csgv.clear();
-    // Double table rANS with detail separation
+    // Serial Decoding
     {
-        Logger(INFO) << "TEST: DOUBLE TABLE RANS, DETAIL SEPARATION";
-        size_t freq[32];
+        // create dummy segmentation volume
+        glm::uvec3 dim = {100, 80, 95};
+        const auto volume = createDummySegmentationVolume(dim);
+
+        Logger(INFO) << "Nibble";
         csgv.setCompressionOptions64(32, NIBBLE_ENC, false);
-        csgv.compressForFrequencyTable(volume.dataConst(), dim, freq, 2, true, false);
-        csgv.setCompressionOptions64(64, EncodingMode::DOUBLE_TABLE_RANS_ENC, false, freq, freq + 16);
         csgv.compress(volume.dataConst(), dim, false);
+        {
+            CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, false);
+            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
+            ctx.sync->hostWaitOnDevice({awaitable});
+            benchmark.freeResources();
+        }
+
+        Logger(INFO) << "Range ANS with Palettized Cache";
+        csgv.setCompressionOptions64(64, SINGLE_TABLE_RANS_ENC, false);
+        csgv.compress(volume.dataConst(), dim, false);
+        {
+            CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, true);
+            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
+            ctx.sync->hostWaitOnDevice({awaitable});
+            benchmark.freeResources();
+        }
+
+        Logger(INFO) << "Double Table Range ANS with Detail Separation";
+        csgv.setCompressionOptions64(16, DOUBLE_TABLE_RANS_ENC, false);
         csgv.separateDetail();
-        if (!csgv.test(volume.dataConst(), dim, false))
-            return 3;
+        csgv.compress(volume.dataConst(), dim, false);
+        {
+            CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, false);
+            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
+            ctx.sync->hostWaitOnDevice({awaitable});
+            benchmark.freeResources();
+        }
     }
 
-    std::remove("./_tmp_test.csgv");
+    // Random Access Decoding
+    {
+        // create dummy segmentation volume
+        glm::uvec3 dim = {100, 80, 95};
+        const auto volume = createDummySegmentationVolume(dim);
+
+        Logger(INFO) << "Random Access Nibble";
+        csgv.setCompressionOptions64(32, NIBBLE_ENC, false);
+        csgv.compress(volume.dataConst(), dim, false);
+        {
+            CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, false);
+            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
+            ctx.sync->hostWaitOnDevice({awaitable});
+            benchmark.freeResources();
+        }
+
+        Logger(INFO) << "Random Access Wavelet Matrix";
+        csgv.setCompressionOptions64(64, SINGLE_TABLE_RANS_ENC, false);
+        csgv.compress(volume.dataConst(), dim, false);
+        {
+            CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, true);
+            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
+            ctx.sync->hostWaitOnDevice({awaitable});
+            benchmark.freeResources();
+        }
+
+        Logger(INFO) << "Random Access Huffman Shaped Wavelet Matrix";
+        csgv.setCompressionOptions64(64, SINGLE_TABLE_RANS_ENC, false);
+        csgv.compress(volume.dataConst(), dim, false);
+        {
+            CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, true);
+            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
+            ctx.sync->hostWaitOnDevice({awaitable});
+            benchmark.freeResources();
+        }
+    }
+
     return 0;
 }
