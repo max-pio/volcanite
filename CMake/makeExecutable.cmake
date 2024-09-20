@@ -74,6 +74,24 @@ function(makeExecutable name)
     if(HEADLESS)
         target_compile_definitions(${name} PUBLIC -DHEADLESS=1)
     endif()
+
+    # add compile time list of paths to data/ directories:
+    set(data_dirs "")
+    # search for DATA_DIR property in link_library dependencies
+    get_target_property(dependency_libs "${name}" LINK_LIBRARIES)
+    foreach(lib IN LISTS dependency_libs)
+        get_target_property(${lib}_data_dir ${lib} INTERFACE_DATA_DIR)
+        if (NOT ${lib}_data_dir STREQUAL ${lib}_data_dir-NOTFOUND)
+            list(APPEND data_dirs ${${lib}_data_dir})
+        endif()
+    endforeach()
+    # add default [project]/data/ and arguments to data_dirs
+    list(APPEND data_dirs ${CMAKE_CURRENT_LIST_DIR}/data)
+    # list(APPEND data_dirs ${ARGN})
+    message("data paths for ${name}: ${data_dirs}")
+    # these are used to find data/ files when binary is run without installing or packaging
+    list(JOIN data_dirs "\;" data_dirs_escaped)
+    target_compile_definitions(${name} PRIVATE "-DDATA_DIRS=\"${data_dirs_escaped}\"")
 endfunction()
 
 # same as makeExecutabe, but for libraries. Can be used to build a library from all shared project files and link that for each executable.
@@ -93,14 +111,9 @@ function(makeLibrary name)
     if(HEADLESS)
         target_compile_definitions(${name} PUBLIC -DHEADLESS=1)
     endif()
-endfunction()
 
-# This will add install()-definitions for this executable. This includes copying all dependent data/-Folders upon `ninja install` or packaging the data/-Files with `cpack`.
-# Also, required variables for finding the data/-Folders at runtime is passed as compile definitions.
-# Ensure that target_link_libraries() is executed before this function as these libraries are searched for data/-Directories.
-function(installExecutable name)
+    # add compile time list of paths to data/ directories:
     set(data_dirs "")
-
     # search for DATA_DIR property in link_library dependencies
     get_target_property(dependency_libs "${name}" LINK_LIBRARIES)
     foreach(lib IN LISTS dependency_libs)
@@ -109,16 +122,32 @@ function(installExecutable name)
             list(APPEND data_dirs ${${lib}_data_dir})
         endif()
     endforeach()
-
     # add default [project]/data/ and arguments to data_dirs
     list(APPEND data_dirs ${CMAKE_CURRENT_LIST_DIR}/data)
-    list(APPEND data_dirs ${ARGN})
-
+    # list(APPEND data_dirs ${ARGN})
     message("data paths for ${name}: ${data_dirs}")
-
     # these are used to find data/ files when binary is run without installing or packaging
     list(JOIN data_dirs "\;" data_dirs_escaped)
     target_compile_definitions(${name} PRIVATE "-DDATA_DIRS=\"${data_dirs_escaped}\"")
+endfunction()
+
+# This will add install()-definitions for this executable. This includes copying all dependent data/-Folders upon `ninja install` or packaging the data/-Files with `cpack`.
+# Also, required variables for finding the data/-Folders at runtime is passed as compile definitions.
+# Ensure that target_link_libraries() is executed before this function as these libraries are searched for data/-Directories.
+function(installExecutable name)
+    set(data_dirs "")
+
+    # get all INTERFACE_DATA_DIR properties to copy those data dirs into the project install directory
+    get_target_property(dependency_libs "${name}" LINK_LIBRARIES)
+    foreach(lib IN LISTS dependency_libs)
+        get_target_property(${lib}_data_dir ${lib} INTERFACE_DATA_DIR)
+        if (NOT ${lib}_data_dir STREQUAL ${lib}_data_dir-NOTFOUND)
+            list(APPEND data_dirs ${${lib}_data_dir})
+        endif()
+    endforeach()
+    # add default [project]/data/ and arguments to data_dirs
+    list(APPEND data_dirs ${CMAKE_CURRENT_LIST_DIR}/data)
+    list(APPEND data_dirs ${ARGN})
 
     # get project name from current folder name for install rules
     get_filename_component(project_dir_name ${CMAKE_CURRENT_LIST_DIR} NAME)
