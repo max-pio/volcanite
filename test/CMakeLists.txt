@@ -27,6 +27,24 @@ macro(makeTest name)
         target_compile_definitions(${name} PUBLIC -DHEADLESS=1)
     endif()
 
+    # add compile time list of paths to data/ directories:
+    set(data_dirs "")
+    # search for DATA_DIR property in link_library dependencies
+    get_target_property(dependency_libs "${name}" LINK_LIBRARIES)
+    foreach(lib IN LISTS dependency_libs)
+        get_target_property(${lib}_data_dir ${lib} INTERFACE_DATA_DIR)
+        if (NOT ${lib}_data_dir STREQUAL ${lib}_data_dir-NOTFOUND)
+            list(APPEND data_dirs ${${lib}_data_dir})
+        endif()
+    endforeach()
+    # add default [project]/data/ and arguments to data_dirs
+    list(APPEND data_dirs ${CMAKE_CURRENT_LIST_DIR}/data)
+    # list(APPEND data_dirs ${ARGN})
+    message("data paths for ${name}: ${data_dirs}")
+    # these are used to find data/ files when binary is run without installing or packaging
+    list(JOIN data_dirs "\;" data_dirs_escaped)
+    target_compile_definitions(${name} PRIVATE "-DDATA_DIRS=\"${data_dirs_escaped}\"")
+
     add_test(NAME ${name}  COMMAND ${name} ${ARGN})
 endmacro(makeTest)
 

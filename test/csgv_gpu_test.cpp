@@ -27,6 +27,9 @@ int main() {
 
     const uint32_t cache_size_mb = 16;
 
+    // initialize data paths to shaders
+    vvv::Paths::initPaths(DATA_DIRS);
+
     // create GPU context
     Logger(INFO, true) << "Create GPU context..";
     DefaultGpuContext ctx;
@@ -90,9 +93,10 @@ int main() {
             ctx.sync->hostWaitOnDevice({awaitable});
             benchmark.freeResources();
         }
+        csgv.clear();
 
         Logger(INFO) << "Random Access Wavelet Matrix";
-        csgv.setCompressionOptions64(64, SINGLE_TABLE_RANS_ENC, false);
+        csgv.setCompressionOptions64(64, WAVELET_MATRIX_ENC, false);
         csgv.compress(volume.dataConst(), dim, false);
         {
             CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, true);
@@ -100,9 +104,10 @@ int main() {
             ctx.sync->hostWaitOnDevice({awaitable});
             benchmark.freeResources();
         }
+        csgv.clear();
 
         Logger(INFO) << "Random Access Huffman Shaped Wavelet Matrix";
-        csgv.setCompressionOptions64(64, SINGLE_TABLE_RANS_ENC, false);
+        csgv.setCompressionOptions64(16, HUFFMAN_WM_ENC, false);
         csgv.compress(volume.dataConst(), dim, false);
         {
             CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, true);
