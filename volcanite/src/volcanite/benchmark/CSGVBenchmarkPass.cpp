@@ -176,8 +176,10 @@ namespace volcanite {
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_uints_per_brick", m_cache_uints_per_brick);
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_indices_per_uint", m_cache_indices_per_uint);
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_palette_idx_bits", m_cache_palette_idx_bits);
+        m_usegmented_volume_info->setUniform<uint32_t>("g_cache_base_element_uints", m_cache_base_element_uints);
         m_usegmented_volume_info->setUniform<uint32_t>("g_brick_idx_to_enc_vector", m_csgv->getBrickIdxToEncVectorMapping());
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_detail_buffer_address", m_detail_buffer_address);
+        m_usegmented_volume_info->setUniform<uint32_t>("g_detail_buffer_dirty", 0u);
         m_usegmented_volume_info->upload(getActiveIndex());
     }
 

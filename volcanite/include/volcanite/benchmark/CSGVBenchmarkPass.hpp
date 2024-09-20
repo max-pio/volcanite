@@ -64,11 +64,14 @@ class CSGVBenchmarkPass : public PassCompute {
                 m_cache_uints_per_brick = m_csgv->getBrickSize() * m_csgv->getBrickSize() * m_csgv->getBrickSize();
                 m_cache_uints_per_brick = (m_cache_uints_per_brick + m_cache_indices_per_uint - 1u)
                                             / m_cache_indices_per_uint;
+                m_cache_base_element_uints = (8u + m_cache_indices_per_uint - 1u) /
+                                             m_cache_indices_per_uint;  // = ceil(8 / m_palette_indices_per_uint)
             } else {
                 // without paletting, the cache stores explicit 32 bit labels = one label per uint
                 m_cache_palette_idx_bits = 32u;
                 m_cache_indices_per_uint = 1u;
                 m_cache_uints_per_brick = m_csgv->getBrickSize() * m_csgv->getBrickSize() * m_csgv->getBrickSize();
+                m_cache_base_element_uints = 8u;
             }
 
             // compute how many bricks fit into the cache at once
@@ -173,6 +176,7 @@ class CSGVBenchmarkPass : public PassCompute {
         uint32_t m_cache_palette_idx_bits = 32u;          ///< the GPU cache can store palette indices with fewer than 32 bits per entry
         uint32_t m_cache_indices_per_uint = 1u;           ///< is floor(32/bits_per_palette_index), indices do not cross multiple words
         uint32_t m_cache_uints_per_brick = 0;             ///< number of uints needed to store all voxels of a full brick
+        uint32_t m_cache_base_element_uints = 8;          ///< number of uints needed to store 2x2x2 output voxels
         std::vector<std::shared_ptr<Buffer>> m_split_encoding_buffers = {};        // base level split encoding buffers
         std::vector<glm::uvec2> m_split_encoding_buffer_addresses = {};
         std::shared_ptr<Buffer> m_split_encoding_buffer_addresses_buffer = nullptr;

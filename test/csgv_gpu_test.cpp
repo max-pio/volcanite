@@ -55,9 +55,13 @@ int main() {
             ctx.sync->hostWaitOnDevice({awaitable});
             benchmark.freeResources();
         }
+        csgv.clear();
 
         Logger(INFO) << "Range ANS with Palettized Cache";
-        csgv.setCompressionOptions64(64, SINGLE_TABLE_RANS_ENC, false);
+        size_t freq[32];
+        csgv.setCompressionOptions64(64, NIBBLE_ENC, false);
+        csgv.compressForFrequencyTable(volume.dataConst(), dim, freq, 2, false, false);
+        csgv.setCompressionOptions64(64, SINGLE_TABLE_RANS_ENC, false, freq, freq + 16);
         csgv.compress(volume.dataConst(), dim, false);
         {
             CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, true);
@@ -65,10 +69,12 @@ int main() {
             ctx.sync->hostWaitOnDevice({awaitable});
             benchmark.freeResources();
         }
+        csgv.clear();
 
-        Logger(INFO) << "Double Table Range ANS with Detail Separation";
-        csgv.setCompressionOptions64(16, DOUBLE_TABLE_RANS_ENC, false);
-        csgv.separateDetail();
+        Logger(INFO) << "Double Table Range ANS";
+        csgv.setCompressionOptions64(16, NIBBLE_ENC, false);
+        csgv.compressForFrequencyTable(volume.dataConst(), dim, freq, 2, true, false);
+        csgv.setCompressionOptions64(16, DOUBLE_TABLE_RANS_ENC, false, freq, freq + 16);
         csgv.compress(volume.dataConst(), dim, false);
         {
             CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, false);
@@ -95,26 +101,26 @@ int main() {
         }
         csgv.clear();
 
-        Logger(INFO) << "Random Access Wavelet Matrix";
-        csgv.setCompressionOptions64(64, WAVELET_MATRIX_ENC, false);
-        csgv.compress(volume.dataConst(), dim, false);
-        {
-            CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, true);
-            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
-            ctx.sync->hostWaitOnDevice({awaitable});
-            benchmark.freeResources();
-        }
-        csgv.clear();
-
-        Logger(INFO) << "Random Access Huffman Shaped Wavelet Matrix";
-        csgv.setCompressionOptions64(16, HUFFMAN_WM_ENC, false);
-        csgv.compress(volume.dataConst(), dim, false);
-        {
-            CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, true);
-            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
-            ctx.sync->hostWaitOnDevice({awaitable});
-            benchmark.freeResources();
-        }
+//        Logger(INFO) << "Random Access Wavelet Matrix";
+//        csgv.setCompressionOptions64(64, WAVELET_MATRIX_ENC, false);
+//        csgv.compress(volume.dataConst(), dim, false);
+//        {
+//            CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, true);
+//            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
+//            ctx.sync->hostWaitOnDevice({awaitable});
+//            benchmark.freeResources();
+//        }
+//        csgv.clear();
+//
+//        Logger(INFO) << "Random Access Huffman Shaped Wavelet Matrix";
+//        csgv.setCompressionOptions64(16, HUFFMAN_WM_ENC, false);
+//        csgv.compress(volume.dataConst(), dim, false);
+//        {
+//            CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, true);
+//            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
+//            ctx.sync->hostWaitOnDevice({awaitable});
+//            benchmark.freeResources();
+//        }
     }
 
     return 0;

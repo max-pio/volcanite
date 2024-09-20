@@ -61,7 +61,7 @@ int main() {
     {
         Logger(INFO) << "Double Table Range ANS with Detail Separation";
         size_t freq[32];
-        csgv.setCompressionOptions64(32, NIBBLE_ENC, false);
+        csgv.setCompressionOptions64(64, NIBBLE_ENC, false);
         csgv.compressForFrequencyTable(volume.dataConst(), dim, freq, 2, true, false);
         csgv.setCompressionOptions64(64, DOUBLE_TABLE_RANS_ENC, false, freq, freq + 16);
         csgv.compress(volume.dataConst(), dim, false);
