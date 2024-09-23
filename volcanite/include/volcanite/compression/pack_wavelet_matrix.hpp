@@ -22,6 +22,7 @@
 
 namespace volcanite {
 
+    // TODO: better struct padding, move uvec4 and BV_L12Type to front
     struct WMBrickHeader {
         uint32_t palette_size;         ///< only included here as padding
         uint32_t text_size;            ///< symbols in the encoding stream
@@ -56,6 +57,7 @@ namespace volcanite {
     // ===============================================================================================================//
 
 
+    // TODO: better struct padding, move uvec4 and BV_L12Type to front
     struct WMHBrickHeader {
         uint32_t bit_vector_size;      ///< total number of bits in all concatenated bit vectors (not the text_size!)
         uint32_t ones_before_level[5]; ///< number of ones before each level in the wavelet matrix
