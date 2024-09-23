@@ -28,6 +28,7 @@
 
 #define STATIC_FAIL(S) {static_assert_fail S}
 
+#define SIZEOF(Type) (uint64_t(Type(uint64_t(0))+1))
 
 // Memory Access and Indexing Utilities --------------------------------------------------------------------------------
 uint brick_pos2idx(const uvec3 brick_idx, const uvec3 brick_count) {

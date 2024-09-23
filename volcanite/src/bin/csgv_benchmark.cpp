@@ -115,7 +115,7 @@ int volcanite_main(int argc, char *argv[]) {
                 std::filesystem::remove(complete_csgv_path);
         }
     }
-        // otherwise, we load a previously compressed volume
+    // otherwise, we load a previously compressed volume
     else {
         compressedSegmentationVolume = std::make_shared<CompressedSegmentationVolume>();
         if(!compressedSegmentationVolume->importFromFile(args.input_file, args.verbose)) {
@@ -165,6 +165,7 @@ int volcanite_main(int argc, char *argv[]) {
 
     DefaultGpuContext ctx;
     ctx.enableDeviceExtension("VK_EXT_memory_budget");
+    ctx.physicalDeviceFeatures().setShaderInt64(true);
     ctx.physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
     ctx.physicalDeviceFeaturesV12().setHostQueryReset(true);
     ctx.createGpuContext();

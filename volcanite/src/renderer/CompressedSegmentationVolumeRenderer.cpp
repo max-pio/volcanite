@@ -577,6 +577,8 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
     if(m_use_palette_cache)
         shader_defines.emplace_back("PALETTE_CACHE");
+    if (m_compressed_segmentation_volume->isUsingRandomAccess())
+        shader_defines.emplace_back("RANDOM_ACCESS");
     shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if(getCtx()->getWsi())

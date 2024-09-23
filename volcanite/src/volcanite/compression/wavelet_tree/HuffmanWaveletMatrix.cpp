@@ -24,7 +24,7 @@ namespace volcanite {
 
 HuffmanWaveletMatrix::HuffmanWaveletMatrix(const uint32_t *op_stream_in, uint32_t start4bit, uint32_t end4bit)
                         : WaveletMatrixBase(op_stream_in, start4bit, end4bit),
-                          m_bv(m_text_size * HWM_LEVELS) {
+                         m_bv(m_text_size * HWM_LEVELS) {
 
     // construct the concatenated bit vector
     prefix_counting_huffman(op_stream_in, start4bit, end4bit, m_bv, m_level_starts);

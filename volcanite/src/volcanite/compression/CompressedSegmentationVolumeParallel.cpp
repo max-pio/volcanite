@@ -45,6 +45,7 @@ void CompressedSegmentationVolume::parallelDecompressLOD(int target_lod, std::ve
                 size_t brick_idx = brick_pos2idx(brick_pos, brickCount);
 #ifndef NO_BRICK_DECODE_INDEX_REMAP
                 // decode brick with threads parallelizing over the output voxels
+                Logger(DEBUG) << "brick-idx " << brick_idx;
                 m_encoder->parallelDecodeBrick(getBrickEncoding(brick_idx), getBrickEncodingLength(brick_idx),
                                                brick_cache.data(),
                                                glm::clamp(m_volume_dim - brick_pos * m_brick_size,

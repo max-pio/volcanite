@@ -64,6 +64,7 @@ public:
     void configureExtensionsAndLayersAndFeatures(GpuContextRwPtr ctx) override {
         ctx->enableDeviceExtension("VK_EXT_memory_budget");
         ctx->physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
+        ctx->physicalDeviceFeatures().setShaderInt64(true);
     }
 
     /// Initializes Descriptorsets and calls pipeline initialization.

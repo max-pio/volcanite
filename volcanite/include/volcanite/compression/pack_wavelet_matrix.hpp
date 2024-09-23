@@ -27,7 +27,7 @@ namespace volcanite {
         uint32_t text_size;            ///< symbols in the encoding stream
         glm::uvec4 ones_before_level;  ///< number of ones before each level in the wavelet matrix
         glm::uvec4 zeros_on_level;     ///< number of zeros within each level in the wavelet matrix
-        const uint64_t fr[1];          ///< L12 flat rank acceleration structure (flexible array member)
+        const BV_L12Type fr[1];        ///< L12 flat rank acceleration structure (flexible array member)
     };
     static_assert(sizeof(WMBrickHeader) == 4*12, "WMBrickHeader must be tightly packed.");
 

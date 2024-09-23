@@ -152,8 +152,10 @@ void resetCSGVBrick(const uint decoded_brick_start_uint, const uint inv_lod) {
     #include "decoder/NibbleDecoder.glsl"
 #elif ENCODING_MODE == SINGLE_TABLE_RANS_ENC || ENCODING_MODE == DOUBLE_TABLE_RANS_ENC
     #include "decoder/RangeANSDecoder.glsl"
-#elif ENCODING_MODE == WAVELET_MATRIX_ENC || ENCODING_MODE == HUFFMAN_WM_ENC
+#elif ENCODING_MODE == WAVELET_MATRIX_ENC
     #include "decoder/WaveletMatrixDecoder.glsl"
+#elif ENCODING_MODE == HUFFMAN_WM_ENC
+    #include "decoder/HuffmanWMDecoder.glsl"
 #else
     STATIC_FAIL(no_decoder_specified);
 #endif

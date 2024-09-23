@@ -13,8 +13,8 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#ifndef ENCODER_SERIAL_GLSL
-#define ENCODER_SERIAL_GLSL
+#ifndef NIBBLE_DECODER_GLSL
+#define NIBBLE_DECODER_GLSL
 
 #include "volcanite/compression/csgv_utils.glsl"
 
@@ -282,7 +282,8 @@ void decompressCSGVVoxelSharedMemory(const uint output_i, const uint brick_encod
         // TODO: This is a race condition! Different threads write to (different bits of) the same uint in the cache
         writeEntryToCache(decoded_brick_start_uint, output_i, palette_index + 1u);
 #else
-        writeEntryToCache(decoded_brick_start_uint, output_i, CSGV_SHARED_MEMORY_BRICK_ENCODING[brick_encoding_length - 1u - palette_index]);
+//        writeEntryToCache(decoded_brick_start_uint, output_i, CSGV_SHARED_MEMORY_BRICK_ENCODING[brick_encoding_length - 1u - palette_index]);
+        writeEntryToCache(decoded_brick_start_uint, output_i, palette_index);
 #endif
     }
 }
@@ -360,4 +361,4 @@ bool verifyBrickCompression(const uint brick_idx) {
 }
 
 
-#endif // ENCODER_SERIAL_GLSL
+#endif // NIBBLE_DECODER_GLSL

@@ -17,6 +17,7 @@
 
 #include "volcanite/compression/encoder/CSGVBrickEncoder.hpp"
 #include "volcanite/compression/pack_wavelet_matrix.hpp"
+#include "volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp"
 
 namespace volcanite {
 
@@ -109,7 +110,29 @@ public:
     [[nodiscard]] virtual uint32_t getPaletteSizeHeaderIndex() const { return getHeaderSize() - 1u; }
 
     /// @returns a list of shader defines used during decoding which are passed to the shader compilation stage
-    [[nodiscard]] virtual std::vector<std::string> getGLSLDefines() const { return CSGVBrickEncoder::getGLSLDefines(); }
+    [[nodiscard]] virtual std::vector<std::string> getGLSLDefines() const {
+        auto defines = CSGVBrickEncoder::getGLSLDefines();
+        switch(sizeof(BV_WordType)) {
+            case 4:
+                defines.emplace_back("BV_WORD_TYPE uint");
+                break;
+            case 8:
+                defines.emplace_back("BV_WORD_TYPE uint64_t");
+                break;
+            default:
+                throw std::runtime_error("Missing GLSL define for BV_WORD_TYPE");
+        }
+        defines.emplace_back("HWM_LEVELS=" + std::to_string(HWM_LEVELS));
+        defines.emplace_back("BV_L1_BIT_SIZE=" + std::to_string(BV_L1_BIT_SIZE));
+        defines.emplace_back("BV_L2_BIT_SIZE=" + std::to_string(BV_L2_BIT_SIZE));
+        defines.emplace_back("BV_L2_WORD_SIZE=" + std::to_string(BV_L2_WORD_SIZE));
+        defines.emplace_back("BV_STORE_L1_BITS=" + std::to_string(BV_STORE_L1_BITS));
+        defines.emplace_back("BV_STORE_L2_BITS=" + std::to_string(BV_STORE_L2_BITS));
+        defines.emplace_back("BV_WORD_BIT_SIZE=" + std::to_string(BV_WORD_BIT_SIZE));
+        defines.emplace_back("BASE_HEADER_SIZE=" + std::to_string(getHeaderSize()));
+        defines.emplace_back("UINT_PER_L12=" + std::to_string(sizeof(BV_L12Type)/sizeof(uint32_t)));
+        return defines;
+    }
 
     // DEBUGGING AND STATISTICS ----------------------------------------------------------------------------------------
 
@@ -119,6 +142,59 @@ public:
                                         const uint32_t *brick_detail_encoding, uint32_t brick_detail_encoding_length,
                                         std::ostream &error) const {
         // TODO: missing compression verification with wavelet matrix brick encoder
+
+        // Obtain a reference to the uint buffer containing this bricks encoding.
+        const uint32_t base_header_size = getHeaderSize();
+        const uint32_t total_header_size_one_fr = base_header_size
+                                                  + ((m_encoding_mode == WAVELET_MATRIX_ENC) ? sizeof(WMBrickHeader)
+                                                                                             : sizeof(WMHBrickHeader)) / 4;
+        const uint32_t lod_count = getLodCountPerBrick();
+        const uint32_t header_start_lods = lod_count;
+
+        uint32_t total_voxels_in_brick = 0u;
+        for (int i = 1; i <= m_brick_size; i <<= 1) {
+            total_voxels_in_brick += (i*i*i);
+        }
+
+        // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
+        if (brick_encoding_length < total_header_size_one_fr + 1u + 1u) {
+            error << "brick encoding is shorter than minimum. (header size (incl. 1 flatrank) + 1 encoding + 1 palette) = "
+                  << base_header_size + 2u <<  " but is " << brick_encoding_length << "\n";
+        }
+
+        // check first header entry being base_header_size * 8
+        if(brick_encoding[0] != 0) {
+            error << "First encoding operation index must be 0." << "\n";
+        }
+
+        // check palette start of first LoD being 0 and second LoD being 1
+        if(brick_encoding[header_start_lods] != 0u)
+            error << "  first palette start must be 0 but is " << brick_encoding[header_start_lods] << "\n";
+        if(brick_encoding[header_start_lods + 1u] != 1u)
+            error << "  second palette start must be 1 but is " << brick_encoding[header_start_lods + 1u] << "\n";
+
+        if (m_encoding_mode == WAVELET_MATRIX_ENC) {
+            WMBrickHeader wm_header = getWMBrickHeaderFromEncoding(brick_encoding, base_header_size);
+            if (wm_header.text_size == 0u || wm_header.text_size > total_voxels_in_brick)
+                error << "  text size must be within (0, " << total_voxels_in_brick << ") but is " << wm_header.text_size << "\n";
+            if (getL1Entry(wm_header.fr[0]) != 0)
+                error << "  first flat rank L1 entry must be 0 but is " << getL1Entry(wm_header.fr[0]) << "\n";
+            if (getL2Entry(wm_header.fr[0], 0) != 0)
+                error << "  first flat rank L1 entry must be 0 but is " << getL1Entry(wm_header.fr[0]) << "\n";
+        } else {
+            WMHBrickHeader wm_header = getWMHBrickHeaderFromEncoding(brick_encoding, base_header_size);
+            // maximum text size: HWM_LEVELS bits per voxel (i.e. 5 bit vectors with length of voxels in brick)
+            if (wm_header.bit_vector_size == 0u || wm_header.bit_vector_size > total_voxels_in_brick * HWM_LEVELS)
+                error << "  bit vector size must be within (0, " << total_voxels_in_brick * HWM_LEVELS << ") but is " << wm_header.bit_vector_size << "\n";
+            if (getL1Entry(wm_header.fr[0]) != 0)
+                error << "  first flat rank L1 entry must be 0 but is " << getL1Entry(wm_header.fr[0]) << "\n";
+            if (getL2Entry(wm_header.fr[0], 0) != 0)
+                error << "  first flat rank L1 entry must be 0 but is " << getL1Entry(wm_header.fr[0]) << "\n";
+            if (wm_header.ones_before_level[0] != 0u)
+                error << "  first ones_before_level entry must be 0 but is " << wm_header.ones_before_level[0] << "\n";
+            if (wm_header.level_starts_1_to_4[0] > total_voxels_in_brick)
+                error << "  level_starts_1_to_4[0] entry must be the text size, limited by voxel count " << total_voxels_in_brick << " but is " << wm_header.level_starts_1_to_4[0] << "\n";
+        }
     };
 
 

@@ -17,6 +17,7 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_debug_printf : enable
 #extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_buffer_reference2 : require
 #extension GL_KHR_shader_subgroup_basic : require
 
 #ifndef SUBGROUP_SIZE

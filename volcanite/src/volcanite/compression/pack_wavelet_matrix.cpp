@@ -43,6 +43,7 @@ namespace volcanite {
         // query L12 acceleration structure
         BV_L12Type l12 = fr[index / BV_L1_BIT_SIZE];
         uint32_t rank1_res = getL1Entry(l12);
+        assert(rank1_res < (index == 0u ? 1u : index) && "_fr_rank1 getL1Entry return value too high.");
         rank1_res += getL2Entry(l12, (index % BV_L1_BIT_SIZE) / BV_L2_BIT_SIZE);
 
         // perform bit counts on a word level to count the remaining bits
@@ -54,8 +55,10 @@ namespace volcanite {
                 offset++;
             }
         }
+
         // if this is a rank(text_size) query, the inlining of the function lead to the potential out of bounds
         // access bv[offset] being ignored.
+        assert(rank1_res + rank1Word(bv[offset], index % BV_WORD_BIT_SIZE) < (index == 0u ? 1u : index) && "_fr_rank1 return value too high");
         return rank1_res + rank1Word(bv[offset], index % BV_WORD_BIT_SIZE);
     }
 
@@ -82,6 +85,8 @@ namespace volcanite {
         uint32_t out_i = start4bit / 8u; // count in 32 bit instead of 4 bit elements
         // (overwrite header start indices, LOD 0) ?
         // uint32_t text size | 4x uint32 ones before level | 4x uint32 zeros in level
+
+
         v[out_i++] = wm.getTextSize();
         for (int _i = 0; _i < 4; _i++)
             v[out_i++] = wm.getOnesBeforeLevel()[_i];
@@ -267,7 +272,7 @@ namespace volcanite {
                 position = wmh_getLevelStart(level + 1, wm_header.level_starts_1_to_4) + zeros_before;
             }
         }
-        return 5u;
+        return HWM_LEVELS;
     }
 
     uint32_t wm_huffman_rank(uint32_t position, uint32_t symbol, const WMHBrickHeader& wm_header, const BV_WordType* bit_vector) {

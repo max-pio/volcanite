@@ -114,9 +114,9 @@ void CSGVSerialBrickEncoder::verifyBrickCompression(const uint32_t* brick_encodi
 
     // check palette start of first LoD being 0 and second LoD being 1
     if(brick_encoding[header_start_lods] != 0u)
-        error << "  first palette start must be 0 but is " << brick_encoding[header_start_lods];
+        error << "  first palette start must be 0 but is " << brick_encoding[header_start_lods] << "\n";
     if(brick_encoding[header_start_lods + 1u] != 1u)
-        error << "  second palette start must be 1 but is " << brick_encoding[header_start_lods + 1u];
+        error << "  second palette start must be 1 but is " << brick_encoding[header_start_lods + 1u] << "\n";
 
     // check palette starts being in ascending order
     for(int l = 2u; l <= lod_count + 1; l++) {
