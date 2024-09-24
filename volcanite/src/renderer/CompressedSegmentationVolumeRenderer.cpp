@@ -417,7 +417,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
                 m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(detail_encoding.data(),
                                                                             detail_encoding.size() * sizeof(uint32_t),
                                                                             offset * sizeof(uint32_t),
-                                                                            {.queueFamily=getCtx()->getQueueFamilyIndices().compute.value()});
+                                                                            {.queueFamily=m_queue_family_index});
                 // construct detail starts into continuous detail encoding array
                 while(brick_idx < bricks_in_volume && brick_idx / m_compressed_segmentation_volume->getBrickIdxToEncVectorMapping() == i) {
                     m_constructed_detail_starts[brick_idx + 1] = m_constructed_detail_starts[brick_idx] + m_compressed_segmentation_volume->getBrickDetailEncodingLength(brick_idx);
@@ -663,7 +663,6 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
     }
     m_inpaintedOutColor = m_pass->reflectTextures(
         "inpaintedOutColor", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8B8A8Unorm, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
-//                                         .queues={getCtx()->getQueueFamilyIndices().compute.value(), getCtx()->getQueueFamilyIndices().present.value()}});
     for (auto& texture : *m_inpaintedOutColor){
         texture->ensureResources();
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
