@@ -92,6 +92,7 @@ private:
 
     struct {
         vk::Queue graphics = nullptr;
+        vk::Queue compute = nullptr;
         vk::Queue present = nullptr;
     } m_queues;
 

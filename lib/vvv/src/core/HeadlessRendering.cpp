@@ -87,9 +87,9 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames
     // copy the last output texture to a new texture that we can return.
     // this way the original rendering texture could be overwritten or destroyed without affecting the return texture.
     auto ret_tex = std::make_shared<Texture>(this, rendererOutput.texture->format, rendererOutput.texture->width, rendererOutput.texture->height,
-                                             vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eStorage);
+                                             vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eStorage, std::set<uint32_t>{rendererOutput.queueFamilyIndex});
     ret_tex->ensureResources();
-    const auto layoutTransformDone = ret_tex->setImageLayout(vk::ImageLayout::eTransferDstOptimal, vk::PipelineStageFlagBits::eAllCommands);
+    const auto layoutTransformDone = ret_tex->setImageLayout(vk::ImageLayout::eTransferDstOptimal, vk::PipelineStageFlagBits::eAllCommands, {.queueFamily=rendererOutput.queueFamilyIndex});
     rendererOutput.renderingComplete.push_back(layoutTransformDone);
     sync->hostWaitOnDevice(rendererOutput.renderingComplete);
     sync->hostWaitOnDevice({this->executeCommands([rendererOutput, ret_tex](vk::CommandBuffer cmd){
@@ -101,7 +101,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames
                                  vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(width, height, 1));
         cmd.copyImage(rendererOutput.texture->image, vk::ImageLayout::eTransferSrcOptimal, ret_tex->image, vk::ImageLayout::eTransferDstOptimal, {copyRegion});
         rendererOutput.texture->setImageLayout(cmd, originalLayout);
-    })});
+    }, {.queueFamily=rendererOutput.queueFamilyIndex})});
     return ret_tex;
 }
 
@@ -120,7 +120,9 @@ void HeadlessRendering::acquireResources() {
 
 void HeadlessRendering::createQueues() {
     m_queues.graphics = getDevice().getQueue(getQueueFamilyIndices().graphics.value(), 0);
-    debugMarker->setName(m_queues.graphics, "Application.m_queues.graphics");
+    debugMarker->setName(m_queues.graphics, "HeadlessRendering.m_queues.graphics");
+    m_queues.compute = getDevice().getQueue(getQueueFamilyIndices().compute.value(), 0);
+    debugMarker->setName(m_queues.compute, "HeadlessRendering.m_queues.compute");
     m_queues.present = nullptr;     // we do not need a present queue in headless rendering
 }
 

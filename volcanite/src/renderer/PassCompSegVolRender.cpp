@@ -26,8 +26,11 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
     commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
     getCtx()->debugMarker->beginRegion(commandBuffer, "total_renderer", glm::vec4(1.f));
-    // potential cache reset / garbage collection
+
+    // potential cache reset / garbage collection.
     if(m_reset_cache) {
+        // will always be called on first frame => wait for all transfers to finish
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
         executeCommands(commandBuffer, CACHECLEAR);
         commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
         Logger(DEBUG) << "hard reset brick cache";
@@ -37,10 +40,10 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
     // block request and visibility classification
     getCtx()->debugMarker->beginRegion(commandBuffer, "request", glm::vec4(0.5f));
     executeCommands(commandBuffer, REQUEST);
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
+    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {},
+                                  {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryWrite | vk::AccessFlagBits::eMemoryRead)},
+                                  nullptr, nullptr);
     getCtx()->debugMarker->endRegion(commandBuffer);
-//    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite)},
-//                                  nullptr, nullptr);
     // fetch new blocks at the end of the cache
     getCtx()->debugMarker->beginRegion(commandBuffer, "provision", glm::vec4(0.8f));
     executeCommands(commandBuffer, PROVISION);
