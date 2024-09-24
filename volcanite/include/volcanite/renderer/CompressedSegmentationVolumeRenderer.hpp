@@ -248,6 +248,7 @@ private:
     vvv::AwaitableList updateAttributeBuffers();
     void updateUniformDescriptorset();
 
+    uint32_t m_queue_family_index = 0u;
     std::unique_ptr<PassCompSegVolRender> m_pass = nullptr;
     std::shared_ptr<Texture> m_accumulation_rgba_tex[2] = {nullptr, nullptr};
     std::shared_ptr<Texture> m_accumulation_samples_tex[2] = {nullptr, nullptr};

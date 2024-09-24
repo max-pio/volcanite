@@ -48,10 +48,10 @@ public:
         RESOLVE = 6,
     };
 
-    PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering,
+    PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering, uint32_t queueFamilyIndex,
                          std::vector<std::string> shaderDefines = {}, bool parallel_decode = false,
                          vk::ImageUsageFlags outputImageUsage = {}, const std::string& label = "PassCompSegVolRender")
-        : PassCompute(ctx, label, multiBuffering, ctx->getQueueFamilyIndices().graphics.value()),
+        : PassCompute(ctx, label, multiBuffering, queueFamilyIndex),
           WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_shader_defines(std::move(shaderDefines)),
           m_parallel_decode(parallel_decode) {}
 

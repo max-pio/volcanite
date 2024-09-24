@@ -190,10 +190,12 @@ int volcanite_main(int argc, char *argv[]) {
             Logger(DEBUG) << compressedSegmentationVolume->getEncodingInfoString();
         }
 
-        // if a config file exists next to the .csgv file, we use it to initialize the renderer
-        std::string config_path = stripFileExtension(args.input_file) + ".vcfg";
-        if(std::filesystem::exists(config_path))
-            args.rendering_config_file = config_path;
+        // if no config file was specified, use a previous config next to the .csgv file, if it exists
+        if (args.rendering_config_file.empty()) {
+            std::string config_path = stripFileExtension(args.input_file) + ".vcfg";
+            if (std::filesystem::exists(config_path))
+                args.rendering_config_file = config_path;
+        }
     }
 
     if (compressedSegmentationVolume == nullptr) {
