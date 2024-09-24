@@ -23,9 +23,11 @@
 
 #include "glm/gtc/matrix_transform.hpp"
 
-#include "portable-file-dialogs.h"
+#ifndef HEADLESS
+    #include "portable-file-dialogs.h"
+#endif
 #ifdef IMGUI
-#include "imgui.h"
+    #include "imgui.h"
 #endif
 
 using namespace vvv;
@@ -116,7 +118,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         // wait for previous frame to finish before uploading material buffer
         getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution);
         auto [material_upload_finished, _material_upload_staging_buffer] = m_materials_buffer->uploadWithStagingBuffer(
-                gpu_mat.data(), sizeof(GPUSegmentedVolumeMaterial) * m_materials.size(), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+                gpu_mat.data(), sizeof(GPUSegmentedVolumeMaterial) * m_materials.size(), {.queueFamily = m_queue_family_index});
         getCtx()->sync->hostWaitOnDevice({material_upload_finished}); // have to wait here, otherwise the upload_staging buffer is freed immediately
     }
 
@@ -205,8 +207,8 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
     // start asynchronous detail upload if scheduled
     if (m_detail_stage == DetailAwaitingUpload && m_constructed_detail_starts.back() > 0u) {
-        m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
-        m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(m_constructed_detail.data(), m_constructed_detail_starts.back() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = m_queue_family_index});
+        m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(m_constructed_detail.data(), m_constructed_detail_starts.back() * sizeof(uint32_t), {.queueFamily = m_queue_family_index});
         m_detail_stage = DetailUploading;
     }
 
@@ -236,7 +238,6 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     m_pass->setStorageImage("accuSampleCountOut", *m_accumulation_samples_tex[1u - (m_frame % 2u)]);
     // 16 bit packed gBuffer texture storing
     m_pass->setStorageImage("gBuffer", *m_g_buffer_tex);
-
 
     std::vector<std::shared_ptr<Awaitable>> renderAwaitableList = {};
     const auto renderingFinished = m_pass->execute(renderAwaitableList, awaitBinaryAwaitableList, signalBinarySemaphore);
@@ -281,6 +282,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     m_mostRecentFrame = vvv::RendererOutput{
         .texture = m_inpaintedOutColor->getActive().get(),
         .renderingComplete = {renderingFinished},
+        .queueFamilyIndex = m_queue_family_index
     };
     return m_mostRecentFrame.value();
 }
@@ -414,7 +416,8 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
                 // upload next single detail encoding buffer into offset memory region to form a back-to-back buffer
                 m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(detail_encoding.data(),
                                                                             detail_encoding.size() * sizeof(uint32_t),
-                                                                            offset * sizeof(uint32_t));
+                                                                            offset * sizeof(uint32_t),
+                                                                            {.queueFamily=getCtx()->getQueueFamilyIndices().compute.value()});
                 // construct detail starts into continuous detail encoding array
                 while(brick_idx < bricks_in_volume && brick_idx / m_compressed_segmentation_volume->getBrickIdxToEncVectorMapping() == i) {
                     m_constructed_detail_starts[brick_idx + 1] = m_constructed_detail_starts[brick_idx] + m_compressed_segmentation_volume->getBrickDetailEncodingLength(brick_idx);
@@ -425,7 +428,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
             }
         }
         // upload initial detail starts buffer (all zeros if no detail is uploaded initially)
-        m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = m_queue_family_index});
         getCtx()->sync->hostWaitOnDevice({m_detail_starts_staging.first});
         m_detail_staging = {nullptr, nullptr};
         m_detail_starts_staging = {nullptr, nullptr};
@@ -500,9 +503,9 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
                                                            {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()}));
         awaitBeforeExecution.push_back(_encoding_upload[i].first);
     }
-    auto [encoding_addresses_upload_finished, _encoding_addresses_staging_buffer] = m_split_encoding_buffer_addresses_buffer->uploadWithStagingBuffer(m_split_encoding_buffer_addresses,  {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+    auto [encoding_addresses_upload_finished, _encoding_addresses_staging_buffer] = m_split_encoding_buffer_addresses_buffer->uploadWithStagingBuffer(m_split_encoding_buffer_addresses,  {.queueFamily = m_queue_family_index});
     awaitBeforeExecution.push_back(encoding_addresses_upload_finished);
-    auto [brickstarts_upload_finished, _brickstarts_staging_buffer] = m_brick_starts_buffer->uploadWithStagingBuffer(*(m_compressed_segmentation_volume->getBrickStarts()),  {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+    auto [brickstarts_upload_finished, _brickstarts_staging_buffer] = m_brick_starts_buffer->uploadWithStagingBuffer(*(m_compressed_segmentation_volume->getBrickStarts()),  {.queueFamily = m_queue_family_index});
     awaitBeforeExecution.push_back(brickstarts_upload_finished);
 
 
@@ -530,6 +533,9 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     setCtx(ctx);
     updateDeviceMemoryUsage();
     Logger(INFO) << "Device memory on startup: " << m_gui_device_mem_text;
+
+    // TODO: all rendering should happen on the compute queue, + queue ownership transfer to present for the Application
+    m_queue_family_index = getCtx()->getQueueFamilyIndices().graphics.value();
 
     // Set camera to a nice start position
     getCamera().reset();
@@ -590,9 +596,9 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         shader_defines.push_back("PALETTE_CACHE");
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if(getCtx()->getWsi())
-        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), shader_defines);
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), m_queue_family_index, shader_defines);
     else
-        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, shader_defines);
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, m_queue_family_index, shader_defines);
     m_pass->allocateResources();
     m_urender_info = m_pass->getUniformSet("render_info");
     m_usegmented_volume_info = m_pass->getUniformSet("segmented_volume_info");
@@ -657,6 +663,7 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
     }
     m_inpaintedOutColor = m_pass->reflectTextures(
         "inpaintedOutColor", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8B8A8Unorm, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+//                                         .queues={getCtx()->getQueueFamilyIndices().compute.value(), getCtx()->getQueueFamilyIndices().present.value()}});
     for (auto& texture : *m_inpaintedOutColor){
         texture->ensureResources();
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
@@ -925,6 +932,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 #endif
     }, "Screenshot");
     //
+#ifndef HEADLESS
 #ifdef IMGUI
     g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
@@ -965,8 +973,8 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
         writeParameterFile(file, VOLCANITE_VERSION);
     }, "Export Parameters");
-    //
     g_gen->addSeparator();
+#endif    // not HEADLESS
     g_gen->addDynamicText(&m_gui_device_mem_text);
 
     // Display properties and render resolution
@@ -1172,7 +1180,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         // reset all accumulation buffers
         m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
 
-        auto [attr_upload_finished, _attr_staging_buffer] = m_attribute_buffer->uploadWithStagingBuffer(attributes.data(), attributes.size() * sizeof(float), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        auto [attr_upload_finished, _attr_staging_buffer] = m_attribute_buffer->uploadWithStagingBuffer(attributes.data(), attributes.size() * sizeof(float), {.queueFamily = m_queue_family_index});
         getCtx()->sync->hostWaitOnDevice({attr_upload_finished});
         // can't just return the awaitable (return {attr_upload_finished}) as _attr_staging_buffer can not be freed yet
         return {};

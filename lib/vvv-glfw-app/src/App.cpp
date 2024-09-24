@@ -187,23 +187,11 @@ namespace vvv {
         assert(m_swapchain.depthFormat == vk::Format::eUndefined &&
                "This function does currently not setup depth buffering!");
 
-
-        vk::ImageMemoryBarrier imageMemoryBarrier;
-        imageMemoryBarrier.oldLayout = ldrRendererOutput.texture->descriptor.imageLayout;
-        imageMemoryBarrier.newLayout = vk::ImageLayout::eGeneral;
-        imageMemoryBarrier.image = ldrRendererOutput.texture->image;
-        imageMemoryBarrier.subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
-        imageMemoryBarrier.srcAccessMask = vk::AccessFlagBits::eShaderWrite;
-        imageMemoryBarrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-
-        // imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        // imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        imageMemoryBarrier.srcQueueFamilyIndex = ldrRendererOutput.queueFamilyIndex;
-        imageMemoryBarrier.dstQueueFamilyIndex = getQueueFamilyIndices().present.value();
-
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, 0,
-                             0, nullptr, 0, nullptr, 1,
-                             reinterpret_cast<const VkImageMemoryBarrier *>(&imageMemoryBarrier));
+        vk::ImageMemoryBarrier imageMemoryBarrier = ldrRendererOutput.texture->queueOwnershipTransfer(ldrRendererOutput.queueFamilyIndex, vk::AccessFlagBits::eShaderWrite,
+                                                                                                      getQueueFamilyIndices().present.value(), vk::AccessFlagBits::eShaderRead);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eFragmentShader,
+                                      {}, 0, nullptr, 0, nullptr,
+                                      1, &imageMemoryBarrier);
 
         updateBlitDescriptorSet(ldrRendererOutput, currentInFlightFrameIndex());
 
