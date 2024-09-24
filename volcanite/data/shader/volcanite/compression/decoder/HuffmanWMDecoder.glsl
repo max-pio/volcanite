@@ -55,7 +55,7 @@
 #ifndef BV_WORD_TYPE
     #define BV_WORD_TYPE uint64_t
     #define HWM_LEVELS 5
-    #define BV_L1_BIT_SIZE 128
+    #define BV_L1_BIT_SIZE 1280
     #define BV_L2_BIT_SIZE 256
     #define BV_L2_WORD_SIZE 4
     #define BV_STORE_L1_BITS 19
@@ -86,8 +86,11 @@ struct WMHBrickHeader {
 
 layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict WMHBrickHeaderRef
 {
-    WMHBrickHeader header;
-};
+    uint bit_vector_size;       ///< symbols in the encoding stream
+    uint ones_before_level[5];  ///< number of ones before each level in the wavelet matrix
+    uint level_starts_1_to_4[4];///< number of zeros within each level in the wavelet matrix
+    uint64_t fr[1];             ///< L12 flat rank acceleration structure (flexible array member)
+};  // must be 12x 4 Bytes packed size
 
 layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict BitVectorRef
 {
@@ -181,7 +184,7 @@ uint _fr_rank1(uint index, const BitVectorRef bv, const WMHBrickHeaderRef wm_hea
         // └──────┘ └──────┘
 
         // query L12 acceleration structure
-        BV_WORD_TYPE l12 = wm_header.header.fr[index / BV_L1_BIT_SIZE];
+        BV_WORD_TYPE l12 = wm_header.fr[index / BV_L1_BIT_SIZE];
         uint rank1_res = getL1Entry(l12);
         assertf(rank1_res < (index == 0u ? 1u : index),
                 "_fr_rank1 getL1Entry return value too high. [index, rank1]: [%v2u]",
@@ -228,9 +231,9 @@ uint wm_huffman_access(uint position, const WMHBrickHeaderRef wm_header, const B
         } else {
             // TODO: we should not use the inverted CHC but the normal CHC, interpret 1 as left and 0 as right
             //  in the wavelet matrix to optimize the rank0 / rank1 queries
-            const uint ones_before = _fr_rank1(position, bit_vector, wm_header) - wm_header.header.ones_before_level[level];
-            const uint zeros_before = (position - wmh_getLevelStart(level, wm_header.header.level_starts_1_to_4)) - ones_before;
-            position = wmh_getLevelStart(level + 1, wm_header.header.level_starts_1_to_4) + zeros_before;
+            const uint ones_before = _fr_rank1(position, bit_vector, wm_header) - wm_header.ones_before_level[level];
+            const uint zeros_before = (position - wmh_getLevelStart(level, wm_header.level_starts_1_to_4)) - ones_before;
+            position = wmh_getLevelStart(level + 1, wm_header.level_starts_1_to_4) + zeros_before;
         }
     }
     return HWM_LEVELS;
@@ -253,9 +256,9 @@ uint wm_huffman_rank(uint position, uint symbol, const WMHBrickHeaderRef wm_head
         } else {
             position = position - ones_before_position;
             // TODO: ones_before_level could become an uvec4 if we exclude this case for level == chc.length-1
-            const uint ones_in_interval = ones_before_interval - wm_header.header.ones_before_level[level];
-            interval_start = wmh_getLevelStart(level + 1, wm_header.header.level_starts_1_to_4)
-                    + (interval_start - wmh_getLevelStart(level, wm_header.header.level_starts_1_to_4) - ones_in_interval);
+            const uint ones_in_interval = ones_before_interval - wm_header.ones_before_level[level];
+            interval_start = wmh_getLevelStart(level + 1, wm_header.level_starts_1_to_4)
+                    + (interval_start - wmh_getLevelStart(level, wm_header.level_starts_1_to_4) - ones_in_interval);
         }
         bit_mask >>= 1;
     }
@@ -337,7 +340,7 @@ void decompressCSGVVoxelSharedMemory(const uint output_i, const uint brick_encod
                 }
             }
 
-            assert(enc_operation_index < wm_header.header.level_starts_1_to_4[0], "brick encoding out of bounds read");
+            assert(enc_operation_index < wm_header.level_starts_1_to_4[0], "brick encoding out of bounds read");
 
             // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
             enc_operation_index = brick_encoding.buf[inv_lod] + inv_lod_op_i;
@@ -439,24 +442,24 @@ bool verifyBrickCompression(const uint brick_idx) {
 
     WMHBrickHeaderRef wm_header = getWMHBrickHeaderFromEncoding(brick_encoding);
     // maximum text size: HWM_LEVELS bits per voxel (i.e. 5 bit vectors with length of voxels in brick)
-    if (wm_header.header.bit_vector_size == 0u || wm_header.header.bit_vector_size > total_voxels_in_brick * HWM_LEVELS) {
-        debugPrintfEXT("Bit vector size must be within (0, %u) but is %u", total_voxels_in_brick * HWM_LEVELS, wm_header.header.bit_vector_size);
+    if (wm_header.bit_vector_size == 0u || wm_header.bit_vector_size > total_voxels_in_brick * HWM_LEVELS) {
+        debugPrintfEXT("Bit vector size must be within (0, %u) but is %u", total_voxels_in_brick * HWM_LEVELS, wm_header.bit_vector_size);
         return false;
     }
-    if (getL1Entry(wm_header.header.fr[0]) != 0) {
-        debugPrintfEXT("First flat rank L1 entry must be 0 but is %u", getL1Entry(wm_header.header.fr[0]));
+    if (getL1Entry(wm_header.fr[0]) != 0) {
+        debugPrintfEXT("First flat rank L1 entry must be 0 but is %u", getL1Entry(wm_header.fr[0]));
         return false;
     }
-    if (getL2Entry(wm_header.header.fr[0], 0) != 0) {
-        debugPrintfEXT("First flat rank L1 entry must be 0 but is %u", getL1Entry(wm_header.header.fr[0]));
+    if (getL2Entry(wm_header.fr[0], 0) != 0) {
+        debugPrintfEXT("First flat rank L1 entry must be 0 but is %u", getL1Entry(wm_header.fr[0]));
         return false;
     }
-    if (wm_header.header.ones_before_level[0] != 0u) {
-        debugPrintfEXT("First ones_before_level entry must be 0 but is %u", wm_header.header.ones_before_level[0]);
+    if (wm_header.ones_before_level[0] != 0u) {
+        debugPrintfEXT("First ones_before_level entry must be 0 but is %u", wm_header.ones_before_level[0]);
         return false;
     }
-    if (wm_header.header.level_starts_1_to_4[0] > total_voxels_in_brick) {
-        debugPrintfEXT("level_starts_1_to_4[0] must be the text size, limited by voxel count, but is %u", wm_header.header.level_starts_1_to_4[0]);
+    if (wm_header.level_starts_1_to_4[0] > total_voxels_in_brick) {
+        debugPrintfEXT("level_starts_1_to_4[0] must be the text size, limited by voxel count, but is %u", wm_header.level_starts_1_to_4[0]);
         return false;
     }
 

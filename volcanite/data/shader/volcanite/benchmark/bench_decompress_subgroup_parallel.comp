@@ -16,6 +16,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_debug_printf : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_buffer_reference_uvec2 : require
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_KHR_shader_subgroup_basic : require
@@ -51,8 +52,17 @@ layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
 
 
 #if (ENCODING_MODE == HUFFMAN_WM_ENC)
-    shared WMHBrickHeaderRef s_wm_header;
-    shared BitVectorRef s_bit_vector;
+#ifndef MAX_BIT_VECTOR_WORD_LENGTH
+    #define MAX_BIT_VECTOR_WORD_LENGTH 2048
+#endif
+#ifndef MAX_FLATRANK_WORD_COUNT
+    #define MAX_FLATRANK_WORD_COUNT (MAX_BIT_VECTOR_WORD_LENGTH / BV_L1_BIT_SIZE + 1)
+#endif
+    // the header contains the variable-sized flat rank array at the end. we allocate enough space measured in
+    // WMHBrickHeaders to be able to fit the flat ranks as well.
+    // 1 {header) + ceil((sizeof(BV_WORD_SIZE) / sizeof(WMHBrickHeader) / max(fr.length)) {flat rank}
+    shared WMHBrickHeader s_wm_header[1 + MAX_FLATRANK_WORD_COUNT];
+    shared BV_WORD_TYPE[MAX_BIT_VECTOR_WORD_LENGTH] s_bit_vector;
 #endif
 
 
@@ -96,12 +106,15 @@ void main() {
         s_brick_encoding[e] = global_brick_encoding.buf[e];
     }
 #elif ENCODING_MODE == WAVELET_MATRIX_ENC || ENCODING_MODE == HUFFMAN_WM_ENC
+    WMHBrickHeaderRef wm_header = getWMHBrickHeaderFromEncoding(global_brick_encoding);
+    BitVectorRef bit_vector = getWMHBitVectorFromEncoding(global_brick_encoding);
     if (workgroup_thread_id == 0u) {
-        s_wm_header = getWMHBrickHeaderFromEncoding(global_brick_encoding);
-        s_bit_vector = getWMHBitVectorFromEncoding(global_brick_encoding);
+        verifyBrickCompression(brick_idx);
+        TEST_BIT_VECTOR();
+//        outputOperationStream(brick_idx);
     }
-#endif
 
+#endif
     memoryBarrierShared();
     barrier();
 
