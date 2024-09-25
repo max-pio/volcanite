@@ -235,13 +235,14 @@ int volcanite_main(int argc, char *argv[]) {
         const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
         renderer->setCacheParameters(args.cache_size_MB, args.cache_palettized);
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
+        tryImportRenderConfig(args, renderer);
+        renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
 
         // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)
         if (!args.screenshot_output_file.empty()) {
             // obtain a headless rendering engine
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
             renderEngine->acquireResources();
-            tryImportRenderConfig(args, renderer);
             // let the rendering converge for some frames (if specified in the rendering config, we use that number)
             int accumulation_frames = renderer->getTargetAccumulationFrames();
             auto texture = renderEngine->renderFrames(accumulation_frames > 0 ? accumulation_frames : 60);
@@ -268,7 +269,6 @@ int volcanite_main(int argc, char *argv[]) {
             app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
             app->setVSync(vsync);
             app->acquireResources();
-            tryImportRenderConfig(args, renderer);
             return app->exec();
         }
 #endif
