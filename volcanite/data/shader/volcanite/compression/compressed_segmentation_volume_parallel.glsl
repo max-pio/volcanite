@@ -20,8 +20,8 @@
  #define CSGV_DECODING_ARRAY g_decoding
 #endif
 
-#ifndef CSGV_SHARED_MEMORY_BRICK_ENCODING
- #define CSGV_SHARED_MEMORY_BRICK_ENCODING s_brick_encoding
+#ifndef SHARED_BRICK_ENCODING
+ #define SHARED_BRICK_ENCODING s_brick_encoding
 #endif
 
 #include "cpp_glsl_include/csgv_constants.h"
@@ -118,7 +118,7 @@ const ivec3 neighbor[8][3] = {  {ivec3(-1, 0, 0), ivec3(0, -1, 0), ivec3(0, 0, -
 
 uint _readOperationFromEncoding(uint entry_id) {
     // ToDo: this is where the implementation of access(i) of the wavelet tree goes
-    return bitfieldExtract(CSGV_SHARED_MEMORY_BRICK_ENCODING[entry_id/8], 28 - int(entry_id % 8u) * 4, 4);
+    return bitfieldExtract(SHARED_BRICK_ENCODING[entry_id/8], 28 - int(entry_id % 8u) * 4, 4);
 }
 
 /** Fills the brick's cache region by setting all entries to value. */

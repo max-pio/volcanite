@@ -1,0 +1,42 @@
+#ifndef HUFFMAN_WM_DECODER_TYPES_GLSL
+#define HUFFMAN_WM_DECODER_TYPES_GLSL
+
+#include "volcanite/compression/csgv_utils.glsl"
+
+// Required DEFINES from shader compiler: (BV_WORD_TYPE must be the same as the BV_L12Type)
+#ifndef BV_WORD_TYPE
+    // these defines are only here for intellisense
+    #define BV_WORD_TYPE uint64_t
+    #define HWM_LEVELS 5
+    #define BV_L1_BIT_SIZE 1280
+    #define BV_L2_BIT_SIZE 256
+    #define BV_L2_WORD_SIZE 4
+    #define BV_STORE_L1_BITS 19
+    #define BV_STORE_L2_BITS 11
+    #define BASE_HEADER_SIZE 10
+    #define UINT_PER_L12 2
+    ASSERT_FAIL(missing_shader_defines_for_HUFFMAN_WM_ENC);
+#endif
+
+struct WMHBrickHeader {
+    uint bit_vector_size;       ///< symbols in the encoding stream
+    uint ones_before_level[5];  ///< number of ones before each level in the wavelet matrix
+    uint level_starts_1_to_4[4];///< number of zeros within each level in the wavelet matrix
+    uint64_t fr[1];             ///< L12 flat rank acceleration structure (flexible array member)
+}; // must be 12x 4 Bytes packed
+
+layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict WMHBrickHeaderRef
+{
+    uint bit_vector_size;       ///< symbols in the encoding stream
+    uint ones_before_level[5];  ///< number of ones before each level in the wavelet matrix
+    uint level_starts_1_to_4[4];///< number of zeros within each level in the wavelet matrix
+    uint64_t fr[1];             ///< L12 flat rank acceleration structure (flexible array member)
+};  // must be 12x 4 Bytes packed size
+
+layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict BitVectorRef
+{
+    BV_WORD_TYPE words[];
+};
+
+
+#endif // HUFFMAN_WM_DECODER_TYPES_GLSL

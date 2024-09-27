@@ -36,35 +36,31 @@ layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
 #include "volcanite/compression/csgv_utils.glsl"
 #define CSGV_DECODING_ARRAY g_cache
 
-#ifndef MAX_BRICK_ENCODING_32BIT_LENGTH
-    #define MAX_BRICK_ENCODING_32BIT_LENGTH 12288
-#endif
 #if ENCODING_MODE == NIBBLE_ENC
-    #define CSGV_SHARED_MEMORY_BRICK_ENCODING s_brick_encoding
+    #ifndef MAX_BRICK_ENCODING_32BIT_LENGTH
+        #define MAX_BRICK_ENCODING_32BIT_LENGTH 12288
+    #endif
     shared uint[MAX_BRICK_ENCODING_32BIT_LENGTH] s_brick_encoding;
-#endif
+    #define SHARED_BRICK_ENCODING s_brick_encoding
+#elif (ENCODING_MODE == HUFFMAN_WM_ENC)
+    #include "volcanite/compression/decoder/HuffmanWMDecoder_types.glsl"
 
-#ifndef RANDOM_ACCESS
-    STATIC_ASSERT(subgroup_parallel_decoding_requires_RANDOM_ACCESS);
+    #ifndef MAX_BIT_VECTOR_WORD_LENGTH
+        #define MAX_BIT_VECTOR_WORD_LENGTH 7680u
+    #endif
+    #define MAX_FLAT_RANK_WORD_LENGTH (MAX_BIT_VECTOR_WORD_LENGTH / BV_L1_BIT_SIZE + 1u)
+    // each WMHBrickHeader is 12x4x8=384 bits in size: allocate enough WMHBrickHeader entries to fit any flat rank at the end
+    shared BV_WORD_TYPE s_bit_vector[MAX_BIT_VECTOR_WORD_LENGTH];
+    #define MAX_WM_HEADER_ARRAY_LENGTH (2 + (MAX_FLAT_RANK_WORD_LENGTH / ((384 + BV_WORD_BIT_SIZE - 1) / BV_WORD_BIT_SIZE)))
+    shared WMHBrickHeader s_wm_header[MAX_WM_HEADER_ARRAY_LENGTH];
+    #define SHARED_BIT_VECTOR s_bit_vector
+    #define SHARED_WM_HEADER s_wm_header[0]
+
+    //shared BitVectorRef s_bit_vector;
+    //shared WMHBrickHeaderRef s_wm_header;
 #endif
 
 #include "volcanite/compression/compressed_segmentation_volume.glsl"
-
-
-#if (ENCODING_MODE == HUFFMAN_WM_ENC)
-#ifndef MAX_BIT_VECTOR_WORD_LENGTH
-    #define MAX_BIT_VECTOR_WORD_LENGTH 2048
-#endif
-#ifndef MAX_FLATRANK_WORD_COUNT
-    #define MAX_FLATRANK_WORD_COUNT (MAX_BIT_VECTOR_WORD_LENGTH / BV_L1_BIT_SIZE + 1)
-#endif
-    // the header contains the variable-sized flat rank array at the end. we allocate enough space measured in
-    // WMHBrickHeaders to be able to fit the flat ranks as well.
-    // 1 {header) + ceil((sizeof(BV_WORD_SIZE) / sizeof(WMHBrickHeader) / max(fr.length)) {flat rank}
-    shared WMHBrickHeader s_wm_header[1 + MAX_FLATRANK_WORD_COUNT];
-    shared BV_WORD_TYPE[MAX_BIT_VECTOR_WORD_LENGTH] s_bit_vector;
-#endif
-
 
 void main() {
     assert(gl_NumSubgroups == 1, "decompression assumes exactly one subgroup per workgroup");
@@ -100,23 +96,37 @@ void main() {
     EncodingRef global_brick_encoding = getBrickEncodingRef(brick_idx);
     const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
 #if ENCODING_MODE == NIBBLE_ENC
-    assert(brick_encoding_length < MAX_BRICK_ENCODING_32BIT_LENGTH, "shared memory brick encoding buffer is too small");
+    assert(brick_encoding_length <= MAX_BRICK_ENCODING_32BIT_LENGTH, "shared memory brick encoding buffer is too small");
     // TODO: copying one uvec4 with each thread is still coalescing and much faster!
     for (uint e = workgroup_thread_id; e < brick_encoding_length; e += workgroup_size) {
         s_brick_encoding[e] = global_brick_encoding.buf[e];
     }
-#elif ENCODING_MODE == WAVELET_MATRIX_ENC || ENCODING_MODE == HUFFMAN_WM_ENC
-    WMHBrickHeaderRef wm_header = getWMHBrickHeaderFromEncoding(global_brick_encoding);
-    BitVectorRef bit_vector = getWMHBitVectorFromEncoding(global_brick_encoding);
-    if (workgroup_thread_id == 0u) {
-        verifyBrickCompression(brick_idx);
-        TEST_BIT_VECTOR();
-//        outputOperationStream(brick_idx);
+#elif ENCODING_MODE == HUFFMAN_WM_ENC
+    // copy the wavelet matrix header to shared memory
+    WMHBrickHeaderRef global_wm_header = getWMHBrickHeaderFromEncoding(global_brick_encoding);
+    uint flat_rank_size = getFlatRankEntriesHuffman(global_wm_header.bit_vector_size);
+    if (workgroup_thread_id == 0u)
+        s_wm_header[0].bit_vector_size = global_wm_header.bit_vector_size;
+    if (workgroup_thread_id < 5u)
+        s_wm_header[0].ones_before_level[workgroup_thread_id] = global_wm_header.ones_before_level[workgroup_thread_id];
+    if (workgroup_thread_id < 4u)
+        s_wm_header[0].level_starts_1_to_4[workgroup_thread_id] = global_wm_header.level_starts_1_to_4[workgroup_thread_id];
+    assert(flat_rank_size <= MAX_FLAT_RANK_WORD_LENGTH, "shared memory too small to fit full flat rank");
+    for (uint e = workgroup_thread_id; e < flat_rank_size; e += workgroup_size) {
+        s_wm_header[0].fr[e] = global_wm_header.fr[e];
     }
-
+    // copy the bit vector to shared memory
+    BitVectorRef global_bit_vector = getWMHBitVectorFromEncoding(global_brick_encoding);
+    uint bit_vector_word_size = (global_wm_header.bit_vector_size + BV_WORD_BIT_SIZE - 1u) / BV_WORD_BIT_SIZE;
+    assert(bit_vector_word_size <= MAX_BIT_VECTOR_WORD_LENGTH, "shared memory too small to fit full bit vector");
+    for (uint e = workgroup_thread_id; e < bit_vector_word_size; e += workgroup_size) {
+        s_bit_vector[e] = global_bit_vector.words[e];
+    }
 #endif
+
     memoryBarrierShared();
     barrier();
+    // from here on, the respective decoder can access the valid brick encoding in shared memory
 
     // 2. iterate over output voxels of brick (cache positions) for the requested LOD and decompress each one in parallel
     const uint output_voxel_count = 1u << (3u * target_inv_lod);
@@ -131,13 +141,11 @@ void main() {
     while (output_i < output_voxel_count) {
 #if ENCODING_MODE == NIBBLE_ENC
         decompressCSGVVoxelSharedMemory(output_i, brick_encoding_length, uvec3(BRICK_SIZE),
-        target_inv_lod, decoded_brick_start_uint);
+                                        target_inv_lod, decoded_brick_start_uint);
 #elif ENCODING_MODE == WAVELET_MATRIX_ENC || ENCODING_MODE == HUFFMAN_WM_ENC
         decompressCSGVVoxelSharedMemory(output_i, brick_encoding_length, uvec3(BRICK_SIZE),
                                         target_inv_lod, decoded_brick_start_uint,
-                                        global_brick_encoding,
-        //                                        s_wm_header, s_bit_vector);
-        getWMHBrickHeaderFromEncoding(global_brick_encoding), getWMHBitVectorFromEncoding(global_brick_encoding));
+                                        global_brick_encoding);
 #endif
 //        decompressCSGVVoxelSharedMemory(output_i, brick_encoding_length, uvec3(BRICK_SIZE),
 //                                        target_inv_lod, decoded_brick_start_uint);

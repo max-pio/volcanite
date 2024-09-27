@@ -155,7 +155,7 @@ void resetCSGVBrick(const uint decoded_brick_start_uint, const uint inv_lod) {
 #elif ENCODING_MODE == WAVELET_MATRIX_ENC
     #include "decoder/WaveletMatrixDecoder.glsl"
 #elif ENCODING_MODE == HUFFMAN_WM_ENC
-    #include "decoder/HuffmanWMDecoder.glsl"
+    #include "decoder/HuffmanWMDecoderShared.glsl"
 #else
     STATIC_FAIL(no_decoder_specified);
 #endif

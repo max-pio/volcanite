@@ -193,14 +193,14 @@ void decompressCSGVBrick(const uint brick_idx,
 
 uint _unpack4BitFromEncodingSharedMemory(uint entry_id) {
     // ToDo: this is where the implementation of access(i) of the wavelet tree goes
-    return bitfieldExtract(CSGV_SHARED_MEMORY_BRICK_ENCODING[entry_id/8], 28 - int(entry_id % 8u) * 4, 4);
+    return bitfieldExtract(SHARED_BRICK_ENCODING[entry_id/8], 28 - int(entry_id % 8u) * 4, 4);
 }
 
 /** number of PALETTE_ADV occurrences before enc_operation_index. */
 uint rank_palette_adv(uint enc_operation_index) {
     // TODO: good lord this is expensive if we do it without an O(1) rank
     uint occurrences = 0u;
-    const uint header_size = CSGV_SHARED_MEMORY_BRICK_ENCODING[0];
+    const uint header_size = SHARED_BRICK_ENCODING[0];
     for(uint entry_id = header_size; entry_id <= enc_operation_index; entry_id++) {
         if ((_unpack4BitFromEncodingSharedMemory(entry_id) & 7u) == PALETTE_ADV)
         occurrences++;
@@ -212,7 +212,7 @@ uint rank_palette_adv(uint enc_operation_index) {
 
 /** Decode a single voxel with index output_i in the target_inv_lod. Decoding is performed by chasing the operation
  * references from the output voxel to a palette reference. It is assumed that the brick encoding is located in a shared
- * memory buffer uint CSGV_SHARED_MEMORY_BRICK_ENCODING[]. */
+ * memory buffer uint SHARED_BRICK_ENCODING[]. */
 void decompressCSGVVoxelSharedMemory(const uint output_i, const uint brick_encoding_length,
                                      const uvec3 valid_brick_size, const uint target_inv_lod,
                                      const uint decoded_brick_start_uint) {
@@ -225,7 +225,7 @@ void decompressCSGVVoxelSharedMemory(const uint output_i, const uint brick_encod
     uvec3 inv_lod_voxel = _cache_idx2pos(inv_lod_op_i);
 
     // obtain encoding operation read index (4 bit)
-    uint enc_operation_index = CSGV_SHARED_MEMORY_BRICK_ENCODING[inv_lod] + inv_lod_op_i;
+    uint enc_operation_index = SHARED_BRICK_ENCODING[inv_lod] + inv_lod_op_i;
     uint operation = _unpack4BitFromEncodingSharedMemory(enc_operation_index);
 
     assert(enc_operation_index < brick_encoding_length * 8u, "brick encoding out of bounds read");
@@ -263,7 +263,7 @@ void decompressCSGVVoxelSharedMemory(const uint output_i, const uint brick_encod
             }
 
             // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
-            enc_operation_index = CSGV_SHARED_MEMORY_BRICK_ENCODING[inv_lod] + inv_lod_op_i;
+            enc_operation_index = SHARED_BRICK_ENCODING[inv_lod] + inv_lod_op_i;
             operation_lsb = _unpack4BitFromEncodingSharedMemory(enc_operation_index) & 7u;
         }
 
@@ -282,8 +282,7 @@ void decompressCSGVVoxelSharedMemory(const uint output_i, const uint brick_encod
         // TODO: This is a race condition! Different threads write to (different bits of) the same uint in the cache
         writeEntryToCache(decoded_brick_start_uint, output_i, palette_index + 1u);
 #else
-//        writeEntryToCache(decoded_brick_start_uint, output_i, CSGV_SHARED_MEMORY_BRICK_ENCODING[brick_encoding_length - 1u - palette_index]);
-        writeEntryToCache(decoded_brick_start_uint, output_i, palette_index);
+        writeEntryToCache(decoded_brick_start_uint, output_i, SHARED_BRICK_ENCODING[brick_encoding_length - 1u - palette_index]);
 #endif
     }
 }
