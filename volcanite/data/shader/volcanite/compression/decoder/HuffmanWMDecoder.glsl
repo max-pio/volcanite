@@ -269,18 +269,13 @@ void decompressCSGVBrick(const uint brick_idx,
 // RANDOM ACCESS DECODING ----------------------------------------------------------------------------------------------
 #ifdef RANDOM_ACCESS
 
-
-/** Decode a single voxel with index output_i in the target_inv_lod. Decoding is performed by chasing the operation
- * references from the output voxel to a palette reference.
- * If DECODE_FROM_SHARED_MEMORY is set, it is assumed that the WMHBrickHeader an bit vector are
- * present in shared memory as SHARED_WM_HEADER and SHARED_BIT_VECTOR.
- * Otherwise, they are passed as function arguments. */
-void decompressCSGVVoxel(const uint output_i, const uint target_inv_lod, const uvec3 valid_brick_size,
-                         const EncodingRef brick_encoding, const uint brick_encoding_length,
+/// Returns the palette index that stores the label of the voxel at location output_i within the target_inv_lod.
+uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
+                         const EncodingRef brick_encoding, const uint brick_encoding_length
 #ifndef DECODE_FROM_SHARED_MEMORY
-                         const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
+                         , const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector
 #endif
-                         const uint decoded_brick_start_uint) {
+                         ) {
 
     // Start by reading the operations in the target inverse LoD's encoding:
     uint inv_lod = target_inv_lod;
@@ -345,15 +340,52 @@ void decompressCSGVVoxel(const uint output_i, const uint target_inv_lod, const u
         assertf(palette_index < brick_encoding.buf[PALETTE_SIZE_HEADER_INDEX], "palette index out of palette bounds, is (index, operation) %v2u", uvec2(palette_index, operation_lsb));
         assert(operation_lsb != PALETTE_D, "palette delta operation not supported with random access");
 
-        // Write to the index in the output array. The output array's positions are in Morton order.
-#ifdef PALETTE_CACHE
-        // TODO: This is a race condition! Different threads write to (different bits of) the same uint in the cache
-        writeEntryToCache(decoded_brick_start_uint, output_i, palette_index + 1u);
-#else
-        writeEntryToCache(decoded_brick_start_uint, output_i, brick_encoding.buf[brick_encoding_length - 1u - palette_index]);
-#endif
+        return palette_index;
     }
 }
+
+/// Decode a single voxel with index output_i in the target_inv_lod. Decoding is performed by chasing the operation
+/// references from the output voxel to a palette reference.
+/// If DECODE_FROM_SHARED_MEMORY is set, it is assumed that the WMHBrickHeader an bit vector are
+/// present in shared memory as SHARED_WM_HEADER and SHARED_BIT_VECTOR.
+/// Otherwise, they are passed as function arguments. */
+void decompressCSGVVoxelToCache(const uint output_i, const uint target_inv_lod, const uvec3 valid_brick_size,
+                         const EncodingRef brick_encoding, const uint brick_encoding_length,
+#ifndef DECODE_FROM_SHARED_MEMORY
+                         const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
+#endif
+                         const uint decoded_brick_start_uint) {
+
+    uint palette_index = getPaletteIndexOfCSGVVoxel(output_i, target_inv_lod,
+                                                    brick_encoding, brick_encoding_length
+                                                #ifndef DECODE_FROM_SHARED_MEMORY
+                                                    , wm_header, bit_vector
+                                                #endif
+                                                    );
+
+    // Write to the index in the output array. The output array's positions are in Morton order.
+#ifdef PALETTE_CACHE
+    // TODO: This is a race condition! Different threads write to (different bits of) the same uint in the cache
+    writeEntryToCache(decoded_brick_start_uint, output_i, palette_index + 1u);
+#else
+    writeEntryToCache(decoded_brick_start_uint, output_i, brick_encoding.buf[brick_encoding_length - 1u - palette_index]);
+#endif
+}
+
+#ifndef DECODE_FROM_SHARED_MEMORY
+uint decompressCSGVVoxel(const uint brick_idx, const uint output_i, const uint target_inv_lod) {
+    EncodingRef brick_encoding = getBrickEncodingRef(brick_idx);
+    uint brick_encoding_length = getBrickEncodingLength(brick_idx);
+    WMHBrickHeaderRef wm_header = getWMHBrickHeaderFromEncoding(brick_encoding);
+    BitVectorRef bit_vector = getWMHBitVectorFromEncoding(brick_encoding);
+
+    uint palette_index = getPaletteIndexOfCSGVVoxel(output_i, target_inv_lod,
+                                                    brick_encoding, brick_encoding_length,
+                                                    wm_header, bit_vector);
+
+    return brick_encoding.buf[brick_encoding_length - 1u - palette_index];
+}
+#endif
 
 #endif // RANDOM_ACCESS
 

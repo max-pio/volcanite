@@ -147,13 +147,13 @@ void main() {
     uint output_i = workgroup_thread_id;
     while (output_i < output_voxel_count) {
         #if ENCODING_MODE == NIBBLE_ENC
-            decompressCSGVVoxel(output_i, target_inv_lod, uvec3(BRICK_SIZE),
+            decompressCSGVVoxelToCache(output_i, target_inv_lod, uvec3(BRICK_SIZE),
                         #ifndef DECODE_FROM_SHARED_MEMORY
                                 global_brick_encoding,
                         #endif
                                 brick_encoding_length, decoded_brick_start_uint);
         #elif ENCODING_MODE == HUFFMAN_WM_ENC
-            decompressCSGVVoxel(output_i, target_inv_lod, uvec3(BRICK_SIZE),
+            decompressCSGVVoxelToCache(output_i, target_inv_lod, uvec3(BRICK_SIZE),
                                 global_brick_encoding, brick_encoding_length,
                         #ifndef DECODE_FROM_SHARED_MEMORY
                                 global_wm_header, global_bit_vector,
