@@ -37,16 +37,17 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #include "brdf_lambert.glsl"
 #include "dummy_envmap.glsl"
 
+#define CACHE_NOTHING 0
+#define CACHE_VOXELS 1
+#define CACHE_BRICKS 2
+#define CACHE_MODE CACHE_NOTHING
+
 // Compressed Segmentation Volume specific: define array containing the encoding (input) as well as the decoding (output)
-#define CSGV_ENCODING_ARRAY g_encoding
-#define CSGV_DETAIL_ARRAY g_detail
 #define CSGV_DECODING_ARRAY g_cache
-#define CSGV_READ_ONLY
-#ifdef CSGV_PARALLEL_DECODE
-    #include "volcanite/compression/compressed_segmentation_volume_parallel.glsl"
-#else
-    #include "volcanite/compression/compressed_segmentation_volume.glsl"
+#if CACHE_MODE == CACHE_BRICKS
+    #define CSGV_READ_ONLY
 #endif
+#include "volcanite/compression/compressed_segmentation_volume.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
 
 uint get_inv_lod(ivec3 voxel) {
@@ -61,70 +62,84 @@ uint get_inv_lod(ivec3 voxel) {
     return min(LOD_COUNT - 1u - uint(clamp(g_lod_bias + findMSB(voxels_per_pixel_at_hit), 0, LOD_COUNT - 1u)), g_max_inv_lod);
 }
 
-/// returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
-uint get_volume_label(ivec3 voxel, inout float depth_valid) {
-    assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
+#if CACHE_MODE == CACHE_NOTHING
+    // returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
+    uint get_volume_label(ivec3 voxel, inout float depth_valid) {
+        assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
 
-    uvec3 brick = uvec3(voxel) / BRICK_SIZE;
-    uvec3 brick_voxel = uvec3(voxel) - (brick * BRICK_SIZE);
-    uint brick_idx = brick_pos2idx(brick, g_brick_count);
-    uint brick_info_pos = brick_idx * 4u;
+        const uvec3 brick = uvec3(voxel) / BRICK_SIZE;
+        const uvec3 brick_voxel = uvec3(voxel) - (brick * BRICK_SIZE);
+        const uint brick_idx = brick_pos2idx(brick, g_brick_count);
+        const uint req_inv_lod = get_inv_lod(voxel);
 
-    // compute optimal LOD for the center of this brick
-    uint req_inv_lod = get_inv_lod(voxel);
-
-    // tell the other shaders that we can see this brick if it's visibility state is "unknown"
-    // but only if this is a valid pixel sample. An invalid sample could be accessing bricks that are actually not visible.
-    assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] <= LOD_COUNT, "we try to access a brick that's flagged as invisible");
-    if (isDepthValid(depth_valid) && req_inv_lod > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > req_inv_lod) {
-        // if the brick was not requested so far:
-        if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT)
-            g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
-        // if we request a finer level than the one that was requested so far:
-        // (this should not happen if we instead compute the LOD in the provision shader)
-        // TODO: Compute requested brick LOD in the provision shader based on the distance brick center <-> camera?
-        else if (req_inv_lod > g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD])
-            atomicMax(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], req_inv_lod);
+        return decompressCSGVVoxel(brick_idx, brick_voxel, req_inv_lod);
     }
+#elif CACHE_MODE == CACHE_BRICKS
+    /// returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
+    uint get_volume_label(ivec3 voxel, inout float depth_valid) {
+        assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
 
-    // find the current LOD
-    uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
-    assert(cur_inv_lod != 0u, "BRICK_INFO_CUR_INV_LOD should never be zero");
+        uvec3 brick = uvec3(voxel) / BRICK_SIZE;
+        uvec3 brick_voxel = uvec3(voxel) - (brick * BRICK_SIZE);
+        uint brick_idx = brick_pos2idx(brick, g_brick_count);
+        uint brick_info_pos = brick_idx * 4u;
 
-    // special case for coarsest LOD: we can do the lookup at the first palette element for LOD_Max
-    // or if the brick is not yet decoded
-    if (req_inv_lod == 0u || cur_inv_lod >= LOD_COUNT) {
+        // compute optimal LOD for the center of this brick
+        uint req_inv_lod = get_inv_lod(voxel);
 
-        EncodingRef encoding_address = getBrickEncodingRef(brick_idx);
-        uint encoding_size = getBrickEncodingLength(brick_idx);
-
-        // if the brick was not decoded, sample a random palette entry
-        if (req_inv_lod > 0u && g_max_inv_lod > 0u) {
-            uint palette_size = getBrickPaletteLength(brick_idx);
-
-            // indicate the sample as invalid (if it is not a homogeneous brick)
-            if (palette_size > 1u)
-                depth_valid = INVALID_DEPTH;
-
-            // read a random palette entry
-            uint random_palette_index = hash_pcg3d(uvec3(gl_GlobalInvocationID.xy, g_frame)).r % palette_size;
-            return  encoding_address.buf[encoding_size - 1u - random_palette_index];
+        // tell the other shaders that we can see this brick if it's visibility state is "unknown"
+        // but only if this is a valid pixel sample. An invalid sample could be accessing bricks that are actually not visible.
+        assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] <= LOD_COUNT, "we try to access a brick that's flagged as invisible");
+        if (isDepthValid(depth_valid) && req_inv_lod > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > req_inv_lod) {
+            // if the brick was not requested so far:
+            if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT)
+                g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
+            // if we request a finer level than the one that was requested so far:
+            // (this should not happen if we instead compute the LOD in the provision shader)
+            // TODO: Compute requested brick LOD in the provision shader based on the distance brick center <-> camera?
+            else if (req_inv_lod > g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD])
+                atomicMax(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], req_inv_lod);
         }
 
-        // return the first palette entry = coarsests compressed representation of the brick for inv_lod 0
-        // we could alternatively perform a small linear search for the first *visible* label here
-        return  encoding_address.buf[encoding_size - 1u];
+        // find the current LOD
+        uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
+        assert(cur_inv_lod != 0u, "BRICK_INFO_CUR_INV_LOD should never be zero");
+
+        // special case for coarsest LOD: we can do the lookup at the first palette element for LOD_Max
+        // or if the brick is not yet decoded
+        if (req_inv_lod == 0u || cur_inv_lod >= LOD_COUNT) {
+
+            EncodingRef encoding_address = getBrickEncodingRef(brick_idx);
+            uint encoding_size = getBrickEncodingLength(brick_idx);
+
+            // if the brick was not decoded, sample a random palette entry
+            if (req_inv_lod > 0u && g_max_inv_lod > 0u) {
+                uint palette_size = getBrickPaletteLength(brick_idx);
+
+                // indicate the sample as invalid (if it is not a homogeneous brick)
+                if (palette_size > 1u)
+                    depth_valid = INVALID_DEPTH;
+
+                // read a random palette entry
+                uint random_palette_index = hash_pcg3d(uvec3(gl_GlobalInvocationID.xy, g_frame)).r % palette_size;
+                return  encoding_address.buf[encoding_size - 1u - random_palette_index];
+            }
+
+            // return the first palette entry = coarsests compressed representation of the brick for inv_lod 0
+            // we could alternatively perform a small linear search for the first *visible* label here
+            return  encoding_address.buf[encoding_size - 1u];
+        }
+        // read the voxel from the brick in the cache (with the currently decoded LOD)
+        else {
+            // TODO: depth_valid validity is not changed here even if the requested LOD differs from currently decoded LOD
+    #ifdef PALETTE_CACHE
+            return readCSGVPaletteBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * g_cache_base_element_uints, brick_idx);
+    #else
+            return readCSGVBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * g_cache_base_element_uints);
+    #endif
+        }
     }
-    // read the voxel from the brick in the cache (with the currently decoded LOD)
-    else {
-        // TODO: depth_valid validity is not changed here even if the requested LOD differs from currently decoded LOD
-#ifdef PALETTE_CACHE
-        return readCSGVPaletteBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * g_cache_base_element_uints, brick_idx);
-#else
-        return readCSGVBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * g_cache_base_element_uints);
 #endif
-    }
-}
 
 
 bool isEmptySpace(ivec3 voxel) {

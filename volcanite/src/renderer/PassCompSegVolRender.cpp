@@ -89,6 +89,13 @@ void PassCompSegVolRender::executeCommands(vk::CommandBuffer commandBuffer, CSGV
 }
 
 std::vector<std::shared_ptr<Shader>> PassCompSegVolRender::createShaders() {
+    {
+        std::stringstream ss;
+        ss << "Shader Definitions: ";
+        for (const auto &s: m_shader_defines)
+            ss << s << " ";
+        Logger(DEBUG) << ss.str();
+    }
     ShaderCompileErrorCallback compileErrorCallback = [](const ShaderCompileError& err) {
         Logger(ERROR) << err.errorText;
         return ShaderCompileErrorCallbackAction::USE_PREVIOUS_CODE;

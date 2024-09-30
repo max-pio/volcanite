@@ -373,13 +373,18 @@ void decompressCSGVVoxelToCache(const uint output_i, const uint target_inv_lod, 
 }
 
 #ifndef DECODE_FROM_SHARED_MEMORY
-uint decompressCSGVVoxel(const uint brick_idx, const uint output_i, const uint target_inv_lod) {
+uint decompressCSGVVoxel(const uint brick_idx, const uvec3 brick_voxel, const uint target_inv_lod) {
     EncodingRef brick_encoding = getBrickEncodingRef(brick_idx);
-    uint brick_encoding_length = getBrickEncodingLength(brick_idx);
+    const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
     WMHBrickHeaderRef wm_header = getWMHBrickHeaderFromEncoding(brick_encoding);
     BitVectorRef bit_vector = getWMHBitVectorFromEncoding(brick_encoding);
 
-    uint palette_index = getPaletteIndexOfCSGVVoxel(output_i, target_inv_lod,
+    // const uint lod_width = BRICK_SIZE >> target_inv_lod;
+    // const uint voxel_idx = _cache_pos2idx(brick_voxel) / (lod_width * lod_width * lod_width);
+    // same as:
+    const uint voxel_idx = _cache_pos2idx(brick_voxel) / (1u << (3 * (findMSB(BRICK_SIZE) - target_inv_lod)));
+
+    uint palette_index = getPaletteIndexOfCSGVVoxel(voxel_idx, target_inv_lod,
                                                     brick_encoding, brick_encoding_length,
                                                     wm_header, bit_vector);
 

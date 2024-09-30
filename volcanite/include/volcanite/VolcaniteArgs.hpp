@@ -35,10 +35,10 @@ namespace volcanite {
 struct VolcaniteArgs {
 
 public:
-    enum Mode {
-        NO_RENDERING = 0,
-        HEADLESS_RENDERING = 1,
-        GUI_APP_RENDERING = 2,
+    enum CacheMode {
+        CACHE_NOTHING = 0,
+        CACHE_VOXELS = 1,
+        CACHE_BRICKS = 2,
     };
 
     // general args
@@ -50,12 +50,12 @@ public:
     uint32_t threads = 0;                    // number of CPU threads (0 = system supported concurrent threads)
 
     // rendering args
-    Mode rendering_mode = GUI_APP_RENDERING;
     std::string rendering_config_file;
     std::string screenshot_output_file;
     uint32_t render_resolution[2] = {1920, 1080};
     bool stream_lod;
     size_t cache_size_MB = 1024ul;
+    uint32_t cache_mode = CACHE_BRICKS;
     bool cache_palettized = false;
     bool decode_from_shared_memory = false;
     bool show_development_gui = false;
@@ -143,10 +143,14 @@ public:
             SwitchArg devArg("", "dev", "Reveal all development render parameters in GUI.", cmd);
             ValueArg<uint32_t> cacheSizeMBArg("", "cache-size", "Size in MB of the renderer's brick cache. 0 to allocate all available.", false, va.cache_size_MB, "size", cmd);
             SwitchArg cachePalettizedArg("", "cache-palette", "Store palette indices in brick cache instead of labels.", cmd);
+            std::vector<char> _allowedCacheUnits = {'n', 'v', 'b'};
+            ValuesConstraint<char> allowedCacheUnits(_allowedCacheUnits);
+            ValueArg<char> cacheModeArg("", "cache-mode", "Content in the cache: [n] no cache [v] single voxels [b] full bricks", false, _allowedCacheUnits[va.cache_mode], &allowedCacheUnits);
+            cmd.add(cacheModeArg);
             SwitchArg decodedSharedMemoryArg("", "decode-sm", "Copy brick encodings to shared memory before decoding.", cmd);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
-            ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "file", cmd);
+            ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
             ValueArg<std::string> renderconfigArg("", "config", "Import render parameters from config file.", false, va.rendering_config_file, "file", cmd);
             // general arguments
             SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
@@ -188,6 +192,17 @@ public:
             va.cache_palettized = cachePalettizedArg.getValue();
             if(va.cache_palettized && va.random_access)
                 throw ArgException(cachePalettizedArg.longID() + " can not be used in combination with " + randomAccessArg.longID(), cachePalettizedArg.longID());
+            switch (cacheModeArg.getValue()) {
+                case 'n':
+                    va.cache_mode = CACHE_NOTHING;
+                    break;
+                case 'v':
+                    va.cache_mode = CACHE_VOXELS;
+                    break;
+                case 'b':
+                    va.cache_mode = CACHE_BRICKS;
+                    break;
+            }
             va.decode_from_shared_memory = decodedSharedMemoryArg.getValue();
             if(va.decode_from_shared_memory && !va.random_access)
                 throw ArgException(decodedSharedMemoryArg.longID() + " must be used in combination with " + randomAccessArg.longID(), cachePalettizedArg.longID());

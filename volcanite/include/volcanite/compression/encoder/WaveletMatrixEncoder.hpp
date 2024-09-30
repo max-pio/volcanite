@@ -114,10 +114,10 @@ public:
         auto defines = CSGVBrickEncoder::getGLSLDefines();
         switch(sizeof(BV_WordType)) {
             case 4:
-                defines.emplace_back("BV_WORD_TYPE uint");
+                defines.emplace_back("BV_WORD_TYPE=uint");
                 break;
             case 8:
-                defines.emplace_back("BV_WORD_TYPE uint64_t");
+                defines.emplace_back("BV_WORD_TYPE=uint64_t");
                 break;
             default:
                 throw std::runtime_error("Missing GLSL define for BV_WORD_TYPE");
