@@ -32,6 +32,10 @@
     STATIC_FAIL(RangeANS_encoding_does_not_support_RANDOM_ACCESS);
 #endif
 
+#ifdef DECODE_FROM_SHARED_MEMORY
+    STATIC_FAIL(RangeANS_encoding_does_not_support_DECODE_FROM_SHARED_MEMORY);
+#endif
+
 #if defined(SEPARATE_DETAIL) && ENCODING_MODE != DOUBLE_TABLE_RANS_ENC
     STATIC_FAIL(SEPARATE_DETAIL_only_supported_in_double_table_RangeANS_encoding);
 #endif

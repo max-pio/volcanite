@@ -188,7 +188,7 @@ namespace volcanite {
             Logger(ERROR) << err.errorText;
             return ShaderCompileErrorCallbackAction::THROW;
         };
-        if (m_parallel_decode) {
+        if (m_csgv->isUsingRandomAccess()) {
             return {std::make_shared<Shader>(
                     SimpleGlslShaderRequest{.filename="volcanite/benchmark/bench_decompress_subgroup_parallel.comp",
                                             .defines= m_shader_defines, .label="bench_decompress_subgroup_parallel.comp"},

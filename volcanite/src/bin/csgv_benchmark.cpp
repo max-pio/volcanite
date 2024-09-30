@@ -169,8 +169,8 @@ int volcanite_main(int argc, char *argv[]) {
     ctx.physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
     ctx.physicalDeviceFeaturesV12().setHostQueryReset(true);
     ctx.createGpuContext();
-    CSGVBenchmarkPass benchmark(&(*compressedSegmentationVolume), &ctx,
-                                args.random_access, args.cache_size_MB, args.cache_palettized);
+    CSGVBenchmarkPass benchmark(&(*compressedSegmentationVolume), &ctx, args.cache_size_MB,
+                                args.cache_palettized, args.decode_from_shared_memory);
 
     std::shared_ptr<Awaitable> awaitable = benchmark.execute();
     ctx.sync->hostWaitOnDevice({awaitable});

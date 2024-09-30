@@ -41,8 +41,18 @@
     STATIC_FAIL(wavelet_matrix_only_supports_random_access);
 #endif
 
+#if !defined(RANDOM_ACCESS) && defined(DECODE_FROM_SHARED_MEMORY)
+    STATIC_FAIL(DECODE_FROM_SHARED_MEMORY_can_only_be_used_with_RANDOM_ACCESS);
+#endif
 
 // TYPE DEFINITIONS AND TYPE ACCESS ------------------------------------------------------------------------------------
+
+#ifndef SHARED_BIT_VECTOR
+    #define SHARED_BIT_VECTOR s_bit_vector
+#endif
+#ifndef SHARED_WM_HEADER
+    #define SHARED_WM_HEADER s_wm_header[0]
+#endif
 
 #include "volcanite/compression/decoder/HuffmanWMDecoder_types.glsl"
 
@@ -64,11 +74,32 @@ WMHBrickHeaderRef getWMHBrickHeaderFromEncoding(EncodingRef brick_encoding) {
 
 BitVectorRef getWMHBitVectorFromEncoding(EncodingRef brick_encoding) {
     return BitVectorRef(bufferAddressAdd(uvec2(brick_encoding),
-                                            BASE_HEADER_SIZE + 10          // base header + constant parts of WMH header
-                                            + UINT_PER_L12 * (brick_encoding.buf[BASE_HEADER_SIZE] / BV_L1_BIT_SIZE + 1u)));      // flat rank
+    BASE_HEADER_SIZE + 10          // base header + constant parts of WMH header
+    + UINT_PER_L12 * (brick_encoding.buf[BASE_HEADER_SIZE] / BV_L1_BIT_SIZE + 1u)));      // flat rank
 }
 
 // UTILITY FUNCTIONS ---------------------------------------------------------------------------------------------------
+
+// depending on if DECODE_FROM_SHARED_MEMORY is set:
+//  the bit vector and wm_header are read from shared memory arrays, or
+//  passed along as function parameters
+// the following macros allow to implement both cases in the same file:
+
+#ifdef DECODE_FROM_SHARED_MEMORY
+    #define WM_BIT_VECTOR SHARED_BIT_VECTOR
+    #define WM_HEADER SHARED_WM_HEADER
+    #define BV_ACCESS(index) _bv_access(index)
+    #define FR_RANK1(index) _fr_rank1(index)
+    #define WM_HUFFMAN_ACCESS(position) _wm_huffman_access(position)
+    #define WM_HUFFMAN_RANK(position, symbol) _wm_huffman_rank(position, symbol)
+#else
+    #define WM_BIT_VECTOR bit_vector.words
+    #define WM_HEADER wm_header
+    #define BV_ACCESS(index) _bv_access(wm_header, bit_vector, index)
+    #define FR_RANK1(index) _fr_rank1(wm_header, bit_vector, index)
+    #define WM_HUFFMAN_ACCESS(position) _wm_huffman_access(wm_header, bit_vector, position)
+    #define WM_HUFFMAN_RANK(position, symbol) _wm_huffman_rank(wm_header, bit_vector, position, symbol)
+#endif
 
 uint bitCount64(uint64_t value) {
     return bitCount(uint(value)) + bitCount(uint(value >> 32));
@@ -83,93 +114,6 @@ uint rank1Word(BV_WORD_TYPE value, uint index) {
     return (index != 0u) ? bitCount64(value << (BV_WORD_BIT_SIZE - index)) : 0u;
 }
 
-bool TEST_BIT_VECTOR() {
-    BV_WORD_TYPE v = uint64_t(12751266098003836929ul);
-    // 1011 0000 1111 0101 1001 1000 1111 0101:0000 0000 0000 0000 0000 0000 0000 0001
-    //   60   56   52   48   44   40   36   32   28   24   20   16   12    8    4    0
-    // bitCount = 19
-
-    assertf(bitCount64(v) == 19, "wrong bitcount is %u", bitCount64(v));
-    //
-    assertf(rank1Word(v, 0) == 0, "wrong rank1Word 0 is %u", rank1Word(v, 0));
-    assertf(rank1Word(v, 1) == 1, "wrong rank1Word 1 is %u", rank1Word(v, 1));
-    assertf(rank1Word(v, 32) == 1, "wrong rank1Word 32 is %u", rank1Word(v, 32));
-    assertf(rank1Word(v, 33) == 2, "wrong rank1Word 33 is %u", rank1Word(v, 33));
-    assertf(rank1Word(v, 63) == 18, "wrong rank1Word 63 is %u", rank1Word(v, 63));
-    assertf(rank1Word(v, 64) == 19, "wrong rank1Word 64 is %u", rank1Word(v, 64));
-    //
-    assertf(bitfieldExtract64(v, 0, 0) == 0, "wrong bitfieldExtract 0 0 is %u", bitfieldExtract64(v, 0, 0));
-    assertf(bitfieldExtract64(v, 3, 30) == 536870912u, "wrong bitfieldExtract 3 30 is %u", bitfieldExtract64(v, 3, 30));
-    assertf(bitfieldExtract64(v, 32, 13) == 6389, "wrong bitfieldExtract 32 13 is %u", bitfieldExtract64(v, 32, 13));
-    assertf(bitfieldExtract64(v, 56, 8) == 176, "wrong bitfieldExtract 56 8 is %u", bitfieldExtract64(v, 56, 8));
-    return true;
-}
-
-uint getL1Entry(const BV_WORD_TYPE v) {
-    return uint(bitfieldExtract64(v, 0, BV_STORE_L1_BITS)); // the least significant BV_STORE_L1_BITS store the L1-information
-}
-
-uint getL2Entry(const BV_WORD_TYPE v, uint i) {
-    // First L2-information is always zero and not stored explicitly. For i > 0, BV_STORE_L2_BITS bits are stored per
-    // L2-information (e.g. 9 bits per for all except the first one L2-block each). They are ordered in the BV_L12Type
-    // from LSB to MSB, starting after the least significant BV_STORE_L1_BITS bits (e.g. 19) that are used for L1-info.
-    const uint OFFSET = BV_STORE_L1_BITS - BV_STORE_L2_BITS;
-    return (i != 0u) ? uint(bitfieldExtract64(v, int(i * BV_STORE_L2_BITS + OFFSET), BV_STORE_L2_BITS)) : 0u;
-}
-
-uint _bv_access(uint index, const BitVectorRef bv) {
-    return uint(bv.words[index / BV_WORD_BIT_SIZE] >> index) & 1u;
-    // bitfieldExtract does not support 64 bit integers:
-    // return bitfieldExtract(bv.words[index / BV_WORD_BIT_SIZE], int(index % BV_WORD_BIT_SIZE), 1);
-}
-
-uint _fr_rank1(uint index, const BitVectorRef bv, const WMHBrickHeaderRef wm_header) {
-//#if 1
-//        uint count = 0u;
-//        const uint words = index / BV_WORD_BIT_SIZE;
-//        for (uint i = 0; i < index / BV_WORD_BIT_SIZE; i++) {
-//            count += bitCount64(bv.words[i]);
-//        }
-//        for (uint i = words * BV_WORD_BIT_SIZE; i < index; i++) {
-//            if (_bv_access(i, bv) == 1u)
-//                count++;
-//        }
-//        return count;
-//#endif
-        // ........ ........  bits
-        // ┌┐┌┐┌┐┌┐ ┌┐┌┐┌┐┌┐  words
-        // └┘└┘└┘└┘ └┘└┘└┘└┘
-        // ┌──┐┌──┐ ┌──┐┌──┐  l2-blocks
-        // └──┘└──┘ └──┘└──┘
-        // ┌──────┐ ┌──────┐  l1-blocks
-        // └──────┘ └──────┘
-
-        // query L12 acceleration structure
-        BV_WORD_TYPE l12 = wm_header.fr[index / BV_L1_BIT_SIZE];
-        uint rank1_res = getL1Entry(l12);
-        assertf(rank1_res < (index == 0u ? 1u : index),
-                "_fr_rank1 getL1Entry return value too high. [index, rank1]: [%v2u]",
-                uvec2(index, rank1_res));
-        rank1_res += getL2Entry(l12, (index % BV_L1_BIT_SIZE) / BV_L2_BIT_SIZE);
-
-        // perform bit counts on a word level to count the remaining bits
-        uint offset = ((index / BV_WORD_BIT_SIZE) / BV_L2_WORD_SIZE) * BV_L2_WORD_SIZE;
-        // fill missing 'full' counted words if L2-blocks cover multiple words
-        #if (BV_L2_WORD_SIZE > 1)
-            for (uint _w = 0u; _w < ((index / BV_WORD_BIT_SIZE) % BV_L2_WORD_SIZE); _w++) {
-                rank1_res += bitCount64(bv.words[offset]);
-                offset++;
-            }
-        #endif
-        // if this is a rank(text_size) query, the inlining of the function lead to the potential out of bounds
-        // access bv[offset] being ignored.
-
-        assertf(rank1_res + rank1Word(bv.words[offset], index % BV_WORD_BIT_SIZE) < (index == 0u ? 1u : index),
-                "_fr_rank1 return value too high. [index, rank1]: [%v2u]",
-                uvec2(index, rank1_res + rank1Word(bv.words[offset], index % BV_WORD_BIT_SIZE)));
-        return rank1_res + rank1Word(bv.words[offset], index % BV_WORD_BIT_SIZE);
-    }
-
 uint getFlatRankEntriesHuffman(uint bit_vector_size) {
     return bit_vector_size / BV_L1_BIT_SIZE + 1u;
 }
@@ -180,36 +124,116 @@ uint wmh_getLevelStart(uint level, const uint level_starts_1_to_4[4]) {
     return level < 4 ? level_starts_1_to_4[level] : 0u;
 }
 
-uint wm_huffman_access(uint position, const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector) {
+uint _get_L1_entry(const BV_WORD_TYPE v) {
+    return uint(bitfieldExtract64(v, 0, BV_STORE_L1_BITS)); // the least significant BV_STORE_L1_BITS store the L1-information
+}
+
+uint _get_L2_entry(const BV_WORD_TYPE v, uint i) {
+    // First L2-information is always zero and not stored explicitly. For i > 0, BV_STORE_L2_BITS bits are stored per
+    // L2-information (e.g. 9 bits per for all except the first one L2-block each). They are ordered in the BV_L12Type
+    // from LSB to MSB, starting after the least significant BV_STORE_L1_BITS bits (e.g. 19) that are used for L1-info.
+    const uint OFFSET = BV_STORE_L1_BITS - BV_STORE_L2_BITS;
+    return (i != 0u) ? uint(bitfieldExtract64(v, int(i * BV_STORE_L2_BITS + OFFSET), BV_STORE_L2_BITS)) : 0u;
+}
+
+uint _bv_access(
+                #ifndef DECODE_FROM_SHARED_MEMORY
+                const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
+                #endif
+                uint index) {
+    return uint(WM_BIT_VECTOR[index / BV_WORD_BIT_SIZE] >> index) & 1u;
+    // bitfieldExtract does not support 64 bit integers:
+    // return bitfieldExtract(WM_BIT_VECTOR[index / BV_WORD_BIT_SIZE], int(index % BV_WORD_BIT_SIZE), 1);
+}
+
+uint _fr_rank1(
+               #ifndef DECODE_FROM_SHARED_MEMORY
+               const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
+               #endif
+               uint index) {
+//#if 1
+//        uint count = 0u;
+//        const uint words = index / BV_WORD_BIT_SIZE;
+//        for (uint i = 0; i < index / BV_WORD_BIT_SIZE; i++) {
+//            count += bitCount64(bv.words[i]);
+//        }
+//        for (uint i = words * BV_WORD_BIT_SIZE; i < index; i++) {
+//            if (BV_ACCESS(i, bv) == 1u)
+//                count++;
+//        }
+//        return count;
+//#endif
+    // ........ ........  bits
+    // ┌┐┌┐┌┐┌┐ ┌┐┌┐┌┐┌┐  words
+    // └┘└┘└┘└┘ └┘└┘└┘└┘
+    // ┌──┐┌──┐ ┌──┐┌──┐  l2-blocks
+    // └──┘└──┘ └──┘└──┘
+    // ┌──────┐ ┌──────┐  l1-blocks
+    // └──────┘ └──────┘
+
+    // query L12 acceleration structure
+    BV_WORD_TYPE l12 = WM_HEADER.fr[index / BV_L1_BIT_SIZE];
+    uint rank1_res = _get_L1_entry(l12);
+    assertf(rank1_res < (index == 0u ? 1u : index),
+            "FR_RANK1 _get_L1_entry return value too high. [index, rank1]: [%v2u]",
+            uvec2(index, rank1_res));
+    rank1_res += _get_L2_entry(l12, (index % BV_L1_BIT_SIZE) / BV_L2_BIT_SIZE);
+
+    // perform bit counts on a word level to count the remaining bits
+    uint offset = ((index / BV_WORD_BIT_SIZE) / BV_L2_WORD_SIZE) * BV_L2_WORD_SIZE;
+    // fill missing 'full' counted words if L2-blocks cover multiple words
+    #if (BV_L2_WORD_SIZE > 1)
+        for (uint _w = 0u; _w < ((index / BV_WORD_BIT_SIZE) % BV_L2_WORD_SIZE); _w++) {
+            rank1_res += bitCount64(WM_BIT_VECTOR[offset]);
+            offset++;
+        }
+    #endif
+    // if this is a rank(text_size) query, the inlining of the function lead to the potential out of bounds
+    // access bv[offset] being ignored.
+
+    assertf(rank1_res + rank1Word(WM_BIT_VECTOR[offset], index % BV_WORD_BIT_SIZE) < (index == 0u ? 1u : index),
+            "FR_RANK1 return value too high. [index, rank1]: [%v2u]",
+            uvec2(index, rank1_res + rank1Word(WM_BIT_VECTOR[offset], index % BV_WORD_BIT_SIZE)));
+    return rank1_res + rank1Word(WM_BIT_VECTOR[offset], index % BV_WORD_BIT_SIZE);
+}
+
+uint _wm_huffman_access(
+                        #ifndef DECODE_FROM_SHARED_MEMORY
+                        const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
+                        #endif
+                        uint position) {
     // see: volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp HuffmanWaveletMatrix::access()
 
     // due to the assumptions for the canonical Huffman codes used in the wavelet matrix,
     // ANY 1 bit directly terminates the canonical huffman code and the symbol is the position of this bit.
     for (uint level = 0; level < HWM_LEVELS; level++) {
-        if (_bv_access(position, bit_vector) != 0u) {
+        if (BV_ACCESS(position) != 0u) {
             assert(position != 0u || level == 4u, "first operation in stream must be 4u (PALETTE_ADV).");
             return level;
         } else {
             // TODO: we should not use the inverted CHC but the normal CHC, interpret 1 as left and 0 as right
             //  in the wavelet matrix to optimize the rank0 / rank1 queries
-            const uint ones_before = _fr_rank1(position, bit_vector, wm_header) - wm_header.ones_before_level[level];
-            const uint zeros_before = (position - wmh_getLevelStart(level, wm_header.level_starts_1_to_4)) - ones_before;
-            position = wmh_getLevelStart(level + 1, wm_header.level_starts_1_to_4) + zeros_before;
+            const uint ones_before = FR_RANK1(position) - WM_HEADER.ones_before_level[level];
+            const uint zeros_before = (position - wmh_getLevelStart(level, WM_HEADER.level_starts_1_to_4)) - ones_before;
+            position = wmh_getLevelStart(level + 1, WM_HEADER.level_starts_1_to_4) + zeros_before;
         }
     }
     return HWM_LEVELS;
 }
 
-
-uint wm_huffman_rank(uint position, uint symbol, const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector) {
+uint _wm_huffman_rank(
+                      #ifndef DECODE_FROM_SHARED_MEMORY
+                      const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
+                      #endif
+                      uint position, uint symbol) {
     // see: volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp HuffmanWaveletMatrix::rank()
 
     uint interval_start = 0;
     uvec2 chc = SYMBOL2CHC[symbol];
     uint bit_mask = 1u << (CHC_BIT_SIZE - 1);
     for (uint level = 0; (level < chc.x) && (position > 0); ++level) {
-        const uint ones_before_interval = _fr_rank1(interval_start, bit_vector, wm_header);
-        const uint ones_before_position = _fr_rank1(interval_start + position, bit_vector, wm_header) - ones_before_interval;
+        const uint ones_before_interval = FR_RANK1(interval_start);
+        const uint ones_before_position = FR_RANK1(interval_start + position) - ones_before_interval;
         // due to the assumptions for the canonical Huffman codes used in the wavelet matrix,
         // ANY 1 bit directly terminates the canonical huffman code and the symbol is the position of this bit.
         if ((chc.y & bit_mask) != 0u) {
@@ -217,9 +241,9 @@ uint wm_huffman_rank(uint position, uint symbol, const WMHBrickHeaderRef wm_head
         } else {
             position = position - ones_before_position;
             // TODO: ones_before_level could become an uvec4 if we exclude this case for level == chc.length-1
-            const uint ones_in_interval = ones_before_interval - wm_header.ones_before_level[level];
-            interval_start = wmh_getLevelStart(level + 1, wm_header.level_starts_1_to_4)
-                    + (interval_start - wmh_getLevelStart(level, wm_header.level_starts_1_to_4) - ones_in_interval);
+            const uint ones_in_interval = ones_before_interval - WM_HEADER.ones_before_level[level];
+            interval_start = wmh_getLevelStart(level + 1, WM_HEADER.level_starts_1_to_4)
+                    + (interval_start - wmh_getLevelStart(level, WM_HEADER.level_starts_1_to_4) - ones_in_interval);
         }
         bit_mask >>= 1;
     }
@@ -248,11 +272,15 @@ void decompressCSGVBrick(const uint brick_idx,
 
 /** Decode a single voxel with index output_i in the target_inv_lod. Decoding is performed by chasing the operation
  * references from the output voxel to a palette reference.
-void decompressCSGVVoxel(const uint output_i, const uint brick_encoding_length,
-                                     const uvec3 valid_brick_size, const uint target_inv_lod,
-                                     const uint decoded_brick_start_uint,
-                                     const EncodingRef brick_encoding,
-                                     const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector) {
+ * If DECODE_FROM_SHARED_MEMORY is set, it is assumed that the WMHBrickHeader an bit vector are
+ * present in shared memory as SHARED_WM_HEADER and SHARED_BIT_VECTOR.
+ * Otherwise, they are passed as function arguments. */
+void decompressCSGVVoxel(const uint output_i, const uint target_inv_lod, const uvec3 valid_brick_size,
+                         const EncodingRef brick_encoding, const uint brick_encoding_length,
+#ifndef DECODE_FROM_SHARED_MEMORY
+                         const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
+#endif
+                         const uint decoded_brick_start_uint) {
 
     // Start by reading the operations in the target inverse LoD's encoding:
     uint inv_lod = target_inv_lod;
@@ -264,7 +292,7 @@ void decompressCSGVVoxel(const uint output_i, const uint brick_encoding_length,
     // obtain encoding operation read index (4 bit)
     assert(brick_encoding.buf[0] == 0u, "First operation in the opstrem must have start index 0.");
     uint enc_operation_index = brick_encoding.buf[inv_lod] + inv_lod_op_i;
-    uint operation = wm_huffman_access(enc_operation_index, wm_header, bit_vector);
+    uint operation = WM_HUFFMAN_ACCESS(enc_operation_index);
 
     // ToDo: handle stop bits
     assert((operation & STOP_BIT) == 0u, "stop bit not yet supported with random access");
@@ -300,16 +328,16 @@ void decompressCSGVVoxel(const uint output_i, const uint brick_encoding_length,
                 }
             }
 
-            assert(enc_operation_index < wm_header.level_starts_1_to_4[0], "brick encoding out of bounds read");
+            assert(enc_operation_index < WM_HEADER.level_starts_1_to_4[0], "brick encoding out of bounds read");
 
             // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
             enc_operation_index = brick_encoding.buf[inv_lod] + inv_lod_op_i;
-            operation_lsb = wm_huffman_access(enc_operation_index, wm_header, bit_vector) & 7u;
+            operation_lsb = WM_HUFFMAN_ACCESS(enc_operation_index) & 7u;
         }
 
         // at this point, the current operation accesses the palette: write the resulting palette entry
         // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
-        uint palette_index = wm_huffman_rank(enc_operation_index, PALETTE_ADV, wm_header, bit_vector);
+        uint palette_index = WM_HUFFMAN_RANK(enc_operation_index, PALETTE_ADV);
         // the actual palette index may be offset depending on the operation
         if (operation_lsb == PALETTE_LAST) {
             palette_index--;
@@ -338,22 +366,22 @@ void outputOperationStream(const uint brick_idx) {
 
     const uint offset = 100;
     debugPrintfEXT("op-stream %u:  %v4u %v4u %v4u %v4u", brick_idx,
-                    uvec4(wm_huffman_access(offset + 0, wm_header, bit_vector),
-                          wm_huffman_access(offset + 1, wm_header, bit_vector),
-                          wm_huffman_access(offset + 2, wm_header, bit_vector),
-                          wm_huffman_access(offset + 3, wm_header, bit_vector)),
-                    uvec4(wm_huffman_access(offset + 4, wm_header, bit_vector),
-                          wm_huffman_access(offset + 5, wm_header, bit_vector),
-                          wm_huffman_access(offset + 6, wm_header, bit_vector),
-                          wm_huffman_access(offset + 7, wm_header, bit_vector)),
-                    uvec4(wm_huffman_access(offset + 8, wm_header, bit_vector),
-                          wm_huffman_access(offset + 9, wm_header, bit_vector),
-                          wm_huffman_access(offset + 10, wm_header, bit_vector),
-                          wm_huffman_access(offset + 11, wm_header, bit_vector)),
-                    uvec4(wm_huffman_access(offset + 12, wm_header, bit_vector),
-                          wm_huffman_access(offset + 13, wm_header, bit_vector),
-                          wm_huffman_access(offset + 14, wm_header, bit_vector),
-                          wm_huffman_access(offset + 15, wm_header, bit_vector)));
+                    uvec4(WM_HUFFMAN_ACCESS(offset + 0),
+                          WM_HUFFMAN_ACCESS(offset + 1),
+                          WM_HUFFMAN_ACCESS(offset + 2),
+                          WM_HUFFMAN_ACCESS(offset + 3)),
+                    uvec4(WM_HUFFMAN_ACCESS(offset + 4),
+                          WM_HUFFMAN_ACCESS(offset + 5),
+                          WM_HUFFMAN_ACCESS(offset + 6),
+                          WM_HUFFMAN_ACCESS(offset + 7)),
+                    uvec4(WM_HUFFMAN_ACCESS(offset + 8),
+                          WM_HUFFMAN_ACCESS(offset + 9),
+                          WM_HUFFMAN_ACCESS(offset + 10),
+                          WM_HUFFMAN_ACCESS(offset + 11)),
+                    uvec4(WM_HUFFMAN_ACCESS(offset + 12),
+                          WM_HUFFMAN_ACCESS(offset + 13),
+                          WM_HUFFMAN_ACCESS(offset + 14),
+                          WM_HUFFMAN_ACCESS(offset + 15)));
 }
 
 bool verifyBrickCompression(const uint brick_idx) {
@@ -406,12 +434,12 @@ bool verifyBrickCompression(const uint brick_idx) {
         debugPrintfEXT("Bit vector size must be within (0, %u) but is %u", total_voxels_in_brick * HWM_LEVELS, wm_header.bit_vector_size);
         return false;
     }
-    if (getL1Entry(wm_header.fr[0]) != 0) {
-        debugPrintfEXT("First flat rank L1 entry must be 0 but is %u", getL1Entry(wm_header.fr[0]));
+    if (_get_L1_entry(wm_header.fr[0]) != 0) {
+        debugPrintfEXT("First flat rank L1 entry must be 0 but is %u", _get_L1_entry(wm_header.fr[0]));
         return false;
     }
-    if (getL2Entry(wm_header.fr[0], 0) != 0) {
-        debugPrintfEXT("First flat rank L1 entry must be 0 but is %u", getL1Entry(wm_header.fr[0]));
+    if (_get_L2_entry(wm_header.fr[0], 0) != 0) {
+        debugPrintfEXT("First flat rank L1 entry must be 0 but is %u", _get_L1_entry(wm_header.fr[0]));
         return false;
     }
     if (wm_header.ones_before_level[0] != 0u) {
@@ -423,11 +451,13 @@ bool verifyBrickCompression(const uint brick_idx) {
         return false;
     }
 
+#ifndef DECODE_FROM_SHARED_MEMORY
     BitVectorRef bit_vector = getWMHBitVectorFromEncoding(brick_encoding);
-    if (wm_huffman_access(0, wm_header, bit_vector) != PALETTE_ADV) {
-        debugPrintfEXT("First operation must be PALETTE_ADV but is %u", wm_huffman_access(0, wm_header, bit_vector));
+    if (_wm_huffman_access(wm_header, bit_vector, 0) != PALETTE_ADV) {
+        debugPrintfEXT("First operation must be PALETTE_ADV but is %u", _wm_huffman_access(wm_header, bit_vector, 0));
         return false;
     }
+#endif
 
     return true;
 }

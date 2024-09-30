@@ -38,13 +38,12 @@ class CSGVBenchmarkPass : public PassCompute {
 
     public:
         CSGVBenchmarkPass(CompressedSegmentationVolume* csgv, GpuContextPtr ctx,
-                             bool parallel_decode = false,
                              uint32_t cache_size_MB = 1024, bool palette_cache = false,
-                             const std::string& label = "CSGVBenchmark")
+                             bool decode_from_shared_memory = false, const std::string& label = "CSGVBenchmark")
                 : WithGpuContext(ctx),
                   WithMultiBuffering(NoMultiBuffering),
-                  PassCompute(ctx, label, NoMultiBuffering, ctx->getQueueFamilyIndices().compute.value()),
-                  m_csgv(csgv), m_parallel_decode(parallel_decode), m_cache_bytes(cache_size_MB * 1024 * 1024),
+                  PassCompute(ctx, label, NoMultiBuffering, ctx->getQueueFamilyIndices().compute.value()), m_csgv(csgv),
+                  m_decode_from_shared_memory(decode_from_shared_memory), m_cache_bytes(cache_size_MB * 1024 * 1024),
                   m_use_palette_cache(palette_cache), m_shader_defines(csgv->getGLSLDefines()) {
 
             // obtain shader compilation and execution parameters
@@ -52,8 +51,10 @@ class CSGVBenchmarkPass : public PassCompute {
                                                 getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
             if (m_use_palette_cache)
                 m_shader_defines.emplace_back("PALETTE_CACHE");
-            if (m_parallel_decode)
+            if (m_csgv->isUsingRandomAccess())
                 m_shader_defines.emplace_back("RANDOM_ACCESS");
+            if (m_decode_from_shared_memory)
+                m_shader_defines.emplace_back("DECODE_FROM_SHARED_MEMORY");
 
             // check how many bits are required to store cache indices
             if(m_use_palette_cache) {
@@ -87,7 +88,7 @@ class CSGVBenchmarkPass : public PassCompute {
             }
             m_execution_iterations = (brick_idx_count + m_bricks_per_execution - 1u) / m_bricks_per_execution;
 
-            if (m_parallel_decode) {
+            if (m_csgv->isUsingRandomAccess()) {
                 const uint32_t subgroup_size = getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize;
                 m_decompression_workgroup_size = vk::Extent3D{m_bricks_per_execution * subgroup_size, 1u, 1u};
             } else {
@@ -151,7 +152,14 @@ class CSGVBenchmarkPass : public PassCompute {
             return total_time_ms;
         }
 
-    protected:
+        static void configureExtensionsAndLayersAndFeatures(GpuContextRwPtr ctx) {
+            ctx->enableDeviceExtension("VK_EXT_memory_budget");
+            ctx->physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
+            ctx->physicalDeviceFeaturesV12().setHostQueryReset(true);
+            ctx->physicalDeviceFeatures().setShaderInt64(true);
+        }
+
+protected:
 
         struct PushConstants{
             uint32_t brick_idx_offset;                ///< the workgroup starts decompression at this 1D index during execution
@@ -162,13 +170,14 @@ class CSGVBenchmarkPass : public PassCompute {
 
         CompressedSegmentationVolume* m_csgv;        ///< the compressed segmentation volume to benchmark
         std::vector<std::string> m_shader_defines;   ///< defines that are passed on to shader compilation
-        bool m_parallel_decode = false;              ///< if decompression is parallelized within one brick
         uint32_t m_bricks_per_execution;             ///< how many bricks can be decompressed in one execution
         uint32_t m_execution_iterations;             ///< how many executions are requried to decode all bricks
         vk::Extent3D m_decompression_workgroup_size = {0u, 0u, 0u};
         size_t m_cache_bytes = 1024 * 1024 * 1024;   ///< cache size in bytes
+        bool m_decode_from_shared_memory = false;    ///< if true, the encoding is copied to shared memory before decoding. Requires random access encoding.
 
-        // GPU resources and buffers
+
+    // GPU resources and buffers
         std::shared_ptr<UniformReflected> m_usegmented_volume_info = nullptr;
         // cache to store decompressed bricks
         std::shared_ptr<Buffer> m_cache_buffer = nullptr; ///< cache for decoding bricks

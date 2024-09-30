@@ -181,14 +181,21 @@ public:
     /// Will save the renderer state to the path when the renderer is shut down
     void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = std::move(path); }
 
-    /// @brief Sets the target cache size for the renderer in MB.
+    /// @brief Configures the CSGV decoding and caching behaviour of the renderer.
     ///
+    /// @param cache_size_MB the target cache size for the renderer in MB.
     /// A size of 0 tries to allocate the maximum available GPU memory.
     /// The cache size must be specified before startup to have an effect.
     /// Actual cache size may be lower if less space is needed or not enough GPU memory is available.
     /// @param palettized_cached if true, the cache stores palette indices instead of labels. Allows to store larger
     /// portions of the volume in cache at the expense of a performance decrease.
-    void setCacheParameters(size_t cache_size_MB, bool palettized_cache) { m_target_cache_size_MB = cache_size_MB; m_use_palette_cache = palettized_cache; }
+    /// @param decode_from_shared_memory if true, the encoding will be copied to shared memory before decoding.
+    /// only works in combination with a random access encoding.
+    void setDecodingParameters(size_t cache_size_MB, bool palettized_cache, bool decode_from_shared_memory) {
+        m_target_cache_size_MB = cache_size_MB;
+        m_use_palette_cache = palettized_cache;
+        m_decode_from_shared_memory = decode_from_shared_memory;
+    }
 
 private:
     /// Fills m_constructed_detail and m_constructed_detail_starts buffers with detail encodings of requested brick
@@ -262,6 +269,7 @@ private:
     std::vector<bool> m_gpu_material_changed = std::vector<bool>(SEGMENTED_VOLUME_MATERIAL_COUNT, true);
     std::vector<GPUSegmentedVolumeMaterial> m_gpu_materials{SEGMENTED_VOLUME_MATERIAL_COUNT};
 
+    bool m_decode_from_shared_memory = false;   ///< if true, the encoding is copied to shared memory before decoding. Requires random access encoding.
     // palettized cache
     bool m_use_palette_cache = false;           ///< if the cache stores indices into brick palettes instead of the actual indexed labels
     uint32_t m_cache_palette_idx_bits = 32u;    ///< the GPU cache can store palette indices with fewer than 32 bits per entry

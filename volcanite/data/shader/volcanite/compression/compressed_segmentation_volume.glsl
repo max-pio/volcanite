@@ -30,6 +30,11 @@
     STATIC_FAIL(random_access_cannot_be_used_with_palette_cache);
 #endif
 
+#if !defined(RANDOM_ACCESS) && defined(DECODE_FROM_SHARED_MEMORY)
+    STATIC_FAIL(DECODE_FROM_SHARED_MEMORY_can_only_be_used_with_RANDOM_ACCESS);
+#endif
+
+
 // Read Decoded Bricks (Cache Read) ------------------------------------------------------------------------------------
 
 uint _cache_pos2idx(const uvec3 voxel_pos_in_brick) {
@@ -155,7 +160,7 @@ void resetCSGVBrick(const uint decoded_brick_start_uint, const uint inv_lod) {
 #elif ENCODING_MODE == WAVELET_MATRIX_ENC
     #include "decoder/WaveletMatrixDecoder.glsl"
 #elif ENCODING_MODE == HUFFMAN_WM_ENC
-    #include "decoder/HuffmanWMDecoderShared.glsl"
+    #include "decoder/HuffmanWMDecoder.glsl"
 #else
     STATIC_FAIL(no_decoder_specified);
 #endif

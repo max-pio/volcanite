@@ -584,13 +584,15 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     // the shader code is dependent on data set properties like operation frequency tables
     std::vector<std::string> shader_defines = m_compressed_segmentation_volume->getGLSLDefines();
     shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
-    if(m_use_palette_cache)
+    if (m_use_palette_cache)
         shader_defines.emplace_back("PALETTE_CACHE");
+    if (m_decode_from_shared_memory)
+        shader_defines.emplace_back("DECODE_FROM_SHARED_MEMORY");
     if (m_compressed_segmentation_volume->isUsingRandomAccess())
         shader_defines.emplace_back("RANDOM_ACCESS");
     shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
-    if(getCtx()->getWsi())
+    if (getCtx()->getWsi())
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), m_queue_family_index, shader_defines,
                                                         m_compressed_segmentation_volume->isUsingRandomAccess());
     else

@@ -57,6 +57,7 @@ public:
     bool stream_lod;
     size_t cache_size_MB = 1024ul;
     bool cache_palettized = false;
+    bool decode_from_shared_memory = false;
     bool show_development_gui = false;
 
     // attribute args
@@ -142,6 +143,7 @@ public:
             SwitchArg devArg("", "dev", "Reveal all development render parameters in GUI.", cmd);
             ValueArg<uint32_t> cacheSizeMBArg("", "cache-size", "Size in MB of the renderer's brick cache. 0 to allocate all available.", false, va.cache_size_MB, "size", cmd);
             SwitchArg cachePalettizedArg("", "cache-palette", "Store palette indices in brick cache instead of labels.", cmd);
+            SwitchArg decodedSharedMemoryArg("", "decode-sm", "Copy brick encodings to shared memory before decoding.", cmd);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "file", cmd);
@@ -186,6 +188,9 @@ public:
             va.cache_palettized = cachePalettizedArg.getValue();
             if(va.cache_palettized && va.random_access)
                 throw ArgException(cachePalettizedArg.longID() + " can not be used in combination with " + randomAccessArg.longID(), cachePalettizedArg.longID());
+            va.decode_from_shared_memory = decodedSharedMemoryArg.getValue();
+            if(va.decode_from_shared_memory && !va.random_access)
+                throw ArgException(decodedSharedMemoryArg.longID() + " must be used in combination with " + randomAccessArg.longID(), cachePalettizedArg.longID());
             va.show_development_gui = devArg.getValue();
             // if no input file was specified, try to open a file dialog
             std::string input_file = expandPath(inputpathArg.getValue());

@@ -406,27 +406,6 @@ void WaveletMatrixEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, u
         const WMHBrickHeader& wm_brick_header = getWMHBrickHeaderFromEncoding(brick_encoding, getHeaderSize());
         const BV_WordType* bit_vector = getWMHBitVectorFromEncoding(brick_encoding, getHeaderSize());
 
-        if (target_inv_lod == 0u) {
-            const uint32_t o = 100;
-            Logger(DEBUG) << "op-stream " <<
-                          str(glm::uvec4(wm_huffman_access(o + 0, wm_brick_header, bit_vector),
-                                         wm_huffman_access(o + 1, wm_brick_header, bit_vector),
-                                         wm_huffman_access(o + 2, wm_brick_header, bit_vector),
-                                         wm_huffman_access(o + 3, wm_brick_header, bit_vector))) <<
-                          str(glm::uvec4(wm_huffman_access(o + 4, wm_brick_header, bit_vector),
-                                         wm_huffman_access(o + 5, wm_brick_header, bit_vector),
-                                         wm_huffman_access(o + 6, wm_brick_header, bit_vector),
-                                         wm_huffman_access(o + 7, wm_brick_header, bit_vector))) <<
-                          str(glm::uvec4(wm_huffman_access(o + 8, wm_brick_header, bit_vector),
-                                         wm_huffman_access(o + 9, wm_brick_header, bit_vector),
-                                         wm_huffman_access(o + 10, wm_brick_header, bit_vector),
-                                         wm_huffman_access(o + 11, wm_brick_header, bit_vector))) <<
-                          str(glm::uvec4(wm_huffman_access(o + 12, wm_brick_header, bit_vector),
-                                         wm_huffman_access(o + 13, wm_brick_header, bit_vector),
-                                         wm_huffman_access(o + 14, wm_brick_header, bit_vector),
-                                         wm_huffman_access(o + 15, wm_brick_header, bit_vector)));
-        }
-
         // m_cpu_threads many threads go through the Morton indexing order from front to back. The threads work on the next
         // following items in parallel. read_offset is the index of the first thread 0.
         //

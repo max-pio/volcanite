@@ -26,7 +26,7 @@
     #define assertf(X, S, P) if(!(X)) debugPrintfEXT(S, P)
 #endif
 
-#define STATIC_FAIL(S) {static_assert_fail S}
+#define STATIC_FAIL(S) {S()}
 
 #define SIZEOF(Type) (uint64_t(Type(uint64_t(0))+1))
 
