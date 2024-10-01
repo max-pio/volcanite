@@ -26,15 +26,21 @@ namespace volcanite {
 
         // fill command buffer
         auto &commandBuffer = m_commandBuffer->getActive();
+        getCtx()->debugMarker->setName(commandBuffer, "CSGVBenchmarkPass.commandBuffer");
         commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
         commandBuffer.resetQueryPool(m_query_pool_timestamps, 0, static_cast<uint32_t>(m_time_stamps.size()));
+
+        // all uploads must be finished before the rendering can access the buffers
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eComputeShader, {},
+                                      {vk::MemoryBarrier(vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead)},
+                                      nullptr, nullptr);
 
         // Each execution decompresses brick_per_exeuction many bricks into the cache. If the cache is not large enough
         // to fit all bricks at once, multiple executions are required.
         const uint32_t brick_idx_count = m_csgv->getBrickIndexCount();
         for (int i = 0; i < m_execution_iterations; i++) {
-            PushConstants pc{.brick_idx_offset = i * m_bricks_per_execution};
+            PushConstants pc{.brick_idx_offset = i * m_bricks_per_execution, .target_inv_lod=(m_csgv->getLodCountPerBrick() - 1u)};
             commandBuffer.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants), &pc);
 
             getCtx()->debugMarker->beginRegion(commandBuffer, "decompress", glm::vec4(0.f, 1.f, 0.f, 1.f));
@@ -42,6 +48,12 @@ namespace volcanite {
             if (hasDescriptors()) {
                 commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_pipelineLayout, 0, m_descriptorSets->getActive(), nullptr);
             }
+
+            // barrier so that all executions finish writing to the cache
+            commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer | vk::PipelineStageFlagBits::eAllCommands,
+                                          vk::PipelineStageFlagBits::eComputeShader, {},
+                                          {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite | vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eMemoryRead)},
+                                          nullptr, nullptr);
 
             // dispatch decompression of bricks and measure runtime
             commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eTopOfPipe, m_query_pool_timestamps, 2*i);
@@ -127,7 +139,7 @@ namespace volcanite {
 //            }
 //
 //            // upload initial detail starts buffer (all zeros if no detail is uploaded initially)
-//            m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+//            m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = m_queueFamilyIndex});
 //            getCtx()->sync->hostWaitOnDevice({m_detail_starts_staging.first});
 //            m_detail_staging = {nullptr, nullptr};
 //            m_detail_starts_staging = {nullptr, nullptr};
@@ -146,12 +158,12 @@ namespace volcanite {
         for(int i = 0; i < split_encoding_count; i++) {
             _encoding_upload.emplace_back(
                     m_split_encoding_buffers[i]->uploadWithStagingBuffer(m_csgv->getAllEncodings()->at(i),
-                                                                         {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()}));
+                                                                         {.queueFamily = m_queueFamilyIndex}));
             awaitBeforeExecution.push_back(_encoding_upload[i].first);
         }
-        auto [encoding_addresses_upload_finished, _encoding_addresses_staging_buffer] = m_split_encoding_buffer_addresses_buffer->uploadWithStagingBuffer(m_split_encoding_buffer_addresses,  {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        auto [encoding_addresses_upload_finished, _encoding_addresses_staging_buffer] = m_split_encoding_buffer_addresses_buffer->uploadWithStagingBuffer(m_split_encoding_buffer_addresses,  {.queueFamily = m_queueFamilyIndex});
         awaitBeforeExecution.push_back(encoding_addresses_upload_finished);
-        auto [brickstarts_upload_finished, _brickstarts_staging_buffer] = m_brick_starts_buffer->uploadWithStagingBuffer(*(m_csgv->getBrickStarts()),  {.queueFamily = getCtx()->getQueueFamilyIndices().transfer.value()});
+        auto [brickstarts_upload_finished, _brickstarts_staging_buffer] = m_brick_starts_buffer->uploadWithStagingBuffer(*(m_csgv->getBrickStarts()),  {.queueFamily = m_queueFamilyIndex});
         awaitBeforeExecution.push_back(brickstarts_upload_finished);
 
 

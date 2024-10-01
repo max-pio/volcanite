@@ -17,6 +17,8 @@
 
 
 #include <glm/glm.hpp>
+#include <functional>
+#include <span>
 #include <vector>
 #include <string>
 #include <sstream>
@@ -141,7 +143,8 @@ class CSGVBrickEncoder {
     [[nodiscard]] virtual uint32_t getPaletteSizeHeaderIndex() const = 0;
 
     /// @returns a list of shader defines used during decoding which are passed to the shader compilation stage
-    [[nodiscard]] virtual std::vector<std::string> getGLSLDefines() const {
+    [[nodiscard]] virtual std::vector<std::string> getGLSLDefines(std::function<std::span<const uint32_t>(uint32_t)> getBrickEncodingSpan,
+                                                                  uint32_t brick_idx_count) const {
         std::vector<std::string> defines{"ENCODING_MODE=" + std::to_string(m_encoding_mode),
                                          "BRICK_SIZE=" + std::to_string(m_brick_size),
                                          "LOD_COUNT=" + std::to_string(getLodCountPerBrick()),

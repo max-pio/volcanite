@@ -162,7 +162,8 @@ class CSGVBenchmarkPass : public PassCompute {
 protected:
 
         struct PushConstants{
-            uint32_t brick_idx_offset;                ///< the workgroup starts decompression at this 1D index during execution
+            uint32_t brick_idx_offset;      ///< the workgroup starts decompression at this 1D index during execution
+            uint32_t target_inv_lod;        ///< the inv. LOD (0 is coarsest at 1³ voxels) into which to decode bricks
         };
 
         std::vector<std::shared_ptr<Shader>> createShaders() override;

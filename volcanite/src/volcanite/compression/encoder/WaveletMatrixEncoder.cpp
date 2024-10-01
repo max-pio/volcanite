@@ -192,7 +192,7 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxelWM(const uint32_t output_
                                                           const glm::uvec3 valid_brick_size,
                                                           const uint32_t* brick_encoding,
                                                           const uint32_t brick_encoding_length,
-                                                          const WMBrickHeader& wm_header,
+                                                          const WMBrickHeader* wm_header,
                                                           const BV_WordType* bit_vector) {
 
     // Start by reading the operations in the target inverse LoD's encoding:
@@ -267,7 +267,7 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxelWMHuffman(const uint32_t 
                                                                  const glm::uvec3 valid_brick_size,
                                                                  const uint32_t* brick_encoding,
                                                                  const uint32_t brick_encoding_length,
-                                                                 const WMHBrickHeader& wm_header,
+                                                                 const WMHBrickHeader* wm_header,
                                                                  const BV_WordType* bit_vector) {
 
     // Start by reading the operations in the target inverse LoD's encoding:
@@ -316,7 +316,7 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxelWMHuffman(const uint32_t 
                 }
             }
 
-            assert(enc_operation_index < wm_header.level_starts_1_to_4[0] && "brick encoding out of bounds read");
+            assert(enc_operation_index < wm_header->level_starts_1_to_4[0] && "brick encoding out of bounds read");
 
             // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
             enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
@@ -380,7 +380,7 @@ void WaveletMatrixEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, u
 
     if (m_encoding_mode == WAVELET_MATRIX_ENC) {
         // gather all information required for decoding symbols from a wavelet matrix encoding
-        const WMBrickHeader& wm_brick_header = getWMBrickHeaderFromEncoding(brick_encoding, getHeaderSize());
+        const WMBrickHeader* wm_brick_header = getWMBrickHeaderFromEncoding(brick_encoding, getHeaderSize());
         const BV_WordType* bit_vector = getWMBitVectorFromEncoding(brick_encoding, getHeaderSize());
 
         // m_cpu_threads many threads go through the Morton indexing order from front to back. The threads work on the next
@@ -403,7 +403,7 @@ void WaveletMatrixEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, u
         }
     } else if (m_encoding_mode == HUFFMAN_WM_ENC) {
         // gather all information required for decoding symbols from a wavelet matrix encoding
-        const WMHBrickHeader& wm_brick_header = getWMHBrickHeaderFromEncoding(brick_encoding, getHeaderSize());
+        const WMHBrickHeader* wm_brick_header = getWMHBrickHeaderFromEncoding(brick_encoding, getHeaderSize());
         const BV_WordType* bit_vector = getWMHBitVectorFromEncoding(brick_encoding, getHeaderSize());
 
         // m_cpu_threads many threads go through the Morton indexing order from front to back. The threads work on the next

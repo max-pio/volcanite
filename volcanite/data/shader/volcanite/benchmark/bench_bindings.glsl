@@ -23,6 +23,7 @@ layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly res
 layout(push_constant) uniform restrict readonly PushConstants
 {
     uint brick_idx_offset;
+    uint target_inv_lod;
 } pc;
 
 // TODO: most of these could be compile time constants

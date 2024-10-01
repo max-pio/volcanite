@@ -18,11 +18,12 @@
     ASSERT_FAIL(missing_shader_defines_for_HUFFMAN_WM_ENC);
 #endif
 
+// careful! use this only if you're copying data incl. the full fr[] array into it. Otherwise, use WMHBrickHeaderRef.
 struct WMHBrickHeader {
     uint bit_vector_size;       ///< symbols in the encoding stream
     uint ones_before_level[5];  ///< number of ones before each level in the wavelet matrix
     uint level_starts_1_to_4[4];///< number of zeros within each level in the wavelet matrix
-    uint64_t fr[1];             ///< L12 flat rank acceleration structure (flexible array member)
+    BV_WORD_TYPE fr[1];         ///< L12 flat rank acceleration structure (flexible array member)
 }; // must be 12x 4 Bytes packed
 
 layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict WMHBrickHeaderRef
@@ -30,7 +31,7 @@ layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly res
     uint bit_vector_size;       ///< symbols in the encoding stream
     uint ones_before_level[5];  ///< number of ones before each level in the wavelet matrix
     uint level_starts_1_to_4[4];///< number of zeros within each level in the wavelet matrix
-    uint64_t fr[1];             ///< L12 flat rank acceleration structure (flexible array member)
+    BV_WORD_TYPE fr[1];         ///< L12 flat rank acceleration structure (flexible array member)
 };  // must be 12x 4 Bytes packed size
 
 layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict BitVectorRef

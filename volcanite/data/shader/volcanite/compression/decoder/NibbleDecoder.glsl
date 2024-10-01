@@ -337,7 +337,7 @@ uint decompressCSGVVoxel(const uint brick_idx, const uvec3 brick_voxel, const ui
     // same as:
     const uint voxel_idx = _cache_pos2idx(brick_voxel) / (1u << (3 * (findMSB(BRICK_SIZE) - target_inv_lod)));
 
-    uint palette_index = getPaletteIndexOfCSGVVoxel(output_i, target_inv_lod,
+    uint palette_index = getPaletteIndexOfCSGVVoxel(voxel_idx, target_inv_lod,
                                                     brick_encoding, brick_encoding_length);
 
     return brick_encoding.buf[brick_encoding_length - 1u - palette_index];

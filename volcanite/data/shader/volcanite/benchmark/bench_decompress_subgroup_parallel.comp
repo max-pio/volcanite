@@ -49,9 +49,9 @@ layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
         #include "volcanite/compression/decoder/HuffmanWMDecoder_types.glsl"
 
         #ifndef MAX_BIT_VECTOR_WORD_LENGTH
-            #define MAX_BIT_VECTOR_WORD_LENGTH 7680u
+            #define MAX_BIT_VECTOR_WORD_LENGTH 5120u
         #endif
-        #define MAX_FLAT_RANK_WORD_LENGTH (MAX_BIT_VECTOR_WORD_LENGTH / BV_L1_BIT_SIZE + 1u)
+        #define MAX_FLAT_RANK_WORD_LENGTH (BV_WORD_BIT_SIZE * MAX_BIT_VECTOR_WORD_LENGTH / BV_L1_BIT_SIZE + 1u)
         // each WMHBrickHeader is 12x4x8=384 bits in size: allocate enough WMHBrickHeader entries to fit any flat rank at the end
         shared BV_WORD_TYPE s_bit_vector[MAX_BIT_VECTOR_WORD_LENGTH];
         #define MAX_WM_HEADER_ARRAY_LENGTH (2 + (MAX_FLAT_RANK_WORD_LENGTH / ((384 + BV_WORD_BIT_SIZE - 1) / BV_WORD_BIT_SIZE)))
@@ -81,7 +81,7 @@ void main() {
     const uvec3 brick = brick_idx2pos(brick_idx, g_brick_count);
 
     // TODO: could also configure LOD via push constants
-    const uint target_inv_lod = g_max_inv_lod;
+    assert(pc.target_inv_lod <= g_max_inv_lod, "target_inv_lod must be <= the maximum possible inv. lod.");
 
     // obtain the bricks start index in the cache buffer
     const uint decoded_brick_start_uint = gl_GlobalInvocationID.x * g_cache_uints_per_brick;
@@ -92,6 +92,12 @@ void main() {
     #ifdef SEPARATE_DETAIL
         STATIC_FAIL(Subgroup_parallelized_decoding_does_not_support_DETAIL_SEPARATION);
     #endif
+
+#ifndef NDEBUG
+    if (workgroup_thread_id == 0u) {
+        verifyBrickCompression(brick_idx);
+    }
+#endif
 
     EncodingRef global_brick_encoding = getBrickEncodingRef(brick_idx);
     const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
@@ -136,7 +142,7 @@ void main() {
 #endif
 
     // 2. iterate over output voxels of brick (cache positions) for the requested LOD and decompress each one in parallel
-    const uint output_voxel_count = 1u << (3u * target_inv_lod);
+    const uint output_voxel_count = 1u << (3u * pc.target_inv_lod);
 
     // The workgroup_size many work items iterate through the Morton indexing order from front to back.
     // The threads work on the next following items in parallel.
@@ -147,13 +153,13 @@ void main() {
     uint output_i = workgroup_thread_id;
     while (output_i < output_voxel_count) {
         #if ENCODING_MODE == NIBBLE_ENC
-            decompressCSGVVoxelToCache(output_i, target_inv_lod, uvec3(BRICK_SIZE),
+            decompressCSGVVoxelToCache(output_i, pc.target_inv_lod, uvec3(BRICK_SIZE),
                         #ifndef DECODE_FROM_SHARED_MEMORY
                                 global_brick_encoding,
                         #endif
                                 brick_encoding_length, decoded_brick_start_uint);
         #elif ENCODING_MODE == HUFFMAN_WM_ENC
-            decompressCSGVVoxelToCache(output_i, target_inv_lod, uvec3(BRICK_SIZE),
+            decompressCSGVVoxelToCache(output_i, pc.target_inv_lod, uvec3(BRICK_SIZE),
                                 global_brick_encoding, brick_encoding_length,
                         #ifndef DECODE_FROM_SHARED_MEMORY
                                 global_wm_header, global_bit_vector,

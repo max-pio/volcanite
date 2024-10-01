@@ -508,9 +508,11 @@ public:
     }
 
     [[nodiscard]] std::vector<std::string> getGLSLDefines() const {
-        std::vector<std::string> shader_defines = m_encoder->getGLSLDefines();
+        std::vector<std::string> shader_defines = m_encoder->getGLSLDefines([this](const uint32_t brick_idx){
+                                                                                return getBrickEncodingSpan(brick_idx);
+                                                                            }, getBrickIndexCount());
         if (isUsingRandomAccess())
-            shader_defines.emplace_back("CSGV_PARALLEL_DECODE");
+            shader_defines.emplace_back("RANDOM_ACCESS");
         if (isUsingSeparateDetail())
             shader_defines.emplace_back("SEPARATE_DETAIL");
         return shader_defines;

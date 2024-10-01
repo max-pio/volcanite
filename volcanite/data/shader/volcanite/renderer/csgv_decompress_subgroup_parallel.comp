@@ -100,6 +100,13 @@ void main() {
         STATIC_FAIL(Subgroup_parallelized_decoding_does_not_support_DETAIL_SEPARATION);
     #endif
 
+
+#ifndef NDEBUG
+    if (workgroup_thread_id == 0u) {
+        verifyBrickCompression(brick_idx);
+    }
+#endif
+
     EncodingRef global_brick_encoding = getBrickEncodingRef(brick_idx);
     const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
 #if ENCODING_MODE == HUFFMAN_WM_ENC

@@ -56,8 +56,9 @@ public:
     // COMPONENT AND SHADER INTERFACE ----------------------------------------------------------------------------------
 
     /// @returns a list of shader defines used during decoding which are passed to the shader compilation stage
-    [[nodiscard]] virtual std::vector<std::string> getGLSLDefines() const override {
-        std::vector<std::string> defines = CSGVSerialBrickEncoder::getGLSLDefines();
+    [[nodiscard]] virtual std::vector<std::string> getGLSLDefines(std::function<std::span<const uint32_t>(uint32_t)> getBrickEncodingSpan,
+                                                                  uint32_t brick_idx_count) const override {
+        std::vector<std::string> defines = CSGVSerialBrickEncoder::getGLSLDefines(getBrickEncodingSpan, brick_idx_count);
 
         // build frequency table string
         std::stringstream ss;

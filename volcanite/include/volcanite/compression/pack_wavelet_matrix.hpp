@@ -29,11 +29,13 @@ namespace volcanite {
         glm::uvec4 ones_before_level;  ///< number of ones before each level in the wavelet matrix
         glm::uvec4 zeros_on_level;     ///< number of zeros within each level in the wavelet matrix
         const BV_L12Type fr[1];        ///< L12 flat rank acceleration structure (flexible array member)
+
+        WMBrickHeader(const WMBrickHeader&) = delete; // copying is not allowed because of the flexible array member
     };
     static_assert(sizeof(WMBrickHeader) == 4*12, "WMBrickHeader must be tightly packed.");
 
     /// @param base_header_size the number of initial uint32 header elements that are not WM specific
-    const WMBrickHeader& getWMBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size);
+    const WMBrickHeader* getWMBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size);
     const BV_WordType* getWMBitVectorFromEncoding(const uint32_t* v, uint32_t base_header_size);
 
     /// Replaces all 4 bit elements between start4bit (including) and end4bit (excluding) in in_packed with a
@@ -48,8 +50,8 @@ namespace volcanite {
 
     // WAVELET MATRIX ACCESS AND RANK ==================================================================================
 
-    uint32_t wm_access(uint32_t position, const WMBrickHeader& wm_header, const BV_WordType* bit_vector);
-    uint32_t wm_rank(uint32_t position, uint32_t symbol, const WMBrickHeader& wm_header, const BV_WordType* bit_vector);
+    uint32_t wm_access(uint32_t position, const WMBrickHeader* wm_header, const BV_WordType* bit_vector);
+    uint32_t wm_rank(uint32_t position, uint32_t symbol, const WMBrickHeader* wm_header, const BV_WordType* bit_vector);
 
 
     // ===============================================================================================================//
@@ -63,12 +65,16 @@ namespace volcanite {
         uint32_t ones_before_level[5]; ///< number of ones before each level in the wavelet matrix
         glm::uvec4 level_starts_1_to_4;///< bit vector level starts for levels 1,2,3, and 4. L0 is always 0, L5 undef.
         const BV_L12Type fr[1];        ///< L12 flat rank acceleration structure (flexible array member)
+
+        WMHBrickHeader(const WMHBrickHeader&) = delete; // copying is not allowed because of the flexible array member
     };
 
     static_assert(sizeof(WMHBrickHeader) == 4*12, "WMHBrickHeader must be tightly packed.");
 
     /// @param base_header_size the number of initial uint32 header elements that are not WM specific
-    const WMHBrickHeader& getWMHBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size);
+    const WMHBrickHeader* getWMHBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size);
+
+    const BV_L12Type* getWMHFlatRankFromEncoding(const uint32_t* v, uint32_t base_header_size);
 
     const BV_WordType* getWMHBitVectorFromEncoding(const uint32_t* v, uint32_t base_header_size);
 
@@ -84,7 +90,7 @@ namespace volcanite {
 
     // WAVELET MATRIX ACCESS AND RANK ==================================================================================
 
-    uint32_t wm_huffman_access(uint32_t position, const WMHBrickHeader& wm_header, const BV_WordType* bit_vector);
-    uint32_t wm_huffman_rank(uint32_t position, uint32_t symbol, const WMHBrickHeader& wm_header, const BV_WordType* bit_vector);
+    uint32_t wm_huffman_access(uint32_t position, const WMHBrickHeader* wm_header, const BV_WordType* bit_vector);
+    uint32_t wm_huffman_rank(uint32_t position, uint32_t symbol, const WMHBrickHeader* wm_header, const BV_WordType* bit_vector);
 
 }

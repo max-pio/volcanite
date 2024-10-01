@@ -141,7 +141,7 @@ uint _bv_access(
                 const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
                 #endif
                 uint index) {
-    return uint(WM_BIT_VECTOR[index / BV_WORD_BIT_SIZE] >> index) & 1u;
+    return uint(WM_BIT_VECTOR[index / BV_WORD_BIT_SIZE] >> (index % BV_WORD_BIT_SIZE)) & 1u;
     // bitfieldExtract does not support 64 bit integers:
     // return bitfieldExtract(WM_BIT_VECTOR[index / BV_WORD_BIT_SIZE], int(index % BV_WORD_BIT_SIZE), 1);
 }
@@ -207,10 +207,15 @@ uint _wm_huffman_access(
     // due to the assumptions for the canonical Huffman codes used in the wavelet matrix,
     // ANY 1 bit directly terminates the canonical huffman code and the symbol is the position of this bit.
     for (uint level = 0; level < HWM_LEVELS; level++) {
+        // debugPrintfEXT("||| level %u ||| bv_access(%u)=%u fr_rank1=%u, ones_before_level=%u", level, position, BV_ACCESS(position), FR_RANK1(position), WM_HEADER.ones_before_level[level]);
+
+        assert(position < WM_HEADER.bit_vector_size, "reading bit vector index out of bounds.");
         if (BV_ACCESS(position) != 0u) {
-            assert(position != 0u || level == 4u, "first operation in stream must be 4u (PALETTE_ADV).");
+            assertf(position != 0u || level == 4u, "first operation in stream must be 4u (PALETTE_ADV) but (pos, op) is (%v2u)", uvec2(position, HWM_LEVELS));
             return level;
         } else {
+            assert(position >= wmh_getLevelStart(level, WM_HEADER.level_starts_1_to_4), "position outside of level");
+            assert(FR_RANK1(position) >= WM_HEADER.ones_before_level[level], "rank1 must yield at least as many rank1 entries as there are before the level");
             // TODO: we should not use the inverted CHC but the normal CHC, interpret 1 as left and 0 as right
             //  in the wavelet matrix to optimize the rank0 / rank1 queries
             const uint ones_before = FR_RANK1(position) - WM_HEADER.ones_before_level[level];
@@ -222,9 +227,9 @@ uint _wm_huffman_access(
 }
 
 uint _wm_huffman_rank(
-                      #ifndef DECODE_FROM_SHARED_MEMORY
+                  #ifndef DECODE_FROM_SHARED_MEMORY
                       const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
-                      #endif
+                  #endif
                       uint position, uint symbol) {
     // see: volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp HuffmanWaveletMatrix::rank()
 
@@ -272,9 +277,9 @@ void decompressCSGVBrick(const uint brick_idx,
 /// Returns the palette index that stores the label of the voxel at location output_i within the target_inv_lod.
 uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
                          const EncodingRef brick_encoding, const uint brick_encoding_length
-#ifndef DECODE_FROM_SHARED_MEMORY
+                    #ifndef DECODE_FROM_SHARED_MEMORY
                          , const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector
-#endif
+                    #endif
                          ) {
 
     // Start by reading the operations in the target inverse LoD's encoding:
@@ -328,6 +333,8 @@ uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
             // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
             enc_operation_index = brick_encoding.buf[inv_lod] + inv_lod_op_i;
             operation_lsb = WM_HUFFMAN_ACCESS(enc_operation_index) & 7u;
+
+            assertf(enc_operation_index != 0u || operation_lsb == PALETTE_ADV, "first brick operation must be PALETTE_ADV but is %u", operation_lsb);
         }
 
         // at this point, the current operation accesses the palette: write the resulting palette entry
@@ -350,11 +357,11 @@ uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
 /// present in shared memory as SHARED_WM_HEADER and SHARED_BIT_VECTOR.
 /// Otherwise, they are passed as function arguments. */
 void decompressCSGVVoxelToCache(const uint output_i, const uint target_inv_lod, const uvec3 valid_brick_size,
-                         const EncodingRef brick_encoding, const uint brick_encoding_length,
-#ifndef DECODE_FROM_SHARED_MEMORY
-                         const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
-#endif
-                         const uint decoded_brick_start_uint) {
+                                const EncodingRef brick_encoding, const uint brick_encoding_length,
+                            #ifndef DECODE_FROM_SHARED_MEMORY
+                                const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
+                            #endif
+                                const uint decoded_brick_start_uint) {
 
     uint palette_index = getPaletteIndexOfCSGVVoxel(output_i, target_inv_lod,
                                                     brick_encoding, brick_encoding_length
@@ -379,10 +386,10 @@ uint decompressCSGVVoxel(const uint brick_idx, const uvec3 brick_voxel, const ui
     WMHBrickHeaderRef wm_header = getWMHBrickHeaderFromEncoding(brick_encoding);
     BitVectorRef bit_vector = getWMHBitVectorFromEncoding(brick_encoding);
 
-    // const uint lod_width = BRICK_SIZE >> target_inv_lod;
-    // const uint voxel_idx = _cache_pos2idx(brick_voxel) / (lod_width * lod_width * lod_width);
+     const uint lod_width = BRICK_SIZE >> target_inv_lod;
+     const uint voxel_idx = _cache_pos2idx(brick_voxel) / (lod_width * lod_width * lod_width);
     // same as:
-    const uint voxel_idx = _cache_pos2idx(brick_voxel) / (1u << (3 * (findMSB(BRICK_SIZE) - target_inv_lod)));
+//    const uint voxel_idx = _cache_pos2idx(brick_voxel) / (1u << (3 * (findMSB(BRICK_SIZE) - target_inv_lod)));
 
     uint palette_index = getPaletteIndexOfCSGVVoxel(voxel_idx, target_inv_lod,
                                                     brick_encoding, brick_encoding_length,
@@ -396,13 +403,35 @@ uint decompressCSGVVoxel(const uint brick_idx, const uvec3 brick_voxel, const ui
 
 // DEBUGGING AND STATISTICS --------------------------------------------------------------------------------------------
 
-void outputOperationStream(const uint brick_idx) {
+bool TEST_BIT_VECTOR() {
+    BV_WORD_TYPE v = uint64_t(12751266098003836929ul);
+    // 1011 0000 1111 0101 1001 1000 1111 0101:0000 0000 0000 0000 0000 0000 0000 0001
+    //   60   56   52   48   44   40   36   32   28   24   20   16   12    8    4    0
+    // bitCount = 19
+
+    assertf(bitCount64(v) == 19, "wrong bitcount is %u", bitCount64(v));
+    //
+    assertf(rank1Word(v, 0) == 0, "wrong rank1Word 0 is %u", rank1Word(v, 0));
+    assertf(rank1Word(v, 1) == 1, "wrong rank1Word 1 is %u", rank1Word(v, 1));
+    assertf(rank1Word(v, 32) == 1, "wrong rank1Word 32 is %u", rank1Word(v, 32));
+    assertf(rank1Word(v, 33) == 2, "wrong rank1Word 33 is %u", rank1Word(v, 33));
+    assertf(rank1Word(v, 63) == 18, "wrong rank1Word 63 is %u", rank1Word(v, 63));
+    assertf(rank1Word(v, 64) == 19, "wrong rank1Word 64 is %u", rank1Word(v, 64));
+    //
+    assertf(bitfieldExtract64(v, 0, 0) == 0, "wrong bitfieldExtract 0 0 is %u", bitfieldExtract64(v, 0, 0));
+    assertf(bitfieldExtract64(v, 3, 30) == 536870912u, "wrong bitfieldExtract 3 30 is %u", bitfieldExtract64(v, 3, 30));
+    assertf(bitfieldExtract64(v, 32, 13) == 6389, "wrong bitfieldExtract 32 13 is %u", bitfieldExtract64(v, 32, 13));
+    assertf(bitfieldExtract64(v, 56, 8) == 176, "wrong bitfieldExtract 56 8 is %u", bitfieldExtract64(v, 56, 8));
+    return true;
+}
+
+
+void outputOperationStream(const uint brick_idx, uint offset) {
     EncodingRef brick_encoding = getBrickEncodingRef(brick_idx);
     WMHBrickHeaderRef wm_header = getWMHBrickHeaderFromEncoding(brick_encoding);
     BitVectorRef bit_vector = getWMHBitVectorFromEncoding(brick_encoding);
 
-    const uint offset = 100;
-    debugPrintfEXT("op-stream %u:  %v4u %v4u %v4u %v4u", brick_idx,
+    debugPrintfEXT("op-stream %u:  %v4u, %v4u, %v4u, %v4u", brick_idx,
                     uvec4(WM_HUFFMAN_ACCESS(offset + 0),
                           WM_HUFFMAN_ACCESS(offset + 1),
                           WM_HUFFMAN_ACCESS(offset + 2),
@@ -419,6 +448,26 @@ void outputOperationStream(const uint brick_idx) {
                           WM_HUFFMAN_ACCESS(offset + 13),
                           WM_HUFFMAN_ACCESS(offset + 14),
                           WM_HUFFMAN_ACCESS(offset + 15)));
+
+//    debugPrintfEXT("bit-vector start %u:  %v2u  %v2u  %v2u  %v2u", brick_idx, unpackUint2x32(bit_vector.words[0]),
+//                   unpackUint2x32(bit_vector.words[1]), unpackUint2x32(bit_vector.words[2]), unpackUint2x32(bit_vector.words[3]));
+//
+//    for (uint i = 0; i < getFlatRankEntriesHuffman(wm_header.bit_vector_size); i++)
+//        debugPrintfEXT("wmh fr start %u at [%u]:  %v2u", brick_idx, i, unpackUint2x32(wm_header.fr[i]));
+//
+//    debugPrintfEXT("header %u:  bit_vector_size %u, ones_before_level %v4u, %u,  level_starts_1_to_4 %v4u, fr[0] %v2u",
+//                        brick_idx,
+//                        wm_header.bit_vector_size,
+//                        uvec4(wm_header.ones_before_level[0],
+//                              wm_header.ones_before_level[1],
+//                              wm_header.ones_before_level[2],
+//                              wm_header.ones_before_level[3]),
+//                        wm_header.ones_before_level[4],
+//                        uvec4(wm_header.level_starts_1_to_4[0],
+//                              wm_header.level_starts_1_to_4[1],
+//                              wm_header.level_starts_1_to_4[2],
+//                              wm_header.level_starts_1_to_4[3]),
+//                        unpackUint2x32(wm_header.fr[0]));
 }
 
 bool verifyBrickCompression(const uint brick_idx) {
@@ -439,59 +488,67 @@ bool verifyBrickCompression(const uint brick_idx) {
 #endif
 
     if (SIZEOF(WMHBrickHeaderRef) != 48) {
-        debugPrintfEXT("WMHBrickHeader size must be 48 but is %u", uint(SIZEOF(WMHBrickHeaderRef)));
+        debugPrintfEXT("[brick %u] WMHBrickHeader size must be 48 but is %u", brick_idx, uint(SIZEOF(WMHBrickHeaderRef)));
         return false;
     }
 
     // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
     if (brick_encoding_length < base_header_size + 1u + 1u) {
-        debugPrintfEXT("brick encoding is shorter than minimum. (header size + 1 encoding + 1 palette) = %u but is %u", base_header_size + 2u, brick_encoding_length);
+        debugPrintfEXT("[brick %u] brick encoding is shorter than minimum. (header size + 1 encoding + 1 palette) = %u but is %u", brick_idx, base_header_size + 2u, brick_encoding_length);
         return false;
     }
 
     // check first header entry being base_header_size * 8
     if(brick_encoding.buf[0] != 0) {
-        debugPrintfEXT("First encoding operation index must be 0.");
+        debugPrintfEXT("[brick %u] First encoding operation index must be 0.", brick_idx);
         return false;
     }
 
     // check palette start of first LoD being 0 and second LoD being 1
     if(brick_encoding.buf[header_start_lods] != 0u) {
-        debugPrintfEXT("First palette start must be 0 but is %u", brick_encoding.buf[header_start_lods]);
+        debugPrintfEXT("[brick %u] First palette start must be 0 but is %u", brick_idx, brick_encoding.buf[header_start_lods]);
         return false;
     }
     if(brick_encoding.buf[header_start_lods + 1u] != 1u) {
-        debugPrintfEXT("Second palette start must be 1 but is %u", brick_encoding.buf[header_start_lods + 1u]);
+        debugPrintfEXT("[brick %u] Second palette start must be 1 but is %u", brick_idx, brick_encoding.buf[header_start_lods + 1u]);
         return false;
     }
 
     WMHBrickHeaderRef wm_header = getWMHBrickHeaderFromEncoding(brick_encoding);
     // maximum text size: HWM_LEVELS bits per voxel (i.e. 5 bit vectors with length of voxels in brick)
     if (wm_header.bit_vector_size == 0u || wm_header.bit_vector_size > total_voxels_in_brick * HWM_LEVELS) {
-        debugPrintfEXT("Bit vector size must be within (0, %u) but is %u", total_voxels_in_brick * HWM_LEVELS, wm_header.bit_vector_size);
+        debugPrintfEXT("[brick %u] Bit vector size must be within (0, %u) but is %u", brick_idx, total_voxels_in_brick * HWM_LEVELS, wm_header.bit_vector_size);
         return false;
     }
     if (_get_L1_entry(wm_header.fr[0]) != 0) {
-        debugPrintfEXT("First flat rank L1 entry must be 0 but is %u", _get_L1_entry(wm_header.fr[0]));
+        debugPrintfEXT("[brick %u] First flat rank L1 entry must be 0 but is %u", brick_idx, _get_L1_entry(wm_header.fr[0]));
         return false;
     }
     if (_get_L2_entry(wm_header.fr[0], 0) != 0) {
-        debugPrintfEXT("First flat rank L1 entry must be 0 but is %u", _get_L1_entry(wm_header.fr[0]));
+        debugPrintfEXT("[brick %u] First flat rank L1 entry must be 0 but is %u", brick_idx, _get_L1_entry(wm_header.fr[0]));
         return false;
     }
     if (wm_header.ones_before_level[0] != 0u) {
-        debugPrintfEXT("First ones_before_level entry must be 0 but is %u", wm_header.ones_before_level[0]);
+        debugPrintfEXT("[brick %u] First ones_before_level entry must be 0 but is %u", brick_idx, wm_header.ones_before_level[0]);
         return false;
     }
     if (wm_header.level_starts_1_to_4[0] > total_voxels_in_brick) {
-        debugPrintfEXT("level_starts_1_to_4[0] must be the text size, limited by voxel count, but is %u", wm_header.level_starts_1_to_4[0]);
+        debugPrintfEXT("[brick %u] level_starts_1_to_4[0] must be the text size, limited by voxel count, but is %u", brick_idx, wm_header.level_starts_1_to_4[0]);
         return false;
+    }
+
+    uint flat_rank_entries = getFlatRankEntriesHuffman(wm_header.bit_vector_size);
+    for (int i = 1; i < flat_rank_entries; i++) {
+        if (_get_L1_entry(wm_header.fr[i]) <= _get_L1_entry(wm_header.fr[i-1])) {
+            debugPrintfEXT("[brick %u] Flat Rank L1 entries must be ascending but for two entries %v2u", brick_idx, uvec2(_get_L1_entry(wm_header.fr[i]), _get_L1_entry(wm_header.fr[i-1])));
+            return false;
+        }
     }
 
 #ifndef DECODE_FROM_SHARED_MEMORY
     BitVectorRef bit_vector = getWMHBitVectorFromEncoding(brick_encoding);
     if (_wm_huffman_access(wm_header, bit_vector, 0) != PALETTE_ADV) {
-        debugPrintfEXT("First operation must be PALETTE_ADV but is %u", _wm_huffman_access(wm_header, bit_vector, 0));
+        debugPrintfEXT("[brick %u] First operation must be PALETTE_ADV (4) but is %u", brick_idx, _wm_huffman_access(wm_header, bit_vector, 0));
         return false;
     }
 #endif

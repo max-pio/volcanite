@@ -75,6 +75,11 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
     // if one of the materials changed, update the whole buffer
     if(std::find(m_gpu_material_changed.begin(), m_gpu_material_changed.end(), true) != m_gpu_material_changed.end()) {
+        // wait for previous frame to finish before uploading material buffer and textures
+        getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution);
+        AwaitableList awaitMaterialUploads = {};
+        std::vector<std::shared_ptr<Buffer>> stagingBufferHandles = {}; // used to prevent freeing buffers before finished upload
+
         std::vector<GPUSegmentedVolumeMaterial> gpu_mat(m_materials.size());
         for (int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
             // Discriminator
@@ -115,13 +120,20 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             gpu_mat[m].emission = m_materials[m].emission * m_materials[m].emission;    // ^2 for better user control
             gpu_mat[m].wrapping = m_materials[m].wrapping;
 
+            // update transfer function textures
+            constexpr int TF_WIDTH = 256;
+            m_materialTransferFunctions[m] = m_materials[m].tf->rasterize(getCtx(), TF_WIDTH);
+            auto [_tf1dAwait, _tf1dStagingBuf] = m_materialTransferFunctions[m]->upload();
+            awaitBeforeExecution.push_back(_tf1dAwait);
+            stagingBufferHandles.push_back(_tf1dStagingBuf);
+            m_pass->setImageSamplerArray("s_transferFunctions", m, m_materialTransferFunctions[m]->texture(), vk::ImageLayout::eReadOnlyOptimal, false);
+
             m_gpu_material_changed[m] = false;
         }
-        // wait for previous frame to finish before uploading material buffer
-        getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution);
         auto [material_upload_finished, _material_upload_staging_buffer] = m_materials_buffer->uploadWithStagingBuffer(
                 gpu_mat.data(), sizeof(GPUSegmentedVolumeMaterial) * m_materials.size(), {.queueFamily = m_queue_family_index});
-        getCtx()->sync->hostWaitOnDevice({material_upload_finished}); // have to wait here, otherwise the upload_staging buffer is freed immediately
+        awaitMaterialUploads.push_back(material_upload_finished);
+        getCtx()->sync->hostWaitOnDevice(awaitMaterialUploads); // have to wait here, otherwise the staging buffers are freed immediately
     }
 
     // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts
@@ -588,8 +600,6 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         shader_defines.emplace_back("PALETTE_CACHE");
     if (m_decode_from_shared_memory)
         shader_defines.emplace_back("DECODE_FROM_SHARED_MEMORY");
-    if (m_compressed_segmentation_volume->isUsingRandomAccess())
-        shader_defines.emplace_back("RANDOM_ACCESS");
     shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if (getCtx()->getWsi())
@@ -1090,16 +1100,8 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     }
 
     void CompressedSegmentationVolumeRenderer::updateSegmentedVolumeMaterial(int m) {
-        constexpr int TF_WIDTH = 256;
-        if(m_mostRecentFrame.has_value())
-            getCtx()->sync->hostWaitOnDevice(m_mostRecentFrame->renderingComplete);
         if (m_materialTransferFunctions.size() < m_materials.size())
             m_materialTransferFunctions.resize(m_materials.size(), nullptr);
-        m_materialTransferFunctions[m] = m_materials[m].tf->rasterize(getCtx(), TF_WIDTH);
-        auto [tf1dAwait, tf1dStagingBuf] = m_materialTransferFunctions[m]->upload();
-
-        getCtx()->sync->hostWaitOnDevice({tf1dAwait});
-        m_pass->setImageSamplerArray("s_transferFunctions", m, m_materialTransferFunctions[m]->texture(), vk::ImageLayout::eReadOnlyOptimal, false);
 
         // reset accumulation
         m_camHash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
