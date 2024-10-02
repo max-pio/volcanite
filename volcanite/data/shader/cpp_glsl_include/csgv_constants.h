@@ -141,4 +141,9 @@ struct GPUSegmentedVolumeMaterial {
     int wrapping;                   ///< wrapping mode to map labels to transfer function values: 0 = clamp, 1 = repeat
 };
 
+// Cache Modes
+#define CACHE_NOTHING 0
+#define CACHE_VOXELS 1
+#define CACHE_BRICKS 2
+
 #endif // CSGV_CONSTANTS_H

@@ -32,7 +32,7 @@ layout (local_size_x = 8, local_size_y = 4, local_size_z = 4) in;
 void main() {
     uvec3 brick = gl_GlobalInvocationID.xyz;
     if(isHelperLane(brick, g_brick_count))
-    return;
+        return;
     uint brick_idx = brick_pos2idx(brick, g_brick_count);
 
     if(brick.x == 0 && brick.y == 0 && brick.z == 0) {
@@ -49,25 +49,32 @@ void main() {
         // reset the cache top counter (= free all cache elements)
         g_assign_info[(LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD] = 0u;
         #ifdef SEPARATE_DETAIL
-        // reset the atomic counter for the detail request buffer
-        g_detail_requests[g_request_buffer_capacity] = 0u;
+            // reset the atomic counter for the detail request buffer
+            g_detail_requests[g_request_buffer_capacity] = 0u;
         #endif
     }
 
-        #ifdef SEPARATE_DETAIL
-    // clear the request buffer
-    uint total_workers = g_brick_count.x * g_brick_count.y * g_brick_count.z;
-    uint elems_per_worker = (g_request_buffer_capacity + total_workers - 1u) / total_workers;
-    for(uint i = elems_per_worker * brick_idx; i < elems_per_worker * (brick_idx + 1); i++) {
-        if(i < g_request_buffer_capacity)
-        g_detail_requests[i] = INVALID;
-    }
-        #endif
-
+    #ifdef SEPARATE_DETAIL
+        // clear the request buffer
+        uint total_workers = g_brick_count.x * g_brick_count.y * g_brick_count.z;
+        uint elems_per_worker = (g_request_buffer_capacity + total_workers - 1u) / total_workers;
+        for(uint i = elems_per_worker * brick_idx; i < elems_per_worker * (brick_idx + 1); i++) {
+            if(i < g_request_buffer_capacity)
+            g_detail_requests[i] = INVALID;
+        }
+    #endif
 
     // reset cache info
     g_brick_info[brick_idx * 4u + BRICK_INFO_REQ_INV_LOD] = INVALID; // for a "garbage collection" we would overwrite this to directly re-assign all required blocks
     g_brick_info[brick_idx * 4u + BRICK_INFO_CUR_INV_LOD] = INVALID;
     g_brick_info[brick_idx * 4u + BRICK_INFO_CACHE_INDEX] = INVALID;
     g_brick_info[brick_idx * 4u + BRICK_INFO_REQ_SLOT] = INVALID;
+
+    #if (CACHE_MODE == CACHE_VOXELS)
+        // fill the whole cache with INVALID information
+        uint total_threads = g_brick_count.x * g_brick_count.y * g_brick_count.z;
+        for (uint id = brick_idx; id < CACHE_UINT_SIZE; id += total_threads) {
+            g_cache[id] = INVALID;
+        }
+    #endif
 }

@@ -35,12 +35,6 @@ namespace volcanite {
 struct VolcaniteArgs {
 
 public:
-    enum CacheMode {
-        CACHE_NOTHING = 0,
-        CACHE_VOXELS = 1,
-        CACHE_BRICKS = 2,
-    };
-
     // general args
     bool verbose = false;
     bool headless = false;
@@ -145,7 +139,7 @@ public:
             SwitchArg cachePalettizedArg("", "cache-palette", "Store palette indices in brick cache instead of labels.", cmd);
             std::vector<char> _allowedCacheUnits = {'n', 'v', 'b'};
             ValuesConstraint<char> allowedCacheUnits(_allowedCacheUnits);
-            ValueArg<char> cacheModeArg("", "cache-mode", "Content in the cache: [n] no cache [v] single voxels [b] full bricks", false, _allowedCacheUnits[va.cache_mode], &allowedCacheUnits);
+            ValueArg<char> cacheModeArg("", "cache-mode", "Content in the cache: [n] no cache [v] single voxels [b] full bricks (default)", false, _allowedCacheUnits[va.cache_mode], &allowedCacheUnits);
             cmd.add(cacheModeArg);
             SwitchArg decodedSharedMemoryArg("", "decode-sm", "Copy brick encodings to shared memory before decoding.", cmd);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);

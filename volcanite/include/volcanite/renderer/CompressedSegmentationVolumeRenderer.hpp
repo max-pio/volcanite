@@ -191,10 +191,17 @@ public:
     /// portions of the volume in cache at the expense of a performance decrease.
     /// @param decode_from_shared_memory if true, the encoding will be copied to shared memory before decoding.
     /// only works in combination with a random access encoding.
-    void setDecodingParameters(size_t cache_size_MB, bool palettized_cache, bool decode_from_shared_memory) {
+    void setDecodingParameters(size_t cache_size_MB, bool palettized_cache, bool decode_from_shared_memory, uint32_t cache_mode) {
         m_target_cache_size_MB = cache_size_MB;
+        if(m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
+            Logger(WARN) << "Cache size is currently limited to 4 GB maximum.";
+            m_target_cache_size_MB = 4294967295ul / 1024ul / 1024ul;
+        }
         m_use_palette_cache = palettized_cache;
         m_decode_from_shared_memory = decode_from_shared_memory;
+        if (cache_mode > 2)
+            throw std::runtime_error("Invalid cache mode " + std::to_string(cache_mode));
+        m_cache_mode = cache_mode;
     }
 
 private:
@@ -270,6 +277,7 @@ private:
     std::vector<GPUSegmentedVolumeMaterial> m_gpu_materials{SEGMENTED_VOLUME_MATERIAL_COUNT};
 
     bool m_decode_from_shared_memory = false;   ///< if true, the encoding is copied to shared memory before decoding. Requires random access encoding.
+    uint32_t m_cache_mode = CACHE_BRICKS;       ///< if full bricks are decoded into the cache or single voxels, or if no cache is used at all
     // palettized cache
     bool m_use_palette_cache = false;           ///< if the cache stores indices into brick palettes instead of the actual indexed labels
     uint32_t m_cache_palette_idx_bits = 32u;    ///< the GPU cache can store palette indices with fewer than 32 bits per entry

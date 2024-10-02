@@ -456,54 +456,67 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     m_free_stack_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_free_stack_buffer", .byteSize = (m_free_stack_capacity * (lods_in_volume - 1u) + (lods_in_volume + 1u)) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_cache_info_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_info_buffer", .byteSize = bricks_in_volume*sizeof(uint32_t)*4u, .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_assign_info_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_assign_buffer", .byteSize = (1u + (lods_in_volume - 1u) * 3u) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
-    // limit cache size to maximum available GPU memory
-    auto heap_budget_and_usage = getMemoryHeapBudgetAndUsage(*ctx);
-    size_t free_heap_size = heap_budget_and_usage.first - heap_budget_and_usage.second;
-    if(m_target_cache_size_MB * 1024 * 1024 > free_heap_size) {
-        updateDeviceMemoryUsage();
-        Logger(WARN) << "not enough GPU memory available to provide target cache size of " << m_target_cache_size_MB << " MB. Using smaller cache. " << m_gui_device_mem_text;
-        m_target_cache_size_MB = 0;
-    }
-    // target size of 0 means to allocate as much for the cache as we can (or rather 90% of it to have some leeway)
-    if(m_target_cache_size_MB == 0) {
-        constexpr float free_heap_amount_to_use = 0.9f;
-        m_target_cache_size_MB = free_heap_size / 1024 / 1024;
-        m_target_cache_size_MB = static_cast<size_t>(free_heap_amount_to_use *
-                                                     static_cast<float>(free_heap_size) / 1024.f / 1024.f);
-    }
-    // for small data sets, we can limit the cache so that it fits all LoDs of the data set at once
-    size_t maximum_req_cache_size_MB = 4095;
-    {
-        // number base elements needed to store all LoDs of a brick at once
-        size_t brick_cache_size_in_lod = m_cache_base_element_uints;   // inv. LoD 0 needs no elements, inv. LoD 1 needs one
-        maximum_req_cache_size_MB = brick_cache_size_in_lod;
-        for(int l = 2; l < m_compressed_segmentation_volume->getLodCountPerBrick(); l++) {
-            // next level needs 8 times the elements
-            brick_cache_size_in_lod *= 2*2*2;
-            maximum_req_cache_size_MB += brick_cache_size_in_lod;
+    // cache size is determined depending on the cache mode
+    uint32_t cache_uint_size = 0ul;
+    if (m_cache_mode == CACHE_NOTHING) {
+        cache_uint_size = 1ul; // minimal size as the cache is not used regardless
+    } else if (m_cache_mode == CACHE_VOXELS) {
+        cache_uint_size = m_target_cache_size_MB * 1024 * 1024 / sizeof(uint32_t);
+    } else if (m_cache_mode == CACHE_BRICKS) {
+        // limit cache size to maximum available GPU memory
+        auto heap_budget_and_usage = getMemoryHeapBudgetAndUsage(*ctx);
+        size_t free_heap_size = heap_budget_and_usage.first - heap_budget_and_usage.second;
+        if (m_target_cache_size_MB * 1024 * 1024 > free_heap_size) {
+            updateDeviceMemoryUsage();
+            Logger(WARN) << "not enough GPU memory available to provide target cache size of " << m_target_cache_size_MB
+                         << " MB. Using smaller cache. " << m_gui_device_mem_text;
+            m_target_cache_size_MB = 0;
         }
-        maximum_req_cache_size_MB *=  m_compressed_segmentation_volume->getBrickIndexCount();
-        // convert from #uints to MB
-        maximum_req_cache_size_MB *= sizeof(uint32_t);
-        maximum_req_cache_size_MB = static_cast<size_t>(std::ceil(static_cast<double>(maximum_req_cache_size_MB) / 1024. / 1024));
+        // target size of 0 means to allocate as much for the cache as we can (or rather 85% of it to have some leeway)
+        if (m_target_cache_size_MB == 0) {
+            constexpr float free_heap_amount_to_use = 0.85f;
+            m_target_cache_size_MB = free_heap_size / 1024 / 1024;
+            m_target_cache_size_MB = static_cast<size_t>(free_heap_amount_to_use *
+                                                         static_cast<float>(free_heap_size) / 1024.f / 1024.f);
+        }
+        // for small data sets, we can limit the cache so that it fits all LoDs of the data set at once
+        size_t maximum_req_cache_size_MB = 4095;
+        {
+            // number base elements needed to store all LoDs of a brick at once
+            size_t brick_cache_size_in_lod = m_cache_base_element_uints;   // inv. LoD 0 needs no elements, inv. LoD 1 needs one
+            maximum_req_cache_size_MB = brick_cache_size_in_lod;
+            for (int l = 2; l < m_compressed_segmentation_volume->getLodCountPerBrick(); l++) {
+                // next level needs 8 times the elements
+                brick_cache_size_in_lod *= 2 * 2 * 2;
+                maximum_req_cache_size_MB += brick_cache_size_in_lod;
+            }
+            maximum_req_cache_size_MB *= m_compressed_segmentation_volume->getBrickIndexCount();
+            // convert from #uints to MB
+            maximum_req_cache_size_MB *= sizeof(uint32_t);
+            maximum_req_cache_size_MB = static_cast<size_t>(std::ceil(
+                    static_cast<double>(maximum_req_cache_size_MB) / 1024. / 1024));
 
-        // TODO: include m_cache_base_element_uints and/or m_cache_indices_per_uint when computing required cache size
+            // TODO: include m_cache_base_element_uints and/or m_cache_indices_per_uint when computing required cache size
+        }
+        if (m_target_cache_size_MB > maximum_req_cache_size_MB) {
+            Logger(DEBUG)
+                    << "Target cache size is bigger than required to store all LoDs of all bricks. Limitting size.";
+            m_target_cache_size_MB = maximum_req_cache_size_MB;
+        }
+        // TODO: could use the BufferDeviceAddress extension for the cache buffer as well to support caches > 4 GB.
+        //  In shaders, cache idx is measured in # base_element where one base_element is ~4 to 16 bytes large.
+        //  Would only have to adapt the (cache_idx * g_cache_base_element_uints) in csgv_assign.
+        // limit cache size to 4GB if the previous steps increased it by too much
+        if (m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
+            m_target_cache_size_MB = 4294967295ul / 1024ul / 1024ul;
+        }
+
+        m_cache_capacity = (m_target_cache_size_MB * 1024 * 1024) / (m_cache_base_element_uints * sizeof(uint32_t));
+        cache_uint_size = m_cache_capacity * m_cache_base_element_uints;
+        Logger(INFO) << "Allocating cache with size " << m_target_cache_size_MB << " MB at " << (m_cache_base_element_uints * 32u / 8u) << " bits per label";
     }
-    if(m_target_cache_size_MB > maximum_req_cache_size_MB) {
-        Logger(DEBUG) << "Target cache size is bigger than required to store all LoDs of all bricks. Limitting size.";
-        m_target_cache_size_MB = maximum_req_cache_size_MB;
-    }
-    // TODO: could use the BufferDeviceAddress extension for the cache buffer as well to support caches > 4 GB.
-    //  In shaders, cache idx is measured in # base_element where one base_element is ~4 to 16 bytes large.
-    //  Would only have to adapt the (cache_idx * g_cache_base_element_uints) in csgv_assign.
-    if(m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
-        Logger(WARN) << "Cache size is currently limited to 4 GB maximum.";
-        m_target_cache_size_MB = 4294967295ul / 1024ul / 1024ul;
-    }
-    Logger(INFO) << "Allocating cache size " << m_target_cache_size_MB << " MB at " << (m_cache_base_element_uints * 32u / 8u) << " bits per label";
-    m_cache_capacity = (m_target_cache_size_MB * 1024 * 1024) / (m_cache_base_element_uints * sizeof(uint32_t));
     size_t maxGPUBufferSize = getCtx()->getPhysicalDevice().getProperties().limits.maxStorageBufferRange;
-    m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = m_cache_capacity * m_cache_base_element_uints * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = cache_uint_size * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
 
     updateDeviceMemoryUsage();
     Logger(INFO) << "Device memory after initialization: " << m_gui_device_mem_text;
@@ -600,14 +613,17 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         shader_defines.emplace_back("PALETTE_CACHE");
     if (m_decode_from_shared_memory)
         shader_defines.emplace_back("DECODE_FROM_SHARED_MEMORY");
+    shader_defines.emplace_back("CACHE_MODE=" + std::to_string(m_cache_mode));
+    if (m_cache_mode == CACHE_VOXELS)
+        shader_defines.push_back("CACHE_UINT_SIZE=" + std::to_string(m_target_cache_size_MB * 1024 * 1024 / sizeof(uint32_t)));
     shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if (getCtx()->getWsi())
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), m_queue_family_index, shader_defines,
-                                                        m_compressed_segmentation_volume->isUsingRandomAccess());
+                                                        m_compressed_segmentation_volume->isUsingRandomAccess(), m_cache_mode==CACHE_BRICKS);
     else
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, m_queue_family_index, shader_defines,
-                                                        m_compressed_segmentation_volume->isUsingRandomAccess());
+                                                        m_compressed_segmentation_volume->isUsingRandomAccess(), m_cache_mode==CACHE_BRICKS);
     m_pass->allocateResources();
     m_urender_info = m_pass->getUniformSet("render_info");
     m_usegmented_volume_info = m_pass->getUniformSet("segmented_volume_info");

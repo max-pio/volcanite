@@ -87,6 +87,14 @@ void main() {
         }
     }
 
+#if CACHE_MODE != CACHE_BRICKS
+    // all the cache management is only necessary when caching bricks (and decoding them in the decompression stage).
+    // for other caching modes, all we care about is the empty space flagging of invisible bricks
+    // a value > lod_count is empty space, value == lod_count is potentially visible
+    g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT + uint(!potentially_visible);
+    return;
+#endif
+
     // we can set a maximum LoD to decode to in the gui
     if(g_max_inv_lod == 0u) {
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT;

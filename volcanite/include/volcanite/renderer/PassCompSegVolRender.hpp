@@ -49,11 +49,11 @@ public:
     };
 
     PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering, uint32_t queueFamilyIndex,
-                         std::vector<std::string> shaderDefines = {}, bool parallel_decode = false,
+                         std::vector<std::string> shaderDefines = {}, bool parallel_decode = false, bool enable_cache_stages = true,
                          vk::ImageUsageFlags outputImageUsage = {}, const std::string& label = "PassCompSegVolRender")
         : PassCompute(ctx, label, multiBuffering, queueFamilyIndex),
           WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_shader_defines(std::move(shaderDefines)),
-          m_parallel_decode(parallel_decode) {}
+          m_parallel_decode(parallel_decode), m_enable_cache_stages(enable_cache_stages) {}
 
     AwaitableHandle execute(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override;
 
@@ -94,6 +94,7 @@ protected:
     bool m_reset_cache = false;                        /// if the GPU cache reset should be triggered on the next call
     const std::vector<std::string> m_shader_defines;   /// defines that are passed on to shader compilation
     bool m_parallel_decode = false;                    /// if decompression is parallelized within one brick
+    bool m_enable_cache_stages = true;                 /// if the cache provision, assign, and decompress stages are executed. only required when caching full bricks.
 };
 
 } // namespace volcanite

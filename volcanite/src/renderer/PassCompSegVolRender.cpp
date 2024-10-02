@@ -41,29 +41,42 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
     // block request and visibility classification
     getCtx()->debugMarker->beginRegion(commandBuffer, "request", glm::vec4(0.f, 0.f, 0.9f, 1.f));
     executeCommands(commandBuffer, REQUEST);
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {},
+
+    if (m_enable_cache_stages) {
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {},
                                   {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite)},
                                   nullptr, nullptr);
-    getCtx()->debugMarker->endRegion(commandBuffer);
-//    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite)},
-//                                  nullptr, nullptr);
-    // fetch new blocks at the end of the cache
-    getCtx()->debugMarker->beginRegion(commandBuffer, "provision", glm::vec4(0.f, 0.3f, 0.6f, 1.f));
-    executeCommands(commandBuffer, PROVISION);
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
-    getCtx()->debugMarker->endRegion(commandBuffer);
-//    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite)},
-//                                  nullptr, nullptr);
-    // assign brick decompression requests to free cache regions
-    getCtx()->debugMarker->beginRegion(commandBuffer, "assign", glm::vec4(0.f, 1.f, 0.6f, 0.3f));
-    executeCommands(commandBuffer, ASSIGN);
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
-    getCtx()->debugMarker->endRegion(commandBuffer);
+        getCtx()->debugMarker->endRegion(commandBuffer);
 
-    // decompress all bricks that request it to their assigned cache region (if it exists)
-    getCtx()->debugMarker->beginRegion(commandBuffer, "decompress", glm::vec4(0.f, 1.f, 0.f, 1.f));
-    executeCommands(commandBuffer, DECOMPRESS);
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
+        //    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite)},
+        //                                  nullptr, nullptr);
+        // fetch new blocks at the end of the cache
+        getCtx()->debugMarker->beginRegion(commandBuffer, "provision", glm::vec4(0.f, 0.3f, 0.6f, 1.f));
+        executeCommands(commandBuffer, PROVISION);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                                      vk::PipelineStageFlagBits::eComputeShader, {},
+                                      {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
+                                                         vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
+        getCtx()->debugMarker->endRegion(commandBuffer);
+        //    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite)},
+        //                                  nullptr, nullptr);
+        // assign brick decompression requests to free cache regions
+        getCtx()->debugMarker->beginRegion(commandBuffer, "assign", glm::vec4(0.f, 1.f, 0.6f, 0.3f));
+        executeCommands(commandBuffer, ASSIGN);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                                      vk::PipelineStageFlagBits::eComputeShader, {},
+                                      {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
+                                                         vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
+        getCtx()->debugMarker->endRegion(commandBuffer);
+
+        // decompress all bricks that request it to their assigned cache region (if it exists)
+        getCtx()->debugMarker->beginRegion(commandBuffer, "decompress", glm::vec4(0.f, 1.f, 0.f, 1.f));
+        executeCommands(commandBuffer, DECOMPRESS);
+    }
+    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                                  vk::PipelineStageFlagBits::eComputeShader, {},
+                                  {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
+                                                     vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
     getCtx()->debugMarker->endRegion(commandBuffer);
 
     // ray marching

@@ -234,7 +234,7 @@ int volcanite_main(int argc, char *argv[]) {
             csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
 
         const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
-        renderer->setDecodingParameters(args.cache_size_MB, args.cache_palettized, args.decode_from_shared_memory);
+        renderer->setDecodingParameters(args.cache_size_MB, args.cache_palettized, args.decode_from_shared_memory, args.cache_mode);
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
         tryImportRenderConfig(args, renderer);
         renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
