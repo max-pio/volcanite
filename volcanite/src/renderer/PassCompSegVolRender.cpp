@@ -41,13 +41,13 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
     // block request and visibility classification
     getCtx()->debugMarker->beginRegion(commandBuffer, "request", glm::vec4(0.f, 0.f, 0.9f, 1.f));
     executeCommands(commandBuffer, REQUEST);
-
-    if (m_enable_cache_stages) {
-        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {},
+    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {},
                                   {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite)},
                                   nullptr, nullptr);
-        getCtx()->debugMarker->endRegion(commandBuffer);
+    getCtx()->debugMarker->endRegion(commandBuffer);
 
+
+    if (m_enable_cache_stages) {
         //    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite)},
         //                                  nullptr, nullptr);
         // fetch new blocks at the end of the cache
@@ -72,17 +72,17 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
         // decompress all bricks that request it to their assigned cache region (if it exists)
         getCtx()->debugMarker->beginRegion(commandBuffer, "decompress", glm::vec4(0.f, 1.f, 0.f, 1.f));
         executeCommands(commandBuffer, DECOMPRESS);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                                      vk::PipelineStageFlagBits::eComputeShader, {},
+                                      {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
+                                                         vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
+        getCtx()->debugMarker->endRegion(commandBuffer);
     }
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
-                                  vk::PipelineStageFlagBits::eComputeShader, {},
-                                  {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
-                                                     vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
-    getCtx()->debugMarker->endRegion(commandBuffer);
 
     // ray marching
     getCtx()->debugMarker->beginRegion(commandBuffer, "rendering", glm::vec4(1.f, 0.f, 0.f, 1.f));
     executeCommands(commandBuffer, RENDERING);
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
+    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite)}, nullptr, nullptr);
     getCtx()->debugMarker->endRegion(commandBuffer);
 
     // inpainting (for progressive pixel subsampling rendering)

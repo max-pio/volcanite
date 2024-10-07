@@ -22,16 +22,16 @@
 float getAttribute(uint label, uint attributeStart) {
     // attributeStart > valid buffer size means that we use the voxel label direclty (csgv_id)
     if(attributeStart == LABEL_AS_ATTRIBUTE)
-    return float(label);
+        return float(label);
     else
-    return g_attributes[attributeStart + label];
+        return g_attributes[attributeStart + label];
 }
 
 /// Returns the first material where the discriminator attribute falls into the discriminator interval, -1 for invisible
 int getMaterial(uint label) {
     for(int m = 0; m <= g_max_active_material; m++) {
         if(getAttribute(label, g_materials[m].discrAttributeStart) >= g_materials[m].discrIntervalMin
-        && getAttribute(label, g_materials[m].discrAttributeStart) <= g_materials[m].discrIntervalMax)
+            && getAttribute(label, g_materials[m].discrAttributeStart) <= g_materials[m].discrIntervalMax)
         return m;
     }
     // a material fits, return "invisible" material
@@ -63,7 +63,7 @@ vec4 getColor(uint label, int material) {
     // This should not be an issue with GLSL version >= 4!
     // Anyways, here's a fix by "forcing" non-uniform control flow:
     if(material == 0)
-    return vec4(textureLod(s_transferFunctions[0], v, 0.f).rgb, g_materials[0].opacity);
+        return vec4(textureLod(s_transferFunctions[0], v, 0.f).rgb, g_materials[0].opacity);
 
     assertf(material >= 0 && material <= g_max_active_material, "material %i assigned to label is invalid", material);
     assert(!any(isnan(vec4(g_materials[material].discrIntervalMin,  g_materials[material].discrIntervalMax,

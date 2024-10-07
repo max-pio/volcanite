@@ -24,11 +24,12 @@ layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
 #include "csgv_bindings.glsl"
 
-// includes
 #include "cpp_glsl_include/csgv_constants.h"
 #include "util.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
 #include "volcanite/renderer/csgv_materials.glsl"
+
+#include "pcg_hash.glsl"
 
 bool pushFreeBlockStack(uint inv_lod, uint value) {
     uint pos = atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], 1u);
@@ -87,8 +88,20 @@ void main() {
         }
     }
 
+#if CACHE_MODE == CACHE_VOXELS
+    // evict random elements from the cache
+    {
+        const uint evict_count = 0;
+        uvec2 rnd = uvec2(brick_idx ^ (~g_frame), g_frame << 8);
+        for (int i = 0; i < evict_count; i++) {
+            rnd = hash_pcg2d(rnd);
+            g_cache[(rnd.x % (CACHE_UINT_SIZE / 2)) * 2] = INVALID;
+        }
+    }
+#endif
+
 #if CACHE_MODE != CACHE_BRICKS
-    // all the cache management is only necessary when caching bricks (and decoding them in the decompression stage).
+    // all following cache management is only necessary when caching bricks (and decoding them in the decompression stage).
     // for other caching modes, all we care about is the empty space flagging of invisible bricks
     // a value > lod_count is empty space, value == lod_count is potentially visible
     g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT + uint(!potentially_visible);

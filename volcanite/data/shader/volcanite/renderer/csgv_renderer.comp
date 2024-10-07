@@ -70,9 +70,26 @@ uint get_inv_lod(ivec3 voxel) {
         return decompressCSGVVoxel(brick_idx, brick_voxel, req_inv_lod);
     }
 #elif CACHE_MODE == CACHE_VOXELS
+    uint hash(uint a, uint x) {
+        const uint bits = findMSB(CACHE_UINT_SIZE / 2u);
+        // (ax mod 2^w) / 2^(w-bits)
+        return (a * x) >> (31 - bits); // mod 2^32 implicit
+    }
 
-    uint get_cache_pos(ivec3 voxel, uint inv_lod) {
-        return morton3Dp2i(voxel) % CACHE_UINT_SIZE;
+    // Cuckoo Hashing
+    // use three xor-combined (c,k) hash functions to construct the two hash functions:
+    // see: "Rasmus Pagh and Flemming Friche Rodler. Cuckoo Hashing. In Journal of Algorithms, pages 122–144 (2004)
+    // and: "An Overview of Cuckoo Hashing" by Charles Chen,
+    uint hash1(uint voxel_id) {
+        return ( (hash(19u, voxel_id) ^ hash(3u, voxel_id) ^ hash(115u, voxel_id)) % (CACHE_UINT_SIZE / 2u) ) * 2u;
+    }
+
+    uint hash2(uint voxel_id) {
+        return ( (hash(31u, voxel_id) ^ hash(7u, voxel_id) ^ hash(97u, voxel_id)) % (CACHE_UINT_SIZE / 2u) ) * 2u;
+    }
+
+    uint get_cache_pos(uint voxel_id, uint inv_lod) {
+        return (voxel_id % (CACHE_UINT_SIZE / 2u)) * 2u;
     }
 
     // returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
@@ -82,17 +99,27 @@ uint get_inv_lod(ivec3 voxel) {
         const uint req_inv_lod = get_inv_lod(voxel);
 
         // check if the voxel is already decoded in the cache
-        const uint cache_pos = get_cache_pos(voxel, req_inv_lod);
-        if (CSGV_DECODING_ARRAY[cache_pos] != INVALID)
-            return CSGV_DECODING_ARRAY[cache_pos];
+        const uint voxel_id = morton3Dp2i((voxel >> (g_max_inv_lod - req_inv_lod)) << (g_max_inv_lod - req_inv_lod));
+        uint cache_pos = hash1(voxel_id);
+        assertf(cache_pos < CACHE_UINT_SIZE, "invalid cache_pos %u", cache_pos);
+        if (CSGV_DECODING_ARRAY[cache_pos] != INVALID) {
+            if (CSGV_DECODING_ARRAY[cache_pos] == voxel_id)
+                return CSGV_DECODING_ARRAY[cache_pos + 1];
 
+            // cuckoo hashing: check second possible position
+            cache_pos = hash2(voxel_id);
+            assertf(cache_pos < CACHE_UINT_SIZE, "invalid cache_pos %u", cache_pos);
+            if (CSGV_DECODING_ARRAY[cache_pos] == voxel_id)
+                return CSGV_DECODING_ARRAY[cache_pos + 1];
+        }
         // otherwise, decode the voxel and store it in the cache
         const uvec3 brick = uvec3(voxel) / BRICK_SIZE;
         const uvec3 brick_voxel = uvec3(voxel) - (brick * BRICK_SIZE);
         const uint brick_idx = brick_pos2idx(brick, g_brick_count);
 
         const uint label = decompressCSGVVoxel(brick_idx, brick_voxel, req_inv_lod);
-        CSGV_DECODING_ARRAY[cache_pos] = label;
+        CSGV_DECODING_ARRAY[cache_pos] = voxel_id;
+        CSGV_DECODING_ARRAY[cache_pos + 1] = label;
         return label;
     }
 #elif CACHE_MODE == CACHE_BRICKS

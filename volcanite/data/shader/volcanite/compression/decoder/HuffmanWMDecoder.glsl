@@ -479,12 +479,16 @@ bool verifyBrickCompression(const uint brick_idx) {
     const uint total_header_size_one_fr = base_header_size + 12; // base header + WMHBrickHeader incl 1 FlatRank
     const uint header_start_lods = LOD_COUNT;
 
-#if (BRICK_SIZE == 16)
+#if (BRICK_SIZE == 8)
+    const uint total_voxels_in_brick = 585;
+#elif (BRICK_SIZE == 16)
     const uint total_voxels_in_brick = 4681;
 #elif (BRICK_SIZE == 32)
     const uint total_voxels_in_brick = 37449;
 #elif (BRICK_SIZE == 64)
     const uint total_voxels_in_brick = 299593;
+#elif (BRICK_SIZE == 128)
+    const uint total_voxels_in_brick = 2396745;
 #endif
 
     if (SIZEOF(WMHBrickHeaderRef) != 48) {
