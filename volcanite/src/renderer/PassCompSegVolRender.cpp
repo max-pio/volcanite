@@ -27,12 +27,13 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
 
     getCtx()->debugMarker->beginRegion(commandBuffer, "total_renderer", glm::vec4(1.f));
 
+    // all uploads must be finished before the rendering can access the buffers
+    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
+
     // potential cache reset / garbage collection.
     if(m_reset_cache) {
-        // will always be called on first frame => wait for all transfers to finish
-        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
         executeCommands(commandBuffer, CACHECLEAR);
-        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
         Logger(DEBUG) << "hard reset brick cache";
         m_reset_cache = false;
     }
@@ -41,32 +42,43 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
     getCtx()->debugMarker->beginRegion(commandBuffer, "request", glm::vec4(0.5f));
     executeCommands(commandBuffer, REQUEST);
     commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {},
-                                  {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryWrite | vk::AccessFlagBits::eMemoryRead)},
+                                  {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite)},
                                   nullptr, nullptr);
     getCtx()->debugMarker->endRegion(commandBuffer);
     // fetch new blocks at the end of the cache
     getCtx()->debugMarker->beginRegion(commandBuffer, "provision", glm::vec4(0.8f));
     executeCommands(commandBuffer, PROVISION);
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
+    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                                  vk::PipelineStageFlagBits::eComputeShader, {},
+                                  {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
+                                                     vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
     getCtx()->debugMarker->endRegion(commandBuffer);
-//    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite)},
-//                                  nullptr, nullptr);
+
     // fetch new blocks at the end of the cache
     getCtx()->debugMarker->beginRegion(commandBuffer, "assign", glm::vec4(0.f, 1.f, 0.f, 1.f));
     executeCommands(commandBuffer, ASSIGN);
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
+    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                                  vk::PipelineStageFlagBits::eComputeShader, {},
+                                  {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
+                                                     vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
     getCtx()->debugMarker->endRegion(commandBuffer);
 
-    // ray marching
-    getCtx()->debugMarker->beginRegion(commandBuffer, "ray_marching", glm::vec4(1.f, 0.f, 0.f, 1.f));
+    // rendering
+    getCtx()->debugMarker->beginRegion(commandBuffer, "rendering", glm::vec4(1.f, 0.f, 0.f, 1.f));
     executeCommands(commandBuffer, RENDERING);
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
+    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite)}, nullptr, nullptr);
     getCtx()->debugMarker->endRegion(commandBuffer); // ray_marching
 
-    // inpainting (for progressive pixel subsampling rendering)
-    executeCommands(commandBuffer, INPAINTING);
+    // resolve (MC sample accumulate and inpainting for progressive pixel subsampling rendering)
+    getCtx()->debugMarker->beginRegion(commandBuffer, "resolve", glm::vec4(1.f, 0.f, 0.f, 1.f));
+    executeCommands(commandBuffer, RESOLVE);
+    getCtx()->debugMarker->endRegion(commandBuffer); // ray_marching
 
     getCtx()->debugMarker->endRegion(commandBuffer); // total_renderer
+
+    // later buffer transfers (e.g. material uploads) must wait for the previous buffer uploads to finish to prevent write-write hazards
+    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eTransferWrite)}, nullptr, nullptr);
+
     commandBuffer.end();
     return getCtx()->sync->submit(commandBuffer, m_queueFamilyIndex, awaitBeforeExecution, vk::PipelineStageFlagBits::eAllCommands, awaitBinaryAwaitableList, signalBinarySemaphore);
 }

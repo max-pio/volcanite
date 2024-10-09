@@ -44,7 +44,7 @@ public:
         PROVISION = 2,
         ASSIGN = 3,
         RENDERING = 4,
-        INPAINTING = 5
+        RESOLVE = 5
     };
 
     PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering, uint32_t queueFamilyIndex,
@@ -63,7 +63,7 @@ public:
     }
     void setImageInfo(uint32_t width, uint32_t height) {
         setGlobalInvocationSize(RENDERING, width, height, 1u);
-        setGlobalInvocationSize(INPAINTING, width, height, 1u);
+        setGlobalInvocationSize(RESOLVE, width, height, 1u);
     }
 
     void resetCacheOnNextCall() { m_reset_cache = true; }
