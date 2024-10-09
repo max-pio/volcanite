@@ -219,6 +219,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessengerCallback(VkDebugUtilsMe
 #if !defined(NDEBUG)
     // per specification pMessageIdName may not be NULL, but RenderDoc emits a single message at startup that has this field set to null.
     // See https://github.com/baldurk/renderdoc/blob/aa26252a778ee9cd795557e346cf8780f56aa834/renderdoc/driver/vulkan/wrappers/vk_misc_funcs.cpp#L1772
+    // released under an MIT license
     if (pCallbackData->pMessageIdName != nullptr && strcmp(pCallbackData->pMessageIdName, "Loader Message") == 0) {
         // blocks info about loaded layers, extensions, etc
         return VK_FALSE;

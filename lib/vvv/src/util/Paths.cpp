@@ -38,6 +38,7 @@ bool Paths::useSourcePaths;
 std::vector<std::string> split(const std::string& s, char delimiter) {
     // method from range-v3, released under the Boost Software License
     // https://github.com/ericniebler/range-v3/blob/master/test/view/split.cpp
+    // released under the Boost Software License 1.0
 
    std::vector<std::string> tokens;
    std::string token;
