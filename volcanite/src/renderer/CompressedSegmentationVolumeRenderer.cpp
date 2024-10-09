@@ -462,6 +462,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
         cache_uint_size = 1ul; // minimal size as the cache is not used regardless
     } else if (m_cache_mode == CACHE_VOXELS) {
         cache_uint_size = m_target_cache_size_MB * 1024 * 1024 / sizeof(uint32_t);
+        Logger(INFO) << "Allocating cache with size " << m_target_cache_size_MB << " MB";
     } else if (m_cache_mode == CACHE_BRICKS) {
         // limit cache size to maximum available GPU memory
         auto heap_budget_and_usage = getMemoryHeapBudgetAndUsage(*ctx);
