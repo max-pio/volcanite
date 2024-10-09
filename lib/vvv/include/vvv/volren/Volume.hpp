@@ -112,6 +112,7 @@ public:
     size_t memorySize() const { return size() * sizeof(ElementType); }
 
     HolderType &data() { return m_payload; }
+    const HolderType &dataConst() const { return m_payload; }
 
     inline bool isElementInBounds(size_t x, size_t y, size_t z) const { return x < dim_x && y < dim_y && z < dim_z; }
     inline bool isElementInBounds(int x, int y, int z) const { return x < dim_x && y < dim_y && z < dim_z; }

@@ -45,6 +45,14 @@ include(CMake/Dependencies.cmake)
 # add Volcanite executable with its sources, includes, shaders
 add_subdirectory(volcanite)
 
+# TESTS ----------------------------------------------------------------------------------------------------------------
+
+option(VOLCANITE_BUILD_TESTS "Build Tests" ON)
+if (VOLCANITE_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(test)
+endif()
+
 
 # PACKAGING ------------------------------------------------------------------------------------------------------------
 

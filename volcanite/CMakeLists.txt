@@ -1,5 +1,21 @@
+#  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <https:#www.gnu.org/licenses/>.
+
 cmake_minimum_required(VERSION 3.16)
 project(volcanite VERSION 0.2.0 DESCRIPTION "Volcanite Renderers" LANGUAGES CXX)
+
 
 # set all sources and headers
 set(VOLCANITE_HEADERS
@@ -17,6 +33,7 @@ set(VOLCANITE_HEADERS
         include/volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp
         include/volcanite/renderer/PassCompSegVolRender.hpp
+        include/volcanite/utility/segmentation_volume_synthesis.hpp
         )
 
 set(VOLCANITE_SOURCES
@@ -29,9 +46,15 @@ set(VOLCANITE_SOURCES
         src/renderer/PassCompSegVolRender.cpp
         )
 
+makeLibrary(libvolcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
+# add data/ folder as target_property to install() by each project
+set_target_properties(libvolcanite PROPERTIES INTERFACE_DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)
 
 makeExecutable(csgv_brick_viewer ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
 installExecutable(csgv_brick_viewer)
 
 makeExecutable(volcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
 installExecutable(volcanite)
+
+makeExecutable(volcanite_synth_volume ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
+installExecutable(volcanite_synth_volume)
