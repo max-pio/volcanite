@@ -51,7 +51,7 @@ makeLibrary(libvolcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
 set_target_properties(libvolcanite PROPERTIES INTERFACE_DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)
 
 makeExecutable(csgv_brick_viewer ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
-installExecutable(csgv_brick_viewer)
+# installExecutable(csgv_brick_viewer)
 
 makeExecutable(volcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
 installExecutable(volcanite)
