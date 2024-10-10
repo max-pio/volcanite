@@ -771,7 +771,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
         m_urender_info->setUniform<int>("g_denoise_filter_kernel_size", m_svgf_enabled ?
                                             glm::min(3, m_denoise_filter_kernel_size) : m_denoise_filter_kernel_size);
-        m_urender_info->setUniform<uint_fast32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
         m_urender_info->setUniform<uint32_t>("g_dof_enable", m_dof_enabled ? 1 : 0);
         m_urender_info->setUniform<float>("g_aperture", m_focal_length / m_f_stop);
         m_urender_info->setUniform<float>("g_image_plane", m_focal_distance * m_focal_length
