@@ -571,7 +571,7 @@ public:
             bool greaterThanZero = freq[i] > 0u;
             out[i] = static_cast<uint32_t>(freq[i] / (code_freq_sum  / (1ul << 30u) + 1u));
             if(greaterThanZero && out[i] == 0u)
-                out[i] = 1u;        // existing symbols mustn't have a zero frequency
+                out[i] = 1u;        // existing symbols must not have a zero frequency
         }
         return out;
     }

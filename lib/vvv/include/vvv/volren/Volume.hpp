@@ -175,9 +175,9 @@ public:
         return limits;
     }
 
-    inline void setElement(size_t x, size_t y, size_t z, ElementType v) { m_payload[z * (dim_x * dim_y) + y * dim_z + x] = v; }
+    inline void setElement(size_t x, size_t y, size_t z, ElementType v) { m_payload[z * (dim_x * dim_y) + y * dim_x + x] = v; }
 
-    inline void setElement(int x, int y, int z, ElementType v) { m_payload[z * (dim_x * dim_y) + y * dim_z + x] = v; }
+    inline void setElement(int x, int y, int z, ElementType v) { m_payload[z * (dim_x * dim_y) + y * dim_x + x] = v; }
 
     bool isTextureInitialized() const { return m_texture != nullptr; }
 

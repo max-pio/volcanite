@@ -258,23 +258,6 @@ public:
                     }
                 }
 
-                // we can't risk missing symbol frequencies >0 in our table due to subsampling
-                if(cfg.freq_subsampling > 1u) {
-                    bool changed = false;
-                    for(int i = 0; i < 16; i++) {
-                        if (code_frequencies[i] == 0ul) {
-                            changed = true;
-                            code_frequencies[i] = 1ul;
-                        }
-                        if(cfg.rANS_mode == DOUBLE_TABLE_RANS && detail_code_frequencies[i] == 0ul) {
-                            changed = true;
-                            detail_code_frequencies[i] = 1ul;
-                        }
-                    }
-                    if (changed)
-                        Logger(WARN) << " set zero frequency to 1 to avoid missing symbols because of frequency pass subsampling.";
-                }
-
                 // Write some general info about the chunk to a file (as of now, only the operation frequencies)
                 if(create_operation_freq_file) {
                     if (std::filesystem::exists(freq_path))

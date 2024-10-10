@@ -1292,7 +1292,13 @@ void CompressedSegmentationVolume::freqEncodeBrick(const std::vector<uint32_t>& 
 }
 
 void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<uint32_t>& volume, glm::uvec3 volume_dim, size_t freq_out[32], uint32_t subsampling_factor, bool detail_freq, bool verbose) {
-    assert(m_brick_size > 0u && "brick size must be a power of 2 > 0");
+    // check brick size
+    // use a default brick size of 32 if nothing was configured for this pass before
+    if (m_brick_size == 0u)
+        m_brick_size = 32u;
+    assert(std::popcount(m_brick_size) == 1u && "brick size must be a power of 2 > 0");
+
+
     m_volume_dim = volume_dim;
     glm::uvec3 brickCount = getBrickCount();
     if(verbose) {
@@ -1307,7 +1313,6 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
 
     // compute the next m_cpu_threads brick encodings in parallel
     size_t brick_freq[m_cpu_threads][32]; // last 16 elements are detail frequencies, if detail separation is used
-    //std::vector<uint32_t> tmpBrick[m_cpu_threads];
     for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
         for(int i = 0; i < 32; i++) {
             brick_freq[thread_id][i] = 0ul;
@@ -1356,6 +1361,23 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
         for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
             freq_out[i] += brick_freq[thread_id][i];
         }
+    }
+
+    // cannot risk missing symbol frequencies >0 in our table due to subsampling
+    if(subsampling_factor > 1u) {
+        bool changed = false;
+        for(int i = 0; i < 16; i++) {
+            if (freq_out[i] == 0ul) {
+                changed = true;
+                freq_out[i] = 1ul;
+            }
+            if (detail_freq && freq_out[i + 16] == 0ul) {
+                changed = true;
+                freq_out[i + 16] = 1ul;
+            }
+        }
+        if (changed)
+            Logger(WARN) << " set zero frequency to 1 to avoid missing symbols because of frequency pass subsampling.";
     }
 
 

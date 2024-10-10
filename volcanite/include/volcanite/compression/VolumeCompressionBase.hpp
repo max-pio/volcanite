@@ -244,7 +244,7 @@ public:
         if(compress_first) {
             Logger(INFO) << "Encode";
             compress(volume, volume_dim);
-            Logger(INFO) << " finished in " << timer.restart() << "s with compression ratio " << getCompressionRatio() * 100.f << "%";
+            Logger(INFO) << " finished in " << timer.restart() << "s with compression ratio " << getCompressionRatio() << "%";
         }
         Logger(INFO) << "Decode";
         std::shared_ptr<std::vector<uint32_t>> out = decompress();
