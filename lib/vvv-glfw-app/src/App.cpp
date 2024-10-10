@@ -239,6 +239,12 @@ namespace vvv {
 #endif
 
         commandBuffer.endRenderPass();
+
+        vk::ImageMemoryBarrier imageMemoryBarrierBack = ldrRendererOutput.texture->queueOwnershipTransfer(getQueueFamilyIndices().present.value(), vk::AccessFlagBits::eShaderRead,
+                                                                                                          ldrRendererOutput.queueFamilyIndex, vk::AccessFlagBits::eShaderWrite);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eComputeShader,
+                                      {}, 0, nullptr, 0, nullptr,
+                                      1, &imageMemoryBarrierBack);
     }
 
     std::thread Application::execAsyncAttached() {

@@ -57,8 +57,15 @@ int export_texture(Texture* tex, const std::string export_file_path) {
 
 
 int volcanite_synth_volume_main(int argc, char *argv[]) {
-    // TODO: parse command line arguments
     VolcaniteArgs args;
+    {
+        auto _args = VolcaniteArgs::parseArguments(argc, argv, false);
+        if(!_args.has_value()) {
+            Logger(ERROR) << "Exiting because of invalid arguments. See volcanite_synth_volume --help for available commands.";
+            return RET_INVALID_ARG;
+        }
+        args = _args.value();
+    }
 
     if(!vvv::debuggerIsAttached() && !args.verbose)
         Logger::s_minLevel = INFO;
@@ -71,6 +78,7 @@ int volcanite_synth_volume_main(int argc, char *argv[]) {
     glm::uvec3 volume_dim = {100, 80, 95};
     auto volume = createDummySegmentationVolume(volume_dim);
 
+    // TODO: parse command line arguments
     size_t operation_freq[32];
     compressedSegmentationVolume->setCompressionOptions64(32, NO_RANS);
     compressedSegmentationVolume->compressForFrequencyTable(volume.dataConst(), volume_dim, operation_freq, 2, true, false);
