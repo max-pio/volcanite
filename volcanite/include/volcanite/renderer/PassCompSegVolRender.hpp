@@ -43,14 +43,16 @@ public:
         REQUEST = 1,
         PROVISION = 2,
         ASSIGN = 3,
-        RENDERING = 4,
-        RESOLVE = 5
+        DECOMPRESS = 4,
+        RENDERING = 5,
+        RESOLVE = 6,
     };
 
     PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering, uint32_t queueFamilyIndex,
-                         std::vector<std::string> shaderDefines = {}, vk::ImageUsageFlags outputImageUsage = {},
-                         const std::string& label = "PassCompSegVolRender")
-        : PassCompute(ctx, label, multiBuffering, queueFamilyIndex), WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_shader_defines(shaderDefines) {}
+                         std::vector<std::string> shaderDefines = {},
+                         vk::ImageUsageFlags outputImageUsage = {}, const std::string& label = "PassCompSegVolRender")
+        : PassCompute(ctx, label, multiBuffering, queueFamilyIndex),
+          WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_shader_defines(std::move(shaderDefines)) {}
 
     AwaitableHandle execute(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override;
 
@@ -60,6 +62,7 @@ public:
         setGlobalInvocationSize(REQUEST, brick_count.x, brick_count.y, brick_count.z);
         setGlobalInvocationSize(PROVISION, lod_count-1u, 1u, 1u);
         setGlobalInvocationSize(ASSIGN, brick_count.x, brick_count.y, brick_count.z);
+        setGlobalInvocationSize(DECOMPRESS, brick_count.x, brick_count.y, brick_count.z);
     }
     void setImageInfo(uint32_t width, uint32_t height) {
         setGlobalInvocationSize(RENDERING, width, height, 1u);
@@ -75,13 +78,15 @@ protected:
 
     void setGlobalInvocationSize(CSGVRenderStage shader_index, uint32_t width, uint32_t height, uint32_t depth) {
         assert(shader_index < m_shaders.size());
-        m_workgroupCount[shader_index] = getDispatchSize(width, height, depth, m_shaders[shader_index]->reflectWorkgroupSize());
+        m_work_group_sizes[shader_index] = getDispatchSize(width, height, depth, m_shaders[shader_index]->reflectWorkgroupSize());
     }
     void executeCommands(vk::CommandBuffer commandBuffer, CSGVRenderStage stage);
 
-    vk::Extent3D m_workgroupCount[6] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}}; // work group sizes per shader index
-    bool m_reset_cache = false;
-    const std::vector<std::string> m_shader_defines;
+    /// work group sizes per stage
+    vk::Extent3D m_work_group_sizes[7] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u},
+                                          {0u, 0u, 0u}, {0u, 0u, 0u}};
+    bool m_reset_cache = false;                        /// if the GPU cache reset should be triggered on the next call
+    const std::vector<std::string> m_shader_defines;   /// defines that are passed on to shader compilation
 };
 
 } // namespace volcanite

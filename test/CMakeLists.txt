@@ -49,3 +49,5 @@ macro(makeTest name)
 endmacro(makeTest)
 
 makeTest(csgv_test)
+
+makeTest(csgv_gpu_test)

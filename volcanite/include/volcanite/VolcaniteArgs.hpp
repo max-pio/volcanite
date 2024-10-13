@@ -35,12 +35,6 @@ namespace volcanite {
 struct VolcaniteArgs {
 
 public:
-    enum Mode {
-        NO_RENDERING = 0,
-        HEADLESS_RENDERING = 1,
-        GUI_APP_RENDERING = 2,
-    };
-
     // general args
     bool verbose = false;
     bool headless = false;
@@ -50,7 +44,6 @@ public:
     uint32_t threads = 0;                    // number of CPU threads (0 = system supported concurrent threads)
 
     // rendering args
-    Mode rendering_mode = GUI_APP_RENDERING;
     std::string rendering_config_file;
     std::string screenshot_output_file;
     uint32_t render_resolution[2] = {1920, 1080};
@@ -70,7 +63,7 @@ public:
     std::string decompress_export_file; // !empty = perform decompression to file       both can be set!
     std::string segmented_volume_file;
     uint32_t brick_size = 32;
-    RANSMode rANS_mode = RANSMode::DOUBLE_TABLE_RANS;
+    EncodingMode encoding_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC;
     uint32_t freq_subsampling = 8;      // n^3 factor for subsampling bricks for frequency table computation with rANS
 
     bool run_tests = false;
@@ -142,7 +135,7 @@ public:
             SwitchArg cachePalettizedArg("", "cache-palette", "Store palette indices in brick cache instead of labels.", cmd);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
-            ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "file", cmd);
+            ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
             ValueArg<std::string> renderconfigArg("", "config", "Import render parameters from config file.", false, va.rendering_config_file, "file", cmd);
             // general arguments
             SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
@@ -263,8 +256,8 @@ public:
 
                 // compression arguments
                 va.brick_size = bricksizeArg.getValue();
-                const RANSMode _strengths[] = {NO_RANS, SINGLE_TABLE_RANS, DOUBLE_TABLE_RANS};
-                va.rANS_mode = _strengths[strengthArg.getValue()];
+                const EncodingMode _strengths[] = {NIBBLE_ENC, SINGLE_TABLE_RANS_ENC, DOUBLE_TABLE_RANS_ENC};
+                va.encoding_mode = _strengths[strengthArg.getValue()];
                 va.freq_subsampling = subsamplingArg.getValue();
                 va.threads = threadsArg.getValue();
                 va.chunked = !chunkedArg.getValue().empty();

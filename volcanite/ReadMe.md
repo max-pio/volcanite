@@ -2,6 +2,7 @@
 
 > Vulcanite: a type of rock that is commonly used as heating elements for sauna stoves.
 
+# Rendering Pipeline
 
 The main executable target for the renderer is [volcanite.cpp](src/bin/volcanite.cpp).
 The renderer has a host (CPU) and device (GPU) site.
@@ -42,7 +43,7 @@ If a ray hits an undecoded brick, its coarsest representation (the brick's first
 Colors of such 
 
 **Temporal Accumulation:**
-Two ping-pong 32 bit floating point buffers are used for temporal accumulation of RGB radiance and sample counts.
+Ping-pong buffers are used for temporal accumulation of RGB radiance and sample counts.
 The [csgv_upsample_resolve](./data/shader/volcanite/renderer/csgv_upsample_resolve.comp) shader handles the feedback loop and blitting to the output color buffer.
 Any color space conversion, tonemapping or other post-processing can be handled in this stage.
 In general, our temporal accumulation allows us to
@@ -51,8 +52,34 @@ In general, our temporal accumulation allows us to
 * perform temporal anti-aliasing, and
 * perform volumetric Monte-Carlo path tracing
 
+## Compressed Segmentation Volume Encoding
 
-#### Relevant Publications
+The different operation-based Compressed Segmentation Volume (CSGV) CPU encoders and decoders are implemented in
+[volcanite/compression/encoder/*](./include/volcanite/compression/encoder).
+Corresponding GPU decoders can be found in the [decoder](./data/shader/volcanite/compression/decoder) shader directory.
+All encoders must have the following properties:
+* the compression operates brick-wise,
+* bricks have a power-of-two brick size, the encoder may restrict the usage of certain sizes,
+* bricks can be (en|de)coded in $log_2(bricksize)+1$ levels-of-detail where each LOD is half the size of the next finer LOD,
+* the brick encoding buffer ends with a palette of all uint32 labels occurring in this brick, possibly with duplicates,
+* one constant uint index in the brick encoding buffer contains the size of this label palette 
+
+The encoders may support different functionality, with optional methods in braces ():
+* quick verification for certain invariants of a brick's encoding buffer
+* (exporting statistic of bricks and their encoding)
+* (decoding with debug information, i.e. the list of CSGV operations)
+* (computing operation frequency tables for variable bit-length encoding)
+* (detail level separation in the encoding stream)
+
+The CPU encoders specify a set of compile time defines for the shader compiler.
+This includes specialized configuration for a certain encoder as well as a set of common parameters:
+* the encoding mode identifier
+* the brick size
+* the resulting number of levels-of-detail
+* the (constant) uint index of a brick's encoding stat stores the palette size
+
+
+## Relevant Publications
 * [Fast Compressed Segmentation Volumes for Scientific Visualization](https://cg.ivd.kit.edu/english/compsegvol.php), Piochowiak and Dachsbacher 2023. Transactions on Visualization and Computer Graphics (Proc. IEEE Vis)
 * [Shading Atlas Streaming](https://www.tugraz.at/institute/icg/research/team-steinberger/research-projects/sas), Mueller et al. 2018. Transactions on Graphics (Proc. SIGASIA)
 * [Monte Carlo Methods for Volumetric Light Transport](https://jannovak.info/publications/VolumeSTAR/index.html), Novák et al. 2018. Computer Graphics Forum (Proc. EG)

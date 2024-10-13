@@ -35,8 +35,7 @@ ivec2 pixelFromInvocationID() {
         // offset the subsampling pixel with some blue noise
         // g_subsampling_pixel is actually just morton_idx2pos(bitfieldReverse(idx % g_subsampling * g_subsampling))
         return ivec2(gl_GlobalInvocationID.xy * g_subsampling)
-             + ivec2(mod(g_subsampling_pixel + pixelBlueNoiseOffset(), ivec2(g_subsampling)));
-
+             + ivec2(mod(vec2(g_subsampling_pixel + pixelBlueNoiseOffset()), vec2(g_subsampling)));
 //        return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + g_subsampling_pixel;
     }
 }
