@@ -57,7 +57,6 @@ int export_texture(Texture* tex, const std::string export_file_path) {
 
 
 int volcanite_synth_volume_main(int argc, char *argv[]) {
-    // TODO: parse command line arguments
     VolcaniteArgs args;
     {
         auto _args = VolcaniteArgs::parseArguments(argc, argv, false);

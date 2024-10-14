@@ -85,6 +85,10 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
     uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
     assert(cur_inv_lod != 0u, "BRICK_INFO_CUR_INV_LOD should never be zero");
 
+    // invalidate the sample if the brick is not decoded up to the requested LOD
+    if (cur_inv_lod != req_inv_lod && req_inv_lod > 0u)
+        depth_valid = INVALID_DEPTH;
+
     // special case for coarsest LOD: we can do the lookup at the first palette element for LOD_Max
     // or if the brick is not yet decoded
     if (req_inv_lod == 0u || cur_inv_lod >= LOD_COUNT) {
@@ -93,7 +97,7 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
         uint encoding_size = getBrickEncodingLength(brick_idx);
 
         // if the brick was not decoded, sample a random palette entry
-        if (req_inv_lod > 0u && g_max_inv_lod > 0u) {
+        if (req_inv_lod > 0u) {
             uint palette_size = getBrickPaletteLength(brick_idx);
 
             // indicate the sample as invalid (if it is not a homogeneous brick)
@@ -107,11 +111,10 @@ uint get_volume_label(ivec3 voxel, inout float depth_valid) {
 
         // return the first palette entry = coarsests compressed representation of the brick for inv_lod 0
         // we could alternatively perform a small linear search for the first *visible* label here
-        return  encoding_address.buf[encoding_size - 1u];
+        return encoding_address.buf[encoding_size - 1u];
     }
     // read the voxel from the brick in the cache (with the currently decoded LOD)
     else {
-        // TODO: depth_valid validity is not changed here even if the requested LOD differs from currently decoded LOD
 #ifdef PALETTE_CACHE
         return readCSGVPaletteBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * g_cache_base_element_uints, brick_idx);
 #else
