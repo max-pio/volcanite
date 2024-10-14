@@ -21,7 +21,8 @@ namespace {
 
     inline uint32_t randomUint() { return std::rand() % (~0u); }
 
-    Volume <uint32_t> createDummySegmentationVolume(glm::uvec3 dim = {100, 100, 100}) {
+    Volume <uint32_t> createDummySegmentationVolume(glm::uvec3 dim = {100, 100, 100}, unsigned long long seed = 1ull) {
+        std::srand(seed);
         Volume <uint32_t> volume = Volume<uint32_t>(1.f, 1.f, 1.f, dim[0], dim[1], dim[2], vk::Format::eR32Uint,
                                                     dim[0] * dim[1] * dim[2]);
         memset(volume.data().data(), 0, dim[0] * dim[1] * dim[2] * sizeof(uint32_t));

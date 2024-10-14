@@ -25,8 +25,8 @@
 #endif
 
 #include "vvv/util/Logger.hpp"
-// TODO: Split the rANS-Mode etc into a separate Header / forward decl
-#include "volcanite/compression/CompressedSegmentationVolume.hpp"
+#include "CSGVPathUtils.hpp"
+#include "csgv_constants.h"
 
 using namespace vvv;
 
@@ -47,7 +47,7 @@ public:
     std::string rendering_config_file;
     std::string screenshot_output_file;
     uint32_t render_resolution[2] = {1920, 1080};
-    bool stream_lod;
+    bool stream_lod = false;
     size_t cache_size_MB = 1024ul;
     bool cache_palettized = false;
     bool show_development_gui = false;

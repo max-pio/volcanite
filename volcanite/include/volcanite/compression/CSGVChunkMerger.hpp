@@ -24,6 +24,8 @@ using namespace vvv;
 
 namespace volcanite {
 
+class CompressedSegmentationVolume;
+
 class CSGVChunkMerger {
 private:
     // full volume properties
