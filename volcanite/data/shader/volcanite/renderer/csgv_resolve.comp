@@ -16,7 +16,6 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_debug_printf : enable
-#extension GL_EXT_buffer_reference_uvec2 : require
 
 layout (local_size_x = 8, local_size_y = 8) in;
 

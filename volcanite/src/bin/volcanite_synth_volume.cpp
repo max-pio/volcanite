@@ -18,10 +18,10 @@
 #include "vvv/util/detect_debugger.hpp"
 #include "vvv/core/HeadlessRendering.hpp"
 #ifdef HEADLESS
-#include "vvv/headless_entrypoint.hpp"
+    #include "vvv/headless_entrypoint.hpp"
 #else
-#include "vvvwindow/App.hpp"
-#include "vvvwindow/entrypoint.hpp"
+    #include "vvvwindow/App.hpp"
+    #include "vvvwindow/entrypoint.hpp"
 #endif
 
 #include "volcanite/CSGVPathUtils.hpp"
@@ -80,9 +80,9 @@ int volcanite_synth_volume_main(int argc, char *argv[]) {
 
     // TODO: parse command line arguments
     size_t operation_freq[32];
-    compressedSegmentationVolume->setCompressionOptions64(32, NO_RANS);
+    compressedSegmentationVolume->setCompressionOptions64(32, NIBBLE_ENC);
     compressedSegmentationVolume->compressForFrequencyTable(volume.dataConst(), volume_dim, operation_freq, 2, true, false);
-    compressedSegmentationVolume->setCompressionOptions64(32, DOUBLE_TABLE_RANS, operation_freq, operation_freq + 16);
+    compressedSegmentationVolume->setCompressionOptions64(32, DOUBLE_TABLE_RANS_ENC, operation_freq, operation_freq + 16);
     compressedSegmentationVolume->compress(volume.dataConst(), volume_dim, false);
 
 
@@ -104,7 +104,7 @@ int volcanite_synth_volume_main(int argc, char *argv[]) {
             csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
 
         const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
-        renderer->setCacheParameters(args.cache_size_MB, args.cache_palettized);
+        renderer->setDecodingParameters(args.cache_size_MB, args.cache_palettized);
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
 
         // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)

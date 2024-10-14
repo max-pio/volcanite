@@ -17,6 +17,8 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_debug_printf : enable
 #extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_buffer_reference2 : require
+
 
 layout (local_size_x = 8, local_size_y = 8) in;
 
@@ -24,6 +26,8 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #include "util.glsl"
 #include "framebuffer.glsl"
 #include "dummy_envmap.glsl"
+
+#include "csgv_debug_resolve.glsl"
 
 vec3 rgb2srgb(vec3 x) {
     return pow(x, vec3(2.2f));
@@ -111,6 +115,8 @@ void main() {
         block_rgba_sum.rgb = tonemap_ACES(block_rgba_sum.rgb);
         block_rgba_sum.rgb = rgb2srgb(block_rgba_sum.rgb);
     }
+
+    DEBUG_img_cache(pixel, block_rgba_sum, false);
 
     // output to display image
     if (current_block_size == 1) {

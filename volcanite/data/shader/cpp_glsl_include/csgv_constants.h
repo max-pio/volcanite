@@ -23,31 +23,70 @@
 
 #ifdef GL_core_profile
     #define CSGV_UINT uint
-    #define NO_RANS 0
-    #define SINGLE_TABLE_RANS 1
-    #define DOUBLE_TABLE_RANS 2
+    #define NIBBLE_ENC 0
+    #define SINGLE_TABLE_RANS_ENC 1
+    #define DOUBLE_TABLE_RANS_ENC 2
 #else
     #define CSGV_UINT uint32_t
-    using namespace vvv;
 
 namespace volcanite {
-        enum RANSMode {NO_RANS=0, SINGLE_TABLE_RANS=1, DOUBLE_TABLE_RANS=2};
+    enum EncodingMode {NIBBLE_ENC=0,
+                       SINGLE_TABLE_RANS_ENC=1, DOUBLE_TABLE_RANS_ENC=2};
+
+    static constexpr const char* EncodingMode_STR(EncodingMode e) {
+        switch (e) {
+            case NIBBLE_ENC:
+                return "Nibble";
+            case SINGLE_TABLE_RANS_ENC:
+                return "rANS";
+            case DOUBLE_TABLE_RANS_ENC:
+                return "rANS-DT";
+            default:
+                throw std::runtime_error("Unknown encoding mode");
+        }
     }
+
+    static constexpr const char* EncodingMode_DefineSTR(EncodingMode e) {
+        switch (e) {
+            case NIBBLE_ENC:
+                return "NIBBLE_ENC";
+            case SINGLE_TABLE_RANS_ENC:
+                return "SINGLE_TABLE_RANS_ENC";
+            case DOUBLE_TABLE_RANS_ENC:
+                return "DOUBLE_TABLE_RANS_ENC";
+            default:
+                throw std::runtime_error("Unknown encoding mode");
+        }
+    }
+
+    static constexpr const char* EncodingMode_ShortSTR(EncodingMode e) {
+        switch (e) {
+            case NIBBLE_ENC:
+                return "nb";
+            case SINGLE_TABLE_RANS_ENC:
+                return "r1";
+            case DOUBLE_TABLE_RANS_ENC:
+                return "r2";
+            default:
+                throw std::runtime_error("Unknown encoding mode");
+        }
+    }
+}
 #endif
 
 // 1000 most significant bit stores stop bit:
 #define STOP_BIT 8u     ///< 1000 MSB bit, stops the hierarchical traversal into finer nodes as they are all constant
 // #XXX least significant 3 bits store operation:
 #define PARENT 0u       ///< copy label from parent node
+// the following must be true: neighbor_z = neighbor_y+1 = neighbor_x+2
 #define NEIGHBOR_X 1u   ///< copy label from x-axis neighbor with different parent node or its parent if not decoded
 #define NEIGHBOR_Y 2u   ///< copy label from x-axis neighbor with different parent node or its parent if not decoded
 #define NEIGHBOR_Z 3u   ///< copy label from x-axis neighbor with different parent node or its parent if not decoded
-#define PALETTE_D 4u    ///< re-read palette label from D+2 entries before the top pointer. D follows in encoding stream.
-#define PALETTE_ADV 5u  ///< read palette label at the palette top pointer and advance the top pointer by 1
-#define PALETTE_LAST 6u ///< re-read palette last palette label, located 1 entry before the top pointer, again
+#define PALETTE_ADV 4u  ///< read palette label at the palette top pointer and advance the top pointer by 1
+#define PALETTE_LAST 5u ///< re-read palette last palette label, located 1 entry before the top pointer, again
+#define PALETTE_D 6u    ///< re-read palette label from D+2 entries before the top pointer. D follows in encoding stream.
 
 #define INVALID 0xFFFFFFFFu    ///< UINT32_MAX all bits set to 1. Denotes undecoded values, invalid labels, errors..
-
 
 // Material Constants --------------------------------------------------------------------------------------------------
 #define LABEL_AS_ATTRIBUTE 0xFFFFFFFFu

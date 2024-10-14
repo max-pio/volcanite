@@ -79,6 +79,8 @@ public:
     vk::PhysicalDevice getPhysicalDevice() const override;
     vvv::QueueFamilyIndices const &getQueueFamilyIndices() const override;
 
+    vk::PhysicalDeviceSubgroupProperties getPhysicalDeviceSubgroupProperties() const override;
+
     std::string const &getAppName() { return m_builder.appName; }
 
     /// Acquire all GPU resources. This method is reintrant.

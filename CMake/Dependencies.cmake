@@ -1,3 +1,18 @@
+#  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <https:#www.gnu.org/licenses/>.
+
 # TODO: we could replace shipped libraries with CMake FetchContent calls, but this would add git, ssh as dependencies
 
 # extern GLM
@@ -11,7 +26,7 @@ add_subdirectory(extern/tclap)
 add_library(tclap::tclap ALIAS TCLAP)
 
 # extern HighFive simplified hdf5 library if libhdf5-dev is installed
-option(ENABLE_HDF5_SUPPORT  "Includes the hdf5 library for importing and exporting .hdf5 files" OFF)
+option(ENABLE_HDF5_SUPPORT  "Includes the hdf5 library for importing and exporting .hdf5 files" ON)
 if (ENABLE_HDF5_SUPPORT)
     find_package(HDF5 QUIET)
     if (HDF5_FOUND)

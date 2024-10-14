@@ -16,20 +16,24 @@
 cmake_minimum_required(VERSION 3.16)
 project(volcanite VERSION 0.2.0 DESCRIPTION "Volcanite Renderers" LANGUAGES CXX)
 
-
 # set all sources and headers
 set(VOLCANITE_HEADERS
         include/volcanite/CSGVPathUtils.hpp
         include/volcanite/VolcaniteArgs.hpp
         include/volcanite/StratifiedPixelSequence.hpp
-        include/volcanite/compression/bitpack.hpp
-        include/volcanite/compression/VolumeCompressionBase.hpp
         data/shader/cpp_glsl_include/csgv_constants.h
+        include/volcanite/benchmark/CSGVBenchmarkPass.hpp
+        include/volcanite/compression/VolumeCompressionBase.hpp
+        include/volcanite/compression/encoder/CSGVBrickEncoder.hpp
+        include/volcanite/compression/encoder/CSGVSerialBrickEncoder.hpp
+        include/volcanite/compression/encoder/NibbleEncoder.hpp
+        include/volcanite/compression/encoder/RangeANSEncoder.hpp
         include/volcanite/compression/CompressedSegmentationVolume.hpp
         include/volcanite/compression/CompSegVolHandler.hpp
         include/volcanite/compression/CSGVChunkMerger.hpp
         include/volcanite/compression/CSGVDatabase.hpp
-        include/volcanite/compression/rans.hpp
+        include/volcanite/compression/pack_nibble.hpp
+        include/volcanite/compression/pack_rans.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp
         include/volcanite/renderer/PassCompSegVolRender.hpp
@@ -37,10 +41,15 @@ set(VOLCANITE_HEADERS
         )
 
 set(VOLCANITE_SOURCES
-        src/volcanite/compression/bitpack.cpp
+        src/volcanite/benchmark/CSGVBenchmarkPass.cpp
+        src/volcanite/compression/encoder/CSGVBrickEncoder.cpp
+        src/volcanite/compression/encoder/CSGVSerialBrickEncoder.cpp
+        src/volcanite/compression/encoder/NibbleEncoder.cpp
+        src/volcanite/compression/encoder/RangeANSEncoder.cpp
         src/volcanite/compression/CompressedSegmentationVolume.cpp
         src/volcanite/compression/CompressedSegmentationVolumeStats.cpp
-        src/volcanite/compression/rans.cpp
+        src/volcanite/compression/pack_nibble.cpp
+        src/volcanite/compression/pack_rans.cpp
         src/renderer/CompressedSegmentationVolumeRenderer.cpp
         src/renderer/CompressedSegmentationVolumeBrickViewer.cpp
         src/renderer/PassCompSegVolRender.cpp
@@ -50,11 +59,12 @@ makeLibrary(libvolcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
 # add data/ folder as target_property to install() by each project
 set_target_properties(libvolcanite PROPERTIES INTERFACE_DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)
 
-makeExecutable(csgv_brick_viewer ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
-# installExecutable(csgv_brick_viewer)
+makeExecutable(csgv_brick_viewer)
 
-makeExecutable(volcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
+makeExecutable(volcanite)
 installExecutable(volcanite)
 
-makeExecutable(volcanite_synth_volume ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
-installExecutable(volcanite_synth_volume)
+makeExecutable(csgv_benchmark)
+
+makeExecutable(volcanite_synth_volume)
+# installExecutable(volcanite_synth_volume)

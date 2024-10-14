@@ -298,6 +298,32 @@ def write_chunked_volume(volume, path_out_format, chunk_size):
 def read_chunked_volume(in_path_prefix):
     raise NotImplementedError("reading chunked volumes is not yet implemented")
 
+def convert_chunked_volume(path_in_format : str, chunk_size_in : (int, int, int), volume_dim : (int, int, int),
+                           path_out_format : str, chunk_size_out : (int, int, int), dtype_out=None):
+    raise NotImplementedError("reading chunked volumes is not yet implemented")
+
+    # construct each output chunk from up to 8 input chunks
+    tmp_chunk = np.empty(shape=volume_dim, dtype=dtype_out)
+    for z in range(0, volume_dim[0], chunk_size_out[0]):
+        for y in range(0, volume_dim[1], chunk_size_out[1]):
+            for x in range(0, volume_dim[2], chunk_size_out[2]):
+                # TODO: read all input chunks that are relevant for the output chunk, stitch together, and offset / clip
+                # tmp_chunk = ...
+
+                # export output chunk
+                # TODO: clamp chunk dimension of border chunks with respect to total volume size
+                write_volume(tmp_chunk,
+                             path_out_format.format(x // chunk_size_out[2], y // chunk_size_out[1], z // chunk_size_out[0]))
+
+
+
+
+
+
+
+
+
+
 def guard_volume_dtype(volume, dtype):
     """If dtype is not None, converts the volume to the given dtype with safeguards:
        1) if dtype is an unsigned type but volume contains values < 0, the values are offset to be 0 at minimum,
@@ -327,7 +353,7 @@ def guard_volume_dtype(volume, dtype):
     return volume.astype(dtype)
 
 
-def convert(path_in, path_out, dtype=None):
+def convert_volume(path_in, path_out, dtype=None):
     write_volume(read_volume(path_in), path_out, dtype)
 
 def debug_print(volume):

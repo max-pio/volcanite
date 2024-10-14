@@ -233,7 +233,7 @@ private:
     }
 
 public:
-    CSGVDatabase() = default;
+    CSGVDatabase() { createDummy(); };
     ~CSGVDatabase() { close(); }
 
     void close() {
