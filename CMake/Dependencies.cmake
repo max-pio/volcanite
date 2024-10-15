@@ -52,7 +52,11 @@ option(ENABLE_VTK_SUPPORT  "Includes the vtk library for importing and exporting
 if (ENABLE_VTK_SUPPORT)
     find_package(VTK COMPONENTS CommonCore IOXML QUIET)
     if (VTK_FOUND)
-        # ...
+        if ((VTK_MAJOR_VERSION LESS  9) OR
+            (VTK_MAJOR_VERSION EQUAL 9 AND VTK_MINOR_VERSION LESS  3) OR
+            (VTK_MAJOR_VERSION EQUAL 9 AND VTK_MINOR_VERSION EQUAL 3 AND VTK_PATCH_VERSION LESS 1))
+            message(WARNING "VTK versions before 9.3.1 may be unable to open certain .vti files due to an incompatibility bug with expat 2.6.0.")
+        endif ()
     else ()
         message(WARNING "ENABLE_VTK_SUPPORT was set but vtk library could not be found.")
     endif ()
