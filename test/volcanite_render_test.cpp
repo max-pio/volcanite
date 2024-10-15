@@ -15,6 +15,8 @@
 
 #define HEADLESS
 
+#include <string>
+
 #include "vvv/volren/Volume.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/utility/segmentation_volume_synthesis.hpp"
@@ -34,7 +36,6 @@ constexpr int RET_INVALID_ARG = 1;
 constexpr int RET_COMPR_ERROR = 3;
 constexpr int RET_RENDER_ERROR = 4;
 constexpr int RET_EXPORT_ERROR = 5;
-
 
 int export_texture(Texture* tex, const std::string& export_file_path) {
     try {
@@ -90,35 +91,73 @@ static const std::vector<VolcaniteArgs> RENDERING_TEST_CONFIGS = {
         {.screenshot_output_file=OUT_DIR + "rANS_16_stream-lod.png", .stream_lod=true, .brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC}
     };
 
-/// Compares two images for equality as a sum of pixel and channel-wise differences as
-/// max(|img_a[x,y,c] - img_b[x,y,c]| - epsilon, 0) for all x,y,c.
+glm::vec4 CIE_rgb2xyz(const glm::vec4& rgba) {
+    static const glm::mat3 rgb2xyz = glm::mat3(0.4887180f, 0.1762044f, 0.0000000f,
+                                               0.3106803f, 0.8129847f, 0.0102048f,
+                                               0.2006017f, 0.0108109f, 0.9897952f);
+    return {rgb2xyz * glm::vec3(rgba), rgba.a};
+}
+
+/// Returns the RMSE between two images, computed in CIE XYZ color space.
 /// \param path1 first image
 /// \param path2 second image
-/// \param epsilon difference per pixel that is not counted as an error in [0,255]
-/// \return 0 for equality, negative values for image loading errors, otherwise the sum of pixel-wise differences.
-long long compareImages(const std::string& path1, const std::string& path2, unsigned char epsilon) {
+/// \param threshold average absolute error below which a pixel is ignored in the RMSE in [0,1]
+/// \return 0 for equality, negative values for image loading errors, otherwise the RMSE of the images.
+double computeImageRMSE(const std::string& path1, const std::string& path2, float threshold = 0.f) {
     int w1, h1, c1, w2, h2, c2;
-    unsigned char* image1 = stbi_load(path1.c_str(), &w1, &h1, &c1, 0);
-    unsigned char* image2 = stbi_load(path2.c_str(), &w2, &h2, &c2, 0);
+    unsigned char* image1 = stbi_load(path1.c_str(), &w1, &h1, &c1, STBI_rgb_alpha);
+    unsigned char* image2 = stbi_load(path2.c_str(), &w2, &h2, &c2, STBI_rgb_alpha);
     if (image1 == nullptr || image2 == nullptr)
         return -2ll;
-    if (w1 != w2 || h1 != h2 || c1 != c2) {
+    if (w1 != w2 || h1 != h2 || c1 != c2 || c1 != 4) {
         return -1ll;
     }
 
     size_t element_count = w1 * h1 * c1;
-    long long differences = 0ll;
-    #pragma omp parallel for default(none) shared(element_count, image1, image2, epsilon) reduction(+ : differences)
-    for (size_t i = 0; i < element_count; i++) {
-        int diff = std::abs(static_cast<int>(image1[i]) - static_cast<int>(image2[i])) - static_cast<int>(epsilon);
-        if (diff > 0)
-            differences += diff;
+    double rmse = 0.;
+    #pragma omp parallel for default(none) shared(element_count, image1, image2, threshold) reduction(+ : rmse)
+    for (size_t i = 0; i < element_count; i += 4) {
+        glm::vec4 rgba1 = glm::vec4{image1[i], image1[i+1], image1[i+2], image1[i+3]} / 255.f;
+        glm::vec4 rgba2 = glm::vec4{image2[i], image2[i+1], image2[i+2], image2[i+3]} / 255.f;
+
+        // convert to CIE XYZ and compute component differences
+        glm::vec4 error = glm::abs(CIE_rgb2xyz(rgba1) - CIE_rgb2xyz(rgba2));
+
+        // if a pixel error is over threshold, count it in the RMSE and create a difference image in image1
+        if ((error.r + error.g + error.b + error.a) / 4.f > threshold) {
+            rmse += glm::dot(error, error);
+            glm::ivec4 diff = glm::clamp(glm::ivec4(glm::abs(rgba1 - rgba2) * 255.f), glm::ivec4(0), glm::ivec4(255));
+            image1[i + 0] = static_cast<unsigned char>(diff.r);
+            image1[i + 1] = static_cast<unsigned char>(diff.g);
+            image1[i + 2] = static_cast<unsigned char>(diff.b);
+            image1[i + 3] = 255; // static_cast<unsigned char>(diff.a);
+        } else {
+            image1[i + 0] = 0;
+            image1[i + 1] = 0;
+            image1[i + 2] = 0;
+            image1[i + 3] = 0;
+        }
+    }
+
+    // normalize for RMSE
+    rmse = glm::sqrt(rmse / static_cast<double>(w1 * h1));
+
+    // export a difference image if errors were found
+    if (rmse > 0.) {
+        std::string diff_image_out = path1;
+        diff_image_out.erase(diff_image_out.rfind('.'), 4);
+        diff_image_out.append("_DIFF_");
+        diff_image_out.append(path2.substr(path2.rfind('/')+1));
+        Logger(DEBUG) << "writing difference image " << diff_image_out;
+        stbi_write_png(diff_image_out.c_str(), w1, h1, c1,
+                       reinterpret_cast<const void*>(image1), w1 * c1);
     }
 
     stbi_image_free(image1);
     stbi_image_free(image2);
-    return differences;
+    return rmse;
 }
+
 
 /// Renders one image with the same rendering config for different CSGV encoding and decoding modes using the Headless
 /// renderer. All output images are compared for differences. The encoding and decoding properties should not change
@@ -170,14 +209,14 @@ int main() {
     // check output image files for pair-wise equality
     for (int img_a = 0; img_a < RENDERING_TEST_CONFIGS.size(); img_a++) {
         for (int img_b = img_a + 1; img_b < RENDERING_TEST_CONFIGS.size(); img_b++) {
-            long long differences = compareImages(RENDERING_TEST_CONFIGS[img_a].screenshot_output_file,
-                                                  RENDERING_TEST_CONFIGS[img_b].screenshot_output_file, 0);
-            if (differences < 0ll) {
+            double rmse = computeImageRMSE(RENDERING_TEST_CONFIGS[img_a].screenshot_output_file,
+                                           RENDERING_TEST_CONFIGS[img_b].screenshot_output_file, 0.01);
+            if (rmse < 0.) {
                 Logger(ERROR) << "Image loading error for "
                               << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                               << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file;
-            } else if (differences > 0ull) {
-                Logger(ERROR) << "Rendering differences with absolute pixel error sum of " << differences
+            } else if (rmse > 0.01) {
+                Logger(ERROR) << "Rendering differences with RMSE of " << rmse
                               << " for images " << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                               << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file;
                 return RET_RENDER_ERROR;

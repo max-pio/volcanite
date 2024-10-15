@@ -79,13 +79,14 @@ void writeEntryToCache(uint decoded_brick_start_uint, uint cache_idx_in_brick, u
 /** Returns the label for the voxel position within the brick starting at the given base element.
  * @param decoded_inv_lod the state of the brick in CSGV_DECODING_ARRAY *must* be a full decoding up to this inv_lod
  * @param brick_voxel the coordinate of the lookup voxel on the *finest* lod, even if the lookup is for a coarser lod */
-uint readCSGVPaletteBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, const uint brick_start_base_element, const uint brick_idx) {
+uint readCSGVPaletteBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, const uint decoded_brick_start_uint, const uint brick_idx) {
+    // TODO: why pass decoded_inv_lod and decoded_brick_start_uint? pass the brick_idx and read cache info here
     // Determine which index element to read from the cache region.
     uint lod_width = BRICK_SIZE >> decoded_inv_lod;
     uint cache_idx_in_brick = _cache_pos2idx(brick_voxel) / (lod_width * lod_width * lod_width);
 
     // By design, the first palette index is 1, meaning it can be substract directly from the brick's encoding length.
-    uint palette_idx = readEntryFromCache(brick_start_base_element * g_cache_base_element_uints, cache_idx_in_brick);
+    uint palette_idx = readEntryFromCache(decoded_brick_start_uint, cache_idx_in_brick);
     assertf(palette_idx > 0 && palette_idx <= getBrickPaletteLength(brick_idx), "read palette index %u is 0 or greater than palette size from cache", palette_idx);
     return getBrickEncodingRef(brick_idx).buf[getBrickEncodingLength(brick_idx) - palette_idx];
 }

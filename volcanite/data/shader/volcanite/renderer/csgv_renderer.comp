@@ -153,6 +153,10 @@ uint get_inv_lod(ivec3 voxel) {
         uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
         assert(cur_inv_lod != 0u, "BRICK_INFO_CUR_INV_LOD should never be zero");
 
+        // invalidate the sample if the brick is not decoded up to the requested LOD
+        if (cur_inv_lod != req_inv_lod && req_inv_lod > 0u)
+            depth_valid = INVALID_DEPTH;
+
         // special case for coarsest LOD: we can do the lookup at the first palette element for LOD_Max
         // or if the brick is not yet decoded
         if (req_inv_lod == 0u || cur_inv_lod >= LOD_COUNT) {
@@ -163,10 +167,6 @@ uint get_inv_lod(ivec3 voxel) {
             // if the brick was not decoded, sample a random palette entry
             if (req_inv_lod > 0u && g_max_inv_lod > 0u) {
                 uint palette_size = getBrickPaletteLength(brick_idx);
-
-                // indicate the sample as invalid (if it is not a homogeneous brick)
-                if (palette_size > 1u)
-                    depth_valid = INVALID_DEPTH;
 
                 // read a random palette entry
                 uint random_palette_index = hash_pcg3d(uvec3(gl_GlobalInvocationID.xy, g_frame)).r % palette_size;
