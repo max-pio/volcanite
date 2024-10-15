@@ -197,7 +197,7 @@ if (OpenMP_CXX_FOUND)
 endif ()
 if (HDF5_FOUND)
     target_link_libraries(libvvv PRIVATE HighFive)
-    target_compile_definitions(libvvv PUBLIC -DLIB_HIGHFIVE)
+    target_compile_definitions(libvvv PRIVATE -DLIB_HIGHFIVE)
 endif ()
 # vtk linking and module initialization
 if (VTK_FOUND)
@@ -206,19 +206,15 @@ if (VTK_FOUND)
             TARGETS libvvv
             MODULES ${VTK_LIBRARIES}
     )
-    target_compile_definitions(libvvv PUBLIC -DLIB_VTK)
-endif ()
-if (SQLite3_FOUND)
-    target_link_libraries(libvvv PUBLIC SQLiteCpp SQLite::SQLite3) # pthread dl
-    target_compile_definitions(libvvv PUBLIC -DLIB_SQLITE3)
+    target_compile_definitions(libvvv PRIVATE -DLIB_VTK)
 endif ()
 if (TIFF_FOUND)
     target_link_libraries(libvvv PRIVATE TIFF::TIFF)
-    target_compile_definitions(libvvv PUBLIC -DLIB_TIFF)
+    target_compile_definitions(libvvv PRIVATE -DLIB_TIFF)
 endif ()
 if (PUGIXML_FOUND)
     target_link_libraries(libvvv PRIVATE pugixml::pugixml)
-    target_compile_definitions(libvvv PUBLIC -DLIB_PUGIXML)
+    target_compile_definitions(libvvv PRIVATE -DLIB_PUGIXML)
 endif ()
 
 # remove comment for automatic /data copy:

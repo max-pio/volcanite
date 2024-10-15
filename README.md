@@ -20,7 +20,7 @@ To install all required dependencies under Ubuntu, first install the [Vulkan SDK
 ```
 sudo apt install -y build-essential cmake xorg-dev
 ```
-and optionally the `libhdf5-dev libvtk9-dev libtiff-dev libpugixml-dev libsqlite3-dev` packages for compatibility with
+and optionally the `libhdf5-dev libvtk9-dev libtiff-dev libpugixml-dev` packages for compatibility with
 a wider range of file formats*.
 Build the `volcanite` executable with
 ```

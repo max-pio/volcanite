@@ -245,22 +245,10 @@ public:
                 }
 
                 // attribute arguments (if we import a .csgv file, the attributes are already stored in a database along with it)
-#ifndef LIB_SQLITE3
-                if(labelRemappingArg.getValue()) {
-                    throw ArgException(labelRemappingArg.longID() + " must not be set as SQLite3 library is not available.", labelRemappingArg.longID());
-                }
-                if(!attributeArg.getValue().empty()) {
-                    throw ArgException(attributeArg.longID() + " is not available as SQLite3 library is not available.", attributeArg.longID());
-                }
-                va.label_remapping = false;
-                va.attribute_database = "";
-                va.attribute_table = "";
-                va.attribute_label = "";
-#else
                 va.label_remapping = labelRemappingArg.getValue();
                 if(!attributeArg.getValue().empty()) {
                     va.label_remapping = true;
-                    const std::string attribute_info = attributeArg.getValue();
+                    const std::string& attribute_info = attributeArg.getValue();
                     auto comma0 = attribute_info.find(',', 0);
                     auto comma1 = attribute_info.find(',', comma0 + 1);
 
@@ -278,7 +266,6 @@ public:
                     if(!std::filesystem::exists(va.attribute_database))
                         throw ArgException(attributeArg.longID() + " attribute database file does not exists or can not be accessed.", attributeArg.longID());
                 }
-#endif
 
                 // compression arguments
                 va.brick_size = bricksizeArg.getValue();
