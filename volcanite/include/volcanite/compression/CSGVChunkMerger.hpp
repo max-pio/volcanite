@@ -18,8 +18,8 @@
 #include <memory>
 
 #include "volcanite/CSGVPathUtils.hpp"
-//#include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/compression/memory_mapping.hpp"
+#include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
 using namespace vvv;
 

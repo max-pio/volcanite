@@ -162,7 +162,7 @@ public:
         std::filesystem::path path_backup_config = vvv::Paths::getTempFileWithName("tmp_render_config_params.vcfg");
         if(std::filesystem::exists(path_backup_config))
             std::filesystem::remove(path_backup_config);
-        if(!writeParameterFile(path_backup_config, expected_version_string))
+        if(!writeParameterFile(path_backup_config.string(), expected_version_string))
             Logger(WARN) << "Could not export backup rendering parameters to " << path_backup_config;
 
         // Try to load selected config path

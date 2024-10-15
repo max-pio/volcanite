@@ -42,7 +42,7 @@ constexpr int RET_RENDER_ERROR = 4;
 
 
 
-int export_texture(Texture* tex, const std::string export_file_path) {
+int export_texture(Texture* tex, const std::string& export_file_path) {
     try {
         Logger(INFO) << "Exporting render output to " << export_file_path;
         tex->writeFile(export_file_path);
@@ -81,7 +81,7 @@ int volcanite_main(int argc, char *argv[]) {
         Logger::s_minLevel = INFO;
 
     std::shared_ptr<volcanite::CompressedSegmentationVolume> compressedSegmentationVolume;
-    std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();;
+    std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();
     // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
     if(args.performCompression()) {
         glm::uvec3 max_chunk_id = glm::uvec3(args.chunk_files[0], args.chunk_files[1], args.chunk_files[2]);
