@@ -72,6 +72,7 @@ set(VVV_HEADERS
         include/vvv/util/random_gpu.hpp
         include/vvv/util/space_filling_curves.hpp
         include/vvv/util/util.hpp
+        include/vvv/util/volume_data_types.hpp
         include/vvv/util/vertex_primitives.hpp
         include/vvv/util/Paths.hpp
 

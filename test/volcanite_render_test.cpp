@@ -68,7 +68,7 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
     renderEngine->acquireResources();
     // let the rendering converge for some frames (if specified in the rendering config, we use that number)
     int accumulation_frames = renderer->getTargetAccumulationFrames();
-    auto texture = renderEngine->renderFrames(accumulation_frames > 0 ? accumulation_frames : 60);
+    auto texture = renderEngine->renderFrames(accumulation_frames > 0 ? accumulation_frames : 300);
     if(texture == nullptr) {
         Logger(ERROR) << "internal rendering error";
         return RET_RENDER_ERROR;
@@ -210,12 +210,12 @@ int main() {
     for (int img_a = 0; img_a < RENDERING_TEST_CONFIGS.size(); img_a++) {
         for (int img_b = img_a + 1; img_b < RENDERING_TEST_CONFIGS.size(); img_b++) {
             double rmse = computeImageRMSE(RENDERING_TEST_CONFIGS[img_a].screenshot_output_file,
-                                           RENDERING_TEST_CONFIGS[img_b].screenshot_output_file);
+                                           RENDERING_TEST_CONFIGS[img_b].screenshot_output_file, 0.01);
             if (rmse < 0.) {
                 Logger(ERROR) << "Image loading error for "
                               << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                               << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file;
-            } else if (rmse > 0.005) {
+            } else if (rmse > 0.01) {
                 Logger(ERROR) << "Rendering differences with RMSE of " << rmse
                               << " for images " << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                               << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file;

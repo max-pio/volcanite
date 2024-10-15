@@ -21,12 +21,13 @@ To install all required dependencies under Ubuntu, first install the [Vulkan SDK
 sudo apt install -y build-essential cmake xorg-dev
 ```
 and optionally the `libhdf5-dev libvtk9-dev libtiff-dev libpugixml-dev libsqlite3-dev` packages for compatibility with
-a wider range of file formats.
+a wider range of file formats*.
 Build the `volcanite` executable with
 ```
 mkdir cmake-build-release && cd cmake-build-release
 cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . --target volcanite
 ```
+
 Start Volcanite, either providing a path to a segmentation volume as a commandline argument with
 ```
 ./projects/volcanite/volcanite /path/to/your/segmentation/volume
@@ -35,6 +36,9 @@ or by using the file dialog to select a volume file.
 Run `./volcanite --help` for a complete list of arguments and commands.
 See [Usage.md](doc/Usage.md#supported-segmentation-volume-file-formats) for a list of currently supported formats.
 You can find a collection of example data sets listed in [ExampleData.md](doc/ExampleData.md).
+
+**Note: due to an [incompatibility bug](https://gitlab.kitware.com/vtk/vtk/-/issues/19258) with the expat 2.6.0 library, libvtk9-dev versions before 9.3.1 are unable to
+  open .vti XML files with binary encoding.*
 
 ## Documentation
 The `doc` directory of this repository contains further information on how to use Volcanite:
