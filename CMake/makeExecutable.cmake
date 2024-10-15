@@ -62,7 +62,7 @@ function(makeExecutable name)
             # WIN32_EXECUTABLE TRUE # this hides the console window. Disabled, because we need to see the console output! maybe re-enable for distribution
             MACOSX_BUNDLE TRUE
             )
-    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap libvolcanite)
+    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap SQLiteCpp libvolcanite)
     if(NOT HEADLESS)
         target_link_libraries(${name} PRIVATE LibVVV::libvvvwindow portable_file_dialogs)
     endif()
@@ -97,7 +97,7 @@ endfunction()
 # same as makeExecutabe, but for libraries. Can be used to build a library from all shared project files and link that for each executable.
 function(makeLibrary name)
     add_library(${name} ${ARGN})
-    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap)
+    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap SQLiteCpp)
     if(NOT HEADLESS)
         target_link_libraries(${name} PRIVATE LibVVV::libvvvwindow portable_file_dialogs)
     endif()

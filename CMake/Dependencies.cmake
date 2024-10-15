@@ -62,17 +62,11 @@ if (ENABLE_VTK_SUPPORT)
     endif ()
 endif ()
 
-# extern SQLiteCpp library if libsqlite3-dev is installed
-option(ENABLE_SQLITE3_SUPPORT "Includes the SQLite3 library for importing and exporting .sqlite files" ON)
-if (ENABLE_SQLITE3_SUPPORT)
-    find_package(SQLite3 QUIET)
-    if (SQLite3_FOUND)
-        set(SQLITECPP_RUN_CPPLINT OFF CACHE INTERNAL "")
-        add_subdirectory(extern/SQLiteCpp)
-    else ()
-        message(WARNING "ENABLE_SQLITE3_SUPPORT was set but SQLite3 library could not be found.")
-    endif ()
-endif ()
+
+# extern SQLiteCpp
+set(SQLITECPP_RUN_CPPLINT OFF CACHE INTERNAL "")
+add_subdirectory(extern/SQLiteCpp)
+
 
 # Vulkan framework vvv for basic Vulkan integration
 add_subdirectory(lib/vvv)

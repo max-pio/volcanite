@@ -29,7 +29,6 @@ instead of `xorg-dev`.
 |---------------------|:-------------|-----------------------------------------|-------------------------------|
 | HDF5                | 1.10.7       | read .hdf5 segmentation volumes         | `libhdf5-dev`                 |
 | VTK                 | 9.1.0        | read .vti segmentation volumes          | `libvtk9-dev`                 |
-| SQLite              | 3.37.2       | read/write sqlite label attribute files | `libsqlite3-dev`              |
 | TIFF                | 4.3.0        | read TIFF volumes                       | `libtiff-dev`                 |
 | PugiXML             | 1.12.1       | parse XML data                          | `libpugixml-dev`              |
 | OpenMP              | 4.5          | CPU parallelization                     | included in compiler          |
