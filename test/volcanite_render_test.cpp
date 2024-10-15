@@ -88,7 +88,9 @@ static const std::string OUT_DIR = "./render_test/";
 static const std::vector<VolcaniteArgs> RENDERING_TEST_CONFIGS = {
         {.screenshot_output_file=OUT_DIR + "nibble_32.png", .brick_size=32, .encoding_mode=NIBBLE_ENC},
         {.screenshot_output_file=OUT_DIR + "rANSd_64_cache-palette.png", .cache_palettized=true, .brick_size=64, .encoding_mode=SINGLE_TABLE_RANS_ENC},
-        {.screenshot_output_file=OUT_DIR + "rANS_16_stream-lod.png", .stream_lod=true, .brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC}
+        {.screenshot_output_file=OUT_DIR + "rANS_16_stream-lod.png", .stream_lod=true, .brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC},
+        {.screenshot_output_file=OUT_DIR + "nibble_16_ra.png", .brick_size=16, .encoding_mode=NIBBLE_ENC, .random_access=true},
+        {.screenshot_output_file=OUT_DIR + "hWM_32_ra.png", .brick_size=32, .encoding_mode=HUFFMAN_WM_ENC, .random_access=true}
     };
 
 glm::vec4 CIE_rgb2xyz(const glm::vec4& rgba) {
@@ -168,8 +170,8 @@ int main() {
 
     // create headless rendering engine with GPU context
 
-    // create dummy segmentation volume
-    glm::uvec3 dim = {100, 80, 95};
+    // create dummy segmentation volume (random access requires volume size that is evenly dividable by brick size)
+    glm::uvec3 dim = {128, 64, 192};
     const auto volume = createDummySegmentationVolume(dim);
 
     // create compressed segmentation volume
