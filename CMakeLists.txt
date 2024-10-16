@@ -71,6 +71,9 @@ endif()
 # PACKAGING ------------------------------------------------------------------------------------------------------------
 
 # cpack is used for packaging. run `ninja package` in build directory to generate packages
+set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
+set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
+SET(CPACK_COMPONENTS_ALL applications)
 include(CPack)
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)

@@ -154,11 +154,11 @@ function(installExecutable name)
 
     # install all data dirs to [project]/data/
     foreach(path IN LISTS data_dirs)
-        install(DIRECTORY ${path} DESTINATION ${project_dir_name})
+        install(DIRECTORY ${path} DESTINATION ${project_dir_name} COMPONENT applications)
     endforeach()
 
     # install binary to target folder
-    install(TARGETS ${name} DESTINATION ${project_dir_name})
+    install(TARGETS ${name} DESTINATION ${project_dir_name} COMPONENT applications)
 
     # use fixup_bundle to copy required dlls for windows
     set(APPS \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${project_dir_name}/${name}${CMAKE_EXECUTABLE_SUFFIX})
