@@ -15,7 +15,7 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-project(vvv-volcanite VERSION 0.4.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES C CXX)
+project(volcanite VERSION 0.4.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES C CXX)
 
 if (MSVC)
     message(FATAL_ERROR "MSVC compiler is currently not supported as it only provides OpenMP version < 4.5")
@@ -48,7 +48,7 @@ endif()
 
 # Use target folders to organize the copy interface targets. This allows to hide the targets easier in certain IDEs.
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-# The makeExecutable is used to create project executables with all CMake and compile dependencies
+# helper functions to create volcanite executables / libraries with all CMake and compile dependencies
 include(makeExecutable)
 
 # In headless mode, no windowing system integration is build.
@@ -70,7 +70,11 @@ endif()
 
 # PACKAGING ------------------------------------------------------------------------------------------------------------
 
-# cpack is used for packaging. run `ninja package` in build directory to generate packages
+# cpack is used for packaging. only the executable is packaged yet.
+# run `cpack --config CPackConfig.cmake` or `ninja package` in build directory to generate packages
+set(CPACK_SOURCE_PACKAGE_FILE_NAME "volcanite-${CMAKE_PROJECT_VERSION}")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY ${CPACK_PACKAGE_NAME})
+set(CPACK_PACKAGE_VENDOR "Max Piochowiak (Karlsruhe Institute of Technology)")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
 set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
 SET(CPACK_COMPONENTS_ALL applications)

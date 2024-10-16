@@ -14,7 +14,7 @@
 #  along with this program.  If not, see <https:#www.gnu.org/licenses/>.
 
 cmake_minimum_required(VERSION 3.16)
-project(volcanite VERSION 0.2.0 DESCRIPTION "Volcanite Renderers" LANGUAGES CXX)
+project(volcanite-renderer VERSION 0.4.0 DESCRIPTION "Volcanite Renderer Compression" LANGUAGES CXX)
 
 # set all sources and headers
 set(VOLCANITE_HEADERS
@@ -48,6 +48,7 @@ set(VOLCANITE_SOURCES
         src/volcanite/compression/encoder/RangeANSEncoder.cpp
         src/volcanite/compression/CompressedSegmentationVolume.cpp
         src/volcanite/compression/CompressedSegmentationVolumeStats.cpp
+        src/volcanite/compression/CSGVDatabase.cpp
         src/volcanite/compression/pack_nibble.cpp
         src/volcanite/compression/pack_rans.cpp
         src/renderer/CompressedSegmentationVolumeRenderer.cpp
@@ -55,18 +56,18 @@ set(VOLCANITE_SOURCES
         src/renderer/PassCompSegVolRender.cpp
         )
 
-makeLibrary(libvolcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
+makeVolcaniteLibrary(libvolcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
 # add data/ folder as target_property to install() by each project
 set_target_properties(libvolcanite PROPERTIES INTERFACE_DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)
 
-makeExecutable(csgv_brick_viewer)
-# installExecutable(csgv_brick_viewer)
+makeVolcaniteExecutable(csgv_brick_viewer)
+# installVolcaniteExecutable(csgv_brick_viewer)
 
-makeExecutable(volcanite)
-installExecutable(volcanite)
+makeVolcaniteExecutable(volcanite)
+installVolcaniteExecutable(volcanite)
 
-makeExecutable(csgv_benchmark)
-# installExecutable(csgv_benchmark)
+makeVolcaniteExecutable(csgv_benchmark)
+# installVolcaniteExecutable(csgv_benchmark)
 
-makeExecutable(volcanite_synth_volume)
-# installExecutable(volcanite_synth_volume)
+makeVolcaniteExecutable(volcanite_synth_volume)
+# installVolcaniteExecutable(volcanite_synth_volume)

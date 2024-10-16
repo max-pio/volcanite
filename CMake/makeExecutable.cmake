@@ -13,13 +13,13 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https:#www.gnu.org/licenses/>.
 
-# this file defines makeExecutable() and installExecutable()-Functions, which can be used to add new executables to the VVV project.
+# this file defines makeVolcaniteExecutable() and installVolcaniteExecutable()-Functions, which can be used to add new executables to the VVV project.
 
-# howto use makeExecutable  and installExecutable in your projects CMakeLists:
-# 1. add source/header files with custom list variables makeExecutable(NAME ${HEADERS} ${SOURCES}) note: the src/bin/NAME.cpp is always added
+# howto use makeVolcaniteExecutable  and installVolcaniteExecutable in your projects CMakeLists:
+# 1. add source/header files with custom list variables makeVolcaniteExecutable(NAME ${HEADERS} ${SOURCES}) note: the src/bin/NAME.cpp is always added
 # 2. add libraries for the executable with target_link_libraries(NAME ..) note: libvvvwindow and libvvv are always added
 # 3. add custom include include directories with target_include_directories(NAME ..) note: PRIVATE include/ is always added
-# 4. add additional data/ paths to installExecutable(NAME ${ADDITIONAL_DATA_DIRS}) note: data/ is always added.
+# 4. add additional data/ paths to installVolcaniteExecutable(NAME ${ADDITIONAL_DATA_DIRS}) note: data/ is always added.
 
 # Add a new executable which uses libvvv and libvvvwindow.
 ## adds a dependency for a new custom copy target to the existing target name which copies the /data subfolder of the current current list directory to the binary data directory.
@@ -51,12 +51,12 @@
 
 
 # Add executables from subdirectories
-# howto use makeExecutable in your projects CMakeLists:
-# 1. add source/header files with custom list variables makeExecutable(NAME ${HEADERS} ${SOURCES}) note: the src/bin/NAME.cpp is always added
+# howto use makeVolcaniteExecutable in your projects CMakeLists:
+# 1. add source/header files with custom list variables makeVolcaniteExecutable(NAME ${HEADERS} ${SOURCES}) note: the src/bin/NAME.cpp is always added
 # 2. add libraries for the executable with target_link_libraries(NAME ..) note: libvvvwindow and libvvv are always added
 # 3. add custom include include directories with target_include_directories(NAME ..) note: PRIVATE include/ is always added
 # 4. ensure that all runtime data that has to be copied to the binary data directory is within your data subfolder and all shaders are in data/shader
-function(makeExecutable name)
+function(makeVolcaniteExecutable name)
     add_executable(${name} ${CMAKE_CURRENT_LIST_DIR}/src/bin/${name}.cpp ${ARGN})
     set_target_properties(${name} PROPERTIES
             # WIN32_EXECUTABLE TRUE # this hides the console window. Disabled, because we need to see the console output! maybe re-enable for distribution
@@ -95,7 +95,7 @@ function(makeExecutable name)
 endfunction()
 
 # same as makeExecutabe, but for libraries. Can be used to build a library from all shared project files and link that for each executable.
-function(makeLibrary name)
+function(makeVolcaniteLibrary name)
     add_library(${name} ${ARGN})
     target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap SQLiteCpp)
     if(NOT HEADLESS)
@@ -134,7 +134,7 @@ endfunction()
 # This will add install()-definitions for this executable. This includes copying all dependent data/-Folders upon `ninja install` or packaging the data/-Files with `cpack`.
 # Also, required variables for finding the data/-Folders at runtime is passed as compile definitions.
 # Ensure that target_link_libraries() is executed before this function as these libraries are searched for data/-Directories.
-function(installExecutable name)
+function(installVolcaniteExecutable name)
     set(data_dirs "")
 
     # get all INTERFACE_DATA_DIR properties to copy those data dirs into the project install directory
