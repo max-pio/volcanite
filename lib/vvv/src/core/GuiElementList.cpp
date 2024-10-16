@@ -269,178 +269,173 @@ namespace vvv {
     }
 
     bool GuiInterface::GuiElementList::readParameters(std::istream& in) {
-        for (BaseGuiEntry *be : m_entries) {
-            auto gui_set = []<class T>(GuiEntry<T> *e, bool changed, T value) {
-                if (changed) {
-                    if (e->setter)
-                        e->setter(value);
-                    else
-                        *e->value = value;
-                }
-            };
+        std::string line;
+        while(std::getline(in, line)) {
+            std::istringstream tempLineStream(line);
 
-            switch (be->type) {
-                // some parameters do not need to be exported because they are 'constant'
-                case GuiAction:
-                case GuiLabel:
-                case GuiProgress:
-                case GuiSeparator:
-                case GuiCustomCode:
-                    break;
+            // empty line indicates end of window
+            // return so next window can be read
+            if (line.empty()) {
+                return true;
+            }
 
-                case GuiTF1D: {
-                    Logger(WARN) << "Importing transfer functions not yet supported.";
-                    break;
-                }
-                case GuiBool: {
-                    if(!checkLabel(in, be))
-                        return false;
-                    bool v;
-                    in >> v;
-                    gui_set(GUI_CAST(be, bool), true, v);
-                    break;
-                }
-                case GuiInt: {
-                    if(!checkLabel(in, be))
-                        return false;
-                    int v;
-                    in >> v;
-                    gui_set(GUI_CAST(be, int), true, v);
-                    break;
-                }
-                case GuiFloat: {
-                    if(!checkLabel(in, be))
-                        return false;
-                    float v;
-                    in >> v;
-                    gui_set(GUI_CAST(be, float), true, v);
-                    break;
-                }
-                case GuiString: {
-                    if(!checkLabel(in, be))
-                        return false;
-                    std::string v;
-                    in >> v;
-                    gui_set(GUI_CAST(be, std::string), true, v);
-                    break;
-                }
-                case GuiVec2:
-                case GuiFloatRange: {
-                    if(!checkLabel(in, be))
-                        return false;
-                    glm::vec2 v;
-                    for(int i = 0; i < 2; i++)
-                        in >> v[i];
-                    gui_set(GUI_CAST(be, glm::vec2), true, v);
-                    break;
-                }
-                case GuiVec3:
-                case GuiDirection: {
-                    if(!checkLabel(in, be))
-                        return false;
-                    glm::vec3 v;
-                    for(int i = 0; i < 3; i++)
-                        in >> v[i];
-                    gui_set(GUI_CAST(be, glm::vec3), true, v);
-                    break;
-                }
-                case GuiVec4:
-                case GuiColor: {
-                    if(!checkLabel(in, be))
-                        return false;
-                    glm::vec4 v;
-                    for(int i = 0; i < 4; i++)
-                        in >> v[i];
-                    gui_set(GUI_CAST(be, glm::vec4), true, v);
-                    break;
-                }
-                case GuiCombo: {
-                    if(!checkLabel(in, be))
-                        return false;
-                    auto e = reinterpret_cast<GuiComboEntry*>(be);
-                    std::string v;
-                    in >> v;
-                    v = sanitizeImportString(v);
-                    int option = -1;
-                    for(int i = 0; i < e->options.size(); i++) {
-                        if(e->options[i] == v) {
-                            option = i;
-                            break;
-                        }
-                    }
-                    if(option < 0 ) {
-                        Logger(WARN) << "Could not set option " << v << " for parameter " << e->label;
-                        return false;
-                    }
-                    *e->selection = option;
-                    break;
-                }
-                case GuiDynamicText: {
-                    if(!checkLabel(in, be))
-                        return false;
-                    std::string text;
-                    in >> text;
-                    *GUI_CAST(be, std::string)->value = sanitizeImportString(text);
-                    break;
-                }
-                case GuiTFSegmentedVolume: {
-                    if(!checkLabel(in, be))
-                        return false;
+            std::string label;
+            tempLineStream >> label;
 
-                    auto e = reinterpret_cast<GuiTFSegmentedVolumeEntry*>(be);
-                    size_t matCount;
-                    in >> matCount;
-                    if(e->materials->size() != matCount) {
-                        Logger(ERROR) << "Material count does not match imported file material count";
-                        return false;
-                    }
-
-                    for(int m = 0; m < matCount; m++) {
-                        auto& mat = e->materials->at(m);
-                        std::string name;
-                        in >> name;
-                        sanitizeImportString(name);
-                        if(name == "#")
-                            mat.name[0] = '\0';
+            auto it = std::find_if(m_entries.begin(), m_entries.end(), [label](const BaseGuiEntry *g) { return sanitizeExportString(g->label, g->id) + ":" == label; });
+            if (it != m_entries.end()) {
+                auto gui_set = []<class T>(GuiEntry<T> *e, bool changed, T value) {
+                    if (changed) {
+                        if (e->setter)
+                            e->setter(value);
                         else
-                            memcpy(mat.name, name.data(),sizeof(mat.name));
-                        in >> mat.discrAttribute;
-                        in >> mat.discrInterval.x;
-                        in >> mat.discrInterval.y;
-                        in >> mat.tfAttribute;
-                        in >> mat.tfMinMax.x;
-                        in >> mat.tfMinMax.y;
-                        in >> mat.opacity;
-                        in >> mat.emission;
-                        in >> mat.wrapping;
-                        //
-                        auto& cm = e->colormapConfig[m];
-                        for(glm::vec3& c : cm.color) {
-                            in >> c.r;
-                            in >> c.g;
-                            in >> c.b;
+                            *e->value = value;
+                    }
+                };
+
+                BaseGuiEntry* be = it[0];
+                switch (be->type) {
+                    // some parameters do not need to be exported because they are 'constant'
+                    case GuiAction:
+                    case GuiLabel:
+                    case GuiProgress:
+                    case GuiSeparator:
+                    case GuiCustomCode:
+                        break;
+
+                    case GuiTF1D: {
+                        Logger(WARN) << "Importing transfer functions not yet supported.";
+                        break;
+                    }
+                    case GuiBool: {
+                        bool v;
+                        tempLineStream >> v;
+                        gui_set(GUI_CAST(be, bool), true, v);
+                        break;
+                    }
+                    case GuiInt: {
+                        int v;
+                        tempLineStream >> v;
+                        gui_set(GUI_CAST(be, int), true, v);
+                        break;
+                    }
+                    case GuiFloat: {
+                        float v;
+                        tempLineStream >> v;
+                        gui_set(GUI_CAST(be, float), true, v);
+                        break;
+                    }
+                    case GuiString: {
+                        std::string v;
+                        tempLineStream >> v;
+                        gui_set(GUI_CAST(be, std::string), true, v);
+                        break;
+                    }
+                    case GuiVec2:
+                    case GuiFloatRange: {
+                        glm::vec2 v;
+                        for(int i = 0; i < 2; i++)
+                            tempLineStream >> v[i];
+                        gui_set(GUI_CAST(be, glm::vec2), true, v);
+                        break;
+                    }
+                    case GuiVec3:
+                    case GuiDirection: {
+                        glm::vec3 v;
+                        for(int i = 0; i < 3; i++)
+                            tempLineStream >> v[i];
+                        gui_set(GUI_CAST(be, glm::vec3), true, v);
+                        break;
+                    }
+                    case GuiVec4:
+                    case GuiColor: {
+                        glm::vec4 v;
+                        for(int i = 0; i < 4; i++)
+                            tempLineStream >> v[i];
+                        gui_set(GUI_CAST(be, glm::vec4), true, v);
+                        break;
+                    }
+                    case GuiCombo: {
+                        auto e = reinterpret_cast<GuiComboEntry*>(be);
+                        std::string v;
+                        tempLineStream >> v;
+                        v = sanitizeImportString(v);
+                        int option = -1;
+                        for(int i = 0; i < e->options.size(); i++) {
+                            if(e->options[i] == v) {
+                                option = i;
+                                break;
+                            }
                         }
-                        in >> cm.precomputedIdx;
-                        int type;
-                        in >> type;
-                        if(type < 0 || type > 2) {
-                            Logger(ERROR) << "Unsupported color map type " << type;
+                        if(option < 0 ) {
+                            Logger(WARN) << "Could not set option " << v << " for parameter " << e->label;
+                            return false;
+                        }
+                        *e->selection = option;
+                        break;
+                    }
+                    case GuiDynamicText: {
+                        std::string text;
+                        tempLineStream >> text;
+                        *GUI_CAST(be, std::string)->value = sanitizeImportString(text);
+                        break;
+                    }
+                    case GuiTFSegmentedVolume: {
+                        auto e = reinterpret_cast<GuiTFSegmentedVolumeEntry*>(be);
+                        size_t matCount;
+                        tempLineStream >> matCount;
+                        if(e->materials->size() != matCount) {
+                            Logger(ERROR) << "Material count does not match imported file material count";
                             return false;
                         }
 
-                        cm.type = static_cast<GuiTFSegmentedVolumeEntry::ColorMapType>(type);
+                        for(int m = 0; m < matCount; m++) {
+                            auto& mat = e->materials->at(m);
+                            std::string name;
+                            tempLineStream >> name;
+                            sanitizeImportString(name);
+                            if(name == "#")
+                                mat.name[0] = '\0';
+                            else
+                                memcpy(mat.name, name.data(),sizeof(mat.name));
+                            tempLineStream >> mat.discrAttribute;
+                            tempLineStream >> mat.discrInterval.x;
+                            tempLineStream >> mat.discrInterval.y;
+                            tempLineStream >> mat.tfAttribute;
+                            tempLineStream >> mat.tfMinMax.x;
+                            tempLineStream >> mat.tfMinMax.y;
+                            tempLineStream >> mat.opacity;
+                            tempLineStream >> mat.emission;
+                            tempLineStream >> mat.wrapping;
+                            //
+                            auto& cm = e->colormapConfig[m];
+                            for(glm::vec3& c : cm.color) {
+                                tempLineStream >> c.r;
+                                tempLineStream >> c.g;
+                                tempLineStream >> c.b;
+                            }
+                            tempLineStream >> cm.precomputedIdx;
+                            int type;
+                            tempLineStream >> type;
+                            if(type < 0 || type > 2) {
+                                Logger(ERROR) << "Unsupported color map type " << type;
+                                return false;
+                            }
 
-                        e->initialize();
+                            cm.type = static_cast<GuiTFSegmentedVolumeEntry::ColorMapType>(type);
+
+                            e->initialize();
+                        }
+                        break;
                     }
-                    break;
-                }
-                default: {
-                    Logger(WARN) << "Could not import parameter type " << be->type << " for entry " << be->label;
-                    break;
+                    default: {
+                        Logger(WARN) << "Could not import parameter type " << be->type << " for entry " << be->label;
+                        break;
+                    }
                 }
             }
 
-            if(!in.good())
+            if (!in.good())
                 return false;
         }
         return true;
