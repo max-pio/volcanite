@@ -408,7 +408,7 @@ namespace vvv {
 
         int icon_channels;
         GLFWimage icon;
-        icon.pixels = stbi_load(vvv::Paths::findDataPath("volcanite_icon_256.png").c_str(), &icon.width, &icon.height, &icon_channels, STBI_rgb_alpha);
+        icon.pixels = stbi_load(vvv::Paths::findDataPath("volcanite_icon_256.png").string().c_str(), &icon.width, &icon.height, &icon_channels, STBI_rgb_alpha);
         if (icon.pixels) {
             glfwSetWindowIcon(m_window, 1, &icon);
             stbi_image_free(icon.pixels);
