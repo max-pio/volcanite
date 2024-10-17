@@ -13,7 +13,7 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include "cpp_glsl_include/csgv_constants.h"
+#include "cpp_glsl_include/csgv_constants.incl"
 
 layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict EncodingRef
 {

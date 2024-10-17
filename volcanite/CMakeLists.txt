@@ -21,7 +21,7 @@ set(VOLCANITE_HEADERS
         include/volcanite/CSGVPathUtils.hpp
         include/volcanite/VolcaniteArgs.hpp
         include/volcanite/StratifiedPixelSequence.hpp
-        data/shader/cpp_glsl_include/csgv_constants.h
+        data/shader/cpp_glsl_include/csgv_constants.incl
         include/volcanite/benchmark/CSGVBenchmarkPass.hpp
         include/volcanite/compression/VolumeCompressionBase.hpp
         include/volcanite/compression/encoder/CSGVBrickEncoder.hpp
@@ -60,14 +60,10 @@ makeVolcaniteLibrary(libvolcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
 # add data/ folder as target_property to install() by each project
 set_target_properties(libvolcanite PROPERTIES INTERFACE_DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)
 
-makeVolcaniteExecutable(csgv_brick_viewer)
-# installVolcaniteExecutable(csgv_brick_viewer)
-
 makeVolcaniteExecutable(volcanite)
 installVolcaniteExecutable(volcanite)
 
+# development executables:
 makeVolcaniteExecutable(csgv_benchmark)
-# installVolcaniteExecutable(csgv_benchmark)
-
 makeVolcaniteExecutable(volcanite_synth_volume)
-# installVolcaniteExecutable(volcanite_synth_volume)
+makeVolcaniteExecutable(csgv_brick_viewer)
