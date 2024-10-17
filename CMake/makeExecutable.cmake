@@ -160,6 +160,9 @@ function(installVolcaniteExecutable name)
     # install binary to target folder
     install(TARGETS ${name} DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT applications)
 
+    # install license file
+    install(FILES ${PROJECT_SOURCE_DIR}/package_assets/LICENSE DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT applications)
+
     # system dependent configuration
     set(VOLCANITE_EXECUTABLE_NAME ${name})
     if (CMAKE_SYSTEM_NAME STREQUAL "Linux")

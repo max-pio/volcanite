@@ -80,9 +80,11 @@ endif()
 
 # PACKAGING ------------------------------------------------------------------------------------------------------------
 
+set(CPACK_PACKAGE_NAME "${CMAKE_PROJECT_NAME}-${CMAKE_PROJECT_VERSION}")
+
 # cpack is used for packaging. only the executable is packaged yet.
 # run `cpack --config CPackConfig.cmake` or `ninja package` in build directory to generate packages
-set(CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${CMAKE_PROJECT_VERSION}")
+set(CPACK_SOURCE_PACKAGE_FILE_NAME ${CPACK_PACKAGE_NAME})
 set(CPACK_PACKAGE_INSTALL_DIRECTORY ${CPACK_PACKAGE_NAME})
 set(CPACK_PACKAGE_VERSION_MAJOR ${CMAKE_PROJECT_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${CMAKE_PROJECT_VERSION_MINOR})
