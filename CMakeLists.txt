@@ -17,6 +17,15 @@ cmake_minimum_required(VERSION 3.16)
 
 project(volcanite VERSION 0.4.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES C CXX)
 
+set(PROJECT_COMPANY_NAME "Karlsruhe Institute of Technology")
+set(PROJECT_COMPANY_NAMESPACE "edu.kit.ivd.cg")
+
+# specify install directories here to make them available in system dependent install commands
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "/opt/volcanite" CACHE PATH "..." FORCE)
+endif()
+set(CPACK_PACKAGING_INSTALL_PREFIX "/opt/volcanite")
+
 if (MSVC)
     message(FATAL_ERROR "MSVC compiler is currently not supported as it only provides OpenMP version < 4.5")
 endif (MSVC)
@@ -72,14 +81,40 @@ endif()
 
 # cpack is used for packaging. only the executable is packaged yet.
 # run `cpack --config CPackConfig.cmake` or `ninja package` in build directory to generate packages
-set(CPACK_SOURCE_PACKAGE_FILE_NAME "volcanite-${CMAKE_PROJECT_VERSION}")
+set(CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${CMAKE_PROJECT_VERSION}")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY ${CPACK_PACKAGE_NAME})
+set(CPACK_PACKAGE_VERSION_MAJOR ${CMAKE_PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${CMAKE_PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${CMAKE_PROJECT_VERSION_PATCH})
 set(CPACK_PACKAGE_VENDOR "Max Piochowiak (Karlsruhe Institute of Technology)")
+set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_LIST_DIR}/LICENSE)
 set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
 set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
 SET(CPACK_COMPONENTS_ALL applications)
-include(CPack)
 
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-    set(CMAKE_INSTALL_PREFIX "/opt/volcanite" CACHE PATH "..." FORCE)
-endif()
+# Windows settings for NSIS generator
+set(CPACK_NSIS_DISPLAY_NAME ${CMAKE_PROJECT_NAME})
+set(CPACK_NSIS_PACKAGE_NAME ${CPACK_PACKAGE_NAME})
+set(CPACK_NSIS_MANIFEST_DPI_AWARE TRUE)
+set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL YES)
+
+# Linux DEB settings
+set(CPACK_DEB_COMPONENT_INSTALL ON)
+# for some reason, the component specific CPACK_DEBIAN_APPLICATIONS_PACKAGE_* has no effect here
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+set(CPACK_DEBIAN_PACKAGE_SECTION Graphics)
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_BINARY_DIR}/volcanite/postinst;${CMAKE_CURRENT_BINARY_DIR}/volcanite/prerm")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION TRUE)
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Max Piochowiak (Karlsruhe Institute of Technology)")
+
+# Generator selection per platform
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(CPACK_GENERATOR ZIP NSIS)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(CPACK_GENERATOR TGZ DEB)
+else ()
+    set(CPACK_GENERATOR TGZ)
+endif ()
+
+include(CPack)

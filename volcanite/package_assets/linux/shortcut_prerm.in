@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+
+# Create symlink to .desktop file
+rm /usr/local/share/applications/${VOLCANITE_EXECUTABLE_NAME}.desktop
+
+# Update desktop database (non fatal)
+update-desktop-database || true

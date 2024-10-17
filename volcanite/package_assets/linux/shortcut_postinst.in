@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+
+# Create symlink to .desktop file
+ln -sf @CPACK_PACKAGING_INSTALL_PREFIX@/share/applications/${VOLCANITE_EXECUTABLE_NAME}.desktop /usr/local/share/applications/${VOLCANITE_EXECUTABLE_NAME}.desktop
+
+# Update desktop database (non fatal)
+update-desktop-database /usr/local/share/applications/ || true

@@ -154,18 +154,48 @@ function(installVolcaniteExecutable name)
 
     # install all data dirs to [project]/data/
     foreach(path IN LISTS data_dirs)
-        install(DIRECTORY ${path} DESTINATION ${project_dir_name} COMPONENT applications)
+        install(DIRECTORY ${path} DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT applications)
     endforeach()
 
     # install binary to target folder
-    install(TARGETS ${name} DESTINATION ${project_dir_name} COMPONENT applications)
+    install(TARGETS ${name} DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT applications)
 
-    # use fixup_bundle to copy required dlls for windows
-    set(APPS \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${project_dir_name}/${name}${CMAKE_EXECUTABLE_SUFFIX})
-    install(CODE "
-        include(BundleUtilities)
-        message(\"fixup_bundle(\\\"${APPS}\\\")\")
-        fixup_bundle(\"${APPS}\" \"\" \"\")"
-        DESTINATION .)
+    # system dependent configuration
+    set(VOLCANITE_EXECUTABLE_NAME ${name})
+    if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+
+        # install .desktop entry and application icon
+        elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            set(CPACK_GENERATOR TGZ DEB)
+        elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+            set(CPACK_GENERATOR ZIP NSIS)
+        configure_file(
+                ${PROJECT_SOURCE_DIR}/package_assets/linux/Volcanite.desktop.in
+                ${CMAKE_CURRENT_BINARY_DIR}/${VOLCANITE_EXECUTABLE_NAME}.desktop)
+        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${VOLCANITE_EXECUTABLE_NAME}.desktop
+                DESTINATION share/applications COMPONENT applications)
+        install(FILES ${PROJECT_SOURCE_DIR}/package_assets/icons/volcanite_icon_256.png
+                DESTINATION share/icons
+                RENAME ${VOLCANITE_EXECUTABLE_NAME}_icon.png COMPONENT applications)
+
+        # add postinst, prerm scripts for CPACK_DEBIAN_APPLICATIONS_PACKAGE_CONTROL_EXTRA to create .desktop and binary symlinks
+        configure_file(
+                ${PROJECT_SOURCE_DIR}/package_assets/linux/shortcut_postinst.in
+                ${CMAKE_CURRENT_BINARY_DIR}/postinst)
+        configure_file(
+                ${PROJECT_SOURCE_DIR}/package_assets/linux/shortcut_prerm.in
+                ${CMAKE_CURRENT_BINARY_DIR}/prerm)
+
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+
+        # use fixup_bundle to copy required dlls for windows
+        #    set(APPS \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${project_dir_name}/${name}${CMAKE_EXECUTABLE_SUFFIX})
+        #    install(CODE "
+        #        include(BundleUtilities)
+        #        message(\"fixup_bundle(\\\"${APPS}\\\")\")
+        #        fixup_bundle(\"${APPS}\" \"\" \"\")"
+        #        DESTINATION .)
+    endif()
+
 endfunction()
 
