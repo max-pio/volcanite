@@ -165,10 +165,6 @@ function(installVolcaniteExecutable name)
     if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
         # install .desktop entry and application icon
-        elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-            set(CPACK_GENERATOR TGZ DEB)
-        elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-            set(CPACK_GENERATOR ZIP NSIS)
         configure_file(
                 ${PROJECT_SOURCE_DIR}/package_assets/linux/Volcanite.desktop.in
                 ${CMAKE_CURRENT_BINARY_DIR}/${VOLCANITE_EXECUTABLE_NAME}.desktop)

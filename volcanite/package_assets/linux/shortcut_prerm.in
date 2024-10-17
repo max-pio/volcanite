@@ -1,8 +1,11 @@
 #!/bin/sh
 set -e
 
-# Create symlink to .desktop file
+# remove symlink to .desktop file
 rm /usr/local/share/applications/${VOLCANITE_EXECUTABLE_NAME}.desktop
 
-# Update desktop database (non fatal)
+# update desktop database (non fatal)
 update-desktop-database || true
+
+# remove symlink to binary
+rm /usr/local/bin/${VOLCANITE_EXECUTABLE_NAME}

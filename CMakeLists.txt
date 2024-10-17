@@ -21,10 +21,11 @@ set(PROJECT_COMPANY_NAME "Karlsruhe Institute of Technology")
 set(PROJECT_COMPANY_NAMESPACE "edu.kit.ivd.cg")
 
 # specify install directories here to make them available in system dependent install commands
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+# use /opt/ on Linux since volcanite is self-contained and contains a shader asset folder
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CMAKE_INSTALL_PREFIX "/opt/volcanite" CACHE PATH "..." FORCE)
+    set(CPACK_PACKAGING_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX})
 endif()
-set(CPACK_PACKAGING_INSTALL_PREFIX "/opt/volcanite")
 
 if (MSVC)
     message(FATAL_ERROR "MSVC compiler is currently not supported as it only provides OpenMP version < 4.5")
@@ -109,12 +110,12 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Max Piochowiak (Karlsruhe Institute of Technology)")
 
 # Generator selection per platform
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(CPACK_GENERATOR ZIP NSIS)
-elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CPACK_GENERATOR TGZ DEB)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(CPACK_GENERATOR ZIP NSIS)
 else ()
-    set(CPACK_GENERATOR TGZ)
+    set(CPACK_GENERATOR ZIP)
 endif ()
 
 include(CPack)
