@@ -15,7 +15,7 @@ sets at compression rates that generally outperforming other methods.
 <sup>Data Set from *Emerging Tumor Development by Simulating Single-cell Events*, Rosenbauer J., Berghoff M., Schug A. (2020) bioRxiv</sup>
 
 ## Quick Start
-See the setup guides for [Ubuntu / Debian](doc/Setup.md#ubuntu--debian) or [Windows](doc/Setup.md#ubuntu--debian) respectively for a more detailed description on how to install all dependencies and how to build Volcanite.
+See the setup guides for [Ubuntu / Debian](doc/Setup.md#ubuntu--debian) or [Windows](doc/Setup.md#windows) respectively for a more detailed description on how to install all dependencies and how to build Volcanite.
 To install all required dependencies under Ubuntu, first install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home), the minimal build packages with
 ```
 sudo apt install -y build-essential cmake xorg-dev

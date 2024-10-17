@@ -38,8 +38,11 @@ If your IDE supports generating build files, you can directly open the `CMakeLis
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
 3. Install [CMake](https://cmake.org/download/) and select "Add CMake to the system PATH".
 4. *Optional: Install packages to support a wider range of volume file formats. 
-   Install the [vcpkg](https://vcpkg.io/en/getting-started) package manager. From the vcpkg install directory, install the optional 64 bit packages in a powershell console:*
+   Install the [vcpkg](https://vcpkg.io/en/getting-started) package manager and install the optional 64 bit packages in a powershell console from the vcpkg directory:*
 ```
+cd [path into which vcpkg is installed]
+git clone https://github.com/microsoft/vcpkg.git
+cd vcpkg; .\bootstrap-vcpkg.bat
 .\vcpkg install hdf5 vtk tiff --triplet=x64-windows
 ```
 5. Build the project. Choose one of the following, depending on your development environment:
