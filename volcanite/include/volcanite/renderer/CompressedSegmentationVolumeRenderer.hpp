@@ -123,7 +123,9 @@ public:
 
         // save rendering parameters on GUI shutdown if requested
         if(!m_save_config_on_shutdown_path.empty()) {
-            writeParameterFile(m_save_config_on_shutdown_path, VOLCANITE_VERSION);
+            if (writeParameterFile(m_save_config_on_shutdown_path, VOLCANITE_VERSION)) {
+                Logger(DEBUG) << "exported parameters to " << m_save_config_on_shutdown_path;
+            }
         }
 
         m_gui_interface = nullptr;
