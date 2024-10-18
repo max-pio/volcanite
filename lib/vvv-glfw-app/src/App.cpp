@@ -21,6 +21,8 @@
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+#include "stb/stb_image.hpp"
+
 
 #ifdef IMGUI
 #include "imgui/imgui.h"
@@ -187,23 +189,11 @@ namespace vvv {
         assert(m_swapchain.depthFormat == vk::Format::eUndefined &&
                "This function does currently not setup depth buffering!");
 
-
-        vk::ImageMemoryBarrier imageMemoryBarrier;
-        imageMemoryBarrier.oldLayout = ldrRendererOutput.texture->descriptor.imageLayout;
-        imageMemoryBarrier.newLayout = vk::ImageLayout::eGeneral;
-        imageMemoryBarrier.image = ldrRendererOutput.texture->image;
-        imageMemoryBarrier.subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
-        imageMemoryBarrier.srcAccessMask = vk::AccessFlagBits::eShaderWrite;
-        imageMemoryBarrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-
-        // imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        // imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        imageMemoryBarrier.srcQueueFamilyIndex = ldrRendererOutput.queueFamilyIndex;
-        imageMemoryBarrier.dstQueueFamilyIndex = getQueueFamilyIndices().present.value();
-
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, 0,
-                             0, nullptr, 0, nullptr, 1,
-                             reinterpret_cast<const VkImageMemoryBarrier *>(&imageMemoryBarrier));
+        vk::ImageMemoryBarrier imageMemoryBarrier = ldrRendererOutput.texture->queueOwnershipTransfer(ldrRendererOutput.queueFamilyIndex, vk::AccessFlagBits::eShaderWrite,
+                                                                                                      getQueueFamilyIndices().present.value(), vk::AccessFlagBits::eShaderRead);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eFragmentShader,
+                                      {}, 0, nullptr, 0, nullptr,
+                                      1, &imageMemoryBarrier);
 
         updateBlitDescriptorSet(ldrRendererOutput, currentInFlightFrameIndex());
 
@@ -251,6 +241,12 @@ namespace vvv {
 #endif
 
         commandBuffer.endRenderPass();
+
+        vk::ImageMemoryBarrier imageMemoryBarrierBack = ldrRendererOutput.texture->queueOwnershipTransfer(getQueueFamilyIndices().present.value(), vk::AccessFlagBits::eShaderRead,
+                                                                                                          ldrRendererOutput.queueFamilyIndex, vk::AccessFlagBits::eShaderWrite);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eComputeShader,
+                                      {}, 0, nullptr, 0, nullptr,
+                                      1, &imageMemoryBarrierBack);
     }
 
     std::thread Application::execAsyncAttached() {
@@ -409,6 +405,19 @@ namespace vvv {
         glfwSetWindowUserPointer(m_window, this);
         glfwSetFramebufferSizeCallback(m_window, framebufferResizeCallback);
         m_camera_controller.setWindow(m_window);
+
+        GLFWimage icon = {.pixels = nullptr};
+        if (vvv::Paths::hasDataPath("icons/volcanite_icon_256.png")) {
+            int icon_channels;
+            icon.pixels = stbi_load(vvv::Paths::findDataPath("icons/volcanite_icon_256.png").string().c_str(), &icon.width,
+                                    &icon.height, &icon_channels, STBI_rgb_alpha);
+        }
+        if (icon.pixels) {
+            glfwSetWindowIcon(m_window, 1, &icon);
+            stbi_image_free(icon.pixels);
+        } else {
+            Logger(WARN) << "Unable to load volcanite_icon_256.png application icon.";
+        }
     }
 
     void Application::destroyWindow() {

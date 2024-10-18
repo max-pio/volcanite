@@ -1,7 +1,7 @@
 # Volcanite Segmentation Volume Renderer
 [![version](https://img.shields.io/badge/version-0.4.0-blue)](https://gitlab.kit.edu/max.piochowiak/volcanite/-/tags/0.4.0)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![doi](https://img.shields.io/badge/doi-10.1109/TVCG.2023.3326573-blue?logo=ieee&logoColor=white)](https://www.doi.org/10.1109/TVCG.2023.3326573)
+<!--[![doi](https://img.shields.io/badge/doi-10.1109/TVCG.2023.3326573-blue?logo=ieee&logoColor=white)](https://www.doi.org/10.1109/TVCG.2023.3326573)-->
 
 Volcanite is a GPU renderer for segmentation volumes implemented using C++ and the Vulkan API.
 Segmentation volumes are voxel data sets that store an integer object label per voxel.
@@ -12,21 +12,22 @@ Apart from interactively or non-interactively visualizing segmentation volumes, 
 sets at compression rates that generally outperforming other methods.
 
 ![Renderer Preview Image](doc/volcanite_app.jpg)
-<sup>Data Set from Emerging Tumor Development by Simulating Single-cell Events, Rosenbauer J., Berghoff M., Schug A. (2020) bioRxiv</sup>
+<sup>Data Set from *Emerging Tumor Development by Simulating Single-cell Events*, Rosenbauer J., Berghoff M., Schug A. (2020) bioRxiv</sup>
 
 ## Quick Start
-See the setup guides for [Ubuntu / Debian](doc/Setup.md#ubuntu--debian) or [Windows](doc/Setup.md#ubuntu--debian) respectively for a more detailed description on how to install all dependencies and how to build Volcanite.
+See the setup guides for [Ubuntu / Debian](doc/Setup.md#ubuntu--debian) or [Windows](doc/Setup.md#windows) respectively for a more detailed description on how to install all dependencies and how to build Volcanite.
 To install all required dependencies under Ubuntu, first install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home), the minimal build packages with
 ```
 sudo apt install -y build-essential cmake xorg-dev
 ```
-and optionally the `libhdf5-dev libvtk9-dev libtiff-dev libpugixml-dev libsqlite3-dev` packages for compatibility with
-a wider range of file formats.
+and optionally the `libhdf5-dev libvtk9-dev libtiff-dev libpugixml-dev` packages for compatibility with
+a wider range of file formats*.
 Build the `volcanite` executable with
 ```
 mkdir cmake-build-release && cd cmake-build-release
 cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . --target volcanite
 ```
+
 Start Volcanite, either providing a path to a segmentation volume as a commandline argument with
 ```
 ./projects/volcanite/volcanite /path/to/your/segmentation/volume
@@ -35,6 +36,9 @@ or by using the file dialog to select a volume file.
 Run `./volcanite --help` for a complete list of arguments and commands.
 See [Usage.md](doc/Usage.md#supported-segmentation-volume-file-formats) for a list of currently supported formats.
 You can find a collection of example data sets listed in [ExampleData.md](doc/ExampleData.md).
+
+**Note: due to an [incompatibility bug](https://gitlab.kitware.com/vtk/vtk/-/issues/19258) with the expat 2.6.0 library, libvtk9-dev versions before 9.3.1 are unable to
+  open .vti XML files with binary encoding.*
 
 ## Documentation
 The `doc` directory of this repository contains further information on how to use Volcanite:
@@ -54,7 +58,7 @@ The third party open source libraries that Volcanite uses and their licenses are
 Volcanite was created by [Max Piochowiak](https://cg.ivd.kit.edu/piochowiak/staff_index.php) with significant code
 contributions by [Reiner Dolp](https://cg.ivd.kit.edu/english/staff_2590.php). Additional contributions by Fabian
 Schiekel, Patrick Jaberg, and Mirco Werner. All contributors are affiliated with Karlsruhe Institute of Technology (KIT).
-You can cite the following publication if you use Volcanite in your projects:
+You can cite the following publication if you use the Volcanite CSGV compression in your projects:
 
 ```bibtex
 @article{Piochowiak:2024:csgv,

@@ -198,6 +198,8 @@ public:
     virtual vk::PhysicalDevice getPhysicalDevice() const = 0;
     virtual QueueFamilyIndices const &getQueueFamilyIndices() const = 0;
 
+    virtual vk::PhysicalDeviceSubgroupProperties getPhysicalDeviceSubgroupProperties() const = 0;
+
     std::shared_ptr<DebugUtilities> debugMarker;
 
     // TODO: a single semaphore might not enough for multibuffering

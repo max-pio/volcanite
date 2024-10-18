@@ -1,6 +1,31 @@
+#  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <https:#www.gnu.org/licenses/>.
+
 cmake_minimum_required(VERSION 3.16)
 
-project(vvv-volcanite VERSION 0.4.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES C CXX)
+project(volcanite VERSION 0.4.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES C CXX)
+
+set(PROJECT_COMPANY_NAME "Karlsruhe Institute of Technology")
+set(PROJECT_COMPANY_NAMESPACE "edu.kit.ivd.cg")
+
+# specify install directories here to make them available in system dependent install commands
+# use /opt/ on Linux since volcanite is self-contained and contains a shader asset folder
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(CMAKE_INSTALL_PREFIX "/opt/volcanite" CACHE PATH "..." FORCE)
+    set(CPACK_PACKAGING_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX})
+endif()
 
 if (MSVC)
     message(FATAL_ERROR "MSVC compiler is currently not supported as it only provides OpenMP version < 4.5")
@@ -33,7 +58,7 @@ endif()
 
 # Use target folders to organize the copy interface targets. This allows to hide the targets easier in certain IDEs.
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-# The makeExecutable is used to create project executables with all CMake and compile dependencies
+# helper functions to create volcanite executables / libraries with all CMake and compile dependencies
 include(makeExecutable)
 
 # In headless mode, no windowing system integration is build.
@@ -45,12 +70,59 @@ include(CMake/Dependencies.cmake)
 # add Volcanite executable with its sources, includes, shaders
 add_subdirectory(volcanite)
 
+# TESTS ----------------------------------------------------------------------------------------------------------------
+
+option(VOLCANITE_BUILD_TESTS "Build Tests" ON)
+if (VOLCANITE_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(test)
+endif()
 
 # PACKAGING ------------------------------------------------------------------------------------------------------------
 
-# cpack is used for packaging. run `ninja package` in build directory to generate packages
-include(CPack)
+set(CPACK_PACKAGE_NAME "${CMAKE_PROJECT_NAME}-${CMAKE_PROJECT_VERSION}")
 
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-    set(CMAKE_INSTALL_PREFIX "/opt/volcanite" CACHE PATH "..." FORCE)
-endif()
+# cpack is used for packaging. only the executable is packaged yet.
+# run `cpack --config CPackConfig.cmake` or `ninja package` in build directory to generate packages
+set(CPACK_SOURCE_PACKAGE_FILE_NAME ${CPACK_PACKAGE_NAME})
+set(CPACK_PACKAGE_INSTALL_DIRECTORY ${CPACK_PACKAGE_NAME})
+set(CPACK_PACKAGE_VERSION_MAJOR ${CMAKE_PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${CMAKE_PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${CMAKE_PROJECT_VERSION_PATCH})
+set(CPACK_PACKAGE_VENDOR "Max Piochowiak (Karlsruhe Institute of Technology)")
+set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_LIST_DIR}/LICENSE)
+set(CPACK_ARCHIVE_COMPONENT_INSTALL TRUE)
+set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
+set(CPACK_COMPONENTS_ALL applications)
+set(CPACK_COMPONENT_APPLICATIONS_REQUIRED TRUE)
+set(CPACK_COMPONENT_APPLICATIONS_DESCRIPTION "The volcanite segmentation volume renderer executable.")
+
+# Linux DEB settings
+set(CPACK_DEB_COMPONENT_INSTALL ON)
+# for some reason, the component specific CPACK_DEBIAN_APPLICATIONS_PACKAGE_* has no effect here
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+set(CPACK_DEBIAN_PACKAGE_SECTION Graphics)
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_BINARY_DIR}/volcanite/postinst;${CMAKE_CURRENT_BINARY_DIR}/volcanite/prerm")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION TRUE)
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Max Piochowiak (Karlsruhe Institute of Technology)")
+
+# Windows settings for NSIS generator
+set(CPACK_NSIS_DISPLAY_NAME ${CMAKE_PROJECT_NAME})
+set(CPACK_NSIS_PACKAGE_NAME ${CPACK_PACKAGE_NAME})
+set(CPACK_NSIS_MANIFEST_DPI_AWARE TRUE)
+set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL YES)
+set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL YES)
+set(CPACK_NSIS_MODIFY_PATH TRUE)
+set(CPACK_NSIS_CONTACT "Max Piochowiak (Karlsruhe Institute of Technology)")
+
+# Generator selection per platform
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(CPACK_GENERATOR TGZ DEB)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(CPACK_GENERATOR ZIP NSIS)
+else ()
+    set(CPACK_GENERATOR ZIP)
+endif ()
+
+include(CPack)

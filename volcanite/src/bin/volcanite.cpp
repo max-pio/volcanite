@@ -42,7 +42,7 @@ constexpr int RET_RENDER_ERROR = 4;
 
 
 
-int export_texture(Texture* tex, const std::string export_file_path) {
+int export_texture(Texture* tex, const std::string& export_file_path) {
     try {
         Logger(INFO) << "Exporting render output to " << export_file_path;
         tex->writeFile(export_file_path);
@@ -81,7 +81,7 @@ int volcanite_main(int argc, char *argv[]) {
         Logger::s_minLevel = INFO;
 
     std::shared_ptr<volcanite::CompressedSegmentationVolume> compressedSegmentationVolume;
-    std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();;
+    std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();
     // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
     if(args.performCompression()) {
         glm::uvec3 max_chunk_id = glm::uvec3(args.chunk_files[0], args.chunk_files[1], args.chunk_files[2]);
@@ -144,7 +144,7 @@ int volcanite_main(int argc, char *argv[]) {
         }
 
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),
-                                                        .rANS_mode = args.rANS_mode,
+                                                        .encoding_mode = args.encoding_mode,
                                                         .label_remapping = label_remapping,
                                                         .cpu_threads = args.threads,
                                                         .use_detail_separation = args.stream_lod,
@@ -189,10 +189,12 @@ int volcanite_main(int argc, char *argv[]) {
             Logger(DEBUG) << compressedSegmentationVolume->getEncodingInfoString();
         }
 
-        // if a config file exists next to the .csgv file, we use it to initialize the renderer
-        std::string config_path = stripFileExtension(args.input_file) + ".vcfg";
-        if(std::filesystem::exists(config_path))
-            args.rendering_config_file = config_path;
+        // if no config file was specified, use a previous config next to the .csgv file, if it exists
+        if (args.rendering_config_file.empty()) {
+            std::string config_path = stripFileExtension(args.input_file) + ".vcfg";
+            if (std::filesystem::exists(config_path))
+                args.rendering_config_file = config_path;
+        }
     }
 
     if (compressedSegmentationVolume == nullptr) {
@@ -231,15 +233,16 @@ int volcanite_main(int argc, char *argv[]) {
             csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
 
         const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
-        renderer->setCacheParameters(args.cache_size_MB, args.cache_palettized);
+        renderer->setDecodingParameters(args.cache_size_MB, args.cache_palettized);
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
+        tryImportRenderConfig(args, renderer);
+        renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
 
         // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)
         if (!args.screenshot_output_file.empty()) {
             // obtain a headless rendering engine
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
             renderEngine->acquireResources();
-            tryImportRenderConfig(args, renderer);
             // let the rendering converge for some frames (if specified in the rendering config, we use that number)
             int accumulation_frames = renderer->getTargetAccumulationFrames();
             auto texture = renderEngine->renderFrames(accumulation_frames > 0 ? accumulation_frames : 60);
@@ -266,7 +269,6 @@ int volcanite_main(int argc, char *argv[]) {
             app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
             app->setVSync(vsync);
             app->acquireResources();
-            tryImportRenderConfig(args, renderer);
             return app->exec();
         }
 #endif

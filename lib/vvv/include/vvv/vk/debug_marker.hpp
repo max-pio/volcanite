@@ -145,6 +145,7 @@ private:
 
 // Legacy Debug Markers for Vulkan 1.0. Use DebugUtil for later Vulkan versions.
 // adapted from https://github.com/SaschaWillems/Vulkan/blob/3b1ff1eecead5933403e9115146f5c80aeef9f5e/examples/debugmarker/debugmarker.cpp
+// released under an MIT license
 class DebugMarkerExt : public DebugUtilities {
 public:
     static const std::string ExtensionName;

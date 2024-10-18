@@ -1,3 +1,19 @@
+#  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <https:#www.gnu.org/licenses/>.
+
+
 cmake_minimum_required(VERSION 3.16.0)
 project(libvvv VERSION 0.1 DESCRIPTION "Vulkan Volume Visualization library" LANGUAGES CXX)
 
@@ -56,6 +72,7 @@ set(VVV_HEADERS
         include/vvv/util/random_gpu.hpp
         include/vvv/util/space_filling_curves.hpp
         include/vvv/util/util.hpp
+        include/vvv/util/volume_data_types.hpp
         include/vvv/util/vertex_primitives.hpp
         include/vvv/util/Paths.hpp
 
@@ -180,7 +197,7 @@ if (OpenMP_CXX_FOUND)
 endif ()
 if (HDF5_FOUND)
     target_link_libraries(libvvv PRIVATE HighFive)
-    target_compile_definitions(libvvv PUBLIC -DLIB_HIGHFIVE)
+    target_compile_definitions(libvvv PRIVATE -DLIB_HIGHFIVE)
 endif ()
 # vtk linking and module initialization
 if (VTK_FOUND)
@@ -189,19 +206,15 @@ if (VTK_FOUND)
             TARGETS libvvv
             MODULES ${VTK_LIBRARIES}
     )
-    target_compile_definitions(libvvv PUBLIC -DLIB_VTK)
-endif ()
-if (SQLite3_FOUND)
-    target_link_libraries(libvvv PUBLIC SQLiteCpp SQLite::SQLite3) # pthread dl
-    target_compile_definitions(libvvv PUBLIC -DLIB_SQLITE3)
+    target_compile_definitions(libvvv PRIVATE -DLIB_VTK)
 endif ()
 if (TIFF_FOUND)
     target_link_libraries(libvvv PRIVATE TIFF::TIFF)
-    target_compile_definitions(libvvv PUBLIC -DLIB_TIFF)
+    target_compile_definitions(libvvv PRIVATE -DLIB_TIFF)
 endif ()
 if (PUGIXML_FOUND)
     target_link_libraries(libvvv PRIVATE pugixml::pugixml)
-    target_compile_definitions(libvvv PUBLIC -DLIB_PUGIXML)
+    target_compile_definitions(libvvv PRIVATE -DLIB_PUGIXML)
 endif ()
 
 # remove comment for automatic /data copy:

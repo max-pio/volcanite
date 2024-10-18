@@ -17,6 +17,7 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_debug_printf : enable
 #extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_buffer_reference2 : require
 
 layout (local_size_x = 16) in;
 
@@ -24,21 +25,21 @@ layout (local_size_x = 16) in;
 #include "csgv_bindings.glsl"
 
 // includes
-#include "cpp_glsl_include/csgv_constants.h"
+#include "cpp_glsl_include/csgv_constants.incl"
 #include "util.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
 
 void main() {
     // at the beginning of this shader:
     // cache element ownership
-    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < g_lod_count) <=> the brick still owns a cache element
+    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick still owns a cache element
     // - REQ_SLOT < INVALID <=> the brick needs a cache element <=> the REQ_SLOT is a valid entry for its REQ_LOD
     // - REQ_SLOT < INVALID => BRICK_INFO_INDEX == INVALID
     // - the ASSIGN_REQUESTED_BLOCKS for each LoD contains the number of requested blocks for this LoD.
     // - all SLOT indices < ASSIGN_REQUESTED_BLOCKS are uniquely assigned to one block each
     // visibility
-    // - BRICK_INFO_REQ_INV_LOD < g_lod_count means the brick is visible in renderer AND had visible palette entries in the frame before
-    // - BRICK_INFO_REQ_INV_LOD = g_lod_count means the brick contains visible labels in its palette
+    // - BRICK_INFO_REQ_INV_LOD < LOD_COUNT means the brick is visible in renderer AND had visible palette entries in the frame before
+    // - BRICK_INFO_REQ_INV_LOD = LOD_COUNT means the brick contains visible labels in its palette
     // - (BRICK_INFO_REQ_INV_LOD > g_loc_count) means that the brick is guaranteed to be invisible
     // stacks
     // - if a brick is no longer visible but held an element in cache, it was freed and added to the free_block_stack
@@ -46,7 +47,7 @@ void main() {
     // find out for which lod we compute everything
     // invocation 0 = LoD 1 which is the coarsest that we handle and uses stores 2x2x2 output voxels in cache (= one base element)
     uint inv_lod = gl_GlobalInvocationID.x + 1u;
-    if (isHelperLane(inv_lod, g_lod_count))
+    if (isHelperLane(inv_lod, LOD_COUNT))
         return;
 
     // for g_debug_step_count
@@ -64,7 +65,7 @@ void main() {
 
 #ifdef SEPARATE_DETAIL
         // keeping track of the cache usage for CPU download
-        g_detail_requests[g_request_buffer_capacity + 1u] =  g_assign_info[(g_lod_count - 1u) * ASSIGN_ELEMS_PER_LOD];
+        g_detail_requests[g_request_buffer_capacity + 1u] =  g_assign_info[(LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD];
 #endif
 
         gpu_blocks_decoded[inv_lod - 1u] = 0u;
@@ -72,7 +73,7 @@ void main() {
     }
 
     // number of elements that are available on the free stack for this LoD
-    uint numberOfFreeBlocks = g_free_block_stacks[(g_lod_count - 1u) * g_free_stack_capacity + (inv_lod - 1u)];
+    uint numberOfFreeBlocks = g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)];
     // find out how many elements for this LoD can not be aquired from the free stack
     int numberOfNewBlocks = int(numberOfRequests) - int(numberOfFreeBlocks);
 
@@ -91,7 +92,7 @@ void main() {
     const int elemSizeInCache = 1 << (3 * (int(inv_lod) - 1)); // number of base elements we need for storing one element of this LoD in g_cache
     uint newBaseElemsToRequest = uint(numberOfNewBlocks * elemSizeInCache);
 
-    const uint cache_top = (g_lod_count - 1u) * ASSIGN_ELEMS_PER_LOD;
+    const uint cache_top = (LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD;
     uint start_idx = atomicAdd(g_assign_info[cache_top], newBaseElemsToRequest);
     if(start_idx >= g_cache_capacity) {
         // we can't create ANY new elements. revert and store the info in our ASSIGN_ location

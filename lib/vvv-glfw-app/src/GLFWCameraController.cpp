@@ -126,12 +126,13 @@ namespace vvv {
                 m_camera->position_look_at_world_space = old_position_look_at;
             }
 #else
-            m_camera->position_look_at_world_space.x = glm::clamp(m_camera->position_look_at_world_space.x, -0.5f,
-                                                                  0.5f);
-            m_camera->position_look_at_world_space.y = glm::clamp(m_camera->position_look_at_world_space.y, -0.5f,
-                                                                  0.5f);
-            m_camera->position_look_at_world_space.z = glm::clamp(m_camera->position_look_at_world_space.z, -0.5f,
-                                                                  0.5f);
+            static constexpr float CAMERA_MOVE_BORDER = 1.f; // [-0.5 to 0.5] is inside the data set, [-1 to 1] is double that.
+            m_camera->position_look_at_world_space.x = glm::clamp(m_camera->position_look_at_world_space.x,
+                                                                  -CAMERA_MOVE_BORDER, CAMERA_MOVE_BORDER);
+            m_camera->position_look_at_world_space.y = glm::clamp(m_camera->position_look_at_world_space.y,
+                                                                  -CAMERA_MOVE_BORDER, CAMERA_MOVE_BORDER);
+            m_camera->position_look_at_world_space.z = glm::clamp(m_camera->position_look_at_world_space.z,
+                                                                  -CAMERA_MOVE_BORDER, CAMERA_MOVE_BORDER);
 #endif
 
             if (captureKeyboard && !m_camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_R)) {

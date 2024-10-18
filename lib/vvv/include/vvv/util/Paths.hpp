@@ -50,7 +50,7 @@ public:
     static void initPaths(const std::string& dataPaths);
 
     /// Add new dataPath to list of searched data paths.
-    /// Consider instead of adding your path here to include it within CMake using either installExecutable() (for executables) or the DATA_DIR target property for libraries.
+    /// Consider instead of adding your path here to include it within CMake using either installVolcaniteExecutable() (for executables) or the DATA_DIR target property for libraries.
     /// @param highPriority if true, path is added to top of list. Else, it will have the lowest priority.
     static void addDataPath(const std::string& dataPath, bool highPriority = true);
 

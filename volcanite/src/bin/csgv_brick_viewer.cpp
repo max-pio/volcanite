@@ -41,7 +41,7 @@ int csgv_brick_viewer(int argc, char *argv[]) {
     std::string appName = "Compressed Segmentation Volume Brick Viewer";
 
     // Load a data set and encode it as a CompressedSegmentationVolume
-    auto csgv = std::make_shared<volcanite::CompressedSegmentationVolume>(volcanite::CompressedSegmentationVolume());
+    auto csgv = std::make_shared<volcanite::CompressedSegmentationVolume>();
     if(!csgv->importFromFile(path, true)) {
         Logger(ERROR) << "Could not import CSGV from " << path;
         return -2;

@@ -25,8 +25,8 @@
 #endif
 
 #include "vvv/util/Logger.hpp"
-// TODO: Split the rANS-Mode etc into a separate Header / forward decl
-#include "volcanite/compression/CompressedSegmentationVolume.hpp"
+#include "CSGVPathUtils.hpp"
+#include "csgv_constants.incl"
 
 using namespace vvv;
 
@@ -35,12 +35,6 @@ namespace volcanite {
 struct VolcaniteArgs {
 
 public:
-    enum Mode {
-        NO_RENDERING = 0,
-        HEADLESS_RENDERING = 1,
-        GUI_APP_RENDERING = 2,
-    };
-
     // general args
     bool verbose = false;
     bool headless = false;
@@ -50,11 +44,10 @@ public:
     uint32_t threads = 0;                    // number of CPU threads (0 = system supported concurrent threads)
 
     // rendering args
-    Mode rendering_mode = GUI_APP_RENDERING;
     std::string rendering_config_file;
     std::string screenshot_output_file;
     uint32_t render_resolution[2] = {1920, 1080};
-    bool stream_lod;
+    bool stream_lod = false;
     size_t cache_size_MB = 1024ul;
     bool cache_palettized = false;
     bool show_development_gui = false;
@@ -70,7 +63,7 @@ public:
     std::string decompress_export_file; // !empty = perform decompression to file       both can be set!
     std::string segmented_volume_file;
     uint32_t brick_size = 32;
-    RANSMode rANS_mode = RANSMode::DOUBLE_TABLE_RANS;
+    EncodingMode encoding_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC;
     uint32_t freq_subsampling = 8;      // n^3 factor for subsampling bricks for frequency table computation with rANS
 
     bool run_tests = false;
@@ -107,7 +100,7 @@ public:
         return !decompress_export_file.empty();
     }
 
-    static std::optional<VolcaniteArgs> parseArguments(int argc, char *argv[]) {
+    static std::optional<VolcaniteArgs> parseArguments(int argc, char *argv[], bool input_volume_required = true) {
         VolcaniteArgs va;
 
         using namespace TCLAP;
@@ -142,7 +135,7 @@ public:
             SwitchArg cachePalettizedArg("", "cache-palette", "Store palette indices in brick cache instead of labels.", cmd);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
-            ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "file", cmd);
+            ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
             ValueArg<std::string> renderconfigArg("", "config", "Import render parameters from config file.", false, va.rendering_config_file, "file", cmd);
             // general arguments
             SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
@@ -184,7 +177,7 @@ public:
             va.show_development_gui = devArg.getValue();
             // if no input file was specified, try to open a file dialog
             std::string input_file = expandPath(inputpathArg.getValue());
-            if(input_file.empty()) {
+            if(input_file.empty() && input_volume_required) {
 #ifdef HEADLESS
                 throw ArgException("Must provide input file in headless mode", inputpathArg.longID(""));
 #else
@@ -214,34 +207,22 @@ public:
             }
             // .. or if we compress a volume
             else {
-                if(!(input_file.ends_with(".vti")
+                if(input_volume_required && !(input_file.ends_with(".vti")
                     || input_file.ends_with(".raw") || input_file.ends_with(".vraw")
                     || input_file.ends_with(".hdf5") || input_file.ends_with(".h5")
                     || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {
                     throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.h5|.raw|.vraw|.nrrd|.nhdr})", inputpathArg.longID(""));
                 }
 
-                if(!va.decompress_export_file.empty()) {
+                if(input_volume_required && !va.decompress_export_file.empty()) {
                     throw ArgException(decompresspathArg.longID() + " can only be used with a .csgv input file.", decompresspathArg.longID());
                 }
 
                 // attribute arguments (if we import a .csgv file, the attributes are already stored in a database along with it)
-#ifndef LIB_SQLITE3
-                if(labelRemappingArg.getValue()) {
-                    throw ArgException(labelRemappingArg.longID() + " must not be set as SQLite3 library is not available.", labelRemappingArg.longID());
-                }
-                if(!attributeArg.getValue().empty()) {
-                    throw ArgException(attributeArg.longID() + " is not available as SQLite3 library is not available.", attributeArg.longID());
-                }
-                va.label_remapping = false;
-                va.attribute_database = "";
-                va.attribute_table = "";
-                va.attribute_label = "";
-#else
                 va.label_remapping = labelRemappingArg.getValue();
                 if(!attributeArg.getValue().empty()) {
                     va.label_remapping = true;
-                    const std::string attribute_info = attributeArg.getValue();
+                    const std::string& attribute_info = attributeArg.getValue();
                     auto comma0 = attribute_info.find(',', 0);
                     auto comma1 = attribute_info.find(',', comma0 + 1);
 
@@ -259,12 +240,11 @@ public:
                     if(!std::filesystem::exists(va.attribute_database))
                         throw ArgException(attributeArg.longID() + " attribute database file does not exists or can not be accessed.", attributeArg.longID());
                 }
-#endif
 
                 // compression arguments
                 va.brick_size = bricksizeArg.getValue();
-                const RANSMode _strengths[] = {NO_RANS, SINGLE_TABLE_RANS, DOUBLE_TABLE_RANS};
-                va.rANS_mode = _strengths[strengthArg.getValue()];
+                const EncodingMode _strengths[] = {NIBBLE_ENC, SINGLE_TABLE_RANS_ENC, DOUBLE_TABLE_RANS_ENC};
+                va.encoding_mode = _strengths[strengthArg.getValue()];
                 va.freq_subsampling = subsamplingArg.getValue();
                 va.threads = threadsArg.getValue();
                 va.chunked = !chunkedArg.getValue().empty();
