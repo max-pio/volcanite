@@ -433,6 +433,9 @@ namespace vvv {
                         break;
                     }
                 }
+            } else {
+                label.pop_back();
+                Logger(WARN) << "Read unknown Parameter " << label;
             }
 
             if (!in.good())
