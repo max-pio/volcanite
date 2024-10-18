@@ -406,9 +406,12 @@ namespace vvv {
         glfwSetFramebufferSizeCallback(m_window, framebufferResizeCallback);
         m_camera_controller.setWindow(m_window);
 
-        int icon_channels;
-        GLFWimage icon;
-        icon.pixels = stbi_load(vvv::Paths::findDataPath("volcanite_icon_256.png").string().c_str(), &icon.width, &icon.height, &icon_channels, STBI_rgb_alpha);
+        GLFWimage icon = {.pixels = nullptr};
+        if (vvv::Paths::hasDataPath("icons/volcanite_icon_256.png")) {
+            int icon_channels;
+            icon.pixels = stbi_load(vvv::Paths::findDataPath("icons/volcanite_icon_256.png").string().c_str(), &icon.width,
+                                    &icon.height, &icon_channels, STBI_rgb_alpha);
+        }
         if (icon.pixels) {
             glfwSetWindowIcon(m_window, 1, &icon);
             stbi_image_free(icon.pixels);
