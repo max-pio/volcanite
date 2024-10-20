@@ -55,6 +55,8 @@ The third party open source libraries that Volcanite uses and their licenses are
 [Development.md](doc/Development.md#licenses).  
 
 ## About
+Volcanite © 2024 Max Piochowiak
+
 Volcanite was created by [Max Piochowiak](https://cg.ivd.kit.edu/piochowiak/staff_index.php) with significant code
 contributions by [Reiner Dolp](https://cg.ivd.kit.edu/english/staff_2590.php). Additional contributions by Fabian
 Schiekel, Patrick Jaberg, and Mirco Werner. All contributors are affiliated with Karlsruhe Institute of Technology (KIT).

@@ -112,7 +112,7 @@ The Volcanite project directory has its own [ReadMe](../volcanite/ReadMe.md) wit
 The Volcanite code directly includes or uses code from:
 * [GLFW](https://github.com/glfw/glfw), released under the Zlib license
 * [GLM](https://github.com/g-truc/glm), released under the MIT license
-* [HighFive](https://github.com/BlueBrain/HighFive?tab=readme-ov-file), released under teh BSL-1.0 license
+* [HighFive](https://github.com/BlueBrain/HighFive?tab=readme-ov-file), released under the BSL-1.0 license
 * [Dear ImGui](https://github.com/ocornut/imgui), released under the MIT license
 * [Portable File Dialogs](https://github.com/samhocevar/portable-file-dialogs), released under the WTFPL license
 * [ryg rANS](https://github.com/rygorous/ryg_rans), released by Fabian Giesen under the CC0 license
