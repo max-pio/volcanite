@@ -28,6 +28,7 @@
 
 #else
 #include <unistd.h>
+#include <pwd.h>
 #endif
 
 namespace vvv {
@@ -177,6 +178,18 @@ std::filesystem::path Paths::getLocalFileForDataPath(const std::filesystem::path
 
     return filename;
 }
+
+    std::filesystem::path Paths::getHomeDirectory() {
+#ifdef _WIN64
+        return std::filesystem::path(getenv("HOMEDRIVE")).append(getenv("HOMEPATH"));
+#else
+        struct passwd* pwd = getpwuid(getuid());
+        if (pwd)
+            return std::filesystem::path(pwd->pw_dir);
+        else
+            return std::filestyem::path(getenv("HOME"));
+#endif
+    }
 
 
 }

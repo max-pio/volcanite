@@ -45,7 +45,7 @@ private:
             m_renderer->setCamera(std::make_shared<Camera>(true));
             m_camera_controller.setCamera(&(*m_renderer->getCamera()));
 
-            auto video_directory = std::filesystem::absolute("vvv_video");
+            auto video_directory = Paths::getHomeDirectory().append("volcanite_video");
             if(!std::filesystem::exists(video_directory) && !std::filesystem::create_directory(video_directory)) {
                 Logger(WARN) << "Could not create non-existing video export directory " << video_directory;
             }
