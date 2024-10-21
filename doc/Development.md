@@ -11,12 +11,12 @@ If you have questions, feel free to contact [Max Piochowiak](mailto:max.piochowi
 
 ## Dependencies
 
-| Required Dependency | Min. Version      | Usage                                 | Ubuntu / Debian package name                                           |
-|---------------------|:------------------|---------------------------------------|------------------------------------------------------------------------|
-| CMake               | 3.16              | creating project build files          | `cmake`                                                                |
-| Vulkan SDK          | 1.3               | Vulkan development tools and headers  | Download from [https://vulkan.lunarg.com/](https://vulkan.lunarg.com/) |
-| glslangValidator    | 11:12.2           | SPIR-V shader compiler                | included in drivers, alternative package`glslang-tools`                |
-| X11 dev packages¹ ² | 1:7.7             | GLFW windowing library dependencies   | `xorg-dev`                                                             |
+| Required Dependency | Min. Version | Usage                                 | Ubuntu / Debian package name                                           |
+|---------------------|:-------------|---------------------------------------|------------------------------------------------------------------------|
+| CMake               | 3.21         | creating project build files          | `cmake`                                                                |
+| Vulkan SDK          | 1.3          | Vulkan development tools and headers  | Download from [https://vulkan.lunarg.com/](https://vulkan.lunarg.com/) |
+| glslangValidator    | 11:12.2      | SPIR-V shader compiler                | included in drivers, alternative package`glslang-tools`                |
+| X11 dev packages¹ ² | 1:7.7        | GLFW windowing library dependencies   | `xorg-dev`                                                             |
 
 ¹ If Volcanite is build with the CMake option [HEADLESS](Setup.md#headless-builds) set, the X11 dependencies are not
 required, but the application can only be run from the command line.

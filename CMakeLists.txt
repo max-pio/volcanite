@@ -13,7 +13,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https:#www.gnu.org/licenses/>.
 
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.21)
 
 project(volcanite VERSION 0.4.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES C CXX)
 
@@ -27,10 +27,11 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT AND CMAKE_SYSTEM_NAME STREQUAL "L
     set(CPACK_PACKAGING_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX})
 endif()
 
+
 if (MSVC)
     message(FATAL_ERROR "MSVC compiler is currently not supported as it only provides OpenMP version < 4.5")
 endif (MSVC)
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
+
 
 # BUILD SETUP ----------------------------------------------------------------------------------------------------------
 
@@ -50,22 +51,25 @@ add_compile_definitions(PROJECT_VERSION=${PROJECT_VERSION} PROJECT_VERSION_MAJOR
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# enable OpenMP
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
+
 # Optionally enable the Address Sanitzer for efficient checks for memory leaks, invalid pointers etc.
 option(ENABLE_ADDRESS_SANITIZER "Enable Address Sanitizer" OFF)
 if (ENABLE_ADDRESS_SANITIZER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -g -DLSAN_OPTIONS=verbosity=1:log_threads=1")
 endif()
 
-# Use target folders to organize the copy interface targets. This allows to hide the targets easier in certain IDEs.
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-# helper functions to create volcanite executables / libraries with all CMake and compile dependencies
-include(makeExecutable)
-
 # In headless mode, no windowing system integration is build.
 option(HEADLESS "Build without GUI and windowing functionality to run only in --headless mode." OFF)
 
 # Fetch all dependencies, including the libraries in the ./extern subdirectory.
 include(CMake/Dependencies.cmake)
+
+# Use target folders to organize the copy interface targets. This allows to hide the targets easier in certain IDEs.
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+# helper functions to create volcanite executables / libraries with all CMake and compile dependencies
+include(makeExecutable)
 
 # add Volcanite executable with its sources, includes, shaders
 add_subdirectory(volcanite)
@@ -96,6 +100,9 @@ set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
 set(CPACK_COMPONENTS_ALL applications)
 set(CPACK_COMPONENT_APPLICATIONS_REQUIRED TRUE)
 set(CPACK_COMPONENT_APPLICATIONS_DESCRIPTION "The volcanite segmentation volume renderer executable.")
+set(CPACK_COMPONENT_LIBRARIES_REQUIRED TRUE)
+set(CPACK_COMPONENT_APPLICATIONS_DESCRIPTION "Runtime libraries.")
+
 
 # Linux DEB settings
 set(CPACK_DEB_COMPONENT_INSTALL ON)
