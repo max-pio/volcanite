@@ -77,16 +77,25 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(const std::string& u
             continue;
         }
 
-        const std::string sepChars = ": ";
-        const auto sep = line.find(sepChars);
+        // some software exports header lines with invalid ":" separator instead of ": ":
+        const std::string sepStrings[2] = {": ", ":"};
+        auto sep = std::string::npos;
+        auto sepStrLength = 0;
+        for (const auto& s : sepStrings) {
+            sep = line.find(s);
+            if (sep != std::string::npos) {
+                sepStrLength = s.size();
+                break;
+            }
+        }
 
         if (sep == std::string::npos) {
             nrrd.close();
-            throw std::runtime_error("invalid header in line" + std::to_string(lineNum) + ": " + line);
+            throw std::runtime_error("invalid NRRD header in line " + std::to_string(lineNum) + ": " + line);
         }
 
         const auto fieldName = line.substr(0, sep);
-        const auto fieldValue = line.substr(sep + sepChars.size(), line.size() - sep - sepChars.size());
+        const auto fieldValue = line.substr(sep + sepStrLength, line.size() - sep - sepStrLength);
 
         if (fieldName == "dimension") {
             // TODO: check the whole fieldValue is read/parsed, and check for out of range
@@ -241,16 +250,25 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(const std:
             continue;
         }
 
-        const std::string sepChars = ": ";
-        const auto sep = line.find(sepChars);
+        // some software exports header lines with invalid ":" separator instead of ": ":
+        const std::string sepStrings[2] = {": ", ":"};
+        auto sep = std::string::npos;
+        auto sepStrLength = 0;
+        for (const auto& s : sepStrings) {
+            sep = line.find(s);
+            if (sep != std::string::npos) {
+                sepStrLength = s.size();
+                break;
+            }
+        }
 
         if (sep == std::string::npos) {
             nrrd.close();
-            throw std::runtime_error("invalid header in line" + std::to_string(lineNum) + ": " + line);
+            throw std::runtime_error("invalid NRRD header in line " + std::to_string(lineNum) + ": " + line);
         }
 
         const auto fieldName = line.substr(0, sep);
-        const auto fieldValue = line.substr(sep + sepChars.size(), line.size() - sep - sepChars.size());
+        const auto fieldValue = line.substr(sep + sepStrLength, line.size() - sep - sepStrLength);
 
         if (fieldName == "dimension") {
             // TODO: check the whole fieldValue is read/parsed, and check for out of range
@@ -365,6 +383,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(const std:
 
     std::vector<T> payload(voxel_count);
 
+    constexpr bool RESCALE_ON_CAST = false;
     const auto needs_cast = sizeof(T) != payloadComponentSize;
     if (needs_cast) {
         float tmin = std::numeric_limits<T>::min();
@@ -372,33 +391,50 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(const std:
         if (payloadComponentSize == 1) {
             for (int j = 0; j < voxel_count; ++j) {
                 auto val = reinterpret_cast<uint8_t *>(payloadRaw.data())[j];
-                auto cval = static_cast<T>(((static_cast<float>(val) - minVal) / (maxVal - minVal) * trange) + tmin);
-                payload[j] = cval;
+                if (RESCALE_ON_CAST) {
+                    auto cval = static_cast<T>(((static_cast<float>(val) - minVal) / (maxVal - minVal) * trange) +
+                                               tmin);
+                    payload[j] = cval;
+                } else {
+                    payload[j] = val;
+                }
             }
         } else if (payloadComponentSize == 2) {
             for (int j = 0; j < voxel_count; ++j) {
                 // assumes the machine is using little endian
                 auto val = reinterpret_cast<uint16_t *>(payloadRaw.data())[j];
-                auto cval = static_cast<T>(((static_cast<float>(val) - minVal) / (maxVal - minVal) * trange) + tmin);
-                payload[j] = cval;
+                if (RESCALE_ON_CAST) {
+                    auto cval = static_cast<T>(((static_cast<float>(val) - minVal) / (maxVal - minVal) * trange) + tmin);
+                    payload[j] = cval;
+                } else {
+                    payload[j] = val;
+                }
             }
         } else if (payloadComponentSize == 4) {
             for (int j = 0; j < voxel_count; ++j) {
                 // assumes the machine is using little endian
                 auto val = reinterpret_cast<uint32_t *>(payloadRaw.data())[j];
-                auto cval = static_cast<T>(((static_cast<float>(val) - minVal) / (maxVal - minVal) * trange) + tmin);
-                payload[j] = cval;
+                if (RESCALE_ON_CAST) {
+                    auto cval = static_cast<T>(((static_cast<float>(val) - minVal) / (maxVal - minVal) * trange) + tmin);
+                    payload[j] = cval;
+                } else {
+                    payload[j] = val;
+                }
             }
         } else if (payloadComponentSize == 8) {
             for (int j = 0; j < voxel_count; ++j) {
                 // assumes the machine is using little endian
                 auto val = reinterpret_cast<uint64_t *>(payloadRaw.data())[j];
-                auto cval = static_cast<T>(((static_cast<float>(val) - minVal) / (maxVal - minVal) * trange) + tmin);
-                payload[j] = cval;
+                if (RESCALE_ON_CAST) {
+                    auto cval = static_cast<T>(((static_cast<float>(val) - minVal) / (maxVal - minVal) * trange) + tmin);
+                    payload[j] = cval;
+                } else {
+                    payload[j] = val;
+                }
             }
         }
         else {
-            assert(false);
+            throw std::runtime_error("Unknown componenent byte size in NRRD file.");
         }
 
         return std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, img_width, img_height, img_depth, gpuFormat, payload);
