@@ -59,6 +59,7 @@ target_link_libraries(libvvvwindow
         PRIVATE glfw
         PRIVATE ${CMAKE_DL_LIBS}
         PRIVATE tclap::tclap
+        PRIVATE portable_file_dialogs
 #        PRIVATE Threads::Threads
         )
 if (TARGET imgui)

@@ -225,6 +225,7 @@ namespace vvv {
                         vstr.append(std::to_string(mat.wrapping) + " ");
                         //
                         const auto& cm = e->colormapConfig[i];
+                        vstr.append(std::to_string(cm.sizeColorVector) + " ");
                         for(auto c : cm.color)
                             vstr.append(std::to_string(c.r) + " " + std::to_string(c.g) + " " + std::to_string(c.b) + " ");
                         vstr.append(std::to_string(cm.precomputedIdx) + " ");
@@ -409,6 +410,7 @@ namespace vvv {
                             tempLineStream >> mat.wrapping;
                             //
                             auto& cm = e->colormapConfig[m];
+                            tempLineStream >> cm.sizeColorVector;
                             for(glm::vec3& c : cm.color) {
                                 tempLineStream >> c.r;
                                 tempLineStream >> c.g;
@@ -417,7 +419,7 @@ namespace vvv {
                             tempLineStream >> cm.precomputedIdx;
                             int type;
                             tempLineStream >> type;
-                            if(type < 0 || type > 2) {
+                            if(type < 0 || type > 3) {
                                 Logger(ERROR) << "Unsupported color map type " << type;
                                 return false;
                             }

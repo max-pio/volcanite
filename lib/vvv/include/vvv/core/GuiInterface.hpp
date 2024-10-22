@@ -126,7 +126,8 @@ public:
         struct ColorMapConfig {
             ColorMapType type = SVTFPrecomputed;
             int precomputedIdx = getDefaultColorMapIdx();
-            glm::vec3 color[2] = {glm::vec3(00.2298f,0.2987f,0.7537f), glm::vec3(0.7057f,0.01556f,0.1502f)};
+            std::vector<glm::vec3> color = {};
+            int sizeColorVector;
         };
         std::vector<ColorMapConfig> colormapConfig = {};
         // additional widget data
@@ -142,6 +143,7 @@ public:
 
     public:
         void initialize();
+        void initializeSingleColormap(int matId);
         void updateVectorColormap(int material);
         static const std::vector<std::string>& getAvailableColormaps();
     };

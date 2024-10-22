@@ -18,6 +18,10 @@
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui_impl_vulkan.h>
 
+#ifndef HEADLESS
+    #include "portable-file-dialogs.h"
+    #include "stb/stb_image.hpp"
+#endif
 void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
     int id = static_cast<int>(e->id);
 
@@ -133,13 +137,14 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
             ImGui::NextColumn();
 
             ImGui::PushID(id++);
-            // TODO: add PNG import for colormaps, store samples in VectorColormap, im-/export full VectorColormap
             std::string types[] = {"Solid Color", "Divergent Colormap", "Precomputed Colormap", "PNG Import"};
             if (ImGui::BeginCombo("", types[d.type].c_str())) {
-                for (int i = 0; i < 3; i++) {
+                for (int i = 0; i < 4; i++) {
                     const bool is_selected = i == d.type;
                     if (ImGui::Selectable(types[i].c_str(), is_selected)) {
                         d.type = static_cast< GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapType>(i);
+                        d.sizeColorVector = -1;
+                        e->initializeSingleColormap(m);
                         colormapChanged = true;
                     }
                     if (is_selected)
@@ -180,6 +185,35 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                                 ImGui::SetItemDefaultFocus();
                         }
                         ImGui::EndCombo();
+                    }
+                    ImGui::PopID();
+                    ImGui::NextColumn();
+                    break;
+                case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFPNGimport:
+                    ImGui::PushID(id++);
+                    ImGui::NextColumn();
+                    colormapChanged |= ImGui::InputInt("", &d.sizeColorVector);
+                    ImGui::PopID();
+                    ImGui::NextColumn();
+                    ImGui::PushID(id++);
+                    if(ImGui::Button("Choose Colormap File")) {
+                        if(!pfd::settings::available()) {
+                            Logger(WARN) << "Can not open file dialog for import PNG. Choose other segmentation volume transfer function colormap";
+                            break;
+                        }
+                        auto selected_file = pfd::open_file("Import PNG", pfd::path::home(),
+                                                            {"Image File (.png)", "*.png"});
+                        int img_width, img_height, img_channels;
+                        unsigned char* image = stbi_load(selected_file.result().at(0).c_str(), &img_width, &img_height, &img_channels, STBI_rgb_alpha);
+                        if(!image) {
+                            Logger(ERROR) << "Failed to load png colormap: " << stbi_failure_reason();
+                        }
+                        d.color.clear();
+                        for(int i = 0; i < d.sizeColorVector * 4; i+=4) {
+                            d.color.emplace_back(glm::vec3(image[i], image[i+1], image[i+2]) / 255.f);
+                        }
+                        stbi_image_free(image);
+                        colormapChanged = true;
                     }
                     ImGui::PopID();
                     ImGui::NextColumn();
