@@ -68,7 +68,7 @@ namespace vvv {
                 mat.tf->m_controlPointsRgb = colormaps::colormaps.at(getAvailableColormaps()[d.precomputedIdx]);
                 break;
             case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFPNGimport: {
-                int targetSizeControlPointsRgb = d.sizeColorVector * 4;
+                int targetSizeControlPointsRgb = d.validElementCount * 4;
                 if (mat.tf->m_controlPointsRgb.size() != targetSizeControlPointsRgb) {
                     mat.tf->m_controlPointsRgb.resize(targetSizeControlPointsRgb);
                 }
@@ -97,29 +97,29 @@ namespace vvv {
         if (colormapConfig[matId].precomputedIdx < 0)
             colormapConfig[matId].precomputedIdx = getDefaultColorMapIdx();
         colormapConfig[matId].color.clear();
-        if (colormapConfig[matId].sizeColorVector <= 0) {
-            // sizeColorVector should only be >0 when loading a config file
+        if (colormapConfig[matId].validElementCount <= 0) {
+            // validElementCount should only be >0 when loading a config file
             switch (colormapConfig[matId].type) {
                 case SVTFSolidColor:
-                    colormapConfig[matId].sizeColorVector = 1;
-                    colormapConfig[matId].color.resize(colormapConfig[matId].sizeColorVector);
+                    colormapConfig[matId].validElementCount = 1;
+                    colormapConfig[matId].color.resize(colormapConfig[matId].validElementCount);
                     colormapConfig[matId].color[0] = glm::vec3(0.2298f, 0.2987f, 0.7537f);
                     break;
                 case SVTFDivergent:
-                    colormapConfig[matId].sizeColorVector = 2;
-                    colormapConfig[matId].color.resize(colormapConfig[matId].sizeColorVector);
+                    colormapConfig[matId].validElementCount = 2;
+                    colormapConfig[matId].color.resize(colormapConfig[matId].validElementCount);
                     colormapConfig[matId].color[0] = glm::vec3(0.2298f, 0.2987f, 0.7537f);
                     colormapConfig[matId].color[1] = glm::vec3(0.7057f, 0.01556f, 0.1502f);
                     break;
                 case SVTFPrecomputed:
-                    colormapConfig[matId].sizeColorVector = 0;
-                    colormapConfig[matId].color.resize(colormapConfig[matId].sizeColorVector);
+                    colormapConfig[matId].validElementCount = 0;
+                    colormapConfig[matId].color.resize(colormapConfig[matId].validElementCount);
                     break;
                 case SVTFPNGimport:
-                    colormapConfig[matId].sizeColorVector = 64;
-                    colormapConfig[matId].color.resize(colormapConfig[matId].sizeColorVector);
-                    for (int i = 0; i < colormapConfig[matId].sizeColorVector; i++) {
-                        colormapConfig[matId].color[i] = glm::vec3(static_cast<float>(i) / colormapConfig[matId].sizeColorVector);
+                    colormapConfig[matId].validElementCount = 64;
+                    colormapConfig[matId].color.resize(colormapConfig[matId].validElementCount);
+                    for (int i = 0; i < colormapConfig[matId].validElementCount; i++) {
+                        colormapConfig[matId].color[i] = glm::vec3(static_cast<float>(i) / colormapConfig[matId].validElementCount);
                     }
                     break;
                 default:

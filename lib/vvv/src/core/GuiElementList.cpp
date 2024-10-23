@@ -225,9 +225,11 @@ namespace vvv {
                         vstr.append(std::to_string(mat.wrapping) + " ");
                         //
                         const auto& cm = e->colormapConfig[i];
-                        vstr.append(std::to_string(cm.sizeColorVector) + " ");
-                        for(auto c : cm.color)
+                        vstr.append(std::to_string(cm.validElementCount) + " ");
+                        for(int j = 0; j < cm.validElementCount; j++) {
+                            auto &c = cm.color[j];
                             vstr.append(std::to_string(c.r) + " " + std::to_string(c.g) + " " + std::to_string(c.b) + " ");
+                        }
                         vstr.append(std::to_string(cm.precomputedIdx) + " ");
                         vstr.append(std::to_string(static_cast<int>(cm.type)));
                         if(i != e->materials->size() - 1)
@@ -410,8 +412,9 @@ namespace vvv {
                             tempLineStream >> mat.wrapping;
                             //
                             auto& cm = e->colormapConfig[m];
-                            tempLineStream >> cm.sizeColorVector;
-                            for(glm::vec3& c : cm.color) {
+                            tempLineStream >> cm.validElementCount;
+                            for(int i = 0; i < cm.validElementCount; i++) {
+                                glm::vec3& c = cm.color[i];
                                 tempLineStream >> c.r;
                                 tempLineStream >> c.g;
                                 tempLineStream >> c.b;

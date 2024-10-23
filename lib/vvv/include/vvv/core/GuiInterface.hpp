@@ -127,7 +127,7 @@ public:
             ColorMapType type = SVTFPrecomputed;
             int precomputedIdx = getDefaultColorMapIdx();
             std::vector<glm::vec3> color = {};
-            int sizeColorVector;
+            int validElementCount;
         };
         std::vector<ColorMapConfig> colormapConfig = {};
         // additional widget data

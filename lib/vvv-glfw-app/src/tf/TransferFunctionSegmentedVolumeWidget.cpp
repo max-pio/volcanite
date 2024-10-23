@@ -143,7 +143,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                     const bool is_selected = i == d.type;
                     if (ImGui::Selectable(types[i].c_str(), is_selected)) {
                         d.type = static_cast< GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapType>(i);
-                        d.sizeColorVector = -1;
+                        d.validElementCount = -1;
                         e->initializeSingleColormap(m);
                         colormapChanged = true;
                     }
@@ -192,7 +192,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                 case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFPNGimport:
                     ImGui::PushID(id++);
                     ImGui::NextColumn();
-                    colormapChanged |= ImGui::InputInt("", &d.sizeColorVector);
+                    colormapChanged |= ImGui::InputInt("", &d.validElementCount);
                     ImGui::PopID();
                     ImGui::NextColumn();
                     ImGui::PushID(id++);
@@ -209,7 +209,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                             Logger(ERROR) << "Failed to load png colormap: " << stbi_failure_reason();
                         }
                         d.color.clear();
-                        for(int i = 0; i < d.sizeColorVector * 4; i+=4) {
+                        for(int i = 0; i < d.validElementCount * 4; i+=4) {
                             d.color.emplace_back(glm::vec3(image[i], image[i+1], image[i+2]) / 255.f);
                         }
                         stbi_image_free(image);
