@@ -17,7 +17,7 @@
 #define RANGE_ANS_DECODER_GLSL
 
 #include "volcanite/compression/csgv_utils.glsl"
-#include "rans.glsl"
+#include "volcanite/compression/rans.glsl"
 
 /// This Decoder corresponds to the encoding from ../../../../include/volcanite/compression/encoder/RangeANSEncoder.hpp
 /// Supported configuration compile time defines:

@@ -23,7 +23,6 @@
 #include <Windows.h>
 #endif
 
-#include <iostream>
 #include <string>
 
 int entrypoint_main(int(*main)(int, char**), int argc, char **argv, const std::string& dataDirs) {

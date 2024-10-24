@@ -27,7 +27,7 @@ namespace vvv {
 using ResourceId = uint32_t;
 using BufferCopyId = uint32_t;
 
-//! Stores number of copies and current index. Is referenced by WithMultiBuffering for tracing current state of e.g. frames in flight
+/// Stores number of copies and current index. Is referenced by WithMultiBuffering for tracing current state of e.g. frames in flight
 class MultiBuffering {
 public:
     explicit MultiBuffering(BufferCopyId copies) : m_count(copies), m_maxIdx(copies - 1), m_currIdx(0) {
@@ -49,7 +49,7 @@ public:
     [[nodiscard]] BufferCopyId getMaxIndex() const { return m_maxIdx; }
     [[nodiscard]] BufferCopyId getIndexCount() const { return m_count; }
 
-    //! will keep the resource alive until this copy is done. Make sure that the owner of this MultiBuffering is calling cleanKeepAlives() in the correct place.
+    /// will keep the resource alive until this copy is done. Make sure that the owner of this MultiBuffering is calling cleanKeepAlives() in the correct place.
     void keepAlive(std::shared_ptr<void> resource) {
         if (m_resourcesToKeepAlive[m_currIdx].size() >= 50)
             Logger(WARN) << "MultiBuffering::keepAlive(): more than 50 resources are kept alive for this frame. Please check that cleanKeepAlives() is called on this MultiBuffering!";
@@ -70,7 +70,7 @@ private:
 
 const std::shared_ptr<MultiBuffering> NoMultiBuffering = std::make_shared<MultiBuffering>(1);
 
-//! inherit from this to track multi buffering state. State is contained in MultiBuffering
+/// inherit from this to track multi buffering state. State is contained in MultiBuffering
 class WithMultiBuffering {
 protected:
     explicit WithMultiBuffering(std::shared_ptr<MultiBuffering> m) : m_multiBuffering(std::move(m)) {}

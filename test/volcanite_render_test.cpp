@@ -78,7 +78,6 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
         return RET_EXPORT_ERROR;
     }
     texture.reset();
-    texture = nullptr;
     renderEngine->releaseResources();
 
     return RET_SUCCESS;

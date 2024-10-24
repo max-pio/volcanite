@@ -25,7 +25,7 @@
 #include "vvv/util/Paths.hpp"
 #include "vvv/volren/Volume.hpp"
 
-#include "csgv_constants.h"
+#include "csgv_constants.incl"
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/compression/CSGVChunkMerger.hpp"
 

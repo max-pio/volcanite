@@ -23,19 +23,19 @@
 layout (local_size_x = 8, local_size_y = 8) in;
 
 // includes
-#include "cpp_glsl_include/csgv_constants.h"
-#include "csgv_bindings.glsl"
+#include "cpp_glsl_include/csgv_constants.incl"
+#include "volcanite/renderer/csgv_bindings.glsl"
 
 #include "util.glsl"
 #include "ray_box_intersection.glsl"
 #include "morton.glsl"
 #include "random.glsl"
-#include "framebuffer.glsl"
+#include "volcanite/renderer/framebuffer.glsl"
 
 #include "debug_colormaps.glsl"
-#include "csgv_materials.glsl"
-#include "brdf_lambert.glsl"
-#include "dummy_envmap.glsl"
+#include "volcanite/renderer/csgv_materials.glsl"
+#include "volcanite/renderer/brdf_lambert.glsl"
+#include "volcanite/renderer/dummy_envmap.glsl"
 
 // Compressed Segmentation Volume specific: define array containing the encoding (input) as well as the decoding (output)
 #define CSGV_DECODING_ARRAY g_cache
@@ -162,7 +162,7 @@ struct RayMarchState {
 
 #define SHADOW_RAY_PATH_LENGTH -1
 
-#include "csgv_debug.glsl"
+#include "volcanite/renderer/csgv_debug.glsl"
 
 void dda_step_multilevel(inout RayMarchState state, const Ray ray, int voxel_size) {
     // Round down to do the traversal in one pseudo-voxel with a size of [voxel_size] many fine-resolution voxels

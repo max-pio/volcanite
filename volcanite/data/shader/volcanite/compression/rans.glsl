@@ -16,7 +16,7 @@
 #ifndef RANS_GLSL
 #define RANS_GLSL
 
-#include "csgv_utils.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
 
 #define RANS_PROB_BITS 14
 #define RANS_BYTE_L (1u << 23)  // lower bound of our normalization interval

@@ -28,6 +28,7 @@
 
 #else
 #include <unistd.h>
+#include <pwd.h>
 #endif
 
 namespace vvv {
@@ -150,11 +151,11 @@ std::vector<std::filesystem::path> Paths::getShaderDirectories(){
 }
 
 std::filesystem::path Paths::getTempFileWithName(const std::string& name) {
-    create_directory(std::filesystem::temp_directory_path() / "vvv");
+    create_directory(std::filesystem::temp_directory_path() / "volcanite");
 #ifdef _WIN32
-    return std::filesystem::temp_directory_path() / "vvv" / (std::to_string(_getpid()) + "_" + name);
+    return std::filesystem::temp_directory_path() / "volcanite" / (std::to_string(_getpid()) + "_" + name);
 #else
-    return std::filesystem::temp_directory_path() / "vvv" / (std::to_string(getpid()) + "_" + name);
+    return std::filesystem::temp_directory_path() / "volcanite" / (std::to_string(getpid()) + "_" + name);
 #endif
 }
 
@@ -177,6 +178,23 @@ std::filesystem::path Paths::getLocalFileForDataPath(const std::filesystem::path
 
     return filename;
 }
+
+    std::filesystem::path Paths::getHomeDirectory() {
+#ifdef _WIN64
+        auto drive = getenv("HOMEDRIVE");
+        auto path = getenv("HOMEPATH");
+        if (drive.empty() || path.empty())
+            return {getenv("USERPROFILE")};
+        else
+            return {drive.append(path)};
+#else
+        struct passwd* pwd = getpwuid(getuid());
+        if (pwd)
+            return {pwd->pw_dir};
+        else
+            return {getenv("HOME")};
+#endif
+    }
 
 
 }

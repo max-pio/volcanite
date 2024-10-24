@@ -14,14 +14,14 @@
 #  along with this program.  If not, see <https:#www.gnu.org/licenses/>.
 
 cmake_minimum_required(VERSION 3.16)
-project(volcanite VERSION 0.2.0 DESCRIPTION "Volcanite Renderers" LANGUAGES CXX)
+project(volcanite-renderer VERSION 0.4.0 DESCRIPTION "Volcanite Renderer Compression" LANGUAGES CXX)
 
 # set all sources and headers
 set(VOLCANITE_HEADERS
         include/volcanite/CSGVPathUtils.hpp
         include/volcanite/VolcaniteArgs.hpp
         include/volcanite/StratifiedPixelSequence.hpp
-        data/shader/cpp_glsl_include/csgv_constants.h
+        data/shader/cpp_glsl_include/csgv_constants.incl
         include/volcanite/benchmark/CSGVBenchmarkPass.hpp
         include/volcanite/compression/VolumeCompressionBase.hpp
         include/volcanite/compression/encoder/CSGVBrickEncoder.hpp
@@ -48,6 +48,7 @@ set(VOLCANITE_SOURCES
         src/volcanite/compression/encoder/RangeANSEncoder.cpp
         src/volcanite/compression/CompressedSegmentationVolume.cpp
         src/volcanite/compression/CompressedSegmentationVolumeStats.cpp
+        src/volcanite/compression/CSGVDatabase.cpp
         src/volcanite/compression/pack_nibble.cpp
         src/volcanite/compression/pack_rans.cpp
         src/renderer/CompressedSegmentationVolumeRenderer.cpp
@@ -55,16 +56,14 @@ set(VOLCANITE_SOURCES
         src/renderer/PassCompSegVolRender.cpp
         )
 
-makeLibrary(libvolcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
+makeVolcaniteLibrary(libvolcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
 # add data/ folder as target_property to install() by each project
 set_target_properties(libvolcanite PROPERTIES INTERFACE_DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)
 
-makeExecutable(csgv_brick_viewer)
+makeVolcaniteExecutable(volcanite)
+installVolcaniteExecutable(volcanite)
 
-makeExecutable(volcanite)
-installExecutable(volcanite)
-
-makeExecutable(csgv_benchmark)
-
-makeExecutable(volcanite_synth_volume)
-# installExecutable(volcanite_synth_volume)
+# development executables:
+makeVolcaniteExecutable(csgv_benchmark)
+makeVolcaniteExecutable(volcanite_synth_volume)
+makeVolcaniteExecutable(csgv_brick_viewer)

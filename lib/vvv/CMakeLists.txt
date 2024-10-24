@@ -15,7 +15,7 @@
 
 
 cmake_minimum_required(VERSION 3.16.0)
-project(libvvv VERSION 0.1 DESCRIPTION "Vulkan Volume Visualization library" LANGUAGES CXX)
+project(libvvv VERSION 0.4.0 DESCRIPTION "Vulkan Volume Visualization library" LANGUAGES CXX)
 
 # Project Files --------------------------------------------------------------------------------------------------------
 set(VVV_HEADERS
@@ -152,9 +152,6 @@ add_library(libvvv STATIC ${VVV_HEADERS} ${VVV_SOURCES})
 # add an alias so that library can be used inside the build tree, e.g. when testing
 add_library(LibVVV::libvvv ALIAS libvvv)
 
-# required packages
-find_package(Vulkan REQUIRED)
-
 # optional packages
 find_package(OpenMP)
 
@@ -175,6 +172,7 @@ if(USE_XML_SUPPORT)
 endif()
 
 # setting glslangValidator via the Vulkan package requires CMAKE 3.21
+# TODO: REMOVE set(SHADER_COMPILER_EXECUTABLE ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE})
 set(SHADER_COMPILER_EXECUTABLE ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE})
 string(TIMESTAMP BUILD_TIME_ISO8601 "%Y-%m-%dT%H:%M:%SZ" UTC)
 set(VVV_BUILD_TIME_ISO8601 ${BUILD_TIME_ISO8601})
@@ -185,11 +183,11 @@ target_compile_definitions(libvvv PRIVATE -DVULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
 target_compile_definitions(libvvv PRIVATE -DVULKAN_HPP_STORAGE_SHARED_EXPORT=1)
 target_compile_definitions(libvvv PRIVATE -DVULKAN_HPP_STORAGE_SHARED=1)
 
+# add GLM definitions for ImGuizmo
 target_compile_definitions(libvvv PUBLIC -DGLM_ENABLE_EXPERIMENTAL -DGLM_FORCE_DEPTH_ZERO_TO_ONE -DLIB_VVV_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\")
 
 # link required libraries
-# target_link_libraries(libvvv PUBLIC Vulkan::Vulkan PRIVATE TIFF::TIFF ZLIB::ZLIB PRIVATE pugixml::pugixml PUBLIC glm::glm)
-target_link_libraries(libvvv PUBLIC Vulkan::Vulkan glm::glm)
+target_link_libraries(libvvv PUBLIC Vulkan::Vulkan glm::glm shaderc)
 
 # link optional libraries
 if (OpenMP_CXX_FOUND)
@@ -197,7 +195,7 @@ if (OpenMP_CXX_FOUND)
 endif ()
 if (HDF5_FOUND)
     target_link_libraries(libvvv PRIVATE HighFive)
-    target_compile_definitions(libvvv PUBLIC -DLIB_HIGHFIVE)
+    target_compile_definitions(libvvv PRIVATE -DLIB_HIGHFIVE)
 endif ()
 # vtk linking and module initialization
 if (VTK_FOUND)
@@ -206,23 +204,16 @@ if (VTK_FOUND)
             TARGETS libvvv
             MODULES ${VTK_LIBRARIES}
     )
-    target_compile_definitions(libvvv PUBLIC -DLIB_VTK)
-endif ()
-if (SQLite3_FOUND)
-    target_link_libraries(libvvv PUBLIC SQLiteCpp SQLite::SQLite3) # pthread dl
-    target_compile_definitions(libvvv PUBLIC -DLIB_SQLITE3)
+    target_compile_definitions(libvvv PRIVATE -DLIB_VTK)
 endif ()
 if (TIFF_FOUND)
     target_link_libraries(libvvv PRIVATE TIFF::TIFF)
-    target_compile_definitions(libvvv PUBLIC -DLIB_TIFF)
+    target_compile_definitions(libvvv PRIVATE -DLIB_TIFF)
 endif ()
 if (PUGIXML_FOUND)
     target_link_libraries(libvvv PRIVATE pugixml::pugixml)
-    target_compile_definitions(libvvv PUBLIC -DLIB_PUGIXML)
+    target_compile_definitions(libvvv PRIVATE -DLIB_PUGIXML)
 endif ()
-
-# remove comment for automatic /data copy:
-#addCopyDataDependency(libvvv ${CMAKE_CURRENT_SOURCE_DIR}/data)
 
 # use minimal public include interface
 target_include_directories(libvvv

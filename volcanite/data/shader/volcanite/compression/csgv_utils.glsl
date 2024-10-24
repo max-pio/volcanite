@@ -16,7 +16,7 @@
 #ifndef CSGV_UTILS_GLSL
 #define CSGV_UTILS_GLSL
 
-#include "cpp_glsl_include/csgv_constants.h"
+#include "cpp_glsl_include/csgv_constants.incl"
 
 #ifdef NDEBUG
     #define assert(X, S)

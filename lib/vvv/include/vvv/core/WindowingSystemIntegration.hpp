@@ -65,7 +65,7 @@ public:
 
 protected:
 
-    //! recreate MultiBuffering objects if the new sizes are different from the currently used sizes
+    /// recreate MultiBuffering objects if the new sizes are different from the currently used sizes
     void setMultiBuffering(uint32_t countSwapchainImages, uint32_t countInFlight) {
         if (!m_swapchain || m_swapchain->getIndexCount() != countSwapchainImages)
             m_swapchain = std::make_shared<MultiBuffering>(countSwapchainImages);
