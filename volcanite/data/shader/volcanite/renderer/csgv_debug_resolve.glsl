@@ -7,7 +7,7 @@
 
 #define ENALBE_CSGV_DEBUGGING
 
-#include "csgv_materials.glsl"
+#include "volcanite/renderer/csgv_materials.glsl"
 #include "debug_colormaps.glsl"
 
 // blend a cache visualization over the pixels color

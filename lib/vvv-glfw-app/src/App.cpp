@@ -674,8 +674,9 @@ namespace vvv {
         const auto shaderDirectory = vvv::getShaderIncludeDirectory();
 
         m_renderpass.shaderFragment = new vvv::Shader(
-                {.filename = "blit.frag", .label = "Application.m_shaderFragment"});
-        m_renderpass.shaderVertex = new vvv::Shader({.filename = "blit.vert", .label = "Application.m_shaderVertex"});
+                SimpleGlslShaderRequest{.filename = "blit.frag", .label = "Application.m_shaderFragment"});
+        m_renderpass.shaderVertex = new vvv::Shader(
+                SimpleGlslShaderRequest{.filename = "blit.vert", .label = "Application.m_shaderVertex"});
     }
 
     void Application::destroyBlitShaders() {

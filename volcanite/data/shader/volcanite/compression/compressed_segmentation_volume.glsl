@@ -22,7 +22,7 @@
 
 #include "cpp_glsl_include/csgv_constants.incl"
 
-#include "csgv_utils.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
 #include "morton.glsl"
 
 
@@ -146,9 +146,9 @@ void resetCSGVBrick(const uint decoded_brick_start_uint, const uint inv_lod) {
 }
 
 #if ENCODING_MODE == NIBBLE_ENC
-    #include "decoder/NibbleDecoder.glsl"
+    #include "volcanite/compression/decoder/NibbleDecoder.glsl"
 #elif ENCODING_MODE == SINGLE_TABLE_RANS_ENC || ENCODING_MODE == DOUBLE_TABLE_RANS_ENC
-    #include "decoder/RangeANSDecoder.glsl"
+    #include "volcanite/compression/decoder/RangeANSDecoder.glsl"
 #else
     STATIC_FAIL(no_decoder_specified);
 #endif

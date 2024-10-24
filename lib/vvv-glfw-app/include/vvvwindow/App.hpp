@@ -199,7 +199,7 @@ private:
         ForEachInFlightFrame<vk::Semaphore> blitToSwapchainImageComplete;
         ForEachInFlightFrame<vk::Semaphore> renderCompleteSemaphore;
         ForEachInFlightFrame<AwaitableHandle> frameInFlightAwaitable;
-        //! points to the Awaitable index in `frameInFlightAwaitable`, which is the frame that uses this image. Can also be IMAGE_NOT_IN_FLIGHT
+        /// points to the Awaitable index in `frameInFlightAwaitable`, which is the frame that uses this image. Can also be IMAGE_NOT_IN_FLIGHT
         ForEachSwapchainImage<size_t> imageInFlightFrame;
 
         // Note: the number of required buffers is ForEachSwapchainImage if we prerecord everything once.

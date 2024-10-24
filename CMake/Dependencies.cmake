@@ -18,6 +18,14 @@
 # extern GLM
 add_subdirectory(extern/glm)
 
+# required packages
+find_package(Vulkan REQUIRED)
+
+# extern shaderc
+set(SHADERC_SKIP_TESTS ON CACHE INTERNAL "")
+set(SHADERC_SKIP_EXAMPLES ON CACHE INTERNAL "")
+add_subdirectory(extern/shaderc)
+
 # extern rANS encoding library
 add_subdirectory(extern/ryg_rans)
 

@@ -190,7 +190,7 @@ public:
         m_dirty.assign(m_dirty.size(), true);
     }
 
-    //! Get a pointer to the CPU data region of a uniform member for writing. Note that you still have to mark the region as dirty and call upload, or call forceUpload!
+    /// Get a pointer to the CPU data region of a uniform member for writing. Note that you still have to mark the region as dirty and call upload, or call forceUpload!
     template <typename T> T* getUniformPtr(std::string memberName) {
         const auto member = getMember(memberName);
 
