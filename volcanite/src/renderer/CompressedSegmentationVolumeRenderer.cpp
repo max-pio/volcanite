@@ -867,6 +867,10 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         newCamHash = hashMemory(&m_max_inv_lod, sizeof(m_max_inv_lod), newCamHash);
         newCamHash = hashMemory(&m_lod_bias, sizeof(m_lod_bias), newCamHash);
         newCamHash = hashMemory(&m_accum_frames, sizeof(m_accum_frames), newCamHash);
+        newCamHash = hashMemory(&m_focal_length, sizeof(m_focal_length), newCamHash);
+        newCamHash = hashMemory(&m_focal_distance, sizeof(m_focal_distance), newCamHash);
+        newCamHash = hashMemory(&m_dof_enabled, sizeof(m_dof_enabled), newCamHash);
+        newCamHash = hashMemory(&m_f_stop, sizeof(m_f_stop), newCamHash);
         if (newCamHash != m_camHash || m_clear_accum_every_frame || m_pass->willCacheBeResetOnNextCall()) {
             m_framesSinceCameraMove = 0u;
             m_camHash = newCamHash;

@@ -85,8 +85,8 @@ float computeWeight(float depthCenter, float depthP, float phiDepth, float lumin
     float weightZ = (phiDepth == 0) ? 0.f : 1.f;
     weightZ = (phiDepth == 0) ? 0.f : abs(depthCenter - depthP) / phiDepth;
 
-    const float weightLillum = 1.f;
-    // const float weightLillum = abs(luminanceIllumCenter - luminanceIllumP) / phiIllum;
+    //const float weightLillum = 1.f;
+    const float weightLillum = abs(luminanceIllumCenter - luminanceIllumP) / phiIllum;
 
     const float weightIllum = exp(0.0 - max(weightLillum, 0.0) - max(weightZ, 0.0));
     return weightIllum;
@@ -94,8 +94,9 @@ float computeWeight(float depthCenter, float depthP, float phiDepth, float lumin
 
 float computeVarianceCenter(ivec2 ipos, const ivec2 viewport_size) {
     // not yet supported
-    return 0.f;
-    float sum = 0.f;
+    return 1.f;
+    float sum_m1 = 0.f;
+    float sum_m2 = 0.f;
     float sumW = 0.f;
     const float kernel[2][2] = {
     { 1.0 / 4.0, 1.0 / 8.0 },
@@ -110,16 +111,17 @@ float computeVarianceCenter(ivec2 ipos, const ivec2 viewport_size) {
             const float k = kernel[abs(xx)][abs(yy)];
 
             if (any(lessThan(block_pixel, ivec2(0))) || any(greaterThanEqual(block_pixel, viewport_size)))
-            continue;
-            vec4 col = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], ivec2(block_pixel));
-            float lum = luminance(col.rgb);
-            sum += (lum + lum * lum) * k;
-            sumW += sum;
+                continue;
+
+            float lum = luminance(imageLoad(denoisingBuffer[pc.denoising_iteration % 2], ivec2(block_pixel)).rgb);
+            sum_m1 += lum * k;
+            sum_m2 += (lum * lum) * k;
+            sumW += k;
         }
     }
-    sum /= max(sumW, 1e-8f);
-    float varianz = sum + sum * sum;
-    return varianz;
+    sum_m1 /= max(sumW, 1e-8f);
+    sum_m2 /= max(sumW, 1e-8f);
+    return sum_m2 - (sum_m1 * sum_m1);
 }
 
 // inplace alpha blending of pixel_rgba with the background color that is visible for the primary ray through block_pixel
@@ -219,11 +221,11 @@ void main() {
         // for now only À-Trous filter w/o any variance estimation or temporal accumulation
         const int step_size = 1 << pc.denoising_iteration;
         const vec3 kernel_weights = { 1.f, 2.f / 3.f * fade, 1.f / 6.f * fade * fade};
-        // const float var = computeVarianceCenter(pixel, viewport_size);
+        const float var = computeVarianceCenter(pixel, viewport_size);
 
-        // const float EPS = 0.01f;
-        // const float phi_Lillumination = g_illumination_sigma * sqrt(var) + EPS;
-        const float phi_Lillumination = 1.f; // unnused for now
+        const float EPS = 0.01f;
+        const float phi_Lillumination = g_illumination_sigma * sqrt(var) + EPS;
+        //const float phi_Lillumination = 1.f; // unnused for now
         const float phi_depth = max(center_normalized_depth, 1e-8) * step_size;
 
         for (int dy = -g_denoise_filter_kernel_size; dy <= g_denoise_filter_kernel_size; dy++) {
@@ -245,7 +247,7 @@ void main() {
                 uint sample_count_block = pc.denoising_iteration == 0 ? max(imageLoad(accuSampleCountOut, filter_pixel).r, 1u) : 1u;
                 vec4 rgba_block = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], filter_pixel) / float(sample_count_block);
 
-                // accumluated radiance from previosu À-trous interations that did not receive a single sample is marked
+                // accumluated radiance from previous À-trous interations that did not receive a single sample is marked
                 // with a negative alpha value. These are skipped.
                 if (rgba_block.a < 0.f)
                     continue;
@@ -273,6 +275,9 @@ void main() {
     } else {
         uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
         accum_rgba = pixel_color / float(sample_count);
+        const float EPS = 0.01f;
+        const float phi_Lillumination = g_illumination_sigma * sqrt(computeVarianceCenter(pixel, viewport_size)) + EPS;
+        accum_rgba = vec4(vec3(phi_Lillumination), 1.f);
     }
 
     if (weight_sum > 0.f)
