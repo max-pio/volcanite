@@ -74,16 +74,23 @@ int volcanite_synth_volume_main(int argc, char *argv[]) {
     std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();
     csgvDatabase->createDummy();
 
-    // Create Synthetic Volume and Compress
+    // create synthetic volume
     glm::uvec3 volume_dim = {100, 80, 95};
     auto volume = createDummySegmentationVolume(volume_dim);
 
-    // TODO: parse command line arguments
-    size_t operation_freq[32];
-    compressedSegmentationVolume->setCompressionOptions64(32, NIBBLE_ENC);
-    compressedSegmentationVolume->compressForFrequencyTable(volume.dataConst(), volume_dim, operation_freq, 2, true, false);
-    compressedSegmentationVolume->setCompressionOptions64(32, DOUBLE_TABLE_RANS_ENC, operation_freq, operation_freq + 16);
+    // compress volume
+    size_t freq[32];
+    if (args.encoding_mode == SINGLE_TABLE_RANS_ENC || args.encoding_mode == DOUBLE_TABLE_RANS_ENC) {
+        // obtain frequency table(s)
+        compressedSegmentationVolume->setCompressionOptions64(args.brick_size, NIBBLE_ENC);
+        compressedSegmentationVolume->compressForFrequencyTable(volume.dataConst(), volume_dim, freq, 2, args.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
+    }
+    compressedSegmentationVolume->setCompressionOptions64(args.brick_size, args.encoding_mode, freq, freq + 16);
     compressedSegmentationVolume->compress(volume.dataConst(), volume_dim, false);
+    // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
+    if(args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
+        compressedSegmentationVolume->separateDetail();
+    }
 
 
     // we only need the rendering part for screenshots or the interactive app
