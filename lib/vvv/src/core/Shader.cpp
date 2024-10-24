@@ -125,7 +125,7 @@ Shader::Shader(const SimpleGlslShaderRequest& req, const ShaderCompileErrorCallb
                               .stage = get_shader_stage(path.extension().string().substr(1)),
                               .defines = req.defines,
                               .label = req.label,
-                              .optimize = false}; //TODO: shaderc compile optimization breaks reflection
+                              .optimize = true};
 
     createShader(request, compileErrorCallback);
 }
@@ -318,8 +318,9 @@ shaderc::CompileOptions getDefaultShaderCCompileOptions(const GlslShaderRequest 
     options.SetIncluder(std::make_unique<VolcaniteShaderIncluder>(request.include_paths));
     if (request.optimize) {
         options.SetOptimizationLevel(shaderc_optimization_level_performance);
-        Logger(WARN) << "Running shader compilation with enabled optimization (-o) may break"
-                        " shader reflection and pipeline layouts!";
+        // binding preservation and debug info are required for reflection
+        options.SetPreserveBindings(true);
+        options.SetGenerateDebugInfo();
     } else {
         options.SetOptimizationLevel(shaderc_optimization_level_zero);
     }
@@ -379,8 +380,6 @@ std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderR
                                      "shaderc preprocess " + std::string(request.shader_file_path));
         }
     }
-
-    // TODO: reflection only works without optimization. Compile without -o and store second result for reflection?
 
     // compile the shader to spirv
     shaderc::SpvCompilationResult compilation_result =
@@ -465,7 +464,7 @@ std::filesystem::path Shader::compileGlslShaderCMD(const GlslShaderRequest& requ
     // note: nothing here is escaped!
     cmd << vvv::shader_compiler_executable
         << " --client vulkan100"                                 // Vulkan SPIR-V semantics
-        << " --target-env spirv1.5"                              // 1.5 is default for vulkan 1.2
+        << " --target-env spirv1.6"                              // 1.6 is default for vulkan 1.3
         << " --quiet"                                            // supress output of currently compiling file
         << " -S " << get_shader_stage_name(request.stage); // select shader stage
 

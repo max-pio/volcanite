@@ -187,7 +187,7 @@ target_compile_definitions(libvvv PRIVATE -DVULKAN_HPP_STORAGE_SHARED=1)
 target_compile_definitions(libvvv PUBLIC -DGLM_ENABLE_EXPERIMENTAL -DGLM_FORCE_DEPTH_ZERO_TO_ONE -DLIB_VVV_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\")
 
 # link required libraries
-target_link_libraries(libvvv PUBLIC Vulkan::Vulkan glm::glm shaderc_combined)
+target_link_libraries(libvvv PUBLIC Vulkan::Vulkan glm::glm shaderc)
 
 # link optional libraries
 if (OpenMP_CXX_FOUND)
