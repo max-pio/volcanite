@@ -104,29 +104,31 @@ set(CPACK_COMPONENT_LIBRARIES_REQUIRED TRUE)
 set(CPACK_COMPONENT_APPLICATIONS_DESCRIPTION "Runtime libraries.")
 
 
-# Linux DEB settings
-set(CPACK_DEB_COMPONENT_INSTALL ON)
-# for some reason, the component specific CPACK_DEBIAN_APPLICATIONS_PACKAGE_* has no effect here
-set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
-set(CPACK_DEBIAN_PACKAGE_SECTION Graphics)
-set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_BINARY_DIR}/volcanite/postinst;${CMAKE_CURRENT_BINARY_DIR}/volcanite/prerm")
-set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION TRUE)
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "")
-set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Max Piochowiak (Karlsruhe Institute of Technology)")
-
+# Linux settings for DEB generator
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(CPACK_DEB_COMPONENT_INSTALL ON)
+    # for some reason, the component specific CPACK_DEBIAN_APPLICATIONS_PACKAGE_* has no effect here
+    set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+    set(CPACK_DEBIAN_PACKAGE_SECTION Graphics)
+    set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_BINARY_DIR}/volcanite/postinst;${CMAKE_CURRENT_BINARY_DIR}/volcanite/prerm")
+    set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION TRUE)
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Max Piochowiak (Karlsruhe Institute of Technology)")
 # Windows settings for NSIS generator
-set(CPACK_NSIS_DISPLAY_NAME ${CMAKE_PROJECT_NAME})
-set(CPACK_NSIS_PACKAGE_NAME ${CPACK_PACKAGE_NAME})
-set(CPACK_NSIS_MANIFEST_DPI_AWARE TRUE)
-set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL YES)
-set(CPACK_NSIS_MODIFY_PATH TRUE)
-set(CPACK_NSIS_CONTACT "Max Piochowiak (Karlsruhe Institute of Technology)")
-set(CPACK_NSIS_BRANDING_TEXT "Volcanite (c) Max Piochowiak")
-set(CPACK_NSIS_WELCOME_TITLE "Volcanite Segmentation Volume Renderer")
-set(CPACK_NSIS_FINISH_TITLE "Volcanite Segmentation Volume Renderer")
-set(CPACK_NSIS_MUI_HEADERIMAGE "${CMAKE_CURRENT_LIST_DIR}\\volcanite\\package_assets\\windows\\nsis_banner_top.bmp")
-set(CPACK_NSIS_MUI_WELCOMEFINISHPAGE_BITMAP "${CMAKE_CURRENT_LIST_DIR}\\volcanite\\package_assets\\windows\\nsis_banner_side.bmp")
-set(CPACK_NSIS_MUI_UNWELCOMEFINISHPAGE_BITMAP "${CMAKE_CURRENT_LIST_DIR}\\volcanite\\package_assets\\windows\\nsis_banner_side.bmp")
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(CPACK_NSIS_DISPLAY_NAME ${CMAKE_PROJECT_NAME})
+    set(CPACK_NSIS_PACKAGE_NAME ${CPACK_PACKAGE_NAME})
+    set(CPACK_NSIS_MANIFEST_DPI_AWARE TRUE)
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL YES)
+    set(CPACK_NSIS_MODIFY_PATH TRUE)
+    set(CPACK_NSIS_CONTACT "Max Piochowiak (Karlsruhe Institute of Technology)")
+    set(CPACK_NSIS_BRANDING_TEXT "Volcanite (c) Max Piochowiak")
+    set(CPACK_NSIS_WELCOME_TITLE "Volcanite Segmentation Volume Renderer")
+    set(CPACK_NSIS_FINISH_TITLE "Volcanite Segmentation Volume Renderer")
+    set(CPACK_NSIS_MUI_HEADERIMAGE "${CMAKE_CURRENT_LIST_DIR}\\volcanite\\package_assets\\windows\\nsis_banner_top.bmp")
+    set(CPACK_NSIS_MUI_WELCOMEFINISHPAGE_BITMAP "${CMAKE_CURRENT_LIST_DIR}\\volcanite\\package_assets\\windows\\nsis_banner_side.bmp")
+    set(CPACK_NSIS_MUI_UNWELCOMEFINISHPAGE_BITMAP "${CMAKE_CURRENT_LIST_DIR}\\volcanite\\package_assets\\windows\\nsis_banner_side.bmp")
+endif()
 
 # Generator selection per platform
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")

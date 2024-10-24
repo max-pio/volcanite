@@ -170,9 +170,9 @@ function(installVolcaniteExecutable name)
     install(TARGETS ${name} DESTINATION ${CMAKE_INSTALL_BINDIR}/ COMPONENT applications)
 
     # install license file
-    install(FILES ${PROJECT_SOURCE_DIR}/package_assets/LICENSE.txt DESTINATION ${CMAKE_INSTALL_DATADIR}/ COMPONENT applications)
+    install(FILES ${PROJECT_SOURCE_DIR}/package_assets/LICENSE.txt DESTINATION ./ COMPONENT applications)
     # install 3rd-party license files
-    install(FILES ${PROJECT_SOURCE_DIR}/package_assets/LICENSE_THIRD_PARTY.txt DESTINATION ${CMAKE_INSTALL_DATADIR}/ COMPONENT applications)
+    install(FILES ${PROJECT_SOURCE_DIR}/package_assets/LICENSE_THIRD_PARTY.txt DESTINATION ./ COMPONENT applications)
 
     # system dependent configuration
     set(VOLCANITE_EXECUTABLE_NAME ${name})
