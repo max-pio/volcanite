@@ -47,6 +47,8 @@
 
 // TYPE DEFINITIONS AND TYPE ACCESS ------------------------------------------------------------------------------------
 
+// TODO: move bit vector implementations and macros to bit_vector.glsl
+
 #ifndef SHARED_BIT_VECTOR
     #define SHARED_BIT_VECTOR s_bit_vector
 #endif

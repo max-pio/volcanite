@@ -3,6 +3,8 @@
 
 #include "volcanite/compression/csgv_utils.glsl"
 
+// TODO: move bit vector implementations and macros to bit_vector.glsl
+
 // Required DEFINES from shader compiler: (BV_WORD_TYPE must be the same as the BV_L12Type)
 #ifndef BV_WORD_TYPE
     // these defines are only here for intellisense
@@ -33,11 +35,5 @@ layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly res
     uint level_starts_1_to_4[4];///< number of zeros within each level in the wavelet matrix
     BV_WORD_TYPE fr[1];         ///< L12 flat rank acceleration structure (flexible array member)
 };  // must be 12x 4 Bytes packed size
-
-layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict BitVectorRef
-{
-    BV_WORD_TYPE words[];
-};
-
 
 #endif // HUFFMAN_WM_DECODER_TYPES_GLSL
