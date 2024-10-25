@@ -19,7 +19,9 @@
 #include <vvv/util/Logger.hpp>
 #include <glm/gtx/transform.hpp>
 
-#define GLFW_INCLUDE_NONE
+#ifndef GLFW_INCLUDE_NONE
+    #define GLFW_INCLUDE_NONE
+#endif
 #include <GLFW/glfw3.h>
 #include "stb/stb_image.hpp"
 
