@@ -47,6 +47,7 @@ add_library(imgui
 find_package(Vulkan REQUIRED)
 
 target_compile_definitions(imgui PUBLIC -DIMGUI=1 -DIMGUI_DEFINE_MATH_OPERATORS -DGLM_ENABLE_EXPERIMENTAL -DVGIZMO_USES_GLM -DIMGUIZMO_IMGUI_FOLDER=./)
+target_include_directories(imgui PRIVATE -DGLFW_INCLUDE_NONE)
 target_include_directories(imgui PUBLIC ./)
 
 target_link_libraries(imgui PRIVATE glfw Vulkan::Vulkan glm::glm)
