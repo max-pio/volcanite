@@ -19,6 +19,7 @@
 #include <filesystem>
 
 #include "vvv/util/Logger.hpp"
+#include "vvv/util/Paths.hpp"
 
 using namespace vvv;
 
@@ -32,8 +33,8 @@ namespace volcanite {
     static std::string expandPath(std::string path) {
         if(path.empty())
             return "";
-        if(path.find('~') != std::string::npos)
-            Logger(WARN) << "tilde-expansion is a bash specific feature. Use explicit home directory instead of '~' in " << path;
+        while (path.find('~') != std::string::npos)
+            path.replace(path.find('~'), 1, Paths::getHomeDirectory().string());
         // make path absolute and normalize
         std::filesystem::path absolute = std::filesystem::path(path);
         std::filesystem::path canonicalPath = std::filesystem::absolute(std::filesystem::weakly_canonical(absolute));

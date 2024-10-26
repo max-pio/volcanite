@@ -181,8 +181,8 @@ std::filesystem::path Paths::getLocalFileForDataPath(const std::filesystem::path
 
     std::filesystem::path Paths::getHomeDirectory() {
 #ifdef _WIN64
-        auto drive = getenv("HOMEDRIVE");
-        auto path = getenv("HOMEPATH");
+        std::string drive = getenv("HOMEDRIVE");
+        std::string path = getenv("HOMEPATH");
         if (drive.empty() || path.empty())
             return {getenv("USERPROFILE")};
         else
