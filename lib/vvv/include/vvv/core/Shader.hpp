@@ -241,7 +241,7 @@ private:
     void loadSpirvFromFile(const std::filesystem::path& path);
     void reflectShader();
 
-    std::optional<std::filesystem::path> getPrecompiledLocalSpirvPath(const SimpleGlslShaderRequest& request);
+    static std::optional<std::filesystem::path> getPrecompiledLocalSpirvPath(const SimpleGlslShaderRequest& request);
 
 
     vk::ShaderModule m_shaderModule = nullptr;

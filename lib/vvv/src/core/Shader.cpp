@@ -23,6 +23,7 @@
 #include <cstdio>
 
 #include <shaderc/shaderc.hpp>
+#include <utility>
 #include <SPIRV-Reflect/spirv_reflect.h>
 #include "vvv/config.hpp"
 
@@ -66,7 +67,7 @@ std::string get_shader_stage_name(vk::ShaderStageFlagBits stage) {
     };
 }
 
-const vk::ShaderStageFlagBits get_shader_stage(const std::string& stage) {
+vk::ShaderStageFlagBits get_shader_stage(const std::string& stage) {
     if (stage == "vert")
         return vk::ShaderStageFlagBits::eVertex;
     if (stage == "tesc")
@@ -173,7 +174,7 @@ std::optional<std::filesystem::path> Shader::getPrecompiledLocalSpirvPath(const 
 void Shader::createShader(const GlslShaderRequest& request, const ShaderCompileErrorCallback& compileErrorCallback) {
         std::filesystem::path spirvPath;
 
-        label = request.shader_file_path.filename();
+        label = request.shader_file_path.filename().string();
         Logger(DEBUG) << "Compiling " << request.shader_file_path;
         try {
 #ifdef USE_SYSTEM_GLSLANG_COMPILER
@@ -254,8 +255,8 @@ shaderc::CompileOptions getDefaultShaderCCompileOptions(const GlslShaderRequest 
     class VolcaniteShaderIncluder : public shaderc::CompileOptions::IncluderInterface
     {
     public:
-        explicit VolcaniteShaderIncluder(const std::vector<std::filesystem::path>& include_paths)
-                : m_include_paths(include_paths) {}
+        explicit VolcaniteShaderIncluder(std::vector<std::filesystem::path> include_paths)
+                : m_include_paths(std::move(include_paths)) {}
 
         shaderc_include_result* GetInclude(const char* requestedSource, shaderc_include_type type,
                                            const char* requestingSource, size_t includeDepth) override {
@@ -377,7 +378,7 @@ std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderR
             throw ShaderCompileError(request, spirv_path.has_value() ? spirv_path.value() : "",
                                      preprocess_result.GetCompilationStatus(),
                                      preprocess_result.GetErrorMessage(),
-                                     "shaderc preprocess " + std::string(request.shader_file_path));
+                                     "shaderc preprocess " + request.shader_file_path.string());
         }
     }
 
@@ -389,7 +390,7 @@ std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderR
         throw ShaderCompileError(request, spirv_path.has_value() ? spirv_path.value() : "",
                                  compilation_result.GetCompilationStatus(),
                                  compilation_result.GetErrorMessage(),
-                                 "shaderc compile " + std::string(request.shader_file_path));
+                                 "shaderc compile " + request.shader_file_path.string());
     }
 
     spirv_binary = {compilation_result.cbegin(), compilation_result.cend()};
