@@ -128,6 +128,8 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(CPACK_NSIS_MUI_HEADERIMAGE "${CMAKE_CURRENT_LIST_DIR}\\volcanite\\package_assets\\windows\\nsis_banner_top.bmp")
     set(CPACK_NSIS_MUI_WELCOMEFINISHPAGE_BITMAP "${CMAKE_CURRENT_LIST_DIR}\\volcanite\\package_assets\\windows\\nsis_banner_side.bmp")
     set(CPACK_NSIS_MUI_UNWELCOMEFINISHPAGE_BITMAP "${CMAKE_CURRENT_LIST_DIR}\\volcanite\\package_assets\\windows\\nsis_banner_side.bmp")
+    set(CPACK_NSIS_MUI_ICON "${CMAKE_CURRENT_LIST_DIR}\\volcanite\\package_assets\\icons\\volcanite_icon_installer_256.ico")
+    set(CPACK_NSIS_MUI_UNIICON "${CMAKE_CURRENT_LIST_DIR}\\volcanite\\package_assets\\icons\\volcanite_icon_uninstaller_256.ico")
 endif()
 
 # Generator selection per platform
