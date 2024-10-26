@@ -57,7 +57,14 @@
 # 3. add custom include include directories with target_include_directories(NAME ..) note: PRIVATE include/ is always added
 # 4. ensure that all runtime data that has to be copied to the binary data directory is within your data subfolder and all shaders are in data/shader
 function(makeVolcaniteExecutable name)
-    add_executable(${name} ${CMAKE_CURRENT_LIST_DIR}/src/bin/${name}.cpp ${ARGN})
+
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        # add windows icon and resources
+        add_executable(${name} ${CMAKE_CURRENT_LIST_DIR}/src/bin/${name}.cpp ${ARGN}
+                       ${PROJECT_SOURCE_DIR}/package_assets/windows/volcanite.rc)
+    else()
+        add_executable(${name} ${CMAKE_CURRENT_LIST_DIR}/src/bin/${name}.cpp ${ARGN})
+    endif()
     set_target_properties(${name} PROPERTIES
             # WIN32_EXECUTABLE TRUE # this hides the console window. Disabled, because we need to see the console output! maybe re-enable for distribution
             MACOSX_BUNDLE TRUE
@@ -93,8 +100,8 @@ function(makeVolcaniteExecutable name)
     list(JOIN data_dirs "\;" data_dirs_escaped)
     target_compile_definitions(${name} PRIVATE "-DDATA_DIRS=\"${data_dirs_escaped}\"")
 
-    # copy runtime libraries to binary on windows
     if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        # copy runtime libraries to binary on windows
         add_custom_command(TARGET ${name} POST_BUILD
                            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${name}> $<TARGET_FILE_DIR:${name}>
                            COMMAND_EXPAND_LISTS)
@@ -206,14 +213,6 @@ function(installVolcaniteExecutable name)
                 DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT applications)
         install(FILES ${WINDOWS_RUNTIME_DLLS}
                 DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT applications)
-
-        # use fixup_bundle to copy required dlls for windows
-        #    set(APPS \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${project_dir_name}/${name}${CMAKE_EXECUTABLE_SUFFIX})
-        #    install(CODE "
-        #        include(BundleUtilities)
-        #        message(\"fixup_bundle(\\\"${APPS}\\\")\")
-        #        fixup_bundle(\"${APPS}\" \"\" \"\")"
-        #        DESTINATION .)
     endif()
 
 endfunction()

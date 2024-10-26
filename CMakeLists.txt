@@ -102,7 +102,7 @@ set(CPACK_COMPONENT_APPLICATIONS_REQUIRED TRUE)
 set(CPACK_COMPONENT_APPLICATIONS_DESCRIPTION "The volcanite segmentation volume renderer executable.")
 set(CPACK_COMPONENT_LIBRARIES_REQUIRED TRUE)
 set(CPACK_COMPONENT_APPLICATIONS_DESCRIPTION "Runtime libraries.")
-
+set(CPACK_PACKAGE_EXECUTABLES volcanite;Volcanite)
 
 # Linux settings for DEB generator
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
