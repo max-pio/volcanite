@@ -58,6 +58,8 @@
 
 #include "volcanite/compression/decoder/HuffmanWMDecoder_types.glsl"
 
+#include "volcanite/bit_vector.glsl"
+
 #define CHC_BIT_SIZE 32
 //struct HuffmanCode {
 //    uint length;            ///< length of the Huffman code
@@ -90,14 +92,12 @@ BitVectorRef getWMHBitVectorFromEncoding(EncodingRef brick_encoding) {
 #ifdef DECODE_FROM_SHARED_MEMORY
     #define WM_BIT_VECTOR SHARED_BIT_VECTOR
     #define WM_HEADER SHARED_WM_HEADER
-    #define BV_ACCESS(index) _bv_access(index)
     #define FR_RANK1(index) _fr_rank1(index)
     #define WM_HUFFMAN_ACCESS(position) _wm_huffman_access(position)
     #define WM_HUFFMAN_RANK(position, symbol) _wm_huffman_rank(position, symbol)
 #else
     #define WM_BIT_VECTOR bit_vector.words
     #define WM_HEADER wm_header
-    #define BV_ACCESS(index) _bv_access(wm_header, bit_vector, index)
     #define FR_RANK1(index) _fr_rank1(wm_header, bit_vector, index)
     #define WM_HUFFMAN_ACCESS(position) _wm_huffman_access(wm_header, bit_vector, position)
     #define WM_HUFFMAN_RANK(position, symbol) _wm_huffman_rank(wm_header, bit_vector, position, symbol)
@@ -138,16 +138,6 @@ uint _get_L2_entry(const BV_WORD_TYPE v, uint i) {
     return (i != 0u) ? uint(bitfieldExtract64(v, int(i * BV_STORE_L2_BITS + OFFSET), BV_STORE_L2_BITS)) : 0u;
 }
 
-uint _bv_access(
-                #ifndef DECODE_FROM_SHARED_MEMORY
-                const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
-                #endif
-                uint index) {
-    return uint(WM_BIT_VECTOR[index / BV_WORD_BIT_SIZE] >> (index % BV_WORD_BIT_SIZE)) & 1u;
-    // bitfieldExtract does not support 64 bit integers:
-    // return bitfieldExtract(WM_BIT_VECTOR[index / BV_WORD_BIT_SIZE], int(index % BV_WORD_BIT_SIZE), 1);
-}
-
 uint _fr_rank1(
                #ifndef DECODE_FROM_SHARED_MEMORY
                const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
@@ -157,10 +147,10 @@ uint _fr_rank1(
 //        uint count = 0u;
 //        const uint words = index / BV_WORD_BIT_SIZE;
 //        for (uint i = 0; i < index / BV_WORD_BIT_SIZE; i++) {
-//            count += bitCount64(bv.words[i]);
+//            count += bitCount64(WM_BIT_VECTOR[i]);
 //        }
 //        for (uint i = words * BV_WORD_BIT_SIZE; i < index; i++) {
-//            if (BV_ACCESS(i, bv) == 1u)
+//            if (BV_ACCESS(WM_BIT_VECTOR, i) == 1u)
 //                count++;
 //        }
 //        return count;
@@ -209,10 +199,10 @@ uint _wm_huffman_access(
     // due to the assumptions for the canonical Huffman codes used in the wavelet matrix,
     // ANY 1 bit directly terminates the canonical huffman code and the symbol is the position of this bit.
     for (uint level = 0; level < HWM_LEVELS; level++) {
-        // debugPrintfEXT("||| level %u ||| bv_access(%u)=%u fr_rank1=%u, ones_before_level=%u", level, position, BV_ACCESS(position), FR_RANK1(position), WM_HEADER.ones_before_level[level]);
+        // debugPrintfEXT("||| level %u ||| bv_access(WM_BIT_VECTOR, %u)=%u fr_rank1=%u, ones_before_level=%u", level, position, BV_ACCESS(WM_BIT_VECTOR, position), FR_RANK1(position), WM_HEADER.ones_before_level[level]);
 
         assert(position < WM_HEADER.bit_vector_size, "reading bit vector index out of bounds.");
-        if (BV_ACCESS(position) != 0u) {
+        if (BV_ACCESS(WM_BIT_VECTOR, position) != 0u) {
             assertf(position != 0u || level == 4u, "first operation in stream must be 4u (PALETTE_ADV) but (pos, op) is (%v2u)", uvec2(position, HWM_LEVELS));
             return level;
         } else {
