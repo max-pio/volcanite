@@ -452,6 +452,10 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     // GPU statistics buffer
     m_gpu_stats_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_gpu_stats_buffer", .byteSize = sizeof(GPUStats), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
 
+    // empty space skipping buffer TODO: only use m_empty_space_buffer with m_cache_mode == CACHE_VOXELS?
+    m_empty_space_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_empty_space_buffer", .byteSize = m_empty_space_buffer_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    Buffer::deviceAddressUvec2(m_empty_space_buffer->getDeviceAddress(), &m_empty_space_buffer_address.x);
+
     // cache for decompressed bricks
     m_free_stack_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_free_stack_buffer", .byteSize = (m_free_stack_capacity * (lods_in_volume - 1u) + (lods_in_volume + 1u)) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_cache_info_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_info_buffer", .byteSize = bricks_in_volume*sizeof(uint32_t)*4u, .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
@@ -585,6 +589,7 @@ void CompressedSegmentationVolumeRenderer::releaseResources() {
     m_cache_info_buffer = nullptr;
     m_free_stack_buffer = nullptr;
     m_cache_buffer = nullptr;
+    m_empty_space_buffer = nullptr;
     m_attribute_buffer = nullptr;
     m_materials_buffer = nullptr;
     for(auto& e : m_split_encoding_buffers)
@@ -615,8 +620,11 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     if (m_decode_from_shared_memory)
         shader_defines.emplace_back("DECODE_FROM_SHARED_MEMORY");
     shader_defines.emplace_back("CACHE_MODE=" + std::to_string(m_cache_mode));
-    if (m_cache_mode == CACHE_VOXELS)
-        shader_defines.push_back("CACHE_UINT_SIZE=" + std::to_string(m_target_cache_size_MB * 1024 * 1024 / sizeof(uint32_t)));
+    if (m_cache_mode == CACHE_VOXELS) {
+        shader_defines.push_back(
+                "CACHE_UVEC2_SIZE=" + std::to_string(m_target_cache_size_MB * 1024 * 1024 / sizeof(glm::uvec2)));
+    }
+    shader_defines.push_back("EMPTY_SPACE_UINT_SIZE=" + std::to_string(m_empty_space_buffer_size / sizeof(uint32_t)));
     shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if (getCtx()->getWsi())
@@ -891,6 +899,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_usegmented_volume_info->setUniform<uint32_t>("g_vol_max_label", 1000000);
         m_usegmented_volume_info->setUniform<glm::uvec3>("g_brick_count",
                                                          m_compressed_segmentation_volume->getBrickCount());
+        m_usegmented_volume_info->setUniform<uint32_t>("g_brick_idx_count",
+                                                       m_compressed_segmentation_volume->getBrickIndexCount());
         auto lod_count = m_compressed_segmentation_volume->getLodCountPerBrick();
         m_usegmented_volume_info->setUniform<uint32_t>("g_frame", m_frame);
         m_usegmented_volume_info->setUniform<uint32_t>("g_max_inv_lod", glm::min(static_cast<uint32_t>(m_max_inv_lod), lod_count - 1u));
@@ -902,6 +912,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
         m_usegmented_volume_info->setUniform<uint32_t>("g_brick_idx_to_enc_vector", m_compressed_segmentation_volume->getBrickIdxToEncVectorMapping());
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_detail_buffer_address", m_detail_buffer_address);
+        m_usegmented_volume_info->setUniform<glm::uvec2>("g_empty_space_bv_address", m_empty_space_buffer_address);
     }
 }
 
@@ -1231,6 +1242,11 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                    + (m_detail_requests_buffer ? m_detail_requests_buffer->getByteSize() : 0ul);
         }
 
+        size_t empty_space = 0ul;
+        if (m_empty_space_buffer) {
+            empty_space = m_empty_space_buffer->getByteSize();
+        }
+
         size_t encoding = 0ul;
         if (m_brick_starts_buffer) {
             encoding += m_split_encoding_buffer_addresses_buffer->getByteSize() + m_brick_starts_buffer->getByteSize();
@@ -1248,6 +1264,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                     << "Materials: " << static_cast<double>(materials) / 1024. / 1024. / 1024. << " GB | "
                     << "Encoding: " << static_cast<double>(encoding) / 1024. / 1024. / 1024. << " GB | "
                     << "Cache: " << static_cast<double>(cache) / 1024. / 1024. / 1024. << " GB   | "
+                    << "Empty Space: " << static_cast<double>(empty_space) / 1024. / 1024. / 1024. << " GB   | "
                     << " = " << static_cast<double>(textures + uniform_buffers + materials + encoding + cache) / 1024. / 1024. / 1024. << " GB"
                     << " / " << static_cast<double>(total_used) / 1024. / 1024. / 1024. << " GB";
     }

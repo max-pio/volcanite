@@ -18,6 +18,7 @@
 #extension GL_EXT_debug_printf : enable
 #extension GL_EXT_buffer_reference_uvec2 : require
 #extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
 layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
@@ -28,6 +29,10 @@ layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 #include "util.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
 #include "volcanite/renderer/csgv_materials.glsl"
+
+#ifdef EMPTY_SPACE_UINT_SIZE
+    #include "volcanite/bit_vector.glsl"
+#endif
 
 #include "pcg_hash.glsl"
 
@@ -58,13 +63,13 @@ void main() {
     // - the top pointers in the g_free_block_stacks point to the next free location in the LoD stack
 
     // find out for which brick we compute if it is visible
-    uvec3 brick = gl_GlobalInvocationID.xyz;
+    const uvec3 brick = gl_GlobalInvocationID.xyz;
     if (isHelperLane(brick, g_brick_count))
         return;
 
     // iterate over the whole palette in this brick (read the palette size from the header)
-    uint brick_idx = brick_pos2idx(brick, g_brick_count);
-    uint brick_info_pos = brick_idx * 4u;
+    const uint brick_idx = brick_pos2idx(brick, g_brick_count);
+    const uint brick_info_pos = brick_idx * 4u;
     assert(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)), "brick CUR_INV_LOD or INDEX are corrupted");
 
 
@@ -74,10 +79,10 @@ void main() {
 
     bool potentially_visible = false;
 
-    uint brick_encoding_length = getBrickEncodingLength(brick_idx);
+    const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
     EncodingRef brick_address = getBrickEncodingRef(brick_idx);
     // read total palette size from brick header
-    uint palette_size = brick_address.buf[PALETTE_SIZE_HEADER_INDEX];
+    const uint palette_size = brick_address.buf[PALETTE_SIZE_HEADER_INDEX];
     assert(palette_size > 0u, "palette size 0 should not be possible");
     assert(palette_size < bitfieldExtract(~0u, 0, int(g_cache_palette_idx_bits)), "palette size exceeds available bits for cache palette indices");
     // check all entries in the palette if anything is visible (> 0)
@@ -89,13 +94,24 @@ void main() {
     }
 
 #if CACHE_MODE == CACHE_VOXELS
-    // evict random elements from the cache
-    {
-        const uint evict_count = 0;
-        uvec2 rnd = uvec2(brick_idx ^ (~g_frame), g_frame << 8);
-        for (int i = 0; i < evict_count; i++) {
-            rnd = hash_pcg2d(rnd);
-            g_cache[(rnd.x % (CACHE_UINT_SIZE / 2)) * 2] = INVALID;
+//    // evict random elements from the cache
+//    {
+//        const uint evict_count = 0;
+//        uvec2 rnd = uvec2(brick_idx ^ (~g_frame), g_frame << 8);
+//        for (int i = 0; i < evict_count; i++) {
+//            rnd = hash_pcg2d(rnd);
+//            g_cache[(rnd.x % (CACHE_UINT_SIZE / 2)) * 2] = INVALID;
+//        }
+//    }
+#endif
+
+#ifdef EMPTY_SPACE_UINT_SIZE
+    // reset empty space buffer
+    if (g_camera_still_frames == 0u) {
+        // fill the whole cache with INVALID information
+        BitVectorRef empty_space_bv = BitVectorRef(g_empty_space_bv_address);
+        for (uint id = brick_idx; id < EMPTY_SPACE_BV_WORD_SIZE; id += g_brick_idx_count) {
+            empty_space_bv.words[id] = BV_WORD_TYPE(0u);
         }
     }
 #endif

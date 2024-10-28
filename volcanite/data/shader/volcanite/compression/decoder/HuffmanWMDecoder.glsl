@@ -339,6 +339,8 @@ uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
     }
 }
 
+#if CACHE_MODE == CACHE_BRICKS
+
 /// Decode a single voxel with index output_i in the target_inv_lod. Decoding is performed by chasing the operation
 /// references from the output voxel to a palette reference.
 /// If DECODE_FROM_SHARED_MEMORY is set, it is assumed that the WMHBrickHeader an bit vector are
@@ -366,6 +368,8 @@ void decompressCSGVVoxelToCache(const uint output_i, const uint target_inv_lod, 
     writeEntryToCache(decoded_brick_start_uint, output_i, brick_encoding.buf[brick_encoding_length - 1u - palette_index]);
 #endif
 }
+
+#endif // CACHE_MODE == CACHE_BRICKS
 
 #ifndef DECODE_FROM_SHARED_MEMORY
 uint decompressCSGVVoxel(const uint brick_idx, const uvec3 brick_voxel, const uint target_inv_lod) {

@@ -53,6 +53,8 @@ layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
 #include "volcanite/compression/compressed_segmentation_volume.glsl"
 
 void main() {
+#if CACHE_MODE == CACHE_BRICKS
+
     assert(gl_NumSubgroups == 1, "decompression assumes exactly one subgroup per workgroup");
     assert(gl_SubgroupSize == SUBGROUP_SIZE && gl_WorkGroupSize.x == SUBGROUP_SIZE && gl_WorkGroupSize.y == 1u
             && gl_WorkGroupSize.z == 1u, "decompression assumes workgroup size equal to the subgroup size");
@@ -184,4 +186,6 @@ void main() {
         g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = target_inv_lod;
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = INVALID;
     }
+
+#endif // CACHE_MODE == CACHE_BRICKS
 }

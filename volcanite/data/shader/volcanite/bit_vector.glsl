@@ -2,8 +2,14 @@
 #define VOLCANITE_BITVECTOR_GLSL
 
 #ifndef BV_WORD_TYPE
+    #define BV_WORD_BIT_SIZE 64
     #define BV_WORD_TYPE uint64_t
 #endif
+
+#ifdef EMPTY_SPACE_UINT_SIZE
+    #define EMPTY_SPACE_BV_WORD_SIZE (EMPTY_SPACE_UINT_SIZE / (BV_WORD_BIT_SIZE / 32))
+#endif
+
 
 layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict BitVectorRef
 {

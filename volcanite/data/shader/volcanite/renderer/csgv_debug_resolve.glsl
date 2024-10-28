@@ -20,12 +20,12 @@ void DEBUG_img_cache(ivec2 pixel, inout vec4 color, bool enabled) {
 
     #if CACHE_MODE == CACHE_VOXELS
         // map the pixel to a cache cell [region]
-        const int size = 8;
-        const uint elems_per_pixel = (CACHE_UINT_SIZE / 2) / (viewport_size.x * viewport_size.y / size);
+        const int size = 4;
+        const uint elems_per_pixel = 1u; //CACHE_UVEC2_SIZE / (viewport_size.x * viewport_size.y / size);
 
         const uint idx = elems_per_pixel * uint((pixel.x / size) + (pixel.y / size) * viewport_size.x);
 
-        if (idx >= CACHE_UINT_SIZE / 2)
+        if (idx >= CACHE_UVEC2_SIZE)
             return;
 
         // accumulate information for all of the pixel's cache cels
@@ -33,11 +33,11 @@ void DEBUG_img_cache(ivec2 pixel, inout vec4 color, bool enabled) {
         uint visible_count = 0u;
         vec3 label = vec3(0.f);
         for (uint i = idx; i < idx + elems_per_pixel; i++) {
-            if (g_cache[i * 2] != INVALID) {
+            if (g_cache[i].x != INVALID) {
                 entry_count++;
-                if (isLabelVisible(g_cache[i * 2 + 1])) {
+                if (isLabelVisible(g_cache[i].y)) {
                     visible_count++;
-                    label += colormap_turbo(float(g_cache[i * 2 + 1] % 96) / 96.f);
+                    label += colormap_turbo(float(g_cache[i].y % 96) / 96.f);
                 } else {
                     label += mix(vec3(0.8f, 0.6f, 0.6f), vec3(0.8f), (0.5f * sin(float(g_frame) / 8.f) + 0.5f));
                 }

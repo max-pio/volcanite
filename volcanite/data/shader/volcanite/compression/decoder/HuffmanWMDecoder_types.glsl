@@ -6,9 +6,8 @@
 // TODO: move bit vector implementations and macros to bit_vector.glsl
 
 // Required DEFINES from shader compiler: (BV_WORD_TYPE must be the same as the BV_L12Type)
-#ifndef BV_WORD_TYPE
+#ifndef HWM_LEVELS
     // these defines are only here for intellisense
-    #define BV_WORD_TYPE uint64_t
     #define HWM_LEVELS 5
     #define BV_L1_BIT_SIZE 1280
     #define BV_L2_BIT_SIZE 256

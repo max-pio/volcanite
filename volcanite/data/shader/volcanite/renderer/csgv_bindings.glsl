@@ -32,6 +32,7 @@ layout(std140, set=0, binding=0) uniform segmented_volume_info {
     vec3 g_normalized_volume_size;  // world space size of the volume (usually ~1m^3 with the largest dim being 1)
     uint g_vol_max_label;           // maximum label in the segmented volume
     uvec3 g_brick_count;            // number of bricks in each xyz dimension for the encoded volume
+    uint g_brick_idx_count;         // number of brick indicies (brick_count.x * .y * .z)
     uint g_frame;                   // current frame of the rendering
 //
     uint g_max_inv_lod;             // max. inv LOD that we would decode / traverse
@@ -44,6 +45,7 @@ layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uint g_detail_buffer_dirty;     // 0 if we can read from the detail buffer, 1 if the detail buffer is dirty
     uint g_brick_idx_to_enc_vector; // dividing the brick index by this number yields its encoding vector index
     uvec2 g_detail_buffer_address;
+    uvec2 g_empty_space_bv_address; // empty space bit vector: 0 = voxel set potentially visible, 1 = no visible labels
 };
 
 
@@ -105,11 +107,18 @@ layout(std430, binding = 5) buffer restrict free_block_stacks
 
 layout(std430, binding = 6) buffer restrict brick_cache
 {
-// contains g_cache_capacity base elements made up by (base_element_size) uints to fit 2x2x2=8 output voxels.
-// the g_brick_info[].CACHE_INDEX points to a base element from which on it is decoded into N
-// base elements, where N depends on the LoD that this is decoded to. The higher the inv. lod
-// the higher is N because more base elements are needed to store the finer brick resolution.
+
+#if CACHE_MODE == CACHE_VOXELS
+    // contains CACHE_UVEC2_SIZE elements as (voxel_id_key, voxel_label).
+    // a voxel_id_key of INVALID denotes an empty cache cell
+    uvec2 g_cache[];
+#else
+    // contains g_cache_capacity base elements made up by (base_element_size) uints to fit 2x2x2=8 output voxels.
+    // the g_brick_info[].CACHE_INDEX points to a base element from which on it is decoded into N
+    // base elements, where N depends on the LoD that this is decoded to. The higher the inv. lod
+    // the higher is N because more base elements are needed to store the finer brick resolution.
     uint g_cache[];
+#endif
 };
 
 #ifdef SEPARATE_DETAIL

@@ -71,10 +71,9 @@ void main() {
     g_brick_info[brick_idx * 4u + BRICK_INFO_REQ_SLOT] = INVALID;
 
     #if (CACHE_MODE == CACHE_VOXELS)
-        // fill the whole cache with INVALID information
-        uint total_threads = g_brick_count.x * g_brick_count.y * g_brick_count.z;
-        for (uint id = brick_idx; id < CACHE_UINT_SIZE; id += total_threads) {
-            g_cache[id] = INVALID;
+        // reset all cache elements
+        for (uint id = brick_idx; id < CACHE_UVEC2_SIZE; id += g_brick_idx_count) {
+            g_cache[id].x = INVALID;
         }
     #endif
 }

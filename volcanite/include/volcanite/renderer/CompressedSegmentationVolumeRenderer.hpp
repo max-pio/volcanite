@@ -285,11 +285,12 @@ private:
     uint32_t m_cache_base_element_uints = 8;    ///< number of uints needed to store 2x2x2 output voxels
     size_t m_target_cache_size_MB = 0u;         ///< user parameter: 0 to use as much GPU memory as possible
     size_t m_cache_capacity = 0ul;              ///< this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x (sizeof(uint)=32) / m_palette_indices_per_uint bytes large
-    size_t m_empty_space_buffer_size = 16777216ul;          ///< byte size of the empty space skipping bit vector
+    size_t m_empty_space_buffer_size = 16777216ul;          ///< byte size of the empty space skipping bit vector (dividable by 16)
     const size_t m_free_stack_capacity = 262144ul;          ///< how many elements (one uint = 4B each) fit into the free stack of EACH LoD > 0. We need max. volume_size/brick_size/lod_width³ elements. a capacity of 262144 equals 1MB * (lod_count-1)
     std::shared_ptr<Buffer> m_cache_info_buffer = nullptr;
     std::shared_ptr<Buffer> m_cache_buffer = nullptr;       ///< cache_capacity * 2x2x2 uints
     std::shared_ptr<Buffer> m_empty_space_buffer = nullptr; ///< bit vector storing if a set of voxels is empty space
+    glm::uvec2 m_empty_space_buffer_address = {};
     std::shared_ptr<Buffer> m_free_stack_buffer = nullptr;  ///< (lod_count - 1) * free_stack_capacity uints followed by (lod_count - 1) stack counters [free_stack_top[1], ..., fst[N-1])
     std::shared_ptr<Buffer> m_assign_info_buffer = nullptr; ///< (lod_count - 1) * 3 * uint assign infos for the LoDs + 1 * uint atomic top-index for the cache buffer
 

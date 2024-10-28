@@ -36,10 +36,11 @@
 
 
 // Read Decoded Bricks (Cache Read) ------------------------------------------------------------------------------------
-
 uint _cache_pos2idx(const uvec3 voxel_pos_in_brick) {
     return morton3Dp2i(voxel_pos_in_brick);
 }
+
+#if CACHE_MODE == CACHE_BRICKS
 
 /** Returns the label at the cache_idx_in_brick-th entry from the brick's cache region. The region starts at
  * decoded_brick_start_uint in the cache array. If a palletized cache is used, the palette index of the label is
@@ -102,6 +103,7 @@ uint readCSGVBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, const ui
 }
 #endif // ifdef PALETTE_CACHE
 
+#endif // CACHE_MODE == CACHE_BRICKS
 // Decoding (Cache Write) ----------------------------------------------------------------------------------------------
 #ifndef CSGV_READ_ONLY
 
@@ -120,6 +122,7 @@ const ivec3 neighbor[8][3] = {  {ivec3(-1, 0, 0), ivec3(0, -1, 0), ivec3(0, 0, -
                                 {ivec3( 1, 0, 0), ivec3(0,  1, 0), ivec3(0, 0,  1)}};
 
 
+#if CACHE_MODE == CACHE_BRICKS
 uint _valueOfNeighborCache(const uvec3 brick_pos, const uint local_lod_i, const uint lod_width, const int neighbor_i, const uint decoded_brick_start_uint) {
     // Find the position of the neighbor and convert it to a memory index.
     ivec3 neighbor_pos = ivec3(brick_pos) + neighbor[local_lod_i][neighbor_i] * int(lod_width);
@@ -153,6 +156,8 @@ void resetCSGVBrick(const uint decoded_brick_start_uint, const uint inv_lod) {
     fillCSGVBrick(decoded_brick_start_uint, inv_lod, INVALID);
 #endif
 }
+
+#endif // CACHE_MODE == CACHE_BRICKS
 
 #if ENCODING_MODE == NIBBLE_ENC
     #include "decoder/NibbleDecoder.glsl"
