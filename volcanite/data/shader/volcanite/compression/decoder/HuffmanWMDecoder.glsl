@@ -112,10 +112,6 @@ uint64_t bitfieldExtract64(uint64_t value, int offset, int bits) {
     return (value >> offset) & ((uint64_t(1) << bits) - uint64_t(1));
 }
 
-uint rank1Word(BV_WORD_TYPE value, uint index) {
-    return (index != 0u) ? bitCount64(value << (BV_WORD_BIT_SIZE - index)) : 0u;
-}
-
 uint getFlatRankEntriesHuffman(uint bit_vector_size) {
     return bit_vector_size / BV_L1_BIT_SIZE + 1u;
 }
@@ -183,10 +179,10 @@ uint _fr_rank1(
     // if this is a rank(text_size) query, the inlining of the function lead to the potential out of bounds
     // access bv[offset] being ignored.
 
-    assertf(rank1_res + rank1Word(WM_BIT_VECTOR[offset], index % BV_WORD_BIT_SIZE) < (index == 0u ? 1u : index),
+    assertf(rank1_res + WORD_RANK1(WM_BIT_VECTOR[offset], index % BV_WORD_BIT_SIZE) < (index == 0u ? 1u : index),
             "FR_RANK1 return value too high. [index, rank1]: [%v2u]",
-            uvec2(index, rank1_res + rank1Word(WM_BIT_VECTOR[offset], index % BV_WORD_BIT_SIZE)));
-    return rank1_res + rank1Word(WM_BIT_VECTOR[offset], index % BV_WORD_BIT_SIZE);
+            uvec2(index, rank1_res + WORD_RANK1(WM_BIT_VECTOR[offset], index % BV_WORD_BIT_SIZE)));
+    return rank1_res + WORD_RANK1(WM_BIT_VECTOR[offset], index % BV_WORD_BIT_SIZE);
 }
 
 uint _wm_huffman_access(
@@ -403,12 +399,12 @@ bool TEST_BIT_VECTOR() {
 
     assertf(bitCount64(v) == 19, "wrong bitcount is %u", bitCount64(v));
     //
-    assertf(rank1Word(v, 0) == 0, "wrong rank1Word 0 is %u", rank1Word(v, 0));
-    assertf(rank1Word(v, 1) == 1, "wrong rank1Word 1 is %u", rank1Word(v, 1));
-    assertf(rank1Word(v, 32) == 1, "wrong rank1Word 32 is %u", rank1Word(v, 32));
-    assertf(rank1Word(v, 33) == 2, "wrong rank1Word 33 is %u", rank1Word(v, 33));
-    assertf(rank1Word(v, 63) == 18, "wrong rank1Word 63 is %u", rank1Word(v, 63));
-    assertf(rank1Word(v, 64) == 19, "wrong rank1Word 64 is %u", rank1Word(v, 64));
+    assertf(WORD_RANK1(v, 0) == 0, "wrong WORD_RANK1 0 is %u", WORD_RANK1(v, 0));
+    assertf(WORD_RANK1(v, 1) == 1, "wrong WORD_RANK1 1 is %u", WORD_RANK1(v, 1));
+    assertf(WORD_RANK1(v, 32) == 1, "wrong WORD_RANK1 32 is %u", WORD_RANK1(v, 32));
+    assertf(WORD_RANK1(v, 33) == 2, "wrong WORD_RANK1 33 is %u", WORD_RANK1(v, 33));
+    assertf(WORD_RANK1(v, 63) == 18, "wrong WORD_RANK1 63 is %u", WORD_RANK1(v, 63));
+    assertf(WORD_RANK1(v, 64) == 19, "wrong WORD_RANK1 64 is %u", WORD_RANK1(v, 64));
     //
     assertf(bitfieldExtract64(v, 0, 0) == 0, "wrong bitfieldExtract 0 0 is %u", bitfieldExtract64(v, 0, 0));
     assertf(bitfieldExtract64(v, 3, 30) == 536870912u, "wrong bitfieldExtract 3 30 is %u", bitfieldExtract64(v, 3, 30));

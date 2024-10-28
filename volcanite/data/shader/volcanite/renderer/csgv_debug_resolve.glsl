@@ -20,7 +20,7 @@ void DEBUG_img_cache(ivec2 pixel, inout vec4 color, bool enabled) {
 
     #if CACHE_MODE == CACHE_VOXELS
         // map the pixel to a cache cell [region]
-        const int size = 4;
+        const int size = 8;
         const uint elems_per_pixel = (CACHE_UINT_SIZE / 2) / (viewport_size.x * viewport_size.y / size);
 
         const uint idx = elems_per_pixel * uint((pixel.x / size) + (pixel.y / size) * viewport_size.x);
@@ -39,7 +39,7 @@ void DEBUG_img_cache(ivec2 pixel, inout vec4 color, bool enabled) {
                     visible_count++;
                     label += colormap_turbo(float(g_cache[i * 2 + 1] % 96) / 96.f);
                 } else {
-                    label += vec3(0.8f, 0.6f, 0.6f);
+                    label += mix(vec3(0.8f, 0.6f, 0.6f), vec3(0.8f), (0.5f * sin(float(g_frame) / 8.f) + 0.5f));
                 }
             }
         }
