@@ -522,6 +522,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     }
     size_t maxGPUBufferSize = getCtx()->getPhysicalDevice().getProperties().limits.maxStorageBufferRange;
     m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = cache_uint_size * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    Buffer::deviceAddressUvec2(m_cache_buffer->getDeviceAddress(), &m_cache_buffer_address.x);
 
     updateDeviceMemoryUsage();
     Logger(INFO) << "Device memory after initialization: " << m_gui_device_mem_text;
@@ -912,6 +913,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
         m_usegmented_volume_info->setUniform<uint32_t>("g_brick_idx_to_enc_vector", m_compressed_segmentation_volume->getBrickIdxToEncVectorMapping());
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_detail_buffer_address", m_detail_buffer_address);
+        m_usegmented_volume_info->setUniform<glm::uvec2>("g_cache_buffer_address", m_cache_buffer_address);
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_empty_space_bv_address", m_empty_space_buffer_address);
         m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_set_size", (m_compressed_segmentation_volume->getBrickIndexCount() + m_empty_space_buffer_size * 8u - 1u) / (m_empty_space_buffer_size * 8u) );
     }

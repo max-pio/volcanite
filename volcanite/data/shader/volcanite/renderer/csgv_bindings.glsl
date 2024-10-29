@@ -22,6 +22,11 @@ layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly res
     uint buf[];
 };
 
+layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict UVec4ArrayRef
+{
+    uvec4 buf[];
+};
+
 // TODO: use push constants for camera parameters and uniform buffers for things that change rarely
 
 layout(std140, set=0, binding=0) uniform segmented_volume_info {
@@ -45,6 +50,7 @@ layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uint g_detail_buffer_dirty;     // 0 if we can read from the detail buffer, 1 if the detail buffer is dirty
     uint g_brick_idx_to_enc_vector; // dividing the brick index by this number yields its encoding vector index
     uvec2 g_detail_buffer_address;
+    uvec2 g_cache_buffer_address;
     uvec2 g_empty_space_bv_address; // empty space bit vector: 0 = voxel set potentially visible, 1 = no visible labels
     uint g_empty_space_set_size;    // how many voxels are grouped into one bit
 };
