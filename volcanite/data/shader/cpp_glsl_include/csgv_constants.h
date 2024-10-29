@@ -124,8 +124,19 @@ namespace volcanite {
 #define PALETTE_LAST 5u ///< re-read palette last palette label, located 1 entry before the top pointer, again
 #define PALETTE_D 6u    ///< re-read palette label from D+2 entries before the top pointer. D follows in encoding stream.
 
+
 #define INVALID 0xFFFFFFFFu    ///< UINT32_MAX all bits set to 1. Denotes undecoded values, invalid labels, errors..
 #define INVISIBLE_LABEL 0xFFFFFFFEu ///< UINT32_MAX-1. Denotes a voxel label that is invisible in the current config
+
+// Rendering Parameter Flags -------------------------------------------------------------------------------------------
+
+// used in a bit mask to denote certain updates
+#define PARAMS_CAMERA 1
+#define PARAMS_RENDER 2
+#define PARAMS_MATERIAL 4
+#define PARAMS_RESOLVE 8
+
+
 
 // Material Constants --------------------------------------------------------------------------------------------------
 #define LABEL_AS_ATTRIBUTE 0xFFFFFFFFu
