@@ -27,6 +27,11 @@
 
 namespace vvv {
 
+/// Imports a comma ',' separated CSV file that contains only numerical values as data points and returns a vector
+/// containing the value list of each row as float numbers. The first CSV row is assumed to contain the column names.
+/// @param column_names a vector into which the column names of the CSV file will be written
+/// @return a vector where the i-th element contains the list of values in the i-th CSV file row
+std::vector<std::vector<float>> csv_float_import(const std::string& csv_path, std::vector<std::string>& column_names);
 
 void csv_export(const std::vector<std::map<std::string, float>>& s, const std::string& path);
 
