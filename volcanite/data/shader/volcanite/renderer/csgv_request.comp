@@ -107,6 +107,7 @@ void main() {
 
 #ifdef EMPTY_SPACE_UINT_SIZE
     // reset empty space buffer
+    // TODO: add bit masks for g_changed_flags (camera 1, rendering 2, material 4, postprocess 8..)
     if (g_camera_still_frames == 0u) {
         // fill the whole cache with INVALID information
         BitVectorRef empty_space_bv = BitVectorRef(g_empty_space_bv_address);

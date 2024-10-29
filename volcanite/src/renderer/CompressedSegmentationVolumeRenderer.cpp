@@ -453,7 +453,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     m_gpu_stats_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_gpu_stats_buffer", .byteSize = sizeof(GPUStats), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
 
     // empty space skipping buffer TODO: only use m_empty_space_buffer with m_cache_mode == CACHE_VOXELS?
-    m_empty_space_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_empty_space_buffer", .byteSize = m_empty_space_buffer_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    m_empty_space_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_empty_space_buffer", .byteSize = m_empty_space_buffer_size, .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     Buffer::deviceAddressUvec2(m_empty_space_buffer->getDeviceAddress(), &m_empty_space_buffer_address.x);
 
     // cache for decompressed bricks
@@ -521,7 +521,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
         Logger(INFO) << "Allocating cache with size " << m_target_cache_size_MB << " MB at " << (m_cache_base_element_uints * 32u / 8u) << " bits per label";
     }
     size_t maxGPUBufferSize = getCtx()->getPhysicalDevice().getProperties().limits.maxStorageBufferRange;
-    m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = cache_uint_size * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = cache_uint_size * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     Buffer::deviceAddressUvec2(m_cache_buffer->getDeviceAddress(), &m_cache_buffer_address.x);
 
     updateDeviceMemoryUsage();
@@ -915,7 +915,14 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_detail_buffer_address", m_detail_buffer_address);
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_cache_buffer_address", m_cache_buffer_address);
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_empty_space_bv_address", m_empty_space_buffer_address);
-        m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_set_size", (m_compressed_segmentation_volume->getBrickIndexCount() + m_empty_space_buffer_size * 8u - 1u) / (m_empty_space_buffer_size * 8u) );
+        // voxel set size: a power of two smaller than the brick size so that last_voxel_id / set_size < 8*m_empty_space_buffer_size
+        uint32_t voxel_count = (m_compressed_segmentation_volume->getVolumeDim().x * m_compressed_segmentation_volume->getVolumeDim().y * m_compressed_segmentation_volume->getVolumeDim().z);
+        uint32_t empty_space_set_size = (voxel_count + (m_empty_space_buffer_size * 8u) - 1) /  (m_empty_space_buffer_size * 8u);
+        if (glm::bitCount(empty_space_set_size) > 1)
+            empty_space_set_size = 1u << (glm::findMSB(empty_space_set_size) + 1);
+        assert(empty_space_set_size > 0u && "empty space set size cannot be 0");
+        assert(empty_space_set_size <= m_compressed_segmentation_volume->getBrickSize() && "empty space set size must be <= the brick size");
+        m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_set_size", empty_space_set_size);
     }
 }
 

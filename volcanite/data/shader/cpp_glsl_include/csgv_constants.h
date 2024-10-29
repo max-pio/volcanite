@@ -125,6 +125,7 @@ namespace volcanite {
 #define PALETTE_D 6u    ///< re-read palette label from D+2 entries before the top pointer. D follows in encoding stream.
 
 #define INVALID 0xFFFFFFFFu    ///< UINT32_MAX all bits set to 1. Denotes undecoded values, invalid labels, errors..
+#define INVISIBLE_LABEL 0xFFFFFFFEu ///< UINT32_MAX-1. Denotes a voxel label that is invisible in the current config
 
 // Material Constants --------------------------------------------------------------------------------------------------
 #define LABEL_AS_ATTRIBUTE 0xFFFFFFFFu

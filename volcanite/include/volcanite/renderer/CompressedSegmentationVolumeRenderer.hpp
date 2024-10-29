@@ -65,6 +65,7 @@ public:
         ctx->enableDeviceExtension("VK_EXT_memory_budget");
         ctx->physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
         ctx->physicalDeviceFeatures().setShaderInt64(true);
+        ctx->physicalDeviceFeaturesV12().setShaderBufferInt64Atomics(true);
     }
 
     /// Initializes Descriptorsets and calls pipeline initialization.

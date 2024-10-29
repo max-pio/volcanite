@@ -37,9 +37,9 @@ void DEBUG_img_cache(ivec2 pixel, inout vec4 color, bool enabled) {
                 entry_count++;
                 if (isLabelVisible(g_cache[i].y)) {
                     visible_count++;
-                    label += colormap_turbo(float(g_cache[i].y % 96) / 96.f);
+                    label += colormap_viridis(float(g_cache[i].y % 96) / 96.f);
                 } else {
-                    label += mix(vec3(0.8f, 0.6f, 0.6f), vec3(0.8f), (0.5f * sin(float(g_frame) / 8.f) + 0.5f));
+                    label += mix(vec3(1.f, 0.f, 1.f), vec3(0.8f), (0.5f * sin(float(g_frame) / 8.f) + 0.5f));
                 }
             }
         }
@@ -52,7 +52,7 @@ void DEBUG_img_cache(ivec2 pixel, inout vec4 color, bool enabled) {
         if (entry_count == 0) {
             display = vec3(1.f);
         } else {
-            const int mode = 0;
+            const int mode = 2;
             switch (mode) {
                 // label
                 case 0:

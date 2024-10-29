@@ -97,19 +97,31 @@ uint get_inv_lod(ivec3 voxel) {
         assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
 
         const uint req_inv_lod = get_inv_lod(voxel);
+        const uint voxel_idx = morton3Dp2i(voxel);
 
-        // check if the voxel is already decoded in the cache
-        uint voxel_id = morton3Dp2i((voxel >> (g_max_inv_lod - req_inv_lod)) << (g_max_inv_lod - req_inv_lod));
-        uint cache_pos = hash1(voxel_id);
+        // check if the voxel is flagged as empty space
+        // the empty space bit vector index is the morton index of the voxel divided by the set size.
+        // the empty space set size is a power of two <= the brick size. all voxels in the same set belong to the same
+        // brick and are thus always accessed in the same LOD
+        const uint empty_space_idx = voxel_idx / g_empty_space_set_size;
+        BitVectorRef empty_space_bv = BitVectorRef(g_empty_space_bv_address);
+        if (BV_ACCESS(empty_space_bv.words, empty_space_idx) > 0u)
+            return INVISIBLE_LABEL;
+
+        // the 1D cache_key is the morton index of the voxel position within the current LOD.
+        // it is used as hash index and maps voxels from different LODs at the same area to identical indices
+        uint cache_key = (voxel_idx >> 3*(g_max_inv_lod - req_inv_lod)) << 3*(g_max_inv_lod - req_inv_lod);
+
+        uint cache_pos = hash1(cache_key);
         assertf(cache_pos < CACHE_UVEC2_SIZE, "invalid cache_pos %u", cache_pos);
 
         // check if the cache contains the voxel at the first or second lookup pos
         uvec2 cache_elem = CSGV_DECODING_ARRAY[cache_pos];
-        if (cache_elem.x == voxel_id)
+        if (cache_elem.x == cache_key)
             return cache_elem.y;
         else {
-            uvec2 cache_elem2 = CSGV_DECODING_ARRAY[hash2(voxel_id)];
-            if (cache_elem2.x == voxel_id)
+            uvec2 cache_elem2 = CSGV_DECODING_ARRAY[hash2(cache_key)];
+            if (cache_elem2.x == cache_key)
                 return cache_elem2.y;
         }
 
@@ -119,17 +131,37 @@ uint get_inv_lod(ivec3 voxel) {
         const uint brick_idx = brick_pos2idx(brick, g_brick_count);
         const uint label = decompressCSGVVoxel(brick_idx, brick_voxel, req_inv_lod); // this is extremely expensive!
 
-        // TODO.. update empty space information
+        // if the label is not visible, check if all other labels from the same set are not visible as well
+        if (!isLabelVisible(label)) {
+            bool all_invisible = true;
+            for (uint set_i = 0u; set_i < g_empty_space_set_size; set_i++) {
+
+                uvec3 s_brick_voxel = morton3Di2p(empty_space_idx * g_empty_space_set_size + set_i) - (brick * BRICK_SIZE);
+
+                // for the empty-space info: decode on the finest LOD
+                // this means we have to recompute the label of the currently decoded voxel as well
+                uint s_label = decompressCSGVVoxel(brick_idx, s_brick_voxel, g_max_inv_lod); // this is extremely expensive!
+                if (isLabelVisible(s_label)) {
+                    // TOO: could add the label to the cache here!
+                    all_invisible = false;
+                    break;
+                }
+            }
+            if (all_invisible) {
+                BV_SET1(empty_space_bv.words, empty_space_idx);
+                return INVISIBLE_LABEL;
+            }
+        }
 
         // insert the element at its 1st cache position
-        CSGV_DECODING_ARRAY[cache_pos] = uvec2(voxel_id, label);
+        CSGV_DECODING_ARRAY[cache_pos] = uvec2(cache_key, label);
 
         if (cache_elem.x != INVALID) {
             // insert the ejected element to its 2nd cache positino
             CSGV_DECODING_ARRAY[hash2(cache_elem.x)] = cache_elem;
         }
 
-        return g_frame % 100u;
+//        return g_frame % 100u;
         return label;
     }
 #elif CACHE_MODE == CACHE_BRICKS

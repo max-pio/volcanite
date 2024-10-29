@@ -103,15 +103,6 @@ BitVectorRef getWMHBitVectorFromEncoding(EncodingRef brick_encoding) {
     #define WM_HUFFMAN_RANK(position, symbol) _wm_huffman_rank(wm_header, bit_vector, position, symbol)
 #endif
 
-uint bitCount64(uint64_t value) {
-    return bitCount(uint(value)) + bitCount(uint(value >> 32));
-}
-
-uint64_t bitfieldExtract64(uint64_t value, int offset, int bits) {
-    assert(bits < 64 && offset < 64, "bitfieldExtract64 requires offset and bits < 64");
-    return (value >> offset) & ((uint64_t(1) << bits) - uint64_t(1));
-}
-
 uint getFlatRankEntriesHuffman(uint bit_vector_size) {
     return bit_vector_size / BV_L1_BIT_SIZE + 1u;
 }
