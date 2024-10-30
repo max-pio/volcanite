@@ -122,7 +122,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
             // update transfer function textures
             constexpr int TF_WIDTH = 256;
-            m_materialTransferFunctions[m] = m_materials[m].tf->rasterize(getCtx(), TF_WIDTH);
+        m_materialTransferFunctions[m] = m_materials[m].tf->rasterize(getCtx(), TF_WIDTH, VectorTransferFunction::ColorSpace::RGB);
             auto [_tf1dAwait, _tf1dStagingBuf] = m_materialTransferFunctions[m]->upload();
             awaitBeforeExecution.push_back(_tf1dAwait);
             stagingBufferHandles.push_back(_tf1dStagingBuf);

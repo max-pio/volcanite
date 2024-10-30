@@ -75,6 +75,7 @@ set(VVV_HEADERS
         include/vvv/util/volume_data_types.hpp
         include/vvv/util/vertex_primitives.hpp
         include/vvv/util/Paths.hpp
+        include/vvv/util/color_space_converter.hpp
 
         ../../extern/SPIRV-Reflect/spirv_reflect.h
         ../../extern/SPIRV-Reflect/include/spirv/unified1/spirv.h

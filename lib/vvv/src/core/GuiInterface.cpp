@@ -46,24 +46,30 @@ namespace vvv {
                 mat.tf->m_controlPointsRgb[6] = d.color[0].g;
                 mat.tf->m_controlPointsRgb[7] = d.color[0].b;
                 break;
-            case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFDivergent:
-                // TODO: color interpolation for diverging color maps should happen in CIELAB space.
+            case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFDivergent: {
                 if(mat.tf->m_controlPointsRgb.size() != 12) {
                     mat.tf->m_controlPointsRgb.resize(12);
                 }
+                // set rgb colors for interpolation
                 mat.tf->m_controlPointsRgb[0] = 0.f;
                 mat.tf->m_controlPointsRgb[1] = d.color[0].r;
                 mat.tf->m_controlPointsRgb[2] = d.color[0].g;
                 mat.tf->m_controlPointsRgb[3] = d.color[0].b;
-                mat.tf->m_controlPointsRgb[4] = 0.5f;
-                mat.tf->m_controlPointsRgb[5] = 1.f;
-                mat.tf->m_controlPointsRgb[6] = 1.f;
-                mat.tf->m_controlPointsRgb[7] = 1.f;
                 mat.tf->m_controlPointsRgb[8] = 1.f;
                 mat.tf->m_controlPointsRgb[9] = d.color[1].r;
                 mat.tf->m_controlPointsRgb[10] = d.color[1].g;
                 mat.tf->m_controlPointsRgb[11] = d.color[1].b;
+
+                // interpolate colors in CIELAB space and convert back to rgb
+                glm::vec3 colMid = mat.tf->sampleColor(0.5f, VectorTransferFunction::ColorSpace::CIELAB);
+
+                mat.tf->m_controlPointsRgb[4] = 0.5f;
+                mat.tf->m_controlPointsRgb[5] = colMid.r;
+                mat.tf->m_controlPointsRgb[6] = colMid.g;
+                mat.tf->m_controlPointsRgb[7] = colMid.b;
+
                 break;
+            }
             case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFPrecomputed:
                 mat.tf->m_controlPointsRgb = colormaps::colormaps.at(getAvailableColormaps()[d.precomputedIdx]);
                 break;
@@ -74,7 +80,7 @@ namespace vvv {
                 }
                 for (int i = 0; i < targetSizeControlPointsRgb; i += 4) {
                     glm::vec3 color = d.color[static_cast<int>(i / 4)];
-                    mat.tf->m_controlPointsRgb[i] = static_cast<float>(i) / 256.f;
+                    mat.tf->m_controlPointsRgb[i] = static_cast<float>(i) / 255.f;
                     mat.tf->m_controlPointsRgb[i + 1] = color.r;
                     mat.tf->m_controlPointsRgb[i + 2] = color.g;
                     mat.tf->m_controlPointsRgb[i + 3] = color.b;

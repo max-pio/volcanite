@@ -19,6 +19,7 @@
 #include <memory>
 
 #include "TransferFunction1D.hpp"
+#include "vvv/util/color_space_converter.hpp"
 
 namespace vvv {
 
@@ -30,6 +31,8 @@ public:
 
     std::vector<float> m_controlPointsRgb;
     std::vector<float> m_controlPointsOpacity;
+
+    enum ColorSpace {RGB = 0, CIELAB};
 
     /// @brief Create a linearly interpolated transfer function from control points.
     ///
@@ -66,8 +69,8 @@ public:
 
     /// Discretize the spline into equidistant samples
     /// @param width width of the transfer function defining the quality of the discretization
-    std::shared_ptr<TransferFunction1D> rasterize(vvv::GpuContextPtr ctx, size_t width) const {
-        auto samples = rasterize<uint16_t>(width);
+    std::shared_ptr<TransferFunction1D> rasterize(vvv::GpuContextPtr ctx, size_t width, ColorSpace cSpace) const {
+        auto samples = rasterize<uint16_t>(width, cSpace);
 
         return std::make_shared<TransferFunction1D>(ctx, samples, ChannelOpacityState::PostMultiplied);
     }
@@ -76,7 +79,7 @@ public:
     ///
     /// @param width number of equidistant samples
     /// @return straight/post-multiplied rgba values
-    template <typename T, typename W> std::vector<T> rasterize(W width) const {
+    template <typename T, typename W> std::vector<T> rasterize(W width, ColorSpace cSpace) const {
         static_assert(std::is_unsigned_v<W>, "width of the rasterized TF must be unsigned integer!" );
         assert(width > 0);
 
@@ -84,7 +87,7 @@ public:
 
         for (int i = 0; i < (width * 4); i += 4) {
             const auto samplePosition = std::clamp(static_cast<float>(i) / (4 * (width - 1)), 0.0f, 1.0f);
-            const auto color = sampleRgb(samplePosition);
+            const auto color = sampleColor(samplePosition, cSpace);
             samples[i + 0] = std::round(std::numeric_limits<T>::min() + color.r * (std::numeric_limits<T>::max() - std::numeric_limits<T>::min()));
             samples[i + 1] = std::round(std::numeric_limits<T>::min() + color.g * (std::numeric_limits<T>::max() - std::numeric_limits<T>::min()));
             samples[i + 2] = std::round(std::numeric_limits<T>::min() + color.b * (std::numeric_limits<T>::max() - std::numeric_limits<T>::min()));
@@ -119,28 +122,63 @@ public:
         throw std::runtime_error("invalid sample position");
     }
 
-    glm::vec3 sampleRgb(double samplePosition) const {
+    glm::vec3 sampleColor(double samplePosition, ColorSpace cSpace) const {
         size_t lower = 0;
         float positionMin = m_controlPointsRgb[0];
         float positionMax = m_controlPointsRgb[m_controlPointsRgb.size() - 1 - 3];
 
         // transform unit range samplePosition to the range of the transfer function
         samplePosition = samplePosition * (positionMax - positionMin) + positionMin;
+        switch(cSpace){
+            case RGB:
+                for (size_t upper = 0; upper < m_controlPointsRgb.size(); upper += 4) {
+                    float upperPosition = m_controlPointsRgb[upper];
+                    if (upperPosition >= samplePosition) {
+                        float lowerPosition = m_controlPointsRgb[lower];
+                        glm::vec3 lowerValue(m_controlPointsRgb[lower + 1], m_controlPointsRgb[lower + 2],
+                                             m_controlPointsRgb[lower + 3]);
+                        glm::vec3 upperValue(m_controlPointsRgb[upper + 1], m_controlPointsRgb[upper + 2],
+                                             m_controlPointsRgb[upper + 3]);
 
-        for (size_t upper = 0; upper < m_controlPointsRgb.size(); upper += 4) {
-            float upperPosition = m_controlPointsRgb[upper];
-            if (upperPosition >= samplePosition) {
-                float lowerPosition = m_controlPointsRgb[lower];
-                glm::vec3 lowerValue(m_controlPointsRgb[lower + 1], m_controlPointsRgb[lower + 2], m_controlPointsRgb[lower + 3]);
-                glm::vec3 upperValue(m_controlPointsRgb[upper + 1], m_controlPointsRgb[upper + 2], m_controlPointsRgb[upper + 3]);
+                        float a = (lowerPosition == upperPosition) ? 0.5 : (samplePosition - lowerPosition) / (upperPosition - lowerPosition);
+                        return glm::mix(lowerValue, upperValue, a);
+                    }
+                    lower = upper;
+                }
+                throw std::runtime_error("invalid sample position");
+            case CIELAB: {
+                glm::vec3 RGBLow(m_controlPointsRgb[lower + 1], m_controlPointsRgb[lower + 2],
+                                 m_controlPointsRgb[lower + 3]);
+                glm::vec3 RGBHigh(m_controlPointsRgb[m_controlPointsRgb.size() - 3],
+                                  m_controlPointsRgb[m_controlPointsRgb.size() - 2],
+                                  m_controlPointsRgb[m_controlPointsRgb.size() - 1]);
+                glm::vec3 mshLow = vvv::RGBToMsh(RGBLow);
+                glm::vec3 mshHigh = vvv::RGBToMsh(RGBHigh);
+                if (mshLow.y > 0.05f && mshHigh.y > 0.05 && glm::abs(mshLow.z - mshHigh.z) > M_PI / 3.f) {
+                    auto mMid = glm::max(glm::max(mshLow.x, mshHigh.x), 88.f);
+                    if (samplePosition < 0.5) {
+                        mshHigh.x = mMid;
+                        mshHigh.y = 0.f;
+                        mshHigh.z = 0.f;
+                        samplePosition *= 2.f;
+                    } else {
+                        mshLow.x = mMid;
+                        mshLow.y = 0.f;
+                        mshLow.z = 0.f;
+                        samplePosition = samplePosition * 2.f - 1.f;
+                    }
+                }
 
-                float a = (lowerPosition == upperPosition) ? 0.5 : (samplePosition - lowerPosition) / (upperPosition - lowerPosition);
-                return glm::mix(lowerValue, upperValue, a);
+                if (mshLow.y < 0.05 && mshHigh.y > 0.05) {
+                    mshLow.z = vvv::adjustHue(mshHigh, mshLow.x);
+                } else if(mshHigh.y < 0.05 && mshLow.y > 0.05) {
+                    mshHigh.z = vvv::adjustHue(mshLow, mshHigh.x);
+                }
+                return vvv::MshToRGB(glm::mix(mshLow, mshHigh, samplePosition));
             }
-            lower = upper;
+            default:
+                throw std::runtime_error("unknown color space");
         }
-
-        throw std::runtime_error("invalid sample position");
     }
 
 private:

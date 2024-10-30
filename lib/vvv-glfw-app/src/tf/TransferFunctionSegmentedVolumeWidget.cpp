@@ -237,7 +237,11 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                 for (int x = static_cast<int>(colormap_canvas_p0.x) + 5;
                      x <= static_cast<int>(colormap_canvas_p1.x) - 5; x++) {
                     float value_x = (x - colormap_canvas_p0.x - 5) / (colormap_canvas_sz.x - 10);
-                    auto color = mat.tf->sampleRgb(value_x);
+                    glm::vec3 color;
+                    if (d.type == GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapType::SVTFDivergent)
+                        color = mat.tf->sampleColor(value_x, VectorTransferFunction::ColorSpace::CIELAB);
+                    else
+                        color = mat.tf->sampleColor(value_x, VectorTransferFunction::ColorSpace::RGB);
                     draw_list->AddRectFilled({static_cast<float>(x), colormap_canvas_p0.y + 5},
                                              {static_cast<float>(x + 1), colormap_canvas_p1.y - 5},
                                              ImGui::GetColorU32(ImVec4(color.r, color.g, color.b, 1)));
