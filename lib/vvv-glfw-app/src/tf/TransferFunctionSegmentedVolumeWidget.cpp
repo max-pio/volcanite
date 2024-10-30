@@ -224,6 +224,11 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                         }
                         stbi_image_free(image);
                         colormapChanged = true;
+                    } else if (colormapChanged && d.validElementCount > d.color.size()) {
+                        // d.validElementCount changed w/o new png import -> extend last color
+                        glm::vec3 last_color = d.color.at(d.color.size() - 1);
+                        for (size_t i = d.color.size(); i < d.validElementCount; i++)
+                            d.color.emplace_back(last_color);
                     }
                     ImGui::PopID();
                     ImGui::NextColumn();
