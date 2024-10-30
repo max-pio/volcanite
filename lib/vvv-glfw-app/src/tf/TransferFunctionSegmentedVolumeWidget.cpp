@@ -190,15 +190,12 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                     ImGui::NextColumn();
                     break;
                 case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFImport: {
-                    ImGui::PushID(id++);
-                    ImGui::NextColumn();
-                    colormapChanged |= ImGui::InputInt("", &d.validElementCount, 1, 10, ImGuiInputTextFlags_EnterReturnsTrue);
-                    ImGui::PopID();
-                    ImGui::NextColumn();
-                    if (d.validElementCount < GuiInterface::GuiTFSegmentedVolumeEntry::minPixelsForColormap) {
-                        Logger(WARN) << "No less than "<< static_cast<int>(GuiInterface::GuiTFSegmentedVolumeEntry::minPixelsForColormap) << "Pixels for color map import allowed";
-                        d.validElementCount = GuiInterface::GuiTFSegmentedVolumeEntry::minPixelsForColormap;
-                    }
+                    // fixed number of control points for now (min(png import pixel, 256))
+//                    ImGui::PushID(id++);
+//                    ImGui::NextColumn();
+//                    colormapChanged |= ImGui::InputInt("", &d.validElementCount, 1, 10, ImGuiInputTextFlags_EnterReturnsTrue);
+//                    ImGui::PopID();
+//                    ImGui::NextColumn();
 
                     ImGui::PushID(id++);
                     if(ImGui::Button("Choose Colormap File")) {
@@ -214,7 +211,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                             Logger(ERROR) << "Failed to load png colormap: " << stbi_failure_reason();
                         }
                         d.color.clear();
-                        d.validElementCount = glm::max(GuiInterface::GuiTFSegmentedVolumeEntry::minPixelsForColormap, img_width);
+                        d.validElementCount = glm::min(GuiInterface::GuiTFSegmentedVolumeEntry::maxPixelsForColormap, img_width);
                         float step_size = static_cast<float>(img_width) / d.validElementCount;
                         float i = 0;
                         while (i < img_width) {
@@ -224,11 +221,6 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                         }
                         stbi_image_free(image);
                         colormapChanged = true;
-                    } else if (colormapChanged && d.validElementCount > d.color.size()) {
-                        // d.validElementCount changed w/o new png import -> extend last color
-                        glm::vec3 last_color = d.color.at(d.color.size() - 1);
-                        for (size_t i = d.color.size(); i < d.validElementCount; i++)
-                            d.color.emplace_back(last_color);
                     }
                     ImGui::PopID();
                     ImGui::NextColumn();

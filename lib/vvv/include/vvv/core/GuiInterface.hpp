@@ -129,7 +129,7 @@ public:
             std::vector<glm::vec3> color = {};
             int validElementCount;
         };
-        const static int minPixelsForColormap = 256;
+        const static int maxPixelsForColormap = 256;
         std::vector<ColorMapConfig> colormapConfig = {};
         // additional widget data
         std::any widgetData = {};

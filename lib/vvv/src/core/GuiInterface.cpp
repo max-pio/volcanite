@@ -122,7 +122,7 @@ namespace vvv {
                     colormapConfig[matId].color.resize(colormapConfig[matId].validElementCount);
                     break;
                 case SVTFImport:
-                    colormapConfig[matId].validElementCount = minPixelsForColormap;
+                    colormapConfig[matId].validElementCount = maxPixelsForColormap;
                     colormapConfig[matId].color.resize(colormapConfig[matId].validElementCount);
                     for (int i = 0; i < colormapConfig[matId].validElementCount; i++) {
                         colormapConfig[matId].color[i] = glm::vec3(static_cast<float>(i) / colormapConfig[matId].validElementCount);
