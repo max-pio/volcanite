@@ -122,13 +122,14 @@ public:
         std::vector<glm::vec2> attributeMinMax = {};
 
         // colormap information (stored here so we can import/export)
-        enum ColorMapType { SVTFSolidColor = 0, SVTFDivergent, SVTFPrecomputed, SVTFPNGimport};
+        enum ColorMapType { SVTFSolidColor = 0, SVTFDivergent, SVTFPrecomputed, SVTFImport};
         struct ColorMapConfig {
             ColorMapType type = SVTFPrecomputed;
             int precomputedIdx = getDefaultColorMapIdx();
             std::vector<glm::vec3> color = {};
             int validElementCount;
         };
+        const static int minPixelsForColormap = 256;
         std::vector<ColorMapConfig> colormapConfig = {};
         // additional widget data
         std::any widgetData = {};

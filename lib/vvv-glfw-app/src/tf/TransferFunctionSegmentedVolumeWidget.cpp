@@ -189,12 +189,17 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                     ImGui::PopID();
                     ImGui::NextColumn();
                     break;
-                case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFPNGimport:
+                case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFImport: {
                     ImGui::PushID(id++);
                     ImGui::NextColumn();
-                    colormapChanged |= ImGui::InputInt("", &d.validElementCount);
+                    colormapChanged |= ImGui::InputInt("", &d.validElementCount, 1, 10, ImGuiInputTextFlags_EnterReturnsTrue);
                     ImGui::PopID();
                     ImGui::NextColumn();
+                    if (d.validElementCount < GuiInterface::GuiTFSegmentedVolumeEntry::minPixelsForColormap) {
+                        Logger(WARN) << "No less than "<< static_cast<int>(GuiInterface::GuiTFSegmentedVolumeEntry::minPixelsForColormap) << "Pixels for color map import allowed";
+                        d.validElementCount = GuiInterface::GuiTFSegmentedVolumeEntry::minPixelsForColormap;
+                    }
+
                     ImGui::PushID(id++);
                     if(ImGui::Button("Choose Colormap File")) {
                         if(!pfd::settings::available()) {
@@ -209,8 +214,13 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                             Logger(ERROR) << "Failed to load png colormap: " << stbi_failure_reason();
                         }
                         d.color.clear();
-                        for(int i = 0; i < d.validElementCount * 4; i+=4) {
-                            d.color.emplace_back(glm::vec3(image[i], image[i+1], image[i+2]) / 255.f);
+                        d.validElementCount = glm::max(GuiInterface::GuiTFSegmentedVolumeEntry::minPixelsForColormap, img_width);
+                        float step_size = static_cast<float>(img_width) / d.validElementCount;
+                        float i = 0;
+                        while (i < img_width) {
+                            int index = static_cast<int>(i) * 4;
+                            d.color.emplace_back(glm::vec3(image[index], image[index + 1], image[index + 2]) / 255.f);
+                            i += step_size;
                         }
                         stbi_image_free(image);
                         colormapChanged = true;
@@ -218,6 +228,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                     ImGui::PopID();
                     ImGui::NextColumn();
                     break;
+                }
                 default:
                     Logger(WARN) << "unknown segmentation volume transfer function colormap " << d.type;
             }

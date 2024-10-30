@@ -73,7 +73,7 @@ namespace vvv {
             case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFPrecomputed:
                 mat.tf->m_controlPointsRgb = colormaps::colormaps.at(getAvailableColormaps()[d.precomputedIdx]);
                 break;
-            case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFPNGimport: {
+            case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFImport: {
                 int targetSizeControlPointsRgb = d.validElementCount * 4;
                 if (mat.tf->m_controlPointsRgb.size() != targetSizeControlPointsRgb) {
                     mat.tf->m_controlPointsRgb.resize(targetSizeControlPointsRgb);
@@ -121,8 +121,8 @@ namespace vvv {
                     colormapConfig[matId].validElementCount = 0;
                     colormapConfig[matId].color.resize(colormapConfig[matId].validElementCount);
                     break;
-                case SVTFPNGimport:
-                    colormapConfig[matId].validElementCount = 64;
+                case SVTFImport:
+                    colormapConfig[matId].validElementCount = minPixelsForColormap;
                     colormapConfig[matId].color.resize(colormapConfig[matId].validElementCount);
                     for (int i = 0; i < colormapConfig[matId].validElementCount; i++) {
                         colormapConfig[matId].color[i] = glm::vec3(static_cast<float>(i) / colormapConfig[matId].validElementCount);
