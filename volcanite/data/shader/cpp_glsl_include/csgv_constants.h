@@ -130,12 +130,15 @@ namespace volcanite {
 
 // Rendering Parameter Flags -------------------------------------------------------------------------------------------
 
-// used in a bit mask to denote certain updates
-#define PARAMS_CAMERA 1
-#define PARAMS_RENDER 2
-#define PARAMS_MATERIAL 4
-#define PARAMS_RESOLVE 8
-
+// used in a bit mask to denote certain renderering parameter updates and resets
+#define UPDATE_PCAMERA 1
+#define UPDATE_PRENDER 2
+#define UPDATE_PMATERIAL 4
+#define UPDATE_PRESOLVE 8
+#define UPDATE_CLEAR_CACHE 16
+#define UPDATE_CLEAR_ACCUM 32
+// triggers rendering the next frame
+#define UPDATE_RENDER_FRAME 64
 
 
 // Material Constants --------------------------------------------------------------------------------------------------
