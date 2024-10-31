@@ -69,8 +69,7 @@ public:
         setGlobalInvocationSize(RESOLVE, width, height, 1u);
     }
 
-    void resetCacheOnNextCall() { m_reset_cache = true; }
-    bool willCacheBeResetOnNextCall() { return m_reset_cache; }
+    void setRenderUpdateFlagsForNextCall(uint32_t param_update_flags) { m_render_update_flags = param_update_flags; }
 
 protected:
     std::vector<std::shared_ptr<Shader>> createShaders() override;
@@ -85,7 +84,7 @@ protected:
     /// work group sizes per stage
     vk::Extent3D m_work_group_sizes[7] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u},
                                           {0u, 0u, 0u}, {0u, 0u, 0u}};
-    bool m_reset_cache = false;                        /// if the GPU cache reset should be triggered on the next call
+    uint32_t m_render_update_flags = 0u;                /// among others: if the GPU cache reset should be triggered on the next call
     const std::vector<std::string> m_shader_defines;   /// defines that are passed on to shader compilation
 };
 

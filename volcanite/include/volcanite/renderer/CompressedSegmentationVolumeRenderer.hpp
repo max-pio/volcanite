@@ -36,7 +36,7 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 
 public:
     CompressedSegmentationVolumeRenderer(bool release_version = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false),
-                                                                         m_camHash(0ul), m_resolution(1920,1080), m_framesSinceCameraMove(0), m_frame(0u),
+                                                                         m_pcamera_hash(0ul), m_resolution(1920, 1080), m_accumulated_frames(0), m_frame(0u),
                                                                          m_release_version(release_version) {
         // initialize the shading materials with something reasonable
         for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
@@ -179,7 +179,7 @@ public:
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
-    int getTargetAccumulationFrames() { return m_accum_frames; }
+    int getTargetAccumulationFrames() { return m_target_accum_frames; }
     /// Will save the renderer state to the path when the renderer is shut down
     void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = std::move(path); }
 
@@ -245,7 +245,7 @@ private:
     bool m_show_step_count = false;
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
-    int m_accum_frames = 16;
+    int m_target_accum_frames = 16;
     int m_max_inv_lod = 6;
     // utility
     std::string m_gui_resolution_text;
@@ -256,6 +256,7 @@ private:
     void updateDeviceMemoryUsage();
     void updateSegmentedVolumeMaterial(int m);
     vvv::AwaitableList updateAttributeBuffers();
+    void updateRenderUpdateFlags();
     void updateUniformDescriptorset();
 
     uint32_t m_queue_family_index = 0u;
@@ -313,7 +314,7 @@ private:
     std::shared_ptr<Buffer> m_detail_buffer = nullptr;
     glm::uvec2 m_detail_buffer_address = {};
     std::pair<std::shared_ptr<vvv::Awaitable>, std::shared_ptr<Buffer>> m_detail_staging = {nullptr, nullptr};
-    size_t m_camHash_at_last_cache_reset = 0u;
+    size_t m_parameter_hash_at_last_reset = 0u;
 
     // debugging
     struct GPUStats {
@@ -325,11 +326,17 @@ private:
     } m_last_gpu_stats = {};
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
 
-    bool m_release_version = false;                                    ///< if this is used in a release where development parameters are hidden
+    bool m_release_version = false;               ///< if this is used in a release where development parameters are hidden
+
+    uint32_t m_render_update_flags = 0u;          ///< each bit marks if a set of rendering parameters changed in this frame
+    size_t m_pcamera_hash = ~0u;                  ///< hash of the last camera parameters
+    size_t m_prender_hash = ~0u;                  ///< hash of the last rendering parameters
+    bool m_pmaterial_reset = true;                ///< if the material parameters where changed since the last frame
+    size_t m_presolve_hash = ~0u;                 ///< hash of the last resolve shader parameters
+    bool m_pcache_reset = true;                   ///< if the cache must reset this frame
+    uint32_t m_accumulated_frames = 0u;
 
     vk::Extent2D m_resolution;
-    size_t m_camHash;
-    uint32_t m_framesSinceCameraMove;
     uint32_t m_frame;
     std::optional<RendererOutput> m_mostRecentFrame = {};
 };
