@@ -40,7 +40,6 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
                                       {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite,
                                                          vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
         Logger(DEBUG) << "hard reset brick cache";
-        m_reset_cache = false;
     }
 
     // block request and visibility classification
@@ -83,6 +82,16 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
     if (m_render_update_flags & UPDATE_RENDER_FRAME) {
         getCtx()->debugMarker->beginRegion(commandBuffer, "rendering", glm::vec4(1.f, 0.f, 0.f, 1.f));
         executeCommands(commandBuffer, RENDERING);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                                      vk::PipelineStageFlagBits::eComputeShader, {},
+                                      {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
+                                                         vk::AccessFlagBits::eShaderRead |
+                                                         vk::AccessFlagBits::eShaderWrite)}, nullptr, nullptr);
+        getCtx()->debugMarker->endRegion(commandBuffer);
+    } else {
+        // simply copy the previous ping-pong buffers to the next ping-pong buffers
+        getCtx()->debugMarker->beginRegion(commandBuffer, "rendering(dummy)", glm::vec4(1.f, 0.f, 0.f, 1.f));
+        executeCommands(commandBuffer, RENDERING_DUMMY);
         commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
                                       vk::PipelineStageFlagBits::eComputeShader, {},
                                       {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
@@ -138,8 +147,9 @@ std::vector<std::shared_ptr<Shader>> PassCompSegVolRender::createShaders() {
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_assign.comp", .defines= m_shader_defines, .label="csgv_assign.comp"}, compileErrorCallback),
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_decompress.comp", .defines= m_shader_defines, .label="csgv_decompress.comp"}, compileErrorCallback),
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_renderer.comp", .defines= m_shader_defines, .label="csgv_renderer.comp"}, compileErrorCallback),
-            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_upsample_resolve.comp", .defines= m_shader_defines, .label="csgv_upsample_resolve.comp"}, compileErrorCallback)
+            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_upsample_resolve.comp", .defines= m_shader_defines, .label="csgv_upsample_resolve.comp"}, compileErrorCallback),
 //            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_denoise_resolve.comp", .defines= m_shader_defines, .label="csgv_denoise_resolve.comp"}, compileErrorCallback)
+            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_renderer_dummy.comp", .defines= m_shader_defines, .label="csgv_renderer_dummy.comp"}, compileErrorCallback),
             };
 }
 
