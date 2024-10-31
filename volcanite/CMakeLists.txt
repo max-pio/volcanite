@@ -21,7 +21,7 @@ set(VOLCANITE_HEADERS
         include/volcanite/CSGVPathUtils.hpp
         include/volcanite/VolcaniteArgs.hpp
         include/volcanite/StratifiedPixelSequence.hpp
-        data/shader/cpp_glsl_include/csgv_constants.h
+        data/shader/cpp_glsl_include/csgv_constants.incl
         include/volcanite/benchmark/CSGVBenchmarkPass.hpp
         include/volcanite/compression/VolumeCompressionBase.hpp
         include/volcanite/compression/encoder/CSGVBrickEncoder.hpp

@@ -20,7 +20,7 @@
  #define CSGV_DECODING_ARRAY g_decoding
 #endif
 
-#include "cpp_glsl_include/csgv_constants.h"
+#include "cpp_glsl_include/csgv_constants.incl"
 
 #include "csgv_utils.glsl"
 #include "morton.glsl"

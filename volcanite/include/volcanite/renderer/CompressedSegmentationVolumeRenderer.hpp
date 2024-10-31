@@ -234,9 +234,6 @@ private:
     int m_max_path_length = 32;
     int m_max_steps = 2048;
     glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
-    bool m_subblock_enabled = false;
-    glm::ivec3 m_subblock_size = glm::ivec3(128, 128, 128);
-    glm::ivec3 m_subblock_start = glm::ivec3(0, 0, 0);
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
     // debugging and dev options
@@ -270,7 +267,9 @@ private:
     std::shared_ptr<Texture> m_accumulation_samples_tex[2] = {nullptr, nullptr};
     std::shared_ptr<Texture> m_g_buffer_tex = nullptr;
     std::shared_ptr<vvv::MultiBufferedResource<std::shared_ptr<Texture>>> m_inpaintedOutColor = nullptr; // this is the output texture and thus the only resource that we have to duplicate for each swapchain image
+    std::shared_ptr<UniformReflected> m_ucamera_info = nullptr;
     std::shared_ptr<UniformReflected> m_urender_info = nullptr;
+    std::shared_ptr<UniformReflected> m_uresolve_info = nullptr;
     std::shared_ptr<UniformReflected> m_usegmented_volume_info = nullptr;
 
     std::shared_ptr<CompressedSegmentationVolume> m_compressed_segmentation_volume = nullptr;

@@ -23,7 +23,7 @@
 #include <span>
 
 #include "VolumeCompressionBase.hpp"
-#include "csgv_constants.h" // in data/shader/cpp_glsl_include
+#include "csgv_constants.incl" // in data/shader/cpp_glsl_include
 #include "volcanite/compression/encoder/CSGVBrickEncoder.hpp"
 #include "volcanite/compression/memory_mapping.hpp"
 

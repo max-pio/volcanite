@@ -204,15 +204,12 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     }
 
     // upload uniforms
-    if (m_urender_info && m_usegmented_volume_info) {
-        updateUniformDescriptorset();
+    updateUniformDescriptorset();
 
-        // inform the shader if the detail buffer upload is ready (= the staging buffer upload finished
-        m_usegmented_volume_info->setUniform<uint32_t>("g_detail_buffer_dirty", m_detail_stage == DetailUploading ? 1u : 0u);
-
-        m_urender_info->upload(m_pass->getActiveIndex());
-        m_usegmented_volume_info->upload(m_pass->getActiveIndex());
-    }
+    m_ucamera_info->upload(m_pass->getActiveIndex());
+    m_urender_info->upload(m_pass->getActiveIndex());
+    m_uresolve_info->upload(m_pass->getActiveIndex());
+    m_usegmented_volume_info->upload(m_pass->getActiveIndex());
 
     // start asynchronous detail upload if scheduled
     if (m_detail_stage == DetailAwaitingUpload && m_constructed_detail_starts.back() > 0u) {
@@ -632,7 +629,9 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, m_queue_family_index, shader_defines,
                                                         m_compressed_segmentation_volume->isUsingRandomAccess(), m_cache_mode==CACHE_BRICKS);
     m_pass->allocateResources();
+    m_ucamera_info = m_pass->getUniformSet("camera_info");
     m_urender_info = m_pass->getUniformSet("render_info");
+    m_uresolve_info = m_pass->getUniformSet("resolve_info");
     m_usegmented_volume_info = m_pass->getUniformSet("segmented_volume_info");
 
     // reset parameter hashes to trigger re-render
@@ -669,7 +668,9 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
 
 void CompressedSegmentationVolumeRenderer::releaseShaderResources() {
     m_usegmented_volume_info = nullptr;
+    m_ucamera_info = nullptr;
     m_urender_info = nullptr;
+    m_uresolve_info = nullptr;
     if(m_pass)
         m_pass->freeResources();
     m_pass = nullptr;
@@ -771,16 +772,20 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     }
 
     // rendering parameters
-    HASHP(m_subsampling) HASHP(m_subsampling) HASHP(m_bboxMin) HASHP(m_bboxMax) HASHP(m_voxel_size)
-    HASHP(m_subblock_start) HASHP(m_subblock_size) HASHP(m_subblock_enabled) HASHP(m_global_illumination_enabled)
-    HASHP(m_max_path_length) HASHP(m_max_steps) HASHP(m_envmap_enabled) HASHP(m_light_direction)
-    HASHP(m_light_intensity) HASHP(m_ambient_occlusion_dist_strength) HASHP(m_factor_ambient)
-    HASHP(m_shadow_pathtracing_ratio) HASHP(m_max_inv_lod) HASHP(m_lod_bias)
-    // TODO: if the target accumulation frame count *increases*, accumulation should not reset
-    HASHP(m_target_accum_frames)
+    // frame indices and seeds
+    HASHP(m_subsampling) HASHP(m_target_accum_frames)
+    // shading
+    HASHP(m_factor_ambient) HASHP(m_light_intensity)
+    HASHP(m_global_illumination_enabled) HASHP(m_shadow_pathtracing_ratio) HASHP(m_light_direction)
+    HASHP(m_ambient_occlusion_dist_strength) HASHP(m_envmap_enabled) HASHP(m_max_path_length)
+    // volume transformations
+    HASHP(m_voxel_size) HASHP(m_bboxMin) HASHP(m_bboxMax)
+    // HASHP(m_subblock_start) HASHP(m_subblock_size) HASHP(m_subblock_enabled)
+    // general rendering config
+    HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_blue_noise) HASHP(m_max_steps) HASHP(m_detail_stage)
     // (debug) rendering parameters
-    HASHP(m_show_model_space) HASHP(m_show_brick_cache) HASHP(m_show_lod) HASHP(m_show_normals) HASHP(m_show_envmap)
-    //HASHP(m_show_step_count)
+    HASHP(m_show_model_space)  HASHP(m_show_normals) HASHP(m_show_lod) HASHP(m_show_brick_cache) HASHP(m_show_envmap)
+    HASHP(m_show_step_count)
     if (new_hash != m_prender_hash) {
         m_render_update_flags |= UPDATE_PRENDER;
         m_prender_hash = new_hash;
@@ -790,6 +795,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     if (m_pmaterial_reset) {
         m_render_update_flags |= UPDATE_PMATERIAL;
         m_pmaterial_reset = false;
+        m_render_update_flags |= UPDATE_PRENDER;        // render uniform stores the max. active material index
     }
 
     // resolve shader parameters
@@ -809,6 +815,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     // reset render frame accumulation if any parameters that influence rendering changed
     if (m_clear_accum_every_frame
        || (m_render_update_flags & (UPDATE_PCAMERA | UPDATE_PRENDER | UPDATE_PMATERIAL | UPDATE_CLEAR_CACHE))) {
+        // TODO: if m_target_accum_frames *increases*, UPDATE_PRENDER is set but accumulation should not reset
         m_render_update_flags |= UPDATE_CLEAR_ACCUM;
         m_accumulated_frames = 0u;
     }
@@ -835,52 +842,77 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
     updateRenderResolutionFromWSI();
 
     glm::vec3 voldim = glm::vec3(m_compressed_segmentation_volume->getVolumeDim());
-    if(m_subblock_enabled)
-        voldim = m_subblock_size;
     glm::vec3 physical_voldim = voldim * m_voxel_size;
 
     // size in world space: uniformly scaled so that the largest component is one
     float scalingFactor = glm::max(physical_voldim.x, glm::max(physical_voldim.y, physical_voldim.z));
     glm::vec3 normalized_volume_size(physical_voldim / scalingFactor);
 
+    // camera uniform
+    if (m_render_update_flags & UPDATE_PCAMERA) {
+        const auto world_to_projection_space = camera->get_world_to_projection_space(m_resolution);
+        const auto projection_to_world_space = glm::inverse(world_to_projection_space);
+        m_ucamera_info->setUniform<glm::mat4x4>("g_world_to_projection_space", world_to_projection_space);
+        m_ucamera_info->setUniform<glm::mat4x4>("g_projection_to_world_space", projection_to_world_space);
+        m_ucamera_info->setUniform<glm::mat4x4>("g_view_to_projection_space",
+                                                camera->get_view_to_projection_space(m_resolution));
+        m_ucamera_info->setUniform<glm::mat4x4>("g_projection_to_view_space",
+                                                glm::inverse(camera->get_view_to_projection_space(m_resolution)));
+        m_ucamera_info->setUniform<glm::mat4x4>("g_world_to_view_space", camera->get_world_to_view_space());
+        m_ucamera_info->setUniform<glm::mat4x4>("g_view_to_world_space",
+                                                glm::inverse(camera->get_world_to_view_space()));
+        glm::mat4 projection_to_world_space_no_translation = projection_to_world_space;
+        glm::vec2 viewportScale(2.0f / static_cast<float>(m_resolution.width),
+                                2.0f / static_cast<float>(m_resolution.height));
+        glm::mat4 pixel_to_ray_direction_projection_space({viewportScale[0], 0.0f, 0.0f, 0.0f},
+                                                          {0.0f, viewportScale[1], 0.0f, 0.0f},
+                                                          {0.5f * viewportScale[0] - 1.0f,
+                                                           0.5f * viewportScale[1] - 1.0f, 1.0f, 1.0f},
+                                                          {0.f, 0.f, 0.f, 1.f});
+        m_ucamera_info->setUniform<glm::mat3x3>("g_pixel_to_ray_direction_world_space", glm::mat3x3(
+                projection_to_world_space_no_translation * pixel_to_ray_direction_projection_space));
+        m_ucamera_info->setUniform<glm::vec3>("g_camera_position_world_space", camera->position_world_space);
+        // the g_voxels_per_pixel_per_dist determines how many voxels an image pixel footprint overlaps for a camera distance
+        // TODO: account for anisotropic voxel sizes
+        float voxels_per_pixel_at_near = scalingFactor / float(m_resolution.height);
+        m_ucamera_info->setUniform<float>("g_voxels_per_pixel_per_dist", glm::tan(this->getCamera()->vertical_fov) * voxels_per_pixel_at_near);
+    }
+
+    // resolve pass parameter uniform
+    if (m_render_update_flags & UPDATE_PRESOLVE) {
+        m_uresolve_info->setUniform<glm::vec4>("g_background_color_a", m_background_color_a);
+        m_uresolve_info->setUniform<glm::vec4>("g_background_color_b", m_background_color_b);
+        m_uresolve_info->setUniform<uint32_t>("g_tonemap_enable", m_tonemap_enabled ? 1 : 0);
+    }
+
     // render info uniform
-    if (m_render_update_flags & (UPDATE_RENDER_FRAME | UPDATE_PCAMERA | UPDATE_PRENDER | UPDATE_PRESOLVE)) {
-        m_urender_info->setUniform<glm::vec4>("g_background_color_a", m_background_color_a);
-        m_urender_info->setUniform<glm::vec4>("g_background_color_b", m_background_color_b);
+    if (m_render_update_flags & (UPDATE_RENDER_FRAME | UPDATE_PRENDER)) {
+        // frame indices and seeds
+        m_urender_info->setUniform<uint32_t>("g_frame", m_frame);
+        m_urender_info->setUniform<uint32_t>("g_camera_still_frames", m_accumulated_frames);
+        m_urender_info->setUniform<uint32_t>("g_swapchain_index", m_pass->getActiveIndex());
+        m_urender_info->setUniform<int32_t>("g_subsampling", (1 << m_subsampling));
+        m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::bitReverseMortonNxNVec(m_subsampling)[m_accumulated_frames % ((1 << m_subsampling) * (1 << m_subsampling))]);
+        m_urender_info->setUniform<float>("g_random_seed", static_cast<float>(m_frame) / 10000.f);
+        // shading
+        m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
+        m_urender_info->setUniform<float>("g_light_intensity", m_light_intensity);
+        m_urender_info->setUniform<uint32_t>("g_global_illumination_enable", m_global_illumination_enabled ? 1 : 0);
+        m_urender_info->setUniform<float>("g_shadow_pathtracing_ratio", m_shadow_pathtracing_ratio);
+        m_urender_info->setUniform<glm::vec3>("g_light_direction", m_light_direction);
+        m_urender_info->setUniform<uint32_t>("g_envmap_enable", m_envmap_enabled ? 1 : 0);
+        m_urender_info->setUniform<int32_t>("g_max_path_length", m_max_path_length);
+
+        // materials
         int max_active_material = -1;
         for(int m = 0; m < m_materials.size(); m++)
             if (m_materials[m].isActive())
                 max_active_material = m;
         m_urender_info->setUniform<int32_t>("g_max_active_material", max_active_material);
-        m_urender_info->setUniform<uint32_t>("g_global_illumination_enable", m_global_illumination_enabled ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_envmap_enable", m_envmap_enabled ? 1 : 0);
-        m_urender_info->setUniform<float>("g_shadow_pathtracing_ratio", m_shadow_pathtracing_ratio);
-        m_urender_info->setUniform<uint32_t>("g_tonemap_enable", m_tonemap_enabled ? 1 : 0);
-        m_urender_info->setUniform<glm::vec3>("g_light_direction", m_light_direction);
-        m_urender_info->setUniform<float>("g_light_intensity", m_light_intensity);
-        m_urender_info->setUniform<int32_t>("g_max_path_length", m_max_path_length);
-        m_urender_info->setUniform<int32_t>("g_maxSteps", m_max_steps);
-        m_urender_info->setUniform<int32_t>("g_subsampling", (1 << m_subsampling));
-        // bbox is the volume dimension in voxels centered around the origin (if no bbox reduction is applied)
-        m_urender_info->setUniform<glm::vec4>("g_bboxMin", glm::vec4(m_bboxMin, 1.f));
-        m_urender_info->setUniform<glm::vec4>("g_bboxMax", glm::vec4(m_bboxMax, 1.f));
-        m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
-        m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? 1 : 0);
-        m_urender_info->setUniform<glm::vec3>("g_camera_position_world_space", camera->position_world_space);
-        m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
-        // the g_voxels_per_pixel_per_dist determines how many voxels an image pixel footprint overlaps for a camera distance
-        float voxels_per_pixel_at_near = scalingFactor / float(m_resolution.height);
-        // TODO: account for anisotropic voxel sizes
-        m_urender_info->setUniform<float>("g_voxels_per_pixel_per_dist", glm::tan(this->getCamera()->vertical_fov) * voxels_per_pixel_at_near);
 
-        // debug
-        m_urender_info->setUniform<uint32_t>("g_debug_model_space", m_show_model_space ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_debug_brick_cache", m_show_brick_cache ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_debug_lod", m_show_lod ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_debug_step_count", m_show_step_count ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_debug_envmap", m_show_envmap ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_debug_normals", m_show_normals ? 1 : 0);
-
+        m_urender_info->setUniform<glm::vec3>("g_voxel_size", m_voxel_size);
+        m_urender_info->setUniform<glm::vec3>("g_physical_vol_dim", physical_voldim);
+        m_urender_info->setUniform<glm::vec3>("g_normalized_volume_size", normalized_volume_size);
         // Transformation matrices:
         // In world space, everything should be a cuboid with the largest dimension being one, centered around the origin.
         // In model space, one voxel must be a unit cube. The normalization transform scales this down to world space [-0.5, 0.5]^3
@@ -897,60 +929,40 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<glm::mat3x3>("g_model_to_world_space_dir", glm::mat3(glm::inverse(world_to_model_space)));
         m_urender_info->setUniform<glm::mat3x3>("g_world_to_model_space_dir", glm::mat3(world_to_model_space));
         m_urender_info->setUniform<float>("g_world_to_model_space_scaling", scalingFactor);
-        const auto world_to_projection_space = camera->get_world_to_projection_space(m_resolution);
-        const auto projection_to_world_space = glm::inverse(world_to_projection_space);
-        m_urender_info->setUniform<glm::mat4x4>("g_world_to_projection_space", world_to_projection_space);
-        m_urender_info->setUniform<glm::mat4x4>("g_projection_to_world_space", projection_to_world_space);
-        m_urender_info->setUniform<glm::mat4x4>("g_projection_to_view_space",
-                                                glm::inverse(camera->get_view_to_projection_space(m_resolution)));
-        m_urender_info->setUniform<glm::mat4x4>("g_view_to_world_space",
-                                                glm::inverse(camera->get_world_to_view_space()));
-        m_urender_info->setUniform<glm::mat4x4>("g_view_to_projection_space",
-                                                camera->get_view_to_projection_space(m_resolution));
-        m_urender_info->setUniform<glm::mat4x4>("g_world_to_view_space", camera->get_world_to_view_space());
-        glm::mat4 projection_to_world_space_no_translation = projection_to_world_space;
-        glm::vec2 viewportScale(2.0f / static_cast<float>(m_resolution.width),
-                                2.0f / static_cast<float>(m_resolution.height));
-        glm::mat4 pixel_to_ray_direction_projection_space({viewportScale[0], 0.0f, 0.0f, 0.0f},
-                                                          {0.0f, viewportScale[1], 0.0f, 0.0f},
-                                                          {0.5f * viewportScale[0] - 1.0f,
-                                                           0.5f * viewportScale[1] - 1.0f, 1.0f, 1.0f},
-                                                          {0.f, 0.f, 0.f, 1.f});
-        m_urender_info->setUniform<glm::mat3x3>("g_pixel_to_ray_direction_world_space", glm::mat3x3(
-                projection_to_world_space_no_translation * pixel_to_ray_direction_projection_space));
+        // bbox is the volume dimension in voxels centered around the origin (if no bbox reduction is applied)
+        m_urender_info->setUniform<glm::vec4>("g_bboxMin", glm::vec4(m_bboxMin, 1.f));
+        m_urender_info->setUniform<glm::vec4>("g_bboxMax", glm::vec4(m_bboxMax, 1.f));
 
-        m_urender_info->setUniform<uint32_t>("g_camera_still_frames", m_accumulated_frames);
-        m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::bitReverseMortonNxNVec(m_subsampling)[m_accumulated_frames % ((1 << m_subsampling) * (1 << m_subsampling))]);
-        // random seed
-        m_urender_info->setUniform<float>("g_random_seed", static_cast<float>(m_frame) / 10000.f);
-        m_urender_info->setUniform<uint32_t>("g_swapchain_index", m_pass->getActiveIndex());
+        // general render config
+        m_urender_info->setUniform<uint32_t>("g_detail_buffer_dirty", m_detail_stage == DetailUploading ? 1u : 0u);
+        m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
+        auto lod_count = m_compressed_segmentation_volume->getLodCountPerBrick();
+        m_urender_info->setUniform<uint32_t>("g_max_inv_lod", glm::min(static_cast<uint32_t>(m_max_inv_lod), lod_count - 1u));
+        m_urender_info->setUniform<int32_t>("g_maxSteps", m_max_steps);
+        m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? 1 : 0);
+
+        // debug views
+        m_urender_info->setUniform<uint32_t>("g_debug_model_space", m_show_model_space ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_debug_normals", m_show_normals ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_debug_lod", m_show_lod ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_debug_brick_cache", m_show_brick_cache ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_debug_envmap", m_show_envmap ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_debug_step_count", m_show_step_count ? 1 : 0);
     }
 
-    // TODO: Split uniform sets into render, resolve, volume move the rendering parameters from volume to the rendering
-    // volume / Compressed Segmentation Volume uniform
-    {
-        uint32_t brick_size = m_compressed_segmentation_volume->getBrickSize();
+    // static segmentation volume and buffer metadata uniform
+    if (m_frame == 0u) {
         m_usegmented_volume_info->setUniform<glm::uvec3>("g_vol_dim", m_compressed_segmentation_volume->getVolumeDim());
-        m_usegmented_volume_info->setUniform<glm::vec3>("g_voxel_size", m_voxel_size);
-        m_usegmented_volume_info->setUniform<glm::ivec3>("g_vol_translation", m_subblock_enabled ? m_subblock_start : glm::ivec3(0));
-        m_usegmented_volume_info->setUniform<glm::vec3>("g_physical_vol_dim", physical_voldim);
-        m_usegmented_volume_info->setUniform<glm::vec3>("g_normalized_volume_size", normalized_volume_size);
-        m_usegmented_volume_info->setUniform<uint32_t>("g_vol_max_label", 1000000);
-        m_usegmented_volume_info->setUniform<glm::uvec3>("g_brick_count",
-                                                         m_compressed_segmentation_volume->getBrickCount());
-        m_usegmented_volume_info->setUniform<uint32_t>("g_brick_idx_count",
-                                                       m_compressed_segmentation_volume->getBrickIndexCount());
-        auto lod_count = m_compressed_segmentation_volume->getLodCountPerBrick();
-        m_usegmented_volume_info->setUniform<uint32_t>("g_frame", m_frame);
-        m_usegmented_volume_info->setUniform<uint32_t>("g_max_inv_lod", glm::min(static_cast<uint32_t>(m_max_inv_lod), lod_count - 1u));
+        m_usegmented_volume_info->setUniform<glm::uvec3>("g_brick_count", m_compressed_segmentation_volume->getBrickCount());
+        m_usegmented_volume_info->setUniform<uint32_t>("g_brick_idx_count", m_compressed_segmentation_volume->getBrickIndexCount());
+        // cache management
+        m_usegmented_volume_info->setUniform<uint32_t>("g_free_stack_capacity", m_free_stack_capacity);
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_capacity", m_cache_capacity);
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_base_element_uints", m_cache_base_element_uints);
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_indices_per_uint", m_cache_indices_per_uint);
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_palette_idx_bits", m_cache_palette_idx_bits);
-        m_usegmented_volume_info->setUniform<uint32_t>("g_free_stack_capacity", m_free_stack_capacity);
-        m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
+        // encoding and detail encoding buffer management
         m_usegmented_volume_info->setUniform<uint32_t>("g_brick_idx_to_enc_vector", m_compressed_segmentation_volume->getBrickIdxToEncVectorMapping());
-        m_usegmented_volume_info->setUniform<glm::uvec2>("g_detail_buffer_address", m_detail_buffer_address);
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_cache_buffer_address", m_cache_buffer_address);
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_empty_space_bv_address", m_empty_space_buffer_address);
         // voxel set size: a power of two smaller than the brick size so that last_voxel_id / set_size < 8*m_empty_space_buffer_size
@@ -961,6 +973,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         assert(empty_space_set_size > 0u && "empty space set size cannot be 0");
         assert(empty_space_set_size <= m_compressed_segmentation_volume->getBrickSize() && "empty space set size must be <= the brick size");
         m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_set_size", empty_space_set_size);
+        m_usegmented_volume_info->setUniform<glm::uvec2>("g_detail_buffer_address", m_detail_buffer_address);
+        m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
     }
 }
 
@@ -1271,7 +1285,8 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
         size_t uniform_buffers = 0ul;
         if (m_urender_info) {
-            uniform_buffers += m_urender_info->getByteSize() + m_usegmented_volume_info->getByteSize();
+            uniform_buffers += m_urender_info->getByteSize() + m_usegmented_volume_info->getByteSize()
+                             + m_uresolve_info->getByteSize() + m_ucamera_info->getByteSize();
         }
 
         size_t materials = 0ul;

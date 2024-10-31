@@ -18,7 +18,7 @@
 #include "volcanite/compression/VolumeCompressionBase.hpp"
 #include "volcanite/compression/memory_mapping.hpp"
 
-#include "csgv_constants.h"
+#include "csgv_constants.incl"
 #include "vvv/util/util.hpp"
 
 namespace volcanite {

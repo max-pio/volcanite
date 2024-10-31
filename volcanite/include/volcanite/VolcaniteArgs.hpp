@@ -26,7 +26,7 @@
 
 #include "vvv/util/Logger.hpp"
 #include "CSGVPathUtils.hpp"
-#include "csgv_constants.h"
+#include "csgv_constants.incl"
 
 using namespace vvv;
 

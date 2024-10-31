@@ -26,7 +26,7 @@
 #include <map>
 #include <thread>
 #include <bit>
-#include "csgv_constants.h"
+#include "csgv_constants.incl"
 
 namespace volcanite {
 
