@@ -46,6 +46,7 @@ public:
         DECOMPRESS = 4,
         RENDERING = 5,
         RESOLVE = 6,
+        RENDERING_DUMMY = 7
     };
 
     PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering, uint32_t queueFamilyIndex,
@@ -73,6 +74,7 @@ public:
     void setImageInfo(uint32_t width, uint32_t height) {
         setGlobalInvocationSize(RENDERING, width, height, 1u);
         setGlobalInvocationSize(RESOLVE, width, height, 1u);
+        setGlobalInvocationSize(RENDERING_DUMMY, width, height, 1u);
     }
 
     void setRenderUpdateFlagsForNextCall(uint32_t param_update_flags) { m_render_update_flags = param_update_flags; }
@@ -88,8 +90,8 @@ protected:
     void executeCommands(vk::CommandBuffer commandBuffer, CSGVRenderStage stage);
 
     /// work group sizes per stage
-    vk::Extent3D m_work_group_sizes[7] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u},
-                                          {0u, 0u, 0u}, {0u, 0u, 0u}};
+    vk::Extent3D m_work_group_sizes[8] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u},
+                                          {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}};
     uint32_t m_render_update_flags = 0u;                /// among others: if the GPU cache reset should be triggered on the next call
     const std::vector<std::string> m_shader_defines;   /// defines that are passed on to shader compilation
     bool m_parallel_decode = false;                    /// if decompression is parallelized within one brick
