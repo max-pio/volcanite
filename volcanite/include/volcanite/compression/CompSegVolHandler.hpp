@@ -25,7 +25,7 @@
 #include "vvv/util/Paths.hpp"
 #include "vvv/volren/Volume.hpp"
 
-#include "csgv_constants.h"
+#include "csgv_constants.incl"
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/compression/CSGVChunkMerger.hpp"
 
@@ -103,6 +103,23 @@ public:
             throw std::runtime_error(_msg.c_str());
         }
 
+#ifdef RELABEL_IDS_FROM_CSV_SUFFIX
+        std::unordered_map<uint32_t, uint32_t> id_types;
+        if (relabelVoxelsFromCSV(path + RELABEL_IDS_FROM_CSV_SUFFIX, id_types)) {
+            Logger(INFO, true) << "  CSV label remapping from " << path << RELABEL_IDS_FROM_CSV_SUFFIX;
+            size_t volume_size = volume->size();
+            uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
+            #pragma omp parallel for default(none) shared(data, id_types, volume_size)
+            for (int i = 0; i < volume_size; i++) {
+                if (id_types.find(data[i]) != id_types.end())
+                    data[i] = id_types[data[i]];
+                else
+                    data[i] = 0u;
+            }
+            Logger(INFO) << "  CSV label remapping from " << path << RELABEL_IDS_FROM_CSV_SUFFIX << " finished.";
+        }
+#endif
+
         // Remap all voxels to other labels. This usually happens because we computed a mapping in the attribute
         // database so that voxels are numbered in Z-order.
         if(label_remapping) {
@@ -111,32 +128,17 @@ public:
             auto voxels = volume->data().data();
             #pragma omp parallel for num_threads(cpu_threads) default(none) shared(voxels, voxel_count, label_remapping)
             for(size_t i = 0; i < voxel_count; i++) {
-                assert(label_remapping->contains(voxels[i]) && "label remapping does not contain voxel label");
+                if (!label_remapping->contains(voxels[i]))
+                    throw std::runtime_error("label remapping does not contain voxel label " + std::to_string(voxels[i]));
                 voxels[i] = (*label_remapping)[voxels[i]];
             }
-            Logger(DEBUG) << "Label remapping in " << t.elapsed() << " seconds";
+            Logger(DEBUG) << "Attribute data base label remapping finished in " << t.elapsed() << " seconds.";
         }
-
-#ifdef RELABEL_IDS_FROM_CSV_SUFFIX
-        std::unordered_map<uint32_t, uint32_t> id_types;
-        if (relabelVoxelsFromCSV(path + RELABEL_IDS_FROM_CSV_SUFFIX, id_types)) {
-            Logger(INFO) << "  relabeling ids from " << path << RELABEL_IDS_FROM_CSV_SUFFIX;
-            size_t volume_size = volume->size();
-            uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
-            #pragma omp parallel for default(none) shared(data, id_types, volume_size)
-            for (int i = 0; i < volume_size; i++) {
-                if(id_types.find(data[i]) != id_types.end())
-                    data[i] = id_types[data[i]];
-                else
-                    data[i] = 0u;
-            }
-        }
-#endif
     }
 
     struct CSGVCompressionConfig {
         int brick_dim = 32;
-        RANSMode rANS_mode = DOUBLE_TABLE_RANS;
+        EncodingMode encoding_mode = DOUBLE_TABLE_RANS_ENC;
         std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> label_remapping = nullptr;
         uint32_t cpu_threads = 0u;
         bool use_detail_separation = false;
@@ -156,12 +158,12 @@ public:
             cpu_threads = std::thread::hardware_concurrency();
 
 
-        if(cfg.use_detail_separation && cfg.rANS_mode != DOUBLE_TABLE_RANS)
-            throw std::runtime_error("Detail separation can only be used in combination with double table rANS!");
-        if(cfg.freq_subsampling == 0u)
-            throw std::runtime_error("Frequency subsampling must be at least 1 (= no subsampling)!");
-        if(cfg.use_detail_separation)
-            Logger(WARN) << "Using detail separation is not recommended at compression stage and may be removed later";
+        if (cfg.use_detail_separation && cfg.encoding_mode != DOUBLE_TABLE_RANS_ENC)
+            throw std::runtime_error("Detail separation can only be used in combination with double table rANS.");
+        if (cfg.freq_subsampling == 0u)
+            throw std::runtime_error("Frequency subsampling must be at least 1 (= no subsampling).");
+        if (cfg.use_detail_separation)
+            Logger(WARN) << "Using detail separation is not recommended at compression stage and may be removed later.";
 
         std::shared_ptr<Volume<uint32_t>> volume = nullptr;
         glm::ivec3 volume_dim(0);
@@ -182,13 +184,15 @@ public:
         // this file name template (creates a path like my/path/tmp_x{}_y{}_z{}_bs64_rANS2.csgv for example):
         std::string chunk_output_path_template = csgv_path.substr(0, csgv_path.length() - 5) + "_x{}_y{}_z{}.csgv";
         // we never separate the detail level in single chunk files.
-        chunk_output_path_template = CompressedSegmentationVolume::getCSGVFileName(chunk_output_path_template, cfg.brick_dim, cfg.rANS_mode, false);
+        chunk_output_path_template = CompressedSegmentationVolume::getCSGVFileName(chunk_output_path_template, cfg.brick_dim, cfg.encoding_mode, false);
 
 
         if(cfg.verbose) {
-            Logger(INFO) << "Compressing " << volume_input_path <<
-                         (cfg.chunked_input_data ? " with chunk indices " + str(cfg.max_file_index) : "") << " to " << csgv_path <<
-                         " [b=" << cfg.brick_dim << ", s=" << cfg.rANS_mode << "]" << (cfg.use_detail_separation ? " with lod separation" : "");
+
+            Logger(INFO) << "Compressing " << volume_input_path
+                         << (cfg.chunked_input_data ? " with chunk indices " + str(cfg.max_file_index) : "")
+                         << " to " << csgv_path << " [b=" << cfg.brick_dim << ", e=" << EncodingMode_STR(cfg.encoding_mode)
+                         << (cfg.use_detail_separation ? " with lod separation" : "");
 
         }
 
@@ -217,10 +221,11 @@ public:
         glm::uvec3 complete_volume_dim(0u);
         std::vector<size_t> code_frequencies(16, 0u);
         std::vector<size_t> detail_code_frequencies(16, 0u);
-        if (cfg.rANS_mode != NO_RANS) {
+        // TODO: Generalize variable bit-length encoding frequency table computation
+        if (cfg.encoding_mode == SINGLE_TABLE_RANS_ENC || cfg.encoding_mode == DOUBLE_TABLE_RANS_ENC) {
             // We may have a precomputed frequency table.
             // As operation frequencies do not change between rANS in single table or no rANS mode, we could use the same filename to store precomputed freq. tables in both cases.
-            std::string freq_path = CompressedSegmentationVolume::getCSGVFileName(csgv_path, cfg.brick_dim, cfg.rANS_mode, false, ".cfrq");
+            std::string freq_path = CompressedSegmentationVolume::getCSGVFileName(csgv_path, cfg.brick_dim, cfg.encoding_mode, false, ".cfrq");
             if (!cfg.force_recompute && std::filesystem::exists(freq_path)) {
                 Logger(DEBUG) << "using operation frequencies from file " << freq_path;
                 std::ifstream freq_file(freq_path, std::ios_base::in | std::ios::binary);
@@ -247,8 +252,8 @@ public:
                             volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
 
                             size_t tmp_code_frequencies[32];
-                            csgv->setCompressionOptions(cfg.brick_dim, NO_RANS);
-                            csgv->compressForFrequencyTable(volume->data(), volume_dim, tmp_code_frequencies, cfg.freq_subsampling, cfg.rANS_mode == DOUBLE_TABLE_RANS, false);
+                            csgv->setCompressionOptions(cfg.brick_dim, NIBBLE_ENC);
+                            csgv->compressForFrequencyTable(volume->data(), volume_dim, tmp_code_frequencies, cfg.freq_subsampling, cfg.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
                             for (int i = 0; i < 16; i++) {
                                 code_frequencies[i] += tmp_code_frequencies[i];
                                 detail_code_frequencies[i] += tmp_code_frequencies[i+16];
@@ -256,23 +261,6 @@ public:
                             total_freq_prepass_seconds += csgv->getLastTotalFreqPrepassSeconds();
                         }
                     }
-                }
-
-                // we can't risk missing symbol frequencies >0 in our table due to subsampling
-                if(cfg.freq_subsampling > 1u) {
-                    bool changed = false;
-                    for(int i = 0; i < 16; i++) {
-                        if (code_frequencies[i] == 0ul) {
-                            changed = true;
-                            code_frequencies[i] = 1ul;
-                        }
-                        if(cfg.rANS_mode == DOUBLE_TABLE_RANS && detail_code_frequencies[i] == 0ul) {
-                            changed = true;
-                            detail_code_frequencies[i] = 1ul;
-                        }
-                    }
-                    if (changed)
-                        Logger(WARN) << " set zero frequency to 1 to avoid missing symbols because of frequency pass subsampling.";
                 }
 
                 // Write some general info about the chunk to a file (as of now, only the operation frequencies)
@@ -322,7 +310,8 @@ public:
 
                         // perform the actual compression
                         csgv->clear();
-                        csgv->setCompressionOptions64(cfg.brick_dim, cfg.rANS_mode, code_frequencies.data(), detail_code_frequencies.data());
+                        csgv->setCompressionOptions64(cfg.brick_dim, cfg.encoding_mode,
+                                                      code_frequencies.data(), detail_code_frequencies.data());
                         csgv->compress(volume->data(), volume_dim, cfg.verbose);
                         total_encoding_seconds += csgv->getLastTotalEncodingSeconds();
                         if (std::filesystem::exists(chunk_output_path)) {
@@ -418,7 +407,7 @@ public:
             s = csgv_path.substr(0, csgv_path.length() - 5) + "_detail.tmp";
             if (std::filesystem::exists(s))
                 std::filesystem::remove(s);
-            s = CompressedSegmentationVolume::getCSGVFileName(csgv_path, cfg.brick_dim, cfg.rANS_mode, false, ".cfrq");
+            s = CompressedSegmentationVolume::getCSGVFileName(csgv_path, cfg.brick_dim, cfg.encoding_mode, false, ".cfrq");
             if (std::filesystem::exists(s))
                 std::filesystem::remove(s);
         }

@@ -23,7 +23,8 @@
 
 #include "vvv/util/util.hpp"
 #include "vvv/util/Logger.hpp"
-#include "vvv/util/space_filling_curves.hpp"
+
+#include "volcanite/compression/memory_mapping.hpp"
 
 #define MULTIGRID_RECURSIVE_CONSTRUCTION
 
@@ -31,26 +32,14 @@ using namespace vvv;
 
 namespace volcanite {
 
+struct MultiGridNode {
+    uint32_t label;
+    bool constant_subregion;
+};
+
 class VolumeCompressionBase {
 
-protected:
-
-    static inline glm::uvec3 voxel_idx2pos(size_t i, glm::uvec3 volume_dim) {
-        assert(i < volume_dim.x*volume_dim.y*volume_dim.z);
-        return sfc::Cartesian::i2p(i, volume_dim);
-    }
-    static inline size_t voxel_pos2idx(glm::uvec3 p, glm::uvec3 volume_dim) {
-        assert(glm::all(glm::lessThan(p, volume_dim)));
-        return sfc::Cartesian::p2i(p, volume_dim);
-    }
-
-    struct MultiGridNode {
-        uint32_t label;
-        bool constant_subregion;
-    };
-
 public:
-
     /**
      * Constructs a multigrid in out from finest to coarsest level for the given brick in the volume. brick_dim must be a power of 2 but can reach to areas outside of the volume.
      * Levels are stored from finest (original) to coarsest (1³) resolution in out.
@@ -164,12 +153,12 @@ public:
      * Decompresses the encoded volume from this object's attribute to an uncompressed volume.
      * @return
      */
-    virtual std::shared_ptr<std::vector<uint32_t>> decompress() = 0;
+    virtual std::shared_ptr<std::vector<uint32_t>> decompress() const = 0;
 
     /**
      * @return Compression ratio achieved after calling compress.
      */
-    virtual float getCompressionRatio() { return -1.f; }
+    virtual float getCompressionRatio() const { return -1.f; }
 
 
     /**
@@ -244,7 +233,7 @@ public:
         if(compress_first) {
             Logger(INFO) << "Encode";
             compress(volume, volume_dim);
-            Logger(INFO) << " finished in " << timer.restart() << "s with compression ratio " << getCompressionRatio() * 100.f << "%";
+            Logger(INFO) << " finished in " << timer.restart() << "s with compression ratio " << getCompressionRatio() << "%";
         }
         Logger(INFO) << "Decode";
         std::shared_ptr<std::vector<uint32_t>> out = decompress();

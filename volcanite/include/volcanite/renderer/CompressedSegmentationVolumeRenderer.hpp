@@ -36,7 +36,7 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 
 public:
     CompressedSegmentationVolumeRenderer(bool release_version = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false),
-                                                                         m_camHash(0ul), m_resolution(1920,1080), m_framesSinceCameraMove(0), m_frame(0u),
+                                                                         m_pcamera_hash(0ul), m_resolution(1920, 1080), m_accumulated_frames(0), m_frame(0u),
                                                                          m_release_version(release_version) {
         // initialize the shading materials with something reasonable
         for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
@@ -64,6 +64,7 @@ public:
     void configureExtensionsAndLayersAndFeatures(GpuContextRwPtr ctx) override {
         ctx->enableDeviceExtension("VK_EXT_memory_budget");
         ctx->physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
+        ctx->physicalDeviceFeatures().setShaderInt64(true);
     }
 
     /// Initializes Descriptorsets and calls pipeline initialization.
@@ -122,7 +123,9 @@ public:
 
         // save rendering parameters on GUI shutdown if requested
         if(!m_save_config_on_shutdown_path.empty()) {
-            writeParameterFile(m_save_config_on_shutdown_path, VOLCANITE_VERSION);
+            if (writeParameterFile(m_save_config_on_shutdown_path, VOLCANITE_VERSION)) {
+                Logger(DEBUG) << "exported parameters to " << m_save_config_on_shutdown_path;
+            }
         }
 
         m_gui_interface = nullptr;
@@ -176,18 +179,26 @@ public:
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
-    int getTargetAccumulationFrames() { return m_accum_frames; }
+    int getTargetAccumulationFrames() { return m_target_accum_frames; }
     /// Will save the renderer state to the path when the renderer is shut down
     void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = std::move(path); }
 
-    /// @brief Sets the target cache size for the renderer in MB.
+    /// @brief Configures the CSGV decoding and caching behaviour of the renderer.
     ///
+    /// @param cache_size_MB the target cache size for the renderer in MB.
     /// A size of 0 tries to allocate the maximum available GPU memory.
     /// The cache size must be specified before startup to have an effect.
     /// Actual cache size may be lower if less space is needed or not enough GPU memory is available.
     /// @param palettized_cached if true, the cache stores palette indices instead of labels. Allows to store larger
     /// portions of the volume in cache at the expense of a performance decrease.
-    void setCacheParameters(size_t cache_size_MB, bool palettized_cache) { m_target_cache_size_MB = cache_size_MB; m_use_palette_cache = palettized_cache; }
+    void setDecodingParameters(size_t cache_size_MB, bool palettized_cache) {
+        m_target_cache_size_MB = cache_size_MB;
+        if(m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
+            Logger(WARN) << "Cache size is currently limited to 4 GB maximum.";
+            m_target_cache_size_MB = 4294967295ul / 1024ul / 1024ul;
+        }
+        m_use_palette_cache = palettized_cache;
+    }
 
 private:
     /// Fills m_constructed_detail and m_constructed_detail_starts buffers with detail encodings of requested brick
@@ -218,9 +229,6 @@ private:
     int m_max_path_length = 32;
     int m_max_steps = 2048;
     glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
-    bool m_subblock_enabled = false;
-    glm::ivec3 m_subblock_size = glm::ivec3(128, 128, 128);
-    glm::ivec3 m_subblock_start = glm::ivec3(0, 0, 0);
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
     // denoising
@@ -245,13 +253,8 @@ private:
     bool m_show_step_count = false;
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
-    int m_accum_frames = 16;
+    int m_target_accum_frames = 16;
     int m_max_inv_lod = 6;
-    // dof
-    bool m_dof_enabled = true;
-    float m_f_stop = 7.72f;
-    float m_focal_length = 0.181f; // distance from lens to focal point
-    float m_focal_distance = 1.13f; // distance from lens to focal plane
     // utility
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text;
@@ -261,15 +264,19 @@ private:
     void updateDeviceMemoryUsage();
     void updateSegmentedVolumeMaterial(int m);
     vvv::AwaitableList updateAttributeBuffers();
+    void updateRenderUpdateFlags();
     void updateUniformDescriptorset();
 
+    uint32_t m_queue_family_index = 0u;
     std::unique_ptr<PassCompSegVolRender> m_pass = nullptr;
     std::shared_ptr<Texture> m_accumulation_rgba_tex[2] = {nullptr, nullptr};
     std::shared_ptr<Texture> m_accumulation_samples_tex[2] = {nullptr, nullptr};
     std::vector<std::shared_ptr<Texture>> m_denoise_tex{2, nullptr};
     std::shared_ptr<Texture> m_g_buffer_tex = nullptr;
     std::shared_ptr<vvv::MultiBufferedResource<std::shared_ptr<Texture>>> m_inpaintedOutColor = nullptr; // this is the output texture and thus the only resource that we have to duplicate for each swapchain image
+    std::shared_ptr<UniformReflected> m_ucamera_info = nullptr;
     std::shared_ptr<UniformReflected> m_urender_info = nullptr;
+    std::shared_ptr<UniformReflected> m_uresolve_info = nullptr;
     std::shared_ptr<UniformReflected> m_usegmented_volume_info = nullptr;
 
     std::shared_ptr<CompressedSegmentationVolume> m_compressed_segmentation_volume = nullptr;
@@ -318,7 +325,7 @@ private:
     std::shared_ptr<Buffer> m_detail_buffer = nullptr;
     glm::uvec2 m_detail_buffer_address = {};
     std::pair<std::shared_ptr<vvv::Awaitable>, std::shared_ptr<Buffer>> m_detail_staging = {nullptr, nullptr};
-    size_t m_camHash_at_last_cache_reset = 0u;
+    size_t m_parameter_hash_at_last_reset = 0u;
 
     // debugging
     struct GPUStats {
@@ -330,11 +337,17 @@ private:
     } m_last_gpu_stats = {};
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
 
-    bool m_release_version = false;                                    ///< if this is used in a release where development parameters are hidden
+    bool m_release_version = false;               ///< if this is used in a release where development parameters are hidden
+
+    uint32_t m_render_update_flags = 0u;          ///< each bit marks if a set of rendering parameters changed in this frame
+    size_t m_pcamera_hash = ~0u;                  ///< hash of the last camera parameters
+    size_t m_prender_hash = ~0u;                  ///< hash of the last rendering parameters
+    bool m_pmaterial_reset = true;                ///< if the material parameters where changed since the last frame
+    size_t m_presolve_hash = ~0u;                 ///< hash of the last resolve shader parameters
+    bool m_pcache_reset = true;                   ///< if the cache must reset this frame
+    uint32_t m_accumulated_frames = 0u;
 
     vk::Extent2D m_resolution;
-    size_t m_camHash;
-    uint32_t m_framesSinceCameraMove;
     uint32_t m_frame;
     std::optional<RendererOutput> m_mostRecentFrame = {};
 };

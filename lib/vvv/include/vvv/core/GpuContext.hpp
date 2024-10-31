@@ -100,14 +100,14 @@ private:
 namespace detail {
 struct ManagedCommandBuffer {
     vk::CommandBuffer handle;
-    //! indicates who currently has ownership of the command buffer
+    /// indicates who currently has ownership of the command buffer
     AwaitableHandle awaitable;
 };
 
 struct OpenGLStyleSubmitOptions {
-    //! Execute on the given queue
+    /// Execute on the given queue
     uint32_t queueFamily = 0;
-    //! If true, block the CPU until the operation finishes
+    /// If true, block the CPU until the operation finishes
     bool hostWait = false;
     AwaitableList await = {};
 };
@@ -197,6 +197,8 @@ public:
     virtual vk::Device getDevice() const = 0;
     virtual vk::PhysicalDevice getPhysicalDevice() const = 0;
     virtual QueueFamilyIndices const &getQueueFamilyIndices() const = 0;
+
+    virtual vk::PhysicalDeviceSubgroupProperties getPhysicalDeviceSubgroupProperties() const = 0;
 
     std::shared_ptr<DebugUtilities> debugMarker;
 

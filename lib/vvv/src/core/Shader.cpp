@@ -21,9 +21,11 @@
 #include <string>
 
 #include <cstdio>
-#include <cstdlib>
 
+#include <shaderc/shaderc.hpp>
+#include <utility>
 #include <SPIRV-Reflect/spirv_reflect.h>
+#include "vvv/config.hpp"
 
 namespace vvv {
 /// Returns the standardized name for the given shader stage, e.g. "vert" or "frag". Only one bit of
@@ -65,7 +67,7 @@ std::string get_shader_stage_name(vk::ShaderStageFlagBits stage) {
     };
 }
 
-const vk::ShaderStageFlagBits get_shader_stage(const std::string& stage) {
+vk::ShaderStageFlagBits get_shader_stage(const std::string& stage) {
     if (stage == "vert")
         return vk::ShaderStageFlagBits::eVertex;
     if (stage == "tesc")
@@ -123,7 +125,8 @@ Shader::Shader(const SimpleGlslShaderRequest& req, const ShaderCompileErrorCallb
                               .entry_point = "main",
                               .stage = get_shader_stage(path.extension().string().substr(1)),
                               .defines = req.defines,
-                              .label = req.label};
+                              .label = req.label,
+                              .optimize = true};
 
     createShader(request, compileErrorCallback);
 }
@@ -144,10 +147,6 @@ std::optional<std::filesystem::path> Shader::getPrecompiledLocalSpirvPath(const 
         size_t compile_hash = 0;
         // hash all defines
         for (const std::string &define : request.defines) {
-            // old way to do it:
-            // spirv_path += '_';
-            // for (char c : define)
-            //     spirv_path += (c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z') ? c : '_';
             for (char c : define) {
                 compile_hash = std::hash<char>{}(c) ^ (std::rotl<size_t>(compile_hash, 1));
             }
@@ -175,9 +174,16 @@ std::optional<std::filesystem::path> Shader::getPrecompiledLocalSpirvPath(const 
 void Shader::createShader(const GlslShaderRequest& request, const ShaderCompileErrorCallback& compileErrorCallback) {
         std::filesystem::path spirvPath;
 
-        Logger(DEBUG) << request.shader_file_path;
+        label = request.shader_file_path.filename().string();
+        Logger(DEBUG) << "Compiling " << request.shader_file_path;
         try {
-            spirvPath = compileGlslShader(request);
+#ifdef USE_SYSTEM_GLSLANG_COMPILER
+            // call glslang on the commandline
+            auto path = compileGlslShaderCMD(request);
+            loadSpirvFromFile(path);
+#else
+            compileGlslShader(request, true);
+#endif
         }
         catch(ShaderCompileError& e) {
 
@@ -196,6 +202,7 @@ void Shader::createShader(const GlslShaderRequest& request, const ShaderCompileE
                     throw std::runtime_error("Cannot reuse old shader source for " + e.request.shader_file_path.string() + " as it has not yet been compiled.");
 
                 spirvPath = alreadyCompilesSpirvFiles[request];
+                loadSpirvFromFile(spirvPath);
             }
             else if (action == ShaderCompileErrorCallbackAction::THROW) {
                 throw; // rethrow this exception
@@ -203,12 +210,227 @@ void Shader::createShader(const GlslShaderRequest& request, const ShaderCompileE
             else throw std::runtime_error("ShaderCompileErrorCallbackAction not defined.");
         }
 
-        loadSpirvFromFile(spirvPath);
-
         reflectShader();
 }
 
-std::filesystem::path Shader::compileGlslShader(const GlslShaderRequest& request) {
+shaderc_shader_kind get_shaderc_kind(vk::ShaderStageFlagBits stage) {
+    switch (stage) {
+        case vk::ShaderStageFlagBits::eVertex:
+            return shaderc_glsl_vertex_shader;
+        case vk::ShaderStageFlagBits::eTessellationControl:
+            return shaderc_glsl_tess_control_shader;
+        case vk::ShaderStageFlagBits::eTessellationEvaluation:
+            return shaderc_glsl_tess_evaluation_shader;
+        case vk::ShaderStageFlagBits::eGeometry:
+            return shaderc_glsl_geometry_shader;
+        case vk::ShaderStageFlagBits::eFragment:
+            return shaderc_glsl_fragment_shader;
+        case vk::ShaderStageFlagBits::eCompute:
+            return shaderc_glsl_compute_shader;
+        case vk::ShaderStageFlagBits::eRaygenKHR:
+            return shaderc_glsl_raygen_shader;
+        case vk::ShaderStageFlagBits::eIntersectionKHR:
+            return shaderc_glsl_intersection_shader;
+        case vk::ShaderStageFlagBits::eAnyHitKHR:
+            return shaderc_glsl_anyhit_shader;
+        case vk::ShaderStageFlagBits::eClosestHitKHR:
+            return shaderc_glsl_closesthit_shader;
+        case vk::ShaderStageFlagBits::eMissKHR:
+            return shaderc_glsl_miss_shader;
+        case vk::ShaderStageFlagBits::eCallableKHR:
+            return shaderc_glsl_callable_shader;
+        case vk::ShaderStageFlagBits::eTaskNV:
+            return shaderc_glsl_task_shader;
+        case vk::ShaderStageFlagBits::eMeshNV:
+            return shaderc_glsl_mesh_shader;
+        default:
+            std::ostringstream err;
+            err << "Unsupported shared stage " << to_string(stage);
+            throw std::runtime_error(err.str());
+    };
+}
+
+
+shaderc::CompileOptions getDefaultShaderCCompileOptions(const GlslShaderRequest &request) {
+    class VolcaniteShaderIncluder : public shaderc::CompileOptions::IncluderInterface
+    {
+    public:
+        explicit VolcaniteShaderIncluder(std::vector<std::filesystem::path> include_paths)
+                : m_include_paths(std::move(include_paths)) {}
+
+        shaderc_include_result* GetInclude(const char* requestedSource, shaderc_include_type type,
+                                           const char* requestingSource, size_t includeDepth) override {
+
+            auto* label_source = new std::pair<std::string, std::string>{std::string(requestedSource), ""};
+
+            // check if the requested file exists in any of the include directories
+            bool include_found = false;
+            // start by searching files right next to the shader itself
+            int i = 0;
+            std::filesystem::path include_dir = std::filesystem::path(requestingSource).parent_path();
+            do {
+                const std::filesystem::path source_path = include_dir / requestedSource;
+                if (is_regular_file(source_path)) {
+                    std::ifstream source_file = std::ifstream(source_path);
+                    if (source_file.is_open()) {
+                        std::stringstream ss;
+                        ss << source_file.rdbuf();
+                        source_file.close();
+                        label_source->second = ss.str();
+                        include_found = true;
+                    } else {
+                        label_source->first.clear();
+                        label_source->second = "could not open shader include file " + source_path.string();
+                        return new shaderc_include_result{label_source->first.data(), label_source->first.size(),
+                                                          label_source->second.data(), label_source->second.size(),
+                                                          label_source};                    }
+                    break;
+                }
+                if (i >= m_include_paths.size())
+                    break;
+                include_dir = m_include_paths.at(i++);
+            } while(true);
+
+            if (!include_found) {
+                label_source->first.clear();
+                label_source->second = "could not find shader file " + std::string(requestedSource)
+                                        + " for requesting shader " + std::string(requestingSource)
+                                        + " in include directories: ";
+                for (const auto& id : m_include_paths)
+                    label_source->second.append(id.string() + "; ");
+                label_source->second.append(std::filesystem::path(requestingSource).parent_path().string());
+            }
+            return new shaderc_include_result{label_source->first.data(), label_source->first.size(),
+                                              label_source->second.data(), label_source->second.size(), label_source};
+        }
+        void ReleaseInclude(shaderc_include_result* data) override {
+            auto* label_source = reinterpret_cast<std::pair<std::string, std::string>*>(data->user_data);
+            delete label_source;
+            delete data;
+        }
+
+        std::vector<std::filesystem::path> m_include_paths = {};
+    };
+
+    shaderc::CompileOptions options;
+    options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_3);
+    options.SetSourceLanguage(shaderc_source_language_glsl);
+    options.SetTargetSpirv(shaderc_spirv_version_1_6);
+    options.SetIncluder(std::make_unique<VolcaniteShaderIncluder>(request.include_paths));
+    if (request.optimize) {
+        options.SetOptimizationLevel(shaderc_optimization_level_performance);
+        // binding preservation and debug info are required for reflection
+        options.SetPreserveBindings(true);
+        options.SetGenerateDebugInfo();
+    } else {
+        options.SetOptimizationLevel(shaderc_optimization_level_zero);
+    }
+
+    // add definitions
+#ifdef NDEBUG
+    options.AddMacroDefinition("NDEBUG");
+#endif
+    for (const auto &def: request.defines) {
+        if (def.find('=') != std::string::npos)
+            options.AddMacroDefinition(def.substr(0, def.find('=')),
+                                       def.substr(def.find('=') + 1, std::string::npos));
+        else
+            options.AddMacroDefinition(def);
+    }
+
+    return options;
+}
+
+
+
+std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderRequest &request, bool write_spirv_tmp_file) {
+
+    // obtain spirv output file path
+    std::optional<std::filesystem::path> spirv_path =
+            write_spirv_tmp_file ? Paths::getTempFileForDataPath(request.shader_file_path) : std::optional<std::filesystem::path>{};
+
+    // read shader source file
+    std::string glsl_source;
+    {
+        std::ifstream glsl_source_file = std::ifstream(request.shader_file_path);
+        if (!glsl_source_file.is_open()) {
+            std::ostringstream err;
+            err << "The shader file at path " << request.shader_file_path << " does not exist or cannot be opened";
+            throw std::runtime_error(err.str());
+        }
+        std::stringstream ss;
+        ss << glsl_source_file.rdbuf();
+        glsl_source_file.close();
+
+        glsl_source = ss.str();
+    }
+
+    shaderc::Compiler compiler;
+    shaderc::CompileOptions options = getDefaultShaderCCompileOptions(request);
+
+    // (optional) run shader preprocessor to check for preprocessor failures
+    if (false) {
+        shaderc::PreprocessedSourceCompilationResult preprocess_result =
+                compiler.PreprocessGlsl(glsl_source, get_shaderc_kind(request.stage),
+                                        request.label.c_str(), options);
+
+        if (preprocess_result.GetCompilationStatus() != shaderc_compilation_status_success) {
+            throw ShaderCompileError(request, spirv_path.has_value() ? spirv_path.value() : "",
+                                     preprocess_result.GetCompilationStatus(),
+                                     preprocess_result.GetErrorMessage(),
+                                     "shaderc preprocess " + request.shader_file_path.string());
+        }
+    }
+
+    // compile the shader to spirv
+    shaderc::SpvCompilationResult compilation_result =
+            compiler.CompileGlslToSpv(glsl_source, get_shaderc_kind(request.stage), request.label.c_str(), options);
+
+    if (compilation_result.GetCompilationStatus() != shaderc_compilation_status_success) {
+        throw ShaderCompileError(request, spirv_path.has_value() ? spirv_path.value() : "",
+                                 compilation_result.GetCompilationStatus(),
+                                 compilation_result.GetErrorMessage(),
+                                 "shaderc compile " + request.shader_file_path.string());
+    }
+
+    spirv_binary = {compilation_result.cbegin(), compilation_result.cend()};
+
+    // write spirv to file
+    if (spirv_path.has_value()) {
+        // TODO: writing the shader binary to a file could be a detached thread
+
+        // construct the output file path
+        // hash all compile time definitions
+        if (!request.defines.empty()) {
+            size_t compile_hash = 0;
+            // hash all defines
+            for (const std::string &define: request.defines) {
+                for (char c: define) {
+                    compile_hash = std::hash<char>{}(c) ^ (std::rotl<size_t>(compile_hash, 1));
+                }
+            }
+            // here would be the place to add other compile time things to the hash
+            // ..
+            spirv_path.value() += "_" + std::to_string(compile_hash);
+        }
+        spirv_path.value() += ".spv";
+
+        // write file
+        std::ofstream spirv_file = std::ofstream(spirv_path.value(), std::ios::binary);
+        if (spirv_file.is_open()) {
+            spirv_file.write(reinterpret_cast<const char*>(spirv_binary.data()),
+                             static_cast<std::streamsize>(spirv_binary.size() * sizeof(uint32_t)));
+            spirv_file.close();
+            alreadyCompilesSpirvFiles[request] = spirv_path.value();
+        } else {
+            Logger(WARN) << "Could not write SPIRV shader file " << spirv_path.value();
+        }
+    }
+
+    return spirv_path;
+}
+
+std::filesystem::path Shader::compileGlslShaderCMD(const GlslShaderRequest& request) {
 
     // Verify that the shader file exists using std::filesystem
     if (!is_regular_file(request.shader_file_path)) {
@@ -240,10 +462,10 @@ std::filesystem::path Shader::compileGlslShader(const GlslShaderRequest& request
 
     std::ostringstream cmd;
 
-    // note: nothing here is escaped!s
+    // note: nothing here is escaped!
     cmd << vvv::shader_compiler_executable
         << " --client vulkan100"                                 // Vulkan SPIR-V semantics
-        << " --target-env spirv1.5"                              // 1.5 is default for vulkan 1.2
+        << " --target-env spirv1.6"                              // 1.6 is default for vulkan 1.3
         << " --quiet"                                            // supress output of currently compiling file
         << " -S " << get_shader_stage_name(request.stage); // select shader stage
 
@@ -282,29 +504,23 @@ std::filesystem::path Shader::compileGlslShader(const GlslShaderRequest& request
     }
 
     alreadyCompilesSpirvFiles[request] = spirv_path;
-
-    Logger(DEBUG) << "Compiled " << spirv_path;
     return spirv_path;
 }
 
 void Shader::loadSpirvFromFile(const std::filesystem::path& path) {
-    FILE *file = fopen(path.string().c_str(), "rb");
-    if (!file) {
-        throw std::runtime_error("Could not open SPIRV file " + path.string());
+    std::ifstream source_file = std::ifstream(path, std::ios::binary);
+    if (source_file.is_open()) {
+        auto file_size = std::filesystem::file_size(path);
+        if (file_size == 0)
+            throw std::runtime_error("SPIRV binary file " + path.string() + " has size 0.");
+        if ((file_size / sizeof(uint32_t)) * sizeof(uint32_t) != file_size)
+            throw std::runtime_error("SPIRV binary file " + path.string() + " is not a uint32 stream as expected.");
+        spirv_binary.resize(file_size / sizeof(uint32_t));
+        source_file.read(reinterpret_cast<char*>(spirv_binary.data()), file_size);
+        source_file.close();
+    } else {
+        throw std::runtime_error("could not open SPIRV file " + path.string());
     }
-
-    // Read the SPIR-V code from the file
-    if (fseek(file, 0, SEEK_END) || (spirv_size = ftell(file)) < 0) {
-        fclose(file);
-        std::ostringstream err;
-        err << "failed to determine file size";
-        throw std::runtime_error(err.str());
-    }
-
-    spirv_code = malloc(spirv_size);
-    fseek(file, 0, SEEK_SET);
-    spirv_size = fread(spirv_code, sizeof(char), spirv_size, file);
-    fclose(file);
 }
 
 vk::ShaderModule Shader::shaderModule(vvv::GpuContextPtr ctx) {
@@ -313,7 +529,7 @@ vk::ShaderModule Shader::shaderModule(vvv::GpuContextPtr ctx) {
         return m_shaderModule;
     }
 
-    vk::ShaderModuleCreateInfo module_info({}, spirv_size, static_cast<uint32_t *>(spirv_code));
+    vk::ShaderModuleCreateInfo module_info({}, spirv_binary.size() * sizeof(uint32_t), spirv_binary.data());
     m_shaderModule = ctx->getDevice().createShaderModule(module_info);
 
     if (!label.empty()) {
@@ -333,7 +549,7 @@ vk::PipelineShaderStageCreateInfo *Shader::pipelineShaderStageCreateInfo(vvv::Gp
 }
 
 void Shader::reflectShader() {
-    m_reflection = std::make_unique<spv_reflect::ShaderModule>(spirv_size, spirv_code);
+    m_reflection = std::make_unique<spv_reflect::ShaderModule>(spirv_binary);
     assert(m_reflection->GetResult() == SPV_REFLECT_RESULT_SUCCESS);
 }
 

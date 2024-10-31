@@ -14,6 +14,24 @@
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <vvv/util/csv_utils.hpp>
+#include <vvv/util/Logger.hpp>
+
+
+std::vector<std::vector<float>> vvv::csv_float_import(const std::string& csv_path, std::vector<std::string>& column_names) {
+    column_names.clear();
+    std::ifstream csv(csv_path, std::ios::in);
+    if (csv.is_open()) {
+        // read column names from first row
+        // column_names = ...
+        // read
+
+        csv.close();
+        // return ..
+    } else {
+        Logger(ERROR) << "Could not open CSV file " << csv_path;
+        return {};
+    }
+}
 
 void vvv::csv_export(const std::vector<std::map<std::string, float>>& s, const std::string& path) {
     std::ofstream fout(path, std::ios::out);
