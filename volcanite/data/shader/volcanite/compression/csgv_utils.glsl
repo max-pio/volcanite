@@ -18,16 +18,6 @@
 
 #include "cpp_glsl_include/csgv_constants.incl"
 
-#ifdef NDEBUG
-    #define assert(X, S)
-    #define assertf(X, S, P)
-#else
-    #define assert(X, S) if(!(X)) debugPrintfEXT(S)
-    #define assertf(X, S, P) if(!(X)) debugPrintfEXT(S, P)
-#endif
-
-#define STATIC_FAIL(S) {S()}
-
 #define SIZEOF(Type) (uint64_t(Type(uint64_t(0))+1))
 
 // Memory Access and Indexing Utilities --------------------------------------------------------------------------------
