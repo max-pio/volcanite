@@ -143,62 +143,70 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec2 g_buffer_pa
 
     // if subsamplign is enabled, we only render one pixel per [g_subsampling]^2 block
     ivec2 subpixel;
+    ivec2 pixel_block_start = (pixel/g_subsampling)*g_subsampling;
     for (subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
         for (subpixel.x = 0; subpixel.x < g_subsampling; subpixel.x++) {
-            ivec2 opix = (pixel/g_subsampling)*g_subsampling + subpixel;
+            ivec2 opix = pixel_block_start + subpixel;
 
-            vec4 accumulated_rgba;
+            vec4 accumulated_rgba_out;
+            uint sample_count_out;
 
             // first frame: reset
             if (g_camera_still_frames == 0u) {
                 // writing other pixel: initialize RGBA accumulation with 0 and invalid G-Buffer, set 0 SPP
                 if (any(notEqual(opix, pixel))) {
-                    accumulated_rgba = vec4(0.f);
-                    imageStore(accuSampleCountOut, opix, uvec4(0u));
+                    accumulated_rgba_out = vec4(0.f);
+                    sample_count_out = 0u;
+//                    imageStore(accuSampleCountOut, opix, uvec4(0u));
                     imageStore(gBuffer, opix, uvec4(invalidGBufferRG8(), 0u, 0u));
                 }
                 // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame
                 else {
-                    accumulated_rgba = new_rgba;
-                    imageStore(accuSampleCountOut, opix, uvec4(isDepthValid(depth_valid) ? 1u : 0u));
+                    accumulated_rgba_out = new_rgba;
+                    sample_count_out = isDepthValid(depth_valid) ? 1u : 0u;
+//                    imageStore(accuSampleCountOut, opix, uvec4(isDepthValid(depth_valid) ? 1u : 0u));
                     imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
                 }
             }
             // later frames: accumulation
             else {
                 vec4 prev_rgba = imageLoad(accumulationIn, opix);
-                uint prev_valid_samples = imageLoad(accuSampleCountIn, opix).r;
+                uint prev_sample_count = imageLoad(accuSampleCountIn, opix).r;
 
                 // writing other pixel: just copy from previous to current frame
                 if (any(notEqual(opix, pixel))) {
-                    accumulated_rgba = prev_rgba;
-                    imageStore(accuSampleCountOut, opix, uvec4(prev_valid_samples));
+                    accumulated_rgba_out = prev_rgba;
+                    sample_count_out = prev_sample_count;
+//                    imageStore(accuSampleCountOut, opix, uvec4(prev_valid_samples));
                     // G-buffer remains unchanged
                 }
                 // writing our pixel, but invalid new sample (from not yet decoded brick)
                 else if (!isDepthValid(depth_valid)) {
-                    if (prev_valid_samples > 0u) {
+                    if (prev_sample_count > 0u) {
                         // the accumulation buffer already contains a valid accumulation: skip this invalid sample
-                        accumulated_rgba = prev_rgba;
+                        accumulated_rgba_out = prev_rgba;
                         // G-buffer remains unchanged
                     } else {
                         // the accumulation buffer is not set
-                        accumulated_rgba = new_rgba;
+                        accumulated_rgba_out = new_rgba;
                         imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
                     }
-                    imageStore(accuSampleCountOut, opix, uvec4(prev_valid_samples));
+                    sample_count_out = prev_sample_count;
+//                    imageStore(accuSampleCountOut, opix, uvec4(prev_valid_samples));
                 }
                 // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
                 else {
-                    accumulated_rgba = new_rgba + (prev_valid_samples > 0u ? prev_rgba : vec4(0.f));
-                    imageStore(accuSampleCountOut, opix, uvec4(1u + prev_valid_samples));
+                    accumulated_rgba_out = new_rgba + (prev_sample_count > 0u ? prev_rgba : vec4(0.f));
+                    sample_count_out = prev_sample_count + 1u;
+//                    imageStore(accuSampleCountOut, opix, uvec4(1u + prev_valid_samples));
                     imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
                 }
             }
 
             // half float range rounds to intinity from 65520 onwards -> clamp
-            imageStore(accumulationOut, opix, min(accumulated_rgba, 65519.f));
-            imageStore(denoisingBuffer[0], opix, min(accumulated_rgba, 65519.f));
+            imageStore(accumulationOut, opix, min(accumulated_rgba_out, 65519.f));
+            imageStore(accuSampleCountOut, opix, uvec4(sample_count_out));
+            imageStore(denoisingBuffer[0], opix, accumulated_rgba_out / float(max(sample_count_out, 1u)));
         }
     }
 }

@@ -28,7 +28,17 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #include "debug_colormaps.glsl"
 
 vec3 rgb2srgb(vec3 x) {
-    return pow(x, vec3(2.2f));
+    // simple mapping:
+    //return pow(x, 1.f / vec3(2.4f));
+
+    #pragma unroll
+    for (int i = 0; i < 3; i++) {
+        if (x[i] < 0.0031308f)
+            x[i] *= 12.92f;
+        else
+            x[i] = 1.055f * pow(x[i], 1.0f/2.4f) - 0.055f;
+    }
+    return x;
 }
 
 float luminance(vec3 v) {
@@ -85,8 +95,8 @@ float computeWeight(float depthCenter, float depthP, float phiDepth, float lumin
     float weightZ = (phiDepth == 0) ? 0.f : 1.f;
     weightZ = (phiDepth == 0) ? 0.f : abs(depthCenter - depthP) / phiDepth;
 
-    //const float weightLillum = 1.f;
-    const float weightLillum = abs(luminanceIllumCenter - luminanceIllumP) / phiIllum;
+    const float weightLillum = 1.f;
+    //const float weightLillum = abs(luminanceIllumCenter - luminanceIllumP) / phiIllum;
 
     const float weightIllum = exp(0.0 - max(weightLillum, 0.0) - max(weightZ, 0.0));
     return weightIllum;
@@ -125,12 +135,31 @@ float computeVarianceCenter(ivec2 ipos, const ivec2 viewport_size) {
 }
 
 // inplace alpha blending of pixel_rgba with the background color that is visible for the primary ray through block_pixel
-vec4 blendWithBackground(vec4 pixel_rgba, ivec2 block_pixel) {
-    vec2 subpixel_offset = randomVec3(block_pixel, g_camera_still_frames).xy;
-    vec2 fragCoord = (vec2(block_pixel) + subpixel_offset) / vec2(imageSize(inpaintedOutColor));
-    vec3 viewRayDirection = normalize((g_pixel_to_ray_direction_world_space * vec3(block_pixel + subpixel_offset, 1.0f)).xyz);
+vec4 blendWithBackground(ivec2 pixel, vec4 pixel_rgba) {
+    vec2 subpixel_offset = randomVec3(pixel, g_camera_still_frames).xy;
+    vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(imageSize(inpaintedOutColor));
+    vec3 viewRayDirection = normalize((g_pixel_to_ray_direction_world_space * vec3(pixel + subpixel_offset, 1.0f)).xyz);
     pixel_rgba = pixel_rgba.a * pixel_rgba + (1.f - pixel_rgba.a) * get_background_color(fragCoord, viewRayDirection);
     return pixel_rgba;
+}
+
+void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {
+#if 0
+    // debug input buffer (left) vs. upsampled and denoised (right) output
+    if (pixel.x < viewport_size.x / 2) {
+        uint sample_count_block = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
+        accum_rgba = imageLoad(accumulationOut, pixel) / float(sample_count_block);
+    }
+#endif
+
+    // perform tonemapping and color space conversion
+    if(g_tonemap_enable) {
+        accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb);
+    }
+    // accum_rgba.rgb = rgb2srgb(accum_rgba.rgb);
+
+    // blend with background, output to display image
+    imageStore(inpaintedOutColor, pixel, blendWithBackground(pixel, accum_rgba));
 }
 
 // TODO: split into separate shaders as either bilateral or À-trous denoising is used (or remove bilateral alltogether)
@@ -143,172 +172,139 @@ void main() {
     if (isHelperLane(pixel, viewport_size))
         return;
 
-    if (g_bilateral_enable && pc.denoising_iteration != LAST_DENOISING_ITERATION)
+    // upsampling / denoising may be disabled or faded out
+    const float fade = g_denoise_fade_enable ? min(1.f, g_denoise_fade_sigma / sqrt(g_camera_still_frames / (g_subsampling * g_subsampling))) : 1.f;
+    if (!g_svgf_enable || fade < 0.01f) {
+        if (pc.denoising_iteration == LAST_DENOISING_ITERATION) {
+            writeFinalFramebuffer(pixel, imageLoad(denoisingBuffer[0], pixel));
+        }
         return;
+    }
 
-    // read the HDR radiance + alpha that was accumulated for this pixel so far
-    // needs normalization based on sample count
-    vec4 pixel_color = g_svgf_enable ? imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel)
-                                     : imageLoad(accumulationOut, pixel);
+    // read RGB radiance + alpha that was accumulated for this pixel so far.
+    // it was already normalized with the sample count
+    // an alpha value < 0 indicates that this pixel did not receive a single sample yet
+    vec4 pixel_color = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel);
+    float pixel_luminance = luminance(pixel_color.rgb);
+//    if (pc.denoising_iteration == 0) {
+//        uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
+//        pixel_color /= float(sample_count);
+//    }
 
-    // unpack the G-Buffer for the current output pixel
+    // unpack the G-Buffer for the current output pixel (center)
+    // center_sampled is false if the pixel did not receive a sample yet -> requires upsampling!
     float center_normalized_depth;
     vec3 center_normal;
-    uint center_label_hash;
-    const uvec2 g_buffer_packed = imageLoad(gBuffer, pixel).rg;
-    // valid is false if the pixel did not receive a sample yet
-    bool center_valid = unpackGBufferRG8(g_buffer_packed, center_label_hash, center_normal, center_normalized_depth);
+    uint center_label;
+    const bool center_sampled = unpackGBufferRG8(imageLoad(gBuffer, pixel).rg,
+                                               center_label, center_normal, center_normalized_depth);
+    if (!center_sampled && pc.denoising_iteration == 0u) {
+        // marking non-sampled pixels for the first iteration must happen here. Otherwise, the renderer shader
+        // would have to read from gBuffer to check if the pixel received a sample in an earlier frame.
+        pixel_color.a = -1.f;
+    }
+
+
+    // MULTI-PASS À-TROUS FILTER -----------------------------------------------------------------------------------
+    // could become SVGF
+    // for now only À-Trous filter w/o any variance estimation or temporal accumulation
+    const int step_size = 1 << pc.denoising_iteration;
+    const vec3 kernel_weights = {1.f, 2.f / 3.f * fade, 1.f / 6.f * fade * fade};
+    const float var = computeVarianceCenter(pixel, viewport_size);
+
+    const float EPS = 0.01f;
+    const float phi_Lillumination = g_illumination_sigma * sqrt(var) + EPS;
+    //const float phi_Lillumination = 1.f; // unnused for now
+    const float phi_depth = max(center_normalized_depth, 1e-8) * step_size;
 
     vec4 accum_rgba = vec4(0.f);
-    ivec2 filter_pixel;
     float weight = 1.f;
     float weight_sum  = 0.f;
 
-    // fade out the denoising over time
-    float fade = 1.f;
-    if (g_denoise_fade_enable) {
-        fade = g_denoise_fade_sigma / sqrt(g_camera_still_frames / (g_subsampling * g_subsampling));
-        fade = min(fade, 1.f);
-    }
+    // for upsampling: use the most frequent label from the 3x3 neighborhood
+    uvec2 label_freq[9] = uvec2[](uvec2(0u), uvec2(0u), uvec2(0u), uvec2(0u), uvec2(0u),
+                                  uvec2(0u), uvec2(0u), uvec2(0u), uvec2(0u));
 
-    if (fade < 0.01f) {
-        uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
-        accum_rgba = imageLoad(accumulationOut, pixel) / float(sample_count);
-        accum_rgba.r = 0.f;
-    // BILATERAL FILTER ------------------------------------------------------------------------------------------------
-    } else if (g_bilateral_enable) {
-        uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
-        pixel_color /= float(sample_count);
+    for (int dy = -g_denoise_filter_kernel_size; dy <= g_denoise_filter_kernel_size; dy++) {
+        for (int dx = -g_denoise_filter_kernel_size; dx <= g_denoise_filter_kernel_size; dx++) {
+            ivec2 filter_pixel = pixel + (ivec2(dx, dy) * step_size);
 
-        for (int dx = -g_denoise_filter_kernel_size; dx < g_denoise_filter_kernel_size; dx++) {
-            for (int dy = -g_denoise_filter_kernel_size; dy < g_denoise_filter_kernel_size; dy++) {
-                filter_pixel = pixel + ivec2(dx, dy);
-                if (isHelperLane(filter_pixel, viewport_size))
-                    continue;
+            // do not sample outside image plane, cast to uvec to catch values < 0
+            if (isHelperLane(uvec2(filter_pixel), uvec2(viewport_size)))
+                continue;
 
-                // unpack gBuffer
-                float normalized_depth;
-                vec3 normal;
-                uint label_hash;
-                if (!unpackGBufferRG8(imageLoad(gBuffer, filter_pixel).rg, label_hash, normal, normalized_depth))
-                    continue;
-
-                // weight the pixel colors by sample counts
-                uint sample_count_block = max(imageLoad(accuSampleCountOut, filter_pixel).r, 1u);
-                vec4 rgba_block = imageLoad(accumulationOut, filter_pixel) / float(sample_count_block);
-
-                // if the center pixel did not receive a sample yet, it gets the average color of all neighboring pixels
-                // that already received a sample
-                if (center_valid) {
-                    if (all(equal(normal, vec3(0.f))) || any(notEqual(center_normal, normal)))
-                        continue;
-                    if (abs(float(center_normalized_depth) - float(normalized_depth)) + 0.001f > g_difference_depth_denoising)
-                        continue;
-
-                    if (g_spatial_sigma > 0)
-                        weight *= gaussian(length(vec2(dx, dy)), g_spatial_sigma);
-                    if (g_depth_sigma > 0)
-                        weight *= gaussian(luminance(pixel_color.rgb) - luminance(rgba_block.rgb), g_depth_sigma);
+            // if upsampling is required and the pixel already received a color:
+            // do not blur in alter passes to prevent overblur!
+            if (!center_sampled || g_bilateral_enable) {
+//                if (weight_sum > 0.f) {
+//                    break;
+//                }
+                if (pixel_color.a >= 0.f) {
+                    accum_rgba = pixel_color;
+                    weight_sum = 1.f;
+                    break;
                 }
-
-                accum_rgba += rgba_block * weight;
-                weight_sum += weight;
             }
-        }
-    // MULTI-PASS À-TROUS FILTER ---------------------------------------------------------------------------------------
-    } else if (g_svgf_enable) {
-        // svgf
-        // for now only À-Trous filter w/o any variance estimation or temporal accumulation
-        const int step_size = 1 << pc.denoising_iteration;
-        const vec3 kernel_weights = { 1.f, 2.f / 3.f * fade, 1.f / 6.f * fade * fade};
-        const float var = computeVarianceCenter(pixel, viewport_size);
 
-        const float EPS = 0.01f;
-        const float phi_Lillumination = g_illumination_sigma * sqrt(var) + EPS;
-        //const float phi_Lillumination = 1.f; // unnused for now
-        const float phi_depth = max(center_normalized_depth, 1e-8) * step_size;
+            // unpack filter pixel
+            float normalized_depth;
+            vec3 normal;
+            uint label;
+            bool sampled = unpackGBufferRG8(imageLoad(gBuffer, filter_pixel).rg, label, normal, normalized_depth);
 
-        for (int dy = -g_denoise_filter_kernel_size; dy <= g_denoise_filter_kernel_size; dy++) {
-            for (int dx = -g_denoise_filter_kernel_size; dx <= g_denoise_filter_kernel_size; dx++) {
-                filter_pixel = pixel + ivec2(dx, dy) * step_size;
+            // filter pixels that did not receive a sample yet are skipped:
+            // - in the first iteration, these are marked by the !sampled return value of the G-Buffer query
+            // - in later queries, these are marked with an rgba alpha value < 0
+            if (pc.denoising_iteration == 0 && !sampled)
+                continue;
 
-                if (isHelperLane(filter_pixel, viewport_size))
-                    continue;
-
-                float normalized_depth;
-                vec3 normal;
-                uint label_hash;
-                // if the center pixel did not receive a sample, accumulate all filter pixels in later passes
-                if ((pc.denoising_iteration == 0 || center_valid)
-                    && !unpackGBufferRG8(imageLoad(gBuffer, filter_pixel).rg, label_hash, normal, normalized_depth))
-                    continue;
-
-                // normalize the pixel radiance by sample counts in the first À-trous iteration
-                uint sample_count_block = pc.denoising_iteration == 0 ? max(imageLoad(accuSampleCountOut, filter_pixel).r, 1u) : 1u;
-                vec4 rgba_block = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], filter_pixel) / float(sample_count_block);
-
-                // accumluated radiance from previous À-trous interations that did not receive a single sample is marked
-                // with a negative alpha value. These are skipped.
-                if (rgba_block.a < 0.f)
-                    continue;
-
-                if (center_valid) {
-                    // quantized normals: either (+/-) 90 or (+/-) 180 degree angle
-                    // => abs(cos) (= weightN) is either 0 or 1
-                    if (any(notEqual(center_normal, normal)) || all(equal(normal, vec3(0.f))))
-                        continue;
-                    if (label_hash != center_label_hash)
-                        continue;
-
-                    const float kernel = kernel_weights[abs(dx)] * kernel_weights[abs(dy)];
-                    const float w = computeWeight(center_normalized_depth, normalized_depth, phi_depth,
-                    luminance(imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel).xyz),
-                    luminance(imageLoad(denoisingBuffer[pc.denoising_iteration % 2], filter_pixel).xyz), phi_Lillumination);
-
-                    weight = w * kernel;
-                }
-                accum_rgba += rgba_block * weight;
-                weight_sum += weight;
+            const vec4 rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], filter_pixel);
+//                // normalize the pixel radiance by sample counts in the first À-trous iteration
+//                if (pc.denoising_iteration == 0) {
+//                    rgba_block /= max(imageLoad(accuSampleCountOut, filter_pixel).r, 1u);
+//                }
+            // filter pixels that did not receive a single sample yet are marked with negative values and skipped
+            if (pc.denoising_iteration > 0 && rgba.a < 0.f) {
+                continue;
             }
+
+            // if the center pixel received a sample (valid G-Buffer): denoising - compute filter weights from G-Buffer
+            // otherwise: upsampling - fill with blurred neighbor colors
+            if (center_sampled) {
+                // quantized normals: either (+/-) 90 or (+/-) 180 degree angle
+                // => max(cos, 0) = weightN is either 0 or 1
+                if (label != center_label)
+                    continue;
+                if (any(notEqual(center_normal, normal))) // || all(equal(normal, vec3(0.f))))
+                    continue;
+
+                const float kernel = kernel_weights[abs(dx)] * kernel_weights[abs(dy)];
+                const float w = computeWeight(center_normalized_depth, normalized_depth, phi_depth,
+                                              pixel_luminance, luminance(rgba.rgb), phi_Lillumination);
+
+                weight = w * kernel;
+            } else {
+                weight = 1.f;
+            }
+
+            accum_rgba += rgba * weight;
+            weight_sum += weight;
         }
-    // NO FILTER -------------------------------------------------------------------------------------------------------
-    } else {
-        uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
-        accum_rgba = pixel_color / float(sample_count);
-        const float EPS = 0.01f;
-        const float phi_Lillumination = g_illumination_sigma * sqrt(computeVarianceCenter(pixel, viewport_size)) + EPS;
-        accum_rgba = vec4(vec3(phi_Lillumination), 1.f);
     }
 
     if (weight_sum > 0.f)
-        accum_rgba.rgba /= weight_sum;
+        accum_rgba /= weight_sum;
 
-    // À-trous feedback to next denoising iteration kernel in HDR
     if (pc.denoising_iteration < LAST_DENOISING_ITERATION) {
+        //  before last iteration:      À-trous feedback to next denoising iteration kernel in HDR
         // mark pixels from a filter step that did not receive a single rendered sample with a negative alpha value
         if (weight_sum <= 0.f)
             accum_rgba.a = -1.f;
 
         // store color for next iteration
         imageStore(denoisingBuffer[(pc.denoising_iteration + 1u) % 2], pixel, accum_rgba);
-    // final pixel output in LDR
     } else {
-#if 0
-        // debug non-denoised (left) vs. denoised (right) output
-        if (pixel.x < viewport_size.x / 2) {
-            uint sample_count_block = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
-            accum_rgba = imageLoad(accumulationOut, pixel) / float(sample_count_block);
-        }
-#endif
-
-        // perform tonemapping and color space conversion
-        if(g_tonemap_enable) {
-            accum_rgba.rgb *= 2.4f; // increase exposure
-            accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb);
-            accum_rgba.rgb = rgb2srgb(accum_rgba.rgb);
-        }
-
-        // output to display image
-        imageStore(inpaintedOutColor, pixel, blendWithBackground(accum_rgba, pixel));
+        // last iteration:              final pixel output in LDR
+        writeFinalFramebuffer(pixel, accum_rgba);
     }
 }
