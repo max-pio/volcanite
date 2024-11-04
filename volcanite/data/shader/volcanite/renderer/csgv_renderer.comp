@@ -152,7 +152,7 @@ struct RayMarchState {
     vec3 normal;        ///< normal at the current position
     uint label;         ///< label at the current position
     uint last_label;    ///< label of the previous position
-    uvec2 packedGBuffer;///< G-Buffer containing validity, label on hit, depth, and normal
+    uvec3 packedGBuffer;///< G-Buffer containing validity, label on hit, depth, and normal
 
     // path tracing
     vec4 out_color;     ///< (radiance) color to be written to the color buffer
@@ -326,7 +326,7 @@ void main() {
     // if the ray does not hit the data set, directly output the background
     if (t_0 >= t_1) {
         ray.direction = normalize(g_model_to_world_space_dir * ray.direction);
-        writePixel(pixel, vec4(0.f), BACKGROUND_DEPTH, noHitGBufferRG8());
+        writePixel(pixel, vec4(0.f), BACKGROUND_DEPTH, noHitGBufferRGB16());
         return;
     }
 
@@ -342,7 +342,7 @@ void main() {
     state.out_color = vec4(0.f);
     state.depth_valid = BACKGROUND_DEPTH;
     state.normal = vec3(0.f);
-    state.packedGBuffer = noHitGBufferRG8();
+    state.packedGBuffer = noHitGBufferRGB16();
 
     // initialize DDA traversal with t_0  offset to prevent aliasing
     dda_init(state, ray, t_0 - 0.01f);
@@ -463,7 +463,7 @@ void main() {
                 float ray_t = length((state.voxel + state.pos_in_voxel) - ray.origin);
                 // TODO: directly write these values to the g-buffer instead of tracking them
                 state.depth_valid = min(state.depth_valid, ray_t);
-                state.packedGBuffer = packGBufferRG8(state.label, state.normal, (ray_t - t_0) / (t_1 - t_0));
+                state.packedGBuffer = packGBufferRGB16(state.label, state.normal, (ray_t - t_0) / (t_1 - t_0));
             }
             // opacity is always 1 on surface hit
             state.out_color.a = 1.f;

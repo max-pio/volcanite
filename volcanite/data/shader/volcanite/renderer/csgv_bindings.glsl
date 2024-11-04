@@ -234,5 +234,5 @@ layout(binding = 19) uniform sampler1D s_transferFunctions[SEGMENTED_VOLUME_MATE
 layout(push_constant) uniform PushConstants
 {
     uint denoising_iteration;   // denoising iteration variable for ping pong svgf-buffer
-    float denoising_heuristic;  // heuristic for fade because image converges
+    uint last_denoising_iteration;
 } pc;

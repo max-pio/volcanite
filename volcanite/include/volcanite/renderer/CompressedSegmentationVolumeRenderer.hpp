@@ -232,6 +232,7 @@ private:
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
     // denoising
+    int m_resolve_passes = 3;
     bool m_bilateral_enabled = false;
     int m_denoise_filter_kernel_size = 1;
     float m_difference_depth_denoising = 1.0f;

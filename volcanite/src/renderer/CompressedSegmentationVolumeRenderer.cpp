@@ -203,8 +203,10 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         return m_mostRecentFrame.value();
     }
 
-    // upload uniforms
+    // upload uniforms and set pass properties
     updateUniformDescriptorset();
+    m_pass->setRenderUpdateFlagsForNextCall(m_render_update_flags);
+    m_pass->setResolvePasses(m_resolve_passes);
 
     m_ucamera_info->upload(m_pass->getActiveIndex());
     m_urender_info->upload(m_pass->getActiveIndex());
@@ -242,10 +244,10 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     m_pass->setStorageImage("accumulationOut", *m_accumulation_rgba_tex[1u - (m_frame % 2u)]);
     m_pass->setStorageImage("accuSampleCountIn", *m_accumulation_samples_tex[m_frame % 2u]);
     m_pass->setStorageImage("accuSampleCountOut", *m_accumulation_samples_tex[1u - (m_frame % 2u)]);
-    // 16 bit packed gBuffer texture storing
+    // 24 bit packed gBuffer texture
     m_pass->setStorageImage("gBuffer", *m_g_buffer_tex);
 
-    // ping pong texture for svgf
+    // ping pong texture for resolve passes
     m_pass->setStorageImageArray("denoisingBuffer", 0, *m_denoise_tex[0], vk::ImageLayout::eGeneral, false);
     m_pass->setStorageImageArray("denoisingBuffer", 1, *m_denoise_tex[1], vk::ImageLayout::eGeneral, false);
 
@@ -602,7 +604,6 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     // the shader code is dependent on data set properties like operation frequency tables
     std::vector<std::string> shader_defines = m_compressed_segmentation_volume->getGLSLDefines();
     shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
-    shader_defines.push_back("LAST_DENOISING_ITERATION=" + std::to_string(PassCompSegVolRender::DENOISING_ITERATIONS - 1));
     if (m_use_palette_cache)
         shader_defines.emplace_back("PALETTE_CACHE");
     shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
@@ -683,7 +684,7 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
         reinitDone.push_back(layoutTransformDone);
     }
     // TODO: use 16 bit precision for denoising buffer
-    m_denoise_tex = m_pass->reflectTextureArray("denoisingBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_denoise_tex = m_pass->reflectTextureArray("denoisingBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     for (auto & texture : m_denoise_tex) {
         texture->ensureResources();
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
@@ -696,7 +697,7 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
     }
-    m_g_buffer_tex = m_pass->reflectTexture("gBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_g_buffer_tex = m_pass->reflectTexture("gBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     {
         m_g_buffer_tex->ensureResources();
         const auto layoutTransformDone = m_g_buffer_tex->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
@@ -795,6 +796,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     // resolve shader parameters
     new_hash = 0ull;
     HASHP(m_background_color_a) HASHP(m_background_color_b) HASHP(m_tonemap_enabled)
+    HASHP(m_resolve_passes)
     HASHP(m_bilateral_enabled) HASHP(m_svgf_enabled) HASHP(m_difference_depth_denoising)
     HASHP(m_spatial_sigma) HASHP(m_depth_sigma) HASHP(m_illumination_sigma) HASHP(m_denoise_fade_sigma)
     HASHP(m_denoise_filter_kernel_size) HASHP(m_denoise_fade_enabled)
@@ -824,8 +826,6 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
             m_render_update_flags |= UPDATE_RENDER_FRAME;
         }
     }
-
-    m_pass->setRenderUpdateFlagsForNextCall(m_render_update_flags);
     #undef HASHP
 }
 
@@ -1156,13 +1156,14 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
     g_dev->addSeparator();
     g_dev->addLabel("Denoising");
+    g_dev->addInt(&m_resolve_passes, "Resolve Passes", 1, 4, 1);
     g_dev->addInt(&m_denoise_filter_kernel_size, "Denoise Filter Kernel Size", 0, 10, 1);
-    g_dev->addBool(&m_bilateral_enabled, "Bilateral Filter");
-    g_dev->addFloat(&m_difference_depth_denoising, "difference depth denoising", 0.001f, 1.f, 0.004, 3);
-    g_dev->addFloat(&m_spatial_sigma, "Spatial Sigma", 0.001f, 5.f, 0.01, 2);
-    g_dev->addFloat(&m_depth_sigma, "Depth Sigma", 0.001f, 5.f, 0.01, 2);
-    g_dev->addBool(&m_svgf_enabled, "À-Trous Filter");
-    g_dev->addFloat(&m_illumination_sigma, "Illumination Sigma", 0.01f, 10.f, 0.01, 2); // unnused for now
+    g_dev->addBool(&m_bilateral_enabled, "Enable Denoising");
+//    g_dev->addFloat(&m_difference_depth_denoising, "difference depth denoising", 0.001f, 1.f, 0.004, 3);
+//    g_dev->addFloat(&m_spatial_sigma, "Spatial Sigma", 0.001f, 5.f, 0.01, 2);
+//    g_dev->addFloat(&m_depth_sigma, "Depth Sigma", 0.001f, 5.f, 0.01, 2);
+    g_dev->addBool(&m_svgf_enabled, "Enable À-Trous Filter");
+//    g_dev->addFloat(&m_illumination_sigma, "Illumination Sigma", 0.01f, 10.f, 0.01, 2); // unnused for now
     g_dev->addBool(&m_denoise_fade_enabled, "Fade Denoiser Out");
     g_dev->addFloat(&m_denoise_fade_sigma, "Denoise Fade Sigma", 0.00f, 10.f, 0.01, 2);
     g_dev->addSeparator();

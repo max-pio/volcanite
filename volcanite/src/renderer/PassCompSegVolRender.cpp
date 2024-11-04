@@ -107,20 +107,13 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
         if (hasDescriptors()) {
             commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_pipelineLayout, 0, m_descriptorSets->getActive(), nullptr);
         }
-        for (uint32_t i = 0; i < DENOISING_ITERATIONS; i++) {
-            PushConstants pushConstants{.denoising_iteration=i};
+        for (uint32_t i = 0; i < m_resolve_passes; i++) {
+            commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite)}, nullptr, nullptr);
+            PushConstants pushConstants{.denoising_iteration=i, .last_denoising_iteration=(m_resolve_passes-1u)};
             commandBuffer.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants), &pushConstants);
             commandBuffer.dispatch(m_work_group_sizes[RESOLVE].width, m_work_group_sizes[RESOLVE].height, m_work_group_sizes[RESOLVE].depth);
             commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
         }
-//        {
-//            // calculate heuristic for denoise fade
-//            float heuristic = 0.f;
-//            m_framesSinceCameraMove;
-//            PushConstants pushConstants{.denoising_heuristic=heuristic};
-//            commandBuffer.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants),
-//                                        &pushConstants);
-//        }
         getCtx()->debugMarker->endRegion(commandBuffer);
     }
 
@@ -179,4 +172,4 @@ std::vector<vk::PushConstantRange> PassCompSegVolRender::definePushConstantRange
     return {pushConstantRange};
 }
 
-} // namspace vvv
+} // namspace volcanite

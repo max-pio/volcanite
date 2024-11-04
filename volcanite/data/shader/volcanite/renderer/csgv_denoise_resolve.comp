@@ -23,6 +23,7 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #include "util.glsl"
 #include "volcanite/renderer/csgv_bindings.glsl"
 #include "volcanite/renderer/framebuffer.glsl"
+#include "volcanite/renderer/csgv_materials.glsl"
 #include "volcanite/renderer/dummy_envmap.glsl"
 
 #include "debug_colormaps.glsl"
@@ -134,14 +135,35 @@ float computeVarianceCenter(ivec2 ipos, const ivec2 viewport_size) {
     return sum_m2 - (sum_m1 * sum_m1);
 }
 
+vec3 getAlbedoOfLabel(uint label) {
+    // TODO: fix bugs with albedo demodulation
+    return vec3(1.f);
+
+    // the G buffer stores the invalid label for rays that hit no surface
+    if (label == INVALID)
+        return vec3(1.f);
+
+    const int material = getMaterial(label);
+    if (material < 0) {
+        assert(false, "G-buffer must not contain labels that are invisible");
+        return vec3(1.f);
+    } else {
+        return getColor(label, material).rgb;
+    }
+}
+
 // inplace alpha blending of pixel_rgba with the background color that is visible for the primary ray through block_pixel
 vec4 blendWithBackground(ivec2 pixel, vec4 pixel_rgba) {
+    // deterministic computation of the view ray
     vec2 subpixel_offset = randomVec3(pixel, g_camera_still_frames).xy;
     vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(imageSize(inpaintedOutColor));
     vec3 viewRayDirection = normalize((g_pixel_to_ray_direction_world_space * vec3(pixel + subpixel_offset, 1.0f)).xyz);
+    // blend with background
     pixel_rgba = pixel_rgba.a * pixel_rgba + (1.f - pixel_rgba.a) * get_background_color(fragCoord, viewRayDirection);
     return pixel_rgba;
 }
+
+#include "volcanite/renderer/csgv_debug_resolve.glsl"
 
 void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {
 #if 0
@@ -158,11 +180,12 @@ void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {
     }
     // accum_rgba.rgb = rgb2srgb(accum_rgba.rgb);
 
-    // blend with background, output to display image
+    DEBUG_img_g_buffer(pixel, accum_rgba, false);
+
+    // blend with background and output to display image
     imageStore(inpaintedOutColor, pixel, blendWithBackground(pixel, accum_rgba));
 }
 
-// TODO: split into separate shaders as either bilateral or À-trous denoising is used (or remove bilateral alltogether)
 void main() {
     // obtain pixel and fragment coordinates
     const ivec2 viewport_size = imageSize(inpaintedOutColor);
@@ -175,7 +198,7 @@ void main() {
     // upsampling / denoising may be disabled or faded out
     const float fade = g_denoise_fade_enable ? min(1.f, g_denoise_fade_sigma / sqrt(g_camera_still_frames / (g_subsampling * g_subsampling))) : 1.f;
     if (!g_svgf_enable || fade < 0.01f) {
-        if (pc.denoising_iteration == LAST_DENOISING_ITERATION) {
+        if (pc.denoising_iteration == pc.last_denoising_iteration) {
             writeFinalFramebuffer(pixel, imageLoad(denoisingBuffer[0], pixel));
         }
         return;
@@ -184,8 +207,7 @@ void main() {
     // read RGB radiance + alpha that was accumulated for this pixel so far.
     // it was already normalized with the sample count
     // an alpha value < 0 indicates that this pixel did not receive a single sample yet
-    vec4 pixel_color = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel);
-    float pixel_luminance = luminance(pixel_color.rgb);
+    vec4 pixel_rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel);
 //    if (pc.denoising_iteration == 0) {
 //        uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
 //        pixel_color /= float(sample_count);
@@ -196,21 +218,41 @@ void main() {
     float center_normalized_depth;
     vec3 center_normal;
     uint center_label;
-    const bool center_sampled = unpackGBufferRG8(imageLoad(gBuffer, pixel).rg,
-                                               center_label, center_normal, center_normalized_depth);
-    if (!center_sampled && pc.denoising_iteration == 0u) {
-        // marking non-sampled pixels for the first iteration must happen here. Otherwise, the renderer shader
-        // would have to read from gBuffer to check if the pixel received a sample in an earlier frame.
-        pixel_color.a = -1.f;
+    const bool center_sampled = unpackGBufferRGB16(imageLoad(gBuffer, pixel).rgb,
+                                                   center_label, center_normal, center_normalized_depth);
+    if (pc.denoising_iteration == 0u) {
+        if (!center_sampled) {
+            // marking non-sampled pixels for the first iteration must happen here. Otherwise, the renderer shader
+            // would have to read from gBuffer to check if the pixel received a sample in an earlier frame.
+            pixel_rgba.a = -1.f;
+        } else {
+            // demodulade rgb by albedo
+            pixel_rgba.rgb /= getAlbedoOfLabel(center_label);
+        }
     }
+
+    float pixel_luminance = luminance(pixel_rgba.rgb);
 
 
     // MULTI-PASS À-TROUS FILTER -----------------------------------------------------------------------------------
     // could become SVGF
     // for now only À-Trous filter w/o any variance estimation or temporal accumulation
-    const int step_size = 1 << pc.denoising_iteration;
+    TODO: why is this creating grid patterns if not using step size 1 in the first two iterations??
+    const int step_size = 1 << (pc.denoising_iteration == 0u ? 0u : pc.denoising_iteration - 1u);
     const vec3 kernel_weights = {1.f, 2.f / 3.f * fade, 1.f / 6.f * fade * fade};
     const float var = computeVarianceCenter(pixel, viewport_size);
+
+//    // for upsampling: halluciante a g buffer sample from the (3,3)*step_size neighborhood
+//    {
+//        // if two neighbors along one of the four axes have the same G-buffer, use it as the center pixel's G-buffer
+//        ivec2 axis_delta[4] = ivec2[](ivec2(1, 0), ivec2(0, 1), ivec2(1, 1), ivec2(-1, 1));
+//        // axis 0   axis 1    axis 2   axis 3
+//        //  - - -    - 0 -    0 - -    - - 1
+//        //  0 - 1    - - -    - - -    - - -
+//        //  - - -    - 1 -    - - 1    0 - -
+//
+//        // TODO implement G buffer hallucination in resolve pass
+//    }
 
     const float EPS = 0.01f;
     const float phi_Lillumination = g_illumination_sigma * sqrt(var) + EPS;
@@ -221,13 +263,9 @@ void main() {
     float weight = 1.f;
     float weight_sum  = 0.f;
 
-    // for upsampling: use the most frequent label from the 3x3 neighborhood
-    uvec2 label_freq[9] = uvec2[](uvec2(0u), uvec2(0u), uvec2(0u), uvec2(0u), uvec2(0u),
-                                  uvec2(0u), uvec2(0u), uvec2(0u), uvec2(0u));
-
     for (int dy = -g_denoise_filter_kernel_size; dy <= g_denoise_filter_kernel_size; dy++) {
         for (int dx = -g_denoise_filter_kernel_size; dx <= g_denoise_filter_kernel_size; dx++) {
-            ivec2 filter_pixel = pixel + (ivec2(dx, dy) * step_size);
+            ivec2 filter_pixel = pixel - (ivec2(dx, dy) * step_size);
 
             // do not sample outside image plane, cast to uvec to catch values < 0
             if (isHelperLane(uvec2(filter_pixel), uvec2(viewport_size)))
@@ -236,11 +274,11 @@ void main() {
             // if upsampling is required and the pixel already received a color:
             // do not blur in alter passes to prevent overblur!
             if (!center_sampled || g_bilateral_enable) {
-//                if (weight_sum > 0.f) {
-//                    break;
-//                }
-                if (pixel_color.a >= 0.f) {
-                    accum_rgba = pixel_color;
+                //if (weight_sum > 0.f) {
+                //    break;
+                //}
+                if (pixel_rgba.a >= 0.f) {
+                    accum_rgba = pixel_rgba;
                     weight_sum = 1.f;
                     break;
                 }
@@ -250,7 +288,7 @@ void main() {
             float normalized_depth;
             vec3 normal;
             uint label;
-            bool sampled = unpackGBufferRG8(imageLoad(gBuffer, filter_pixel).rg, label, normal, normalized_depth);
+            bool sampled = unpackGBufferRGB16(imageLoad(gBuffer, filter_pixel).rgb, label, normal, normalized_depth);
 
             // filter pixels that did not receive a sample yet are skipped:
             // - in the first iteration, these are marked by the !sampled return value of the G-Buffer query
@@ -258,11 +296,8 @@ void main() {
             if (pc.denoising_iteration == 0 && !sampled)
                 continue;
 
-            const vec4 rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], filter_pixel);
-//                // normalize the pixel radiance by sample counts in the first À-trous iteration
-//                if (pc.denoising_iteration == 0) {
-//                    rgba_block /= max(imageLoad(accuSampleCountOut, filter_pixel).r, 1u);
-//                }
+            vec4 rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], filter_pixel);
+
             // filter pixels that did not receive a single sample yet are marked with negative values and skipped
             if (pc.denoising_iteration > 0 && rgba.a < 0.f) {
                 continue;
@@ -275,36 +310,48 @@ void main() {
                 // => max(cos, 0) = weightN is either 0 or 1
                 if (label != center_label)
                     continue;
-                if (any(notEqual(center_normal, normal))) // || all(equal(normal, vec3(0.f))))
+                if (any(notEqual(center_normal, normal)))// || all(equal(normal, vec3(0.f))))
                     continue;
 
-                const float kernel = kernel_weights[abs(dx)] * kernel_weights[abs(dy)];
-                const float w = computeWeight(center_normalized_depth, normalized_depth, phi_depth,
-                                              pixel_luminance, luminance(rgba.rgb), phi_Lillumination);
-
-                weight = w * kernel;
-            } else {
-                weight = 1.f;
+                // in the first iteration: demodulate filter pixel radiance by filter pixel albedo
+                // only if not upsampling! there is no way to re-modulate if the center is not sampled.
+//                if (pc.denoising_iteration == 0u)
+//                    rgba.rgb /= getAlbedoOfLabel(label);
             }
+
+            const float kernel = kernel_weights[abs(dx)] * kernel_weights[abs(dy)];
+            const float w = 1.f; //computeWeight(center_normalized_depth, normalized_depth, phi_depth, pixel_luminance, luminance(rgba.rgb), phi_Lillumination);
+            weight = w * kernel;
 
             accum_rgba += rgba * weight;
             weight_sum += weight;
         }
     }
 
+//    if (isCenterWorkItem()) {
+//        debugPrintfEXT("this is iteration %u of %u, reading from buffer %u writing to %u", pc.denoising_iteration, pc.last_denoising_iteration, (pc.denoising_iteration % 2u), 1u - (pc.denoising_iteration % 2u));
+//    }
+
     if (weight_sum > 0.f)
         accum_rgba /= weight_sum;
 
-    if (pc.denoising_iteration < LAST_DENOISING_ITERATION) {
+//    if (pc.denoising_iteration > 0)
+//        accum_rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel);
+
+    if (pc.denoising_iteration < pc.last_denoising_iteration) {
         //  before last iteration:      À-trous feedback to next denoising iteration kernel in HDR
         // mark pixels from a filter step that did not receive a single rendered sample with a negative alpha value
         if (weight_sum <= 0.f)
             accum_rgba.a = -1.f;
 
         // store color for next iteration
-        imageStore(denoisingBuffer[(pc.denoising_iteration + 1u) % 2], pixel, accum_rgba);
+        imageStore(denoisingBuffer[1u - (pc.denoising_iteration % 2u)], pixel, accum_rgba);
     } else {
         // last iteration:              final pixel output in LDR
+        // re-modulate with albedo
+        if (center_sampled) {
+            accum_rgba.rgb *= getAlbedoOfLabel(center_label);
+        }
         writeFinalFramebuffer(pixel, accum_rgba);
     }
 }

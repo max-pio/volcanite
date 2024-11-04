@@ -43,7 +43,7 @@ void main() {
         // initialize RGBA accumulation with 0 and invalid G-Buffer, set 0 SPP
         imageStore(accumulationOut, pixel, vec4(0.f));
         imageStore(accuSampleCountOut, pixel, uvec4(0u));
-        imageStore(gBuffer, pixel, uvec4(invalidGBufferRG8(), 0u, 0u));
+        imageStore(gBuffer, pixel, uvec4(invalidGBufferRGB16(), 0u));
         imageStore(denoisingBuffer[0], pixel, vec4(0.f));
     }
     else {
