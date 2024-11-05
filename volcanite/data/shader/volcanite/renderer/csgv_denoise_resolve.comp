@@ -237,10 +237,15 @@ void main() {
     // MULTI-PASS À-TROUS FILTER -----------------------------------------------------------------------------------
     // could become SVGF
     // for now only À-Trous filter w/o any variance estimation or temporal accumulation
-    TODO: why is this creating grid patterns if not using step size 1 in the first two iterations??
-    const int step_size = 1 << (pc.denoising_iteration == 0u ? 0u : pc.denoising_iteration - 1u);
-    const vec3 kernel_weights = {1.f, 2.f / 3.f * fade, 1.f / 6.f * fade * fade};
-    const float var = computeVarianceCenter(pixel, viewport_size);
+    const int step_size = 1 << pc.denoising_iteration;
+    // use a Gaussian instead of B-spline kernel (see Dolp et al. "A Fast GPU Schedule For À-Trous Wavelet-Based Denoisers")
+    // we do not overlbur in the first iteration, as we found artifacts to be reduced with the constant Gauss kernel
+    // weights defined for 3x3 kernel [0.5, 1, 0.5] in 1D, convolved as [1 2 1]
+    //                                                            1/4 * [2 4 2]
+    //                                                                  [1 2 1]
+    const vec4 kernel_weights = vec4(1.f, 0.5f * fade, 0.25f * fade * fade, 0.125f * fade * fade);
+
+    const float var =  1.f;//computeVarianceCenter(pixel, viewport_size);
 
 //    // for upsampling: halluciante a g buffer sample from the (3,3)*step_size neighborhood
 //    {

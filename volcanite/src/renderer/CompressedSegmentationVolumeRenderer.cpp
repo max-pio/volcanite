@@ -889,8 +889,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_uresolve_info->setUniform<float>("g_illumination_sigma", m_illumination_sigma);
         m_uresolve_info->setUniform<float>("g_denoise_fade_sigma", m_denoise_fade_sigma);
         m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
-        m_uresolve_info->setUniform<int>("g_denoise_filter_kernel_size", m_svgf_enabled ?
-                                            glm::min(3, m_denoise_filter_kernel_size) : m_denoise_filter_kernel_size);
+        m_uresolve_info->setUniform<int>("g_denoise_filter_kernel_size",m_denoise_filter_kernel_size);
         m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
     }
 
@@ -1157,7 +1156,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addSeparator();
     g_dev->addLabel("Denoising");
     g_dev->addInt(&m_resolve_passes, "Resolve Passes", 1, 4, 1);
-    g_dev->addInt(&m_denoise_filter_kernel_size, "Denoise Filter Kernel Size", 0, 10, 1);
+    g_dev->addInt(&m_denoise_filter_kernel_size, "Denoise Filter Kernel Size", 0, 3, 1);
     g_dev->addBool(&m_bilateral_enabled, "Enable Denoising");
 //    g_dev->addFloat(&m_difference_depth_denoising, "difference depth denoising", 0.001f, 1.f, 0.004, 3);
 //    g_dev->addFloat(&m_spatial_sigma, "Spatial Sigma", 0.001f, 5.f, 0.01, 2);
