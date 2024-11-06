@@ -49,6 +49,7 @@ class CSGVBenchmarkPass : public PassCompute {
             // obtain shader compilation and execution parameters
             m_shader_defines.emplace_back("SUBGROUP_SIZE=" + std::to_string(
                                                 getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
+            m_shader_defines.emplace_back("CACHE_MODE=" + std::to_string(CACHE_BRICKS));
             if (m_use_palette_cache)
                 m_shader_defines.emplace_back("PALETTE_CACHE");
             if (m_csgv->isUsingRandomAccess())

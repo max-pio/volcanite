@@ -151,6 +151,8 @@ void CSGVSerialBrickEncoder::verifyBrickCompression(const uint32_t* brick_encodi
 // 4bit_encoding_start[0, 1, .. L-1], palette_start[0, 1 .. L], 4bit_encoding_padded_to32bit[0, 1, .. L], 32bit_palette[L, .., 1, 0]
 //       header_size*8 ᒧ                always zero ᒧ  ∟ .. one  ∟ palette size
 uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out, const glm::uvec3 start, const glm::uvec3 volume_dim) const {
+    assert(m_encoding_mode == NIBBLE_ENC || m_rans_initialized);
+
     std::vector<uint32_t> palette;
     glm::uvec3 volume_pos, brick_pos;
 
@@ -236,8 +238,7 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
             uint32_t operation = 0u;
             // if the whole subtree from here has this parent_value, we can set a stop sign and fill the whole brick area of the subtree
             // note that grid nodes outside the volume are by definition also homogeneous
-            if (lod_width > 1 && multigrid[muligrid_lod_start +
-                                           voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].constant_subregion) {
+            if (lod_width > 1 && multigrid[muligrid_lod_start + voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].constant_subregion) {
                 operation = STOP_BIT;
             }
             // determine operation for the next entry
@@ -317,6 +318,8 @@ void CSGVSerialBrickEncoder::decodeBrick(const uint32_t* brick_encoding, const u
                                          const uint32_t* brick_detail_encoding,
                                          const uint32_t brick_detail_encoding_length,
                                          uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const {
+    assert(m_encoding_mode == NIBBLE_ENC || m_rans_initialized);
+
     // the palette starts at the end of the encoding block
     uint32_t paletteE = brick_encoding_length - 1u;
     const uint32_t* brick_palette = brick_encoding;
@@ -425,6 +428,8 @@ void CSGVSerialBrickEncoder::decodeBrickWithDebugEncoding(const uint32_t* brick_
                                                           uint32_t* output_brick, uint32_t* output_encoding,
                                                           std::vector<glm::uvec4>* output_palette, glm::uvec3 valid_brick_size,
                                                           int inv_lod) const {
+    assert(m_encoding_mode == NIBBLE_ENC || m_rans_initialized);
+
     // the palette starts at the end of the encoding block
     uint32_t paletteE = brick_encoding_length - 1u;
     const uint32_t* brick_palette = brick_encoding;
@@ -606,13 +611,14 @@ void CSGVSerialBrickEncoder::freqEncodeBrick(const std::vector<uint32_t>& volume
                 // if this subtree is already filled (because in a previous LOD we set a STOP_BIT for this area), the last element of this block is set and we can skip it
                 // note that this will also happen if this LOD block lies completely outside the volume because some parent would've been set to STOP_BIT earlier
                 // our parent spanned 8 elements of this finer current level, so we need to look at the element 7 indices further
-                if (multigrid[parent_multigrid_lod_start +
-                              voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].constant_subregion) { //tmpBrick[i + (lod_width * lod_width * lod_width * 7)] != INVALID) {
+                if ((m_op_mask & OP_STOP_BIT)
+                     && multigrid[parent_multigrid_lod_start +
+                              voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].constant_subregion) {
                     i += (lod_width * lod_width * lod_width * 7);
                     continue;
                 }
                 parent_value = multigrid[parent_multigrid_lod_start +
-                                         voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].label; //tmpBrick[i];
+                                         voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].label;
                 assert(parent_value != INVALID && "parent element in brick was not set in previous LOD!");
             }
 
@@ -622,26 +628,27 @@ void CSGVSerialBrickEncoder::freqEncodeBrick(const std::vector<uint32_t>& volume
             uint32_t operation = 0u;
             // if the whole subtree from here has this parent_value, we can set a stop sign and fill the whole brick area of the subtree
             // note that grid nodes outside the volume are by definition also homogeneous
-            if (lod_width >= 1 && multigrid[muligrid_lod_start +
+            if ((m_op_mask & OP_STOP_BIT) && lod_width >= 1
+                 && multigrid[muligrid_lod_start +
                                             voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].constant_subregion) {
                 operation = STOP_BIT;
             }
             // determine operation for the next entry
             [[likely]]
-            if (value == parent_value)
+            if ((m_op_mask & OP_PARENT_BIT) && value == parent_value)
                 operation |= PARENT;
-            else if (valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 0) == value)
+            else if ((m_op_mask & OP_NEIGHBORX_BIT) && valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 0) == value)
                 operation |= NEIGHBOR_X;
-            else if (valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 1) == value)
+            else if ((m_op_mask & OP_NEIGHBORY_BIT) && valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 1) == value)
                 operation |= NEIGHBOR_Y;
-            else if (valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 2) == value)
+            else if ((m_op_mask & OP_NEIGHBORZ_BIT) && valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 2) == value)
                 operation |= NEIGHBOR_Z;
-            else if (palette.back() == value)
+            else if ((m_op_mask & OP_PALETTE_LAST_BIT) && palette.back() == value)
                 operation |= PALETTE_LAST;
             else {
                 // reuse the n-X palette value where 0 < X < 17
                 uint32_t palette_delta = static_cast<uint32_t>(std::find(palette.rbegin(), palette.rend(), value) - palette.rbegin());
-                if(palette_delta < 17u && palette_delta < palette.size()) {
+                if((m_op_mask & OP_PALETTE_D_BIT) && palette_delta < 17u && palette_delta < palette.size()) {
                     assert(palette.at(palette.size() - palette_delta - 1u) == value && "Palette value does not fit!");
                     assert(palette_delta > 0u && "the palette delta 0 should've been caught by the palette_last value!");
                     if(detail_freq && (current_inv_lod == lod_count - 1u))

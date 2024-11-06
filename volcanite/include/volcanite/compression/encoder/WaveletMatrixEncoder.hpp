@@ -177,6 +177,24 @@ public:
         return defines;
     }
 
+    // FILE IMPORT AND EXPORT ------------------------------------------------------------------------------------------
+
+    /// Exports all specialized configuration information of this encoder (e.g. frequency tables) that are not handled
+    /// by the encoder base class or CompressedSegmentationVolume class.
+    void exportToFile(std::ostream& out) override {
+        // TODO: WaveletMatrixEncoder should export a hash of all compile time config constants and check it on import
+        CSGVBrickEncoder::exportToFile(out);
+    }
+
+    /// Imports specialized configuration information from the stream.
+    /// @return true on success, false otherwise.
+    bool importFromFile(std::istream& in) override {
+        if (!CSGVBrickEncoder::importFromFile(in))
+            return false;
+        // TODO: WaveletMatrixEncoder should export a hash of all compile time config constants and check it on import
+        return true;
+    }
+
     // DEBUGGING AND STATISTICS ----------------------------------------------------------------------------------------
 
     /// A quick way of checking some invariants of CSGV representations to verify the compressed volume.

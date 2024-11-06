@@ -31,6 +31,8 @@ uint32_t NibbleEncoder::readNextLodOperationFromEncoding(const uint32_t* brick_e
 //       header_size*8 ᒧ                always zero ᒧ  ∟ .. one  ∟ palette size
 uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out,
                                                    glm::uvec3 start, glm::uvec3 volume_dim) const {
+    assert(!(m_op_mask & OP_STOP_BIT) && "Nibble encoder does not support stop bits in random access");
+
     std::vector<uint32_t> palette;
     palette.reserve(32);
     glm::uvec3 volume_pos, brick_pos;
@@ -48,10 +50,6 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
     // construct the multigrid on this brick that we want to represent in this encoding
     std::vector<MultiGridNode> multigrid;
     VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size, m_op_mask & OP_STOP_BIT);
-
-    // ToDo: random access encoding does not support stop bits yet
-    for (MultiGridNode &node: multigrid)
-        node.constant_subregion = false;
 
     // we start with the coarsest LOD, which is always a PALETTE_ADV of the max occuring value in the whole brick
     // we handle this here because it allows us to skip some special handling (for example checking if the palette is empty) in the following loop
@@ -122,15 +120,15 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
             }
             // determine operation for the next entry
             [[likely]]
-            if (value == parent_value)
+            if ((m_op_mask & OP_PARENT_BIT) && value == parent_value)
                 operation |= PARENT;
-            else if (valueOfNeighbor(&multigrid[muligrid_lod_start], &multigrid[parent_multigrid_lod_start], brick_pos / lod_width, child_index, lod_dim, m_brick_size, 0) == value)
+            else if ((m_op_mask & OP_NEIGHBORX_BIT) && valueOfNeighbor(&multigrid[muligrid_lod_start], &multigrid[parent_multigrid_lod_start], brick_pos / lod_width, child_index, lod_dim, m_brick_size, 0) == value)
                 operation |= NEIGHBOR_X;
-            else if (valueOfNeighbor(&multigrid[muligrid_lod_start], &multigrid[parent_multigrid_lod_start], brick_pos / lod_width, child_index, lod_dim, m_brick_size, 1) == value)
+            else if ((m_op_mask & OP_NEIGHBORY_BIT) && valueOfNeighbor(&multigrid[muligrid_lod_start], &multigrid[parent_multigrid_lod_start], brick_pos / lod_width, child_index, lod_dim, m_brick_size, 1) == value)
                 operation |= NEIGHBOR_Y;
-            else if (valueOfNeighbor(&multigrid[muligrid_lod_start], &multigrid[parent_multigrid_lod_start], brick_pos / lod_width, child_index, lod_dim, m_brick_size, 2) == value)
+            else if ((m_op_mask & OP_NEIGHBORZ_BIT) && valueOfNeighbor(&multigrid[muligrid_lod_start], &multigrid[parent_multigrid_lod_start], brick_pos / lod_width, child_index, lod_dim, m_brick_size, 2) == value)
                 operation |= NEIGHBOR_Z;
-            else if (palette.back() == value)
+            else if ((m_op_mask & OP_PALETTE_LAST_BIT) && palette.back() == value)
                 operation |= PALETTE_LAST;
             else {
                 // Random access encoding does not use the palette delta operation

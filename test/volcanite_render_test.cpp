@@ -195,7 +195,7 @@ int main() {
             csgv->setCompressionOptions64(args.brick_size, NIBBLE_ENC, OP_ALL, args.random_access);
             csgv->compressForFrequencyTable(volume.dataConst(), dim, freq, 2, args.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
         }
-        csgv->setCompressionOptions64(args.brick_size, args.encoding_mode, OP_ALL, args.random_access, freq, freq + 16);
+        csgv->setCompressionOptions64(args.brick_size, args.encoding_mode, args.random_access ? OP_ALL_WITHOUT_STOP : OP_ALL, args.random_access, freq, freq + 16);
         csgv->compress(volume.dataConst(), dim, false);
         // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
         if(args.stream_lod && !csgv->isUsingSeparateDetail()) {

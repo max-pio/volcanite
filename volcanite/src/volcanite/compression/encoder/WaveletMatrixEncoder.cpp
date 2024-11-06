@@ -192,7 +192,7 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
     // append stop bit vector (if stop bits are enabled)
     if (m_op_mask & OP_STOP_BIT) {
         stop_bit_vector.shrink_to_fit();
-        assert(sizeof(BV_L12Type) % 32 == 0u);
+        assert(sizeof(BV_L12Type) % sizeof(uint32_t) == 0u);
         FlatRank fr(stop_bit_vector);
         const uint32_t fr_32b_size = fr.getRawDataSize() * (sizeof(BV_L12Type) / sizeof(uint32_t));
         const uint32_t* fr_32b = reinterpret_cast<const uint32_t*>(fr.getRawData());
@@ -200,7 +200,7 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
             out[out_i++] = fr_32b[i];
         }
 
-        assert(sizeof(BV_WordType) % 32 == 0u);
+        assert(sizeof(BV_WordType) % sizeof(uint32_t) == 0u);
         const uint32_t stop_bit_32b_size = stop_bit_vector.getRawDataSize() * (sizeof(BV_WordType) / sizeof(uint32_t));
         const uint32_t* stop_bit_32b = reinterpret_cast<const uint32_t *>(stop_bit_vector.getRawData());
         for (uint32_t i = 0; i < stop_bit_32b_size; i++) {

@@ -497,17 +497,9 @@ public:
         return normalizeCodeFrequencies(f);
     }
 
-    [[nodiscard]] std::vector<uint32_t> getCurrentFrequencyTable() const {
-        if(!isUsingRANS())
-            throw std::runtime_error("Can't get a frequency table from a Compressed Segmentation Volume that's not using rANS!");
-        return m_frequency_table;
-    }
+    [[nodiscard]] std::vector<uint32_t> getCurrentFrequencyTable() const;
 
-    [[nodiscard]] const std::vector<uint32_t> getCurrentDetailFrequencyTable() const {
-        if(!isUsingDetailFreq())
-            throw std::runtime_error("Can't get a detail frequency table from a Compressed Segmentation Volume that's not using rANS in double table mode.");
-        return m_detail_frequency_table;
-    }
+    [[nodiscard]] std::vector<uint32_t> getCurrentDetailFrequencyTable() const;
 
     [[nodiscard]] std::vector<std::string> getGLSLDefines() const {
         std::vector<std::string> shader_defines = m_encoder->getGLSLDefines([this](const uint32_t brick_idx){
@@ -544,8 +536,8 @@ private:
     std::unique_ptr<CSGVBrickEncoder> m_encoder = {};    ///< encodes single bricks with a certain encoding method
     EncodingMode m_encoding_mode;
     uint32_t m_op_mask = OP_ALL;                    ///< if certain CSGV operations and stop bits are enabled
-    std::vector<uint32_t> m_frequency_table;        ///< operation frequencies within all, or within the base levels
-    std::vector<uint32_t> m_detail_frequency_table; ///< operation frequencies within the detail level
+//    std::vector<uint32_t> m_frequency_table;        ///< operation frequencies within all, or within the base levels
+//    std::vector<uint32_t> m_detail_frequency_table; ///< operation frequencies within the detail level
     bool m_random_access = false;                   ///< encoding supports random access within a brick
 
     bool m_separate_detail;

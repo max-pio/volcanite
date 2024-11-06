@@ -104,8 +104,22 @@ public:
     // VARIABLE BIT-LENGTH ENCODING ------------------------------------------------------------------------------------
 
     /// Computes operation frequencies and detail operation frequencies (the latter offset by 16) for the brick into the given brick_freq[32] array.
-    virtual void freqEncodeBrick(const std::vector<uint32_t>& volume, size_t* brick_freq, glm::uvec3 start,
-                                 glm::uvec3 volume_dim, bool detail_freq) const override;
+    void freqEncodeBrick(const std::vector<uint32_t>& volume, size_t* brick_freq, glm::uvec3 start,
+                         glm::uvec3 volume_dim, bool detail_freq) const override;
+
+    // FILE IMPORT AND EXPORT ------------------------------------------------------------------------------------------
+
+    /// Exports all specialized configuration information of this encoder (e.g. frequency tables) that are not handled
+    /// by the encoder base class or CompressedSegmentationVolume class.
+    void exportToFile(std::ostream& out) override { CSGVBrickEncoder::exportToFile(out); }
+
+    /// Imports specialized configuration information from the stream.
+    /// @return true on success, false otherwise.
+    bool importFromFile(std::istream& in) override {
+        if (!CSGVBrickEncoder::importFromFile(in))
+            return false;
+        return true;
+    }
 
     // COMPONENT AND SHADER INTERFACE ----------------------------------------------------------------------------------
 
@@ -135,6 +149,8 @@ protected:
         bool in_detail_lod = false;     // if we are in the finest level-of-detail (only set in rANS double table mode)
     };
 
+    // TODO: move rANS attributes to RangeANSEncoder.hpp
+    bool m_rans_initialized;
     RANS m_rans;
     RANS m_detail_rans;
 

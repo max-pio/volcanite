@@ -98,9 +98,7 @@ void RANS::recomputeFrequencyTables(const uint32_t * frequency_array) {
         stats.freqs[s] = frequency_array[s];
     stats.normalize_freqs(prob_scale);
 
-    std::stringstream sss("");
     for (int s = 0; s < RANS_ALPHABET_SIZE; s++) {
-        sss << stats.freqs[s] << ",";
         for (uint32_t i = stats.cum_freqs[s]; i < stats.cum_freqs[s + 1]; i++)
             cum2sym[i] = s;
     }
