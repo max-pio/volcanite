@@ -44,8 +44,8 @@ struct MultiGridNode;
 class CSGVBrickEncoder {
 
     public:CSGVBrickEncoder() = delete;
-    explicit CSGVBrickEncoder(uint32_t brick_size, EncodingMode encoding_mode)
-         : m_brick_size(brick_size), m_encoding_mode(encoding_mode),
+    explicit CSGVBrickEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask=OP_ALL)
+         : m_brick_size(brick_size), m_encoding_mode(encoding_mode), m_op_mask(op_mask),
            m_separate_detail(false), m_cpu_threads(std::thread::hardware_concurrency()) {
         assert(std::popcount(brick_size) == 1u && "Encoding brick size must be a positive power of two.");
     }
@@ -206,6 +206,7 @@ protected:
     // configuration
     uint32_t m_brick_size;
     EncodingMode m_encoding_mode;
+    uint32_t m_op_mask;             ///< mask for enabling / disabling certain CSGV operations
     bool m_separate_detail;
     uint32_t m_cpu_threads;
 

@@ -96,6 +96,7 @@ int volcanite_main(int argc, char *argv[]) {
         // we open a precomputed csgv database for this volume if it exists or create it otherwise
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),
                 .encoding_mode = args.encoding_mode,
+                .op_mask = args.operation_mask,
                 .random_access = args.random_access,
                 .label_remapping = nullptr,
                 .cpu_threads = args.threads,

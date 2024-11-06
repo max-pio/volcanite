@@ -22,7 +22,8 @@ namespace volcanite {
 class NibbleEncoder : public CSGVSerialBrickEncoder {
 
 public:
-    NibbleEncoder(uint32_t brick_size, EncodingMode encoding_mode) : CSGVSerialBrickEncoder(brick_size, encoding_mode) {
+    NibbleEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask=OP_ALL)
+        : CSGVSerialBrickEncoder(brick_size, encoding_mode, op_mask) {
         if (encoding_mode != NIBBLE_ENC)
             throw std::runtime_error("NibbleEncoder must be used with NIBBLE_ENC encoding mode.");
     }

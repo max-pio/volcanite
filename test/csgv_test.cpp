@@ -29,7 +29,7 @@ int main() {
     // Plain 4 bit per operation encoding
     {
         Logger(INFO) << "Nibble";
-        csgv.setCompressionOptions64(16, NIBBLE_ENC, false);
+        csgv.setCompressionOptions64(16, NIBBLE_ENC, OP_ALL, false);
         if (!csgv.test(volume.dataConst(), dim, true))
             return 1;
 
@@ -44,9 +44,9 @@ int main() {
     {
         Logger(INFO) << "Range ANS";
         size_t freq[32];
-        csgv.setCompressionOptions64(32, NIBBLE_ENC, false);
+        csgv.setCompressionOptions64(32, NIBBLE_ENC, OP_ALL, false);
         csgv.compressForFrequencyTable(volume.dataConst(), dim, freq, 2, false, false);
-        csgv.setCompressionOptions64(32, SINGLE_TABLE_RANS_ENC, false, freq, freq + 16);
+        csgv.setCompressionOptions64(32, SINGLE_TABLE_RANS_ENC, OP_ALL, false, freq, freq + 16);
         if (!csgv.test(volume.dataConst(), dim, true))
             return 2;
 
@@ -61,9 +61,9 @@ int main() {
     {
         Logger(INFO) << "Double Table Range ANS with Detail Separation";
         size_t freq[32];
-        csgv.setCompressionOptions64(64, NIBBLE_ENC, false);
+        csgv.setCompressionOptions64(64, NIBBLE_ENC, OP_ALL, false);
         csgv.compressForFrequencyTable(volume.dataConst(), dim, freq, 2, true, false);
-        csgv.setCompressionOptions64(64, DOUBLE_TABLE_RANS_ENC, false, freq, freq + 16);
+        csgv.setCompressionOptions64(64, DOUBLE_TABLE_RANS_ENC, OP_ALL, false, freq, freq + 16);
         csgv.compress(volume.dataConst(), dim, false);
         csgv.separateDetail();
         if (!csgv.test(volume.dataConst(), dim, false))

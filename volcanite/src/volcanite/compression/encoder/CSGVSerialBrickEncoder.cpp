@@ -166,7 +166,7 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
 
     // construct the multigrid on this brick that we want to represent in this encoding
     std::vector<MultiGridNode> multigrid;
-    VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size);
+    VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size, m_op_mask & OP_STOP_BIT);
 
     // we start with the coarsest LOD, which is always a PALETTE_ADV of the max occuring value in the whole brick
     // we handle this here because it allows us to skip some special handling (for example checking if the palette is empty) in the following loop
@@ -242,20 +242,20 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
             }
             // determine operation for the next entry
             [[likely]]
-            if (value == parent_value)
+            if ((m_op_mask & OP_PARENT_BIT) && value == parent_value)
                 operation |= PARENT;
-            else if (valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 0) == value)
+            else if ((m_op_mask & OP_NEIGHBORX_BIT) && valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 0) == value)
                 operation |= NEIGHBOR_X;
-            else if (valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 1) == value)
+            else if ((m_op_mask & OP_NEIGHBORY_BIT) && valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 1) == value)
                 operation |= NEIGHBOR_Y;
-            else if (valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 2) == value)
+            else if ((m_op_mask & OP_NEIGHBORZ_BIT) && valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 2) == value)
                 operation |= NEIGHBOR_Z;
-            else if (palette.back() == value)
+            else if ((m_op_mask & OP_PALETTE_LAST_BIT) && palette.back() == value)
                 operation |= PALETTE_LAST;
             else {
                 // reuse the n-X palette value where 0 < X < 17
                 uint32_t palette_delta = static_cast<uint32_t>(std::find(palette.rbegin(), palette.rend(), value) - palette.rbegin());
-                if(palette_delta < 17u && palette_delta < palette.size()) {
+                if((m_op_mask & OP_PALETTE_D_BIT) && palette_delta < 17u && palette_delta < palette.size()) {
                     assert(palette.at(palette.size() - palette_delta - 1u) == value && "Palette value does not fit!");
                     assert(palette_delta > 0u && "the palette delta 0 should've been caught by the palette_last value!");
                     write4Bit(out, 0u, out_i++, operation | PALETTE_D);
@@ -567,7 +567,7 @@ void CSGVSerialBrickEncoder::freqEncodeBrick(const std::vector<uint32_t>& volume
 
     // construct the multigrid on this brick that we want to represent in this encoding
     std::vector<MultiGridNode> multigrid;
-    VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size);
+    VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size, m_op_mask & OP_STOP_BIT);
 
     // we start with the coarsest LOD, which is always a PALETTE_ADV of the max occuring value in the whole brick
     // we handle this here because it allows us to skip some special handling (for example checking if the palette is empty) in the following loop

@@ -45,8 +45,9 @@ public:
      * Levels are stored from finest (original) to coarsest (1³) resolution in out.
      * Entries for nodes in out lying completely outside the volume are set to 0 and are flagged as constant.
      * Nodes in the finest level L0 are always flagged as constant.
+     * if mark_constant_regions is false, none of the nodes are flagged as constant
      */
-    static void constructMultiGrid(std::vector<MultiGridNode>& out, const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, const glm::uvec3 brick_start, const uint32_t brick_dim) {
+    static void constructMultiGrid(std::vector<MultiGridNode>& out, const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, const glm::uvec3 brick_start, const uint32_t brick_dim, bool mark_constant_regions) {
         assert(!(brick_dim & (brick_dim - 1u)) && "brick_dim must be a power of 2");
 
         out.resize(static_cast<size_t>(std::floor(brick_dim * brick_dim * brick_dim) * 8.f/7.f));
@@ -98,7 +99,7 @@ public:
                         // but is not a performance bottleneck at the moment.
                         uint32_t max_ocurrences = 0u;
                         uint32_t max_label = 0xFFFFFFFF;
-                        bool constant = true;
+                        bool constant = mark_constant_regions;
                         for(i = 0; i < 8; i++) {
                             // skip childs lying completely outside the volume
                             if(child_elements[i]->label == 0xFFFFFFFF)

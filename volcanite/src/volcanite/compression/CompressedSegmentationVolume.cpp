@@ -28,7 +28,7 @@ using namespace vvv;
 namespace volcanite {
 
 void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, EncodingMode encoding_mode,
-                                                         bool random_access,
+                                                         uint32_t op_mask,  bool random_access,
                                                          const uint32_t* code_frequencies,
                                                          const uint32_t* detail_code_frequencies) {
     if(!(brick_size > 0 && !(brick_size & (brick_size - 1))))
@@ -47,27 +47,28 @@ void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, En
 
     m_brick_size = brick_size;
     m_encoding_mode = encoding_mode;
+    m_op_mask = op_mask;
     m_random_access = random_access;
 
     // TODO: replace with switch / case
     // set up the respective brick encoder
     if (m_encoding_mode == NIBBLE_ENC) {
-        m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode);
+        m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     }
     else if (m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
         if(code_frequencies == nullptr)
             throw std::runtime_error("Operation frequencies must be given if using rANS.");
-        if(random_access)
+        if (random_access)
             throw std::runtime_error("Random access encoding is not compatible with rANS.");
 
         // normalize the symbol frequencies and setup encoder
-        m_encoder = std::make_unique<RangeANSEncoder>(m_brick_size, m_encoding_mode,
+        m_encoder = std::make_unique<RangeANSEncoder>(m_brick_size, m_encoding_mode, m_op_mask,
                                     normalizeCodeFrequencies(code_frequencies).data(),
                                     (m_encoding_mode == DOUBLE_TABLE_RANS_ENC)
                                     ? normalizeCodeFrequencies(detail_code_frequencies).data()
                                     : nullptr);
     } else if (m_encoding_mode == WAVELET_MATRIX_ENC || m_encoding_mode == HUFFMAN_WM_ENC) {
-        m_encoder = std::make_unique<WaveletMatrixEncoder>(m_brick_size, m_encoding_mode);
+        m_encoder = std::make_unique<WaveletMatrixEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     } else {
         throw std::runtime_error("No CSGB brick encoder for given encoding mode available.");
     }
@@ -567,7 +568,7 @@ bool CompressedSegmentationVolume::testLOD(const std::vector<uint32_t> &volume, 
 
                     // construct target multigrid for this brick (a bit efficient since we only test one level here..)
                     std::vector<MultiGridNode> multigrid;
-                    constructMultiGrid(multigrid, volume, volume_dim, brick * m_brick_size, m_brick_size);
+                    constructMultiGrid(multigrid, volume, volume_dim, brick * m_brick_size, m_brick_size, false);
 
                     // check all elements of this LoD
                     glm::uvec3 pos_in_brick;

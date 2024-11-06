@@ -137,6 +137,7 @@ public:
     struct CSGVCompressionConfig {
         int brick_dim = 32;
         EncodingMode encoding_mode = DOUBLE_TABLE_RANS_ENC;
+        uint32_t op_mask = OP_ALL;
         bool random_access = false;
         std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> label_remapping = nullptr;
         uint32_t cpu_threads = 0u;
@@ -189,10 +190,29 @@ public:
 
 
         if(cfg.verbose) {
-
+            std::string op_mask_str;
+            if (cfg.op_mask == OP_ALL)
+                op_mask_str = "all";
+            else {
+                if (cfg.op_mask & OP_PARENT_BIT)
+                    op_mask_str.push_back('p');
+                if (cfg.op_mask & OP_NEIGHBORY_BIT)
+                    op_mask_str.push_back('x');
+                if (cfg.op_mask & OP_NEIGHBORY_BIT)
+                    op_mask_str.push_back('y');
+                if (cfg.op_mask & OP_NEIGHBORZ_BIT)
+                    op_mask_str.push_back('z');
+                if (cfg.op_mask & OP_PALETTE_LAST_BIT)
+                    op_mask_str.push_back('l');
+                if (cfg.op_mask & OP_PALETTE_D_BIT)
+                    op_mask_str.push_back('d');
+                if (cfg.op_mask & OP_STOP_BIT)
+                    op_mask_str.push_back('s');
+            }
             Logger(INFO) << "Compressing " << volume_input_path
                          << (cfg.chunked_input_data ? " with chunk indices " + str(cfg.max_file_index) : "")
                          << " to " << csgv_path << " [b=" << cfg.brick_dim << ", e=" << EncodingMode_STR(cfg.encoding_mode)
+                         << ", op=" << op_mask_str
                          << (cfg.random_access ? ", p" : "") << "]"
                          << (cfg.use_detail_separation ? " with lod separation" : "");
 
@@ -254,7 +274,7 @@ public:
                             volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
 
                             size_t tmp_code_frequencies[32];
-                            csgv->setCompressionOptions(cfg.brick_dim, NIBBLE_ENC, cfg.random_access);
+                            csgv->setCompressionOptions(cfg.brick_dim, NIBBLE_ENC, cfg.op_mask, cfg.random_access);
                             csgv->compressForFrequencyTable(volume->data(), volume_dim, tmp_code_frequencies, cfg.freq_subsampling, cfg.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
                             for (int i = 0; i < 16; i++) {
                                 code_frequencies[i] += tmp_code_frequencies[i];
@@ -312,7 +332,7 @@ public:
 
                         // perform the actual compression
                         csgv->clear();
-                        csgv->setCompressionOptions64(cfg.brick_dim, cfg.encoding_mode, cfg.random_access,
+                        csgv->setCompressionOptions64(cfg.brick_dim, cfg.encoding_mode, cfg.op_mask, cfg.random_access,
                                                       code_frequencies.data(), detail_code_frequencies.data());
                         csgv->compress(volume->data(), volume_dim, cfg.verbose);
                         total_encoding_seconds += csgv->getLastTotalEncodingSeconds();

@@ -24,8 +24,8 @@ namespace volcanite {
 class WaveletMatrixEncoder : public CSGVBrickEncoder {
 
 public:
-    WaveletMatrixEncoder(uint32_t brick_size, EncodingMode encoding_mode)
-            : CSGVBrickEncoder(brick_size, encoding_mode) {
+    WaveletMatrixEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask=OP_ALL)
+            : CSGVBrickEncoder(brick_size, encoding_mode, op_mask) {
         if (encoding_mode != WAVELET_MATRIX_ENC && encoding_mode != HUFFMAN_WM_ENC)
             throw std::runtime_error("WaveletMatrixEncoder must be used with (Huffman) WAVELET_MATRIX encoding mode.");
     }

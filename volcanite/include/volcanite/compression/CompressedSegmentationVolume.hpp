@@ -350,17 +350,19 @@ public:
 
     /// Sets the options for the compression step. If using rANS, a frequency table as a uint32_t[16] array must be given for the base.
     /// If using detail separation (use_detail) and rANS, an additional frequency table must be given for the detail buffer.
+    /// @param op_mask combination of OP_*_BIT flags specifying if certain CSGV operations and stop bits are used
     /// @param random_access if true, encodes in a format that supports in-brick random access
-    void setCompressionOptions(uint32_t brick_size, EncodingMode encoding_mode, bool random_access,
+    void setCompressionOptions(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask, bool random_access,
                                const uint32_t* code_frequencies = nullptr, const uint32_t* detail_code_frequencies = nullptr);
 
     /// Sets the options for the compression step. If using rANS, a 64 bit frequency table as a size_t[16] array must be given for the base.
     /// If an additional frequency table must be given for the finest LoD if rANS is used in double table mode.
     /// Detail separation (splitting off the operation stream of the finest LoD in a separated compressed file.
+    /// @param op_mask combination of OP_*_BIT flags specifying if certain CSGV operations and stop bits are used
     /// @param random_access if true, encodes in a format that supports in-brick random access
-    void setCompressionOptions64(uint32_t brick_size, EncodingMode encoding_mode, bool random_access,
+    void setCompressionOptions64(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask, bool random_access,
                                  const size_t* code_frequencies = nullptr, const size_t* detail_code_frequencies = nullptr) {
-        setCompressionOptions(brick_size, encoding_mode, random_access,
+        setCompressionOptions(brick_size, encoding_mode, op_mask, random_access,
                           code_frequencies ? normalizeCodeFrequencies(code_frequencies).data() : nullptr,
                           detail_code_frequencies ? normalizeCodeFrequencies(detail_code_frequencies).data() : nullptr);
     }
@@ -541,6 +543,7 @@ private:
 
     std::unique_ptr<CSGVBrickEncoder> m_encoder = {};    ///< encodes single bricks with a certain encoding method
     EncodingMode m_encoding_mode;
+    uint32_t m_op_mask = OP_ALL;                    ///< if certain CSGV operations and stop bits are enabled
     std::vector<uint32_t> m_frequency_table;        ///< operation frequencies within all, or within the base levels
     std::vector<uint32_t> m_detail_frequency_table; ///< operation frequencies within the detail level
     bool m_random_access = false;                   ///< encoding supports random access within a brick

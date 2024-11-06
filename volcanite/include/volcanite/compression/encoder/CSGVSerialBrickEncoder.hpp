@@ -25,8 +25,8 @@ namespace volcanite {
 class CSGVSerialBrickEncoder : public CSGVBrickEncoder {
 
 public:
-    CSGVSerialBrickEncoder(uint32_t brick_size, EncodingMode encoding_mode)
-            : CSGVBrickEncoder(brick_size, encoding_mode) {}
+    CSGVSerialBrickEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask=OP_ALL)
+            : CSGVBrickEncoder(brick_size, encoding_mode, op_mask) {}
 
     // SERIAL ENCODING -------------------------------------------------------------------------------------------------
 

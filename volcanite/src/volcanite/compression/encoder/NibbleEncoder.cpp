@@ -47,7 +47,7 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
 
     // construct the multigrid on this brick that we want to represent in this encoding
     std::vector<MultiGridNode> multigrid;
-    VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size);
+    VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size, m_op_mask & OP_STOP_BIT);
 
     // ToDo: random access encoding does not support stop bits yet
     for (MultiGridNode &node: multigrid)

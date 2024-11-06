@@ -67,6 +67,7 @@ public:
     uint32_t brick_size = 32;
     EncodingMode encoding_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC;
     uint32_t freq_subsampling = 8;      // n^3 factor for subsampling bricks for frequency table computation with rANS
+    uint32_t operation_mask = OP_ALL;   // enables certain CSGV operations and stop bits through OP_*_BIT
     bool random_access = false;         // encode bricks so that they support random access within a brick
 
     bool run_tests = false;
@@ -128,6 +129,7 @@ public:
             cmd.add(bricksizeArg);
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
+            ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits, or [a]ll", false, "a", "(a|p|n|x|y|z|l|d|s)*", cmd);
             SwitchArg randomAccessArg("p", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
 
             // attribute arguments
@@ -167,6 +169,43 @@ public:
             va.decompress_export_file = expandPath(decompresspathArg.getValue());
             va.compress_export_file = expandPath(compresspathArg.getValue());
             va.export_stats = statsArg.getValue();
+            {
+                std::string op_codes = opMaskArg.getValue();
+                std::transform(op_codes.begin(), op_codes.end(), op_codes.begin(), ::tolower);
+                va.operation_mask = 0;
+                for (const auto& c : opMaskArg.getValue()) {
+                    switch (c) {
+                        case 'a':
+                            va.operation_mask |= OP_ALL;
+                        case 'p':
+                            va.operation_mask |= OP_PARENT_BIT;
+                            break;
+                        case 'x':
+                            va.operation_mask |= OP_NEIGHBORX_BIT;
+                            break;
+                        case 'y':
+                            va.operation_mask |= OP_NEIGHBORY_BIT;
+                            break;
+                        case 'z':
+                            va.operation_mask |= OP_NEIGHBORZ_BIT;
+                            break;
+                        case 'n':
+                            va.operation_mask |= OP_NEIGHBOR_BITS;
+                            break;
+                        case 'l':
+                            va.operation_mask |= OP_PALETTE_LAST_BIT;
+                            break;
+                        case 'd':
+                            va.operation_mask |= OP_PALETTE_D_BIT;
+                            break;
+                        case 's':
+                            va.operation_mask |= OP_STOP_BIT;
+                            break;
+                        default:
+                            throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d,s only", opMaskArg.longID());
+                    }
+                }
+            }
             va.random_access = randomAccessArg.getValue();
             // rendering arguments
             va.rendering_config_file = expandPath(renderconfigArg.getValue());

@@ -124,6 +124,18 @@ namespace volcanite {
 #define PALETTE_LAST 5u ///< re-read palette last palette label, located 1 entry before the top pointer, again
 #define PALETTE_D 6u    ///< re-read palette label from D+2 entries before the top pointer. D follows in encoding stream.
 
+// operation bit masks to enable / disable certain operations in the encoding
+#define OP_PARENT_BIT 1u
+#define OP_NEIGHBORX_BIT 2u
+#define OP_NEIGHBORY_BIT 4u
+#define OP_NEIGHBORZ_BIT 8u
+#define OP_NEIGHBOR_BITS 14u
+// PALETTE_ADV must always be enabled
+#define OP_PALETTE_LAST_BIT 32u
+#define OP_PALETTE_D_BIT 128u
+#define OP_STOP_BIT 256u
+#define OP_ALL 0xFFFFFFFFu
+
 
 #define INVALID 0xFFFFFFFFu    ///< UINT32_MAX all bits set to 1. Denotes undecoded values, invalid labels, errors..
 #define INVISIBLE_LABEL 0xFFFFFFFEu ///< UINT32_MAX-1. Denotes a voxel label that is invisible in the current config

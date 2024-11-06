@@ -145,6 +145,7 @@ int volcanite_main(int argc, char *argv[]) {
 
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),
                                                         .encoding_mode = args.encoding_mode,
+                                                        .op_mask = args.operation_mask,
                                                         .random_access = args.random_access,
                                                         .label_remapping = label_remapping,
                                                         .cpu_threads = args.threads,
