@@ -802,7 +802,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     // check if a new frame has to be accumulated, target frame count of 0 means: render as long as possible
     if (m_accumulated_frames < m_target_accum_frames || m_target_accum_frames == 0u) {
         // TODO: half float precision for the accumulation buffer only allows for 2048 single samples per pixel
-        if (m_target_accum_frames < 2048 * (1 << 2 * m_subsampling)) {
+        if (m_accumulated_frames < 2048 * (1 << 2 * m_subsampling)) {
             m_render_update_flags |= UPDATE_RENDER_FRAME;
         }
     }
@@ -1071,16 +1071,16 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                            // how many frames have to be accumulated so that each pixel received one sample
                            int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
                            switch(i) {
-                               // local shading
                                case 0:
+                                   // local shading
                                    m_factor_ambient = 0.4f;
                                    m_light_intensity = 1.f;
                                    m_global_illumination_enabled = false;
                                    m_envmap_enabled = false;
                                    m_target_accum_frames = frames_for_one_spp * 8;
                                    break;
-                                   // global shadows
                                case 1:
+                                   // global shadows
                                    m_factor_ambient = 0.4f;
                                    m_light_intensity = 1.f;
                                    m_global_illumination_enabled = true;
@@ -1088,8 +1088,8 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                    m_envmap_enabled = false;
                                    m_target_accum_frames = frames_for_one_spp * 8;
                                    break;
-                                   // ambient occlusion
                                case 2:
+                                   // ambient occlusion
                                    m_factor_ambient = 0.4f;
                                    m_light_intensity = 1.f;
                                    m_global_illumination_enabled = true;
@@ -1098,8 +1098,8 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                    m_envmap_enabled = false;
                                    m_target_accum_frames = glm::min(frames_for_one_spp * 256, 4096);
                                    break;
-                                   // path tracing
                                case 3:
+                                   // path tracing
                                    m_factor_ambient = 0.f;
                                    m_light_intensity = 1.f;
                                    m_global_illumination_enabled = true;
