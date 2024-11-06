@@ -41,11 +41,13 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
 
     // construct the multigrid on this brick that we want to represent in this encoding
     std::vector<MultiGridNode> multigrid;
-    VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size);
+    VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size, m_op_mask & OP_STOP_BIT);
 
-    // ToDo: random access encoding does not support stop bits yet
-    for (MultiGridNode &node: multigrid)
-        node.constant_subregion = false;
+    // stop bit vector
+    BitVector stop_bit_vector;
+    if (m_op_mask & OP_STOP_BIT)
+        stop_bit_vector.reserve(multigrid.size());
+
 
     // we start with the coarsest LOD, which is always a PALETTE_ADV of the max occuring value in the whole brick
     // we handle this here because it allows us to skip some special handling (for example checking if the palette is empty) in the following loop
@@ -109,22 +111,30 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
             assert(value != INVALID && "Original volume mustn't contain the INVALID magic value!");
 
             uint32_t operation = 0u;
-            // if the whole subtree from here has this parent_value, we can set a stop sign and fill the whole brick area of the subtree
-            // note that grid nodes outside the volume are by definition also homogeneous
-            if (lod_width > 1 && multigrid[muligrid_lod_start + voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].constant_subregion) {
-                operation = STOP_BIT;
+            if (m_op_mask & OP_STOP_BIT) {
+                // if the whole subtree from here has this parent_value, we can set a stop sign and fill the whole brick
+                // area of the subtree. note that grid nodes outside the volume are by definition also homogeneous
+                if (lod_width > 1 && multigrid[muligrid_lod_start + voxel_pos2idx(brick_pos / lod_width, glm::uvec3(
+                        lod_dim))].constant_subregion) {
+                    // wavelet matrix does not store the stop bits per operation code, but in a separate bit vector
+                    // (serial encoder behavior would be: operation = STOP_BIT;)
+                    stop_bit_vector.push_back(1);
+                } else {
+                    stop_bit_vector.push_back(0);
+                }
             }
+
             // determine operation for the next entry
             [[likely]]
-            if (value == parent_value)
+            if ((m_op_mask & OP_PARENT_BIT) && value == parent_value)
                 operation |= PARENT;
-            else if (valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 0) == value)
+            else if ((m_op_mask & OP_NEIGHBORX_BIT) && valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 0) == value)
                 operation |= NEIGHBOR_X;
-            else if (valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 1) == value)
+            else if ((m_op_mask & OP_NEIGHBORY_BIT) && valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 1) == value)
                 operation |= NEIGHBOR_Y;
-            else if (valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 2) == value)
+            else if ((m_op_mask & OP_NEIGHBORZ_BIT) && valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 2) == value)
                 operation |= NEIGHBOR_Z;
-            else if (palette.back() == value)
+            else if ((m_op_mask & OP_PALETTE_LAST_BIT) && palette.back() == value)
                 operation |= PALETTE_LAST;
             else {
                 // Random access encoding does not use the palette delta operation
@@ -171,14 +181,36 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
         out_i = packWaveletMatrix(out.data(), out[0], out_i, lod_count);
     else if (m_encoding_mode == HUFFMAN_WM_ENC)
         out_i = packWaveletMatrixHuffman(out.data(), out[0], out_i, lod_count);
+    else
+        assert(false && "unsupported encoding mode for wavelet matrix encoder");
 
-    // last entry of our header stores the palette size
-    out[header_size - 1u] = palette.size();
     // now we calculate everything in 32 bit elements. round up to start the palette at an uint32_t index but AFTER the last encoding element
     while(out_i % 8u != 0u)
         write4Bit(out, 0u, out_i++, 0u);
     out_i /= 8u;
-    // palette is added in reverse order at the end to be read from encoding back to front
+
+    // append stop bit vector (if stop bits are enabled)
+    if (m_op_mask & OP_STOP_BIT) {
+        stop_bit_vector.shrink_to_fit();
+        assert(sizeof(BV_L12Type) % 32 == 0u);
+        FlatRank fr(stop_bit_vector);
+        const uint32_t fr_32b_size = fr.getRawDataSize() * (sizeof(BV_L12Type) / sizeof(uint32_t));
+        const uint32_t* fr_32b = reinterpret_cast<const uint32_t*>(fr.getRawData());
+        for (uint32_t i = 0; i < fr_32b_size; i++) {
+            out[out_i++] = fr_32b[i];
+        }
+
+        assert(sizeof(BV_WordType) % 32 == 0u);
+        const uint32_t stop_bit_32b_size = stop_bit_vector.getRawDataSize() * (sizeof(BV_WordType) / sizeof(uint32_t));
+        const uint32_t* stop_bit_32b = reinterpret_cast<const uint32_t *>(stop_bit_vector.getRawData());
+        for (uint32_t i = 0; i < stop_bit_32b_size; i++) {
+            out[out_i++] = stop_bit_32b[i];
+        }
+    }
+
+    // append palette which is added in reverse order at the end to be read from encoding back to front
+    // last entry of our header stores the palette size
+    out[header_size - 1u] = palette.size();
     for(int i = static_cast<int>(palette.size()) - 1; i >= 0; i--) {
         out.at(out_i++) = palette.at(i);
     }
