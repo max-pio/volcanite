@@ -180,6 +180,7 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
     // append stop bit vector (if stop bits are enabled)
     if (m_op_mask & OP_STOP_BIT) {
         stop_bit_vector.shrink_to_fit();
+        // construct and write flat rank information
         assert(sizeof(BV_L12Type) % sizeof(uint32_t) == 0u);
         FlatRank fr(stop_bit_vector);
         const uint32_t fr_32b_size = fr.getRawDataSize() * (sizeof(BV_L12Type) / sizeof(uint32_t));
@@ -188,12 +189,21 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
             out[out_i++] = fr_32b[i];
         }
 
+        // write bit vector
         assert(sizeof(BV_WordType) % sizeof(uint32_t) == 0u);
         const uint32_t stop_bit_32b_size = stop_bit_vector.getRawDataSize() * (sizeof(BV_WordType) / sizeof(uint32_t));
         const uint32_t* stop_bit_32b = reinterpret_cast<const uint32_t *>(stop_bit_vector.getRawData());
         for (uint32_t i = 0; i < stop_bit_32b_size; i++) {
             out[out_i++] = stop_bit_32b[i];
         }
+
+        // write stop bit vector length. query it at:
+        //     brick_end - palette_size
+        // start address of the bit vector can be queried as:
+        //     brick_end - palette_size - 1 - stop_bit_length
+        // flat rank start address is:
+        //     stop_bit_address - getFlatRankEntries(stop_bit_length) * sizeof(BV_L12Type) / sizeof(uint32_t)
+        out[out_i++] = stop_bit_32b_size;
     }
 
     // append palette which is added in reverse order at the end to be read from encoding back to front
