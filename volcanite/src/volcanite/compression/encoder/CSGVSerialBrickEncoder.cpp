@@ -151,6 +151,8 @@ void CSGVSerialBrickEncoder::verifyBrickCompression(const uint32_t* brick_encodi
 // 4bit_encoding_start[0, 1, .. L-1], palette_start[0, 1 .. L], 4bit_encoding_padded_to32bit[0, 1, .. L], 32bit_palette[L, .., 1, 0]
 //       header_size*8 ᒧ                always zero ᒧ  ∟ .. one  ∟ palette size
 uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out, const glm::uvec3 start, const glm::uvec3 volume_dim) const {
+    assert(m_encoding_mode == NIBBLE_ENC || m_rans_initialized);
+
     std::vector<uint32_t> palette;
     glm::uvec3 volume_pos, brick_pos;
 
@@ -317,6 +319,8 @@ void CSGVSerialBrickEncoder::decodeBrick(const uint32_t* brick_encoding, const u
                                          const uint32_t* brick_detail_encoding,
                                          const uint32_t brick_detail_encoding_length,
                                          uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const {
+    assert(m_encoding_mode == NIBBLE_ENC || m_rans_initialized);
+
     // the palette starts at the end of the encoding block
     uint32_t paletteE = brick_encoding_length - 1u;
     const uint32_t* brick_palette = brick_encoding;
@@ -425,6 +429,8 @@ void CSGVSerialBrickEncoder::decodeBrickWithDebugEncoding(const uint32_t* brick_
                                                           uint32_t* output_brick, uint32_t* output_encoding,
                                                           std::vector<glm::uvec4>* output_palette, glm::uvec3 valid_brick_size,
                                                           int inv_lod) const {
+    assert(m_encoding_mode == NIBBLE_ENC || m_rans_initialized);
+
     // the palette starts at the end of the encoding block
     uint32_t paletteE = brick_encoding_length - 1u;
     const uint32_t* brick_palette = brick_encoding;

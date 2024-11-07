@@ -89,6 +89,8 @@ class CSGVBrickEncoder {
 
     // VARIABLE BIT-LENGTH ENCODING ------------------------------------------------------------------------------------
 
+    // TODO: the CSGV encoders should not expose frequency tables but handle them inside their object only
+
     /// Computes operation frequencies and detail operation frequencies (the latter offset by 16) for the brick into the given brick_freq[32] array.
     virtual void freqEncodeBrick(const std::vector<uint32_t>& volume, size_t* brick_freq, glm::uvec3 start,
                                  glm::uvec3 volume_dim, bool detail_freq) const {
@@ -111,6 +113,16 @@ class CSGVBrickEncoder {
             defines.emplace_back("SEPARATE_DETAIL");
         return defines;
     }
+
+    // FILE IMPORT AND EXPORT ------------------------------------------------------------------------------------------
+
+    /// Exports all specialized configuration information of this encoder (e.g. frequency tables) that are not handled
+    /// by the encoder base class or CompressedSegmentationVolume class.
+    virtual void exportToFile(std::ostream& out) {}
+
+    /// Imports specialized configuration information from the stream.
+    /// @return true on success, false otherwise.
+    virtual bool importFromFile(std::istream& in) { return true; }
 
     // DEBUGGING AND STATISTICS ----------------------------------------------------------------------------------------
 

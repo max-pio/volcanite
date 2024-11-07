@@ -36,13 +36,6 @@ void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, En
         clear();
     }
 
-    m_frequency_table.clear();
-    if (code_frequencies)
-        m_frequency_table = normalizeCodeFrequencies(code_frequencies);
-    m_detail_frequency_table.clear();
-    if (detail_code_frequencies)
-        m_detail_frequency_table = normalizeCodeFrequencies(detail_code_frequencies);
-
     m_brick_size = brick_size;
     m_encoding_mode = encoding_mode;
 
@@ -614,7 +607,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
 
     // write header: 8 chars CMPSGVOL + 4 chars version number
     const char *magic_header = "CMPSGVOL";
-    const char *version = "0014";
+    const char *version = "0015";
     /* VERSION HISTORY
      * 0001: initial version
      * 0002: adds booleans if RLE and rANS are used, as well as frequency tables for rANS
@@ -625,6 +618,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
      * 0012: store max. brick palette size
      * 0013: split encoding buffers
      * 0014: re-ordered operation codes by occurring frequency to Parent,X,Y,Z,PaletteA,PaletteL,PaletteD
+     * 0015: encoders handle specialized export data like frequency tables
      */
     file.write(magic_header, 8);
     file.write(version, 4);
@@ -633,17 +627,12 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
     file.write(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
     file.write(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
     file.write(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode)); // since 0011
+    uint32_t all_set = ~0u;
+    file.write(reinterpret_cast<char *>(&all_set), sizeof(uint32_t)); // since 015 (placeholder for research branch)
     file.write(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t)); // since 012
-    if (isUsingRANS()) {  // since 0002
-        auto freq_table = getCurrentFrequencyTable();
-        for (int i = 0; i < 16; i++)
-            file.write(reinterpret_cast<char *>(&freq_table[i]), sizeof(uint32_t));
-        if (isUsingDetailFreq()) {
-            auto detail_freq_table = getCurrentDetailFrequencyTable();
-            for (int i = 0; i < 16; i++)
-                file.write(reinterpret_cast<char *>(&detail_freq_table[i]), sizeof(uint32_t));
-        }
-    }
+
+    file.write(reinterpret_cast<char *>(&all_set), sizeof(uint32_t)); // since 015 (placeholder for research branch)
+    m_encoder->exportToFile(file);
 
     // mapping of brick indices to encoding arrays
     file.write(reinterpret_cast<char *>(&m_brick_idx_to_enc_vector), sizeof(uint32_t)); // since 0013
@@ -705,7 +694,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     int _numeric_version = std::stoi(std::string(_version));
 
     // backwards compatibility code:
-    if (std::string(_version) != "0014") {
+    if (std::string(_version) != "0014" && std::string(_version) != "0015") {
         Logger(ERROR) << "Import does not support version " << _version << " of Compressed Segmentation Volume file " << path << ". Skipping.";
         return false;
     }
@@ -714,33 +703,31 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     fin.read(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
     fin.read(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
     fin.read(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode));
+    uint32_t tmp;
+    if (_numeric_version >= 15)  // since 015 (placeholder for research branch)
+        fin.read(reinterpret_cast<char *>(&tmp), sizeof(uint32_t));
     fin.read(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t));
-    uint32_t freq[16];
-    uint32_t detail_freq[16];
-    if (isUsingRANS()) {
-        for (int i = 0; i < 16; i++)
-            fin.read(reinterpret_cast<char *>(&freq[i]), sizeof(uint32_t));
-        if (isUsingDetailFreq()) {
-            for (int i = 0; i < 16; i++)
-                fin.read(reinterpret_cast<char *>(&detail_freq[i]), sizeof(uint32_t));
-        }
-    }
-    // trigger encoder updates
-    setCompressionOptions(m_brick_size, m_encoding_mode,
-                          isUsingRANS() ? freq : nullptr,
-                          isUsingDetailFreq() ? detail_freq : nullptr);
+    if (_numeric_version >= 15)  // since 015 (placeholder for research branch)
+        fin.read(reinterpret_cast<char *>(&tmp), sizeof(uint32_t));
 
-    fin.read(reinterpret_cast<char *>(&m_brick_idx_to_enc_vector), sizeof(uint32_t));
-    // read the data directly to our members
+    // update encoder
+    if (m_encoding_mode == NIBBLE_ENC) {
+        m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode);
+    } else if (m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
+        m_encoder = std::make_unique<RangeANSEncoder>(m_brick_size, m_encoding_mode);
+    } else {
+        throw std::runtime_error("No CSGV brick encoder for given encoding mode available.");
+    }
+    m_encoder->importFromFile(fin);
+
+    // mapping of brick indices to encoding arrays
+    fin.read(reinterpret_cast<char *>(&m_brick_idx_to_enc_vector), sizeof(uint32_t)); // since 0013
     size_t size;
     fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
     m_brick_starts.resize(size);
     fin.read(reinterpret_cast<char *>(&m_brick_starts[0]), static_cast<long>(size * sizeof(uint32_t)));
     // read split encoding count
-    if(_numeric_version >= 13)
-        fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
-    else
-        size = 1;
+    fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
     m_encodings.resize(size);
     // read all single split encoding arrays
     for(int i = 0; i < m_encodings.size(); i++) {
@@ -757,10 +744,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
             throw std::runtime_error("error importing file: brickstarts and detailstarts buffers must have equal size");
         fin.read(reinterpret_cast<char *>(&m_detail_starts[0]), static_cast<long>(size * sizeof(uint32_t)));
 
-        if(_numeric_version >= 13)
-            fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
-        else
-            size = 1;
+        fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
         m_detail_encodings.resize(size);
         // read all single split encoding arrays
         for(int i = 0; i < m_detail_encodings.size(); i++) {
@@ -910,5 +894,19 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
         Logger(INFO) << " Prepass Progress 100% in " << std::fixed << std::setprecision(3) << total_seconds << "s";
     }
 }
+
+std::vector<uint32_t> CompressedSegmentationVolume::getCurrentFrequencyTable() const {
+    if(!isUsingRANS())
+        throw std::runtime_error("Can't get a frequency table from a Compressed Segmentation Volume that's not using rANS!");
+    return reinterpret_cast<RangeANSEncoder*>(m_encoder.get())->getCurrentFrequencyTable();
+}
+
+std::vector<uint32_t> CompressedSegmentationVolume::getCurrentDetailFrequencyTable() const {
+    if(!isUsingDetailFreq())
+        throw std::runtime_error("Cannot get a detail frequency table from a Compressed Segmentation Volume that is"
+                                 " not using rANS in double table mode.");
+    return reinterpret_cast<RangeANSEncoder*>(m_encoder.get())->getCurrentDetailFrequencyTable();
+}
+
 
 }; // namespace volcanite
