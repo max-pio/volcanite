@@ -810,6 +810,10 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     if (m_clear_cache_every_frame || m_pcache_reset) {
         m_render_update_flags |= UPDATE_CLEAR_CACHE;
         m_pcache_reset = false;
+        if (m_cache_mode == CACHE_VOXELS) {
+            // trigger empty space bit vector update as well
+            m_render_update_flags |= UPDATE_PMATERIAL;
+        }
     }
 
     // reset render frame accumulation if any parameters that influence rendering changed
@@ -825,6 +829,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
         // TODO: half float precision for the accumulation buffer only allows for 2048 single samples per pixel
         if (m_accumulated_frames < 2048 * (1 << 2 * m_subsampling)) {
             m_render_update_flags |= UPDATE_RENDER_FRAME;
+            m_render_update_flags |= UPDATE_PRESOLVE;
         }
     }
 
