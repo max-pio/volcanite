@@ -12,6 +12,7 @@
 #endif
 
 #if BV_WORD_TYPE == uint64_t
+    #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
     #extension GL_EXT_shader_atomic_int64 : require
 #endif
 

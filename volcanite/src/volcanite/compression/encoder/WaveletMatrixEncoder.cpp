@@ -158,21 +158,9 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
         }
 
 
-//        if(m_rANS_mode == DOUBLE_TABLE_HUFFMAN_WT) {
-//            throw std::runtime_error("DOUBLE_TABLE_HUFFMAN_WT not implemented yet");
-//            // pack all previous levels via rANS encoding if we're at the second last LoD (last LoD of non-detail encoding)
-//            // NOTE: the old out_i and header starts count in number of elements. the following out_i counts in 4bit
-//            if (current_inv_lod == lod_count - 2u) {
-//                out_i = m_rans.packRANS(out, out[0], out_i);
-//                // the detail encoding has to start at a new 32bit element (which is guaranteed by our rANS output)
-//                assert(out_i % 8u == 0u && "next element after rANS output should start at a new uint32_t element");
-//            }
-//            // pack the detail (=finest LOD) via rANS encoding.
-//            // We have a separate rANS encoder here because the detail level does not use stop bits => different operation frequencies
-//            else if (current_inv_lod == lod_count - 1u) {
-//                out_i = m_detail_rans.packRANS(out, out[current_inv_lod], out_i);
-//            }
-//        }
+        if(m_encoding_mode == DOUBLE_TABLE_HUFFMAN_WM_ENC) {
+            throw std::runtime_error("DOUBLE_TABLE_HUFFMAN_WM_ENC not implemented yet");
+        }
         current_inv_lod++;
     }
 

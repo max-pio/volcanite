@@ -10,7 +10,9 @@
 #include "csgv_materials.glsl"
 #include "debug_colormaps.glsl"
 
-// blend a cache visualization over the pixels color
+#include "volcanite/bit_vector.glsl"
+
+// blend a cache visualization over the pixel's color
 void DEBUG_img_cache(ivec2 pixel, inout vec4 color, bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
     if (!enabled)
@@ -21,7 +23,7 @@ void DEBUG_img_cache(ivec2 pixel, inout vec4 color, bool enabled) {
     #if CACHE_MODE == CACHE_VOXELS
         // map the pixel to a cache cell [region]
         const int size = 4;
-        const uint elems_per_pixel = 1u; //CACHE_UVEC2_SIZE / (viewport_size.x * viewport_size.y / size);
+        const uint elems_per_pixel = max(CACHE_UVEC2_SIZE / (viewport_size.x * viewport_size.y / size), 1u);
 
         const uint idx = elems_per_pixel * uint((pixel.x / size) + (pixel.y / size) * viewport_size.x);
 
@@ -33,7 +35,7 @@ void DEBUG_img_cache(ivec2 pixel, inout vec4 color, bool enabled) {
         uint visible_count = 0u;
         vec3 label = vec3(0.f);
         for (uint i = idx; i < idx + elems_per_pixel; i++) {
-            if (g_cache[i].x != INVALID) {
+            if (i < CACHE_UVEC2_SIZE && g_cache[i].x != INVALID) {
                 entry_count++;
                 if (isLabelVisible(g_cache[i].y)) {
                     visible_count++;
@@ -73,6 +75,49 @@ void DEBUG_img_cache(ivec2 pixel, inout vec4 color, bool enabled) {
         const float alpha = 0.8f;
         color = vec4((1.f - alpha) * color.rgb + alpha * display, 1.f);
     #endif
+
+#endif
+}
+
+// blend a visualization of the empty space bit vector over the pixel's color
+void DEBUG_img_empty_space_bv(ivec2 pixel, inout vec4 color, bool enabled) {
+#ifdef ENALBE_CSGV_DEBUGGING
+    if (!enabled)
+        return;
+
+    const ivec2 viewport_size = imageSize(inpaintedOutColor);
+
+    // map the pixel to a cache cell [region]
+    const int size = 4;
+    const uint voxel_count = g_vol_dim.x * g_vol_dim.y * g_vol_dim.z;
+    const uint elems_per_pixel = max(voxel_count / (viewport_size.x * viewport_size.y / size), 1u);
+    const uint idx = elems_per_pixel * uint((pixel.x / size) + (pixel.y / size) * viewport_size.x);
+
+    if (idx >= voxel_count)
+        return;
+
+    BitVectorRef empty_space_bv = BitVectorRef(g_empty_space_bv_address);
+
+    // accumulate information for all of the pixel's empty space bit vector cells
+    uint empty_count = 0u;
+    for (uint i = idx; i < idx + elems_per_pixel; i++) {
+        if (i > voxel_count)
+            break;
+
+        const uint empty_space_idx = i / g_empty_space_set_size;
+        if (BV_ACCESS(empty_space_bv.words, empty_space_idx) > 0u) {
+            empty_count++;
+        }
+    }
+
+    // display the rendering in grayscale in the background
+    color = vec4(vec3(dot(color.rgb, vec3(1.f / 3.f))), color.a);
+    // the redder, the more invisible
+    vec3 display = vec3(1.f, 0.f, 0.f);
+
+    // blend colored cache vis with background
+    const float alpha = float(empty_count) / float(elems_per_pixel);
+    color = vec4((1.f - alpha) * color.rgb + alpha * display, 1.f);
 
 #endif
 }
