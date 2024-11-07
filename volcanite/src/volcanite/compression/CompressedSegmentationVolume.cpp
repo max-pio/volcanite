@@ -728,6 +728,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     fin.read(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
     fin.read(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
     fin.read(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode));
+    fin.read(reinterpret_cast<char *>(&m_random_access), sizeof(bool));
     fin.read(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t));
 
     // update encoder
@@ -739,24 +740,18 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     } else if (m_encoding_mode == WAVELET_MATRIX_ENC || m_encoding_mode == HUFFMAN_WM_ENC) {
         m_encoder = std::make_unique<WaveletMatrixEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     } else {
-        throw std::runtime_error("No CSGB brick encoder for given encoding mode available.");
+        throw std::runtime_error("No CSGV brick encoder for given encoding mode available.");
     }
     m_encoder->importFromFile(fin);
 
-    if(_numeric_version >= 13)
-        fin.read(reinterpret_cast<char *>(&m_brick_idx_to_enc_vector), sizeof(uint32_t));
-    else
-        m_brick_idx_to_enc_vector = ~0u;
+    fin.read(reinterpret_cast<char *>(&m_brick_idx_to_enc_vector), sizeof(uint32_t));
     // read the data directly to our members
     size_t size;
     fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
     m_brick_starts.resize(size);
     fin.read(reinterpret_cast<char *>(&m_brick_starts[0]), static_cast<long>(size * sizeof(uint32_t)));
     // read split encoding count
-    if(_numeric_version >= 13)
-        fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
-    else
-        size = 1;
+    fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
     m_encodings.resize(size);
     // read all single split encoding arrays
     for(int i = 0; i < m_encodings.size(); i++) {
@@ -773,10 +768,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
             throw std::runtime_error("error importing file: brickstarts and detailstarts buffers must have equal size");
         fin.read(reinterpret_cast<char *>(&m_detail_starts[0]), static_cast<long>(size * sizeof(uint32_t)));
 
-        if(_numeric_version >= 13)
-            fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
-        else
-            size = 1;
+        fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
         m_detail_encodings.resize(size);
         // read all single split encoding arrays
         for(int i = 0; i < m_detail_encodings.size(); i++) {
