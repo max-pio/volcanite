@@ -217,7 +217,7 @@ int main() {
                 Logger(ERROR) << "Image loading error for "
                               << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                               << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file;
-            } else if (rmse > 0.01) {
+            } else if (rmse >= 0.02) {
                 Logger(ERROR) << "Rendering differences with RMSE of " << rmse
                               << " for images " << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                               << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file;

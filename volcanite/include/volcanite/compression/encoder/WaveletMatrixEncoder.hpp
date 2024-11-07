@@ -179,11 +179,22 @@ public:
 
     // FILE IMPORT AND EXPORT ------------------------------------------------------------------------------------------
 
+    uint32_t getCompileConstantsHash() {
+        std::vector<uint32_t> keys = {sizeof(BV_WordType), sizeof(BV_L12Type), HWM_LEVELS, BV_L1_BIT_SIZE,
+                                      BV_L2_BIT_SIZE, BV_L2_WORD_SIZE, BV_STORE_L1_BITS, BV_STORE_L2_BITS,
+                                      BV_WORD_BIT_SIZE, getHeaderSize()};
+        uint32_t hash = 0u;
+        for (const auto& k : keys)
+            hash = (std::hash < unsigned char > {}(k ^ (std::rotl<size_t>(hash, 1))));
+        return hash;
+    }
+
     /// Exports all specialized configuration information of this encoder (e.g. frequency tables) that are not handled
     /// by the encoder base class or CompressedSegmentationVolume class.
     void exportToFile(std::ostream& out) override {
-        // TODO: WaveletMatrixEncoder should export a hash of all compile time config constants and check it on import
         CSGVBrickEncoder::exportToFile(out);
+        uint32_t compile_constant_hash = getCompileConstantsHash();
+        out.write(reinterpret_cast<char*>(&compile_constant_hash), sizeof(uint32_t));
     }
 
     /// Imports specialized configuration information from the stream.
@@ -191,7 +202,13 @@ public:
     bool importFromFile(std::istream& in) override {
         if (!CSGVBrickEncoder::importFromFile(in))
             return false;
-        // TODO: WaveletMatrixEncoder should export a hash of all compile time config constants and check it on import
+
+        uint32_t compile_constant_hash;
+        in.read(reinterpret_cast<char*>(&compile_constant_hash), sizeof(uint32_t));
+        if (compile_constant_hash != getCompileConstantsHash()) {
+            Logger(ERROR) << "WaveletMatrixEncoder import error: file was encoded with different compile constants.";
+            return false;
+        }
         return true;
     }
 

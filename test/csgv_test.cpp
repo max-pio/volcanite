@@ -69,6 +69,47 @@ int main() {
         if (!csgv.test(volume.dataConst(), dim, false))
             return 3;
     }
+    csgv.clear();
+    // Wavelet Matrix
+    {
+        Logger(INFO) << "Wavelet Matrix";
+        csgv.setCompressionOptions64(32, WAVELET_MATRIX_ENC, OP_ALL, true);
+        if (!csgv.test(volume.dataConst(), dim, true))
+            return 4;
+
+        // export / re-import
+        std::remove("./_tmp_test.csgv");
+        csgv.exportToFile("./_tmp_test.csgv");
+        if (!csgv.importFromFile("./_tmp_test.csgv") || !csgv.test(volume.dataConst(), dim, false))
+            return 104;
+    }
+    // Huffman Wavelet Matrix
+    {
+        Logger(INFO) << "Wavelet Matrix";
+        csgv.setCompressionOptions64(16, HUFFMAN_WM_ENC, OP_ALL, true);
+        if (!csgv.test(volume.dataConst(), dim, true))
+            return 5;
+
+        // export / re-import
+        std::remove("./_tmp_test.csgv");
+        csgv.exportToFile("./_tmp_test.csgv");
+        if (!csgv.importFromFile("./_tmp_test.csgv") || !csgv.test(volume.dataConst(), dim, false))
+            return 105;
+    }
+//    // Huffman Wavelet Matrix with Stop Bits
+//    {
+//        Logger(INFO) << "Wavelet Matrix";
+//        size_t freq[32];
+//        csgv.setCompressionOptions64(64, HUFFMAN_WM_ENC, OP_ALL, true);
+//        if (!csgv.test(volume.dataConst(), dim, true))
+//            return 6;
+//
+//        // export / re-import
+//        std::remove("./_tmp_test.csgv");
+//        csgv.exportToFile("./_tmp_test.csgv");
+//        if (!csgv.importFromFile("./_tmp_test.csgv") || !csgv.test(volume.dataConst(), dim, false))
+//            return 106;
+//    }
 
     std::remove("./_tmp_test.csgv");
     return 0;

@@ -654,6 +654,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
     file.write(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
     file.write(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
     file.write(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode)); // since 0011
+    file.write(reinterpret_cast<char *>(&m_random_access), sizeof(m_random_access)); // since 015
     file.write(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t)); // since 012
 
     file.write(reinterpret_cast<char *>(&m_op_mask), sizeof(uint32_t)); // since 015
