@@ -16,6 +16,8 @@
 #ifndef MORTON_GLSL
 #define MORTON_GLSL
 
+#include "volcanite/compression/csgv_utils.glsl"
+
 // 2D ------------------------------------------------------------------------------------------------------------------
 
 // "Insert" a 0 bit after each of the 16 low bits of x
@@ -63,8 +65,14 @@ uint _morton_Compact1By2(uint x) {
     return x;
 }
 
-uint morton3Dp2i(uvec3 p) { return (_morton_Part1By2(p.z) << 2) + (_morton_Part1By2(p.y) << 1) + _morton_Part1By2(p.x); }
-uvec3 morton3Di2p(uint i) { return uvec3(_morton_Compact1By2(i >> 0), _morton_Compact1By2(i >> 1), _morton_Compact1By2(i >> 2)); }
+uint morton3Dp2i(uvec3 p) {
+    assertf(all(lessThanEqual(p, uvec3(1023u))), "32 Bit Morton code processing only works for dimensions up to (1023, 1023, 1023) (10 bit per component) but got pos. %v3u", p);
+    return (_morton_Part1By2(p.z) << 2) + (_morton_Part1By2(p.y) << 1) + _morton_Part1By2(p.x);
+}
+uvec3 morton3Di2p(uint i) {
+    assertf(i < 1073741823u, "32 Bit Morton code processing only works for dimensions up to (1023, 1023, 1023) (10 bit per component) but got idx. %u", i);
+    return uvec3(_morton_Compact1By2(i >> 0), _morton_Compact1By2(i >> 1), _morton_Compact1By2(i >> 2));
+}
 
 
 #endif // MORTON_GLSL

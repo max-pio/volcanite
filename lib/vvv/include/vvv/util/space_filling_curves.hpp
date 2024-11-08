@@ -68,7 +68,7 @@ private:
 
 class Morton3D {
 public:
-    // the 64 bit variants can work with up to 10 bits per positional component
+    // the 32 bit variants can work with up to 10 bits per positional component
     static uint32_t p2i(glm::uvec3 p) {
         assert(glm::all(glm::lessThanEqual(p, glm::uvec3(1023u))) && "32 Bit Morton code processing only works for dimensions up to (1023, 1023, 1023) (10 bit per component)");
         return (Part1By2(p.z) << 2) + (Part1By2(p.y) << 1) + Part1By2(p.x);

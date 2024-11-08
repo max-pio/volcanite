@@ -78,7 +78,9 @@ uint readCSGVPaletteBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, c
 
     // By design, the first palette index is 1, meaning it can be substract directly from the brick's encoding length.
     uint palette_idx = readEntryFromCache(decoded_brick_start_uint, cache_idx_in_brick);
-    assertf(palette_idx > 0 && palette_idx <= getBrickPaletteLength(brick_idx), "read palette index %u is 0 or greater than palette size from cache", palette_idx);
+    assertf(palette_idx > 0 && palette_idx <= getBrickPaletteLength(brick_idx),
+            "read palette index is 0 or greater than palette size from cache (idx, palette size) = %v2u",
+            uvec2(palette_idx, getBrickPaletteLength(brick_idx)));
     return getBrickEncodingRef(brick_idx).buf[getBrickEncodingLength(brick_idx) - palette_idx];
 }
 #else
