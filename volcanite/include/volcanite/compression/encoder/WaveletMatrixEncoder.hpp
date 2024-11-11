@@ -326,9 +326,12 @@ private:
                                                       const uint32_t *brick_encoding,
                                                       const uint32_t brick_encoding_length,
                                                       const WMHBrickHeader* wm_header,
-                                                      const BV_WordType* bit_vector);
+                                                      const BV_WordType* bit_vector,
+                                                      const FlatRank_BitVector_ptrs& stop_bits);
 
-    /// returns the size of the header at the beginning of each brick measured in uint32 entries.
+    // TODO: getHeaderSize() should return the full size of the header up to the flat rank in uint32 elements
+    /// returns the size of the base header without WM specific entries at the beginning of each brick.
+    /// measured in uint32 entries.
     [[nodiscard]] uint32_t getHeaderSize() const { return getLodCountPerBrick() * 2 + 1; }
 
 };

@@ -173,6 +173,11 @@ private:
 /// 64³ + 32³ + 16³ + 8³ + 4³ + 2³ + 1³ bit entries, i.e. the maximum possible number of operations in a 64³ CSGB brick.
 typedef uint64_t BV_L12Type;
 
+struct FlatRank_BitVector_ptrs {
+    const BV_L12Type* fr;
+    const BV_WordType* bv;
+};
+
 /// Number of L2-blocks that are grouped into one L1-block MINUS ONE. The first L2-block is not stored explicitly.
 static constexpr uint32_t BV_STORE_L2_PER_L1 = 4;
 /// Bits that each stored L1-block takes up in the BV_L12Type

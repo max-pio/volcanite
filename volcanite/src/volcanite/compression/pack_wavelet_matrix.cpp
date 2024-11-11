@@ -27,11 +27,14 @@ namespace volcanite {
         return bitfieldExtract(bv[index / BV_WORD_BIT_SIZE], static_cast<int>(index % BV_WORD_BIT_SIZE), 1);
     }
 
+    // TODO: rename getFlankRankEntriesHuffman to getFlatRankEntries(uint32_t text_size) and move (.. * WM_LEVELS) to non-Huffman caller
     inline uint32_t getFlatRankEntries(uint32_t text_size) {
         return (text_size * WM_LEVELS) / BV_L1_BIT_SIZE + 1u;
     }
 
     uint32_t _fr_rank1(uint32_t index, const uint64_t* bv, const uint64_t* fr) {
+        assert(getL1Entry(fr[0]) == 0u && "corrupted flat rank: first L1 is not 0");
+
         // ........ ........  bits
         // ┌┐┌┐┌┐┌┐ ┌┐┌┐┌┐┌┐  words
         // └┘└┘└┘└┘ └┘└┘└┘└┘
@@ -258,6 +261,50 @@ namespace volcanite {
         return reinterpret_cast<const BV_WordType*>(v + base_header_size + 10
                                                     + (sizeof(BV_L12Type)/sizeof(uint32_t)) * getFlatRankEntriesHuffman(v[base_header_size]));
     }
+
+    FlatRank_BitVector_ptrs getWMHStopBitsFromEncoding(const uint32_t* brick_encoding,
+                                                       const uint32_t brick_encoding_length,
+                                                       const uint32_t palette_size) {
+        uint32_t stop_bv_length = brick_encoding[brick_encoding_length - palette_size - 1];
+        FlatRank_BitVector_ptrs stop_bits = {};
+        assert(palette_size + 1 + stop_bv_length < brick_encoding_length);
+        stop_bits.bv = reinterpret_cast<const BV_WordType*>(brick_encoding + brick_encoding_length - palette_size - 1 - stop_bv_length);
+        stop_bits.fr = reinterpret_cast<const BV_L12Type*>(stop_bits.bv - getFlatRankEntriesHuffman(stop_bv_length * 32) * (sizeof(BV_L12Type) / sizeof(BV_WordType)));
+        return stop_bits;
+    }
+
+    uint32_t getNegativeStopBitOffset(uint32_t& inv_lod, uint32_t& inv_lod_op_i, const uint32_t* inv_lod_starts,
+                                      const FlatRank_BitVector_ptrs& stop_bits) {
+        uint32_t offset = 0u;
+        uint32_t covered_nodes_shift = 3 * inv_lod;
+
+        for (int l = 0; l < inv_lod; l++) {
+            // TODO: replace division with covered_nodes with a bit shift
+            // encoding index of the parent node within its inverse LOD.
+            // each parent node covers 2³ nodes in the next level, (2³)³ nodes in the next level afterwards etc.
+            const uint32_t parent_op_i = inv_lod_op_i >> covered_nodes_shift;
+
+            // if the parent sets a stop bit: set inv_lod and inv_lod_op_i so that they update
+            if (_bv_access(inv_lod_starts[l] + parent_op_i - offset, stop_bits.bv)) {
+                inv_lod = l;
+                inv_lod_op_i = parent_op_i;
+                return offset;
+            }
+
+            // TODO: can the second _fr_rank1 be computed iteratively or cancelled out?
+            // add offset introduced by the nodes in this LOD
+            offset += _fr_rank1(inv_lod_starts[l] + parent_op_i - offset, stop_bits.bv, stop_bits.fr)
+                      - _fr_rank1(inv_lod_starts[l], stop_bits.bv, stop_bits.fr);
+
+            // in the next finer LOD, the (grand-)parent grid node covers only 1/8th of the nodes in inv_lod compared
+            // to the parent from the coarser level
+            covered_nodes_shift -= 3u;
+            offset *= 8u;
+        }
+
+        return offset;
+    }
+
 
     uint32_t wm_huffman_access(uint32_t position, const WMHBrickHeader* wm_header, const BV_WordType* bit_vector) {
         // see: volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp HuffmanWaveletMatrix::access()

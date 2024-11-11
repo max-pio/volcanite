@@ -25,6 +25,9 @@ namespace volcanite {
 uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& volume,
                                                           std::vector<uint32_t>& out,
                                                           glm::uvec3 start, glm::uvec3 volume_dim) const {
+    assert(glm::all(glm::equal(volume_dim % glm::uvec3(m_brick_size), glm::uvec3(0u))) &&
+           "partially occupied bricks are not allowed in Wavelet Matrix encoding");
+
     std::vector<uint32_t> palette;
     palette.reserve(32);
     glm::uvec3 volume_pos, brick_pos;
@@ -48,18 +51,18 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
     if (m_op_mask & OP_STOP_BIT)
         stop_bit_vector.reserve(multigrid.size());
 
-
     // we start with the coarsest LOD, which is always a PALETTE_ADV of the max occuring value in the whole brick
     // we handle this here because it allows us to skip some special handling (for example checking if the palette is empty) in the following loop
     // in theory, we could start with a finer level here too and skip the first levels (= Carsten's original idea)
     out[0] = out_i;                 // LoD start position
     out[lod_count] = 0u;            // palette start position (from back)
     uint32_t muligrid_lod_start = multigrid.size() - 1;
+    write4Bit(out, 0u, out_i++, PALETTE_ADV);
     if (multigrid[muligrid_lod_start].constant_subregion) {
-        write4Bit(out, 0u, out_i++, PALETTE_ADV | STOP_BIT);
+        stop_bit_vector.push_back(1);
     }
     else {
-        write4Bit(out, 0u, out_i++, PALETTE_ADV);
+        stop_bit_vector.push_back(0);
     }
     palette.push_back(multigrid[muligrid_lod_start].label);
 
@@ -110,12 +113,13 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
             value = multigrid[muligrid_lod_start + voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].label;
             assert(value != INVALID && "Original volume mustn't contain the INVALID magic value!");
 
-            uint32_t operation = 0u;
+            uint32_t operation;
             if (m_op_mask & OP_STOP_BIT) {
                 // if the whole subtree from here has this parent_value, we can set a stop sign and fill the whole brick
                 // area of the subtree. note that grid nodes outside the volume are by definition also homogeneous
-                if (lod_width > 1 && multigrid[muligrid_lod_start + voxel_pos2idx(brick_pos / lod_width, glm::uvec3(
-                        lod_dim))].constant_subregion) {
+                if (lod_width > 1
+                    && multigrid[muligrid_lod_start
+                                 + voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].constant_subregion) {
                     // wavelet matrix does not store the stop bits per operation code, but in a separate bit vector
                     // (serial encoder behavior would be: operation = STOP_BIT;)
                     stop_bit_vector.push_back(1);
@@ -127,15 +131,15 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
             // determine operation for the next entry
             [[likely]]
             if ((m_op_mask & OP_PARENT_BIT) && value == parent_value)
-                operation |= PARENT;
+                operation = PARENT;
             else if ((m_op_mask & OP_NEIGHBORX_BIT) && valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 0) == value)
-                operation |= NEIGHBOR_X;
+                operation = NEIGHBOR_X;
             else if ((m_op_mask & OP_NEIGHBORY_BIT) && valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 1) == value)
-                operation |= NEIGHBOR_Y;
+                operation = NEIGHBOR_Y;
             else if ((m_op_mask & OP_NEIGHBORZ_BIT) && valueOfNeighbor(multigrid.data() + muligrid_lod_start, multigrid.data() + parent_multigrid_lod_start, brick_pos / lod_width, child_index, lod_dim, m_brick_size, 2) == value)
-                operation |= NEIGHBOR_Z;
+                operation = NEIGHBOR_Z;
             else if ((m_op_mask & OP_PALETTE_LAST_BIT) && palette.back() == value)
-                operation |= PALETTE_LAST;
+                operation = PALETTE_LAST;
             else {
                 // Random access encoding does not use the palette delta operation
                 // reuse the n-X palette value where 0 < X < 17
@@ -148,10 +152,10 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
 //                } else
                 {  // if nothing helps, we add a completely new palette entry
                     palette.push_back(value);
-                    operation |= PALETTE_ADV;
+                    operation = PALETTE_ADV;
                 }
             }
-            assert(operation < 16u && "writing invalid 4 bit operation!");
+            assert(operation <= 5u && "writing invalid 4 bit operation!");
             write4Bit(out, 0u, out_i++, operation);
 
             assert(value != INVALID);
@@ -163,6 +167,9 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
         }
         current_inv_lod++;
     }
+
+    assert(!(m_op_mask & OP_STOP_BIT) || (out_i - out[0]) == stop_bit_vector.size()
+            && "stop bit vector size and operation stream size must be equal");
 
     // wavelet matrix packing
     if (m_encoding_mode == WAVELET_MATRIX_ENC)
@@ -179,9 +186,13 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
 
     // append stop bit vector (if stop bits are enabled)
     if (m_op_mask & OP_STOP_BIT) {
-        stop_bit_vector.shrink_to_fit();
+        // fill the bit vector so that it contains full words
+        // TODO: this is only done as the brick encoding stores the bit vector length as full bit vector words
+        //  (translated to a 32 bit index offset). The flat rank size that is recomputed from here must be correct.
+        while (stop_bit_vector.size() % (8 * sizeof(BV_WordType)) != 0u)
+            stop_bit_vector.push_back(0u);
+
         // construct and write flat rank information
-        assert(sizeof(BV_L12Type) % sizeof(uint32_t) == 0u);
         FlatRank fr(stop_bit_vector);
         const uint32_t fr_32b_size = fr.getRawDataSize() * (sizeof(BV_L12Type) / sizeof(uint32_t));
         const uint32_t* fr_32b = reinterpret_cast<const uint32_t*>(fr.getRawData());
@@ -192,7 +203,7 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
         // write bit vector
         assert(sizeof(BV_WordType) % sizeof(uint32_t) == 0u);
         const uint32_t stop_bit_32b_size = stop_bit_vector.getRawDataSize() * (sizeof(BV_WordType) / sizeof(uint32_t));
-        const uint32_t* stop_bit_32b = reinterpret_cast<const uint32_t *>(stop_bit_vector.getRawData());
+        const uint32_t* stop_bit_32b = reinterpret_cast<const uint32_t*>(stop_bit_vector.getRawData());
         for (uint32_t i = 0; i < stop_bit_32b_size; i++) {
             out[out_i++] = stop_bit_32b[i];
         }
@@ -202,13 +213,13 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
         // start address of the bit vector can be queried as:
         //     brick_end - palette_size - 1 - stop_bit_length
         // flat rank start address is:
-        //     stop_bit_address - getFlatRankEntries(stop_bit_length) * sizeof(BV_L12Type) / sizeof(uint32_t)
+        //     stop_bit_address - getFlatRankEntries(stop_bit_32b_size * 32) * sizeof(BV_L12Type) / sizeof(uint32_t)
         out[out_i++] = stop_bit_32b_size;
     }
 
     // append palette which is added in reverse order at the end to be read from encoding back to front
     // last entry of our header stores the palette size
-    out[header_size - 1u] = palette.size();
+    out[getPaletteSizeHeaderIndex()] = palette.size();
     for(int i = static_cast<int>(palette.size()) - 1; i >= 0; i--) {
         out.at(out_i++) = palette.at(i);
     }
@@ -233,32 +244,31 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxelWM(const uint32_t output_
     glm::uvec3 inv_lod_voxel = enumBrickPos(inv_lod_op_i);
 
     // obtain encoding operation read index (4 bit)
-    assert(brick_encoding[0] == 0u && "First operation in the opstrem must have start index 0.");
+    assert(brick_encoding[0] == 0u && "First operation in the op.stream must have start index 0.");
     uint32_t enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
+    assert(enc_operation_index < brick_encoding_length * 8u && "brick encoding out of bounds read");
     uint32_t operation = wm_access(enc_operation_index, wm_header, bit_vector);
 
-    assert(enc_operation_index < brick_encoding_length * 8u && "brick encoding out of bounds read");
-    // ToDo: handle stop bits
-    assert((operation & STOP_BIT) == 0u && "stop bit not yet supported with random access");
+    // TODO: add stop bit handling for plain Wavelet Matrix encoding
 
     // follow the chain of operations from the current output voxel up to an operation that accesses the palette
     {
-        uint32_t operation_lsb = operation & 7u; // extract least significant 3 bits
+        assert(operation <= PALETTE_LAST && "Wavelet Matrix encoding does not support stop bits encoded in OP stream");
 
         // equal to (operation_lsb != PALETTE_LAST && operation_lsb != PALETTE_ADV && operation_lsb != PALETTE_D)
-        while (operation_lsb < 4u) {
+        while (operation < 4u) {
             // find the read position for the next operation along the chain
-            if (operation_lsb == PARENT) {
+            if (operation == PARENT) {
                 // read from the parent in the next iteration
                 inv_lod--;
                 assert(inv_lod <= target_inv_lod && "LOD chasing overflow for Huffman Wavelet Matrix decoding.");
                 inv_lod_op_i /= 8u;
                 inv_lod_voxel = enumBrickPos(inv_lod_op_i);
             }
-            // operation_lsb is NEIGHBOR_X, NEIGHBOR_Y, or NEIGHBOR_Z:
+            // operation is NEIGHBOR_X, NEIGHBOR_Y, or NEIGHBOR_Z:
             else {
                 // read from a neighbor in the next iteration
-                const uint32_t neighbor_index = operation_lsb - NEIGHBOR_X; // X: 0, Y: 1, Z: 2
+                const uint32_t neighbor_index = operation - NEIGHBOR_X; // X: 0, Y: 1, Z: 2
                 const uint32_t child_index = inv_lod_op_i % 8u;
 
                 inv_lod_voxel += neighbor[child_index][neighbor_index];
@@ -274,18 +284,17 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxelWM(const uint32_t output_
 
             // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
             enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
-            operation_lsb = wm_access(enc_operation_index, wm_header, bit_vector) & 7u;
+            operation = wm_access(enc_operation_index, wm_header, bit_vector) & 7u;
         }
 
         // at this point, the current operation accesses the palette: write the resulting palette entry
         // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
         uint32_t palette_index = wm_rank(enc_operation_index, PALETTE_ADV, wm_header, bit_vector);
         // the actual palette index may be offset depending on the operation
-        if (operation_lsb == PALETTE_LAST) {
+        if (operation == PALETTE_LAST) {
             palette_index--;
         }
-        assert(operation_lsb != PALETTE_D && "palette delta operation not supported with random access");
-        //assert(palette_index < getBrickPaletteLength(brick_idx), "obtained wrong palette index");
+        // assert(palette_index < brick_encoding_length[getPaletteSizeHeaderIndex()] && "out of bounds palette index");
 
         // Write to the index in the output array. The output array's positions are in Morton order.
         return brick_encoding[brick_encoding_length - 1u - palette_index];
@@ -298,70 +307,77 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxelWMHuffman(const uint32_t 
                                                                  const uint32_t* brick_encoding,
                                                                  const uint32_t brick_encoding_length,
                                                                  const WMHBrickHeader* wm_header,
-                                                                 const BV_WordType* bit_vector) {
+                                                                 const BV_WordType* bit_vector,
+                                                                 const FlatRank_BitVector_ptrs& stop_bits) {
 
     // Start by reading the operations in the target inverse LoD's encoding:
     uint32_t inv_lod = target_inv_lod;
     // operation index within in the current inv. LoD, starting at the target LoD
     uint32_t inv_lod_op_i = output_i;
-    // corresponding voxel position within the inv. LoD
-    glm::uvec3 inv_lod_voxel = enumBrickPos(inv_lod_op_i);
 
     // obtain encoding operation read index (4 bit)
-    assert(brick_encoding[0] == 0u && "First operation in the opstrem must have start index 0.");
-    uint32_t enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
+    assert(brick_encoding[0] == 0u && "First operation in the op.stream must have start index 0.");
+    // if stop bits are enabled, an offset must be subtracted from encoding array indices
+    uint32_t stop_bit_offset = 0u;
+    if (stop_bits.bv) {
+        stop_bit_offset = getNegativeStopBitOffset(inv_lod, inv_lod_op_i, brick_encoding, stop_bits);
+    }
+    uint32_t enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i - stop_bit_offset;
+    assert(enc_operation_index < wm_header->level_starts_1_to_4[0] && "brick encoding out of bounds read");
     uint32_t operation = wm_huffman_access(enc_operation_index, wm_header, bit_vector);
-
-    // ToDo: handle stop bits
-    assert((operation & STOP_BIT) == 0u && "stop bit not yet supported with random access");
 
     // follow the chain of operations from the current output voxel up to an operation that accesses the palette
     {
-        uint32_t operation_lsb = operation & 7u; // extract least significant 3 bits
+        assert(operation <= PALETTE_LAST && "Wavelet Matrix encoding does not support stop bits encoded in OP stream");
 
-        // equal to (operation_lsb != PALETTE_LAST && operation_lsb != PALETTE_ADV && operation_lsb != PALETTE_D)
-        while (operation_lsb < 4u) {
+        // equal to (operation != PALETTE_LAST && operation != PALETTE_ADV && operation != PALETTE_D)
+        while (operation < 4u) {
             // find the read position for the next operation along the chain
-            if (operation_lsb == PARENT) {
+            if (operation == PARENT) {
                 // read from the parent in the next iteration
                 inv_lod--;
-                assert(inv_lod <= target_inv_lod && "LOD chasing overflow for Huffman Wavelet Matrix decoding.");
                 inv_lod_op_i /= 8u;
-                inv_lod_voxel = enumBrickPos(inv_lod_op_i);
             }
-            // operation_lsb is NEIGHBOR_X, NEIGHBOR_Y, or NEIGHBOR_Z:
+            // operation is NEIGHBOR_X, NEIGHBOR_Y, or NEIGHBOR_Z:
             else {
                 // read from a neighbor in the next iteration
-                const uint32_t neighbor_index = operation_lsb - NEIGHBOR_X; // X: 0, Y: 1, Z: 2
+                const uint32_t neighbor_index = operation - NEIGHBOR_X; // X: 0, Y: 1, Z: 2
                 const uint32_t child_index = inv_lod_op_i % 8u;
 
-                inv_lod_voxel += neighbor[child_index][neighbor_index];
+                // get the current corresponding voxel position within the inv. LoD to add the neighbor offset
+                const glm::uvec3 inv_lod_voxel = glm::ivec3(enumBrickPos(inv_lod_op_i)) + neighbor[child_index][neighbor_index];
                 inv_lod_op_i = indexOfBrickPos(inv_lod_voxel);
 
                 // ToDo: may be able to remove this later! for neighbors with later indices, we have to copy from its parent instead
                 if (any(greaterThan(neighbor[child_index][neighbor_index], glm::ivec3(0)))) {
                     inv_lod--;
                     inv_lod_op_i /= 8u;
-                    inv_lod_voxel = enumBrickPos(inv_lod_op_i);
                 }
             }
 
-            assert(enc_operation_index < wm_header->level_starts_1_to_4[0] && "brick encoding out of bounds read");
+            // uses stop bits, i.e. encoded with m_op_mask & OP_STOP_BIT == 1
+            if (stop_bits.bv != nullptr) {
+                // move lookup position in the encoding array around
+                stop_bit_offset = getNegativeStopBitOffset(inv_lod, inv_lod_op_i, brick_encoding, stop_bits);
+            }
+
+            assert(inv_lod <= target_inv_lod && "LOD chasing overflow for Huffman Wavelet Matrix decoding.");
+            assert(stop_bit_offset <= inv_lod_op_i);
 
             // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
-            enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
-            operation_lsb = wm_huffman_access(enc_operation_index, wm_header, bit_vector) & 7u;
+            enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i - stop_bit_offset;
+            assert(enc_operation_index < wm_header->level_starts_1_to_4[0] && "brick encoding out of bounds read");
+            operation = wm_huffman_access(enc_operation_index, wm_header, bit_vector);
         }
 
         // at this point, the current operation accesses the palette: write the resulting palette entry
         // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
         uint32_t palette_index = wm_huffman_rank(enc_operation_index, PALETTE_ADV, wm_header, bit_vector);
         // the actual palette index may be offset depending on the operation
-        if (operation_lsb == PALETTE_LAST) {
+        if (operation == PALETTE_LAST) {
             palette_index--;
         }
-        assert(operation_lsb != PALETTE_D && "palette delta operation not supported with random access");
-        //assert(palette_index < getBrickPaletteLength(brick_idx), "obtained wrong palette index");
+        // assert(palette_index < brick_encoding_length[getPaletteSizeHeaderIndex()] && "out of bounds palette index");
 
         // Write to the index in the output array. The output array's positions are in Morton order.
         return brick_encoding[brick_encoding_length - 1u - palette_index];
@@ -378,10 +394,16 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxel(const uint32_t output_i,
                                           getWMBrickHeaderFromEncoding(brick_encoding, getHeaderSize()),
                                           getWMBitVectorFromEncoding(brick_encoding, getHeaderSize()));
     } else if (m_encoding_mode == HUFFMAN_WM_ENC) {
+        FlatRank_BitVector_ptrs stop_bits = (m_op_mask & OP_STOP_BIT)
+                                            ? getWMHStopBitsFromEncoding(brick_encoding,
+                                                                         brick_encoding_length,
+                                                                         brick_encoding[getPaletteSizeHeaderIndex()])
+                                            : FlatRank_BitVector_ptrs(nullptr, nullptr);
         return decompressCSGVBrickVoxelWMHuffman(output_i, target_inv_lod, valid_brick_size, brick_encoding,
                                                  brick_encoding_length,
                                                  getWMHBrickHeaderFromEncoding(brick_encoding, getHeaderSize()),
-                                                 getWMHBitVectorFromEncoding(brick_encoding, getHeaderSize()));
+                                                 getWMHBitVectorFromEncoding(brick_encoding, getHeaderSize()),
+                                                 stop_bits);
     } else {
         throw std::runtime_error("Encoding mode not supported by WaveletMatrixEncoder.");
     }
@@ -394,7 +416,7 @@ void WaveletMatrixEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, u
     assert(!m_separate_detail && "detail separation not yet supported in parallelDecodeBrick");
     assert(target_inv_lod < getLodCountPerBrick() && "not enough LoDs in a brick to process target inv. LoD");
     assert(glm::all(glm::equal(valid_brick_size, glm::uvec3(m_brick_size))) &&
-           "partially occupied bricks are not allowed");
+           "partially occupied bricks are not allowed in Wavelet Matrix encoding");
 
     // first, set the whole brick to INVALID, so we know later which elements and LOD blocks were already processed
     // #pragma omp parallel for default(none) shared(m_brick_size, output_brick)
@@ -435,13 +457,18 @@ void WaveletMatrixEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, u
         // gather all information required for decoding symbols from a wavelet matrix encoding
         const WMHBrickHeader* wm_brick_header = getWMHBrickHeaderFromEncoding(brick_encoding, getHeaderSize());
         const BV_WordType* bit_vector = getWMHBitVectorFromEncoding(brick_encoding, getHeaderSize());
+        FlatRank_BitVector_ptrs stop_bits = (m_op_mask & OP_STOP_BIT)
+                                            ? getWMHStopBitsFromEncoding(brick_encoding,
+                                                                         brick_encoding_length,
+                                                                         brick_encoding[getPaletteSizeHeaderIndex()])
+                                            : FlatRank_BitVector_ptrs(nullptr, nullptr);
 
         // m_cpu_threads many threads go through the Morton indexing order from front to back. The threads work on the next
         // following items in parallel. read_offset is the index of the first thread 0.
         //
         // Of course, we could directly parallelize over the number of output voxels in a for loop here, but:
         // on a GPU m_cpu_threads should be equal to the number of threads in a warp allowing us to do vulkan subgroup optimizations
-        #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(output_index_step, output_voxel_count, target_inv_lod, brick_encoding, output_brick, target_brick_size, brick_encoding_length, wm_brick_header, bit_vector)
+        #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(output_index_step, output_voxel_count, target_inv_lod, brick_encoding, output_brick, target_brick_size, brick_encoding_length, wm_brick_header, bit_vector, stop_bits)
         {
             uint32_t output_i = omp_get_thread_num();
             while (output_i < output_voxel_count) {
@@ -449,7 +476,7 @@ void WaveletMatrixEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, u
                 output_brick[output_index_step * output_i] =
                         decompressCSGVBrickVoxelWMHuffman(output_i, target_inv_lod, glm::uvec3(m_brick_size),
                                                           brick_encoding, brick_encoding_length,
-                                                          wm_brick_header, bit_vector);
+                                                          wm_brick_header, bit_vector, stop_bits);
 
                 // #pragma omp barrier
                 output_i += omp_get_num_threads();

@@ -78,6 +78,23 @@ namespace volcanite {
 
     const BV_WordType* getWMHBitVectorFromEncoding(const uint32_t* v, uint32_t base_header_size);
 
+    FlatRank_BitVector_ptrs getWMHStopBitsFromEncoding(const uint32_t* brick_encoding,
+                                                             uint32_t brick_encoding_length, uint32_t palette_size);
+
+    /// If the encoding uses stop bits, the lookup positions for a multi-grid node (inv_lod, inv_lod_op_i) in the
+    /// encoding stream of the current level-of-detail (LOD) may change:\n
+    /// 1. if any (grand-)parent sets a stop bit, the node is not present and that (grand-)parent should be accessed
+    /// instead.\n
+    ///  2. the lookup position within the current LOD is moved to the front if any previous nodes in this level have
+    /// one or more (grand-)parents that set a stop bit.\n
+    /// This method takes care of these changes.
+    /// For case 1, the input argument references inv_lod and inv_lod_op_i are updated in place to refer to the parent.
+    /// Additionally, the offset is returned that is required to access the encoding for the node inv_lod_op_i in
+    /// inv_lod at (inv_lod_starts[inv_lod] + inv_lod_op_i - offset).
+    /// @return the offset that has to be subtracted from inv_lod_op_i to access the node in the encoding of inv_lod
+    uint32_t getNegativeStopBitOffset(uint32_t& inv_lod, uint32_t& inv_lod_op_i, const uint32_t* inv_lod_starts,
+                                      const FlatRank_BitVector_ptrs& stop_bits);
+
     /// Replaces all 4 bit elements between start4bit (including) and end4bit (excluding) in in_packed with a
     /// wavelet matrix encoded bytestream. Updates the brick header's start position at v[0] to point to the beginning
     /// of the FlatRank acceleration of the WaveletMatrix stream. The new layout is:\n
