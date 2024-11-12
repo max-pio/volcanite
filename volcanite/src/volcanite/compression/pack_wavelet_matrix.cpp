@@ -266,10 +266,13 @@ namespace volcanite {
                                                        const uint32_t brick_encoding_length,
                                                        const uint32_t palette_size) {
         uint32_t stop_bv_length = brick_encoding[brick_encoding_length - palette_size - 1];
-        FlatRank_BitVector_ptrs stop_bits = {};
         assert(palette_size + 1 + stop_bv_length < brick_encoding_length);
+
+        FlatRank_BitVector_ptrs stop_bits = {};
         stop_bits.bv = reinterpret_cast<const BV_WordType*>(brick_encoding + brick_encoding_length - palette_size - 1 - stop_bv_length);
         stop_bits.fr = reinterpret_cast<const BV_L12Type*>(stop_bits.bv - getFlatRankEntriesHuffman(stop_bv_length * 32) * (sizeof(BV_L12Type) / sizeof(BV_WordType)));
+
+        assert(getL1Entry(stop_bits.fr[0]) == 0u && "corrupted flat rank: first L1 is not 0");
         return stop_bits;
     }
 
@@ -279,7 +282,6 @@ namespace volcanite {
         uint32_t covered_nodes_shift = 3 * inv_lod;
 
         for (int l = 0; l < inv_lod; l++) {
-            // TODO: replace division with covered_nodes with a bit shift
             // encoding index of the parent node within its inverse LOD.
             // each parent node covers 2³ nodes in the next level, (2³)³ nodes in the next level afterwards etc.
             const uint32_t parent_op_i = inv_lod_op_i >> covered_nodes_shift;
@@ -302,6 +304,7 @@ namespace volcanite {
             offset *= 8u;
         }
 
+        assert(offset <= inv_lod_op_i && "stop bit offset too large");
         return offset;
     }
 

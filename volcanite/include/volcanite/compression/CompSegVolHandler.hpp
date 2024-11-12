@@ -29,7 +29,7 @@
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/compression/CSGVChunkMerger.hpp"
 
-#define RELABEL_IDS_FROM_CSV_SUFFIX "_relabel.csv"
+//#define RELABEL_IDS_FROM_CSV_SUFFIX "_relabel.csv"
 
 using namespace vvv;
 

@@ -16,6 +16,7 @@
 #ifndef HUFFMAN_WM_DECODER_GLSL
 #define HUFFMAN_WM_DECODER_GLSL
 
+#include "cpp_glsl_include/csgv_constants.incl"
 #include "volcanite/compression/csgv_utils.glsl"
 
 /// This Decoder corresponds to the huffman-shaped wavelet matrix encoder from
@@ -92,13 +93,13 @@ BitVectorRef getWMHBitVectorFromEncoding(EncodingRef brick_encoding) {
 #ifdef DECODE_FROM_SHARED_MEMORY
     #define WM_BIT_VECTOR SHARED_BIT_VECTOR
     #define WM_HEADER SHARED_WM_HEADER
-    #define FR_RANK1(index) _fr_rank1(index)
+    #define FR_RANK1(index) _fr_rank1_wmh(index)
     #define WM_HUFFMAN_ACCESS(position) _wm_huffman_access(position)
     #define WM_HUFFMAN_RANK(position, symbol) _wm_huffman_rank(position, symbol)
 #else
     #define WM_BIT_VECTOR bit_vector.words
     #define WM_HEADER wm_header
-    #define FR_RANK1(index) _fr_rank1(wm_header, bit_vector, index)
+    #define FR_RANK1(index) _fr_rank1_wmh(wm_header, bit_vector, index)
     #define WM_HUFFMAN_ACCESS(position) _wm_huffman_access(wm_header, bit_vector, position)
     #define WM_HUFFMAN_RANK(position, symbol) _wm_huffman_rank(wm_header, bit_vector, position, symbol)
 #endif
@@ -113,19 +114,11 @@ uint wmh_getLevelStart(uint level, const uint level_starts_1_to_4[4]) {
     return level < 4 ? level_starts_1_to_4[level] : 0u;
 }
 
-uint _get_L1_entry(const BV_WORD_TYPE v) {
-    return uint(bitfieldExtract64(v, 0, BV_STORE_L1_BITS)); // the least significant BV_STORE_L1_BITS store the L1-information
-}
-
-uint _get_L2_entry(const BV_WORD_TYPE v, uint i) {
-    // First L2-information is always zero and not stored explicitly. For i > 0, BV_STORE_L2_BITS bits are stored per
-    // L2-information (e.g. 9 bits per for all except the first one L2-block each). They are ordered in the BV_L12Type
-    // from LSB to MSB, starting after the least significant BV_STORE_L1_BITS bits (e.g. 19) that are used for L1-info.
-    const uint OFFSET = BV_STORE_L1_BITS - BV_STORE_L2_BITS;
-    return (i != 0u) ? uint(bitfieldExtract64(v, int(i * BV_STORE_L2_BITS + OFFSET), BV_STORE_L2_BITS)) : 0u;
-}
-
-uint _fr_rank1(
+/// The wavelet matrix encoded brick header stores the flat rank at its end directly. This is a special
+/// flat rank function that does not take a reference to the flat rank array but uses this header array instead.
+/// Additionally, if DECODE_FROM_SHARED_MEMORY is defined, the bit vector and flat rank are not taken as arguments
+/// but read from the shared memory arrays defined by WM_BIT_VECTOR and WM_HEADER instead.
+uint _fr_rank1_wmh(
                #ifndef DECODE_FROM_SHARED_MEMORY
                const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
                #endif
@@ -174,6 +167,61 @@ uint _fr_rank1(
             "FR_RANK1 return value too high. [index, rank1]: [%v2u]",
             uvec2(index, rank1_res + WORD_RANK1(WM_BIT_VECTOR[offset], index % BV_WORD_BIT_SIZE)));
     return rank1_res + WORD_RANK1(WM_BIT_VECTOR[offset], index % BV_WORD_BIT_SIZE);
+}
+
+/// returns two addresses: the stop bit vector reference as (x, y) and its flat rank as (z, w). 
+uvec4 getWMHStopBitsFromEncoding(const EncodingRef brick_encoding,
+                                 const uint brick_encoding_length,
+                                 const uint palette_size) {
+    uint stop_bv_length = brick_encoding.buf[brick_encoding_length - palette_size - 1u];
+    assert(palette_size + 1u + stop_bv_length < brick_encoding_length, "stop_bv_length exceeds brick encoding length");
+
+    uvec2 bv_ref = bufferAddressAdd(uvec2(brick_encoding), brick_encoding_length - palette_size - 1u - stop_bv_length);
+    // note regarding the (BV_WORD_BIT_SIZE / 32u): getFlatRankEntriesHuffman counts in 64 bit elements, but the alignment of BitVectorRef is 4 byte (32 bit).
+    // For that reason, pointer arithmetic on these adresses must use 32 bit indices. The conversion factor from 64 bit to 32 bit index offsets is (BV_WORD_BIT_SIZE / 32u).
+    uvec2 fr_ref = bufferAddressSub(bv_ref, getFlatRankEntriesHuffman(stop_bv_length * 32u) * (BV_WORD_BIT_SIZE / 32u));
+
+
+    // TODO remove heavy stop_bits asserts:
+    assert(uint64_t(BitVectorRef(bv_ref)) >= uint64_t(brick_encoding) && uint64_t(BitVectorRef(bv_ref)) <= uint64_t(EncodingRef(bufferAddressAdd(uvec2(brick_encoding), brick_encoding_length))), "out of bounds bv address");
+    assert(uint64_t(BitVectorRef(fr_ref)) >= uint64_t(brick_encoding) && uint64_t(BitVectorRef(fr_ref)) <= uint64_t(EncodingRef(bufferAddressAdd(uvec2(brick_encoding), brick_encoding_length))), "out of bounds fr address");
+
+    assertf(_get_L1_entry(BitVectorRef(fr_ref).words[0]) == 0u, "corrupted flat rank: first L1 is not 0 but %u", _get_L1_entry(BitVectorRef(fr_ref).words[0]));
+    return uvec4(bv_ref, fr_ref);
+}
+
+uint getNegativeStopBitOffset(inout uint inv_lod, inout uint inv_lod_op_i, const EncodingRef inv_lod_starts,
+                              const uvec4 stop_bits) {
+
+    uint offset = 0u;
+    uint covered_nodes_shift = 3u * inv_lod;
+
+    for (uint l = 0; l < inv_lod; l++) {
+        // encoding index of the parent node within its inverse LOD.
+        // each parent node covers 2³ nodes in the next level, (2³)³ nodes in the next level afterwards etc.
+        const uint parent_op_i = inv_lod_op_i >> covered_nodes_shift;
+
+        // if the parent sets a stop bit: set inv_lod and inv_lod_op_i so that they update
+        if (BV_ACCESS(BitVectorRef(stop_bits.xy).words, inv_lod_starts.buf[l] + parent_op_i - offset) != 0u) {
+            inv_lod = l;
+            inv_lod_op_i = parent_op_i;
+            assertf(offset <= inv_lod_op_i, "stop bit offset for parent too large (offset, index): %v2u", uvec2(offset, inv_lod_op_i));
+            return offset;
+        }
+
+        // TODO: can the second _fr_rank1 be computed iteratively or cancelled out?
+        // add offset introduced by the nodes in this LOD
+        offset += _fr_rank1(inv_lod_starts.buf[l] + parent_op_i - offset, BitVectorRef(stop_bits.xy), BitVectorRef(stop_bits.zw))
+                - _fr_rank1(inv_lod_starts.buf[l], BitVectorRef(stop_bits.xy), BitVectorRef(stop_bits.zw));
+
+        // in the next finer LOD, the (grand-)parent grid node covers only 1/8th of the nodes in inv_lod compared
+        // to the parent from the coarser level
+        covered_nodes_shift -= 3u;
+        offset *= 8u;
+    }
+
+    assertf(offset <= inv_lod_op_i, "stop bit offset too large (offset, index): %v2u", uvec2(offset, inv_lod_op_i));
+    return offset;
 }
 
 uint _wm_huffman_access(
@@ -259,72 +307,85 @@ uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
                     #ifndef DECODE_FROM_SHARED_MEMORY
                          , const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector
                     #endif
+                    #if (OP_MASK & OP_STOP_BIT_INT)
+                         , const uvec4 stop_bits
+                    #endif
                          ) {
 
     // Start by reading the operations in the target inverse LoD's encoding:
     uint inv_lod = target_inv_lod;
     // operation index within in the current inv. LoD, starting at the target LoD
     uint inv_lod_op_i = output_i;
-    // corresponding voxel position within the inv. LoD
-    uvec3 inv_lod_voxel = _cache_idx2pos(inv_lod_op_i);
 
     // obtain encoding operation read index (4 bit)
     assert(brick_encoding.buf[0] == 0u, "First operation in the opstrem must have start index 0.");
+#if (OP_MASK & OP_STOP_BIT_INT)
+    // getNegativeStopBitOffset may move inv_lod and inv_lod_op_i to a coarser LOD which is why the encoding offsets
+    // that depend on these two parameters have to be added later
+    uint enc_operation_index = -getNegativeStopBitOffset(inv_lod, inv_lod_op_i, brick_encoding, stop_bits);
+    enc_operation_index += brick_encoding.buf[inv_lod] + inv_lod_op_i;
+#else
     uint enc_operation_index = brick_encoding.buf[inv_lod] + inv_lod_op_i;
-    uint operation = WM_HUFFMAN_ACCESS(enc_operation_index);
+#endif
+    assertf(inv_lod <= target_inv_lod, "inv lod out of bounds %u", inv_lod);
+    assertf(enc_operation_index < WM_HEADER.level_starts_1_to_4[0], "brick encoding out of bounds read (access, bound, diff): %v3u", uvec3(enc_operation_index, WM_HEADER.level_starts_1_to_4[0], enc_operation_index - WM_HEADER.level_starts_1_to_4[0]));
 
-    // ToDo: handle stop bits
-    assert((operation & STOP_BIT) == 0u, "stop bit not yet supported with random access");
+    return 0u;
+
+    uint operation = WM_HUFFMAN_ACCESS(enc_operation_index);
 
     // follow the chain of operations from the current output voxel up to an operation that accesses the palette
     {
-        uint operation_lsb = operation & 7u; // extract least significant 3 bits
+        assert(operation <= PALETTE_LAST, "Wavelet Matrix encoding does not support stop bits encoded in OP stream");
 
-        // equal to (operation_lsb != PALETTE_LAST && operation_lsb != PALETTE_ADV && operation_lsb != PALETTE_D)
-        while (operation_lsb < 4u) {
+        // equal to (operation != PALETTE_LAST && operation != PALETTE_ADV && operation != PALETTE_D)
+        while (operation < 4u) {
             // find the read position for the next operation along the chain
-            if (operation_lsb == PARENT) {
+            if (operation == PARENT) {
                 // read from the parent in the next iteration
                 inv_lod--;
                 assert(inv_lod <= target_inv_lod, "LOD chasing overflow for Huffman Wavelet Matrix decoding.");
                 inv_lod_op_i /= 8u;
-                inv_lod_voxel = _cache_idx2pos(inv_lod_op_i);
             }
-            // operation_lsb is NEIGHBOR_X, NEIGHBOR_Y, or NEIGHBOR_Z:
+            // operation is NEIGHBOR_X, NEIGHBOR_Y, or NEIGHBOR_Z:
             else {
                 // read from a neighbor in the next iteration
-                const uint neighbor_index = operation_lsb - NEIGHBOR_X; // X: 0, Y: 1, Z: 2
+                const uint neighbor_index = operation - NEIGHBOR_X; // X: 0, Y: 1, Z: 2
                 const uint child_index = inv_lod_op_i % 8u;
 
-                inv_lod_voxel += neighbor[child_index][neighbor_index];
+                const uvec3 inv_lod_voxel = uvec3(ivec3(_cache_idx2pos(inv_lod_op_i)) + neighbor[child_index][neighbor_index]);
                 inv_lod_op_i = _cache_pos2idx(inv_lod_voxel);
 
                 // ToDo: may be able to remove this later! for neighbors with later indices, we have to copy from its parent instead
                 if (any(greaterThan(neighbor[child_index][neighbor_index], ivec3(0)))) {
                     inv_lod--;
                     inv_lod_op_i /= 8u;
-                    inv_lod_voxel = _cache_idx2pos(inv_lod_op_i);
                 }
             }
 
-            assert(enc_operation_index < WM_HEADER.level_starts_1_to_4[0], "brick encoding out of bounds read");
+            #if (OP_MASK & STOP_BIT_INT)
+                enc_operation_index = -getNegativeStopBitOffset(inv_lod, inv_lod_op_i, brick_encoding, stop_bits);
+                enc_operation_index += brick_encoding.buf[inv_lod] + inv_lod_op_i;
+            #else
+                enc_operation_index = brick_encoding.buf[inv_lod] + inv_lod_op_i;
+            #endif
 
-            // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
-            enc_operation_index = brick_encoding.buf[inv_lod] + inv_lod_op_i;
-            operation_lsb = WM_HUFFMAN_ACCESS(enc_operation_index) & 7u;
+            // at this point: inv_lod, and inv_lod_op_i must be valid and set correctly
+            assert(inv_lod <= target_inv_lod, "LOD chasing overflow for Huffman Wavelet Matrix decoding.");
+            assertf(enc_operation_index < WM_HEADER.level_starts_1_to_4[0], "brick encoding out of bounds read (access, bound): %v2u", uvec2(enc_operation_index, WM_HEADER.level_starts_1_to_4[0]));
 
-            assertf(enc_operation_index != 0u || operation_lsb == PALETTE_ADV, "first brick operation must be PALETTE_ADV but is %u", operation_lsb);
+            operation = WM_HUFFMAN_ACCESS(enc_operation_index);
+            assertf(enc_operation_index != 0u || operation == PALETTE_ADV, "first brick operation must be PALETTE_ADV but is %u", operation);
         }
 
         // at this point, the current operation accesses the palette: write the resulting palette entry
         // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
         uint palette_index = WM_HUFFMAN_RANK(enc_operation_index, PALETTE_ADV);
         // the actual palette index may be offset depending on the operation
-        if (operation_lsb == PALETTE_LAST) {
+        if (operation == PALETTE_LAST) {
             palette_index--;
         }
-        assertf(palette_index < brick_encoding.buf[PALETTE_SIZE_HEADER_INDEX], "palette index out of palette bounds, is (index, operation) %v2u", uvec2(palette_index, operation_lsb));
-        assert(operation_lsb != PALETTE_D, "palette delta operation not supported with random access");
+        assertf(palette_index < brick_encoding.buf[PALETTE_SIZE_HEADER_INDEX], "palette index out of palette bounds, is (index, operation) %v2u", uvec2(palette_index, operation));
 
         return palette_index;
     }
@@ -348,6 +409,12 @@ void decompressCSGVVoxelToCache(const uint output_i, const uint target_inv_lod, 
                                                     brick_encoding, brick_encoding_length
                                                 #ifndef DECODE_FROM_SHARED_MEMORY
                                                     , wm_header, bit_vector
+                                                #endif
+// TODO: should the stop bits be moved to shared memory as well for DECODE_FORM_SHARED_MEMORY, as with WM_HEADER..?
+                                                #if (OP_MASK & OP_STOP_BIT_INT)
+                                                    , getWMHStopBitsFromEncoding(brick_encoding,
+                                                                                 brick_encoding_length,
+                                                                                 brick_encoding.buf[PALETTE_SIZE_HEADER_INDEX])
                                                 #endif
                                                     );
 
@@ -376,7 +443,13 @@ uint decompressCSGVVoxel(const uint brick_idx, const uvec3 brick_voxel, const ui
 
     uint palette_index = getPaletteIndexOfCSGVVoxel(voxel_idx, target_inv_lod,
                                                     brick_encoding, brick_encoding_length,
-                                                    wm_header, bit_vector);
+                                                    wm_header, bit_vector
+                                                #if (OP_MASK & OP_STOP_BIT_INT)
+                                                    , getWMHStopBitsFromEncoding(brick_encoding,
+                                                                                 brick_encoding_length,
+                                                                                 brick_encoding.buf[PALETTE_SIZE_HEADER_INDEX])
+                                                #endif
+                                                    );
 
     return brick_encoding.buf[brick_encoding_length - 1u - palette_index];
 }

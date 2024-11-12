@@ -137,9 +137,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     }
 
     // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts
-    // finished). Times out after 15 seconds and throws an exception.
+    // finished). Times out after 60 seconds and throws an exception.
     // Buffer upload synchronization is handled in PassCompSegVolRender
-    getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 15 * 1000000000ull);
+    getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 60 * 1000000000ull);
 
     // if a screenshot export was requested, we do this here
     if(m_download_frame_to_image_file.has_value() && m_mostRecentFrame.has_value()) {
