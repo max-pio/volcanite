@@ -89,10 +89,10 @@ namespace volcanite {
     /// one or more (grand-)parents that set a stop bit.\n
     /// This method takes care of these changes.
     /// For case 1, the input argument references inv_lod and inv_lod_op_i are updated in place to refer to the parent.
-    /// Additionally, the offset is returned that is required to access the encoding for the node inv_lod_op_i in
-    /// inv_lod at (inv_lod_starts[inv_lod] + inv_lod_op_i - offset).
-    /// @return the offset that has to be subtracted from inv_lod_op_i to access the node in the encoding of inv_lod
-    uint32_t getNegativeStopBitOffset(uint32_t& inv_lod, uint32_t& inv_lod_op_i, const uint32_t* inv_lod_starts,
+    /// Additionally, the encoding index for the lookup the corresponding node *after these changes* is returned as
+    /// inv_lod_starts[inv_lod] + inv_lod_op_i - offset.
+    /// @return the index to access the possibly changed node index (inv_lod, inv_lod_op_i)
+    uint32_t getEncodingIndexWithStopBits(uint32_t& inv_lod, uint32_t& inv_lod_op_i, const uint32_t* inv_lod_starts,
                                       const FlatRank_BitVector_ptrs& stop_bits);
 
     /// Replaces all 4 bit elements between start4bit (including) and end4bit (excluding) in in_packed with a

@@ -272,12 +272,12 @@ namespace volcanite {
         stop_bits.bv = reinterpret_cast<const BV_WordType*>(brick_encoding + brick_encoding_length - palette_size - 1 - stop_bv_length);
         stop_bits.fr = reinterpret_cast<const BV_L12Type*>(stop_bits.bv - getFlatRankEntriesHuffman(stop_bv_length * 32) * (sizeof(BV_L12Type) / sizeof(BV_WordType)));
 
-        assert(getL1Entry(stop_bits.fr[0]) == 0u && "corrupted flat rank: first L1 is not 0");
+        assert(getL1Entry(stop_bits.fr[0]) == 0u && "corrupted stop bit flat rank pointer: first L1 is not 0");
         return stop_bits;
     }
 
-    uint32_t getNegativeStopBitOffset(uint32_t& inv_lod, uint32_t& inv_lod_op_i, const uint32_t* inv_lod_starts,
-                                      const FlatRank_BitVector_ptrs& stop_bits) {
+    uint32_t getEncodingIndexWithStopBits(uint32_t& inv_lod, uint32_t& inv_lod_op_i, const uint32_t* inv_lod_starts,
+                                          const FlatRank_BitVector_ptrs& stop_bits) {
         uint32_t offset = 0u;
         uint32_t covered_nodes_shift = 3 * inv_lod;
 
@@ -290,7 +290,7 @@ namespace volcanite {
             if (_bv_access(inv_lod_starts[l] + parent_op_i - offset, stop_bits.bv)) {
                 inv_lod = l;
                 inv_lod_op_i = parent_op_i;
-                return offset;
+                break;
             }
 
             // TODO: can the second _fr_rank1 be computed iteratively or cancelled out?
@@ -305,7 +305,7 @@ namespace volcanite {
         }
 
         assert(offset <= inv_lod_op_i && "stop bit offset too large");
-        return offset;
+        return inv_lod_starts[inv_lod] + inv_lod_op_i - offset;
     }
 
 

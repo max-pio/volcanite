@@ -297,7 +297,7 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
 
 
     // last entry of our header stores the palette size
-    out[header_size - 1u] = palette.size();
+    out[getPaletteSizeHeaderIndex()] = palette.size();
     // now we calculate everything in 32 bit elements. round up to start the palette at an uint32_t index but AFTER the last encoding element
     while(out_i % 8u != 0u)
         write4Bit(out, 0u, out_i++, 0u);

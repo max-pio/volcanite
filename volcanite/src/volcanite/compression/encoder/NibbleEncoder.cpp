@@ -146,7 +146,7 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
     }
 
     // last entry of our header stores the palette size
-    out[header_size - 1u] = palette.size();
+    out[CSGVSerialBrickEncoder::getPaletteSizeHeaderIndex()] = palette.size();
     // now we calculate everything in 32 bit elements. round up to start the palette at an uint32_t index but AFTER the last encoding element
     while(out_i % 8u != 0u)
         write4Bit(out, 0u, out_i++, 0u);
@@ -249,7 +249,7 @@ void NibbleEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, uint32_t
     assert(!m_separate_detail && "detail separation not yet supported in parallelDecodeBrick");
     assert(target_inv_lod < getLodCountPerBrick() && "not enough LoDs in a brick to process target inv. LoD");
     assert(glm::all(glm::equal(valid_brick_size, glm::uvec3(m_brick_size))) &&
-           "partially occupied bricks are not allowed");
+           "partially occupied bricks are not allowed in random access Nibble encoding");
 
     // first, set the whole brick to INVALID, so we know later which elements and LOD blocks were already processed
     // #pragma omp parallel for default(none) shared(m_brick_size, output_brick)

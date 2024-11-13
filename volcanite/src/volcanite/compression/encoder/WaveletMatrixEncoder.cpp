@@ -310,6 +310,7 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxelWMHuffman(const uint32_t 
                                                                  const BV_WordType* bit_vector,
                                                                  const FlatRank_BitVector_ptrs& stop_bits) {
 
+
     // Start by reading the operations in the target inverse LoD's encoding:
     uint32_t inv_lod = target_inv_lod;
     // operation index within in the current inv. LoD, starting at the target LoD
@@ -318,16 +319,10 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxelWMHuffman(const uint32_t 
     // obtain encoding operation read index (4 bit)
     assert(brick_encoding[0] == 0u && "First operation in the op.stream must have start index 0.");
 
-    // if stop bits are enabled, an offset must be subtracted from encoding array indices
-    uint32_t enc_operation_index;
-    if (stop_bits.bv) {
-        // getNegativeStopBitOffset may move inv_lod and inv_lod_op_i to a coarser LOD which is why the encoding offsets
-        // that depend on these two parameters have to be added later
-        enc_operation_index = -getNegativeStopBitOffset(inv_lod, inv_lod_op_i, brick_encoding, stop_bits);
-    } else {
-        enc_operation_index = 0u;
-    }
-    enc_operation_index += brick_encoding[inv_lod] + inv_lod_op_i;
+    // if stop bits are enabled, an offset must be subtracted from encoding array indices.
+    uint32_t enc_operation_index = stop_bits.bv
+                                    ? getEncodingIndexWithStopBits(inv_lod, inv_lod_op_i, brick_encoding, stop_bits)
+                                    : brick_encoding[inv_lod] + inv_lod_op_i;
 
     assert(enc_operation_index < wm_header->level_starts_1_to_4[0] && "brick encoding out of bounds read");
     uint32_t operation = wm_huffman_access(enc_operation_index, wm_header, bit_vector);
@@ -362,13 +357,9 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxelWMHuffman(const uint32_t 
             }
 
             // uses stop bits, i.e. encoded with m_op_mask & OP_STOP_BIT == 1
-            if (stop_bits.bv != nullptr) {
-                // move lookup position in the encoding array around
-                enc_operation_index = -getNegativeStopBitOffset(inv_lod, inv_lod_op_i, brick_encoding, stop_bits);
-                enc_operation_index += brick_encoding[inv_lod] + inv_lod_op_i;
-            } else {
-                enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
-            }
+            enc_operation_index = stop_bits.bv
+                                    ? getEncodingIndexWithStopBits(inv_lod, inv_lod_op_i, brick_encoding, stop_bits)
+                                    : brick_encoding[inv_lod] + inv_lod_op_i;
 
             // at this point: inv_lod, and inv_lod_op_i must be valid and set correctly
             assert(inv_lod <= target_inv_lod && "LOD chasing overflow for Huffman Wavelet Matrix decoding.");
