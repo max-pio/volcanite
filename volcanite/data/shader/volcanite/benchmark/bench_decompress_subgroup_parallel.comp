@@ -117,7 +117,7 @@ void main() {
         }
     #elif ENCODING_MODE == HUFFMAN_WM_ENC
         // copy the wavelet matrix header to shared memory
-        uint flat_rank_size = getFlatRankEntriesHuffman(global_wm_header.bit_vector_size);
+        uint flat_rank_size =  getFlatRankEntries(global_wm_header.bit_vector_size);
         if (workgroup_thread_id == 0u)
             s_wm_header[0].bit_vector_size = global_wm_header.bit_vector_size;
         if (workgroup_thread_id < 5u)

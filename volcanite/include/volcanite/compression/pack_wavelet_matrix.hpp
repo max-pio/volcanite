@@ -22,6 +22,8 @@
 
 namespace volcanite {
 
+    inline uint32_t  getFlatRankEntries(uint32_t bit_vector_size) { return bit_vector_size / BV_L1_BIT_SIZE + 1u; }
+
     // TODO: better struct padding, move uvec4 and BV_L12Type to front
     struct WMBrickHeader {
         uint32_t palette_size;         ///< only included here as padding
@@ -33,10 +35,6 @@ namespace volcanite {
         WMBrickHeader(const WMBrickHeader&) = delete; // copying is not allowed because of the flexible array member
     };
     static_assert(sizeof(WMBrickHeader) == 4*12, "WMBrickHeader must be tightly packed.");
-
-    /// @param base_header_size the number of initial uint32 header elements that are not WM specific
-    const WMBrickHeader* getWMBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size);
-    const BV_WordType* getWMBitVectorFromEncoding(const uint32_t* v, uint32_t base_header_size);
 
     /// Replaces all 4 bit elements between start4bit (including) and end4bit (excluding) in in_packed with a
     /// wavelet matrix encoded bytestream. Updates the brick header's start position at v[0] to point to the beginning
@@ -71,15 +69,6 @@ namespace volcanite {
 
     static_assert(sizeof(WMHBrickHeader) == 4*12, "WMHBrickHeader must be tightly packed.");
 
-    /// @param base_header_size the number of initial uint32 header elements that are not WM specific
-    const WMHBrickHeader* getWMHBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size);
-
-    const BV_L12Type* getWMHFlatRankFromEncoding(const uint32_t* v, uint32_t base_header_size);
-
-    const BV_WordType* getWMHBitVectorFromEncoding(const uint32_t* v, uint32_t base_header_size);
-
-    FlatRank_BitVector_ptrs getWMHStopBitsFromEncoding(const uint32_t* brick_encoding,
-                                                             uint32_t brick_encoding_length, uint32_t palette_size);
 
     /// If the encoding uses stop bits, the lookup positions for a multi-grid node (inv_lod, inv_lod_op_i) in the
     /// encoding stream of the current level-of-detail (LOD) may change:\n

@@ -27,11 +27,6 @@ namespace volcanite {
         return bitfieldExtract(bv[index / BV_WORD_BIT_SIZE], static_cast<int>(index % BV_WORD_BIT_SIZE), 1);
     }
 
-    // TODO: rename getFlankRankEntriesHuffman to getFlatRankEntries(uint32_t text_size) and move (.. * WM_LEVELS) to non-Huffman caller
-    inline uint32_t getFlatRankEntries(uint32_t text_size) {
-        return (text_size * WM_LEVELS) / BV_L1_BIT_SIZE + 1u;
-    }
-
     uint32_t _fr_rank1(uint32_t index, const uint64_t* bv, const uint64_t* fr) {
         assert(getL1Entry(fr[0]) == 0u && "corrupted flat rank: first L1 is not 0");
 
@@ -131,7 +126,7 @@ namespace volcanite {
 
     const BV_WordType* getWMBitVectorFromEncoding(const uint32_t* v, uint32_t base_header_size) {
         return reinterpret_cast<const BV_WordType*>(v + base_header_size + 9
-                                                     + (sizeof(BV_L12Type)/sizeof(uint32_t)) * getFlatRankEntries(v[base_header_size]));
+                                                     + (sizeof(BV_L12Type)/sizeof(uint32_t)) * getFlatRankEntries(v[base_header_size] * WM_LEVELS));
     }
 
     uint32_t wm_access(uint32_t position, const WMBrickHeader* wm_header, const BV_WordType* bit_vector) {
@@ -188,10 +183,6 @@ namespace volcanite {
     //                                          HUFFMAN WAVELET MATRIX                                                //
     // ===============================================================================================================//
 
-    inline uint32_t getFlatRankEntriesHuffman(uint32_t bit_vector_size) {
-        return bit_vector_size / BV_L1_BIT_SIZE + 1u;
-    }
-
     inline uint32_t wmh_getLevelStart(uint32_t level, const glm::uvec4& level_starts_1_to_4) {
         level--; // Force overflow for level 0 (uint). Will be optimized away for any getLevelStart(level+1) call.
         // For L0, 0 is correct. For L5 (complete bit vector size), may return any value as it is never used.
@@ -235,7 +226,7 @@ namespace volcanite {
 
         // FlatRank
         const BV_L12Type* fr = wm.getFlatRank()->getRawData();
-        assert(wm.getFlatRank()->getRawDataSize() == getFlatRankEntriesHuffman(v[start4bit / 8u]) && "Flat rank size does not match expected size.");
+        assert(wm.getFlatRank()->getRawDataSize() ==  getFlatRankEntries(v[start4bit / 8u]) && "Flat rank size does not match expected size.");
         for (uint32_t _i = 0u; _i < wm.getFlatRank()->getRawDataSize(); _i++) {
             v64[out_i++] = fr[_i];
         }
@@ -247,33 +238,6 @@ namespace volcanite {
 
         // return the new end4bit
         return end4bit + out_i * 16;
-    }
-
-    const WMHBrickHeader* getWMHBrickHeaderFromEncoding(const uint32_t* v, uint32_t base_header_size) {
-        return reinterpret_cast<const WMHBrickHeader*>(v + base_header_size);
-    }
-
-    const BV_L12Type* getWMHFlatRankFromEncoding(const uint32_t* v, uint32_t base_header_size) {
-        return reinterpret_cast<const BV_L12Type*>(v + base_header_size + 10);
-    }
-
-    const BV_WordType* getWMHBitVectorFromEncoding(const uint32_t* v, uint32_t base_header_size) {
-        return reinterpret_cast<const BV_WordType*>(v + base_header_size + 10
-                                                    + (sizeof(BV_L12Type)/sizeof(uint32_t)) * getFlatRankEntriesHuffman(v[base_header_size]));
-    }
-
-    FlatRank_BitVector_ptrs getWMHStopBitsFromEncoding(const uint32_t* brick_encoding,
-                                                       const uint32_t brick_encoding_length,
-                                                       const uint32_t palette_size) {
-        uint32_t stop_bv_length = brick_encoding[brick_encoding_length - palette_size - 1];
-        assert(palette_size + 1 + stop_bv_length < brick_encoding_length);
-
-        FlatRank_BitVector_ptrs stop_bits = {};
-        stop_bits.bv = reinterpret_cast<const BV_WordType*>(brick_encoding + brick_encoding_length - palette_size - 1 - stop_bv_length);
-        stop_bits.fr = reinterpret_cast<const BV_L12Type*>(stop_bits.bv - getFlatRankEntriesHuffman(stop_bv_length * 32) * (sizeof(BV_L12Type) / sizeof(BV_WordType)));
-
-        assert(getL1Entry(stop_bits.fr[0]) == 0u && "corrupted stop bit flat rank pointer: first L1 is not 0");
-        return stop_bits;
     }
 
     uint32_t getEncodingIndexWithStopBits(uint32_t& inv_lod, uint32_t& inv_lod_op_i, const uint32_t* inv_lod_starts,

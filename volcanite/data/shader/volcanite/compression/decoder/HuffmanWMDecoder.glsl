@@ -74,13 +74,15 @@ const uvec2 SYMBOL2CHC[6] = {{1, 2147483648}, // 1 000000 ... PARENT
                              {5, 0}};         // 00000 00 ... PALETTE_LAST
 
 WMHBrickHeaderRef getWMHBrickHeaderFromEncoding(EncodingRef brick_encoding) {
-    return WMHBrickHeaderRef(bufferAddressAdd(uvec2(brick_encoding), BASE_HEADER_SIZE));
+    return WMHBrickHeaderRef(bufferAddressAdd(uvec2(brick_encoding), WM_HEADER_INDEX));
 }
 
 BitVectorRef getWMHBitVectorFromEncoding(EncodingRef brick_encoding) {
+    // the bit vector follows after the [LOD starts] [WMH Header] and its flexible array member [Flat Rank]
+    // the flat rank size depends on the text size, which is the first element of the WM header at WM_HEADER_INDEX
     return BitVectorRef(bufferAddressAdd(uvec2(brick_encoding),
-    BASE_HEADER_SIZE + 10          // base header + constant parts of WMH header
-    + UINT_PER_L12 * (brick_encoding.buf[BASE_HEADER_SIZE] / BV_L1_BIT_SIZE + 1u)));      // flat rank
+                                         WM_HEADER_INDEX + 10
+                                         + UINT_PER_L12 * (brick_encoding.buf[WM_HEADER_INDEX] / BV_L1_BIT_SIZE + 1u)));
 }
 
 // UTILITY FUNCTIONS ---------------------------------------------------------------------------------------------------
@@ -104,7 +106,7 @@ BitVectorRef getWMHBitVectorFromEncoding(EncodingRef brick_encoding) {
     #define WM_HUFFMAN_RANK(position, symbol) _wm_huffman_rank(wm_header, bit_vector, position, symbol)
 #endif
 
-uint getFlatRankEntriesHuffman(uint bit_vector_size) {
+uint  getFlatRankEntries(uint bit_vector_size) {
     return bit_vector_size / BV_L1_BIT_SIZE + 1u;
 }
 
@@ -184,7 +186,7 @@ uvec4 getWMHStopBitsFromEncoding(const EncodingRef brick_encoding,
     // note regarding the (BV_WORD_BIT_SIZE / 32u): getFlatRankEntriesHuffman counts in 64 bit elements, but the
     // alignment of BitVectorRef is 4 byte (32 bit). For that reason, pointer arithmetic on these adresses must use
     // 32 bit indices. The conversion factor from 64 bit to 32 bit index offsets is (BV_WORD_BIT_SIZE / 32u).
-    const uvec2 fr_ref = bufferAddressSub(bv_ref, getFlatRankEntriesHuffman(stop_bv_length * 32u) * (BV_WORD_BIT_SIZE / 32u));
+    const uvec2 fr_ref = bufferAddressSub(bv_ref,  getFlatRankEntries(stop_bv_length * 32u) * (BV_WORD_BIT_SIZE / 32u));
 
     assertf(_get_L1_entry(BitVectorRef(fr_ref).words[0]) == 0u, "corrupted flat rank: first L1 is not 0 but %u",
             _get_L1_entry(BitVectorRef(fr_ref).words[0]));
@@ -519,7 +521,7 @@ void outputOperationStream(const uint brick_idx, uint offset) {
 //    debugPrintfEXT("bit-vector start %u:  %v2u  %v2u  %v2u  %v2u", brick_idx, unpackUint2x32(bit_vector.words[0]),
 //                   unpackUint2x32(bit_vector.words[1]), unpackUint2x32(bit_vector.words[2]), unpackUint2x32(bit_vector.words[3]));
 //
-//    for (uint i = 0; i < getFlatRankEntriesHuffman(wm_header.bit_vector_size); i++)
+//    for (uint i = 0; i <  getFlatRankEntries(wm_header.bit_vector_size); i++)
 //        debugPrintfEXT("wmh fr start %u at [%u]:  %v2u", brick_idx, i, unpackUint2x32(wm_header.fr[i]));
 //
 //    debugPrintfEXT("header %u:  bit_vector_size %u, ones_before_level %v4u, %u,  level_starts_1_to_4 %v4u, fr[0] %v2u",
@@ -608,7 +610,7 @@ bool verifyBrickCompression(const uint brick_idx) {
         return false;
     }
 
-    uint flat_rank_entries = getFlatRankEntriesHuffman(wm_header.bit_vector_size);
+    uint flat_rank_entries =  getFlatRankEntries(wm_header.bit_vector_size);
     for (int i = 1; i < flat_rank_entries; i++) {
         if (_get_L1_entry(wm_header.fr[i]) < _get_L1_entry(wm_header.fr[i-1])) {
             debugPrintfEXT("[brick %u] Flat Rank L1 entries must be ascending but for two entries entries are %v2u", brick_idx, uvec2(_get_L1_entry(wm_header.fr[i-1]), _get_L1_entry(wm_header.fr[i])));

@@ -16,6 +16,7 @@
 #include "volcanite/compression/encoder/WaveletMatrixEncoder.hpp"
 #include "volcanite/compression/VolumeCompressionBase.hpp"
 #include "volcanite/compression/pack_nibble.hpp"
+#include "volcanite/compression/wavelet_tree/WaveletMatrix.hpp"
 #include "volcanite/compression/pack_wavelet_matrix.hpp"
 #include <omp.h>
 
@@ -33,7 +34,7 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
     glm::uvec3 volume_pos, brick_pos;
 
     const uint32_t lod_count = getLodCountPerBrick();
-    const uint32_t header_size = getHeaderSize();
+    const uint32_t header_size = lod_count * 2 + 1u;
     uint32_t out_i = header_size * 8u;  // write head position in out, counted as number of encoded 4 bit elements
 
     // we need to keep track of the current brick status from coarsest to finest level to determine the right operations
@@ -390,8 +391,8 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxel(const uint32_t output_i,
     if (m_encoding_mode == WAVELET_MATRIX_ENC) {
         return decompressCSGVBrickVoxelWM(output_i, target_inv_lod, valid_brick_size, brick_encoding,
                                           brick_encoding_length,
-                                          getWMBrickHeaderFromEncoding(brick_encoding, getHeaderSize()),
-                                          getWMBitVectorFromEncoding(brick_encoding, getHeaderSize()));
+                                          getWMBrickHeaderFromEncoding(brick_encoding),
+                                          getWMBitVectorFromEncoding(brick_encoding));
     } else if (m_encoding_mode == HUFFMAN_WM_ENC) {
         FlatRank_BitVector_ptrs stop_bits = (m_op_mask & OP_STOP_BIT)
                                             ? getWMHStopBitsFromEncoding(brick_encoding,
@@ -400,8 +401,8 @@ uint32_t WaveletMatrixEncoder::decompressCSGVBrickVoxel(const uint32_t output_i,
                                             : FlatRank_BitVector_ptrs(nullptr, nullptr);
         return decompressCSGVBrickVoxelWMHuffman(output_i, target_inv_lod, valid_brick_size, brick_encoding,
                                                  brick_encoding_length,
-                                                 getWMHBrickHeaderFromEncoding(brick_encoding, getHeaderSize()),
-                                                 getWMHBitVectorFromEncoding(brick_encoding, getHeaderSize()),
+                                                 getWMHBrickHeaderFromEncoding(brick_encoding),
+                                                 getWMHBitVectorFromEncoding(brick_encoding),
                                                  stop_bits);
     } else {
         throw std::runtime_error("Encoding mode not supported by WaveletMatrixEncoder.");
@@ -431,8 +432,8 @@ void WaveletMatrixEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, u
 
     if (m_encoding_mode == WAVELET_MATRIX_ENC) {
         // gather all information required for decoding symbols from a wavelet matrix encoding
-        const WMBrickHeader* wm_brick_header = getWMBrickHeaderFromEncoding(brick_encoding, getHeaderSize());
-        const BV_WordType* bit_vector = getWMBitVectorFromEncoding(brick_encoding, getHeaderSize());
+        const WMBrickHeader* wm_brick_header = getWMBrickHeaderFromEncoding(brick_encoding);
+        const BV_WordType* bit_vector = getWMBitVectorFromEncoding(brick_encoding);
 
         // m_cpu_threads many threads go through the Morton indexing order from front to back. The threads work on the next
         // following items in parallel. read_offset is the index of the first thread 0.
@@ -454,8 +455,8 @@ void WaveletMatrixEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, u
         }
     } else if (m_encoding_mode == HUFFMAN_WM_ENC) {
         // gather all information required for decoding symbols from a wavelet matrix encoding
-        const WMHBrickHeader* wm_brick_header = getWMHBrickHeaderFromEncoding(brick_encoding, getHeaderSize());
-        const BV_WordType* bit_vector = getWMHBitVectorFromEncoding(brick_encoding, getHeaderSize());
+        const WMHBrickHeader* wm_brick_header = getWMHBrickHeaderFromEncoding(brick_encoding);
+        const BV_WordType* bit_vector = getWMHBitVectorFromEncoding(brick_encoding);
         FlatRank_BitVector_ptrs stop_bits = (m_op_mask & OP_STOP_BIT)
                                             ? getWMHStopBitsFromEncoding(brick_encoding,
                                                                          brick_encoding_length,
@@ -484,6 +485,150 @@ void WaveletMatrixEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, u
     } else {
         throw std::runtime_error("Encoding mode not supported by WaveletMatrixEncoder.");
     }
+}
+
+
+// COMONENT ACCESS
+
+// Wavelet Matrix -----
+
+inline const WMBrickHeader* WaveletMatrixEncoder::getWMBrickHeaderFromEncoding(const uint32_t* v) const {
+    // to ensure tight packing, the WMBrickHeader starts one uint earlier in the previous (normal) brick header
+    return reinterpret_cast<const WMBrickHeader*>(v + getWMHeaderIndex());
+}
+
+inline const BV_WordType* WaveletMatrixEncoder::getWMBitVectorFromEncoding(const uint32_t* v) const {
+    return reinterpret_cast<const BV_WordType*>(v + getWMHeaderIndex() + 10
+                                                + (sizeof(BV_L12Type)/sizeof(uint32_t)) * getFlatRankEntries(v[getWMHeaderIndex() + 1] * WM_LEVELS));
+}
+
+// Huffman Wavelet Matrix ----
+
+inline const WMHBrickHeader* WaveletMatrixEncoder::getWMHBrickHeaderFromEncoding(const uint32_t* v) const {
+    return reinterpret_cast<const WMHBrickHeader*>(v + getWMHeaderIndex());
+}
+
+inline const BV_L12Type* WaveletMatrixEncoder::getWMHFlatRankFromEncoding(const uint32_t* v) const {
+    return reinterpret_cast<const BV_L12Type*>(v + getWMHeaderIndex() + 10);
+}
+
+inline const BV_WordType* WaveletMatrixEncoder::getWMHBitVectorFromEncoding(const uint32_t* v) const {
+    return reinterpret_cast<const BV_WordType*>(v + getWMHeaderIndex() + 10
+                                                + (sizeof(BV_L12Type)/sizeof(uint32_t)) *  getFlatRankEntries(v[getWMHeaderIndex()]));
+}
+
+inline FlatRank_BitVector_ptrs WaveletMatrixEncoder::getWMHStopBitsFromEncoding(const uint32_t* brick_encoding,
+                                                   const uint32_t brick_encoding_length,
+                                                   const uint32_t palette_size) const {
+    uint32_t stop_bv_length = brick_encoding[brick_encoding_length - palette_size - 1];
+    assert(palette_size + 1 + stop_bv_length < brick_encoding_length);
+
+    FlatRank_BitVector_ptrs stop_bits = {};
+    stop_bits.bv = reinterpret_cast<const BV_WordType*>(brick_encoding + brick_encoding_length - palette_size - 1 - stop_bv_length);
+    stop_bits.fr = reinterpret_cast<const BV_L12Type*>(stop_bits.bv -  getFlatRankEntries(stop_bv_length * 32) * (sizeof(BV_L12Type) / sizeof(BV_WordType)));
+
+    assert(getL1Entry(stop_bits.fr[0]) == 0u && "corrupted stop bit flat rank pointer: first L1 is not 0");
+    return stop_bits;
+}
+
+void WaveletMatrixEncoder::verifyBrickCompression(const uint32_t *brick_encoding, uint32_t brick_encoding_length,
+                                                  const uint32_t *brick_detail_encoding,
+                                                  uint32_t brick_detail_encoding_length,
+                                                  std::ostream &error) const {
+    // TODO: missing compression verification with wavelet matrix brick encoder
+
+    // Obtain a reference to the uint buffer containing this bricks encoding.
+    const uint32_t minimum_header_size = getWMHeaderIndex()
+                                         + ((m_encoding_mode == WAVELET_MATRIX_ENC) ? sizeof(WMBrickHeader)
+                                                                                    : sizeof(WMHBrickHeader)) / 4;
+    const uint32_t lod_count = getLodCountPerBrick();
+    const uint32_t header_start_lods = lod_count;
+
+    uint32_t total_voxels_in_brick = 0u;
+    for (int i = 1; i <= m_brick_size; i <<= 1) {
+        total_voxels_in_brick += (i * i * i);
+    }
+
+    // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
+    if (brick_encoding_length < minimum_header_size + 1u + 1u) {
+        error
+                << "brick encoding is shorter than minimum. (header (incl. 1 flatrank) + 1 encoding + 1 palette) = "
+                << minimum_header_size + 2u << " but is " << brick_encoding_length << "\n";
+    }
+
+    // check LOD starts
+    if (brick_encoding[0] != 0) {
+        error << "First encoding operation index must be 0." << "\n";
+    }
+    if (brick_encoding[1] > 1) {
+        error << "Second encoding operation index must be 0 or 1." << "\n";
+    }
+
+    // check palette start of first LoD being 0 and second LoD being 1
+    if (brick_encoding[header_start_lods] != 0u)
+        error << "  first palette start must be 0 but is " << brick_encoding[header_start_lods] << "\n";
+    if (brick_encoding[header_start_lods + 1u] != 1u)
+        error << "  second palette start must be 1 but is " << brick_encoding[header_start_lods + 1u] << "\n";
+
+    if (brick_encoding[getPaletteSizeHeaderIndex()] == 0
+        || brick_encoding[getPaletteSizeHeaderIndex()] > total_voxels_in_brick)
+        error << " palette size must be in [1, total_voxels_in_brick] = [1, " << total_voxels_in_brick
+              << " but is " << brick_encoding[getPaletteSizeHeaderIndex()];
+
+    if (m_encoding_mode == WAVELET_MATRIX_ENC) {
+        const WMBrickHeader *wm_header = getWMBrickHeaderFromEncoding(brick_encoding);
+        if (wm_header->palette_size != brick_encoding[getPaletteSizeHeaderIndex()])
+            error << "  wavelet matrix header has palette size " << wm_header->palette_size << " but should be "
+                  << brick_encoding[getPaletteSizeHeaderIndex()];
+        if (wm_header->text_size == 0u || wm_header->text_size > total_voxels_in_brick)
+            error << "  text size must be within (0, " << total_voxels_in_brick << ") but is "
+                  << wm_header->text_size << "\n";
+        if (getL1Entry(wm_header->fr[0]) != 0)
+            error << "  first flat rank L1 entry must be 0 but is " << getL1Entry(wm_header->fr[0]) << "\n";
+        if (getL2Entry(wm_header->fr[0], 0) != 0)
+            error << "  first flat rank L1 entry must be 0 but is " << getL1Entry(wm_header->fr[0]) << "\n";
+    } else {
+        const WMHBrickHeader *wm_header = getWMHBrickHeaderFromEncoding(brick_encoding);
+        // maximum text size: HWM_LEVELS bits per voxel (i.e. 5 bit vectors with length of voxels in brick)
+        if (wm_header->bit_vector_size == 0u || wm_header->bit_vector_size > total_voxels_in_brick * HWM_LEVELS)
+            error << "  bit vector size must be within (0, " << total_voxels_in_brick * HWM_LEVELS << ") but is "
+                  << wm_header->bit_vector_size << "\n";
+        if (getL1Entry(wm_header->fr[0]) != 0)
+            error << "  first flat rank L1 entry must be 0 but is " << getL1Entry(wm_header->fr[0]) << "\n";
+        if (getL2Entry(wm_header->fr[0], 0) != 0)
+            error << "  first flat rank L1 entry must be 0 but is " << getL1Entry(wm_header->fr[0]) << "\n";
+        if (wm_header->ones_before_level[0] != 0u)
+            error << "  first ones_before_level entry must be 0 but is " << wm_header->ones_before_level[0] << "\n";
+        for (int i = 1; i < 4; i++) {
+            if (wm_header->ones_before_level[i] >= wm_header->level_starts_1_to_4[i - 1])
+                error << "  ones_before_level[" << i << "] must be < level_starts_1_to_4[" << (i - 1) << "] "
+                      << wm_header->level_starts_1_to_4[i - 1] << " but is " << wm_header->ones_before_level[i]
+                      << "\n";
+        }
+        if (wm_header->level_starts_1_to_4[0] > total_voxels_in_brick)
+            error << "  level_starts_1_to_4[0] entry must be the text size, limited by voxel count "
+                  << total_voxels_in_brick << " but is " << wm_header->level_starts_1_to_4[0] << "\n";
+        for (int i = 0; i < 3; i++) {
+            if (wm_header->level_starts_1_to_4[i] > wm_header->level_starts_1_to_4[i + 1])
+                error << " level_starts_1_to_4[" << i << "] entry must be <= level_starts_1_to_4[" << (i + 1)
+                      << "] = " << wm_header->level_starts_1_to_4[i + 1] << " but is "
+                      << wm_header->level_starts_1_to_4[i] << "\n";
+        }
+        if (wm_header->level_starts_1_to_4[3] > wm_header->bit_vector_size)
+            error << " level_starts_1_to_4[3] entry must be <= bit_vector_size " << wm_header->bit_vector_size
+                  << " but is " << wm_header->level_starts_1_to_4[3] << "\n";
+    }
+}
+
+std::string WaveletMatrixEncoder::outputOperationStream(const std::span<const uint32_t> encoding,
+                                                        const uint32_t offset, const uint32_t count) const {
+    const WMHBrickHeader *wm_header = getWMHBrickHeaderFromEncoding(encoding.data());
+    const BV_WordType *bit_vector = getWMHBitVectorFromEncoding(encoding.data());
+
+    std::stringstream ss;
+    for (uint32_t i = 0; i < count; i++)
+        ss << wm_huffman_access(offset + i, wm_header, bit_vector) << ", ";
+    return ss.str();
 }
 
 } // namespace volcanite

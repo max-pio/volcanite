@@ -14,7 +14,6 @@
     #define BV_L2_WORD_SIZE 4
     #define BV_STORE_L1_BITS 19
     #define BV_STORE_L2_BITS 11
-    #define BASE_HEADER_SIZE 10
     #define UINT_PER_L12 2
     ASSERT_FAIL(missing_shader_defines_for_HUFFMAN_WM_ENC);
 #endif

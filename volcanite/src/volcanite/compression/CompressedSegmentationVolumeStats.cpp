@@ -27,7 +27,7 @@ using namespace vvv;
 namespace volcanite {
 
     void CompressedSegmentationVolume::printBrickInfo(glm::uvec3 brick, loglevel log_level) const {
-        throw std::runtime_error("not adapted for CSGVBrickEncoding refactor.");
+        Logger(log_level) << "printBrickInfo(..) not adapted for CSGVBrickEncoder yet.";
 //        if(m_encodings.empty())
 //            throw std::runtime_error("Segmentation volume is not yet compressed!");
 //
