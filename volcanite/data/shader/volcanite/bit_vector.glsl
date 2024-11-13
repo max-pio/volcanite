@@ -68,6 +68,9 @@ uint word_rank1_uvec4(uvec4 word, uint index) {
 
 // FLAT RANK -----------------------------------------------------------------------------------------------------------
 
+// assume that flat rank support is enabled when the respective defines exist:
+#ifdef BV_STORE_L1_BITS
+
 uint _get_L1_entry(const BV_WORD_TYPE v) {
     return uint(bitfieldExtract64(v, 0, BV_STORE_L1_BITS)); // the least significant BV_STORE_L1_BITS store the L1-information
 }
@@ -128,5 +131,7 @@ uint _fr_rank1(uint index, BitVectorRef bv, BitVectorRef fr) {
             uvec2(index, rank1_res + WORD_RANK1(bv.words[offset], index % BV_WORD_BIT_SIZE)));
     return rank1_res + WORD_RANK1(bv.words[offset], index % BV_WORD_BIT_SIZE);
 }
+
+#endif // BV_STORE_L1_BITS (Flat Rank)
 
 #endif // VOLCANITE_BITVECTOR_GLSL

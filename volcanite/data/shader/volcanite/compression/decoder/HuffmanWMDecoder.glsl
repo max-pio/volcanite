@@ -173,23 +173,22 @@ uint _fr_rank1_wmh(
 uvec4 getWMHStopBitsFromEncoding(const EncodingRef brick_encoding,
                                  const uint brick_encoding_length,
                                  const uint palette_size) {
-    uint stop_bv_length = brick_encoding.buf[brick_encoding_length - palette_size - 1u];
+    // layout within the brick encoding:
+    // [...]  [stop bit flat rank] [stop bit vector] [1x uint32 stop bit vector uint32 element count] [palette]
+
+    const uint stop_bv_length_lookup_index = brick_encoding_length - palette_size - 1u;
+    const uint stop_bv_length = brick_encoding.buf[stop_bv_length_lookup_index];
     assert(palette_size + 1u + stop_bv_length < brick_encoding_length, "stop_bv_length exceeds brick encoding length");
 
-    uvec2 bv_ref = bufferAddressAdd(uvec2(brick_encoding), brick_encoding_length - palette_size - 1u - stop_bv_length);
-    // note regarding the (BV_WORD_BIT_SIZE / 32u): getFlatRankEntriesHuffman counts in 64 bit elements, but the alignment of BitVectorRef is 4 byte (32 bit).
-    // For that reason, pointer arithmetic on these adresses must use 32 bit indices. The conversion factor from 64 bit to 32 bit index offsets is (BV_WORD_BIT_SIZE / 32u).
-    uvec2 fr_ref = bufferAddressSub(bv_ref, getFlatRankEntriesHuffman(stop_bv_length * 32u) * (BV_WORD_BIT_SIZE / 32u));
+    const uvec2 bv_ref = bufferAddressAdd(uvec2(brick_encoding), stop_bv_length_lookup_index - stop_bv_length);
+    // note regarding the (BV_WORD_BIT_SIZE / 32u): getFlatRankEntriesHuffman counts in 64 bit elements, but the
+    // alignment of BitVectorRef is 4 byte (32 bit). For that reason, pointer arithmetic on these adresses must use
+    // 32 bit indices. The conversion factor from 64 bit to 32 bit index offsets is (BV_WORD_BIT_SIZE / 32u).
+    const uvec2 fr_ref = bufferAddressSub(bv_ref, getFlatRankEntriesHuffman(stop_bv_length * 32u) * (BV_WORD_BIT_SIZE / 32u));
 
-    // check existence of 0xFFF..FFF_64 flag right before stop bit vector / flat rank block
-    uvec2 test_ref_fr = bufferAddressSub(fr_ref, 2u);
-    assertf(BitVectorRef(test_ref_fr).words[0] == uint64_t(0xFFFFFFFFFFFFFFFFul), "fr should start with 0xF..FF_64 but is %lu", BitVectorRef(test_ref_fr).words[0]);
+    assertf(_get_L1_entry(BitVectorRef(fr_ref).words[0]) == 0u, "corrupted flat rank: first L1 is not 0 but %u",
+            _get_L1_entry(BitVectorRef(fr_ref).words[0]));
 
-    // TODO remove heavy stop_bits asserts:
-    assert(uint64_t(BitVectorRef(bv_ref)) >= uint64_t(brick_encoding) && uint64_t(BitVectorRef(bv_ref)) <= uint64_t(EncodingRef(bufferAddressAdd(uvec2(brick_encoding), brick_encoding_length))), "out of bounds bv address");
-    assert(uint64_t(BitVectorRef(fr_ref)) >= uint64_t(brick_encoding) && uint64_t(BitVectorRef(fr_ref)) <= uint64_t(EncodingRef(bufferAddressAdd(uvec2(brick_encoding), brick_encoding_length))), "out of bounds fr address");
-
-    assertf(_get_L1_entry(BitVectorRef(fr_ref).words[0]) == 0u, "corrupted flat rank: first L1 is not 0 but %u", _get_L1_entry(BitVectorRef(fr_ref).words[0]));
     return uvec4(bv_ref, fr_ref);
 }
 

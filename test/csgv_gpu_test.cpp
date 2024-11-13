@@ -107,7 +107,7 @@ int main() {
         csgv.clear();
 
 //        Logger(INFO) << "Random Access Wavelet Matrix";
-//        csgv.setCompressionOptions64(64, WAVELET_MATRIX_ENC, OP_ALL, false);
+//        csgv.setCompressionOptions64(64, WAVELET_MATRIX_ENC, OP_ALL_WITHOUT_STOP_BIT, false);
 //        csgv.compress(volume.dataConst(), dim, false);
 //        {
 //            CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, true);
@@ -118,7 +118,7 @@ int main() {
 //        csgv.clear();
 //
         Logger(INFO) << "Random Access Huffman Shaped Wavelet Matrix";
-        csgv.setCompressionOptions64(16, HUFFMAN_WM_ENC, OP_ALL_WITHOUT_STOP, true);
+        csgv.setCompressionOptions64(16, HUFFMAN_WM_ENC, OP_ALL, true);
         csgv.compress(volume.dataConst(), dim, false);
         {
             CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, false, false);

@@ -37,6 +37,10 @@
     STATIC_FAIL(DECODE_FROM_SHARED_MEMORY_can_only_be_used_with_RANDOM_ACCESS);
 #endif
 
+#if defined(RANDOM_ACCESS) && (OP_MASK & OP_STOP_BIT)
+    STATIC_FAIL(OP_STOP_BIT_cannot_be_used_with_NIBBLE_ENC_and_RANDOM_ACCESS);
+#endif
+
 
 // UTILITY FUNCTIONS ---------------------------------------------------------------------------------------------------
 
