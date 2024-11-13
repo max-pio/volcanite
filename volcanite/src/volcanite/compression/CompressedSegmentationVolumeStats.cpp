@@ -313,13 +313,20 @@ namespace volcanite {
             for (brick_pos.y = 0; brick_pos.y < brickCount.y; brick_pos.y++) {
                 for (brick_pos.x = 0; brick_pos.x < brickCount.x; brick_pos.x++) {
                     size_t brick_idx = brick_pos2idx(brick_pos, brickCount);
-                    // decode brick
-                    getBrickStatistics(statistics[brick_idx], brick_idx, glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u), glm::uvec3(m_brick_size)));
+                    const uint32_t* brick_encoding = getBrickEncoding(brick_idx);
+                    const uint32_t brick_encoding_length = getBrickEncodingLength(brick_idx);
+
+                    m_encoder->getBrickStatistics(statistics[brick_idx], brick_encoding, brick_encoding_length,
+                                                  glm::clamp(m_volume_dim - brick_pos * m_brick_size,
+                                                             glm::uvec3(0u), glm::uvec3(m_brick_size)));
+
                     // add some extra values to statistics
                     statistics[brick_idx]["brick_x"] = static_cast<float>(brick_pos.x); // x coordinate of brick
                     statistics[brick_idx]["brick_y"] = static_cast<float>(brick_pos.y); // y coordinate of brick
                     statistics[brick_idx]["brick_z"] = static_cast<float>(brick_pos.z); // z coordinate of brick
-                    statistics[brick_idx]["total_size"] = static_cast<float>(m_brick_starts[brick_idx + 1] - m_brick_starts[brick_idx] + 1u); // total size of brick in number of uint32_t (+1 uint for the brick_starts buffer)
+                    // total size is the encoding + one single uint for the brick starts array
+                    statistics[brick_idx]["total_byte_size"] = static_cast<float>(brick_encoding_length + 1u) * sizeof(uint32_t);
+                    statistics[brick_idx]["palette_length"] = static_cast<float>(brick_encoding[m_encoder->getPaletteSizeHeaderIndex()]);
                 }
             }
         }

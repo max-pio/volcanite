@@ -488,55 +488,98 @@ void WaveletMatrixEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, u
 }
 
 
-// COMONENT ACCESS
+std::vector<std::string>
+    WaveletMatrixEncoder::getGLSLDefines(std::function<std::span<const uint32_t>(uint32_t)> getBrickEncodingSpan,
+                                         uint32_t brick_idx_count) const {
+    auto defines = CSGVBrickEncoder::getGLSLDefines(getBrickEncodingSpan, brick_idx_count);
+    switch (sizeof(BV_WordType)) {
+        case 4:
+            defines.emplace_back("BV_WORD_TYPE=uint");
+            break;
+        case 8:
+            defines.emplace_back("BV_WORD_TYPE=uint64_t");
+            break;
+        default:
+            throw std::runtime_error("Missing GLSL define for BV_WORD_TYPE");
+    }
+    defines.emplace_back("HWM_LEVELS=" + std::to_string(HWM_LEVELS));
+    defines.emplace_back("BV_L1_BIT_SIZE=" + std::to_string(BV_L1_BIT_SIZE));
+    defines.emplace_back("BV_L2_BIT_SIZE=" + std::to_string(BV_L2_BIT_SIZE));
+    defines.emplace_back("BV_L2_WORD_SIZE=" + std::to_string(BV_L2_WORD_SIZE));
+    defines.emplace_back("BV_STORE_L1_BITS=" + std::to_string(BV_STORE_L1_BITS));
+    defines.emplace_back("BV_STORE_L2_BITS=" + std::to_string(BV_STORE_L2_BITS));
+    defines.emplace_back("BV_WORD_BIT_SIZE=" + std::to_string(BV_WORD_BIT_SIZE));
+    defines.emplace_back("WM_HEADER_INDEX=" + std::to_string(getWMHeaderIndex()));
+    defines.emplace_back("UINT_PER_L12=" + std::to_string(sizeof(BV_L12Type) / sizeof(uint32_t)));
 
-// Wavelet Matrix -----
+    // obtain MAX_BIT_VECTOR_WORD_LENGTH as ceil(max_bitvector_bit_length / BV_WORD_BIT_SIZE)
+    uint32_t max_bitvector_bit_length = 0u;
+    #pragma omp parallel for default(none) shared(brick_idx_count, getBrickEncodingSpan) reduction(max:max_bitvector_bit_length)
+    for (uint32_t brick_idx = 0u; brick_idx < brick_idx_count; brick_idx++) {
+        auto brick_encoding = getBrickEncodingSpan(brick_idx);
+        max_bitvector_bit_length = std::max(max_bitvector_bit_length,
+                                            getWMHBrickHeaderFromEncoding(brick_encoding.data())->bit_vector_size);
+    }
+    defines.emplace_back("MAX_BIT_VECTOR_WORD_LENGTH=" +
+                         std::to_string((max_bitvector_bit_length + BV_WORD_BIT_SIZE - 1) / BV_WORD_BIT_SIZE));
 
-inline const WMBrickHeader* WaveletMatrixEncoder::getWMBrickHeaderFromEncoding(const uint32_t* v) const {
-    // to ensure tight packing, the WMBrickHeader starts one uint earlier in the previous (normal) brick header
-    return reinterpret_cast<const WMBrickHeader*>(v + getWMHeaderIndex());
+    return defines;
 }
 
-inline const BV_WordType* WaveletMatrixEncoder::getWMBitVectorFromEncoding(const uint32_t* v) const {
-    return reinterpret_cast<const BV_WordType*>(v + getWMHeaderIndex() + 10
-                                                + (sizeof(BV_L12Type)/sizeof(uint32_t)) * getFlatRankEntries(v[getWMHeaderIndex() + 1] * WM_LEVELS));
+// DEBUGGING AND STATISTICS ----------------------------------------------------------------------------------------
+
+void WaveletMatrixEncoder::getBrickStatistics(std::map<std::string, float>& statistics,
+                                              const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
+                                              glm::uvec3 valid_brick_size) const {
+
+    // gather header information
+    uint32_t palette_length = brick_encoding[getPaletteSizeHeaderIndex()];
+    uint32_t operation_count = 0u;
+    uint32_t bit_vector_length = 0u;
+    if (m_encoding_mode == WAVELET_MATRIX_ENC) {
+        const WMBrickHeader* wm_header = getWMBrickHeaderFromEncoding(brick_encoding);
+        operation_count = wm_header->text_size;
+        bit_vector_length = operation_count * WM_LEVELS;
+    } else if (m_encoding_mode == HUFFMAN_WM_ENC) {
+        const WMHBrickHeader* wmh_header = getWMHBrickHeaderFromEncoding(brick_encoding);
+        operation_count = wmh_header->level_starts_1_to_4[0];
+        bit_vector_length = wmh_header->bit_vector_size;
+    } else {
+        throw std::runtime_error("encoding mode not supported by Wavelet Matrix encoder");
+    }
+    uint32_t bit_vector_words = (bit_vector_length + BV_WORD_BIT_SIZE - 1) / BV_WORD_BIT_SIZE;
+
+    statistics["operation_count"] = static_cast<float>(operation_count);
+
+    statistics["header_byte_size"] = static_cast<float>((getWMHeaderIndex() + 10) * sizeof(uint32_t));
+    statistics["operation_stream_byte_size"] = static_cast<float>(sizeof(BV_WordType) * bit_vector_words
+                                                        + (sizeof(BV_L12Type) * getFlatRankEntries(bit_vector_length)));
+    double flat_rank_overhead = 0.f;
+    size_t stop_bits_byte_size = 0u;
+    if (m_op_mask & OP_STOP_BIT) {
+        uint32_t stop_bv_uint_length = brick_encoding[brick_encoding_length - palette_length - 1]; // measured as 32 bit elems
+        stop_bits_byte_size += stop_bv_uint_length * sizeof(uint32_t);                             // stop bit vector
+        stop_bits_byte_size += getFlatRankEntries(stop_bv_uint_length * 32u) * sizeof(BV_L12Type); // stop bit flat rank
+        stop_bits_byte_size += sizeof(uint32_t);                                                   // stop bit uint size
+
+        flat_rank_overhead = static_cast<double>(sizeof(BV_L12Type) * getFlatRankEntries(bit_vector_length)
+                            + getFlatRankEntries(stop_bv_uint_length * 32u) * sizeof(BV_L12Type));
+        flat_rank_overhead /= static_cast<double>(sizeof(BV_WordType) * bit_vector_words
+                              + stop_bv_uint_length * sizeof(uint32_t));
+    } else {
+        flat_rank_overhead = static_cast<float>(sizeof(BV_L12Type) * getFlatRankEntries(bit_vector_length))
+                             / static_cast<float>(sizeof(BV_WordType) * bit_vector_words);
+    }
+    statistics["stop_bits_byte_size"] = static_cast<float>(stop_bits_byte_size);
+    statistics["palette_byte_size"] = static_cast<float>(palette_length * sizeof(uint32_t));
+    statistics["flat_rank_overhead"] = static_cast<float>(flat_rank_overhead);
 }
 
-// Huffman Wavelet Matrix ----
-
-inline const WMHBrickHeader* WaveletMatrixEncoder::getWMHBrickHeaderFromEncoding(const uint32_t* v) const {
-    return reinterpret_cast<const WMHBrickHeader*>(v + getWMHeaderIndex());
-}
-
-inline const BV_L12Type* WaveletMatrixEncoder::getWMHFlatRankFromEncoding(const uint32_t* v) const {
-    return reinterpret_cast<const BV_L12Type*>(v + getWMHeaderIndex() + 10);
-}
-
-inline const BV_WordType* WaveletMatrixEncoder::getWMHBitVectorFromEncoding(const uint32_t* v) const {
-    return reinterpret_cast<const BV_WordType*>(v + getWMHeaderIndex() + 10
-                                                + (sizeof(BV_L12Type)/sizeof(uint32_t)) *  getFlatRankEntries(v[getWMHeaderIndex()]));
-}
-
-inline FlatRank_BitVector_ptrs WaveletMatrixEncoder::getWMHStopBitsFromEncoding(const uint32_t* brick_encoding,
-                                                   const uint32_t brick_encoding_length,
-                                                   const uint32_t palette_size) const {
-    uint32_t stop_bv_length = brick_encoding[brick_encoding_length - palette_size - 1];
-    assert(palette_size + 1 + stop_bv_length < brick_encoding_length);
-
-    FlatRank_BitVector_ptrs stop_bits = {};
-    stop_bits.bv = reinterpret_cast<const BV_WordType*>(brick_encoding + brick_encoding_length - palette_size - 1 - stop_bv_length);
-    stop_bits.fr = reinterpret_cast<const BV_L12Type*>(stop_bits.bv -  getFlatRankEntries(stop_bv_length * 32) * (sizeof(BV_L12Type) / sizeof(BV_WordType)));
-
-    assert(getL1Entry(stop_bits.fr[0]) == 0u && "corrupted stop bit flat rank pointer: first L1 is not 0");
-    return stop_bits;
-}
 
 void WaveletMatrixEncoder::verifyBrickCompression(const uint32_t *brick_encoding, uint32_t brick_encoding_length,
                                                   const uint32_t *brick_detail_encoding,
                                                   uint32_t brick_detail_encoding_length,
                                                   std::ostream &error) const {
-    // TODO: missing compression verification with wavelet matrix brick encoder
-
     // Obtain a reference to the uint buffer containing this bricks encoding.
     const uint32_t minimum_header_size = getWMHeaderIndex()
                                          + ((m_encoding_mode == WAVELET_MATRIX_ENC) ? sizeof(WMBrickHeader)
@@ -630,5 +673,50 @@ std::string WaveletMatrixEncoder::outputOperationStream(const std::span<const ui
         ss << wm_huffman_access(offset + i, wm_header, bit_vector) << ", ";
     return ss.str();
 }
+
+
+// COMONENT ACCESS
+
+// Wavelet Matrix -----
+
+inline const WMBrickHeader* WaveletMatrixEncoder::getWMBrickHeaderFromEncoding(const uint32_t* v) const {
+    // to ensure tight packing, the WMBrickHeader starts one uint earlier in the previous (normal) brick header
+    return reinterpret_cast<const WMBrickHeader*>(v + getWMHeaderIndex());
+}
+
+inline const BV_WordType* WaveletMatrixEncoder::getWMBitVectorFromEncoding(const uint32_t* v) const {
+    return reinterpret_cast<const BV_WordType*>(v + getWMHeaderIndex() + 10
+                                                + (sizeof(BV_L12Type)/sizeof(uint32_t)) * getFlatRankEntries(v[getWMHeaderIndex() + 1] * WM_LEVELS));
+}
+
+// Huffman Wavelet Matrix ----
+
+inline const WMHBrickHeader* WaveletMatrixEncoder::getWMHBrickHeaderFromEncoding(const uint32_t* v) const {
+    return reinterpret_cast<const WMHBrickHeader*>(v + getWMHeaderIndex());
+}
+
+inline const BV_L12Type* WaveletMatrixEncoder::getWMHFlatRankFromEncoding(const uint32_t* v) const {
+    return reinterpret_cast<const BV_L12Type*>(v + getWMHeaderIndex() + 10);
+}
+
+inline const BV_WordType* WaveletMatrixEncoder::getWMHBitVectorFromEncoding(const uint32_t* v) const {
+    return reinterpret_cast<const BV_WordType*>(v + getWMHeaderIndex() + 10
+                                                + (sizeof(BV_L12Type)/sizeof(uint32_t)) *  getFlatRankEntries(v[getWMHeaderIndex()]));
+}
+
+inline FlatRank_BitVector_ptrs WaveletMatrixEncoder::getWMHStopBitsFromEncoding(const uint32_t* brick_encoding,
+                                                   const uint32_t brick_encoding_length,
+                                                   const uint32_t palette_size) const {
+    uint32_t stop_bv_length = brick_encoding[brick_encoding_length - palette_size - 1];
+    assert(palette_size + 1 + stop_bv_length < brick_encoding_length);
+
+    FlatRank_BitVector_ptrs stop_bits = {};
+    stop_bits.bv = reinterpret_cast<const BV_WordType*>(brick_encoding + brick_encoding_length - palette_size - 1 - stop_bv_length);
+    stop_bits.fr = reinterpret_cast<const BV_L12Type*>(stop_bits.bv -  getFlatRankEntries(stop_bv_length * 32) * (sizeof(BV_L12Type) / sizeof(BV_WordType)));
+
+    assert(getL1Entry(stop_bits.fr[0]) == 0u && "corrupted stop bit flat rank pointer: first L1 is not 0");
+    return stop_bits;
+}
+
 
 } // namespace volcanite

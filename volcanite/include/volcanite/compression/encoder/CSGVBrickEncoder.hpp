@@ -200,9 +200,7 @@ class CSGVBrickEncoder {
 
     virtual void getBrickStatistics(std::map<std::string, float>& statistics,
                                     const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
-                                    glm::uvec3 valid_brick_size) const {
-        throw std::logic_error("CSGV brick encoder does not implement statistics export.");
-    }
+                                    glm::uvec3 valid_brick_size) const {}
 
     // CONFIGURATION ---------------------------------------------------------------------------------------------------
     void setCPUThreadCount(uint32_t thread_count = 0u) {

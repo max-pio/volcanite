@@ -111,42 +111,8 @@ public:
 
     /// @returns a list of shader defines used during decoding which are passed to the shader compilation stage
     [[nodiscard]] virtual std::vector<std::string>
-    getGLSLDefines(std::function<std::span<const uint32_t>(uint32_t)> getBrickEncodingSpan,
-                   uint32_t brick_idx_count) const {
-        auto defines = CSGVBrickEncoder::getGLSLDefines(getBrickEncodingSpan, brick_idx_count);
-        switch (sizeof(BV_WordType)) {
-            case 4:
-                defines.emplace_back("BV_WORD_TYPE=uint");
-                break;
-            case 8:
-                defines.emplace_back("BV_WORD_TYPE=uint64_t");
-                break;
-            default:
-                throw std::runtime_error("Missing GLSL define for BV_WORD_TYPE");
-        }
-        defines.emplace_back("HWM_LEVELS=" + std::to_string(HWM_LEVELS));
-        defines.emplace_back("BV_L1_BIT_SIZE=" + std::to_string(BV_L1_BIT_SIZE));
-        defines.emplace_back("BV_L2_BIT_SIZE=" + std::to_string(BV_L2_BIT_SIZE));
-        defines.emplace_back("BV_L2_WORD_SIZE=" + std::to_string(BV_L2_WORD_SIZE));
-        defines.emplace_back("BV_STORE_L1_BITS=" + std::to_string(BV_STORE_L1_BITS));
-        defines.emplace_back("BV_STORE_L2_BITS=" + std::to_string(BV_STORE_L2_BITS));
-        defines.emplace_back("BV_WORD_BIT_SIZE=" + std::to_string(BV_WORD_BIT_SIZE));
-        defines.emplace_back("WM_HEADER_INDEX=" + std::to_string(getWMHeaderIndex()));
-        defines.emplace_back("UINT_PER_L12=" + std::to_string(sizeof(BV_L12Type) / sizeof(uint32_t)));
-
-        // obtain MAX_BIT_VECTOR_WORD_LENGTH as ceil(max_bitvector_bit_length / BV_WORD_BIT_SIZE)
-        uint32_t max_bitvector_bit_length = 0u;
-#pragma omp parallel for default(none) shared(brick_idx_count, getBrickEncodingSpan) reduction(max:max_bitvector_bit_length)
-        for (uint32_t brick_idx = 0u; brick_idx < brick_idx_count; brick_idx++) {
-            auto brick_encoding = getBrickEncodingSpan(brick_idx);
-            max_bitvector_bit_length = std::max(max_bitvector_bit_length,
-                                                getWMHBrickHeaderFromEncoding(brick_encoding.data())->bit_vector_size);
-        }
-        defines.emplace_back("MAX_BIT_VECTOR_WORD_LENGTH=" +
-                             std::to_string((max_bitvector_bit_length + BV_WORD_BIT_SIZE - 1) / BV_WORD_BIT_SIZE));
-
-        return defines;
-    }
+                                getGLSLDefines(std::function<std::span<const uint32_t>(uint32_t)> getBrickEncodingSpan,
+                                               uint32_t brick_idx_count) const;
 
     // FILE IMPORT AND EXPORT ------------------------------------------------------------------------------------------
 
@@ -196,6 +162,9 @@ public:
     [[nodiscard]] std::string
     outputOperationStream(std::span<const uint32_t> encoding, uint32_t offset, uint32_t count) const;
 
+    void getBrickStatistics(std::map<std::string, float>& statistics,
+                            const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
+                            glm::uvec3 valid_brick_size) const override;
 
 private:
     static uint32_t decompressCSGVBrickVoxelWM(uint32_t output_i, uint32_t target_inv_lod,
