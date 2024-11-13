@@ -57,7 +57,7 @@ def write_vraw(volume, out_path, dtype=None):
         # [data type]
         file.write(
             (str(volume.shape[2]) + " " + str(volume.shape[1]) + " " + str(volume.shape[0]) + "\n").encode('utf8'))
-        file.write((volume.dtype + "\n").encode('utf8'))
+        file.write((str(volume.dtype) + "\n").encode('utf8'))
         # write binary
         np.ascontiguousarray(volume.astype(volume.dtype)).tofile(file)
         # for z in range(volume.shape[0]):
@@ -314,14 +314,6 @@ def convert_chunked_volume(path_in_format : str, chunk_size_in : (int, int, int)
                 # TODO: clamp chunk dimension of border chunks with respect to total volume size
                 write_volume(tmp_chunk,
                              path_out_format.format(x // chunk_size_out[2], y // chunk_size_out[1], z // chunk_size_out[0]))
-
-
-
-
-
-
-
-
 
 
 def guard_volume_dtype(volume, dtype):
