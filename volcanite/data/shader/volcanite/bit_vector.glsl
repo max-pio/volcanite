@@ -23,9 +23,9 @@ layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly res
     BV_WORD_TYPE words[];
 };
 
-#define WORD_ACCESS(word, index) uint((word >> index) & 1u)
-#define WORD_SET0(word, index) atomicAnd(word, ~(BV_WORD_TYPE(1u) << index) )
-#define WORD_SET1(word, index) atomicOr(word, BV_WORD_TYPE(1u) << index)
+#define WORD_ACCESS(word, index) uint((word >> (index)) & 1u)
+#define WORD_SET0(word, index) atomicAnd(word, ~(BV_WORD_TYPE(1u) << (index)) )
+#define WORD_SET1(word, index) atomicOr(word, BV_WORD_TYPE(1u) << (index))
 #if BV_WORD_TYPE == uint64_t
     #define WORD_RANK1(word, index) uint((index) != 0u ? bitCount64(word << (BV_WORD_BIT_SIZE - (index))) : 0u)
 #elif BV_WORD_TYPE uint
@@ -35,9 +35,9 @@ layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly res
 #endif
 
 
-#define BV_ACCESS(bitvector, index) WORD_ACCESS(bitvector[index / BV_WORD_BIT_SIZE], index % BV_WORD_BIT_SIZE)
-#define BV_SET0(bitvector, index) WORD_SET0(bitvector[index / BV_WORD_BIT_SIZE], index % BV_WORD_BIT_SIZE)
-#define BV_SET1(bitvector, index) WORD_SET1(bitvector[index / BV_WORD_BIT_SIZE], index % BV_WORD_BIT_SIZE)
+#define BV_ACCESS(bitvector, index) WORD_ACCESS(bitvector[(index) / BV_WORD_BIT_SIZE], (index) % BV_WORD_BIT_SIZE)
+#define BV_SET0(bitvector, index) WORD_SET0(bitvector[(index) / BV_WORD_BIT_SIZE], (index) % BV_WORD_BIT_SIZE)
+#define BV_SET1(bitvector, index) WORD_SET1(bitvector[(index) / BV_WORD_BIT_SIZE], (index) % BV_WORD_BIT_SIZE)
 
 uint bitCount64(uint64_t value) {
     return bitCount(uint(value)) + bitCount(uint(value >> 32));
@@ -83,18 +83,18 @@ uint _get_L2_entry(const BV_WORD_TYPE v, uint i) {
 
 uint _fr_rank1(uint index, BitVectorRef bv, BitVectorRef fr) {
     assert(_get_L1_entry(fr.words[0]) == 0u, "corrupted flat rank: first L1 is not 0");
-#if 1
-    uint count = 0u;
-    const uint words = index / BV_WORD_BIT_SIZE;
-    for (uint i = 0; i < index / BV_WORD_BIT_SIZE; i++) {
-        count += bitCount64(bv.words[i]);
-    }
-    for (uint i = words * BV_WORD_BIT_SIZE; i < index; i++) {
-        if (BV_ACCESS(bv.words, i) == 1u)
-            count++;
-    }
-    return count;
-#endif
+//#if 1
+//    uint count = 0u;
+//    const uint words = index / BV_WORD_BIT_SIZE;
+//    for (uint i = 0; i < words; i++) {
+//        count += bitCount64(bv.words[i]);
+//    }
+//    for (uint i = words * BV_WORD_BIT_SIZE; i < index; i++) {
+//        if (BV_ACCESS(bv.words, i) == 1u)
+//            count++;
+//    }
+//    return count;
+//#endif
     // ........ ........  bits
     // ┌┐┌┐┌┐┌┐ ┌┐┌┐┌┐┌┐  words
     // └┘└┘└┘└┘ └┘└┘└┘└┘
