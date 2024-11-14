@@ -89,11 +89,12 @@ void DEBUG_img_empty_space_bv(ivec2 pixel, inout vec4 color, bool enabled) {
 
     // map the pixel to a cache cell [region]
     const int size = 4;
-    const uint voxel_count = g_vol_dim.x * g_vol_dim.y * g_vol_dim.z;
-    const uint elems_per_pixel = max(voxel_count / (viewport_size.x * viewport_size.y / size), 1u);
+    const uvec3 empty_space_dim = g_vol_dim / g_empty_space_block_size;
+    const uint empty_space_set_count = empty_space_dim.x * empty_space_dim.y * empty_space_dim.z;
+    const uint elems_per_pixel = max(empty_space_set_count / (viewport_size.x * viewport_size.y / size), 1u);
     const uint idx = elems_per_pixel * uint((pixel.x / size) + (pixel.y / size) * viewport_size.x);
 
-    if (idx >= voxel_count)
+    if (idx >= empty_space_set_count)
         return;
 
     BitVectorRef empty_space_bv = BitVectorRef(g_empty_space_bv_address);
@@ -101,11 +102,10 @@ void DEBUG_img_empty_space_bv(ivec2 pixel, inout vec4 color, bool enabled) {
     // accumulate information for all of the pixel's empty space bit vector cells
     uint empty_count = 0u;
     for (uint i = idx; i < idx + elems_per_pixel; i++) {
-        if (i > voxel_count)
+        if (i > empty_space_set_count)
             break;
 
-        const uint empty_space_idx = i / g_empty_space_set_size;
-        if (BV_ACCESS(empty_space_bv.words, empty_space_idx) > 0u) {
+        if (BV_ACCESS(empty_space_bv.words, i) > 0u) {
             empty_count++;
         }
     }

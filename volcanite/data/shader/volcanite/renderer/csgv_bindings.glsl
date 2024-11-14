@@ -46,7 +46,8 @@ layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uint g_brick_idx_to_enc_vector; // dividing the brick index by this number yields its encoding vector index
     uvec2 g_cache_buffer_address;
     uvec2 g_empty_space_bv_address; // empty space bit vector: 0 = voxel set potentially visible, 1 = no visible labels
-    uint g_empty_space_set_size;    // how many voxels are grouped into one bit
+    uint g_empty_space_block_size;  // a block of [g_empty_space_block_size]^3 voxels is grouped into an empty space set
+    uint g_empty_space_set_size;    // how many voxels are grouped into one bit (= g_empty_space_block_size^3)
     uvec2 g_detail_buffer_address;
     uint g_request_buffer_capacity; // the size of the request buffer for brick detail encodings
 };
