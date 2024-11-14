@@ -181,7 +181,7 @@ int volcanite_main(int argc, char *argv[]) {
         execution_time = benchmark.getExecutionTimeMS();
     } while (execution_time == 0.f);
 
-    size_t volume_size_byte = compressedSegmentationVolume->getVolumeDim().x
+    size_t volume_size_byte = static_cast<size_t>(compressedSegmentationVolume->getVolumeDim().x)
                               * compressedSegmentationVolume->getVolumeDim().y
                               * compressedSegmentationVolume->getVolumeDim().z
                               * sizeof(uint32_t);

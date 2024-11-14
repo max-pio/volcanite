@@ -94,6 +94,8 @@ namespace volcanite {
 //
 class CompressedSegmentationVolume : public VolumeCompressionBase {
 
+friend class CSGVChunkMerger;
+
 private:
     /// @return encoding array that contains the encoding of the given 1D brick index.
     [[nodiscard]] const std::vector<uint32_t>* getEncodingBufferForBrickIdx(uint32_t brick_idx) const {
@@ -343,6 +345,7 @@ public:
     [[nodiscard]] bool isUsingDetailFreq() const { return m_encoding_mode == DOUBLE_TABLE_RANS_ENC; }
     [[nodiscard]] bool isUsingSeparateDetail() const { return m_separate_detail; }
     [[nodiscard]] bool isUsingRandomAccess() const { return m_random_access; }
+    [[nodiscard]] uint32_t getOperationMask() const { return m_op_mask; }
     [[nodiscard]] bool isUsingWaveletMatrix() const { return m_encoding_mode == WAVELET_MATRIX_ENC; }
 
     /// returns the maximum number of uint32 palette entries that any brick in the volume contains.
@@ -389,6 +392,8 @@ public:
         m_brick_starts.clear();
         m_detail_encodings.clear();
         m_detail_starts.clear();
+        m_random_access = false;
+        m_op_mask = OP_ALL;
         m_separate_detail = false;
         m_brick_idx_to_enc_vector = ~0u;
         m_max_brick_palette_count = 0u;
@@ -536,8 +541,6 @@ private:
     std::unique_ptr<CSGVBrickEncoder> m_encoder = {};    ///< encodes single bricks with a certain encoding method
     EncodingMode m_encoding_mode;
     uint32_t m_op_mask = OP_ALL;                    ///< if certain CSGV operations and stop bits are enabled
-//    std::vector<uint32_t> m_frequency_table;        ///< operation frequencies within all, or within the base levels
-//    std::vector<uint32_t> m_detail_frequency_table; ///< operation frequencies within the detail level
     bool m_random_access = false;                   ///< encoding supports random access within a brick
 
     bool m_separate_detail;

@@ -39,10 +39,8 @@ private:
     // (inner) chunk properties
     glm::uvec3 chunk_dimension = {0u, 0u, 0u};
     glm::uvec3 bricks_in_chunk = {0u, 0u, 0u};
-    uint32_t brick_size = 0u;
-    EncodingMode rANS_mode = NIBBLE_ENC;
-    std::vector<uint32_t> complete_frequency_table = {};
-    std::vector<uint32_t> complete_detail_frequency_table = {};
+    std::vector<uint32_t> reference_frequency_table = {};
+    std::vector<uint32_t> reference_detail_frequency_table = {};
 
     /** Obtains the memory region in which the encoding for the given output brick is located.
      * @param output_brick brick position in the merged output volume
@@ -109,29 +107,29 @@ public:
             if(c == 0) {
                 // store parameters of chunks
                 chunk_dimension = chunks[0].getVolumeDim();
-                brick_size = chunks[0].getBrickSize();
-                if((chunk_count.x > 1 && chunk_dimension.x % brick_size != 0)
-                   || (chunk_count.y > 1 && chunk_dimension.y % brick_size != 0)
-                   || (chunk_count.z > 1 && chunk_dimension.z % brick_size != 0)) {
+                chunks[0].m_encoding_mode = chunks[0].getEncodingMode();
+                if((chunk_count.x > 1 && chunk_dimension.x % chunks[0].m_brick_size != 0)
+                   || (chunk_count.y > 1 && chunk_dimension.y % chunks[0].m_brick_size != 0)
+                   || (chunk_count.z > 1 && chunk_dimension.z % chunks[0].m_brick_size != 0)) {
                     Logger(ERROR) << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunk dimension must be multiple of brick size.";
                     return nullptr;
                 }
-                bricks_in_chunk = (chunk_dimension + brick_size - glm::uvec3(1u)) / brick_size;
-                rANS_mode = chunks[0].getEncodingMode();
-                if (rANS_mode != NIBBLE_ENC)
-                    complete_frequency_table = chunks[0].getCurrentFrequencyTable();
-                if(rANS_mode == DOUBLE_TABLE_RANS_ENC)
-                    complete_detail_frequency_table = chunks[0].getCurrentDetailFrequencyTable();
+                bricks_in_chunk = (chunk_dimension + chunks[0].m_brick_size - glm::uvec3(1u)) / chunks[0].m_brick_size;
+
+                if (chunks[0].m_encoding_mode == SINGLE_TABLE_RANS_ENC || chunks[0].m_encoding_mode == DOUBLE_TABLE_RANS_ENC)
+                    reference_frequency_table = chunks[0].getCurrentFrequencyTable();
+                if(chunks[0].m_encoding_mode == DOUBLE_TABLE_RANS_ENC)
+                    reference_detail_frequency_table = chunks[0].getCurrentDetailFrequencyTable();
             } else {
                 // check if chunk CSGV use the same compression parameters
-                if (rANS_mode != chunks[0].getEncodingMode()) {
+                if (chunks[0].m_encoding_mode != chunks[c].getEncodingMode()) {
                     Logger(ERROR)
-                            << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunks must use same rANS mode.";
+                            << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunks must use same encoding mode.";
                     return nullptr;
                 }
-                if ((rANS_mode != NIBBLE_ENC && complete_frequency_table != chunks[c].getCurrentFrequencyTable()) ||
-                    (rANS_mode == DOUBLE_TABLE_RANS_ENC &&
-                     complete_detail_frequency_table != chunks[c].getCurrentDetailFrequencyTable())) {
+                if ((!reference_frequency_table.empty() && reference_frequency_table != chunks[c].getCurrentFrequencyTable()) ||
+                    (!reference_detail_frequency_table.empty() &&
+                     reference_detail_frequency_table != chunks[c].getCurrentDetailFrequencyTable())) {
                     Logger(ERROR)
                             << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunks must use same rANS frequency tables.";
                     return nullptr;
@@ -150,7 +148,7 @@ public:
             }
         }
         glm::uvec3 complete_volume_dim = chunk_dimension * glm::uvec3(max_input_csgv_index) + chunks[sfc::Cartesian::p2i(max_input_csgv_index, chunk_count)].getVolumeDim();
-        brick_count = (glm::uvec3(chunk_count - glm::ivec3(1)) * chunk_dimension + chunks[sfc::Cartesian::p2i(max_input_csgv_index, chunk_count)].getVolumeDim() - glm::uvec3(1)) / brick_size + 1u;
+        brick_count = (glm::uvec3(chunk_count - glm::ivec3(1)) * chunk_dimension + chunks[sfc::Cartesian::p2i(max_input_csgv_index, chunk_count)].getVolumeDim() - glm::uvec3(1)) / chunks[0].m_brick_size + 1u;
         total_brick_count = brick_count.x * brick_count.y * brick_count.z;
         if(total_brick_count > (1ul << 32) - 1ul) {
             Logger(ERROR)
@@ -266,13 +264,19 @@ public:
             encoding_file.write(reinterpret_cast<const char *>(&encoding_size), sizeof(size_t));
         }
 
-        // 4. free memory of all CSGV chunks
-        delete[] chunks;
-        chunks = nullptr;
         brickstarts_file.close();
         encoding_file.close();
+
+        // 4. free memory of all chunks but the first (which is used to write out general header information)
+        chunks[0].m_encodings.clear();
+        chunks[0].m_brick_starts.clear();
+        chunks[0].m_detail_encodings.clear();
+        chunks[0].m_detail_starts.clear();
+        for(uint32_t c = 1; c < total_chunk_count; c++) {
+            chunks[c].clear();
+        }
         // wait for cleanup
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
         // 5. append tmp files together to form one valid csgv file
         {
@@ -291,28 +295,32 @@ public:
             // similar to CompressedSegmentationVolume::exportToFile(..)
             // write header: 8 chars CMPSGVOL + 4 chars version number
             const char *magic_header = "CMPSGVOL";
-            const char *version = "0014";
+            const char *version = "0015";
             file.write(magic_header, 8);
             file.write(version, 4);
 
             // write general info
-            file.write(reinterpret_cast<char *>(&brick_size), sizeof(uint32_t));
-            file.write(reinterpret_cast<char *>(&complete_volume_dim), sizeof(glm::uvec3));
-            file.write(reinterpret_cast<char *>(&rANS_mode), sizeof(EncodingMode)); // since 0011
-            file.write(reinterpret_cast<char *>(&max_brick_palette_count), sizeof(uint32_t));
-            if (rANS_mode == SINGLE_TABLE_RANS_ENC || rANS_mode == DOUBLE_TABLE_RANS_ENC) {  // since 0002
-                for (int i = 0; i < 16; i++)
-                    file.write(reinterpret_cast<char *>(&complete_frequency_table[i]), sizeof(uint32_t));
-                if (rANS_mode == DOUBLE_TABLE_RANS_ENC) {
-                    for (int i = 0; i < 16; i++)
-                        file.write(reinterpret_cast<char *>(&complete_detail_frequency_table[i]), sizeof(uint32_t));
-                }
-            }
-            file.write(reinterpret_cast<char *>(&brick_idx_to_enc_vector), sizeof(uint32_t)); // since 0013
+            file.write(reinterpret_cast<const char *>(&chunks[0].m_brick_size), sizeof(uint32_t));
+            file.write(reinterpret_cast<const char*>(&complete_volume_dim), sizeof(glm::uvec3));
+            file.write(reinterpret_cast<const char*>(&chunks[0].m_encoding_mode), sizeof(EncodingMode)); // since 0011
+            file.write(reinterpret_cast<const char*>(&chunks[0].m_random_access), sizeof(bool)); // since 015
+            file.write(reinterpret_cast<const char*>(&max_brick_palette_count), sizeof(uint32_t));
+            file.write(reinterpret_cast<const char*>(&chunks[0].m_op_mask), sizeof(uint32_t)); // since 015
+            chunks[0].m_encoder->exportToFile(file); // since 015
+
+            file.write(reinterpret_cast<const char*>(&brick_idx_to_enc_vector), sizeof(uint32_t)); // since 0013
+
+            // free all remaining memory of CSGV chunks
+            delete[] chunks;
+            chunks = nullptr;
+            // wait for cleanup
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+            // --- merged encodings ---
 
             // write brick starts buffer
             size_t complete_brickstarts_size = total_brick_count + 1;
-            file.write(reinterpret_cast<char *>(&complete_brickstarts_size), sizeof(size_t));
+            file.write(reinterpret_cast<const char*>(&complete_brickstarts_size), sizeof(size_t));
             if (complete_brickstarts_size * sizeof(uint32_t) != std::filesystem::file_size(brickstarts_path)) {
                 Logger(ERROR) << "Brickstarts size " << std::filesystem::file_size(brickstarts_path) << " does not match the expected size " << (complete_brickstarts_size * sizeof(uint32_t));
                 file.close();
@@ -334,13 +342,13 @@ public:
                 file.close();
                 return nullptr;
             }
-            file.write(reinterpret_cast<char *>(&split_encoding_count), sizeof(size_t));
+            file.write(reinterpret_cast<const char*>(&split_encoding_count), sizeof(size_t));
             file << encoding_file_in.rdbuf();
             encoding_file_in.close();
 
             // we never use detail separation here
             bool use_detail_separation = false;
-            file.write(reinterpret_cast<char *>(&use_detail_separation), sizeof(bool));
+            file.write(reinterpret_cast<const char*>(&use_detail_separation), sizeof(bool));
             file.close();
         }
 

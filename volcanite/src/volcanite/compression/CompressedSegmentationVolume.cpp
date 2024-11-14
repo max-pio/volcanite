@@ -173,6 +173,11 @@ bool CompressedSegmentationVolume::verifyCompression() const {
     if(m_encodings.empty())
         throw std::runtime_error("Segmentation volume is not yet compressed!");
 
+    if (static_cast<size_t>(m_volume_dim.x) * m_volume_dim.y * m_volume_dim.z == 0ull) {
+        Logger(ERROR) << "  volume size is zero with voxel dimension " << str(m_volume_dim);
+        return false;
+    }
+
     bool is_ok = true;
     glm::uvec3 brick_count = getBrickCount();
     size_t last_brick = getBrickIndexCount() - 1ul;
@@ -182,7 +187,7 @@ bool CompressedSegmentationVolume::verifyCompression() const {
         // any m_brick_idx_to_enc_vector-th entry in brick_starts is the end of the last brick in the previous array
         uint32_t size_from_brick_starts = m_brick_starts[std::min(static_cast<uint32_t>(last_brick + 1), (i+1) * m_brick_idx_to_enc_vector)];
         if (m_encodings.at(i).size() != size_from_brick_starts) {
-            Logger(ERROR) << "Found errors: split encoding array [" << i << "] size differs from size tracked in brick starts (is "
+            Logger(ERROR) << "  split encoding array [" << i << "] size differs from size tracked in brick starts (is "
                           << m_encodings.at(i).size() << " expected " << size_from_brick_starts << ").";
             return false;
         }
@@ -654,7 +659,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
     file.write(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
     file.write(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
     file.write(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode)); // since 0011
-    file.write(reinterpret_cast<char *>(&m_random_access), sizeof(m_random_access)); // since 015
+    file.write(reinterpret_cast<char *>(&m_random_access), sizeof(bool)); // since 015
     file.write(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t)); // since 012
 
     file.write(reinterpret_cast<char *>(&m_op_mask), sizeof(uint32_t)); // since 015
