@@ -70,7 +70,7 @@ uint morton3Dp2i(uvec3 p) {
     return (_morton_Part1By2(p.z) << 2) + (_morton_Part1By2(p.y) << 1) + _morton_Part1By2(p.x);
 }
 uvec3 morton3Di2p(uint i) {
-    assert(i < 1073741823, "32 Bit Morton code processing only works for dimensions up to (1023, 1023, 1023) (10 bit per component)");
+    assert(i < 1073741823, "32 Bit Morton code processing only works for dimensions up to index 1073741822 (1023, 1023, 1023) (10 bit per component)");
     return uvec3(_morton_Compact1By2(i >> 0), _morton_Compact1By2(i >> 1), _morton_Compact1By2(i >> 2));
 }
 
