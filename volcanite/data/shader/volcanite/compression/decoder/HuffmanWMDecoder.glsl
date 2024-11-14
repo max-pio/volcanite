@@ -372,11 +372,6 @@ uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
                 }
             }
 
-            if (inv_lod_op_i >= 32*32*32) {
-                debugPrintfEXT("inv_lod_op_i out of bounds before stop bit offset, output_i: %u", output_i);
-                return 0u;
-            }
-
             #if (OP_MASK & OP_STOP_BIT)
                 enc_operation_index = getEncodingIndexWithStopBits(inv_lod, inv_lod_op_i, brick_encoding, stop_bits);
             #else
@@ -384,6 +379,7 @@ uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
             #endif
 
             // at this point: inv_lod, and inv_lod_op_i must be valid and set correctly
+            assertf(inv_lod_op_i < BRICK_SIZE * BRICK_SIZE * BRICK_SIZE, "inv_lod_op_i out of (brick size)^3 bounds: %u", output_i);
             assert(inv_lod <= target_inv_lod, "LOD chasing overflow for Huffman Wavelet Matrix decoding.");
             assertf(enc_operation_index < WM_HEADER.level_starts_1_to_4[0], "brick encoding out of bounds read (access, bound, inv_lod, inv_lod_op_i): %v4u", uvec4(enc_operation_index, WM_HEADER.level_starts_1_to_4[0], inv_lod, inv_lod_op_i));
 
