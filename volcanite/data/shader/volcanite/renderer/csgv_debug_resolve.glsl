@@ -89,7 +89,7 @@ void DEBUG_img_empty_space_bv(ivec2 pixel, inout vec4 color, bool enabled) {
 
     // map the pixel to a cache cell [region]
     const int size = 4;
-    const uvec3 empty_space_dim = g_vol_dim / g_empty_space_block_size;
+    const uvec3 empty_space_dim = g_vol_dim / g_empty_space_block_dim;
     const uint empty_space_set_count = empty_space_dim.x * empty_space_dim.y * empty_space_dim.z;
     const uint elems_per_pixel = max(empty_space_set_count / (viewport_size.x * viewport_size.y / size), 1u);
     const uint idx = elems_per_pixel * uint((pixel.x / size) + (pixel.y / size) * viewport_size.x);

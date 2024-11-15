@@ -440,6 +440,9 @@ void decompressCSGVVoxelToCache(const uint output_i, const uint target_inv_lod, 
 
 #ifndef DECODE_FROM_SHARED_MEMORY
 uint decompressCSGVVoxel(const uint brick_idx, const uvec3 brick_voxel, const uint target_inv_lod) {
+    assertf(brick_idx < g_brick_idx_count, "brick idx out of bounds (is, bound) %v2u", uvec2(brick_idx, g_brick_idx_count));
+    assertf(all(lessThan(brick_voxel, uvec3(BRICK_SIZE))), "brick voxel out of brick size bounds, is: %v3u", brick_voxel);
+
     EncodingRef brick_encoding = getBrickEncodingRef(brick_idx);
     const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
     WMHBrickHeaderRef wm_header = getWMHBrickHeaderFromEncoding(brick_encoding);

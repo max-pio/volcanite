@@ -74,6 +74,17 @@ uint get_inv_lod(ivec3 voxel) {
         return decompressCSGVVoxel(brick_idx, brick_voxel, req_inv_lod);
     }
 #elif CACHE_MODE == CACHE_VOXELS
+
+#ifdef EMPTY_SPACE_UINT_SIZE
+    uint ess_permute_bits(uint i) {
+        // TODO: find a correct, collision-free permutation
+        return i;
+        // revert the LSB that are guaranteed to be included in the words
+        const int safe_bits_to_permute = findMSB(int(EMPTY_SPACE_BV_BIT_SIZE)) - 1;
+        return bitfieldInsert(i, bitfieldReverse(bitfieldExtract(i, 0, safe_bits_to_permute)), 0, safe_bits_to_permute);
+    }
+#endif
+
     uint _hash(uint a, uint x) {
         const uint bits = findMSB(CACHE_UVEC2_SIZE);
         // (ax mod 2^w) / 2^(w-bits)
@@ -86,28 +97,39 @@ uint get_inv_lod(ivec3 voxel) {
         return (a * x) >> (31 - bits); // mod 2^32 implicit
     }
 
+    uvec4 _hash(uvec4 a, uvec4 x) {
+        const uint bits = findMSB(CACHE_UVEC2_SIZE);
+        // (ax mod 2^w) / 2^(w-bits)
+        return (a * x) >> (31 - bits); // mod 2^32 implicit
+    }
+
     // Cuckoo Hashing
     // use three xor-combined (c,k) hash functions to construct the two hash functions:
     // see: "Rasmus Pagh and Flemming Friche Rodler. Cuckoo Hashing. In Journal of Algorithms, pages 122–144 (2004)
     // and: "An Overview of Cuckoo Hashing" by Charles Chen
 
     // use a component-wise xor as in Hoskins 2014, Quilez 2017a cf. "Hash Functions for GPU Rendering" JCGT 9(3) (2020)
-    uint hash1(uvec3 voxel_id) {
-        voxel_id = _hash(uvec3(19u, 3u, 115u), voxel_id);
-        return (voxel_id.x ^ voxel_id.y ^ voxel_id.z) % CACHE_UVEC2_SIZE;
+    uint hash1(uvec3 lod_voxel) {
+        lod_voxel = hash_pcg3d(lod_voxel);
+        lod_voxel = _hash(uvec3(19u, 47u, 101u), lod_voxel);
+        return (lod_voxel.x ^ lod_voxel.y ^ lod_voxel.z + 131u) % CACHE_UVEC2_SIZE;
         // return (_hash(19u, voxel_id) ^ _hash(3u, voxel_id) ^ _hash(115u, voxel_id)) % CACHE_UVEC2_SIZE;
     }
 
-    uint hash2(uvec3 voxel_id) {
-        voxel_id = _hash(uvec3(7u, 31u, 97u), voxel_id);
-        return (voxel_id.x ^ voxel_id.y ^ voxel_id.z) % CACHE_UVEC2_SIZE;
+    uint key(uvec4 lod_voxel_and_lod) {
+        lod_voxel_and_lod = hash_pcg4d(lod_voxel_and_lod);
+        lod_voxel_and_lod *= _hash(uvec4(5u, 149u, 61u, 2887u), lod_voxel_and_lod);
+        return lod_voxel_and_lod.x ^ lod_voxel_and_lod.y ^ lod_voxel_and_lod.z ^ lod_voxel_and_lod.w + 171u;
+    }
+
+    // obtains a key and a position in table 1 and maps it to a new position in table 2
+    uint hash2(uvec2 key1_pos1) {
+        key1_pos1 = hash_pcg2d(key1_pos1);
+        uvec4 h = _hash(uvec4(7u, 31u, 97u, 173u), key1_pos1.xyxy);
+        return (h.x ^ h.y ^ h.z ^ h.w) % CACHE_UVEC2_SIZE;
         //return (_hash(31u, voxel_id) ^ _hash(7u, voxel_id) ^ _hash(97u, voxel_id)) % CACHE_UVEC2_SIZE;
     }
 
-    uint key(uvec4 lod_voxel_and_lod) {
-        lod_voxel *= uvec3(5u, 149u, 61u, 2887u);
-        return (5u * voxel.x) ^ (149u * voxel.y) ^ (61 * voxel.z) ^ (2887u * lod));
-    }
 
     // returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
     uint get_volume_label(ivec3 voxel, inout float depth_valid) {
@@ -115,35 +137,48 @@ uint get_inv_lod(ivec3 voxel) {
 
         const uint req_inv_lod = get_inv_lod(voxel);
 
+
         // check if the voxel is flagged as empty space
         // the empty space bit vector index is the morton index of the voxel divided by the set size.
         // the empty space set size is a power of two <= the brick size. all voxels in the same set belong to the same
         // brick and are thus always accessed in the same LOD
 #ifdef EMPTY_SPACE_UINT_SIZE
-        const uvec3 empty_space_base_voxel = uvec3(voxel) / g_empty_space_block_size;
-        const uint empty_space_idx = morton3Dp2i(empty_space_base_voxel);
+        uvec3 empty_space_base_voxel = uvec3(voxel) / g_empty_space_block_dim;
+        // ess_permute_bits swizzles bits around to reduce collisions for the atomic operations
+        const uint empty_space_idx = ess_permute_bits(empty_space_base_voxel.x
+                                                      + empty_space_base_voxel.y * g_empty_space_dot_map.y
+                                                      + empty_space_base_voxel.z * g_empty_space_dot_map.z);
+        assertf(empty_space_idx < EMPTY_SPACE_BV_BIT_SIZE,
+                "accessing empty space idx out of bounds (idx, bound): %v2u",
+                uvec2(empty_space_idx, EMPTY_SPACE_BV_BIT_SIZE));
         BitVectorRef empty_space_bv = BitVectorRef(g_empty_space_bv_address);
         if (BV_ACCESS(empty_space_bv.words, empty_space_idx) > 0u)
             return INVISIBLE_LABEL;
 #endif
 
-        //
-        // it maps voxels from different LODs at the same area to identical indices.
-        const uvec3 lod_voxel = (uvec3(voxel) >> 3*(g_max_inv_lod - req_inv_lod)) << 3*(g_max_inv_lod - req_inv_lod);
+        // map voxels from different LODs at the same area to identical indices.
+        const uvec3 lod_voxel = voxel;// (uvec3(voxel) >> 3*(g_max_inv_lod - req_inv_lod)) << 3*(g_max_inv_lod - req_inv_lod);
+
+        #define KEY_KEY_BITS 0x7FFFFFFFu
+        #define KEY_TABLE2_BIT 0x80000000u
 
         // the 1D cache_key identifies cache collisions between different voxel positions.
-        const uint cache_key = key(lod_voxel, req_inv_lod);
+        // the MSB of the key is 1 if and only if the element it belongs to is stored at its second position (table 2)
+        // the cache position is not directly dependent on the cache_key.
+        const uint cache_key = key(uvec4(lod_voxel, req_inv_lod)) & KEY_KEY_BITS;
 
-        uint cache_pos = hash1(cache_key); // TODO: the hash positions should not depend on the key! or should they?
+        uint cache_pos = hash1(lod_voxel);
         assertf(cache_pos < CACHE_UVEC2_SIZE, "invalid cache_pos %u", cache_pos);
 
         // check if the cache contains the voxel at the first or second lookup pos
         uvec2 cache_elem = CSGV_DECODING_ARRAY[cache_pos];
-        if (cache_elem.x == cache_key)
+        // at the first position, the key should have its MSB set to 0
+        if (cache_elem.x == cache_key) {
             return cache_elem.y;
-        else {
-            uvec2 cache_elem2 = CSGV_DECODING_ARRAY[hash2(cache_key)];
-            if (cache_elem2.x == cache_key)
+        } else {
+            uvec2 cache_elem2 = CSGV_DECODING_ARRAY[hash2(uvec2(cache_key, cache_pos))];
+            // at the second positoin, the key should have its MSB set to 1
+            if (cache_elem2.x == (cache_key | KEY_TABLE2_BIT))
                 return cache_elem2.y;
         }
 
@@ -157,12 +192,14 @@ uint get_inv_lod(ivec3 voxel) {
 #ifdef EMPTY_SPACE_UINT_SIZE
         if (!isLabelVisible(label)) {
             bool all_invisible = true;
-            for (uint set_i = 0u; set_i < g_empty_space_set_size; set_i++) {
+            // the base voxel is now the first (lowest component wise coords) local voxel in the brick
+            empty_space_base_voxel = (empty_space_base_voxel * g_empty_space_block_dim) % BRICK_SIZE;
+            for (uint set_i = 0u; set_i < g_empty_space_set_size && all_invisible; set_i++) {
 
-                uvec3 s_brick_voxel = (empty_space_base_voxel * g_empty_space_block_size) % BRICK_SIZE
-                                      + uvec3(set_i / (g_empty_space_block_size * g_empty_space_block_size,
-                                              (set_i / (g_empty_space_block_size)) % g_empty_space_block_size),
-                                              set_i % g_empty_space_block_size);
+                uvec3 s_brick_voxel = empty_space_base_voxel
+                                      + uvec3(set_i / (g_empty_space_block_dim * g_empty_space_block_dim),
+                                              (set_i / (g_empty_space_block_dim)) % g_empty_space_block_dim,
+                                              set_i % g_empty_space_block_dim);
 
                 // for the empty-space info: decode on the finest LOD
                 // this means we have to recompute the label of the currently decoded voxel as well
@@ -170,7 +207,6 @@ uint get_inv_lod(ivec3 voxel) {
                 if (isLabelVisible(s_label)) {
                     // TODO: could add the label to the cache here!
                     all_invisible = false;
-                    break;
                 }
             }
             if (all_invisible) {
@@ -183,9 +219,13 @@ uint get_inv_lod(ivec3 voxel) {
         // insert the element at its 1st cache position
         CSGV_DECODING_ARRAY[cache_pos] = uvec2(cache_key, label);
 
-        if (cache_elem.x != INVALID) {
+        if (cache_elem.x != INVALID && (cache_elem.x & KEY_TABLE2_BIT) == 0u) {
+            // only if the ejected element is not already at its second location:
             // insert the ejected element to its 2nd cache position, possibly forcing another element out
-            CSGV_DECODING_ARRAY[hash2(cache_elem.x)] = cache_elem;
+            CSGV_DECODING_ARRAY[hash2(uvec2(cache_elem.x, cache_pos))] = uvec2(cache_elem.x | KEY_TABLE2_BIT, cache_elem.y);
+
+            // if the element already was at its second location, it will be re-inserted at its first position if it is
+            // accessed again. this results in the cuckoo ping-pong loop between first and second position of elements.
         }
 
         return label;

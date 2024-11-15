@@ -130,47 +130,7 @@ public:
         m_gui_interface = nullptr;
     }
 
-    void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> csgv, std::shared_ptr<CSGVDatabase> db) {
-        if(!csgv)
-            throw std::runtime_error("CompressedSegmentationVolume must not be null");
-        if(!db)
-            throw std::runtime_error("CompressedSegmentationVolume database must not be null");
-
-
-        if(csgv->getBrickCount().x < csgv->getLodCountPerBrick()) {
-            Logger(DEBUG) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
-                         ") in one dimension than there are brick level-of-details (" << csgv->getLodCountPerBrick() <<
-                         "). This may break some shaders. Advice: Re-Compress with a smaller brick-size.";
-        }
-        m_compressed_segmentation_volume = std::move(csgv);
-        m_data_changed = true;
-
-        // check how many bits are required to store cache indices
-        if(m_use_palette_cache) {
-            // must be (max_palette_count + 1), need an additional magic number (= 0) for not yet written output voxels
-            m_cache_palette_idx_bits = static_cast<uint32_t>(glm::ceil(
-                    glm::log2(static_cast<double>(m_compressed_segmentation_volume->getMaxBrickPaletteCount()) + 1.0)));
-            m_cache_indices_per_uint = 32u / m_cache_palette_idx_bits;
-            m_cache_base_element_uints = (8u + m_cache_indices_per_uint - 1u) /
-                                         m_cache_indices_per_uint;  // = ceil(8 / m_palette_indices_per_uint)
-        } else {
-            // without paletting, the cache stores explicit 32 bit labels = one label per uint
-            m_cache_palette_idx_bits = 32u;
-            m_cache_indices_per_uint = 1u;
-            m_cache_base_element_uints = 8;
-        }
-
-        // when a database is provided, we use it for attribute visualization
-        m_csgv_db = std::move(db);
-        m_attribute_start_position.resize(m_csgv_db->getAttributeCount(), -1);
-        // update transfer function limits
-        for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
-            if(m_materials[m].discrAttribute >= 0) {
-                m_materials[m].discrInterval = m_csgv_db->getAttributeMinMax().at(m_materials[m].discrAttribute);
-            }
-            m_materials[m].tfMinMax = m_csgv_db->getAttributeMinMax().at(m_materials[m].tfAttribute);
-        }
-    }
+    void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> csgv, std::shared_ptr<CSGVDatabase> db);
 
     /// Creates and populates all GPU buffers for the currently set compressed segmentation volume data set.
     /// Blocks until all buffer acquisitions and uploads are finished.
@@ -178,7 +138,7 @@ public:
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
-    int getTargetAccumulationFrames() { return m_target_accum_frames; }
+    [[nodiscard]] int getTargetAccumulationFrames() const { return m_target_accum_frames; }
     /// Will save the renderer state to the path when the renderer is shut down
     void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = std::move(path); }
 
@@ -286,8 +246,8 @@ private:
     uint32_t m_cache_base_element_uints = 8;    ///< number of uints needed to store 2x2x2 output voxels
     size_t m_target_cache_size_MB = 0u;         ///< user parameter: 0 to use as much GPU memory as possible
     size_t m_cache_capacity = 0ul;              ///< this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x (sizeof(uint)=32) / m_palette_indices_per_uint bytes large
-    //size_t m_empty_space_buffer_size = 16777216ul;          ///< byte size of the empty space skipping bit vector (dividable by 16)
-    size_t m_empty_space_buffer_size = 0ul;          ///< byte size of the empty space skipping bit vector (dividable by 16)
+    uint32_t g_empty_space_block_dim = 2ul;                ///< block_size^3 voxels are grouped together into one empty space bit
+    size_t m_empty_space_buffer_size = 0ul;                 ///< byte size of the empty space skipping bit vector (dividable by 16)
     const size_t m_free_stack_capacity = 262144ul;          ///< how many elements (one uint = 4B each) fit into the free stack of EACH LoD > 0. We need max. volume_size/brick_size/lod_width³ elements. a capacity of 262144 equals 1MB * (lod_count-1)
     std::shared_ptr<Buffer> m_cache_info_buffer = nullptr;
     std::shared_ptr<Buffer> m_cache_buffer = nullptr;       ///< cache_capacity * 2x2x2 uints

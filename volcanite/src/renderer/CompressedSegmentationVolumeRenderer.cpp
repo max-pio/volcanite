@@ -28,6 +28,8 @@
 #endif
 #ifdef IMGUI
     #include "imgui.h"
+#include "volcanite/compression/wavelet_tree/BitVector.hpp"
+
 #endif
 
 using namespace vvv;
@@ -356,6 +358,72 @@ void CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers() {
     // Logger(DEBUG) << " CPU detail construction in " << detail_construction_timer.elapsed() * 1000.f << " ms.";
 }
 
+void CompressedSegmentationVolumeRenderer::setCompressedSegmentationVolume(
+        std::shared_ptr<CompressedSegmentationVolume> csgv, std::shared_ptr<CSGVDatabase> db) {
+    if(!csgv)
+        throw std::runtime_error("CompressedSegmentationVolume must not be null");
+    if(!db)
+        throw std::runtime_error("CompressedSegmentationVolume database must not be null");
+
+
+    if(csgv->getBrickCount().x < csgv->getLodCountPerBrick()) {
+        Logger(DEBUG) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
+                     ") in one dimension than there are brick level-of-details (" << csgv->getLodCountPerBrick() <<
+                     "). This may break some shaders. Advice: Re-Compress with a smaller brick-size.";
+    }
+    m_compressed_segmentation_volume = std::move(csgv);
+    m_data_changed = true;
+
+    // check how many bits are required to store cache indices
+    if(m_use_palette_cache) {
+        // must be (max_palette_count + 1), need an additional magic number (= 0) for not yet written output voxels
+        m_cache_palette_idx_bits = static_cast<uint32_t>(glm::ceil(
+                glm::log2(static_cast<double>(m_compressed_segmentation_volume->getMaxBrickPaletteCount()) + 1.0)));
+        m_cache_indices_per_uint = 32u / m_cache_palette_idx_bits;
+        m_cache_base_element_uints = (8u + m_cache_indices_per_uint - 1u) /
+                                     m_cache_indices_per_uint;  // = ceil(8 / m_palette_indices_per_uint)
+    } else {
+        // without paletting, the cache stores explicit 32 bit labels = one label per uint
+        m_cache_palette_idx_bits = 32u;
+        m_cache_indices_per_uint = 1u;
+        m_cache_base_element_uints = 8;
+    }
+
+    // when a database is provided, we use it for attribute visualization
+    m_csgv_db = std::move(db);
+    m_attribute_start_position.resize(m_csgv_db->getAttributeCount(), -1);
+    // update transfer function limits
+    for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
+        if(m_materials[m].discrAttribute >= 0) {
+            m_materials[m].discrInterval = m_csgv_db->getAttributeMinMax().at(m_materials[m].discrAttribute);
+        }
+        m_materials[m].tfMinMax = m_csgv_db->getAttributeMinMax().at(m_materials[m].tfAttribute);
+    }
+
+    // determine the block size of the empty space skipping grid
+    if (g_empty_space_block_dim > 0u) {
+        glm::uvec3 ess_dim;
+        // check if the ESS volume dimension supports the block size (has to be indexed with 32 bits)
+        do {
+            glm::uvec3 vol_dim = m_compressed_segmentation_volume->getVolumeDim();
+            ess_dim = vol_dim / g_empty_space_block_dim;
+            if (static_cast<size_t>(ess_dim.x) * ess_dim.y * ess_dim.z <= 0xFFFFFFFFull)
+                break;
+            g_empty_space_block_dim *= 2ul;
+        } while (true);
+        if (g_empty_space_block_dim > m_compressed_segmentation_volume->getBrickSize()) {
+            throw std::runtime_error("Brick size is too small to create empty space skipping structure.");
+        }
+
+        // each cell of the empty space skipping grid requires one bit. the bit vector is stored in BV_WordType elements.
+        // ceil(ceil(cell_count / 8) / sizeof(BV_WORD_TYPE)) * sizeof(BV_WORD_TYPE)
+        m_empty_space_buffer_size = (ess_dim.x * ess_dim.y * ess_dim.z + sizeof(BV_WordType) * 8u - 1) / 8u; // bytes
+        m_empty_space_buffer_size = ((m_empty_space_buffer_size + sizeof(BV_WordType) - 1) / sizeof(BV_WordType)) * sizeof(BV_WordType);  // bytes for words
+    } else {
+        m_empty_space_buffer_size = 0u;
+    }
+}
+
 void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     if(!m_compressed_segmentation_volume || m_compressed_segmentation_volume->getAllEncodings()->empty())
         throw std::runtime_error("CompressedSegmentationVolume not initialized!");
@@ -627,8 +695,10 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         shader_defines.push_back(
                 "CACHE_UVEC2_SIZE=" + std::to_string(m_target_cache_size_MB * 1024 * 1024 / sizeof(glm::uvec2)));
     }
-    if (m_empty_space_buffer_size > 0)
-        shader_defines.push_back("EMPTY_SPACE_UINT_SIZE=" + std::to_string(m_empty_space_buffer_size / sizeof(uint32_t)));
+    if (m_empty_space_buffer_size > 0) {
+        shader_defines.push_back(
+                "EMPTY_SPACE_UINT_SIZE=" + std::to_string(m_empty_space_buffer_size / sizeof(uint32_t)));
+    }
     shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if (getCtx()->getWsi())
@@ -979,26 +1049,25 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_usegmented_volume_info->setUniform<uint32_t>("g_brick_idx_to_enc_vector", m_compressed_segmentation_volume->getBrickIdxToEncVectorMapping());
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_cache_buffer_address", m_cache_buffer_address);
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_empty_space_bv_address", m_empty_space_buffer_address);
-        // voxel set size: a power of two smaller than the brick size so that last_voxel_id / set_size < 8*m_empty_space_buffer_size
         if (m_empty_space_buffer_size > 0) {
-            size_t voxel_count = static_cast<size_t>(m_compressed_segmentation_volume->getVolumeDim().x)
-                                 * m_compressed_segmentation_volume->getVolumeDim().y
-                                 * m_compressed_segmentation_volume->getVolumeDim().z;
-            uint32_t empty_space_set_size = (voxel_count + (m_empty_space_buffer_size * 8ull) - 1ull) /
-                                            static_cast<size_t>(m_empty_space_buffer_size * 8ull);
-            // empty space set size must be
-            // empty space set size must be a power of two
-            if (glm::bitCount(empty_space_set_size) > 1)
-                empty_space_set_size = 1u << (glm::findMSB(empty_space_set_size) + 1);
-            if (empty_space_set_size == 0u)
-                throw std::runtime_error("empty space set size cannot be 0");
-            if (empty_space_set_size > m_compressed_segmentation_volume->getBrickSize()
-                                     * m_compressed_segmentation_volume->getBrickSize()
-                                     * m_compressed_segmentation_volume->getBrickSize())
-                throw std::runtime_error("empty space set size must be <= brick size³");
+            if (g_empty_space_block_dim == 0u)
+                throw std::runtime_error("empty space block size cannot be 0");
+            if (g_empty_space_block_dim > m_compressed_segmentation_volume->getBrickSize())
+                throw std::runtime_error("empty space block dimension must not be greater than the brick size");
+
+            m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_block_dim", g_empty_space_block_dim);
+            uint32_t empty_space_set_size = g_empty_space_block_dim * g_empty_space_block_dim * g_empty_space_block_dim;
             m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_set_size", empty_space_set_size);
+
+            const glm::uvec3 empty_space_dim = m_compressed_segmentation_volume->getVolumeDim() / g_empty_space_block_dim;
+            const glm::uvec3 empty_space_dot_map = {1, empty_space_dim.x, empty_space_dim.x * empty_space_dim.y};
+            assert(static_cast<size_t>(empty_space_dim.x) * empty_space_dim.y * empty_space_dim.z <= 0xFFFFFFFFull
+                   && "empty space dim too large to be indexed in 32 bit. decrease empty space block size.");
+            m_usegmented_volume_info->setUniform<glm::uvec3>("g_empty_space_dot_map", empty_space_dot_map);
         } else {
+            m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_block_dim", 0u);
             m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_set_size", 0u);
+            m_usegmented_volume_info->setUniform<glm::uvec3>("g_empty_space_dot_map", glm::uvec3{0});
         }
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_detail_buffer_address", m_detail_buffer_address);
         m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
@@ -1056,6 +1125,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 #endif
     }, "Screenshot");
     //
+    g_gen->addAction([this]() { printGPUMemoryUsage(); }, "Print GPU Memory Usage");
 #ifndef HEADLESS
 #ifdef IMGUI
     g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
@@ -1319,8 +1389,10 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         size_t materials = 0ul;
         if (m_materials_buffer) {
             materials += m_materials_buffer->getByteSize() + m_attribute_buffer->getByteSize();
-            for (const auto &t: m_materialTransferFunctions)
-                materials += t->texture().memorySize();
+            for (const auto &t: m_materialTransferFunctions) {
+                if (t)
+                    materials += t->texture().memorySize();
+            }
         }
 
         size_t cache = 0ul;
@@ -1346,15 +1418,16 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         }
 
         size_t total_used = getMemoryHeapBudgetAndUsage(*getCtx()).second;
-        Logger(INFO) << "[GPU Memory] " << std::fixed << std::setprecision(3)
-                    << "Framebuffers: " << static_cast<double>(textures) / 1024. / 1024. / 1024. << " GB | "
-                    << "Uniform Buffers: " << static_cast<double>(uniform_buffers) / 1024. / 1024. / 1024. << " GB | "
-                    << "Materials: " << static_cast<double>(materials) / 1024. / 1024. / 1024. << " GB | "
-                    << "Encoding: " << static_cast<double>(encoding) / 1024. / 1024. / 1024. << " GB | "
-                    << "Cache: " << static_cast<double>(cache) / 1024. / 1024. / 1024. << " GB   | "
-                    << "Empty Space: " << static_cast<double>(empty_space) / 1024. / 1024. / 1024. << " GB   | "
-                    << " = " << static_cast<double>(textures + uniform_buffers + materials + encoding + cache) / 1024. / 1024. / 1024. << " GB"
-                    << " / " << static_cast<double>(total_used) / 1024. / 1024. / 1024. << " GB";
+        Logger(INFO)  << "[GPU Memory] " << std::fixed << std::setprecision(3)
+                      << "Framebuffers: " << static_cast<double>(textures) / 1024. / 1024. / 1024. << " GB | "
+                      << "Uniform Buffers: " << static_cast<double>(uniform_buffers) / 1024. / 1024. / 1024. << " GB | "
+                      << "Materials: " << static_cast<double>(materials) / 1024. / 1024. / 1024. << " GB | "
+                      << "Encoding: " << static_cast<double>(encoding) / 1024. / 1024. / 1024. << " GB | "
+                      << "Cache: " << static_cast<double>(cache) / 1024. / 1024. / 1024. << " GB | "
+                      << "Empty Space: " << static_cast<double>(empty_space) / 1024. / 1024. / 1024. << " GB | "
+                      << "  = " << static_cast<double>(textures + uniform_buffers + materials + encoding + cache + empty_space) / 1024. / 1024. / 1024. << " GB"
+                      << " / " << static_cast<double>(total_used) / 1024. / 1024. / 1024. << " GB";
     }
+
 
 } // namespace volcanite
