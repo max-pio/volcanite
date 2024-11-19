@@ -43,7 +43,7 @@ class CSGVBenchmarkPass : public PassCompute {
                 : WithGpuContext(ctx),
                   WithMultiBuffering(NoMultiBuffering),
                   PassCompute(ctx, label, NoMultiBuffering, ctx->getQueueFamilyIndices().compute.value()), m_csgv(csgv),
-                  m_decode_from_shared_memory(decode_from_shared_memory), m_cache_bytes(cache_size_MB * 1024 * 1024),
+                  m_decode_from_shared_memory(decode_from_shared_memory), m_cache_bytes(cache_size_MB * 1024ull * 1024ull),
                   m_use_palette_cache(palette_cache), m_shader_defines(csgv->getGLSLDefines()) {
 
             // obtain shader compilation and execution parameters
@@ -175,11 +175,11 @@ protected:
         uint32_t m_bricks_per_execution;             ///< how many bricks can be decompressed in one execution
         uint32_t m_execution_iterations;             ///< how many executions are requried to decode all bricks
         vk::Extent3D m_decompression_workgroup_size = {0u, 0u, 0u};
-        size_t m_cache_bytes = 1024 * 1024 * 1024;   ///< cache size in bytes
+        size_t m_cache_bytes = 1024ull * 1024 * 1024;   ///< cache size in bytes
         bool m_decode_from_shared_memory = false;    ///< if true, the encoding is copied to shared memory before decoding. Requires random access encoding.
 
 
-    // GPU resources and buffers
+        // GPU resources and buffers
         std::shared_ptr<UniformReflected> m_usegmented_volume_info = nullptr;
         // cache to store decompressed bricks
         std::shared_ptr<Buffer> m_cache_buffer = nullptr; ///< cache for decoding bricks
@@ -202,6 +202,7 @@ protected:
         float m_timestamp_period;
         std::vector<uint64_t> m_time_stamps;
         vk::QueryPool m_query_pool_timestamps;
+        int m_cache_heat_up_iterations = 0;
 };
 
 } // namespace volcanite

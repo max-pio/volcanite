@@ -238,7 +238,7 @@ public:
             }
             va.decode_from_shared_memory = decodedSharedMemoryArg.getValue();
             if(va.decode_from_shared_memory && !va.random_access)
-                throw ArgException(decodedSharedMemoryArg.longID() + " must be used in combination with " + randomAccessArg.longID(), cachePalettizedArg.longID());
+                throw ArgException(decodedSharedMemoryArg.longID() + " must be used in combination with " + randomAccessArg.longID(), decodedSharedMemoryArg.longID());
             va.show_development_gui = devArg.getValue();
             // if no input file was specified, try to open a file dialog
             std::string input_file = expandPath(inputpathArg.getValue());
