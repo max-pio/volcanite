@@ -107,7 +107,7 @@ public:
     // COMPONENT AND SHADER INTERFACE ----------------------------------------------------------------------------------
 
     /// @returns the index of the uint32_t element in the brick encoding / header that stores the palette size.
-    [[nodiscard]] virtual uint32_t getPaletteSizeHeaderIndex() const { return getLodCountPerBrick() * 2; }
+    [[nodiscard]] virtual uint32_t getPaletteSizeHeaderIndex() const { return getLodCountPerBrick(); }
 
     /// @returns a list of shader defines used during decoding which are passed to the shader compilation stage
     [[nodiscard]] virtual std::vector<std::string>
@@ -195,9 +195,9 @@ private:
     [[nodiscard]] uint32_t getWMHeaderIndex() const {
         if (m_encoding_mode == WAVELET_MATRIX_ENC) {
             // the non-Huffman Wavelet Matrix header struct contains the palette size to ensure a correct padding
-            return getLodCountPerBrick() * 2u;
+            return getLodCountPerBrick();
         } else if (m_encoding_mode == HUFFMAN_WM_ENC) {
-            return getLodCountPerBrick() * 2u + 1u;
+            return getLodCountPerBrick() + 1u;
         } else {
             throw std::runtime_error("encoding mode not supported by wavelet matrix encoder");
         }

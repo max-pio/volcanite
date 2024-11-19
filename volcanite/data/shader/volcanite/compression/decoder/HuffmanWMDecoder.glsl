@@ -576,15 +576,16 @@ bool verifyBrickCompression(const uint brick_idx) {
         return false;
     }
 
-    // check palette start of first LoD being 0 and second LoD being 1
-    if(brick_encoding.buf[header_start_lods] != 0u) {
-        debugPrintfEXT("[brick %u] First palette start must be 0 but is %u", brick_idx, brick_encoding.buf[header_start_lods]);
-        return false;
-    }
-    if(brick_encoding.buf[header_start_lods + 1u] != 1u) {
-        debugPrintfEXT("[brick %u] Second palette start must be 1 but is %u", brick_idx, brick_encoding.buf[header_start_lods + 1u]);
-        return false;
-    }
+    // Brick headers do no longer store LOD palette starts
+//    // check palette start of first LoD being 0 and second LoD being 1
+//    if(brick_encoding.buf[header_start_lods] != 0u) {
+//        debugPrintfEXT("[brick %u] First palette start must be 0 but is %u", brick_idx, brick_encoding.buf[header_start_lods]);
+//        return false;
+//    }
+//    if(brick_encoding.buf[header_start_lods + 1u] != 1u) {
+//        debugPrintfEXT("[brick %u] Second palette start must be 1 but is %u", brick_idx, brick_encoding.buf[header_start_lods + 1u]);
+//        return false;
+//    }
 
     WMHBrickHeaderRef wm_header = getWMHBrickHeaderFromEncoding(brick_encoding);
     // maximum text size: HWM_LEVELS bits per voxel (i.e. 5 bit vectors with length of voxels in brick)

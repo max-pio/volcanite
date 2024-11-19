@@ -34,7 +34,7 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
     glm::uvec3 volume_pos, brick_pos;
 
     const uint32_t lod_count = getLodCountPerBrick();
-    const uint32_t header_size = lod_count * 2 + 1u;
+    const uint32_t header_size = lod_count + 1u;
     uint32_t out_i = header_size * 8u;  // write head position in out, counted as number of encoded 4 bit elements
 
     // we need to keep track of the current brick status from coarsest to finest level to determine the right operations
@@ -76,7 +76,7 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
     for (uint32_t lod_width = m_brick_size / 2u; lod_width > 0u; lod_width /= 2u) {
         // write to header: keep track of where the new LODs start as number of 4bit
         out[current_inv_lod] = out_i;
-        out[lod_count + current_inv_lod] = static_cast<uint32_t>(palette.size());
+        // out[lod_count + current_inv_lod] = static_cast<uint32_t>(palette.size()); (not storing lod palette sizes anymore)
 
         // in the multigrid, LODs are ordered from finest to coarsest, so we have to go through them in reverse.
         uint32_t lod_dim = (m_brick_size/lod_width);
@@ -607,11 +607,12 @@ void WaveletMatrixEncoder::verifyBrickCompression(const uint32_t *brick_encoding
         error << "Second encoding operation index must be 0 or 1." << "\n";
     }
 
-    // check palette start of first LoD being 0 and second LoD being 1
-    if (brick_encoding[header_start_lods] != 0u)
-        error << "  first palette start must be 0 but is " << brick_encoding[header_start_lods] << "\n";
-    if (brick_encoding[header_start_lods + 1u] != 1u)
-        error << "  second palette start must be 1 but is " << brick_encoding[header_start_lods + 1u] << "\n";
+    // Brick headers do no longer store LOD palette starts
+//    // check palette start of first LoD being 0 and second LoD being 1
+//    if (brick_encoding[header_start_lods] != 0u)
+//        error << "  first palette start must be 0 but is " << brick_encoding[header_start_lods] << "\n";
+//    if (brick_encoding[header_start_lods + 1u] != 1u)
+//        error << "  second palette start must be 1 but is " << brick_encoding[header_start_lods + 1u] << "\n";
 
     if (brick_encoding[getPaletteSizeHeaderIndex()] == 0
         || brick_encoding[getPaletteSizeHeaderIndex()] > total_voxels_in_brick)
