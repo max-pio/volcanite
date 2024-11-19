@@ -181,7 +181,7 @@ struct FlatRank_BitVector_ptrs {
 /// Number of L2-blocks that are grouped into one L1-block MINUS ONE. The first L2-block is not stored explicitly.
 static constexpr uint32_t BV_STORE_L2_PER_L1 = 4;
 /// Bits that each stored L1-block takes up in the BV_L12Type
-static constexpr uint32_t BV_STORE_L1_BITS = 19;
+static constexpr uint32_t BV_STORE_L1_BITS = 20;
 /// Bits that each stored L2-block takes up in the BV_L12Type
 static constexpr uint32_t BV_STORE_L2_BITS = 11;
 /// Bits covered by an L2-block.
@@ -189,7 +189,7 @@ static constexpr uint32_t BV_L2_BIT_SIZE = 4 * BV_WORD_BIT_SIZE;
 
 // some reasonable configurations:
 // 5 19 9 1     (fastest, 16,67% overhead)
-// 4 19 11 4    (2x as slow, 5% overhead)
+// 4 20 11 4    (2x as slow, 5% overhead)
 // 3 19 12 8    (3x as slow, 3.125% overhead)
 
 /// Bits covered by an L1-block.
