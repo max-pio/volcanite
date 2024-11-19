@@ -12,7 +12,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
+import argparse
 import os
 import time
 
@@ -26,14 +26,14 @@ import converter
 
 # ----------- CONFIG --------------
 # data set to download (browse bossdb.org for available data)
-DATASET = "bossdb://witvliet2020/Dataset_8/segmentation"
-# DATASET = "gs://h01-release/data/20210601/c3/"
+# DATASET = "bossdb://witvliet2020/Dataset_8/segmentation"
+DATASET = "gs://h01-release/data/20210601/c3/"
 
 # total (cubic) volume size to download
-TOTAL_SIZE = 2048
+TOTAL_SIZE = (2048, 2048, 2048)
 
 # chunk size in all three dimensions
-CHUNK_SIZE = 1024
+CHUNK_SIZE = (1024, 1024, 1024)
 
 # location to store the resulting files
 output_path = "data/download/"
@@ -46,7 +46,7 @@ output_format = "hdf5"
 def obtain_cloud_dataset(path):
     """Returns an array handle to a remote data set without downloading the full data until a slice is accessed."""
 
-    # from online examples:
+    # see online examples:
     # https://colab.research.google.com/gist/jbms/1ec1192c34ec816c2c517a3b51a8ed6c/h01_data_access.ipynb#scrollTo=rtimT0EkY93k
     # https://bossdb.org/get-started
     if path[:6] == "bossdb":
@@ -65,60 +65,101 @@ def obtain_cloud_dataset(path):
                                   read=True, context=context).result()[ts.d['channel'][0]]
     else:
         assert False, "unknown cloud storage"
-    print("Accessing data set " + str(path) + " with shape (ZYX) " + str(_dataset.shape) + " chunks: " + str(np.ceil(np.array(_dataset.shape) / CHUNK_SIZE).astype('int')))
+    # print("Accessing data set " + str(path) + " with shape (ZYX) " + str(_dataset.shape) + " chunks: " + str(np.ceil(np.array(_dataset.shape) / CHUNK_SIZE).astype('int')))
     return _dataset
 
 
-# create output directory
-if len(output_path) == 0:
-    output_path = "./" + DATASET[DATASET.find("://") + 3:] + "/"
-os.makedirs(output_path, exist_ok=True)
-if output_path[-1] != '/':
-    output_path += '/'
-if os.listdir(output_path) != []:
-    print("Aborting: directory " + output_path + " must be empty")
-    exit(0)
+if __name__ == '__main__':
 
-# obtain dataset
-data = obtain_cloud_dataset(DATASET)
-full_dim_z = data.shape[0]
-full_dim_y = data.shape[1]
-full_dim_x = data.shape[2]
+    parser = argparse.ArgumentParser(
+        prog='Segmentation Volume Downloader',
+        description='Downloads segmentation volumes from cloud storages and stores them locally.',
+        epilog='')
 
-# determine start / end volume sizes
-start = (max(0, data.shape[0] // 2 - TOTAL_SIZE // 2),
-         max(0, data.shape[1] // 2 - TOTAL_SIZE // 2),
-         max(0, data.shape[2] // 2 - TOTAL_SIZE // 2))
-end   = (min(full_dim_z, start[0] + TOTAL_SIZE),
-         min(full_dim_y, start[1] + TOTAL_SIZE),
-         min(full_dim_x, start[2] + TOTAL_SIZE))
+    parser.add_argument('-d', '--data_set', default='h01')
+    parser.add_argument('-o', '--output_path', default='')
+    parser.add_argument('-s', '--size', type=int, nargs=3, default=(2048, 2048, 2048))
+    parser.add_argument('-f', '--filetype', default='hdf5')
+    parser.add_argument('-c', '--chunk_size', type=int, nargs=3, default=(1024, 1024, 1024))
+    parser.add_argument('-v', '--verbose', action='store_true')
 
-chunk_count = np.ceil(np.array([end[0] - start[0], end[1] - start[1], end[2] - start[2]]) / CHUNK_SIZE)
-total_chunk_count = chunk_count[0] * chunk_count[1] * chunk_count[2]
+    args = parser.parse_args()
+    if args.data_set == 'h01':
+        DATASET = "gs://h01-release/data/20210601/c3/"
+    elif args.data_set == 'witvliet':
+        DATASET = "bossdb://witvliet2020/Dataset_8/segmentation"
+    else:
+        print("Unknown data set " + args.data_set)
+        DATASET = args.data_set
 
-print(time.strftime("%H:%M:%S") + "  Start download of " + str(int(total_chunk_count)) + " chunks. Uncompressed uint32 array is " + str((end[0] - start[0]) * (end[1] - start[1]) * (end[2] - start[2]) * 4 / 1024 / 1024 / 1024) + " GB.")
-chunk_id = 0
-for z in range(0, end[0] - start[0], CHUNK_SIZE):
-    for y in range(0, end[1] - start[1], CHUNK_SIZE):
-        for x in range(0, end[2] - start[2], CHUNK_SIZE):
-            z_end = min(full_dim_z, z + CHUNK_SIZE + start[0])
-            y_end = min(full_dim_y, y + CHUNK_SIZE + start[1])
-            x_end = min(full_dim_x, x + CHUNK_SIZE + start[2])
+    output_path = args.output_path
+    output_format = args.filetype
+    TOTAL_SIZE = args.size
+    CHUNK_SIZE = args.chunk_size
 
-            print(time.strftime("%H:%M:%S") + "  " + str(int(chunk_id / total_chunk_count * 100.)) + "% processing chunk x"
-                  + str(x // CHUNK_SIZE) + "y" + str(y // CHUNK_SIZE) + "z" + str(z // CHUNK_SIZE)
-                  + " from ZYX " + str((z + start[0], y + start[1], z + start[2])) + " to " + str((z + end[0], y + end[1], z + end[2])) , end='')
+    if (CHUNK_SIZE[0] % 64) or (CHUNK_SIZE[1] % 64) or (CHUNK_SIZE[2] % 64):
+        print("WARNING: chunk size should be dividable by 64 in each dimension for brick-wise compression")
+        exit(2)
 
-            output_file = output_path + "x" + str(x // CHUNK_SIZE) + "y" + str(y // CHUNK_SIZE) + "z" + str(z // CHUNK_SIZE) + "." + output_format
-            if not os.path.exists(output_file):
-                cur_slice = data[(z + start[0]):z_end, (y + start[1]):y_end, (x + start[2]):x_end].astype('uint32')
+    # obtain dataset
+    data = obtain_cloud_dataset(DATASET)
+    full_dim_z = data.shape[0]
+    full_dim_y = data.shape[1]
+    full_dim_x = data.shape[2]
 
-                converter.write_volume(cur_slice, "uint32", True)
-                print(" done.")
-            else:
-                print(" already exists. skipping.")
+    if output_path == '':
+        print("Volume " + DATASET + " has a total size of " + str((full_dim_z, full_dim_y, full_dim_x))
+              + ". Specify a download directory with -o /path/to/dir/")
+        exit(0)
 
-            chunk_id  += 1
+    # create output directory
+    if len(output_path) == 0:
+        output_path = "./" + DATASET[DATASET.find("://") + 3:] + "/"
+    os.makedirs(output_path, exist_ok=True)
+    if output_path[-1] != '/' and output_path[-1] != '\\':
+        output_path += '/'
+    if os.listdir(output_path):
+        print("Aborting: directory " + output_path + " must be empty")
+        exit(0)
 
-print("=============================")
-print(time.strftime("%H:%M:%S") + "  done")
+
+    print("Downloading " + str(
+        TOTAL_SIZE) + " volume from " + DATASET + " to " + output_path + " with chunk size " + str(CHUNK_SIZE))
+
+    # determine start / end volume sizes
+    start = (max(0, data.shape[0] // 2 - TOTAL_SIZE[0] // 2),
+             max(0, data.shape[1] // 2 - TOTAL_SIZE[1] // 2),
+             max(0, data.shape[2] // 2 - TOTAL_SIZE[2] // 2))
+    end   = (min(full_dim_z, start[0] + TOTAL_SIZE[0]),
+             min(full_dim_y, start[1] + TOTAL_SIZE[1]),
+             min(full_dim_x, start[2] + TOTAL_SIZE[2]))
+
+    chunk_count = np.ceil(np.array([end[0] - start[0], end[1] - start[1], end[2] - start[2]]) / np.array(CHUNK_SIZE))
+    total_chunk_count = chunk_count[0] * chunk_count[1] * chunk_count[2]
+
+    print(time.strftime("%H:%M:%S") + "  Start download of " + str(int(total_chunk_count)) + " chunks. Uncompressed uint32 array is " + str((end[0] - start[0]) * (end[1] - start[1]) * (end[2] - start[2]) * 4 / 1024 / 1024 / 1024) + " GB.")
+    chunk_id = 0
+    for z in range(0, end[0] - start[0], CHUNK_SIZE[0]):
+        for y in range(0, end[1] - start[1], CHUNK_SIZE[1]):
+            for x in range(0, end[2] - start[2], CHUNK_SIZE[2]):
+                z_end = min(full_dim_z, z + CHUNK_SIZE[0] + start[0])
+                y_end = min(full_dim_y, y + CHUNK_SIZE[1] + start[1])
+                x_end = min(full_dim_x, x + CHUNK_SIZE[2] + start[2])
+
+                print(time.strftime("%H:%M:%S") + "  " + str(int(chunk_id / total_chunk_count * 100.)) + "% processing chunk x"
+                      + str(x // CHUNK_SIZE[2]) + "y" + str(y // CHUNK_SIZE[1]) + "z" + str(z // CHUNK_SIZE[0])
+                      + " from ZYX " + str((z + start[0], y + start[1], z + start[2])) + " to " + str((z + end[0], y + end[1], z + end[2])) , end='')
+
+                output_file = output_path + "x" + str(x // CHUNK_SIZE[2]) + "y" + str(y // CHUNK_SIZE[1]) + "z" + str(z // CHUNK_SIZE[0]) + "." + output_format
+                if not os.path.exists(output_file):
+                    cur_slice = np.array(data[(z + start[0]):z_end, (y + start[1]):y_end, (x + start[2]):x_end]).astype('uint32')
+
+                    converter.write_volume(cur_slice, output_file, "uint32", True, False)
+                    print(" done.")
+                else:
+                    print(" already exists. skipping.")
+
+                chunk_id  += 1
+
+    print("=============================")
+    print(time.strftime("%H:%M:%S") + "  done")
