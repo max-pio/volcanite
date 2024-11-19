@@ -122,10 +122,6 @@ if __name__ == '__main__':
         print("Aborting: directory " + output_path + " must be empty")
         exit(0)
 
-
-    print("Downloading " + str(
-        TOTAL_SIZE) + " volume from " + DATASET + " to " + output_path + " with chunk size " + str(CHUNK_SIZE))
-
     # determine start / end volume sizes
     start = (max(0, data.shape[0] // 2 - TOTAL_SIZE[0] // 2),
              max(0, data.shape[1] // 2 - TOTAL_SIZE[1] // 2),
@@ -133,6 +129,10 @@ if __name__ == '__main__':
     end   = (min(full_dim_z, start[0] + TOTAL_SIZE[0]),
              min(full_dim_y, start[1] + TOTAL_SIZE[1]),
              min(full_dim_x, start[2] + TOTAL_SIZE[2]))
+
+    print("Downloading " + str(
+          TOTAL_SIZE) + " volume from " + DATASET + " to " + output_path
+          + "\nsub-volume: " + str(start) + ":" + str(end) + ", chunk size " + str(CHUNK_SIZE))
 
     chunk_count = np.ceil(np.array([end[0] - start[0], end[1] - start[1], end[2] - start[2]]) / np.array(CHUNK_SIZE))
     total_chunk_count = chunk_count[0] * chunk_count[1] * chunk_count[2]
