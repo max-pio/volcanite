@@ -12,7 +12,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
+import argparse
 import os
 import string
 
@@ -25,6 +25,7 @@ import PIL.Image as Image
 import nibabel as nib
 import gzip
 
+import matplotlib
 import matplotlib.pyplot as plt
 
 
@@ -168,7 +169,7 @@ def write_numpy(volume, path_out, dtype=None, compressed = True):
 
 # nifti
 def read_nifti(path_in):
-    return np.array(nib.load(path_in).dataobj)
+    return np.asarray(nib.load(path_in).dataobj)
 
 def write_nifti(volume, path_out, dtype=None):
     volume = guard_volume_dtype(volume, dtype)
@@ -324,21 +325,21 @@ def guard_volume_dtype(volume, dtype):
     if not dtype or volume.dtype.num == np.dtype(dtype).num:
         return volume
 
-    supported_min = np.iinfo(dtype).min
-    supported_max = np.iinfo(dtype).max
-    vol_min = np.min(volume)
-    vol_max = np.max(volume)
+    supported_min = np.uint64(np.iinfo(dtype).min)
+    supported_max = np.uint64(np.iinfo(dtype).max)
+    vol_min = np.min(volume).astype('uint64')
+    vol_max = np.max(volume).astype('uint64')
 
     if (supported_max - supported_min) < (vol_max - vol_min):
-        print("Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
+        print("1 Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
               + " by normalization to range [" + str(supported_min) + "," + str(supported_max) + "].")
         volume = (volume - vol_min) / (vol_max - vol_min) * (supported_max - supported_min) + supported_min
     elif vol_min < supported_min:
-        print("Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
+        print("2 Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
               + " by offsetting values to [" + str(supported_min) + "," + str(vol_max - vol_min + supported_min) + "].")
         volume = volume - vol_min + supported_min
-    elif vol_max > supported_min:
-        print("Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
+    elif vol_max > supported_max:
+        print("3 Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
               + " by offsetting values to [" + str(vol_min - vol_max + supported_max) + "," + str(supported_max) + "].")
         volume = volume - vol_max + supported_max
 
@@ -365,9 +366,38 @@ def debug_vis(volume, row_count=2, col_count=3, colormap='turbo', print_info=Tru
         ax.set_ylabel("Slice " + str("[" + str(slice_loc) + ":,:]"))
         ax.imshow(volume[slice_loc, :, :], cmap=colormap)
         slice_loc += (volume.shape[0] // len(axs))
-    plt.show()
+
+
+    if matplotlib.is_interactive():
+        plt.show()
+    else:
+        print("matplotlib backend is non-interactive. Trying to save plot as ./converter_plot.png\n"
+              "To enable interactive plotting, set the environment variable MPLBACKEND to an available backend, e.g.\n"
+              "> pip install PyQt6\n> export MPLBACKEND=qtagg\n> python3 converter.py")
+        plt.savefig('./converter_plot.png')
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        prog='Segmentation Volume Converter',
+        description='Downloads segmentation volumes from cloud storages and stores them locally.',
+        epilog='')
+
+    parser.add_argument('input_file', help='path to input volume file')
+    parser.add_argument('output_file', help='path to output volume file')
+    parser.add_argument('-z', '--gzip', action='store_true', help="apply additional gzip compression on output file")
+    parser.add_argument('--vis', action='store_true', help="show a 2D plot of volume slices after import")
+    parser.add_argument('-v', '--verbose', action='store_true', help="enable verbose output")
+    parser.add_argument('--guarantee-corder',  default=True, action=argparse.BooleanOptionalAction, help="enable guard functions to guarantee a C indexing output order")
+
+    args = parser.parse_args()
+
+    volume = read_volume(args.input_file)
+    if args.verbose:
+        debug_print(volume)
+    if args.vis:
+        debug_vis(volume)
+
+    write_volume(volume, args.output_file, 'uint32', args.guarantee_corder, args.gzip)
     exit(0)
 
