@@ -112,19 +112,19 @@ void CSGVSerialBrickEncoder::verifyBrickCompression(const uint32_t* brick_encodi
         }
     }
 
-    // check palette start of first LoD being 0 and second LoD being 1
-    if(brick_encoding[header_start_lods] != 0u)
-        error << "  first palette start must be 0 but is " << brick_encoding[header_start_lods] << "\n";
-    if(brick_encoding[header_start_lods + 1u] != 1u)
-        error << "  second palette start must be 1 but is " << brick_encoding[header_start_lods + 1u] << "\n";
-
-    // check palette starts being in ascending order
-    for(int l = 2u; l <= lod_count + 1; l++) {
-        if(brick_encoding[header_start_lods + l] < brick_encoding[header_start_lods + l - 1]) {
-            error << "  palette starts are not in ascending order\n";
-            break;
-        }
-    }
+    // Brick headers do no longer store LOD palette starts
+//    // check palette start of first LoD being 0 and second LoD being 1
+//    if(brick_encoding[header_start_lods] != 0u)
+//        error << "  first palette start must be 0 but is " << brick_encoding[header_start_lods] << "\n";
+//    if(brick_encoding[header_start_lods + 1u] != 1u)
+//        error << "  second palette start must be 1 but is " << brick_encoding[header_start_lods + 1u] << "\n";
+//    // check palette starts being in ascending order
+//    for(int l = 2u; l <= lod_count + 1; l++) {
+//        if(brick_encoding[header_start_lods + l] < brick_encoding[header_start_lods + l - 1]) {
+//            error << "  palette starts are not in ascending order\n";
+//            break;
+//        }
+//    }
 
     uint32_t palette_size = brick_encoding[getPaletteSizeHeaderIndex()];
     // check palette size not being zero
@@ -193,7 +193,7 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
     for (uint32_t lod_width = m_brick_size / 2u; lod_width > 0u; lod_width /= 2u) {
         // write to header: keep track of where the new LODs start as number of 4bit
         out[current_inv_lod] = out_i;
-        out[lod_count + current_inv_lod] = static_cast<uint32_t>(palette.size());
+        // out[lod_count + current_inv_lod] = static_cast<uint32_t>(palette.size()); (not writing LOD palette sizes anymore)
 
         // in the multigrid, LODs are ordered from finest to coarsest, so we have to go through them in reverse.
         uint32_t lod_dim = (m_brick_size/lod_width);

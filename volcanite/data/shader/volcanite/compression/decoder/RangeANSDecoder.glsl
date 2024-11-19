@@ -217,17 +217,16 @@ bool verifyBrickCompression(const uint brick_idx) {
     // Obtain a reference to the uint buffer containing this bricks encoding.
     EncodingRef brick_encoding = getBrickEncodingRef(brick_idx);
     const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
-    const uint header_size = LOD_COUNT * 2 + 1u;
     const uint header_start_lods = LOD_COUNT;
 
     // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
-    if (brick_encoding_length < header_size + 1u + 1u) {
-        debugPrintfEXT("brick encoding is shorter than minimum. (header size + 1 encoding + 1 palette) = %u but is %u", header_size + 2u, brick_encoding_length);
+    if (brick_encoding_length < HEADER_SIZE + 1u + 1u) {
+        debugPrintfEXT("brick encoding is shorter than minimum. (header size + 1 encoding + 1 palette) = %u but is %u", HEADER_SIZE + 2u, brick_encoding_length);
         return false;
     }
 
-    // check first header entry being header_size * 8
-    if(brick_encoding.buf[0] != header_size * 8u) {
+    // check first header entry being HEADER_SIZE * 8
+    if(brick_encoding.buf[0] != HEADER_SIZE * 8u) {
         debugPrintfEXT("first encoding starts 4bit must be header*8");
         return false;
     }
@@ -247,15 +246,16 @@ bool verifyBrickCompression(const uint brick_idx) {
         }
     }
 
-    // check palette start of first LoD being 0 and second LoD being 1
-    if (brick_encoding.buf[header_start_lods] != 0u) {
-        debugPrintfEXT("first palette start must be 0");
-        return false;
-    }
-    if (brick_encoding.buf[header_start_lods + 1u] != 1u) {
-        debugPrintfEXT("second palette start must be 1");
-        return false;
-    }
+    // Brick headers do no longer store palette offsets
+//    // check palette start of first LoD being 0 and second LoD being 1
+//    if (brick_encoding.buf[header_start_lods] != 0u) {
+//        debugPrintfEXT("first palette start must be 0");
+//        return false;
+//    }
+//    if (brick_encoding.buf[header_start_lods + 1u] != 1u) {
+//        debugPrintfEXT("second palette start must be 1");
+//        return false;
+//    }
 
     //    // check palette starts being in ascending order
     //    for(int l = 2u; l <= LOD_COUNT + 1; l++) {

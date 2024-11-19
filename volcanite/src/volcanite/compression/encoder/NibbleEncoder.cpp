@@ -74,7 +74,7 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
     for (uint32_t lod_width = m_brick_size / 2u; lod_width > 0u; lod_width /= 2u) {
         // write to header: keep track of where the new LODs start as number of 4bit
         out[current_inv_lod] = out_i;
-        out[lod_count + current_inv_lod] = static_cast<uint32_t>(palette.size());
+        // out[lod_count + current_inv_lod] = static_cast<uint32_t>(palette.size()); (no longer writing LOD palette sizes)
 
         // in the multigrid, LODs are ordered from finest to coarsest, so we have to go through them in reverse.
         uint32_t lod_dim = (m_brick_size/lod_width);

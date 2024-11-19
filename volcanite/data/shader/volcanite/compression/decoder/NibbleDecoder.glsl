@@ -390,15 +390,16 @@ bool verifyBrickCompression(const uint brick_idx) {
         }
     }
 
-    // check palette start of first LoD being 0 and second LoD being 1
-    if (brick_encoding.buf[header_start_lods] != 0u) {
-        debugPrintfEXT("first palette start must be 0");
-        return false;
-    }
-    if (brick_encoding.buf[header_start_lods + 1u] != 1u) {
-        debugPrintfEXT("second palette start must be 1");
-        return false;
-    }
+    // Brick headers do no longer store LOD palette starts
+//    // check palette start of first LoD being 0 and second LoD being 1
+//    if (brick_encoding.buf[header_start_lods] != 0u) {
+//        debugPrintfEXT("first palette start must be 0");
+//        return false;
+//    }
+//    if (brick_encoding.buf[header_start_lods + 1u] != 1u) {
+//        debugPrintfEXT("second palette start must be 1");
+//        return false;
+//    }
 
     //    // check palette starts being in ascending order
     //    for(int l = 2u; l <= LOD_COUNT + 1; l++) {

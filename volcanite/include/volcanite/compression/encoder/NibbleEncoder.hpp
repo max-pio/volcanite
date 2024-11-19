@@ -62,15 +62,6 @@ public:
                                      uint32_t* output_brick, glm::uvec3 valid_brick_size,
                                      int target_inv_lod) const override;
 
-    // COMPONENT AND SHADER INTERFACE ----------------------------------------------------------------------------------
-
-    /// @returns a list of shader defines used during decoding which are passed to the shader compilation stage
-    [[nodiscard]] virtual std::vector<std::string> getGLSLDefines(std::function<std::span<const uint32_t>(uint32_t)> getBrickEncodingSpan,
-                                                                  uint32_t brick_idx_count) const {
-        return CSGVBrickEncoder::getGLSLDefines(getBrickEncodingSpan, brick_idx_count);
-    }
-
-
 protected:
     /// Reads the next element from the brick encoding, possibly using the rANS decoder from this CompressedSegmentationVolume, and updates the state.
     uint32_t readNextLodOperationFromEncoding(const uint32_t* brick_encoding, ReadState& state) const override;
