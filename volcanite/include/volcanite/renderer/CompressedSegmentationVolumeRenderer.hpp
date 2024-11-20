@@ -191,7 +191,7 @@ private:
     // shading and post processing
     glm::vec4 m_background_color_a = glm::vec4(1.f, 1.f, 1.f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
-    int m_subsampling = 1;
+    int m_subsampling = 0;
     bool m_tonemap_enabled = false;
     bool m_global_illumination_enabled = false;
     bool m_envmap_enabled = false;
