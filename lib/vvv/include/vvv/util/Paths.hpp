@@ -44,6 +44,8 @@ public:
     /// returns a file path in a subfolder of the given data path
     static std::filesystem::path getLocalFileForDataPath(const std::filesystem::path& dataPath);
 
+    static std::filesystem::path getHomeDirectory();
+
 
     /// initialize paths.
     /// @param dataPath a list of semi-colon separated paths to data/-Folders. This list is sorted from lowest to highest priority.
