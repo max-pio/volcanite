@@ -57,7 +57,11 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
         csgvDatabase->updateDummyMinMax(*csgv);
 
     const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
-    renderer->setDecodingParameters(args.cache_size_MB, args.cache_palettized, false, CACHE_BRICKS);
+    renderer->setDecodingParameters({.cache_size_MB=args.cache_size_MB,
+                                     .palettized_cache=args.cache_palettized,
+                                     .decode_from_shared_memory=false,
+                                     .cache_mode=args.cache_mode,
+                                     .empty_space_resolution=args.empty_space_resolution});
     renderer->setCompressedSegmentationVolume(csgv, csgvDatabase);
     // not setting render config: use default values
     renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
@@ -90,7 +94,9 @@ static const std::vector<VolcaniteArgs> RENDERING_TEST_CONFIGS = {
         {.screenshot_output_file=OUT_DIR + "rANSd_64_cache-palette.png", .cache_palettized=true, .brick_size=64, .encoding_mode=SINGLE_TABLE_RANS_ENC},
         {.screenshot_output_file=OUT_DIR + "rANS_16_stream-lod.png", .stream_lod=true, .brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC},
         {.screenshot_output_file=OUT_DIR + "nibble_16_ra.png", .brick_size=16, .encoding_mode=NIBBLE_ENC, .operation_mask=OP_ALL_WITHOUT_STOP, .random_access=true},
-        {.screenshot_output_file=OUT_DIR + "hWM_32_ra.png", .brick_size=32, .encoding_mode=HUFFMAN_WM_ENC, .random_access=true}
+        {.screenshot_output_file=OUT_DIR + "hWM_32_ra_cache_brck.png", .cache_mode='b', .brick_size=64, .encoding_mode=HUFFMAN_WM_ENC,  .random_access=true,},
+        {.screenshot_output_file=OUT_DIR + "hWM_32_ra_cache_none.png", .cache_mode='v', .empty_space_resolution=2u, .brick_size=16, .encoding_mode=HUFFMAN_WM_ENC,  .random_access=true,},
+        {.screenshot_output_file=OUT_DIR + "hWM_32_ra_cache_voxl.png", .cache_mode='n', .brick_size=32, .encoding_mode=HUFFMAN_WM_ENC,  .random_access=true,},
     };
 
 glm::vec4 CIE_rgb2xyz(const glm::vec4& rgba) {

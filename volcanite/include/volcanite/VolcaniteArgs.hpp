@@ -52,6 +52,7 @@ public:
     uint32_t cache_mode = CACHE_BRICKS;
     bool cache_palettized = false;
     bool decode_from_shared_memory = false;
+    uint32_t empty_space_resolution = 2u;    // in cache mode CACHE_VOXELS, groups n³ voxels into one empty space entry
     bool show_development_gui = false;
 
     // attribute args
@@ -144,6 +145,10 @@ public:
             ValueArg<char> cacheModeArg("", "cache-mode", "Content in the cache: [n] no cache [v] single voxels [b] full bricks (default)", false, _allowedCacheUnits[va.cache_mode], &allowedCacheUnits);
             cmd.add(cacheModeArg);
             SwitchArg decodedSharedMemoryArg("", "decode-sm", "Copy brick encodings to shared memory before decoding.", cmd);
+            std::vector<uint32_t> _allowedESSRes = {0, 1, 2, 4, 8, 16, 32, 64};
+            ValuesConstraint<uint32_t> allowedESSRes(_allowedESSRes);
+            ValueArg<uint32_t> emptySpaceResolutionArg("", "empty-space-res", "Groups n³ voxels into one empty space entry. Requires cache-mode v. Set 0 to disable empty space skipping.", false, va.empty_space_resolution, &allowedESSRes);
+            cmd.add(emptySpaceResolutionArg);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
@@ -240,6 +245,7 @@ public:
             if(va.decode_from_shared_memory && !va.random_access)
                 throw ArgException(decodedSharedMemoryArg.longID() + " must be used in combination with " + randomAccessArg.longID(), decodedSharedMemoryArg.longID());
             va.show_development_gui = devArg.getValue();
+            va.empty_space_resolution = emptySpaceResolutionArg.getValue();
             // if no input file was specified, try to open a file dialog
             std::string input_file = expandPath(inputpathArg.getValue());
             if(input_file.empty()) {

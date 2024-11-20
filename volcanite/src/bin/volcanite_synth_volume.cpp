@@ -96,7 +96,11 @@ int volcanite_synth_volume_main(int argc, char *argv[]) {
             csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
 
         const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
-        renderer->setDecodingParameters(args.cache_size_MB, args.cache_palettized, args.decode_from_shared_memory, args.cache_mode);
+        renderer->setDecodingParameters({.cache_size_MB=args.cache_size_MB,
+                                         .palettized_cache=args.cache_palettized,
+                                         .decode_from_shared_memory=args.decode_from_shared_memory,
+                                         .cache_mode=args.cache_mode,
+                                         .empty_space_resolution=args.empty_space_resolution});
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
 
         // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)

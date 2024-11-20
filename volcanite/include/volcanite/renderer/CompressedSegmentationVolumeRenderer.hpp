@@ -142,6 +142,14 @@ public:
     /// Will save the renderer state to the path when the renderer is shut down
     void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = std::move(path); }
 
+    struct CSGVRenderingConfig {
+        size_t cache_size_MB = 1024;
+        bool palettized_cache = false;
+        bool decode_from_shared_memory = false;  /// requires random access and CACHE_BRICKS cache_mode
+        uint32_t cache_mode = CACHE_BRICKS;  ///< CACHE_NOTHING, CACHE_VOXELS, or CACHE_BRICKS (req. w.o. random access)
+        uint32_t empty_space_resolution = 2u;    ///< n³ voxels are grouped into one empty space entry. 0 to disable.
+    };
+
     /// @brief Configures the CSGV decoding and caching behaviour of the renderer.
     ///
     /// @param cache_size_MB the target cache size for the renderer in MB.
@@ -152,17 +160,18 @@ public:
     /// portions of the volume in cache at the expense of a performance decrease.
     /// @param decode_from_shared_memory if true, the encoding will be copied to shared memory before decoding.
     /// only works in combination with a random access encoding.
-    void setDecodingParameters(size_t cache_size_MB, bool palettized_cache, bool decode_from_shared_memory, uint32_t cache_mode) {
-        m_target_cache_size_MB = cache_size_MB;
+    void setDecodingParameters(CSGVRenderingConfig config) {
+        m_target_cache_size_MB = config.cache_size_MB;
         if(m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
             Logger(WARN) << "Cache size is currently limited to 4 GB maximum.";
             m_target_cache_size_MB = 4294967295ul / 1024ul / 1024ul;
         }
-        m_use_palette_cache = palettized_cache;
-        m_decode_from_shared_memory = decode_from_shared_memory;
-        if (cache_mode > 2)
-            throw std::runtime_error("Invalid cache mode " + std::to_string(cache_mode));
-        m_cache_mode = cache_mode;
+        m_use_palette_cache = config.palettized_cache;
+        m_decode_from_shared_memory = config.decode_from_shared_memory;
+        if (config.cache_mode > 2)
+            throw std::runtime_error("Invalid cache mode " + std::to_string(config.cache_mode));
+        m_cache_mode = config.cache_mode;
+        m_empty_space_block_dim = config.empty_space_resolution;
     }
 
 private:
@@ -246,7 +255,7 @@ private:
     uint32_t m_cache_base_element_uints = 8;    ///< number of uints needed to store 2x2x2 output voxels
     size_t m_target_cache_size_MB = 0u;         ///< user parameter: 0 to use as much GPU memory as possible
     size_t m_cache_capacity = 0ul;              ///< this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x (sizeof(uint)=32) / m_palette_indices_per_uint bytes large
-    uint32_t g_empty_space_block_dim = 2ul;                ///< block_size^3 voxels are grouped together into one empty space bit
+    uint32_t m_empty_space_block_dim = 2ul;                ///< block_size^3 voxels are grouped together into one empty space bit
     size_t m_empty_space_buffer_size = 0ul;                 ///< byte size of the empty space skipping bit vector (dividable by 16)
     const size_t m_free_stack_capacity = 262144ul;          ///< how many elements (one uint = 4B each) fit into the free stack of EACH LoD > 0. We need max. volume_size/brick_size/lod_width³ elements. a capacity of 262144 equals 1MB * (lod_count-1)
     std::shared_ptr<Buffer> m_cache_info_buffer = nullptr;
