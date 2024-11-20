@@ -71,8 +71,10 @@ public:
     uint32_t operation_mask = OP_ALL;   // enables certain CSGV operations and stop bits through OP_*_BIT
     bool random_access = false;         // encode bricks so that they support random access within a brick
 
+    // evaluation and statistics
     bool run_tests = false;
     bool export_stats = false;
+    std::string eval_logfile = {};      // a file into which rendering evaluation results are written as 'append'
 
 
     static std::string getHelpString() {
@@ -130,6 +132,7 @@ public:
             cmd.add(bricksizeArg);
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
+            ValueArg<std::string> evalLogFileArg("", "eval-logfile", "File into which rendering evaluation results are appended after all frames finished rendering the screenshot image. Must be used with -i.", false, va.eval_logfile, "file", cmd);
             ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits, or [a]ll", false, "a", "(a|p|n|x|y|z|l|d|s)*", cmd);
             SwitchArg randomAccessArg("p", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
 
@@ -173,7 +176,6 @@ public:
 #endif
             va.decompress_export_file = expandPath(decompresspathArg.getValue());
             va.compress_export_file = expandPath(compresspathArg.getValue());
-            va.export_stats = statsArg.getValue();
             {
                 std::string op_codes = opMaskArg.getValue();
                 std::transform(op_codes.begin(), op_codes.end(), op_codes.begin(), ::tolower);
@@ -362,6 +364,12 @@ public:
                     }
                 }
                 va.run_tests = testArg.getValue();
+            }
+            va.export_stats = statsArg.getValue();
+            va.eval_logfile = expandPath(evalLogFileArg.getValue());
+            if (!va.eval_logfile.empty() && va.screenshot_output_file.empty()) {
+                throw ArgException("Evaluation log file must be used in combination with image output -i.",
+                        evalLogFileArg.longID(""));
             }
 
             return va;

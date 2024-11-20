@@ -39,6 +39,7 @@ constexpr int RET_INVALID_ARG = 1;
 constexpr int RET_NOT_SUPPORTED = 2;
 constexpr int RET_COMPR_ERROR = 3;
 constexpr int RET_RENDER_ERROR = 4;
+constexpr int RET_IO_ERROR = 5;
 
 
 
@@ -49,9 +50,77 @@ int export_texture(Texture* tex, const std::string& export_file_path) {
     }
     catch(const std::runtime_error& e) {
         Logger(ERROR) << "Render export error: " << e.what();
-        return RET_RENDER_ERROR;
+        return RET_IO_ERROR;
     }
     return 0;
+}
+
+void format_evaluation_string(std::string& format_string, int argc, char *argv[]/*EvaluationResults results*/) {
+    // obtain time stamp
+    auto t = std::time(nullptr);
+    auto tm = *std::localtime(&t);
+    std::stringstream time_stamp_ss;
+    time_stamp_ss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
+    // obtain args string
+    std::stringstream args_ss;
+    for (int i = 0; i < argc; i++) {
+        args_ss << argv[i];
+        if (i < argc - 1)
+            args_ss << " "; // if arguments should be comma separated, this would be ","
+    }
+
+    // the list of replacement specifiers and the replacement values:
+    std::vector<std::pair<std::string, std::string>> replace_str = {
+            {"%time", time_stamp_ss.str()},
+            {"%args", args_ss.str()},
+    };
+
+    // replace all occurrences of all specifiers
+    bool replaced;
+    do {
+        replaced = false;
+        for (const auto& r: replace_str) {
+            auto pos = format_string.find(r.first);
+            if (pos != std::string::npos) {
+                format_string.replace(pos, r.first.size(), r.second);
+                replaced = true;
+            }
+        }
+    } while (replaced);
+}
+
+int write_eval_logfile(const std::string& eval_logfile, int argc, char *argv[]/*, EvaluationResults results*/) {
+    bool logfile_exists = std::filesystem::exists(eval_logfile);
+    std::string format_string;
+    if (logfile_exists) {
+        std::ifstream file = std::ifstream(eval_logfile);
+        if (file.is_open()) {
+            std::string first_line;
+            std::getline(file, first_line);
+            if (first_line.starts_with('#'))
+                format_string = first_line.substr(1);
+            file.close();
+        } else {
+            Logger(ERROR) << "Could not open pre-existing evaluation log file " << eval_logfile;
+            return RET_IO_ERROR;
+        }
+    } else {
+        // the default format string:
+        format_string = "%time %args";
+    }
+    std::ofstream output_file = std::ofstream(eval_logfile, std::ios_base::app);
+    if (!output_file.is_open()) {
+        Logger(ERROR) << "Could not open evaluation log file " << eval_logfile;
+        return RET_IO_ERROR;
+    }
+
+    if (logfile_exists)
+        output_file << "#format_string";
+    // replace all replacement specifiers in the format string
+    format_evaluation_string(format_string, argc, argv/*, results*/);
+    output_file << format_string << std::endl;
+    output_file.close();
+    return RET_SUCCESS;
 }
 
 int tryImportRenderConfig(VolcaniteArgs& args, std::shared_ptr<CompressedSegmentationVolumeRenderer> renderer) {
@@ -246,6 +315,9 @@ int volcanite_main(int argc, char *argv[]) {
 
         // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)
         if (!args.screenshot_output_file.empty()) {
+
+            // TODO: renderer->setRendering
+
             // obtain a headless rendering engine
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
             renderEngine->acquireResources();
@@ -255,6 +327,15 @@ int volcanite_main(int argc, char *argv[]) {
             if(texture == nullptr || export_texture(texture.get(), args.screenshot_output_file)) {
                 Logger(ERROR) << "internal rendering error";
                 return RET_RENDER_ERROR;
+            }
+            if (!args.eval_logfile.empty()) {
+                // TODO: obtain results from renderer
+                if (write_eval_logfile(args.eval_logfile, argc, argv) == RET_SUCCESS) {
+                    Logger(INFO) << "exported evaluation results to " << args.eval_logfile;
+                } else {
+                    Logger(WARN) << "could not export evaluation results to " << args.eval_logfile;
+                    return RET_IO_ERROR;
+                }
             }
             texture.reset();
             texture = nullptr;
