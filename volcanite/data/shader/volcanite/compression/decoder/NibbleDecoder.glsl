@@ -228,8 +228,7 @@ uint _rank_palette_adv(
                       ) {
     // TODO: good lord this is expensive if we do it without an O(1) rank
     uint occurrences = 0u;
-    const uint header_size = BRICK_ENCODING[0];
-    for(uint entry_id = header_size; entry_id <= enc_operation_index; entry_id++) {
+    for(uint entry_id = HEADER_SIZE; entry_id <= enc_operation_index; entry_id++) {
         if ((UNPACK_4BIT_FROM_ENC(entry_id) & 7u) == PALETTE_ADV)
         occurrences++;
     }
@@ -360,17 +359,16 @@ bool verifyBrickCompression(const uint brick_idx) {
     // Obtain a reference to the uint buffer containing this bricks encoding.
     EncodingRef brick_encoding = getBrickEncodingRef(brick_idx);
     const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
-    const uint header_size = LOD_COUNT * 2 + 1u;
     const uint header_start_lods = LOD_COUNT;
 
     // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
-    if (brick_encoding_length < header_size + 1u + 1u) {
-        debugPrintfEXT("brick encoding is shorter than minimum. (header size + 1 encoding + 1 palette) = %u but is %u", header_size + 2u, brick_encoding_length);
+    if (brick_encoding_length < HEADER_SIZE + 1u + 1u) {
+        debugPrintfEXT("brick encoding is shorter than minimum. (header size + 1 encoding + 1 palette) = %u but is %u", HEADER_SIZE + 2u, brick_encoding_length);
         return false;
     }
 
-    // check first header entry being header_size * 8
-    if(brick_encoding.buf[0] != header_size * 8u) {
+    // check first header entry being HEADER_SIZE * 8
+    if(brick_encoding.buf[0] != HEADER_SIZE * 8u) {
         debugPrintfEXT("first encoding starts 4bit must be header*8");
         return false;
     }
