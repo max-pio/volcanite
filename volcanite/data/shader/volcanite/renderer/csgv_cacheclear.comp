@@ -30,6 +30,10 @@ layout (local_size_x = 8, local_size_y = 4, local_size_z = 4) in;
 #include "volcanite/compression/csgv_utils.glsl"
 
 void main() {
+#if CACHE_MODE == CACHE_NOTHING
+    return;
+#endif
+
     uvec3 brick = gl_GlobalInvocationID.xyz;
     if(isHelperLane(brick, g_brick_count))
         return;
