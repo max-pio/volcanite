@@ -180,7 +180,7 @@ private:
     std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
     float m_factor_ambient = 0.4f;
     // shading and post processing
-    glm::vec4 m_background_color_a = glm::vec4(0.9f, 0.9f, 0.95f, 1.f);
+    glm::vec4 m_background_color_a = glm::vec4(1.f, 1.f, 1.f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
     int m_subsampling = 1;
     bool m_tonemap_enabled = false;
