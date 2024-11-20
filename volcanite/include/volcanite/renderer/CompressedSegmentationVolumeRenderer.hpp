@@ -32,6 +32,29 @@
 
 namespace volcanite {
 
+struct CSGVRenderEvaluationResults {
+    double frame_min_ms = -1.;
+    double frame_avg_ms = -1.;
+    double frame_sdv_ms = -1.;
+    double frame_med_ms = -1.;
+    double frame_max_ms = -1.;
+    double frame_ms[16] = {-1.};
+    double total_ms = 0.f;
+    double mem_framebuffers_bytes = 0.;
+    double mem_ubos_bytes = 0.;
+    double mem_materials_bytes = 0.;
+    double mem_encoding_bytes = 0.;
+    double mem_cache_bytes = 0.;
+    double mem_empty_space_bytes = 0.;
+    double mem_total_bytes = 0.;
+    int accumulated_frames = 0;
+//    double spp_min = 0.f;
+//    double spp_avg = 0.f;
+//    double spp_max = 0.f;
+//    double samples_total = 0.f;
+
+};
+
 class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuContext {
 
 public:
@@ -174,13 +197,21 @@ public:
         m_empty_space_block_dim = config.empty_space_resolution;
     }
 
+    // evaluation and statistics
+    void startFrameTimeTracking() { m_enable_frame_time_tracking = true; m_last_frame_times.clear(); m_last_frame_start_time.reset(); }
+    void stopFrameTimeTracking() { m_enable_frame_time_tracking = false; m_last_frame_start_time.reset(); }
+
+    /// Returns statistics about frame times and GPU memory consumption. Frame times are only available if tracking was
+    /// enabled via startFrameTimeTracking(). Tracking should have been stopped with stopFrameTimeTracking() when called.
+    CSGVRenderEvaluationResults getLastEvaluationResults();
+    void printGPUMemoryUsage();
+
 private:
     /// Fills m_constructed_detail and m_constructed_detail_starts buffers with detail encodings of requested brick
     /// indices in m_detail_requests. Can be executed in a separate thread. Finished execution is indicated by
     /// m_detail_stage being set to DetailAwaitingUpload.
     void updateCPUDetailBuffers();
 
-    void printGPUMemoryUsage();
 
 private:
     // (gui) parameters:
@@ -296,7 +327,21 @@ private:
     std::pair<std::shared_ptr<vvv::Awaitable>, std::shared_ptr<Buffer>> m_detail_staging = {nullptr, nullptr};
     size_t m_parameter_hash_at_last_reset = 0u;
 
+    uint32_t m_render_update_flags = 0u;          ///< each bit marks if a set of rendering parameters changed in this frame
+
+    size_t m_pcamera_hash = ~0u;                  ///< hash of the last camera parameters
+    size_t m_prender_hash = ~0u;                  ///< hash of the last rendering parameters
+    bool m_pmaterial_reset = true;                ///< if the material parameters where changed since the last frame
+    size_t m_presolve_hash = ~0u;                 ///< hash of the last resolve shader parameters
+    bool m_pcache_reset = true;                   ///< if the cache must reset this frame
+    uint32_t m_accumulated_frames = 0u;
+    vk::Extent2D m_resolution;
+
+    uint32_t m_frame;
+    std::optional<RendererOutput> m_mostRecentFrame = {};
+
     // debugging
+    bool m_release_version = false;               ///< if this is used in a release where development parameters are hidden
     struct GPUStats {
         uint32_t gpu_blocks_decoded[6];
         uint32_t gpu_blocks_in_cache[6];
@@ -304,21 +349,12 @@ private:
         uint32_t gpu_raymarch_samples;
         uint32_t gpu_bbox_hits;
     } m_last_gpu_stats = {};
+
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
 
-    bool m_release_version = false;               ///< if this is used in a release where development parameters are hidden
-
-    uint32_t m_render_update_flags = 0u;          ///< each bit marks if a set of rendering parameters changed in this frame
-    size_t m_pcamera_hash = ~0u;                  ///< hash of the last camera parameters
-    size_t m_prender_hash = ~0u;                  ///< hash of the last rendering parameters
-    bool m_pmaterial_reset = true;                ///< if the material parameters where changed since the last frame
-    size_t m_presolve_hash = ~0u;                 ///< hash of the last resolve shader parameters
-    bool m_pcache_reset = true;                   ///< if the cache must reset this frame
-    uint32_t m_accumulated_frames = 0u;
-
-    vk::Extent2D m_resolution;
-    uint32_t m_frame;
-    std::optional<RendererOutput> m_mostRecentFrame = {};
+    bool m_enable_frame_time_tracking = false;
+    std::optional<std::chrono::high_resolution_clock::time_point> m_last_frame_start_time = {};
+    std::vector<double> m_last_frame_times = {};
 };
 
 } // namespace volcanite

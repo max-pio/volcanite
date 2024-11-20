@@ -75,6 +75,7 @@ public:
     bool run_tests = false;
     bool export_stats = false;
     std::string eval_logfile = {};      // a file into which rendering evaluation results are written as 'append'
+    std::string eval_name = {};         // a name of the evaluation run that can be accessed in the log file as "%name"
 
 
     static std::string getHelpString() {
@@ -133,6 +134,7 @@ public:
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
             ValueArg<std::string> evalLogFileArg("", "eval-logfile", "File into which rendering evaluation results are appended after all frames finished rendering the screenshot image. Must be used with -i.", false, va.eval_logfile, "file", cmd);
+            ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be vailable in log files as \"%name\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
             ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits, or [a]ll", false, "a", "(a|p|n|x|y|z|l|d|s)*", cmd);
             SwitchArg randomAccessArg("p", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
 
@@ -367,9 +369,14 @@ public:
             }
             va.export_stats = statsArg.getValue();
             va.eval_logfile = expandPath(evalLogFileArg.getValue());
+            va.eval_name = evalNameArg.getValue();
             if (!va.eval_logfile.empty() && va.screenshot_output_file.empty()) {
                 throw ArgException("Evaluation log file must be used in combination with image output -i.",
                         evalLogFileArg.longID(""));
+            }
+            if (!va.eval_name.empty() && va.eval_logfile.empty()) {
+                throw ArgException("Evaluation log file must be used in combination with --eval-logfile",
+                                   evalNameArg.longID(""));
             }
 
             return va;

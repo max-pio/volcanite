@@ -34,6 +34,39 @@ using namespace vvv;
 
 namespace volcanite {
 
+struct CSGVCompressionEvaluationResults {
+    double compression_mainpass_seconds = 0.;          ///< total compression time [s] without pre-pass and IO
+    double compression_prepass_seconds = 0.;
+    double compression_total_seconds = 0.;
+    double csgv_base_encoding_bytes = 0.;
+    double csgv_detail_encoding_bytes = 0.;
+    double csgv_bytes = 0.;
+    double compression_rate = -1.;
+    double compression_GB_per_s = 0.;
+    double original_volume_bytes = 0.;
+    glm::uvec3 volume_dim = {0u, 0u, 0u};
+//    uint32_t volume_labels = 0u;
+//    uint32_t labels_per_brick_min = 0u;
+//    uint32_t labels_per_brick_avg = 0u;
+//    uint32_t labels_per_brick_max = 0u;
+//    uint32_t palette_size_min = 0u;
+//    uint32_t palette_size_avg = 0u;
+//    uint32_t palette_size_max = 0u;
+//    double brick_min_bytes = 0u;
+//    double brick_avg_bytes = 0u;
+//    double brick_max_bytes = 0u;
+//    double header_bytes = 0u;
+};
+
+struct CSGVDecompressionEvaluationResults {
+    double cpu_decoded_GB = 0.;
+    double cpu_decoded_seconds = -1.;
+    double cpu_GB_per_s = -1.;
+    double gpu_decoded_GB = 0.;
+    double gpu_decoded_seconds = -1.;
+    double gpu_GB_per_s = -1.;
+};
+
 // COMPRESSION
 //
 //    ────────────┐
@@ -417,16 +450,16 @@ public:
 
     /// @return multiline string describing size and compression rates of the encoded volume and encoding components.
     [[nodiscard]] std::string getEncodingInfoString() const {
-        double brick_starts_memory = static_cast<double>(m_brick_starts.size() * sizeof(uint32_t)) / 1000. / 1000.;
+        double brick_starts_memory = static_cast<double>(m_brick_starts.size() * sizeof(uint32_t)) * BYTE_TO_MB;
         double encoding_memory = 0.;
         for(const auto& e : m_encodings)
             encoding_memory += static_cast<double>(e.size() * sizeof(uint32_t));
-        encoding_memory = encoding_memory / 1000. / 1000.;
-        double detail_starts_memory = static_cast<double>(m_detail_starts.size() * sizeof(uint32_t)) / 1000. / 1000.;
+        encoding_memory = encoding_memory * BYTE_TO_MB;
+        double detail_starts_memory = static_cast<double>(m_detail_starts.size() * sizeof(uint32_t)) * BYTE_TO_MB;
         double detail_memory = 0.;
         for(const auto& d : m_detail_encodings)
-            detail_memory += static_cast<double>(d.size() * sizeof(uint32_t)) / 1000. / 1000.;
-        double volume_memory = static_cast<double>(static_cast<size_t>(m_volume_dim[0]) * m_volume_dim[1] * m_volume_dim[2] * sizeof(uint32_t)) / 1000. / 1000.;
+            detail_memory += static_cast<double>(d.size() * sizeof(uint32_t)) * BYTE_TO_MB;
+        double volume_memory = static_cast<double>(static_cast<size_t>(m_volume_dim[0]) * m_volume_dim[1] * m_volume_dim[2] * sizeof(uint32_t)) * BYTE_TO_MB;
         std::stringstream ss;
         ss << "start buffer (base  " << brick_starts_memory << "MB + detail " << detail_starts_memory
            << "MB) + encoding buffers (base " << encoding_memory << "MB + detail " << detail_memory << "MB) = "
@@ -476,6 +509,32 @@ public:
     float getLastTotalEncodingSeconds() const { return m_last_total_encoding_seconds; }
     /// Time needed for the frequency pre-pass in seconds.
     float getLastTotalFreqPrepassSeconds() const { return m_last_total_freq_prepass_seconds; }
+
+    CSGVCompressionEvaluationResults getLastEvaluationResults() {
+        double brick_starts_memory = static_cast<double>(m_brick_starts.size() * sizeof(uint32_t));
+        double base_encoding_memory = 0.;
+        for(const auto& e : m_encodings)
+            base_encoding_memory += static_cast<double>(e.size() * sizeof(uint32_t));
+        base_encoding_memory = base_encoding_memory;
+        double detail_starts_memory = static_cast<double>(m_detail_starts.size() * sizeof(uint32_t));
+        double detail_memory = 0.;
+        for(const auto& d : m_detail_encodings)
+            detail_memory += static_cast<double>(d.size() * sizeof(uint32_t));
+        double volume_memory = static_cast<double>(static_cast<size_t>(m_volume_dim[0]) * m_volume_dim[1] * m_volume_dim[2] * sizeof(uint32_t));
+
+        CSGVCompressionEvaluationResults res;
+        res.csgv_base_encoding_bytes = brick_starts_memory + base_encoding_memory;
+        res.csgv_detail_encoding_bytes = detail_starts_memory + detail_memory;
+        res.csgv_bytes = brick_starts_memory + base_encoding_memory + detail_starts_memory + detail_memory;
+        res.compression_prepass_seconds = m_last_total_freq_prepass_seconds;
+        res.compression_mainpass_seconds = m_last_total_encoding_seconds;
+        res.compression_total_seconds = m_last_total_freq_prepass_seconds + m_last_total_encoding_seconds;
+        res.volume_dim = m_volume_dim;
+        res.original_volume_bytes = volume_memory;
+        res.compression_rate = res.csgv_bytes / res.original_volume_bytes;
+        res.compression_GB_per_s = (res.original_volume_bytes * BYTE_TO_GB) / res.compression_total_seconds;
+        return res;
+    }
 
     ///////////////////////////////////////////////////////////////////
     ///                   rANS frequency tables                     ///

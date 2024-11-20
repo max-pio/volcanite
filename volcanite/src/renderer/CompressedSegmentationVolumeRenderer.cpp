@@ -143,7 +143,15 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     // Buffer upload synchronization is handled in PassCompSegVolRender
     getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 60 * 1000000000ull);
 
-    // if a screenshot export was requested, we do this here
+    // track timing of the last frame
+    // TODO: renderFrame and thus the final timing finish will not be called after the last frame in HeadlessRendering
+    if (m_enable_frame_time_tracking && m_last_frame_start_time.has_value()) {
+        m_last_frame_times.emplace_back(std::chrono::duration_cast<std::chrono::nanoseconds >(
+                std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value()).count() / 1000000.);
+        m_last_frame_start_time.reset();
+    }
+
+    // if a screenshot export was requested, we do this here (not timed)
     if(m_download_frame_to_image_file.has_value() && m_mostRecentFrame.has_value()) {
         Logger(INFO) << "exporting screenshot to " << m_download_frame_to_image_file.value();
         try {
@@ -154,6 +162,10 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         }
         m_download_frame_to_image_file = {};
     }
+
+    // time tracking start (on host side to consider semaphores, CPU work as well, not just the GPU render times)
+    if (m_enable_frame_time_tracking)
+        m_last_frame_start_time = std::chrono::high_resolution_clock::now();
 
     // check if any previous detail upload is finished
     if (m_detail_stage == DetailUploading) {
@@ -246,7 +258,6 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     m_pass->setStorageImage("accuSampleCountOut", *m_accumulation_samples_tex[1u - (m_frame % 2u)]);
     // 16 bit packed gBuffer texture storing
     m_pass->setStorageImage("gBuffer", *m_g_buffer_tex);
-
 
     std::vector<std::shared_ptr<Awaitable>> renderAwaitableList = {};
     const auto renderingFinished = m_pass->execute(renderAwaitableList, awaitBinaryAwaitableList, signalBinarySemaphore);
@@ -1371,62 +1382,111 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     }
 
     void CompressedSegmentationVolumeRenderer::printGPUMemoryUsage() {
-
-        size_t textures = 0ul;
-        if (m_accumulation_rgba_tex[0]) {
-            textures += m_accumulation_rgba_tex[0]->memorySize() + m_accumulation_rgba_tex[1]->memorySize();
-            textures += m_accumulation_samples_tex[0]->memorySize() + m_accumulation_samples_tex[1]->memorySize();
-            for (const auto &t: *m_inpaintedOutColor)
-                textures += t->memorySize();
-        }
-
-        size_t uniform_buffers = 0ul;
-        if (m_urender_info) {
-            uniform_buffers += m_urender_info->getByteSize() + m_usegmented_volume_info->getByteSize()
-                             + m_uresolve_info->getByteSize() + m_ucamera_info->getByteSize();
-        }
-
-        size_t materials = 0ul;
-        if (m_materials_buffer) {
-            materials += m_materials_buffer->getByteSize() + m_attribute_buffer->getByteSize();
-            for (const auto &t: m_materialTransferFunctions) {
-                if (t)
-                    materials += t->texture().memorySize();
-            }
-        }
-
-        size_t cache = 0ul;
-        if (m_cache_buffer) {
-            cache += m_cache_info_buffer->getByteSize() + m_cache_buffer->getByteSize()
-                   + m_free_stack_buffer->getByteSize() + m_assign_info_buffer->getByteSize()
-                   + (m_detail_requests_buffer ? m_detail_requests_buffer->getByteSize() : 0ul);
-        }
-
-        size_t empty_space = 0ul;
-        if (m_empty_space_buffer) {
-            empty_space = m_empty_space_buffer->getByteSize();
-        }
-
-        size_t encoding = 0ul;
-        if (m_brick_starts_buffer) {
-            encoding += m_split_encoding_buffer_addresses_buffer->getByteSize() + m_brick_starts_buffer->getByteSize();
-            for (const auto &b: m_split_encoding_buffers)
-                encoding += b->getByteSize();
-            if (m_detail_buffer) {
-                encoding += m_detail_buffer->getByteSize() + m_detail_starts_buffer->getByteSize();
-            }
-        }
-
-        size_t total_used = getMemoryHeapBudgetAndUsage(*getCtx()).second;
+        CSGVRenderEvaluationResults res = getLastEvaluationResults();
         Logger(INFO)  << "[GPU Memory] " << std::fixed << std::setprecision(3)
-                      << "Framebuffers: " << static_cast<double>(textures) / 1024. / 1024. / 1024. << " GB | "
-                      << "Uniform Buffers: " << static_cast<double>(uniform_buffers) / 1024. / 1024. / 1024. << " GB | "
-                      << "Materials: " << static_cast<double>(materials) / 1024. / 1024. / 1024. << " GB | "
-                      << "Encoding: " << static_cast<double>(encoding) / 1024. / 1024. / 1024. << " GB | "
-                      << "Cache: " << static_cast<double>(cache) / 1024. / 1024. / 1024. << " GB | "
-                      << "Empty Space: " << static_cast<double>(empty_space) / 1024. / 1024. / 1024. << " GB | "
-                      << "  = " << static_cast<double>(textures + uniform_buffers + materials + encoding + cache + empty_space) / 1024. / 1024. / 1024. << " GB"
-                      << " / " << static_cast<double>(total_used) / 1024. / 1024. / 1024. << " GB";
+                      << "Framebuffers: " << res.mem_framebuffers_bytes * BYTE_TO_GB << " GB | "
+                      << "Uniform Buffers: " << res.mem_ubos_bytes * BYTE_TO_GB << " GB | "
+                      << "Materials: " << res.mem_materials_bytes * BYTE_TO_GB << " GB | "
+                      << "Encoding: " << res.mem_encoding_bytes * BYTE_TO_GB << " GB | "
+                      << "Cache: " << res.mem_cache_bytes * BYTE_TO_GB << " GB | "
+                      << "Empty Space: " << res.mem_empty_space_bytes * BYTE_TO_GB << " GB | "
+                      << "  = " << res.mem_framebuffers_bytes + res.mem_ubos_bytes
+                      + res.mem_materials_bytes + res.mem_encoding_bytes + res.mem_cache_bytes + res.mem_empty_space_bytes * BYTE_TO_GB << " GB"
+                      << " / " << res.mem_total_bytes * BYTE_TO_GB << " GB";
+    }
+
+    CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluationResults() {
+        CSGVRenderEvaluationResults results;
+
+        // obtain GPU memory consumption
+        {
+            size_t textures = 0ul;
+            if (m_accumulation_rgba_tex[0]) {
+                textures += m_accumulation_rgba_tex[0]->memorySize() + m_accumulation_rgba_tex[1]->memorySize();
+                textures += m_accumulation_samples_tex[0]->memorySize() + m_accumulation_samples_tex[1]->memorySize();
+                for (const auto &t: *m_inpaintedOutColor)
+                    textures += t->memorySize();
+            }
+            results.mem_framebuffers_bytes = textures;
+
+            size_t uniform_buffers = 0ul;
+            if (m_urender_info) {
+                uniform_buffers += m_urender_info->getByteSize() + m_usegmented_volume_info->getByteSize()
+                                   + m_uresolve_info->getByteSize() + m_ucamera_info->getByteSize();
+            }
+            results.mem_ubos_bytes = uniform_buffers;
+
+            size_t materials = 0ul;
+            if (m_materials_buffer) {
+                materials += m_materials_buffer->getByteSize() + m_attribute_buffer->getByteSize();
+                for (const auto &t: m_materialTransferFunctions) {
+                    if (t)
+                        materials += t->texture().memorySize();
+                }
+            }
+            results.mem_materials_bytes = materials;
+
+            size_t cache = 0ul;
+            if (m_cache_buffer) {
+                cache += m_cache_info_buffer->getByteSize() + m_cache_buffer->getByteSize()
+                         + m_free_stack_buffer->getByteSize() + m_assign_info_buffer->getByteSize()
+                         + (m_detail_requests_buffer ? m_detail_requests_buffer->getByteSize() : 0ul);
+            }
+            results.mem_cache_bytes = cache;
+
+            size_t empty_space = 0ul;
+            if (m_empty_space_buffer) {
+                empty_space = m_empty_space_buffer->getByteSize();
+            }
+            results.mem_empty_space_bytes = empty_space;
+
+            size_t encoding = 0ul;
+            if (m_brick_starts_buffer) {
+                encoding +=
+                        m_split_encoding_buffer_addresses_buffer->getByteSize() + m_brick_starts_buffer->getByteSize();
+                for (const auto &b: m_split_encoding_buffers)
+                    encoding += b->getByteSize();
+                if (m_detail_buffer) {
+                    encoding += m_detail_buffer->getByteSize() + m_detail_starts_buffer->getByteSize();
+                }
+            }
+            results.mem_encoding_bytes = encoding;
+
+            results.mem_total_bytes = getMemoryHeapBudgetAndUsage(*getCtx()).second;
+        }
+
+        // frame times are only available if tracking was enabled via setEvalTracking(true)
+        if (m_enable_frame_time_tracking) {
+            Logger(WARN) << "Querying rendering results before frame time tracking was stopped";
+        }
+        if (!m_last_frame_times.empty()) {
+            double min = std::numeric_limits<double>::max();
+            double m1 = 0.;
+            double m2 = 0.;
+            double max = -1.;
+            for(int i = 0; i < m_last_frame_times.size(); i++) {
+                const auto& ms = m_last_frame_times[i];
+                if (i < 16)
+                    results.frame_ms[i] = ms;
+                min = std::min(min, ms);
+                max = std::max(max, ms);
+                m1 += ms;
+                m2 += ms * ms;
+            }
+            for(int i = m_last_frame_times.size(); i < 16; i++)
+                results.frame_ms[i] = 0.;
+            auto frame_time_cpy = m_last_frame_times;
+            nth_element(frame_time_cpy.begin(),
+                        frame_time_cpy.begin()+(frame_time_cpy.size() / 2),
+                        frame_time_cpy.end());
+            results.frame_min_ms = min;
+            results.frame_avg_ms = m1 / m_last_frame_times.size();
+            results.frame_sdv_ms = std::sqrt((m2 / m_last_frame_times.size()) - results.frame_avg_ms * results.frame_avg_ms);
+            results.frame_med_ms = *(frame_time_cpy.begin()+(frame_time_cpy.size() / 2));
+            results.frame_max_ms = max;
+            results.accumulated_frames = m_last_frame_times.size();
+        }
+        return results;
     }
 
 

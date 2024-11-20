@@ -19,6 +19,13 @@
 // This header contains compile time CompressedSegmentationVolume constants to be included in the
 // CPU encoding/decoding C++ classes as well as in the GLSL shaders for GPU decoding.
 
+#define KB_TO_BYTE 1000.
+#define MB_TO_BYTE (KB_TO_BYTE*KB_TO_BYTE)
+#define GB_TO_BYTE (KB_TO_BYTE*KB_TO_BYTE * KB_TO_BYTE)
+#define BYTE_TO_KB (1./KB_TO_BYTE)
+#define BYTE_TO_MB (BYTE_TO_KB*BYTE_TO_KB)
+#define BYTE_TO_GB (BYTE_TO_KB*BYTE_TO_KB*BYTE_TO_KB)
+
 // Compressed Segmentation Volume Constants ----------------------------------------------------------------------------
 
 // stream compression mode bit flags
