@@ -157,7 +157,8 @@ int write_eval_logfile(const std::string& eval_logfile, const std::string& eval_
             std::string line;
             std::getline(file, line);
             while (line.starts_with("#fmt:")) {
-                format_string = line.substr(5) + "\n";
+                line = line.substr(5);
+                format_string += (line + "\n");
             }
             if (format_string.ends_with('\n'))
                 format_string.pop_back(); // remove trailing '\n'
@@ -219,7 +220,7 @@ int write_eval_logfile(const std::string& eval_logfile, const std::string& eval_
             out_fmt_string.replace(pos, 1, "\n#fmt:");
             pos += 6;
         }
-        output_file << "#fmt" << out_fmt_string << std::endl;
+        output_file << "#fmt:" << out_fmt_string << std::endl;
         // add the header string that is not part of the format string
         if (!header_string.empty())
             output_file << header_string << std::endl;
@@ -427,13 +428,20 @@ int volcanite_main(int argc, char *argv[]) {
             // obtain a headless rendering engine
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
             renderEngine->acquireResources();
-            // let the rendering converge for some frames (if specified in the rendering config, we use that number)
+            // if frame count is specified in the rendering config, use that number.
             int accumulation_frames = renderer->getTargetAccumulationFrames();
+            // if a recording file is given, play the full recording file instead (flagged as frame count 0)
+            if (!args.record_in_file.empty())
+                accumulation_frames = 0;
+            else if (accumulation_frames == 0)
+                accumulation_frames = 60;
+
             if (!args.eval_logfile.empty())
                 renderer->startFrameTimeTracking();
-            auto texture = renderEngine->renderFrames(accumulation_frames > 0 ? accumulation_frames : 60);
+            auto texture = renderEngine->renderFrames(accumulation_frames, args.record_in_file);
             if (!args.eval_logfile.empty())
-                renderer->stopFrameTimeTracking();
+                renderer->stopFrameTimeTracking({}); // stopFrameTimeTracking is already called by renderEngine
+
             if(texture == nullptr || export_texture(texture.get(), args.screenshot_output_file)) {
                 Logger(ERROR) << "internal rendering error";
                 return RET_RENDER_ERROR;

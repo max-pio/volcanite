@@ -74,8 +74,9 @@ public:
     // evaluation and statistics
     bool run_tests = false;
     bool export_stats = false;
-    std::string eval_logfile = {};      // a file into which rendering evaluation results are written as 'append'
-    std::string eval_name = {};         // a name of the evaluation run that can be accessed in the log file as "%name"
+    std::string record_in_file = "";    // file that stores a previously exported camera path for replay in headless
+    std::string eval_logfile = {};      // file into which rendering evaluation results are written as 'append'
+    std::string eval_name = {};         // name of the evaluation run that can be accessed in the log file as "%name"
 
 
     static std::string getHelpString() {
@@ -133,6 +134,8 @@ public:
             cmd.add(bricksizeArg);
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
+            // TODO: add a video output option '-v' where HeadlessRendering sets CompressedSegmentationVolumeRenderer::m_download_frame_to_image_file with a frame index file name after each frame
+            ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path. Must be used with -i.", false, va.record_in_file, "file", cmd);
             ValueArg<std::string> evalLogFileArg("", "eval-logfile", "File into which rendering evaluation results are appended after all frames finished rendering the screenshot image. Must be used with -i.", false, va.eval_logfile, "file", cmd);
             ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be vailable in log files as \"%name\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
             ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits, or [a]ll", false, "a", "(a|p|n|x|y|z|l|d|s)*", cmd);
@@ -368,6 +371,11 @@ public:
                 va.run_tests = testArg.getValue();
             }
             va.export_stats = statsArg.getValue();
+            va.record_in_file = expandPath(recordInFileArg.getValue());
+            if (!va.record_in_file.empty() && va.screenshot_output_file.empty()) {
+                throw ArgException("Recording input file must be used in combination with image output -i.",
+                                   recordInFileArg.longID(""));
+            }
             va.eval_logfile = expandPath(evalLogFileArg.getValue());
             va.eval_name = evalNameArg.getValue();
             if (!va.eval_logfile.empty() && va.screenshot_output_file.empty()) {

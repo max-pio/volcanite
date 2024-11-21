@@ -56,7 +56,9 @@ RendererOutput HeadlessRendering::renderFrame(AwaitableList awaitBeforeExecution
 //
 //void HeadlessRendering::execAsync() { execAsyncAttached().detach(); }
 
-std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames, void (*frameFinishedCallback)(vvv::Texture *)) {
+std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames,
+                                                         std::string record_file_in,
+                                                         void (*frameFinishedCallback)(RendererOutput *)) {
     if(!isGpuContextCreated()) {
         Logger(ERROR) << "GPU context not available. You must call acquireResources() before rendering.";
         return nullptr;
@@ -65,24 +67,48 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames
     // TODO: decouple HeadlessRendering::exec in an initialization method and multiple render calls, respect m_pendingRecreation
     // e.g.: hr.init(); hr.setRenderResolution(400, 400); hr.renderToFile(120); hr.setRenderParametersFromFile(path); auto output = hr.render(60);
 
+    // pre-recorded camera path playback
+    std::optional<std::ifstream> m_record_in = {};
+    if (!record_file_in.empty()) {
+        m_record_in = std::ifstream(record_file_in, std::ios::in | std::ios::binary);
+        if (!m_record_in->is_open()) {
+            throw std::runtime_error("could not open recording input file " + record_file_in);
+        }
+    }
+
     RendererOutput rendererOutput = {nullptr, {}};
     MiniTimer timer;
-    for (size_t frame_idx = 0; frame_idx < number_of_frames; frame_idx++) {
+    size_t frame_idx;
+    for (frame_idx = 0u; frame_idx < number_of_frames || (number_of_frames == 0 && m_record_in.has_value()); frame_idx++) {
+
+        if (m_record_in.has_value()) {
+            getCamera()->readFrom(m_record_in.value());
+            if (m_record_in->eof()) {
+                m_record_in->close();
+                m_record_in = {};
+                // stop the rendering if not target frame count was given once the recording file finished
+                if (number_of_frames == 0u)
+                    break;
+            }
+        }
+
         // render one frame after the other = wait for the last renderingComplete to finish
+
         rendererOutput = renderFrame({rendererOutput.renderingComplete});
 
         if(frameFinishedCallback) {
-            frameFinishedCallback(rendererOutput.texture);
+            frameFinishedCallback(&rendererOutput);
         }
     }
+    m_renderer->stopFrameTimeTracking(rendererOutput.renderingComplete);
     double endTime = timer.elapsed();
 
     if (getDevice()) {
         getDevice().waitIdle();
     }
 
-    double frame_time = endTime / static_cast<double>(number_of_frames);
-    Logger(INFO) << "rendering of " << number_of_frames << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
+    double frame_time = endTime / static_cast<double>(frame_idx);
+    Logger(INFO) << "rendering of " << frame_idx << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
 
     // copy the last output texture to a new texture that we can return.
     // this way the original rendering texture could be overwritten or destroyed without affecting the return texture.

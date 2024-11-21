@@ -58,9 +58,12 @@ public:
     void releaseResources();
 
     /// Run the renderloop for number_of_frames taking ownership of the current thread.
-    /// If a frame finished callback is passed it is called everytime a frame finished with the current texture output
-    /// @return the final Texture of the render loop
-    std::shared_ptr<Texture> renderFrames(size_t number_of_frames, void (*frameFinishedCallback)(Texture*) = nullptr);
+    /// @param number_of_frames number of frames to render. can be zero if record_file_in is given to use record length.
+    /// @param record_file_in a previously recorded camera path that is played when rendering the frames.
+    /// @param frameFinishedCallback is called everytime a frame finished with the current texture output.
+    /// @return the final Texture of the render loop.
+    std::shared_ptr<Texture> renderFrames(size_t number_of_frames, std::string record_file_in = "",
+                                          void (*frameFinishedCallback)(RendererOutput*) = nullptr);
 
 //    /// Run the renderloop without taking ownership of the current thread.
 //    /// You MUST NOT call `execAsync` or `exec` to invoke a second instance of the renderloop until the forked renderloop terminates.

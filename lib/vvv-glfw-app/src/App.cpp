@@ -810,7 +810,7 @@ namespace vvv {
                 vvv::Logger(vvv::INFO) << "min / avg (std.dev.) / max [ms/frame]";
                 vvv::Logger(vvv::INFO) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms << " ("
                                        << std::sqrt(var_ms - (avg_ms * avg_ms)) << ") " << " / " << max_ms
-                                       << " total avg ms " << avg_ms;
+                                       << " | " << avg_ms_samples << " frames rendered.";
             } else {
                 m_record_out = std::ofstream(m_record_file_path, std::ios::out | std::ios::binary);
                 if (!m_record_out->is_open()) {

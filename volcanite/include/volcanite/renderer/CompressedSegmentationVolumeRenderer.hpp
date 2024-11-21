@@ -198,8 +198,24 @@ public:
     }
 
     // evaluation and statistics
-    void startFrameTimeTracking() { m_enable_frame_time_tracking = true; m_last_frame_times.clear(); m_last_frame_start_time.reset(); }
-    void stopFrameTimeTracking() { m_enable_frame_time_tracking = false; m_last_frame_start_time.reset(); }
+    void startFrameTimeTracking() override { m_enable_frame_time_tracking = true; m_last_frame_times.clear(); m_last_frame_start_time.reset(); }
+    /// Stops the tracking. Should be immediately called after last renderNextFrame. If awaitLastFrameFinished is set,
+    /// either to {} or an awaitable list, the method waits for the awaitables to finish and adds a final timing
+    /// measurement for the last frame. Query the results with getLastEvaluationResults()
+    void stopFrameTimeTracking(std::optional<AwaitableList> awaitLastFrameFinished) override {
+        // if the last frame is rendering, wait for completion and track
+        if (awaitLastFrameFinished.has_value()) {
+            getCtx()->sync->hostWaitOnDevice(awaitLastFrameFinished.value(), 60 * 1000000000ull);
+            if (m_enable_frame_time_tracking && m_last_frame_start_time.has_value()) {
+                m_last_frame_times.emplace_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value()).count()) /
+                                                1000000.);
+                m_last_frame_start_time.reset();
+            }
+        }
+        m_enable_frame_time_tracking = false;
+        m_last_frame_start_time.reset();
+    }
 
     /// Returns statistics about frame times and GPU memory consumption. Frame times are only available if tracking was
     /// enabled via startFrameTimeTracking(). Tracking should have been stopped with stopFrameTimeTracking() when called.
