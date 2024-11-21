@@ -116,7 +116,8 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
     getCtx()->debugMarker->endRegion(commandBuffer); // total_rendering
 
     // later buffer transfers (e.g. material uploads) must wait for the previous buffer uploads to finish to prevent write-write hazards
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eTransferWrite)}, nullptr, nullptr);
+    // and for the shader to finish all reads
+    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer | vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eTransfer, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eTransferWrite | vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eTransferWrite)}, nullptr, nullptr);
     commandBuffer.end();
 
     // reset update flags
