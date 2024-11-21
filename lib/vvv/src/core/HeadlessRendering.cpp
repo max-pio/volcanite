@@ -136,6 +136,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames
 
     // export the final frame to the video path
     if (!video_fmt_file_out.empty()) {
+        frame_idx--; // frame_idx is now the number of frames, but the last index is one before
         ret_tex->writeFile(std::vformat(video_fmt_file_out,
                                         std::make_format_args(frame_idx)));
     }

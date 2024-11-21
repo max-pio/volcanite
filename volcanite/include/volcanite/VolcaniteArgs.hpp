@@ -161,7 +161,7 @@ public:
             cmd.add(emptySpaceResolutionArg);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
-            ValueArg<std::string> videoArg("v", "video", "Formatted file path with single {} placeholder to export intermediate images when rendering -i. Example: ./out{:3}.png", false, va.video_output_fmt_file, "formatted file", cmd);
+            ValueArg<std::string> videoArg("v", "video", "Formatted file path with single {} placeholder to export intermediate images when rendering -i. Example: ./out{:04}.jpg", false, va.video_output_fmt_file, "formatted file", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
             ValueArg<std::string> renderconfigArg("", "config", "Import render parameters from config file.", false, va.rendering_config_file, "file", cmd);
             // general arguments
@@ -231,7 +231,7 @@ public:
                     size_t test_frame_idx = 123;
                     auto f = std::vformat(va.video_output_fmt_file, std::make_format_args(test_frame_idx));
                 } catch(std::format_error err) {
-                    throw ArgException(videoArg.longID() + " must be a formatted image file path string containing a single {} replacement field. Example: ./out{:3}.png", videoArg.longID());
+                    throw ArgException(videoArg.longID() + " must be a formatted image file path string containing a single {} replacement field. Example: ./out{:04}.jpg", videoArg.longID());
                 }
             }
             if(!resolutionArg.getValue().empty()) {
