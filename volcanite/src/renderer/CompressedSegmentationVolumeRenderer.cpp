@@ -155,7 +155,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     if(m_download_frame_to_image_file.has_value() && m_mostRecentFrame.has_value()) {
         Logger(INFO) << "exporting screenshot to " << m_download_frame_to_image_file.value();
         try {
-            m_mostRecentFrame->texture->writeFile(m_download_frame_to_image_file.value());
+            m_mostRecentFrame->texture->writeFile(m_download_frame_to_image_file.value(), m_queue_family_index);
         }
         catch(const std::runtime_error& e) {
             Logger(ERROR) << "image export error: " << e.what();
@@ -1117,11 +1117,11 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_gen->addSeparator();
     g_gen->addAction([this]() {
 #ifdef HEADLESS
-        m_download_frame_to_image_file = "./volcanite_output.png";
+        exportCurrentFrameToImage("./volcanite_output.png");
 #else
         if (!pfd::settings::available()) {
             Logger(WARN) << "Can not open file dialog for screenshot export. Using default file ./volcanite_output.png";
-            m_download_frame_to_image_file = "./volcanite_output.png";
+            exportCurrentFrameToImage("./volcanite_output.png");
             return;
         }
 
@@ -1129,9 +1129,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         auto selected_file = pfd::save_file("Save Screenshot", pfd::path::home(),
                                             { "Image File (.png .jpg .jpeg)", "*.png *.jpg *.jpeg", "All Files", "*" });
         if(!selected_file.result().empty()) {
-            m_download_frame_to_image_file = selected_file.result();
-            if(!m_download_frame_to_image_file->ends_with(".png"))
-                m_download_frame_to_image_file->append(".png");
+            exportCurrentFrameToImage(selected_file.result());
         }
 #endif
     }, "Screenshot");
@@ -1485,6 +1483,9 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             results.frame_med_ms = *(frame_time_cpy.begin()+(frame_time_cpy.size() / 2));
             results.frame_max_ms = max;
             results.accumulated_frames = m_last_frame_times.size();
+            Logger(DEBUG) << "CSGV rendering evaluation: "
+                               << results.frame_min_ms << " / " << results.frame_avg_ms << " / " << results.frame_max_ms
+                               << " [ms/frame] (min/avg/max) | " << results.accumulated_frames << " total frames";
         }
         return results;
     }

@@ -58,6 +58,7 @@ RendererOutput HeadlessRendering::renderFrame(AwaitableList awaitBeforeExecution
 
 std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames,
                                                          std::string record_file_in,
+                                                         std::string video_fmt_file_out,
                                                          void (*frameFinishedCallback)(RendererOutput *)) {
     if(!isGpuContextCreated()) {
         Logger(ERROR) << "GPU context not available. You must call acquireResources() before rendering.";
@@ -77,8 +78,8 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames
     }
 
     RendererOutput rendererOutput = {nullptr, {}};
-    MiniTimer timer;
     size_t frame_idx;
+    MiniTimer timer;
     for (frame_idx = 0u; frame_idx < number_of_frames || (number_of_frames == 0 && m_record_in.has_value()); frame_idx++) {
 
         if (m_record_in.has_value()) {
@@ -95,20 +96,25 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames
         // render one frame after the other = wait for the last renderingComplete to finish
 
         rendererOutput = renderFrame({rendererOutput.renderingComplete});
+        if (!video_fmt_file_out.empty()) {
+            m_renderer->exportCurrentFrameToImage(std::vformat(video_fmt_file_out,
+                                                               std::make_format_args(frame_idx)));
+        }
 
         if(frameFinishedCallback) {
             frameFinishedCallback(&rendererOutput);
         }
     }
+//    sync->hostWaitOnDevice(rendererOutput.renderingComplete);
     m_renderer->stopFrameTimeTracking(rendererOutput.renderingComplete);
     double endTime = timer.elapsed();
+
+    double frame_time = endTime / static_cast<double>(frame_idx);
+    Logger(INFO) << "rendering of " << frame_idx << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
 
     if (getDevice()) {
         getDevice().waitIdle();
     }
-
-    double frame_time = endTime / static_cast<double>(frame_idx);
-    Logger(INFO) << "rendering of " << frame_idx << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
 
     // copy the last output texture to a new texture that we can return.
     // this way the original rendering texture could be overwritten or destroyed without affecting the return texture.
@@ -117,7 +123,6 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames
     ret_tex->ensureResources();
     const auto layoutTransformDone = ret_tex->setImageLayout(vk::ImageLayout::eTransferDstOptimal, vk::PipelineStageFlagBits::eAllCommands, {.queueFamily=rendererOutput.queueFamilyIndex});
     rendererOutput.renderingComplete.push_back(layoutTransformDone);
-    sync->hostWaitOnDevice(rendererOutput.renderingComplete);
     sync->hostWaitOnDevice({this->executeCommands([rendererOutput, ret_tex](vk::CommandBuffer cmd){
         auto width = rendererOutput.texture->width;
         auto height = rendererOutput.texture->height;
@@ -128,6 +133,12 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames
         cmd.copyImage(rendererOutput.texture->image, vk::ImageLayout::eTransferSrcOptimal, ret_tex->image, vk::ImageLayout::eTransferDstOptimal, {copyRegion});
         rendererOutput.texture->setImageLayout(cmd, originalLayout);
     }, {.queueFamily=rendererOutput.queueFamilyIndex})});
+
+    // export the final frame to the video path
+    if (!video_fmt_file_out.empty()) {
+        ret_tex->writeFile(std::vformat(video_fmt_file_out,
+                                        std::make_format_args(frame_idx)));
+    }
     return ret_tex;
 }
 

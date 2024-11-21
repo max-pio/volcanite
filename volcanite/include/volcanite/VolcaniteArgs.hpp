@@ -45,7 +45,6 @@ public:
 
     // rendering args
     std::string rendering_config_file;
-    std::string screenshot_output_file;
     uint32_t render_resolution[2] = {1920, 1080};
     bool stream_lod = false;
     size_t cache_size_MB = 1024ul;
@@ -72,6 +71,8 @@ public:
     bool random_access = false;         // encode bricks so that they support random access within a brick
 
     // evaluation and statistics
+    std::string screenshot_output_file; // png or jpg output file path to export the last frame from headless rendering
+    std::string video_output_fmt_file;  // output image file path string accepted by std::format for immediate frames
     bool run_tests = false;
     bool export_stats = false;
     std::string record_in_file = "";    // file that stores a previously exported camera path for replay in headless
@@ -132,14 +133,15 @@ public:
             ValuesConstraint<uint32_t> allowedBrickSize(_allowedBrickSize);
             ValueArg<uint32_t> bricksizeArg("b", "brick-size", "Compress with given brick size.", false, va.brick_size, &allowedBrickSize);
             cmd.add(bricksizeArg);
+            ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits, or [a]ll", false, "a", "(a|p|n|x|y|z|l|d|s)*", cmd);
+            SwitchArg randomAccessArg("p", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
+            // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
             // TODO: add a video output option '-v' where HeadlessRendering sets CompressedSegmentationVolumeRenderer::m_download_frame_to_image_file with a frame index file name after each frame
             ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path. Must be used with -i.", false, va.record_in_file, "file", cmd);
             ValueArg<std::string> evalLogFileArg("", "eval-logfile", "File into which rendering evaluation results are appended after all frames finished rendering the screenshot image. Must be used with -i.", false, va.eval_logfile, "file", cmd);
             ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be vailable in log files as \"%name\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
-            ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits, or [a]ll", false, "a", "(a|p|n|x|y|z|l|d|s)*", cmd);
-            SwitchArg randomAccessArg("p", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
 
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
@@ -159,11 +161,12 @@ public:
             cmd.add(emptySpaceResolutionArg);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
+            ValueArg<std::string> videoArg("v", "video", "Formatted file path with single {} placeholder to export intermediate images when rendering -i. Example: ./out{:3}.png", false, va.video_output_fmt_file, "formatted file", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
             ValueArg<std::string> renderconfigArg("", "config", "Import render parameters from config file.", false, va.rendering_config_file, "file", cmd);
             // general arguments
             SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
-            SwitchArg verboseArg("v", "verbose", "Verbose debug output.", cmd);
+            SwitchArg verboseArg("", "verbose", "Verbose debug output.", cmd);
 
             // input file (file ending determines if we are on the import/decompress side (.csgv) or can specify compression options (other)
             UnlabeledValueArg<std::string> inputpathArg("input", "Either a previously compressed .csgv file to render or a segmented volume to compress or render.", false, "", "volume", cmd, true);
@@ -222,6 +225,15 @@ public:
             // rendering arguments
             va.rendering_config_file = expandPath(renderconfigArg.getValue());
             va.screenshot_output_file = expandPath(imageArg.getValue());
+            va.video_output_fmt_file = expandPath(videoArg.getValue());
+            if (!va.video_output_fmt_file.empty()) {
+                try {
+                    size_t test_frame_idx = 123;
+                    auto f = std::vformat(va.video_output_fmt_file, std::make_format_args(test_frame_idx));
+                } catch(std::format_error err) {
+                    throw ArgException(videoArg.longID() + " must be a formatted image file path string containing a single {} replacement field. Example: ./out{:3}.png", videoArg.longID());
+                }
+            }
             if(!resolutionArg.getValue().empty()) {
                 std::stringstream ss(resolutionArg.getValue());
                 ss >> va.render_resolution[0];
@@ -372,16 +384,8 @@ public:
             }
             va.export_stats = statsArg.getValue();
             va.record_in_file = expandPath(recordInFileArg.getValue());
-            if (!va.record_in_file.empty() && va.screenshot_output_file.empty()) {
-                throw ArgException("Recording input file must be used in combination with image output -i.",
-                                   recordInFileArg.longID(""));
-            }
             va.eval_logfile = expandPath(evalLogFileArg.getValue());
             va.eval_name = evalNameArg.getValue();
-            if (!va.eval_logfile.empty() && va.screenshot_output_file.empty()) {
-                throw ArgException("Evaluation log file must be used in combination with image output -i.",
-                        evalLogFileArg.longID(""));
-            }
             if (!va.eval_name.empty() && va.eval_logfile.empty()) {
                 throw ArgException("Evaluation log file must be used in combination with --eval-logfile",
                                    evalNameArg.longID(""));

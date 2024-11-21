@@ -217,6 +217,15 @@ public:
         m_last_frame_start_time.reset();
     }
 
+    void exportCurrentFrameToImage(std::string image_path) override {
+        if(!image_path.ends_with(".png")
+           && !image_path.ends_with(".jpg")
+           && !image_path.ends_with(".jpeg")) {
+            image_path.append(".png");
+        }
+        m_download_frame_to_image_file = image_path;
+    }
+
     /// Returns statistics about frame times and GPU memory consumption. Frame times are only available if tracking was
     /// enabled via startFrameTimeTracking(). Tracking should have been stopped with stopFrameTimeTracking() when called.
     CSGVRenderEvaluationResults getLastEvaluationResults();

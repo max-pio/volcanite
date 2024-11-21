@@ -397,7 +397,9 @@ int volcanite_main(int argc, char *argv[]) {
 
     // we only need the rendering part for screenshots or the interactive app
     std::string appName = "Volcanite " + VolcaniteArgs::getVolcaniteVersionString();
-    if (!args.headless || !args.screenshot_output_file.empty()) {
+    bool run_headless_pass = !args.screenshot_output_file.empty() || !args.video_output_fmt_file.empty()
+                                || !args.eval_logfile.empty();
+    if (!args.headless || run_headless_pass) {
         Logger(INFO) << "--------------------------------------------------- ";
         Logger(INFO) << "initializing Volcanite renderer";
 
@@ -422,8 +424,8 @@ int volcanite_main(int argc, char *argv[]) {
         tryImportRenderConfig(args, renderer);
         renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
 
-        // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)
-        if (!args.screenshot_output_file.empty()) {
+        // if a screenshot file, video file, or evaluation log file path is given, run the headless mode first
+        if (run_headless_pass) {
 
             // obtain a headless rendering engine
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
@@ -438,12 +440,16 @@ int volcanite_main(int argc, char *argv[]) {
 
             if (!args.eval_logfile.empty())
                 renderer->startFrameTimeTracking();
-            auto texture = renderEngine->renderFrames(accumulation_frames, args.record_in_file);
+            auto texture = renderEngine->renderFrames(accumulation_frames,
+                                                      args.record_in_file,
+                                                      args.video_output_fmt_file);
             if (!args.eval_logfile.empty())
                 renderer->stopFrameTimeTracking({}); // stopFrameTimeTracking is already called by renderEngine
 
-            if(texture == nullptr || export_texture(texture.get(), args.screenshot_output_file)) {
-                Logger(ERROR) << "internal rendering error";
+            // export final frame
+            if (!args.screenshot_output_file.empty()
+                && (texture == nullptr || export_texture(texture.get(), args.screenshot_output_file))) {
+                Logger(ERROR) << "could not export final render frame to " << args.screenshot_output_file;
                 return RET_RENDER_ERROR;
             }
             if (!args.eval_logfile.empty()) {
