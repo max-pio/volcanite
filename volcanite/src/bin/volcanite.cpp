@@ -342,6 +342,18 @@ int volcanite_main(int argc, char *argv[]) {
             if (std::filesystem::exists(complete_csgv_path))
                 std::filesystem::remove(complete_csgv_path);
         }
+
+        // if no config file was specified, use a config file at the export or import location if it exists
+        if (args.rendering_config_file.empty()) {
+            std::string config_path = stripFileExtension(complete_csgv_path) + ".vcfg";
+            if (std::filesystem::exists(config_path))
+                args.rendering_config_file = config_path;
+            else {
+                config_path = stripFileExtension(args.input_file) + ".vcfg";
+                if (std::filesystem::exists(config_path))
+                    args.rendering_config_file = config_path;
+            }
+        }
     }
     // otherwise, we load a previously compressed volume
     else {
@@ -369,7 +381,7 @@ int volcanite_main(int argc, char *argv[]) {
             Logger(DEBUG) << compressedSegmentationVolume->getEncodingInfoString();
         }
 
-        // if no config file was specified, use a previous config next to the .csgv file, if it exists
+        // if no config file was specified, use a previous config next to the volume input or .csgv file, if it exists
         if (args.rendering_config_file.empty()) {
             std::string config_path = stripFileExtension(args.input_file) + ".vcfg";
             if (std::filesystem::exists(config_path))
@@ -421,7 +433,6 @@ int volcanite_main(int argc, char *argv[]) {
                                          .cache_mode=args.cache_mode,
                                          .empty_space_resolution=args.empty_space_resolution});
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
-        tryImportRenderConfig(args, renderer);
         renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
 
         // if a screenshot file, video file, or evaluation log file path is given, run the headless mode first
@@ -430,6 +441,7 @@ int volcanite_main(int argc, char *argv[]) {
             // obtain a headless rendering engine
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
             renderEngine->acquireResources();
+            tryImportRenderConfig(args, renderer);
             // if frame count is specified in the rendering config, use that number.
             int accumulation_frames = renderer->getTargetAccumulationFrames();
             // if a recording file is given, play the full recording file instead (flagged as frame count 0)
@@ -473,10 +485,10 @@ int volcanite_main(int argc, char *argv[]) {
 #ifndef HEADLESS
         // only start the application if we are not in headless mode
         if (!args.headless) {
-            // export the state of the renderer next to the csgv volume when the app is closed
-            if(!args.performCompression())
+            // export the state of the renderer next to the input or csgv volume when the app is closed
+            if(!args.performCompression() || args.compress_export_file.empty())
                 renderer->saveConfigOnShutdown(stripFileExtension(args.input_file) + ".vcfg");
-            else if(!args.compress_export_file.empty())
+            else
                 renderer->saveConfigOnShutdown(stripFileExtension(args.compress_export_file) + ".vcfg");
 
             bool vsync = true;  // TODO: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
@@ -484,6 +496,7 @@ int volcanite_main(int argc, char *argv[]) {
             app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
             app->setVSync(vsync);
             app->acquireResources();
+            tryImportRenderConfig(args, renderer);
             return app->exec();
         }
 #endif

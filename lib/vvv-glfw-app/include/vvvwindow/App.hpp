@@ -42,7 +42,6 @@ private:
         m_camera_controller(), m_gui(std::make_unique<GuiImgui>(this)), m_startup_resolution(1920, 1080)
         {
             // choose a camera controller for the renderer
-            m_renderer->setCamera(std::make_shared<Camera>(true));
             m_camera_controller.setCamera(&(*m_renderer->getCamera()));
 
             auto video_directory = std::filesystem::absolute("vvv_video");

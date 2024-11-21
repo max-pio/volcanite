@@ -61,6 +61,9 @@ public:
     CompressedSegmentationVolumeRenderer(bool release_version = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false),
                                                                          m_pcamera_hash(0ul), m_resolution(1920, 1080), m_accumulated_frames(0), m_frame(0u),
                                                                          m_release_version(release_version) {
+        // initialize camera in orbital mode
+        m_camera = std::make_shared<vvv::Camera>(true);
+
         // initialize the shading materials with something reasonable
         for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
             auto &mat = m_materials[m];

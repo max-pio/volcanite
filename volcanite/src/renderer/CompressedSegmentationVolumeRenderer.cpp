@@ -405,8 +405,10 @@ void CompressedSegmentationVolumeRenderer::setCompressedSegmentationVolume(
     m_attribute_start_position.resize(m_csgv_db->getAttributeCount(), -1);
     // update transfer function limits
     for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
-        if(m_materials[m].discrAttribute >= 0) {
+        if (m_materials[m].discrAttribute >= 0) {
             m_materials[m].discrInterval = m_csgv_db->getAttributeMinMax().at(m_materials[m].discrAttribute);
+            if (m == 0 && m_materials[m].discrInterval.x == 0u)
+                m_materials[m].discrInterval.x = 1u;
         }
         m_materials[m].tfMinMax = m_csgv_db->getAttributeMinMax().at(m_materials[m].tfAttribute);
     }

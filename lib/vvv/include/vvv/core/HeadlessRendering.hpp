@@ -39,8 +39,6 @@ private:
             : DefaultGpuContext({.debugUtilities = std::move(debugUtilities), .appName = std::move(appName)}),
             m_renderer(std::move(renderer)), m_pendingRecreation(false), m_gui(std::make_unique<DummyGuiInterface>())
     {
-        // choose a camera controller for the renderer
-        m_renderer->setCamera(std::make_shared<vvv::Camera>(true));
     };
 
 public:
