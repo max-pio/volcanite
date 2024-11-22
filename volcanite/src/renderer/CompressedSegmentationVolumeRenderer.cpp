@@ -1015,11 +1015,11 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         // In model space, one voxel must be a unit cube. The normalization transform scales this down to world space [-0.5, 0.5]^3
         glm::mat4 world_to_model_space;
         // TODO: generalize switching model space axes in the GUI as axes selector [xyz, xzy, yxz, ...]) and remove the hacky fix
-        // if (switch axes) {
-        //     glm::mat4 _world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), glm::vec3(scalingFactor)), glm::vec3(normalized_volume_size / 2.f));
-        //     world_to_model_space = glm::mat4(_world_to_model_space[0], _world_to_model_space[2], _world_to_model_space[1], _world_to_model_space[3]);
-        // }
-        // else
+//         if (m_compressed_segmentation_volume->getVolumeDim().y == 1224) {
+//             glm::mat4 _world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), voldim / normalized_volume_size), normalized_volume_size / 2.f);
+//             world_to_model_space = glm::mat4(_world_to_model_space[0], _world_to_model_space[2], _world_to_model_space[1], _world_to_model_space[3]);
+//         }
+//         else
         world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), voldim / normalized_volume_size), normalized_volume_size / 2.f);
         m_urender_info->setUniform<glm::mat4x4>("g_model_to_world_space", glm::inverse(world_to_model_space));
         m_urender_info->setUniform<glm::mat4x4>("g_world_to_model_space", world_to_model_space);
@@ -1197,6 +1197,11 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
+    g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(1080, 1920); }, "1080x1920 FullHD");
+#ifdef IMGUI
+    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize( 2160, 3840); }, "2160x3840 4K");
     //g_dis->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
 
     // Materials
@@ -1221,7 +1226,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                    break;
                                case 1:
                                    // global shadows
-                                   m_factor_ambient = 0.4f;
+                                   m_factor_ambient = 0.25f;
                                    m_light_intensity = 1.f;
                                    m_global_illumination_enabled = true;
                                    m_shadow_pathtracing_ratio = 0.f;
@@ -1230,8 +1235,8 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                    break;
                                case 2:
                                    // ambient occlusion
-                                   m_factor_ambient = 0.4f;
-                                   m_light_intensity = 1.f;
+                                   m_factor_ambient = 0.1f;
+                                   m_light_intensity = 1.22f;
                                    m_global_illumination_enabled = true;
                                    m_shadow_pathtracing_ratio = 1.f;
                                    m_max_path_length = 1;
@@ -1275,6 +1280,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addBool(&m_show_envmap, "Show Environment Map");
     g_dev->addBool(&m_show_normals, "Show Normals");
     g_dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
+    g_dev->addAction([this](){ getCamera()->position_look_at_world_space = {0, 0, 0}; }, "Center Camera");
     g_dev->addAction([this]() { m_pcache_reset = true; }, "Hard Reset Brick Cache");
     g_dev->addBool(&m_clear_cache_every_frame, "Clear Cache Every Frame");
     g_dev->addBool(&m_clear_accum_every_frame, "Clear Accumulation Every Frame");

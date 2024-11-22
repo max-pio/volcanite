@@ -663,5 +663,16 @@ const std::map<std::string, const std::vector<float>&> good_colormaps = {
         { "x-ray", x_ray },
         { "turbo", turbo },
         { "grayscale", grayscale },
+        // not so good color maps but they look good:
+        { "black, blue and white", black_blue_and_white },
+        { "cold and hot", cold_and_hot },
+        { "desaturated rainbow", rainbow_desaturated },
+        { "uniform rainbow", rainbow_uniform },
+        { "white blended rainbow", rainbow_blended_white },
+        { "grey blended rainbow", rainbow_blended_grey },
+        { "black blended rainbow", rainbow_blended_black },
+        { "blue to yellow", blue_to_yellow },
+        { "haze", haze },
+        { "hsv", hsv },
 };
 } // namespace vvv::colormaps

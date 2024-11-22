@@ -252,8 +252,8 @@ namespace vvv {
         if (!m_resources_acquired)
             acquireResources();
 
-        double accumulatedTime{0.0};
-        size_t frameCount{0};
+        double accum_display_time{0.0};
+        size_t accum_display_frame_count{0};
 
         while (!glfwWindowShouldClose(m_window)) {
             double startTime = glfwGetTime();
@@ -272,27 +272,27 @@ namespace vvv {
             renderFrame();
             processVideoRecording();
 
+            // update frame time tracking
+            double frame_time = (glfwGetTime() - startTime) * 1000.;
+            avg_ms += frame_time;
+            var_ms += (frame_time * frame_time);
+            min_ms = std::min(min_ms, frame_time);
+            max_ms = std::max(max_ms, frame_time);
+            avg_ms_samples++;
+
             // print FPS in window title
-            double endTime = glfwGetTime();
-            accumulatedTime += endTime - startTime;
-            ++frameCount;
-            if (0.5 < accumulatedTime) {
-                assert(0 < frameCount);
+            accum_display_frame_count++;
+            accum_display_time += frame_time;
+            if (500 < accum_display_time) {
+                assert(0 < accum_display_frame_count);
 
                 std::ostringstream oss;
-                double frame_time = accumulatedTime / static_cast<double>(frameCount);
-                oss << getAppName() << "  " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms)";
+                double display_frame_time = accum_display_time / static_cast<double>(accum_display_frame_count);
+                oss << getAppName() << "  " << (1000. / display_frame_time) << " fps (" << display_frame_time << "ms)";
                 glfwSetWindowTitle(m_window, oss.str().c_str());
 
-                accumulatedTime = 0.0;
-                frameCount = 0;
-
-                frame_time *= 1000.;
-                avg_ms += frame_time;
-                var_ms += (frame_time * frame_time);
-                min_ms = std::min(min_ms, frame_time);
-                max_ms = std::max(max_ms, frame_time);
-                avg_ms_samples++;
+                accum_display_time = 0.0;
+                accum_display_frame_count = 0;
             }
         }
 
@@ -847,7 +847,7 @@ namespace vvv {
                 var_ms /= static_cast<double>(avg_ms_samples);
                 vvv::Logger(vvv::WARN) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms
                                        << " ($\\sigma=" << std::sqrt(var_ms - (avg_ms * avg_ms)) << "$) " << " / "
-                                       << max_ms << " total avg ms " << avg_ms;
+                                       << max_ms << " total avg ms " << avg_ms << " | " << avg_ms_samples << " frames rendered.";
             }
                 // start replay
             else {
@@ -934,7 +934,7 @@ namespace vvv {
                 var_ms /= static_cast<double>(avg_ms_samples);
                 vvv::Logger(vvv::WARN) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms
                                        << " ($\\sigma=" << std::sqrt(var_ms - (avg_ms * avg_ms)) << "$) " << " / "
-                                       << max_ms;
+                                       << max_ms  << " | " << avg_ms_samples << " frames rendered.";
             }
         }
     }
