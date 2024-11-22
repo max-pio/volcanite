@@ -112,7 +112,6 @@ layout(std430, binding = 5) buffer restrict free_block_stacks
 
 layout(std430, binding = 6) buffer restrict brick_cache
 {
-
 #if CACHE_MODE == CACHE_VOXELS
     // contains CACHE_UVEC2_SIZE elements as (voxel_id_key, voxel_label).
     // a voxel_id_key of INVALID denotes an empty cache cell

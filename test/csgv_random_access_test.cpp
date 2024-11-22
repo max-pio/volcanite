@@ -21,8 +21,8 @@ using namespace volcanite;
 
 int main() {
 
-    // create dummy segmentation volume (must be dividable by brick size for random access decoding)
-    glm::uvec3 dim = {128, 64, 192};
+    // create dummy segmentation volume
+    glm::uvec3 dim = {100, 80, 130};
     const auto volume = createDummySegmentationVolume(dim);
 
     CompressedSegmentationVolume csgv;

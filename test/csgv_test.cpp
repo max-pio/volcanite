@@ -23,12 +23,12 @@ int main() {
 
     CompressedSegmentationVolume csgv;
 
+    // create dummy segmentation volume
+    glm::uvec3 dim = {100, 80, 95};
+    const auto volume = createDummySegmentationVolume(dim);
+
     // Serial Encoding
     {
-        // create dummy segmentation volume
-        glm::uvec3 dim = {100, 80, 95};
-        const auto volume = createDummySegmentationVolume(dim);
-
         // Plain 4 bit per operation encoding
         {
             Logger(INFO) << "Nibble";
@@ -77,10 +77,6 @@ int main() {
 
     // Random Access Encoding
     {
-        // create dummy segmentation volume
-        glm::uvec3 dim = {128, 64, 192};
-        const auto volume = createDummySegmentationVolume(dim);
-
         // Wavelet Matrix
         {
             Logger(INFO) << "Wavelet Matrix";

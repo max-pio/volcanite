@@ -36,6 +36,10 @@
     STATIC_FAIL(RangeANS_encoding_does_not_support_DECODE_FROM_SHARED_MEMORY);
 #endif
 
+#if CACHE_MODE != CACHE_BRICKS
+    STATIC_FAIL(RangeANS_encoding_only_supports_CACHE_MODE_set_to_CACHE_BRICKS);
+#endif
+
 #if defined(SEPARATE_DETAIL) && ENCODING_MODE != DOUBLE_TABLE_RANS_ENC
     STATIC_FAIL(SEPARATE_DETAIL_only_supported_in_double_table_RangeANS_encoding);
 #endif

@@ -26,12 +26,10 @@ namespace volcanite {
 uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& volume,
                                                           std::vector<uint32_t>& out,
                                                           glm::uvec3 start, glm::uvec3 volume_dim) const {
-    assert(glm::all(glm::equal(volume_dim % glm::uvec3(m_brick_size), glm::uvec3(0u))) &&
-           "partially occupied bricks are not allowed in Wavelet Matrix encoding");
 
     std::vector<uint32_t> palette;
     palette.reserve(32);
-    glm::uvec3 volume_pos, brick_pos;
+    glm::uvec3 brick_pos;
 
     const uint32_t lod_count = getLodCountPerBrick();
     const uint32_t header_size = lod_count + 1u;
@@ -45,7 +43,7 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
 
     // construct the multigrid on this brick that we want to represent in this encoding
     std::vector<MultiGridNode> multigrid;
-    VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size, m_op_mask & OP_STOP_BIT);
+    VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size, m_op_mask & OP_STOP_BIT, true);
 
     // stop bit vector
     BitVector stop_bit_vector;
@@ -87,9 +85,6 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
             // we don't store any operations for a grid node that would lie completely outside the volume
             // if this is problematic, and we would like to always handle a full brick, we could output anything here and thus just write PARENT_STOP.
             brick_pos = enumBrickPos(i);
-            volume_pos = start + brick_pos;
-            if (glm::any(glm::greaterThanEqual(volume_pos, volume_dim)))
-                continue;
 
             // every 8th element (we span 2*2*2=8 elements of the coarse LOD above), we fetch the new parent
             child_index = (i % (lod_width * lod_width * lod_width * 8)) / (lod_width * lod_width * lod_width);
@@ -415,8 +410,6 @@ void WaveletMatrixEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, u
     // ToDo: support detail separation, stop bits, and palette delta operations in parallelDecodeBrick
     assert(!m_separate_detail && "detail separation not yet supported in parallelDecodeBrick");
     assert(target_inv_lod < getLodCountPerBrick() && "not enough LoDs in a brick to process target inv. LoD");
-    assert(glm::all(glm::equal(valid_brick_size, glm::uvec3(m_brick_size))) &&
-           "partially occupied bricks are not allowed in Wavelet Matrix encoding");
 
     // first, set the whole brick to INVALID, so we know later which elements and LOD blocks were already processed
     // #pragma omp parallel for default(none) shared(m_brick_size, output_brick)

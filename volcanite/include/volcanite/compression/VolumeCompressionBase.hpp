@@ -41,14 +41,20 @@ class VolumeCompressionBase {
 
 public:
     /**
-     * Constructs a multigrid in out from finest to coarsest level for the given brick in the volume. brick_dim must be a power of 2 but can reach to areas outside of the volume.
-     * Levels are stored from finest (original) to coarsest (1³) resolution in out.
-     * Entries for nodes in out lying completely outside the volume are set to 0 and are flagged as constant.
+     * Constructs a multigrid in out from finest to coarsest level for the given brick in the volume.
+     * brick_dim must be a power of 2 but can reach to areas outside of the volume.
+     * Levels are stored from finest (original) to coarsest (1³) resolution in out meaning that the first volume_dim^3
+     * MultiGridNodes belong to the finest original brick level.
+     * Entries for nodes in out lying completely outside the volume are set to 0xFFFFFFFF and are flagged as constant.
      * Nodes in the finest level L0 are always flagged as constant.
-     * if mark_constant_regions is false, none of the nodes are flagged as constant
+     * @param mark_constant_regions if false, none of the nodes are flagged as constant
+     * @param set_out_of_bounds_to_parent if true, nodes out of the volume bounds are set to their parent label
      */
-    static void constructMultiGrid(std::vector<MultiGridNode>& out, const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, const glm::uvec3 brick_start, const uint32_t brick_dim, bool mark_constant_regions) {
+    static void constructMultiGrid(std::vector<MultiGridNode>& out, const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, const glm::uvec3 brick_start, const uint32_t brick_dim,
+                                   bool mark_constant_regions, bool set_out_of_bounds_to_parent) {
         assert(!(brick_dim & (brick_dim - 1u)) && "brick_dim must be a power of 2");
+
+        bool contains_voxels_outside_of_volume = glm::any(glm::greaterThanEqual(brick_start + brick_dim, volume_dim));
 
         out.resize(static_cast<size_t>(std::floor(brick_dim * brick_dim * brick_dim) * 8.f/7.f));
         glm::uvec3 pos;
@@ -101,22 +107,30 @@ public:
                         uint32_t max_label = 0xFFFFFFFF;
                         bool constant = mark_constant_regions;
                         for(i = 0; i < 8; i++) {
-                            // skip childs lying completely outside the volume
-                            if(child_elements[i]->label == 0xFFFFFFFF)
+                            // skip children lying completely outside the volume
+                            // these will be marked as constant and will be assigned to the most frequent label
+                            if(child_elements[i]->label == 0xFFFFFFFF) {
                                 continue;
-
-                            uint32_t occurrences = 1u;
-                            for(int n = i+1; n < 8; n++) {
-                                if(child_elements[n]->label == child_elements[i]->label)
-                                    occurrences++;
                             }
-                            if(occurrences > max_ocurrences) {
-                                max_label = child_elements[i]->label;
-                                max_ocurrences = occurrences;
+
+                            if (max_label != child_elements[i]->label) {
+                                // all children must have constant subregions (or be a single element) and the same label for this node to also be constant
+                                if (max_label != 0xFFFFFFFF)
+                                    constant = false;
+
+                                uint32_t occurrences = 1u;
+                                for (int n = i + 1; n < 8; n++) {
+                                    if (child_elements[n]->label == child_elements[i]->label)
+                                        occurrences++;
+                                }
+                                if (occurrences > max_ocurrences) {
+                                    max_label = child_elements[i]->label;
+                                    max_ocurrences = occurrences;
+                                }
                             }
 
                             // all children must have constant subregions (or be a single element) and the same label for this node to also be constant
-                            constant = constant && (prev_lod_start == 0u || child_elements[i]->constant_subregion) && (child_elements[i]->label == child_elements[0]->label);
+                             constant = constant && (prev_lod_start == 0u || child_elements[i]->constant_subregion); // && (child_elements[i]->label == child_elements[0]->label);
                         }
 #else
                         // deprecated computation: use most frequent labels from finest instead of last LOD
@@ -134,15 +148,47 @@ public:
 #endif
 
                         out[lod_start + voxel_pos2idx(pos, glm::uvec3(current_dim))].label = max_label;
+                        assert(current_dim > 1u || max_label != 0xFFFFFFFF && "Setting invalid label 0xFFFFFFFF to coarsest brick node");
                         out[lod_start + voxel_pos2idx(pos, glm::uvec3(current_dim))].constant_subregion = constant;
-                        assert(lod_start + voxel_pos2idx(pos, glm::uvec3(current_dim)) < out.size() && "Writing multigrid node outside of array!");
+                        assert(lod_start + voxel_pos2idx(pos, glm::uvec3(current_dim)) < out.size() && "Writing multigrid node outside of array");
                     }
                 }
             }
             prev_lod_start = lod_start;
             lod_start += current_dim * current_dim * current_dim;
         }
+
         assert(lod_start == out.size() && "Allocated too much memory for Multigrid nodes");
+
+        // if parts of the brick are outside of the volume, assign those grid nodes the most freq. label
+        if (contains_voxels_outside_of_volume && set_out_of_bounds_to_parent) {
+            // iterate from second coarsest to finest level, assign invalids to parent
+            prev_lod_start = out.size() - 1u;
+
+            for(uint32_t current_dim = 2; current_dim <= brick_dim; current_dim *= 2u) {
+
+                lod_start = prev_lod_start - current_dim * current_dim * current_dim;
+
+                assert(lod_start < out.size() && "current lod start out of bounds");
+                assert(prev_lod_start < out.size() && "parent lod start out of bounds");
+
+                // iterate over all cells in finer level
+                for (pos.z = 0u; pos.z < current_dim; pos.z++) {
+                    for (pos.y = 0u; pos.y < current_dim; pos.y++) {
+                        for (pos.x = 0u; pos.x < current_dim; pos.x++) {
+
+                            const auto& parent_element = out.at(prev_lod_start + voxel_pos2idx(pos / 2u, glm::uvec3(current_dim / 2u)));
+                            auto& cur_element = out.at(lod_start + voxel_pos2idx(pos, glm::uvec3(current_dim)));
+                            if (cur_element.label == 0xFFFFFFFF) {
+                                cur_element.label = parent_element.label;
+                            }
+                        }
+                    }
+                }
+
+                prev_lod_start = lod_start;
+            }
+        }
     }
 
     /**

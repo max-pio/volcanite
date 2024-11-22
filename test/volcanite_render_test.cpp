@@ -90,13 +90,13 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
 
 static const std::string OUT_DIR = "./render_test/";
 static const std::vector<VolcaniteArgs> RENDERING_TEST_CONFIGS = {
-        {.screenshot_output_file=OUT_DIR + "nibble_32.png", .brick_size=32, .encoding_mode=NIBBLE_ENC},
-        {.screenshot_output_file=OUT_DIR + "rANSd_64_cache-palette.png", .cache_palettized=true, .brick_size=64, .encoding_mode=SINGLE_TABLE_RANS_ENC},
-        {.screenshot_output_file=OUT_DIR + "rANS_16_stream-lod.png", .stream_lod=true, .brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC},
-        {.screenshot_output_file=OUT_DIR + "nibble_16_ra.png", .brick_size=16, .encoding_mode=NIBBLE_ENC, .operation_mask=OP_ALL_WITHOUT_STOP, .random_access=true},
-        {.screenshot_output_file=OUT_DIR + "hWM_32_ra_cache_brck.png", .cache_mode='b', .brick_size=64, .encoding_mode=HUFFMAN_WM_ENC,  .random_access=true,},
-        {.screenshot_output_file=OUT_DIR + "hWM_32_ra_cache_none.png", .cache_mode='v', .empty_space_resolution=2u, .brick_size=16, .encoding_mode=HUFFMAN_WM_ENC,  .random_access=true,},
-        {.screenshot_output_file=OUT_DIR + "hWM_32_ra_cache_voxl.png", .cache_mode='n', .brick_size=32, .encoding_mode=HUFFMAN_WM_ENC,  .random_access=true,},
+        {.brick_size=32, .encoding_mode=NIBBLE_ENC, .screenshot_output_file=OUT_DIR + "nibble_32.png"},
+        {.cache_palettized=true, .brick_size=64, .encoding_mode=SINGLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANSd_64_cache-palette.png"},
+        {.stream_lod=true, .brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANS_16_stream-lod.png"},
+        {.brick_size=16, .encoding_mode=NIBBLE_ENC, .operation_mask=OP_ALL_WITHOUT_STOP, .random_access=true, .screenshot_output_file=OUT_DIR + "nibble_16_ra.png"},
+        {.cache_mode=CACHE_BRICKS, .brick_size=64, .encoding_mode=HUFFMAN_WM_ENC, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_32_ra_cache_brck.png"},
+        {.cache_mode=CACHE_VOXELS, .empty_space_resolution=2u, .brick_size=16, .encoding_mode=HUFFMAN_WM_ENC,  .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_32_ra_cache_none.png"},
+        {.cache_mode=CACHE_NOTHING, .brick_size=32, .encoding_mode=HUFFMAN_WM_ENC, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_32_ra_cache_voxl.png"},
     };
 
 glm::vec4 CIE_rgb2xyz(const glm::vec4& rgba) {
@@ -176,8 +176,8 @@ int main() {
 
     // create headless rendering engine with GPU context
 
-    // create dummy segmentation volume (random access requires volume size that is evenly dividable by brick size)
-    glm::uvec3 dim = {128, 64, 192};
+    // create dummy segmentation volume
+    glm::uvec3 dim = {133, 70, 194};
     const auto volume = createDummySegmentationVolume(dim);
 
     // create compressed segmentation volume

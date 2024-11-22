@@ -256,8 +256,6 @@ bool CompressedSegmentationVolume::verifyCompression() const {
 void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume, const glm::uvec3 volume_dim, bool verbose) {
     if (m_brick_size == 0u)
         throw std::runtime_error("Compression parameters are not initialized!");
-    if (m_random_access && volume_dim.x % m_brick_size + volume_dim.y % m_brick_size + volume_dim.y % m_brick_size != 0u)
-        throw std::runtime_error("Volume size must be evenly dividable by brick size when encoded with random access.");
 
     m_volume_dim = volume_dim;
     glm::uvec3 brickCount = getBrickCount();
@@ -566,7 +564,7 @@ bool CompressedSegmentationVolume::testLOD(const std::vector<uint32_t> &volume, 
 
                     // construct target multigrid for this brick (a bit efficient since we only test one level here..)
                     std::vector<MultiGridNode> multigrid;
-                    constructMultiGrid(multigrid, volume, volume_dim, brick * m_brick_size, m_brick_size, false);
+                    constructMultiGrid(multigrid, volume, volume_dim, brick * m_brick_size, m_brick_size, false, false);
 
                     // check all elements of this LoD
                     glm::uvec3 pos_in_brick;

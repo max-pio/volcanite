@@ -35,7 +35,7 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
 
     std::vector<uint32_t> palette;
     palette.reserve(32);
-    glm::uvec3 volume_pos, brick_pos;
+    glm::uvec3 brick_pos;
 
     const uint32_t lod_count = getLodCountPerBrick();
     const uint32_t header_size = getHeaderSize();
@@ -49,7 +49,7 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
 
     // construct the multigrid on this brick that we want to represent in this encoding
     std::vector<MultiGridNode> multigrid;
-    VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size, m_op_mask & OP_STOP_BIT);
+    VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size, m_op_mask & OP_STOP_BIT, true);
 
     // we start with the coarsest LOD, which is always a PALETTE_ADV of the max occuring value in the whole brick
     // we handle this here because it allows us to skip some special handling (for example checking if the palette is empty) in the following loop
@@ -85,9 +85,6 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
             // we don't store any operations for a grid node that would lie completely outside the volume
             // if this is problematic, and we would like to always handle a full brick, we could output anything here and thus just write PARENT_STOP.
             brick_pos = enumBrickPos(i);
-            volume_pos = start + brick_pos;
-            if (glm::any(glm::greaterThanEqual(volume_pos, volume_dim)))
-                continue;
 
             // every 8th element (we span 2*2*2=8 elements of the coarse LOD above), we fetch the new parent
             child_index = (i % (lod_width * lod_width * lod_width * 8)) / (lod_width * lod_width * lod_width);

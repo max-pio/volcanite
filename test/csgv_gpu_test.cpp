@@ -37,13 +37,13 @@ int main() {
     ctx.createGpuContext();
     Logger(INFO) << "Create GPU context (ok)";
 
+    // create dummy segmentation volume
+    glm::uvec3 dim = {100, 80, 95};
+    const auto volume = createDummySegmentationVolume(dim);
+
     CompressedSegmentationVolume csgv;
     // Serial Decoding
     {
-        // create dummy segmentation volume
-        glm::uvec3 dim = {100, 80, 95};
-        const auto volume = createDummySegmentationVolume(dim);
-
         Logger(INFO) << "Nibble";
         csgv.setCompressionOptions64(32, NIBBLE_ENC, OP_ALL, false);
         csgv.compress(volume.dataConst(), dim, false);
@@ -84,10 +84,6 @@ int main() {
 
     // Random Access Decoding
     {
-        // create dummy segmentation volume
-        glm::uvec3 dim = {128, 64, 192};
-        const auto volume = createDummySegmentationVolume(dim);
-
         Logger(INFO) << "Random Access Nibble";
         csgv.setCompressionOptions64(32, NIBBLE_ENC, OP_ALL_WITHOUT_STOP, true);
         csgv.compress(volume.dataConst(), dim, false);
