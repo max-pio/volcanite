@@ -62,7 +62,6 @@ if (ENABLE_VTK_SUPPORT)
     endif ()
 endif ()
 
-
 # extern SQLiteCpp
 set(SQLITECPP_RUN_CPPLINT OFF CACHE INTERNAL "")
 add_subdirectory(extern/SQLiteCpp)
@@ -92,3 +91,8 @@ if(NOT HEADLESS)
     add_subdirectory(lib/vvv-glfw-app)
 endif()
 
+# eurovis related work:
+find_package(LibLZMA)
+if (NOT LIBLZMA_HAS_EASY_ENCODER)
+    message(FATAL_ERROR "could not find LZMA with easy encoder")
+endif()

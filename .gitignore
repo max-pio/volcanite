@@ -13,6 +13,7 @@ compile_commands.json
 **/python/config/*
 **/.idea/*
 **/python/internal/*
+**/.venv/*
 
 # operating system and IDE specific ignores
 /.idea*

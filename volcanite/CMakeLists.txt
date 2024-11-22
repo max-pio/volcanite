@@ -45,6 +45,10 @@ set(VOLCANITE_HEADERS
         include/volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp
         include/volcanite/renderer/PassCompSegVolRender.hpp
         include/volcanite/utility/segmentation_volume_synthesis.hpp
+        # eurovis related work:
+        include/related_work/cpp-compresso.h
+        include/related_work/compress_segmentation.h
+        include/related_work/cpp-neuroglancer.h
         )
 
 set(VOLCANITE_SOURCES
@@ -67,6 +71,10 @@ set(VOLCANITE_SOURCES
         src/renderer/CompressedSegmentationVolumeRenderer.cpp
         src/renderer/CompressedSegmentationVolumeBrickViewer.cpp
         src/renderer/PassCompSegVolRender.cpp
+        # eurovis related work:
+        src/related_work/cpp-compresso.cpp
+        src/related_work/compress_segmentation.cpp
+        src/related_work/cpp-neuroglancer.cpp
         )
 
 makeVolcaniteLibrary(libvolcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
@@ -84,3 +92,6 @@ makeVolcaniteExecutable(csgv_benchmark)
 
 makeVolcaniteExecutable(volcanite_synth_volume)
 # installExecutable(volcanite_synth_volume)
+
+# eurovis related work:
+makeVolcaniteExecutable(eval_related_work)
