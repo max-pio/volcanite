@@ -1,0 +1,4 @@
+#fmt: & %cr\% & %compression_total_s & %compression_gb_per_s
+&  & \multicolumn{3}{l}{\gls{csgv} Nibble} & \multicolumn{3}{|l}{\gls{csgv} rANS} & \multicolumn{3}{|l}{\gls{csgvr}} & \multicolumn{3}{|l}{\gls{csgvr}+stop bits}\\
+& b & CR & Time (s) & GB/s & CR & Time (s) & GB/s & CR & Time (s) & GB/s & CR & Time (s) & GB/s\\
+\midrule
