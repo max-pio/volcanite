@@ -57,7 +57,8 @@ int export_texture(Texture* tex, const std::string& export_file_path) {
     return 0;
 }
 
-std::string dtos(double v) {
+std::string dtos(double v, int decimal_places=3) {
+    v = std::round(v * pow(10., decimal_places)) / pow(10., decimal_places);
     std::string s = std::to_string(v);
     auto decpos = s.rfind('.');
     int skipped_chars = 0;
@@ -133,6 +134,7 @@ std::string format_evaluation_string(std::string format_string, const std::strin
     do {
         replaced = false;
         for (const auto& r: replace_str) {
+            // TODO: support a std::vformat style replacement to control decimal points etc.
             auto replace_key = "%" + r.first;
             auto pos = format_string.find(replace_key);
             if (pos != std::string::npos) {
