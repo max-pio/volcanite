@@ -29,9 +29,10 @@ git checkout mp/parallel-decode
 cmake --build . -j 16
 
 # name of the evaluation is the script name
-NAME=${$(basename $0)%%.*}
-EVAL_TMP_LOG=$(dirname $0)/${NAME}_tmp.log
-EVAL_LOG=${OUT_DIR}/${NAME}.log
+SCRIPT_PATH="$(basename $0)"
+NAME="$(SCRIPT_PATH%.*)"
+EVAL_TMP_LOG="$(dirname $0)/${NAME}_tmp.log"
+EVAL_LOG="${OUT_DIR}/${NAME}.log"
 
 if [-f ${EVAL_LOG} ]; then
 	echo "log file ${EVAL_LOG} already exists. aborting."

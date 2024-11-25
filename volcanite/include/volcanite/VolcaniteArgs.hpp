@@ -141,7 +141,7 @@ public:
             // TODO: add a video output option '-v' where HeadlessRendering sets CompressedSegmentationVolumeRenderer::m_download_frame_to_image_file with a frame index file name after each frame
             ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path. Must be used with -i.", false, va.record_in_file, "file", cmd);
             ValueArg<std::string> evalLogFileArg("", "eval-logfile", "File into which rendering evaluation results are appended after all frames finished rendering the screenshot image. Must be used with -i.", false, va.eval_logfile, "file", cmd);
-            ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be vailable in log files as \"%name\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
+            ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"%name\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
 
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
