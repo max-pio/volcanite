@@ -139,8 +139,15 @@ if __name__ == "__main__":
 
 
     # evaluation ------------------------------------------------------------------------------------
-    volcanite(def_volc + e_nibble + bs_16 + csgv_out_name(d_cells + e_nibble + bs_16) + d_cells)
+    bs = bs_16
+    data = d_cells
+    volcanite(def_volc + e_nibble + bs + csgv_out_name(data + e_nibble + bs) + data)
+    volcanite(def_volc + e_rans + bs + csgv_out_name(data + e_rans + bs) + data)
+    volcanite(def_volc + e_wmh_nosb + bs + csgv_out_name(data + e_wmh_nosb + bs_16) + data)
+    volcanite(def_volc + e_wmh + bs + csgv_out_name(data + e_wmh + bs) + data)
+    #
     log_newline()
+
 
     # cleanup and log file conversion ---------------------------------------------------------------
     create_csv_tex_from_log()

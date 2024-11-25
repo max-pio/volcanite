@@ -15,6 +15,9 @@ compile_commands.json
 **/python/internal/*
 **/.venv/*
 
+# large evaluation files
+/eurovis/eval/**/**.csgv
+
 # operating system and IDE specific ignores
 /.idea*
 /cmake-build-*
