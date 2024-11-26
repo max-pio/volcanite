@@ -148,7 +148,7 @@ if __name__ == "__main__":
     # preliminaries ---------------------------------------------------------------------------------
     script_path = Path(sys.argv[0])
     script_dir = script_path.resolve().absolute().parent
-    config_dir = (script_path / Path("config")).absolute()
+    config_dir = (script_dir / Path("config")).absolute()
     eval = script_path.stem
     eval_dir = Path(OUTPUT_BASE_DIR) / Path(eval)
 
@@ -209,6 +209,7 @@ if __name__ == "__main__":
                         volcanite(def_volc + vcfg_name(data, shade) + rec_name(data)
                                    + img_name_jpg(data + enc_mode + cache_mode + shade)
                                    + csgv_in_name(data + enc_mode + bs))
+                        sleep(10)
             log_newline()
             
 
