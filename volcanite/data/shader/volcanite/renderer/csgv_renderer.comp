@@ -157,7 +157,7 @@ uint get_inv_lod(ivec3 voxel) {
 #endif
 
         // map voxels from different LODs at the same area to identical indices.
-        const uvec3 lod_voxel = voxel;// (uvec3(voxel) >> 3*(g_max_inv_lod - req_inv_lod)) << 3*(g_max_inv_lod - req_inv_lod);
+        const uvec3 lod_voxel = (uvec3(voxel) >> 3*(g_max_inv_lod - req_inv_lod)) << 3*(g_max_inv_lod - req_inv_lod);
 
         #define KEY_KEY_BITS 0x7FFFFFFFu
         #define KEY_TABLE2_BIT 0x80000000u

@@ -41,6 +41,11 @@ cache_voxel =[(["--cache-mode", "v"], "_csh-v", 3)]
 cache_brick =[(["--cache-mode", "v"], "_csh-b", 3)]
 cache_brick_sm =[(["--cache-mode", "v", "--decode-sm"], "_csh-bsm", 3)]
 all_cache = (cache_no, cache_voxel, cache_brick, cache_brick_sm)
+# render shading mode
+shade_local = [([], "_local", 4)]
+shade_shadow = [([], "_shadow", 4)]
+shade_ao = [([], "_ao", 4)]
+shade_pt = [([], "_pt", 4)]
 # other default args
 def_volc = [(["--verbose", "--headless", "--cache-size", "3000"], "", 1000)]
 
@@ -63,16 +68,25 @@ def img_name(arg_args):
 
 def video_name(arg_args):
     sorted_by_prio = sorted(arg_args, key=lambda a: a[2])
-    return [([str(eval_dir / Path(concat_arg_ids(arg_args))) + ".jpg"], "", 1000)]
+    return [(["-v", str(eval_dir / Path(concat_arg_ids(arg_args))) + ".jpg"], "", 1000)]
+
+def vcfg_name(data_arg, shade_arg):
+    resolution = "1080x1920" if data_arg[0][1] == "h01" else "1920x1080"
+    return [(["--config", str(config_dir / Path(data_arg[0][1] + shade_arg[0][1] + ".vcfg")), "--resolution", resolution], "", 1000)]
+
+def rec_name(data_arg):
+    return [(["--record-in", str(config_dir / Path(data_arg[0][1] + ".rec"))], "", 1000)]
 
 def build_volcanite():
     subp.run(["git", "checkout", GIT_CHECKOUT], cwd=VOLCANITE_BUILD_DIR)
     res = subp.run(["git", "pull"], cwd=VOLCANITE_BUILD_DIR)
     if res.returncode != 0:
         print("Error: git pull returned " + str(res.returncode))
+        exit(res.returncode)
     res = subp.run(["cmake", "--build", ".", "-j", "16", "--target", "volcanite"], cwd=VOLCANITE_BUILD_DIR)
     if res.returncode != 0:
         print("Error: building volcanite returned " + str(res.returncode))
+        exit(res.returncode)
 
 def volcanite(arg_args, eval_name=None):
     if eval_name is None:
@@ -83,10 +97,11 @@ def volcanite(arg_args, eval_name=None):
     print("RUN VOLCANITE -----------------")
     print(" ".join(args))
     print("-------------------------------")
-    res = subp.run(args, cwd="/home/maxpio/code/volcanite/cmake-build-release/volcanite")
-    if res.returncode != 0:
-        print("Error: volcanite returned " + str(res.returncode))
-        exit(0)
+    if not DRY_RUN:
+        res = subp.run(args, cwd="/home/maxpio/code/volcanite/cmake-build-release/volcanite")
+        if res.returncode != 0:
+            print("Error: volcanite returned " + str(res.returncode))
+            exit(res.returncode)
 
 def log_manual(output):
     with open(str(log_path), "a") as log_out:
@@ -115,9 +130,15 @@ def create_csv_tex_from_log():
 
 if __name__ == "__main__":
 
+    DRY_RUN = False
+    if len(sys.args) > 1 and sys.args[0] == "dry":
+        DRY_RUN = True
+        print("Performing dry run")
+
     # preliminaries ---------------------------------------------------------------------------------
     script_path = Path(sys.argv[0])
     script_dir = script_path.resolve().absolute().parent
+    config_dir = (script_path / Path("config")).absolute()
     eval = script_path.stem
     eval_dir = Path(OUTPUT_BASE_DIR) / Path(eval)
 
@@ -154,9 +175,6 @@ if __name__ == "__main__":
             exit(1)
         shutil.copy(tmp_log_path, log_path)
         out_path.unlink(missing_ok=True)
-
-
-# TODO: RECOMPUTE ALL e_wmh_nosb
 
     # evaluation ------------------------------------------------------------------------------------
 

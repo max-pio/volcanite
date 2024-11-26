@@ -127,6 +127,8 @@ struct CSGVDecompressionEvaluationResults {
 //
 class CompressedSegmentationVolume : public VolumeCompressionBase {
 
+
+friend class CompSegVolHandler;
 friend class CSGVChunkMerger;
 
 private:

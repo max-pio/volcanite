@@ -1,5 +1,3 @@
-#fmt: & %fps_ms_min/%fps_ms_avg/%fps_ms_max
-        & \multicolumn{4}{c}{\gls{csgv} rANS} & \multicolumn{4}{|c}{\gls{csgvr}} & \multicolumn{4}{|c}{\gls{csgvr}+stop bits}\\
-        & \cells{} & \fiber{} & \hone{} & \azba{} & \cells{}& \fiber{} & \hone{} & \azba{} & \cells{}& \fiber{} & \hone{} & \azba{}\\
-        \midrule
-
+#fmt: & %fps_ms_min/%fps_ms_avg/%fps_ms_max  % %name
+& \multicolumn{4}{c}{\gls{csgv} rANS} & \multicolumn{4}{|c}{\gls{csgvr}} & \multicolumn{4}{|c}{\gls{csgvr}+stop bits}\\
+& \cells{} & \fiber{} & \hone{} & \azba{} & \cells{}& \fiber{} & \hone{} & \azba{} & \cells{}& \fiber{} & \hone{} & \azba{}\\
