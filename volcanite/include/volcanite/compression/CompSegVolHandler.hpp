@@ -385,6 +385,8 @@ public:
             if(!csgv)
                 return nullptr;
             csgv->setCPUThreadCount(cpu_threads);
+            csgv->m_last_total_freq_prepass_seconds = total_freq_prepass_seconds;
+            csgv->m_last_total_encoding_seconds = total_encoding_seconds;
         }
 
         // create a log file

@@ -1,0 +1,14 @@
+,  , \multicolumn{3}{l}{\gls{csgv} Nibble} , \multicolumn{3}{|l}{\gls{csgv} rANS} , \multicolumn{3}{|l}{\gls{csgvr}} , \multicolumn{3}{|l}{\gls{csgvr}+stop bits}
+, b , CR , Time (s) , GB/s , CR , Time (s) , GB/s , CR , Time (s) , GB/s , CR , Time (s) , GB/s
+# 2024-11-26T11:14:06.735143\midrule\multirow{3}{*}{\rotatebox{90}{\cells{}}}, $16$ , 6.111% , 3.332 , 1.2  % cells_wm_b16
+, $32$ , 5.489% , 3.193 , 1.253  % cells_wm_b32
+, $64$ , 5.257% , 3.678 , 1.087  % cells_wm_b64
+\midrule\multirow{3}{*}{\rotatebox{90}{\fiber{}}}, $16$ , 4.515% , 8.18 , 1.392  % fiber_wm_b16
+, $32$ , 4.149% , 7.444 , 1.53  % fiber_wm_b32
+, $64$ , 4.189% , 9.177 , 1.241  % fiber_wm_b64
+\midrule\multirow{3}{*}{\rotatebox{90}{\hone{}}}, $16$, , , % wm b16
+, $32$ , 4.449% , 0 , inf  % h01_wm_b32
+, $64$ , 4.336% , 0 , inf  % h01_wm_b64
+\midrule\multirow{3}{*}{\rotatebox{90}{\azba{}}}, $16$ , 4.414% , 1.122 , 1.374  % azba_wm_b16
+, $32$ , 4.015% , 1.052 , 1.466  % azba_wm_b32
+, $64$ , 4.525% , 1.371 , 1.125  % azba_wm_b64

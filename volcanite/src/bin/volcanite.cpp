@@ -409,10 +409,9 @@ int volcanite_main(int argc, char *argv[]) {
         Logger(INFO) << "export brick statistics to " << stats_path + " done";
     }
 
-    // we only need the rendering part for screenshots or the interactive app
+    // we only need the rendering part for screenshots/videos or the interactive app
     std::string appName = "Volcanite " + VolcaniteArgs::getVolcaniteVersionString();
-    bool run_headless_pass = !args.screenshot_output_file.empty() || !args.video_output_fmt_file.empty()
-                                || !args.eval_logfile.empty();
+    bool run_headless_pass = !args.screenshot_output_file.empty() || !args.video_output_fmt_file.empty();
     if (!args.headless || run_headless_pass) {
         Logger(INFO) << "--------------------------------------------------- ";
         Logger(INFO) << "initializing Volcanite renderer";
@@ -502,6 +501,22 @@ int volcanite_main(int argc, char *argv[]) {
             return app->exec();
         }
 #endif
+    }
+    else {
+        // If no rendering is requested: export the copmression results here
+        if (!args.eval_logfile.empty()) {
+            CSGVCompressionEvaluationResults comp_res = compressedSegmentationVolume->getLastEvaluationResults();
+            CSGVDecompressionEvaluationResults decomp_res; // TODO: decompression benchmark
+            CSGVRenderEvaluationResults render_res; 
+
+            if (write_eval_logfile(args.eval_logfile, args.eval_name, argc, argv,
+                                    comp_res, decomp_res, render_res) == RET_SUCCESS) {
+                Logger(INFO) << "exported evaluation results to " << args.eval_logfile;
+            } else {
+                Logger(WARN) << "could not export evaluation results to " << args.eval_logfile;
+                return RET_IO_ERROR;
+            }
+        }
     }
 
     return RET_SUCCESS;

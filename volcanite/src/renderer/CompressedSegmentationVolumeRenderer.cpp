@@ -1402,10 +1402,10 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     }
 
     CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluationResults() {
-        CSGVRenderEvaluationResults results;
+        CSGVRenderEvaluationResults results;        
 
         // obtain GPU memory consumption
-        {
+        if (m_inpaintedOutColor != nullptr) {
             size_t textures = 0ul;
             if (m_accumulation_rgba_tex[0]) {
                 textures += m_accumulation_rgba_tex[0]->memorySize() + m_accumulation_rgba_tex[1]->memorySize();

@@ -5,6 +5,9 @@ compile_commands.json
 .ipynb_checkpoints/
 *.pkl
 
+# gitlab merge conflict backups
+**/**.orig
+
 # ignore shaders generated during application execution
 *.spv
 
@@ -27,8 +30,11 @@ compile_commands.json
 /.vs
 /out
 /CMakeSettings.json
+**/**.code-workspace
 
 # vulkan, volcanite and imgui specific ignores
 /imgui.ini
 /vulkan_pipeline_cache.data
 /projects/volcanite/python/data/*
+/extern/shaderc/third_party/spirv-tools/build_overrides/*
+
