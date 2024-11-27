@@ -10,7 +10,7 @@ OLD_ABORT = 0
 OLD_APPEND = 1
 OLD_OVERWRITE = 2
 
-OLD_LOGS = OLD_APPEND
+OLD_LOGS = OLD_OVERWRITE
 GIT_CHECKOUT = "mp/parallel-decode"
 OUTPUT_BASE_DIR =  "/home/maxpio/code/volcanite/eurovis/eval/out"
 VOLCANITE_BUILD_DIR = "/home/maxpio/code/volcanite/cmake-build-release"
@@ -38,8 +38,8 @@ all_bs = (bs_16, bs_32, bs_64)
 # render cache mode
 cache_no =[(["--cache-mode", "n"], "_csh-n", 3)]
 cache_voxel =[(["--cache-mode", "v"], "_csh-v", 3)]
-cache_brick =[(["--cache-mode", "v"], "_csh-b", 3)]
-cache_brick_sm =[(["--cache-mode", "v", "--decode-sm"], "_csh-bsm", 3)]
+cache_brick =[(["--cache-mode", "b"], "_csh-b", 3)]
+cache_brick_sm =[(["--cache-mode", "b", "--decode-sm"], "_csh-bsm", 3)]
 all_cache = (cache_no, cache_voxel, cache_brick, cache_brick_sm)
 # render shading mode
 shade_local = [([], "_local", 4)]
@@ -92,20 +92,25 @@ def build_volcanite():
         print("Error: building volcanite returned " + str(res.returncode))
         exit(res.returncode)
 
-def volcanite(arg_args, eval_name=None):
+def volcanite(arg_args, fallback_log=None, eval_name=None):
     if eval_name is None:
         eval_name = concat_arg_ids(arg_args)
-    args = ["./volcanite", "--eval-logfile", str(log_path), "--eval-name", eval_name]
+    args = ["./volcanite", "--eval-logfile", str(log_path)]
+    if eval_name:
+        args = args + ["--eval-name", eval_name]
     # arg_args example:   [(["-b", "16"], "_b16"), (["-s", "0"], "_nb")]
     args = args + [a for args in arg_args for a in args[0]]
-    print("RUN VOLCANITE -----------------")
+    print("RUN VOLCANITE -----------------  " + eval_name)
     print(" ".join(args))
     print("-------------------------------")
     if not DRY_RUN:
         res = subp.run(args, cwd="/home/maxpio/code/volcanite/cmake-build-release/volcanite")
         if res.returncode != 0:
             print("Error: volcanite returned " + str(res.returncode))
-            exit(res.returncode)
+            if fallback_log:
+                log_manual(fallback_log) # output an empty entry to the log file
+            else:
+                exit(res.returncode)
 
 def log_manual(output):
     if DRY_RUN:
@@ -199,17 +204,22 @@ if __name__ == "__main__":
         log_manual("& \\multicolumn{12}{c}{shading mode: " + shade_tex[shade_i] + "} ")
         log_newline()
         for cache_mode_i, cache_mode in enumerate([cache_no, cache_voxel, cache_brick, cache_brick_sm]): 
-            log_manual(cache_mode_tex[cache_mode_i])
-            for enc_mode in [e_rans, e_wmh_nosb, e_wmh_nosb]:
+            log_manual(cache_mode_tex[cache_mode_i] + "\n")
+            for enc_mode in [e_rans, e_wmh_nosb, e_wmh]:
                 for data in [d_cells, d_fiber, d_h01, d_azba]:
                     bs = bs_64 if data == d_h01 else bs_32
                     if enc_mode == e_rans and cache_mode != cache_brick:
-                        log_manual("& - ")
+                        log_manual("& - \n")
+                    if enc_mode == e_wmh_nosb and data == d_h01:
+                        log_manual("& - \n")
                     else:
-                        volcanite(def_volc + vcfg_name(data, shade) + rec_name(data)
+                        volcanite(def_volc + cache_mode + vcfg_name(data, shade) + rec_name(data)
                                    + img_name_jpg(data + enc_mode + cache_mode + shade)
-                                   + csgv_in_name(data + enc_mode + bs))
-                        sleep(10)
+                                   + csgv_in_name(data + enc_mode + bs),
+                                  fallback_log="& - \n",
+                                  eval_name=concat_arg_ids(data + enc_mode + cache_mode + shade))
+                        if not DRY_RUN:
+                            sleep(5)
             log_newline()
             
 
