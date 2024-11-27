@@ -208,9 +208,8 @@ if __name__ == "__main__":
             for enc_mode in [e_rans, e_wmh_nosb, e_wmh]:
                 for data in [d_cells, d_fiber, d_h01, d_azba]:
                     bs = bs_64 if data == d_h01 else bs_32
-                    if enc_mode == e_rans and cache_mode != cache_brick:
-                        log_manual("& - \n")
-                    if enc_mode == e_wmh_nosb and data == d_h01:
+                    if (enc_mode == e_rans and cache_mode != cache_brick) or\
+                       (enc_mode == e_wmh_nosb and data == d_h01):
                         log_manual("& - \n")
                     else:
                         volcanite(def_volc + cache_mode + vcfg_name(data, shade) + rec_name(data)
