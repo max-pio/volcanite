@@ -56,6 +56,9 @@
 #ifndef SHARED_WM_HEADER
     #define SHARED_WM_HEADER s_wm_header[0]
 #endif
+#ifndef SHARED_STOP_BITS_REF
+    #define SHARED_STOP_BITS_REF s_stop_bits_ref
+#endif
 
 #include "volcanite/compression/decoder/HuffmanWMDecoder_types.glsl"
 
@@ -421,9 +424,13 @@ void decompressCSGVVoxelToCache(const uint output_i, const uint target_inv_lod, 
                                                 #endif
 // TODO: should the stop bits be moved to shared memory as well for DECODE_FORM_SHARED_MEMORY, as with WM_HEADER..?
                                                 #if (OP_MASK & OP_STOP_BIT)
-                                                    , getWMHStopBitsFromEncoding(brick_encoding,
-                                                                                 brick_encoding_length,
-                                                                                 brick_encoding.buf[PALETTE_SIZE_HEADER_INDEX])
+                                                    #ifndef DECODE_FROM_SHARED_MEMORY
+                                                        , getWMHStopBitsFromEncoding(brick_encoding,
+                                                                                    brick_encoding_length,
+                                                                                    brick_encoding.buf[PALETTE_SIZE_HEADER_INDEX])
+                                                    #else
+                                                        , SHARED_STOP_BITS_REF
+                                                    #endif
                                                 #endif
                                                     );
 

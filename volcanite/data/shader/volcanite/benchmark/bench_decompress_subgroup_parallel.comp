@@ -57,6 +57,7 @@ layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
         #define MAX_WM_HEADER_ARRAY_LENGTH (2 + (MAX_FLAT_RANK_WORD_LENGTH / ((384 + BV_WORD_BIT_SIZE - 1) / BV_WORD_BIT_SIZE)))
         shared WMHBrickHeader s_wm_header[MAX_WM_HEADER_ARRAY_LENGTH];
         #define SHARED_BIT_VECTOR s_bit_vector
+        TODO: stop bits ref!
         #define SHARED_WM_HEADER s_wm_header[0]
     #else
         STATIC_FAIL(unsupported_encoding_mode);

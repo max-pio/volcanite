@@ -36,7 +36,7 @@ Path_Length: 1
 [Display]
 Background_Color_A: 0.900000 0.900000 0.950000 1.000000
 Background_Color_B: 1.000000 1.000000 1.000000 1.000000
-Accumulation_Frames: 1024
+Accumulation_Frames: 256
 Subsampling_Resolution: 0
 GUI_7: Render~resolution:~1920x1080
 Resizable_Window: 1

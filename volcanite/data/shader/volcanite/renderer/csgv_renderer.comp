@@ -110,15 +110,13 @@ uint get_inv_lod(ivec3 voxel) {
 
     // use a component-wise xor as in Hoskins 2014, Quilez 2017a cf. "Hash Functions for GPU Rendering" JCGT 9(3) (2020)
     uint hash1(uvec3 lod_voxel) {
-        lod_voxel = hash_pcg3d(lod_voxel);
-        lod_voxel = _hash(uvec3(19u, 47u, 101u), lod_voxel);
+        lod_voxel = _hash(uvec3(19u, 47u, 101u), hash_pcg3d(lod_voxel));
         return (lod_voxel.x ^ lod_voxel.y ^ lod_voxel.z + 131u) % CACHE_UVEC2_SIZE;
         // return (_hash(19u, voxel_id) ^ _hash(3u, voxel_id) ^ _hash(115u, voxel_id)) % CACHE_UVEC2_SIZE;
     }
 
     uint key(uvec4 lod_voxel_and_lod) {
-        lod_voxel_and_lod = hash_pcg4d(lod_voxel_and_lod);
-        lod_voxel_and_lod *= _hash(uvec4(5u, 149u, 61u, 2887u), lod_voxel_and_lod);
+        lod_voxel_and_lod = _hash(uvec4(5u, 149u, 61u, 2887u), hash_pcg4d(lod_voxel_and_lod));
         return lod_voxel_and_lod.x ^ lod_voxel_and_lod.y ^ lod_voxel_and_lod.z ^ lod_voxel_and_lod.w + 171u;
     }
 
@@ -136,7 +134,13 @@ uint get_inv_lod(ivec3 voxel) {
         assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
 
         const uint req_inv_lod = get_inv_lod(voxel);
-
+        
+        // if (req_inv_lod < g_max_inv_lod) {
+        //     const uvec3 brick = uvec3(voxel) / BRICK_SIZE;
+        //     const uvec3 brick_voxel = uvec3(voxel) - (brick * BRICK_SIZE);
+        //     const uint brick_idx = brick_pos2idx(brick, g_brick_count);
+        //     return decompressCSGVVoxel(brick_idx, brick_voxel, req_inv_lod);
+        // }
 
         // check if the voxel is flagged as empty space
         // the empty space bit vector index is the morton index of the voxel divided by the set size.
@@ -157,7 +161,7 @@ uint get_inv_lod(ivec3 voxel) {
 #endif
 
         // map voxels from different LODs at the same area to identical indices.
-        const uvec3 lod_voxel = (uvec3(voxel) >> 3*(g_max_inv_lod - req_inv_lod)) << 3*(g_max_inv_lod - req_inv_lod);
+        const uvec3 lod_voxel = (uvec3(voxel) >> (g_max_inv_lod - req_inv_lod)) << (g_max_inv_lod - req_inv_lod);
 
         #define KEY_KEY_BITS 0x7FFFFFFFu
         #define KEY_TABLE2_BIT 0x80000000u

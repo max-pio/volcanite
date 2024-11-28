@@ -37,17 +37,18 @@ bs_64 = [(["-b", "64"], "_b64", 2)]
 all_bs = (bs_16, bs_32, bs_64)
 # render cache mode
 cache_no =[(["--cache-mode", "n"], "_csh-n", 3)]
-cache_voxel =[(["--cache-mode", "v"], "_csh-v", 3)]
+cache_voxel =[(["--cache-mode", "v", "--empty-space-res", "0"], "_csh-v", 3)]
+cache_voxel_es =[(["--cache-mode", "v", "--empty-space-res", "2"], "_csh-v_es", 3)]
 cache_brick =[(["--cache-mode", "b"], "_csh-b", 3)]
 cache_brick_sm =[(["--cache-mode", "b", "--decode-sm"], "_csh-bsm", 3)]
 all_cache = (cache_no, cache_voxel, cache_brick, cache_brick_sm)
 # render shading mode
-shade_local = [([], "_local", 4)]
-shade_shadow = [([], "_shadow", 4)]
-shade_ao = [([], "_ao", 4)]
-shade_pt = [([], "_pt", 4)]
+shade_local = [([], "_local", 0.5)]
+shade_shadow = [([], "_shadow", 0.5)]
+shade_ao = [([], "_ao", 0.5)]
+shade_pt = [([], "_pt", 0.5)]
 # other default args
-def_volc = [(["--verbose", "--headless", "--cache-size", "4095"], "", 1000)]
+def_volc = [(["--verbose", "--headless"], "", 1000)]
 
 
 def concat_arg_ids(arg_args):
@@ -75,7 +76,7 @@ def video_name(arg_args):
     return [(["-v", str(eval_dir / Path(concat_arg_ids(arg_args))) + ".jpg"], "", 1000)]
 
 def vcfg_name(data_arg, shade_arg):
-    resolution = "1080x1920" if data_arg[0][1] == "h01" else "1920x1080"
+    resolution = "1080x1920" if data_arg[0][1] == "azba" else "1920x1080"
     return [(["--config", str(config_dir / Path(data_arg[0][1] + shade_arg[0][1] + ".vcfg")), "--resolution", resolution], "", 1000)]
 
 def rec_name(data_arg):
@@ -108,7 +109,7 @@ def volcanite(arg_args, fallback_log=None, eval_name=None):
         if res.returncode != 0:
             print("Error: volcanite returned " + str(res.returncode))
             if fallback_log:
-                log_manual(fallback_log) # output an empty entry to the log file
+                log_manual(fallback_log.replace("%name", eval_name) + "\n") # output an empty entry to the log file
             else:
                 exit(res.returncode)
 
@@ -145,11 +146,6 @@ def create_csv_tex_from_log():
 
 if __name__ == "__main__":
 
-    DRY_RUN = False
-    if len(sys.argv) > 1 and "dry" in sys.argv[1]:
-        DRY_RUN = True
-        print("Performing dry run")
-
     # preliminaries ---------------------------------------------------------------------------------
     script_path = Path(sys.argv[0])
     script_dir = script_path.resolve().absolute().parent
@@ -162,6 +158,17 @@ if __name__ == "__main__":
     tex_path = eval_dir / Path(eval + ".tex")
     csv_path = eval_dir / Path(eval + ".csv")
     out_path = eval_dir / Path(eval + "_output.txt")
+
+    if len(sys.argv) > 1 and any(["file" in a for a in sys.argv[1:]]):
+        print("Only creating csv and tex files from log")
+        create_csv_tex_from_log()
+        exit(0)
+    DRY_RUN = False
+    if len(sys.argv) > 1 and any(["dry" in a for a in sys.argv[1:]]):
+        DRY_RUN = True
+        print("Performing dry run")
+
+
     print("Evaluation " + eval + " from template " + str(tmp_log_path) + "\n Directory: " + str(eval_dir)
            + "\n log file: "  + str(log_path) + "\n tex file: " + str(tex_path) + "\n csv file: " + str(csv_path) + "\n out file: " + str(out_path))
 
@@ -194,28 +201,45 @@ if __name__ == "__main__":
 
     # evaluation ------------------------------------------------------------------------------------
 
+
+    if OLD_LOGS == OLD_APPEND:
+        print("re-running other results: ")
+        sleep(5)
+        data = d_fiber
+        enc_mode = e_wmh
+        bs = bs_32
+        for shade in [shade_local, shade_ao, shade_shadow]:
+            for cache_mode in [cache_voxel]:
+                volcanite(def_volc + cache_mode + vcfg_name(data, shade) + rec_name(data) + enc_mode
+                                    + img_name_jpg(data + enc_mode + cache_mode + shade)
+                                    + csgv_in_name(data + enc_mode + bs),
+                                    fallback_log="& -  % %name",
+                                    eval_name=concat_arg_ids(data + enc_mode + cache_mode + shade))
+        exit(0)
+
     log_manual("# " + datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f") + "\n")
 
     shade_tex = ["local shading", "shadow rays", "ambient occlusion", "path tracing"]
-    cache_mode_tex = ["no cache ", "voxel cache ", "voxel + empty space ", "brick cache ", "brick cache (sm) "]
+    cache_mode_tex = ["no cache ", "voxel cache ", "voxel cache (es)", "brick cache ", "brick cache (sm) "]
 
-    for shade_i, shade in enumerate([shade_local, shade_shadow, shade_ao, shade_pt]):
+    for shade_i, shade in enumerate([shade_local, shade_shadow, shade_ao]): # without shade_pt
         log_manual("\\midrule\n")
-        log_manual("& \\multicolumn{12}{c}{shading mode: " + shade_tex[shade_i] + "} ")
+        log_manual("\\multicolumn{13}{c}{shading mode: " + shade_tex[shade_i] + "} ")
         log_newline()
-        for cache_mode_i, cache_mode in enumerate([cache_no, cache_voxel, cache_brick, cache_brick_sm]): 
+        for cache_mode_i, cache_mode in enumerate([cache_no, cache_voxel, cache_voxel_es, cache_brick]):  # without cache_brick_sm as there's a bug
             log_manual(cache_mode_tex[cache_mode_i] + "\n")
             for enc_mode in [e_rans, e_wmh_nosb, e_wmh]:
                 for data in [d_cells, d_fiber, d_h01, d_azba]:
                     bs = bs_64 if data == d_h01 else bs_32
+                    cache_size = [(["--cache-size", "1500" if (data == d_h01 and enc_mode != e_rans) else "4095"], "", 1000)]
                     if (enc_mode == e_rans and cache_mode != cache_brick) or\
                        (enc_mode == e_wmh_nosb and data == d_h01):
                         log_manual("& - \n")
                     else:
-                        volcanite(def_volc + cache_mode + vcfg_name(data, shade) + rec_name(data)
+                        volcanite(def_volc + cache_size + cache_mode + vcfg_name(data, shade) + rec_name(data) + enc_mode
                                    + img_name_jpg(data + enc_mode + cache_mode + shade)
                                    + csgv_in_name(data + enc_mode + bs),
-                                  fallback_log="& - \n",
+                                  fallback_log="& -  % %name",
                                   eval_name=concat_arg_ids(data + enc_mode + cache_mode + shade))
                         if not DRY_RUN:
                             sleep(5)

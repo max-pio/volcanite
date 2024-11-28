@@ -44,6 +44,8 @@ layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
         shared WMHBrickHeader s_wm_header[MAX_WM_HEADER_ARRAY_LENGTH];
         #define SHARED_BIT_VECTOR s_bit_vector
         #define SHARED_WM_HEADER s_wm_header[0]
+        shared uvec4 s_stop_bits_ref;
+        #define SHARED_STOP_BITS_REF s_stop_bits_ref
     #else
         STATIC_FAIL(unsupported_encoding_mode);
     #endif
@@ -128,8 +130,12 @@ void main() {
     #elif ENCODING_MODE == HUFFMAN_WM_ENC
         // copy the wavelet matrix header to shared memory
         uint flat_rank_size =  getFlatRankEntries(global_wm_header.bit_vector_size);
-        if (workgroup_thread_id == 0u)
+        if (workgroup_thread_id == 0u) {
             s_wm_header[0].bit_vector_size = global_wm_header.bit_vector_size;
+            s_stop_bits_ref = getWMHStopBitsFromEncoding(global_brick_encoding,
+                                                         brick_encoding_length,
+                                                         global_brick_encoding.buf[PALETTE_SIZE_HEADER_INDEX]);
+        }
         if (workgroup_thread_id < 5u)
             s_wm_header[0].ones_before_level[workgroup_thread_id] = global_wm_header.ones_before_level[workgroup_thread_id];
         if (workgroup_thread_id < 4u)

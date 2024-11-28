@@ -32,7 +32,7 @@ layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uvec3 g_brick_count;            // number of bricks in each xyz dimension for the encoded volume
     uint g_brick_idx_count;         // number of brick indicies (brick_count.x * .y * .z)
 //
-    uint g_max_inv_lod;             // max. inv LOD that we would decode / traverse
+    uint g_max_inv_lod;             // max. inv LOD that we would decode / traverse (finest resolution = 1³ voxels)
     uint g_cache_base_element_uints;// size in uints of an atomic cache memory region that stores 2x2x2=8 output voxels
     uint g_cache_uints_per_brick;   // size in uints of a cache memory region that stores all output voxels of a brick
     uint g_cache_indices_per_uint;  // number of output element indices that are stored in one uint in the cache
