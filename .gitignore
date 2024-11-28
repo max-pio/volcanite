@@ -20,6 +20,8 @@ compile_commands.json
 
 # large evaluation files
 /eurovis/eval/**/**.csgv
+/eurovis/eval/out/**/**.png
+/eurovis/eval/out/**/**.jpg
 
 # operating system and IDE specific ignores
 /.idea*
