@@ -205,25 +205,23 @@ if __name__ == "__main__":
     if OLD_LOGS == OLD_APPEND:
         print("re-running other results: ")
         sleep(5)
-        data = d_azba
-        enc_mode = e_wmh
-        bs = bs_32
-        for shade in [shade_shadow]:
-            for cache_mode in [cache_voxel_es]:
-                for cache_prob in [0.001, 0.01, 0.1, 0.25, 0.5, 0.9, 1.]:# [0.1, 0.25, 0.5, 0.75, 0.9, 1.]:
-                    for size in [1000]:# [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000]:
-                        cache_size = [(["--cache-size", str(size)], "cs-" + str(size), 10)]
-                        prob =  [(["--shader-def", "CACHE_EJECT_PROB=" + str(int(cache_prob * 4294967295))], "_cshp-" + "{:.2f}".format(cache_prob), 9)] if cache_prob < 1. else [([], "", 9)]
-                        log_manual("\\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 " + str(cache_prob) + "}\n")
-                        volcanite(def_volc + cache_size + cache_mode + vcfg_name(data, shade) + rec_name(data) + enc_mode + prob
-                                            + img_name_jpg(data + enc_mode + cache_mode + shade + prob + cache_size)
-                                            + csgv_in_name(data + enc_mode + bs),
-                                            fallback_log="& -  % %name",
-                                            eval_name=concat_arg_ids(data + enc_mode + cache_mode + shade))
-                        log_newline()
-        exit(0)
-
-    exit(0)
+        # data = d_azba
+        # enc_mode = e_wmh
+        # bs = bs_32
+        # for shade in [shade_shadow]:
+        #     for cache_mode in [cache_voxel_es]:
+        #         for cache_prob in [0.001, 0.01, 0.1, 0.25, 0.5, 0.9, 1.]:# [0.1, 0.25, 0.5, 0.75, 0.9, 1.]:
+        #             for size in [1000]:# [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000]:
+        #                 cache_size = [(["--cache-size", str(size)], "cs-" + str(size), 10)]
+        #                 prob =  [(["--shader-def", "CACHE_EJECT_PROB=" + str(int(cache_prob * 4294967295))], "_cshp-" + "{:.2f}".format(cache_prob), 9)] if cache_prob < 1. else [([], "", 9)]
+        #                 log_manual("\\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 " + str(cache_prob) + "}\n")
+        #                 volcanite(def_volc + cache_size + cache_mode + vcfg_name(data, shade) + rec_name(data) + enc_mode + prob
+        #                                     + img_name_jpg(data + enc_mode + cache_mode + shade + prob + cache_size)
+        #                                     + csgv_in_name(data + enc_mode + bs),
+        #                                     fallback_log="& -  % %name",
+        #                                     eval_name=concat_arg_ids(data + enc_mode + cache_mode + shade))
+        #                 log_newline()
+        # exit(0)
 
     log_manual("# " + datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f") + "\n")
 
@@ -234,12 +232,15 @@ if __name__ == "__main__":
         log_manual("\\midrule\n")
         log_manual("\\multicolumn{13}{c}{shading mode: " + shade_tex[shade_i] + "} ")
         log_newline()
-        for cache_mode_i, cache_mode in enumerate([cache_no, cache_voxel, cache_voxel_es, cache_brick]):  # without cache_brick_sm as there's a bug
+        for cache_mode_i, cache_mode in enumerate([cache_no, cache_voxel, cache_voxel_es, cache_brick, cache_brick_sm]):
             log_manual(cache_mode_tex[cache_mode_i] + "\n")
             for enc_mode in [e_rans, e_wmh_nosb, e_wmh]:
                 for data in [d_cells, d_fiber, d_h01, d_azba]:
                     bs = bs_64 if data == d_h01 else bs_32
-                    cache_size = [(["--cache-size", "1500" if (data == d_h01 and enc_mode != e_rans) else "4095"], "", 1000)]
+
+                    # rANS with h01 uses a large cache of 4 GiB, everything else uses 1 GiB
+                    cache_size = [(["--cache-size", "1024" if (data != d_h01 or enc_mode != e_rans) else "4095"], "", 1000)]
+
                     if (enc_mode == e_rans and cache_mode != cache_brick) or\
                        (enc_mode == e_wmh_nosb and data == d_h01):
                         log_manual("& - \n")
