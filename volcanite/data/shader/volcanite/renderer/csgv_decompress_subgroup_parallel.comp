@@ -35,7 +35,7 @@ layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
         #include "volcanite/compression/decoder/HuffmanWMDecoder_types.glsl"
 
         #ifndef MAX_BIT_VECTOR_WORD_LENGTH
-            #define MAX_BIT_VECTOR_WORD_LENGTH 120
+            #define MAX_BIT_VECTOR_WORD_LENGTH 1024
         #endif
         #define MAX_FLAT_RANK_WORD_LENGTH (BV_WORD_BIT_SIZE * MAX_BIT_VECTOR_WORD_LENGTH / BV_L1_BIT_SIZE + 1)
         // each WMHBrickHeader is 12x4x8=384 bits in size: allocate enough WMHBrickHeader entries to fit any flat rank at the end
