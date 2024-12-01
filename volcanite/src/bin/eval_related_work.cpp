@@ -40,6 +40,8 @@ int eval_related_work(int argc, char *argv[]) {
 
     if(argc > 1) {
         path = std::string(argv[1]);
+    } else {
+        Logger(WARN) << " add a path to a segmentation volume as a command line argument!"
     }
 
     double seconds, lzma_seconds;
@@ -73,14 +75,14 @@ int eval_related_work(int argc, char *argv[]) {
     // }
 
     // Fast Compressed Segmentation Volumes
-    Logger(INFO) << "CSGV ------------------------------------------------------------------";
+    Logger(INFO) << "CSGV (one thread) -----------------------------------------------------";
     {
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = 64,
                 .encoding_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC,
                 .op_mask = OP_ALL,
                 .random_access = false,
                 .label_remapping = nullptr,
-                .cpu_threads = 0,
+                .cpu_threads = 1,
                 .use_detail_separation = false,
                 .force_recompute = true,
                 .chunked_input_data = false,
@@ -98,20 +100,21 @@ int eval_related_work(int argc, char *argv[]) {
     }
 
     // Random Access Compressed Segmentation Volumes
-    Logger(INFO) << "CSGV-R ----------------------------------------------------------------";
+    Logger(INFO) << "CSGV-R (one thread) ---------------------------------------------------";
     {
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = 64,
                 .encoding_mode = EncodingMode::HUFFMAN_WM_ENC,
-                .op_mask = OP_ALL,
+                .op_mask = OP_ALL_WITHOUT_STOP,
                 .random_access = true,
                 .label_remapping = nullptr,
-                .cpu_threads = 0,
+                .cpu_threads = 1,
                 .use_detail_separation = false,
                 .force_recompute = true,
                 .chunked_input_data = false,
                 .run_tests = false,
                 .export_stats_per_chunk = false,
-                .verbose = false};
+                .verbose = false
+        };
         auto compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(path,
                                                                                                   Paths::getTempFileWithName(
                                                                                                           "eval_csgv-r.csgv"),
@@ -119,6 +122,38 @@ int eval_related_work(int argc, char *argv[]) {
         auto eval_res = compressedSegmentationVolume->getLastEvaluationResults();
         std::cout << "CSGV-R HuffWM  Compression rate: " << std::fixed << std::setprecision(9)
                   << (eval_res.compression_rate * 100.) << "% in " << eval_res.compression_total_seconds << std::endl;
+    }
+
+    // Random Access Compressed Segmentation Volumes
+    Logger(INFO) << "CSGV-R+sb (one thread) ------------------------------------------------";
+    {
+        CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = 64,
+                .encoding_mode = EncodingMode::HUFFMAN_WM_ENC,
+                .op_mask = OP_ALL,
+                .random_access = true,
+                .label_remapping = nullptr,
+                .cpu_threads = 1,
+                .use_detail_separation = false,
+                .force_recompute = true,
+                .chunked_input_data = false,
+                .run_tests = false,
+                .export_stats_per_chunk = false,
+                .verbose = false
+        };
+        auto compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(path,
+                                                                                                  Paths::getTempFileWithName(
+                                                                                                          "eval_csgv-r-sb.csgv"),
+                                                                                                  cfg);
+        auto eval_res = compressedSegmentationVolume->getLastEvaluationResults();
+        std::cout << "CSGV-R HuffWM  Compression rate: " << std::fixed << std::setprecision(9)
+                  << (eval_res.compression_rate * 100.) << "% in " << eval_res.compression_total_seconds << std::endl;
+
+        std::cout << "-------------" << std::endl;
+        std::cout << "Original Volume: " << (eval_res.original_volume_bytes * BYTE_TO_GB) << " GB"
+                  << " containing " << str(eval_res.volume_dim) << " voxels @ "
+                  << CompressedSegmentationVolume::getBytesForLabelCount(eval_res.volume_labels)
+                  << " bytes/voxel for " << eval_res.volume_labels << " labels. "
+                  << std::endl;
     }
 
     return 0;
