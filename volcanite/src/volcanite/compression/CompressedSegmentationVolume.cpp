@@ -793,7 +793,9 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     fin.close();
     if(verbose)
         Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim)
-                      << " voxels and " << str(getBrickCount()) << " = " << getBrickIndexCount()
+                      << " = " << (static_cast<size_t>(m_volume_dim.x) * m_volume_dim.y * m_volume_dim.z)
+                      << " voxels and " << getNumberOfUniqueLabelsInVolume() << " unique labels,"
+                      << " encoded in " << str(getBrickCount()) << " = " << getBrickIndexCount() << " bricks"
                       << " [b=" << m_brick_size << ",e=" << EncodingMode_STR(m_encoding_mode) << "]"
                       << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
 
