@@ -507,11 +507,17 @@ std::vector<std::string>
 
     // obtain MAX_BIT_VECTOR_WORD_LENGTH as ceil(max_bitvector_bit_length / BV_WORD_BIT_SIZE)
     uint32_t max_bitvector_bit_length = 0u;
+    uint32_t max_brick_encoding_32bit_length = 0u;
     #pragma omp parallel for default(none) shared(brick_idx_count, getBrickEncodingSpan) reduction(max:max_bitvector_bit_length)
     for (uint32_t brick_idx = 0u; brick_idx < brick_idx_count; brick_idx++) {
         auto brick_encoding = getBrickEncodingSpan(brick_idx);
-        max_bitvector_bit_length = std::max(max_bitvector_bit_length,
-                                            getWMHBrickHeaderFromEncoding(brick_encoding.data())->bit_vector_size);
+        if (m_encoding_mode == HUFFMAN_WM_ENC) {
+            auto wmh_brick_header = getWMHBrickHeaderFromEncoding(brick_encoding.data());
+            max_bitvector_bit_length = std::max(max_bitvector_bit_length, wmh_brick_header->bit_vector_size);
+        } else {
+            auto wm_brick_header = getWMBrickHeaderFromEncoding(brick_encoding.data());
+            max_bitvector_bit_length = std::max(max_bitvector_bit_length, wm_brick_header->text_size * WM_LEVELS);
+        }
     }
     defines.emplace_back("MAX_BIT_VECTOR_WORD_LENGTH=" +
                          std::to_string((max_bitvector_bit_length + BV_WORD_BIT_SIZE - 1) / BV_WORD_BIT_SIZE));

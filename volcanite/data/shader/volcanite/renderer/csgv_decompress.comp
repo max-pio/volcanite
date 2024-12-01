@@ -28,8 +28,7 @@ void main() {
     g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = max(LOD_COUNT, g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]);
 
     // if this brick has a valid request slot, it requests decompression. Otherwise, it can be ignored.
-    uint slot = g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT];
-    if(slot == INVALID) {
+    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] == INVALID) {
         return;
     }
 

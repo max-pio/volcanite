@@ -35,9 +35,9 @@ layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
         #include "volcanite/compression/decoder/HuffmanWMDecoder_types.glsl"
 
         #ifndef MAX_BIT_VECTOR_WORD_LENGTH
-            #define MAX_BIT_VECTOR_WORD_LENGTH 7680u
+            #define MAX_BIT_VECTOR_WORD_LENGTH 120
         #endif
-        #define MAX_FLAT_RANK_WORD_LENGTH (MAX_BIT_VECTOR_WORD_LENGTH / BV_L1_BIT_SIZE + 1u)
+        #define MAX_FLAT_RANK_WORD_LENGTH (BV_WORD_BIT_SIZE * MAX_BIT_VECTOR_WORD_LENGTH / BV_L1_BIT_SIZE + 1)
         // each WMHBrickHeader is 12x4x8=384 bits in size: allocate enough WMHBrickHeader entries to fit any flat rank at the end
         shared BV_WORD_TYPE s_bit_vector[MAX_BIT_VECTOR_WORD_LENGTH];
         #define MAX_WM_HEADER_ARRAY_LENGTH (2 + (MAX_FLAT_RANK_WORD_LENGTH / ((384 + BV_WORD_BIT_SIZE - 1) / BV_WORD_BIT_SIZE)))
@@ -68,25 +68,27 @@ void main() {
     const uint brick_idx = gl_WorkGroupID.x;
     if (isHelperLane(brick_idx, g_brick_count.x * g_brick_count.y * g_brick_count.z))
         return;
+
     const uvec3 brick = brick_idx2pos(brick_idx, g_brick_count);
     const uint brick_info_pos = brick_idx * 4u;
+
+    // obtain requested inv_lod and previously assigned cache_idx
+    const uint target_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
+    const uint cache_idx = g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX];
+
+    // barrier must be here before thread 0 resets the REQ_INV_LOD
+    barrier();
+    // reset the requested LOD. the renderer will have to flag everything visible again
+    // no return (except the isHelperLane return) allowed before this point
+    if (workgroup_thread_id == 0u) {
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = max(LOD_COUNT, g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]);
+    }
 
     // if this brick has a valid request slot, it requests decompression. Otherwise, it can be ignored.
     if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] == INVALID) {
         return;
     }
-
-    // obtain requested inv_lod and previously assigned cache_idx
-    const uint target_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
     assert(0 < target_inv_lod && target_inv_lod < LOD_COUNT, "brick has slot index but requests zero or invalid lod");
-    const uint cache_idx = g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX];
-
-    barrier();
-
-    // reset the requested LOD. the renderer will have to flag everything visible again
-    if (workgroup_thread_id == 0u) {
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = max(LOD_COUNT, g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]);
-    }
 
     // decompression requested for brick, but brick could not receive a free cache region
     if (cache_idx == INVALID) {

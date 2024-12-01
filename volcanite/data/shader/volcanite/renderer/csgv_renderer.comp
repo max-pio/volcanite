@@ -259,14 +259,16 @@ uint get_inv_lod(ivec3 voxel) {
         // but only if this is a valid pixel sample. An invalid sample could be accessing bricks that are actually not visible.
         assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] <= LOD_COUNT, "we try to access a brick that's flagged as invisible");
         if (isDepthValid(depth_valid) && req_inv_lod > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > req_inv_lod) {
-            // if the brick was not requested so far:
-            if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT)
-                g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
-            // if we request a finer level than the one that was requested so far:
-            // (this should not happen if we instead compute the LOD in the provision shader)
-            // TODO: Compute requested brick LOD in the provision shader based on the distance brick center <-> camera?
-            else if (req_inv_lod > g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD])
-                atomicMax(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], req_inv_lod);
+            g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
+            // old code, no longer necessary since all threads will compute the same LOD for the brick:
+            // // if the brick was not requested so far:
+            // if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT)
+            //     g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
+            // // if we request a finer level than the one that was requested so far:
+            // // (this should not happen if we instead compute the LOD in the provision shader)
+            // // TODO: Compute requested brick LOD in the provision shader based on the distance brick center <-> camera?
+            // else if (req_inv_lod > g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD])
+            //     atomicMax(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], req_inv_lod);
         }
 
         // find the current LOD
@@ -468,7 +470,7 @@ void main() {
     if (DEBUG_vis_lod_rectangles(pixel, g_debug_lod)) return;
 
     // Add a subpixel offset in [0, 1) to perform temporal anti-aliasing
-    vec2 subpixel_offset = randomVec3(pixel, g_camera_still_frames).xy;
+    vec2 subpixel_offset = g_blue_noise_enable ? randomVec3(pixel, g_camera_still_frames).xy : vec2(0.5f);
     vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(viewport_size);
 
     // create view ray in model space
