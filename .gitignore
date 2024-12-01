@@ -22,6 +22,7 @@ compile_commands.json
 /eurovis/eval/**/**.csgv
 /eurovis/eval/out/**/**.png
 /eurovis/eval/out/**/**.jpg
+/eurovis/eval/out/**/**.mp4
 
 # operating system and IDE specific ignores
 /.idea*
