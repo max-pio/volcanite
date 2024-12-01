@@ -100,13 +100,13 @@ BitVectorRef getWMHBitVectorFromEncoding(EncodingRef brick_encoding) {
     #define WM_HEADER SHARED_WM_HEADER
     #define FR_RANK1(index) _fr_rank1_wmh(index)
     #define WM_HUFFMAN_ACCESS(position) _wm_huffman_access(position)
-    #define WM_HUFFMAN_RANK(position, symbol) _wm_huffman_rank(position, symbol)
+    #define WM_HUFFMAN_RANK_PALETTE(position) _wm_huffman_rank_palette(position)
 #else
     #define WM_BIT_VECTOR bit_vector.words
     #define WM_HEADER wm_header
     #define FR_RANK1(index) _fr_rank1_wmh(wm_header, bit_vector, index)
     #define WM_HUFFMAN_ACCESS(position) _wm_huffman_access(wm_header, bit_vector, position)
-    #define WM_HUFFMAN_RANK(position, symbol) _wm_huffman_rank(wm_header, bit_vector, position, symbol)
+    #define WM_HUFFMAN_RANK_PALETTE(position) _wm_huffman_rank_palette(wm_header, bit_vector, position)
 #endif
 
 uint  getFlatRankEntries(uint bit_vector_size) {
@@ -269,6 +269,36 @@ uint _wm_huffman_access(
     return HWM_LEVELS;
 }
 
+
+uint _wm_huffman_rank_palette(
+                  #ifndef DECODE_FROM_SHARED_MEMORY
+                      const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
+                  #endif
+                      uint position) {
+    // see: volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp HuffmanWaveletMatrix::rank()
+
+    // the PALETTE_ADV operation consists of 5 bits (00001) => 4 loop iterations for the internal zeros
+    
+    uint interval_start = 0;
+    #pragma unroll
+    for (uint level = 0; level < 4 && (position > 0); ++level) {
+        const uint ones_before_interval = FR_RANK1(interval_start);
+        const uint ones_before_position = FR_RANK1(interval_start + position) - ones_before_interval;
+
+        // this is the 0 branch of the WM rank as no symbol has interal zeros
+
+        position = position - ones_before_position;
+        // TODO: ones_before_level could become an uvec4 as this case is excluded for level == chc.length-1 == 4
+        const uint ones_in_interval = ones_before_interval - WM_HEADER.ones_before_level[level];
+        interval_start = wmh_getLevelStart(level + 1, WM_HEADER.level_starts_1_to_4)
+                + (interval_start - wmh_getLevelStart(level, WM_HEADER.level_starts_1_to_4) - ones_in_interval);
+    }
+
+    const uint ones_before_interval = FR_RANK1(interval_start);
+    const uint ones_before_position = FR_RANK1(interval_start + position) - ones_before_interval;
+    return ones_before_position;
+}
+
 uint _wm_huffman_rank(
                   #ifndef DECODE_FROM_SHARED_MEMORY
                       const WMHBrickHeaderRef wm_header, const BitVectorRef bit_vector,
@@ -392,7 +422,7 @@ uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
 
         // at this point, the current operation accesses the palette: write the resulting palette entry
         // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
-        uint palette_index = WM_HUFFMAN_RANK(enc_operation_index, PALETTE_ADV);
+        uint palette_index = WM_HUFFMAN_RANK_PALETTE(enc_operation_index);
         // the actual palette index may be offset depending on the operation
         if (operation == PALETTE_LAST) {
             palette_index--;
