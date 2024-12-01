@@ -210,8 +210,8 @@ if __name__ == "__main__":
         bs = bs_32
         for shade in [shade_shadow]:
             for cache_mode in [cache_voxel_es]:
-                for cache_prob in [1.]:# [0.1, 0.25, 0.5, 0.75, 0.9, 1.]:
-                    for size in [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000]:
+                for cache_prob in [0.001, 0.01, 0.1, 0.25, 0.5, 0.9, 1.]:# [0.1, 0.25, 0.5, 0.75, 0.9, 1.]:
+                    for size in [1000]:# [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000]:
                         cache_size = [(["--cache-size", str(size)], "cs-" + str(size), 10)]
                         prob =  [(["--shader-def", "CACHE_EJECT_PROB=" + str(int(cache_prob * 4294967295))], "_cshp-" + "{:.2f}".format(cache_prob), 9)] if cache_prob < 1. else [([], "", 9)]
                         log_manual("\\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 " + str(cache_prob) + "}\n")
