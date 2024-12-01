@@ -192,6 +192,14 @@ uint get_inv_lod(ivec3 voxel) {
         const uint brick_idx = brick_pos2idx(brick, g_brick_count);
         const uint label = decompressCSGVVoxel(brick_idx, brick_voxel, req_inv_lod); // this is extremely expensive!
 
+    // #define CACHE_EJECT_PROB ((~0u) / 4u)
+    #ifdef CACHE_EJECT_PROB
+            // if an element would be ejected by inserting the new label, only insert with a certain probability 
+            if (cache_elem.x != INVALID && hash_pcg4d(uvec4(lod_voxel, g_frame * 111u + 1711u)).x < CACHE_EJECT_PROB) {
+                return label;
+            }
+    #endif
+
         // if the label is not visible, check if all other labels from the same set are not visible as well
 #ifdef EMPTY_SPACE_UINT_SIZE
         if (!isLabelVisible(label)) {

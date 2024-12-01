@@ -78,6 +78,7 @@ public:
     std::string record_in_file = "";    // file that stores a previously exported camera path for replay in headless
     std::string eval_logfile = {};      // file into which rendering evaluation results are written as 'append'
     std::string eval_name = {};         // name of the evaluation run that can be accessed in the log file as "%name"
+    std::string shader_defines = "";     // string of shader defines that will be passed on to the shader compiler
 
 
     static std::string getHelpString() {
@@ -138,14 +139,15 @@ public:
             // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
-            // TODO: add a video output option '-v' where HeadlessRendering sets CompressedSegmentationVolumeRenderer::m_download_frame_to_image_file with a frame index file name after each frame
             ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path. Must be used with -i.", false, va.record_in_file, "file", cmd);
             ValueArg<std::string> evalLogFileArg("", "eval-logfile", "File into which rendering evaluation results are appended after all frames finished rendering the screenshot image. Must be used with -i.", false, va.eval_logfile, "file", cmd);
             ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"%name\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
+            ValueArg<std::string> shaderDefineArg("", "shader-def", "String of ; separated definitions that will be passed on to the shader. e.g. 'MY_VAL=64;MY_DEF'. Use with care.", false, va.shader_defines, "string", cmd);
+
 
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
-            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{label column name referenced by volume}]]\".", false, "", "database[,table[,label]]", cmd);
+            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{label co'lumn name referenced by volume}]]\".", false, "", "database[,table[,label]]", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal all development render parameters in GUI.", cmd);
             ValueArg<uint32_t> cacheSizeMBArg("", "cache-size", "Size in MB of the renderer's brick cache. 0 to allocate all available.", false, va.cache_size_MB, "size", cmd);
@@ -390,6 +392,8 @@ public:
                 throw ArgException("Evaluation log file must be used in combination with --eval-logfile",
                                    evalNameArg.longID(""));
             }
+            va.shader_defines = shaderDefineArg.getValue();
+            std::replace(va.shader_defines.begin(), va.shader_defines.end(), ';', ' ');
 
             return va;
         }

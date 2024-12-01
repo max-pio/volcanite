@@ -171,9 +171,10 @@ public:
     struct CSGVRenderingConfig {
         size_t cache_size_MB = 1024;
         bool palettized_cache = false;
-        bool decode_from_shared_memory = false;  /// requires random access and CACHE_BRICKS cache_mode
-        uint32_t cache_mode = CACHE_BRICKS;  ///< CACHE_NOTHING, CACHE_VOXELS, or CACHE_BRICKS (req. w.o. random access)
-        uint32_t empty_space_resolution = 2u;    ///< n³ voxels are grouped into one empty space entry. 0 to disable.
+        bool decode_from_shared_memory = false; ///< requires random access and CACHE_BRICKS cache_mode
+        uint32_t cache_mode = CACHE_BRICKS;     ///< CACHE_NOTHING, CACHE_VOXELS, or CACHE_BRICKS (req. w.o. random access)
+        uint32_t empty_space_resolution = 2u;   ///< n³ voxels are grouped into one empty space entry. 0 to disable.
+        std::string shader_defines = "";        ///< Space separated additional definitions passed on to shader compilers 
     };
 
     /// @brief Configures the CSGV decoding and caching behaviour of the renderer.
@@ -187,6 +188,7 @@ public:
     /// @param decode_from_shared_memory if true, the encoding will be copied to shared memory before decoding.
     /// only works in combination with a random access encoding.
     void setDecodingParameters(CSGVRenderingConfig config) {
+        // TODO: instead of copying all CSGVRenderingConfig parameters, simply store such a struct as member
         m_target_cache_size_MB = config.cache_size_MB;
         if(m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
             Logger(WARN) << "Cache size is currently limited to 4 GB maximum.";
@@ -198,6 +200,7 @@ public:
             throw std::runtime_error("Invalid cache mode " + std::to_string(config.cache_mode));
         m_cache_mode = config.cache_mode;
         m_empty_space_block_dim = config.empty_space_resolution;
+        m_additional_shader_defs = config.shader_defines;
     }
 
     // evaluation and statistics
@@ -377,6 +380,7 @@ private:
         uint32_t gpu_raymarch_samples;
         uint32_t gpu_bbox_hits;
     } m_last_gpu_stats = {};
+    std::string m_additional_shader_defs = "";
 
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
 
