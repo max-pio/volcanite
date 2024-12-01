@@ -34,10 +34,10 @@ Environment_Map: 1
 Path_Length: 32
 
 [Display]
-Background_Color_A: 0.900000 0.900000 0.950000 1.000000
+Background_Color_A: 1.000000 1.000000 1.000000 1.000000
 Background_Color_B: 1.000000 1.000000 1.000000 1.000000
 Accumulation_Frames: 1024
-Subsampling_Resolution: 2
+Subsampling_Resolution: 0
 GUI_7: Render~resolution:~1920x1080
 Resizable_Window: 1
 

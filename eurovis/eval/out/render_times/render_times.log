@@ -176,3 +176,64 @@ brick cache
  & \numbersMinAvgMax{16.339}{21.551}{150.403}  % h01_ao_wm-sb_csh-b cache: 1590.952 MB
  & \numbersMinAvgMax{2.986}{12.154}{35.691}  % azba_ao_wm-sb_csh-b cache: 1845.69 MB
 \\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.1}
+ & \numbersMinAvgMax{4.091}{11.166}{103.449}  % azba_shadow_wm-sb_csh-v_es cache: 1079.181 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.25}
+ & \numbersMinAvgMax{3.715}{11.162}{103.184}  % azba_shadow_wm-sb_csh-v_es cache: 1079.181 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.5}
+ & \numbersMinAvgMax{3.869}{11.128}{104.952}  % azba_shadow_wm-sb_csh-v_es cache: 1079.181 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.75}
+ & \numbersMinAvgMax{3.841}{11.071}{103.458}  % azba_shadow_wm-sb_csh-v_es cache: 1079.181 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.9}
+ & \numbersMinAvgMax{3.879}{11.191}{102.101}  % azba_shadow_wm-sb_csh-v_es cache: 1079.181 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{3.944}{11.198}{104.965}  % azba_shadow_wm-sb_csh-v_es cache: 1079.181 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.1}
+ & \numbersMinAvgMax{102.159}{311.984}{610.774}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.25}
+ & \numbersMinAvgMax{101.587}{311.152}{610.535}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.5}
+ & \numbersMinAvgMax{101.97}{311.181}{610.945}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.75}
+ & \numbersMinAvgMax{101.79}{311.175}{610.653}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.9}
+ & \numbersMinAvgMax{101.807}{311.205}{610.553}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{102.113}{311.152}{610.466}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{4.289}{11.756}{101.826}  % azba_shadow_wm-sb_csh-v_es cache: 529.728 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{3.93}{11.359}{104.078}  % azba_shadow_wm-sb_csh-v_es cache: 1054.016 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{3.765}{12.179}{105.188}  % azba_shadow_wm-sb_csh-v_es cache: 1578.304 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{5.169}{15.868}{108.144}  % azba_shadow_wm-sb_csh-v_es cache: 2102.592 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{30.253}{90.78}{176.175}  % azba_shadow_wm-sb_csh-v_es cache: 2626.88 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{55.022}{168.401}{330.06}  % azba_shadow_wm-sb_csh-v_es cache: 3151.168 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{77.961}{237.698}{466.71}  % azba_shadow_wm-sb_csh-v_es cache: 3675.456 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{98.709}{302.29}{592.522}  % azba_shadow_wm-sb_csh-v_es cache: 4199.744 MB
+\\

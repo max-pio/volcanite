@@ -6,11 +6,15 @@ import re
 from datetime import datetime
 from time import sleep
 
+
+NO_LOG = True
+
 OLD_ABORT = 0
 OLD_APPEND = 1
 OLD_OVERWRITE = 2
 
-OLD_LOGS = OLD_APPEND
+OLD_LOGS = OLD_OVERWRITE
+VIDEO_CREATE = True
 GIT_CHECKOUT = "mp/parallel-decode"
 OUTPUT_BASE_DIR =  "/home/maxpio/code/volcanite/eurovis/eval/out"
 VOLCANITE_BUILD_DIR = "/home/maxpio/code/volcanite/cmake-build-release"
@@ -56,24 +60,34 @@ def concat_arg_ids(arg_args):
     return ''.join([a[1] for a in sorted_by_prio])
 
 def csgv_out_name(arg_args):
-    sorted_by_prio = sorted(arg_args, key=lambda a: a[2])
     return [(["-c", OUTPUT_BASE_DIR + "/" + concat_arg_ids(arg_args) + ".csgv"], "", 1000)]
 
 def csgv_in_name(arg_args):
-    sorted_by_prio = sorted(arg_args, key=lambda a: a[2])
     return [([OUTPUT_BASE_DIR + "/" + concat_arg_ids(arg_args) + ".csgv"], "", 1000)]
 
 def img_name(arg_args):
-    sorted_by_prio = sorted(arg_args, key=lambda a: a[2])
     return [(["-i", str(eval_dir / Path(concat_arg_ids(arg_args))) + ".png"], "", 1000)]
 
 def img_name_jpg(arg_args):
-    sorted_by_prio = sorted(arg_args, key=lambda a: a[2])
     return [(["-i", str(eval_dir / Path(concat_arg_ids(arg_args))) + ".jpg"], "", 1000)]
 
-def video_name(arg_args):
-    sorted_by_prio = sorted(arg_args, key=lambda a: a[2])
-    return [(["-v", str(eval_dir / Path(concat_arg_ids(arg_args))) + ".jpg"], "", 1000)]
+def video_name(arg_args, create_dir=True):
+    video_dir = (eval_dir / Path(concat_arg_ids(arg_args))).absolute()
+    if create_dir:
+        video_dir.mkdir(parents=True, exist_ok=True)
+    return [(["-v", str(video_dir) + "/" + concat_arg_ids(arg_args) + "_{:04}.jpg"], "", 1000)]
+
+def create_mp4(video_arg):
+    _tmp = video_arg[0][0][1]
+    _dir = Path(_tmp).parent
+    _name = Path(_tmp).name
+
+    prefix = _name[:_name.find("{")]
+    files = prefix + "*" + _name[_name.rfind("}")+1:]
+    cmd = "ffmpeg -n -framerate 60 -pattern_type glob -i '" + files + "' -c:v libx264 -pix_fmt yuv420p " + prefix + ".mp4"
+    print("Creating video file in " + str(_dir.absolute()) + " with\n  " + cmd)
+    if not DRY_RUN or VIDEO_CREATE:
+        subp.run(cmd, cwd=str(_dir.absolute()), shell=True)
 
 def vcfg_name(data_arg, shade_arg):
     resolution = "1080x1920" if data_arg[0][1] == "azba" else "1920x1080"
@@ -96,9 +110,11 @@ def build_volcanite():
 def volcanite(arg_args, fallback_log=None, eval_name=None):
     if eval_name is None:
         eval_name = concat_arg_ids(arg_args)
-    args = ["./volcanite", "--eval-logfile", str(log_path)]
-    if eval_name:
-        args = args + ["--eval-name", eval_name]
+    args = ["./volcanite"]
+    if not NO_LOG:
+        args = args + ["--eval-logfile", str(log_path)]
+        if eval_name:
+            args = args + ["--eval-name", eval_name]
     # arg_args example:   [(["-b", "16"], "_b16"), (["-s", "0"], "_nb")]
     args = args + [a for args in arg_args for a in args[0]]
     print("RUN VOLCANITE -----------------  " + eval_name)
@@ -108,12 +124,14 @@ def volcanite(arg_args, fallback_log=None, eval_name=None):
         res = subp.run(args, cwd="/home/maxpio/code/volcanite/cmake-build-release/volcanite")
         if res.returncode != 0:
             print("Error: volcanite returned " + str(res.returncode))
-            if fallback_log:
+            if (not NO_LOG) and fallback_log:
                 log_manual(fallback_log.replace("%name", eval_name) + "\n") # output an empty entry to the log file
             else:
                 exit(res.returncode)
 
 def log_manual(output):
+    if NO_LOG:
+        return
     if DRY_RUN:
         print(output)
         return
@@ -121,6 +139,8 @@ def log_manual(output):
         log_out.write(output)
 
 def log_newline():
+    if NO_LOG:
+        return
     if DRY_RUN:
         print("\\\\")
         return
@@ -129,6 +149,8 @@ def log_newline():
 
 
 def create_csv_tex_from_log():
+  if NO_LOG:
+      return
   with open(log_path, 'r') as log_in:
     log_data = log_in.read()
     # csv: remove comment lines, delete newlines, replace double \\ with newline,
@@ -145,7 +167,6 @@ def create_csv_tex_from_log():
         tex_out.write(log_data.replace('#', '%'))
 
 if __name__ == "__main__":
-
     # preliminaries ---------------------------------------------------------------------------------
     script_path = Path(sys.argv[0])
     script_dir = script_path.resolve().absolute().parent
@@ -181,76 +202,48 @@ if __name__ == "__main__":
 
         # set up log files
         eval_dir.mkdir(parents=True, exist_ok=True)
-        if OLD_LOGS == OLD_OVERWRITE:
-            print("OVERWRITING ANY PRE-EXISTING LOG FILES")
-            sleep(5)
-            log_path.unlink(missing_ok=True)
-            tex_path.unlink(missing_ok=True)
-            csv_path.unlink(missing_ok=True)
-            out_path.unlink(missing_ok=True)
-        if log_path.exists():
-            if OLD_LOGS == OLD_ABORT:
-                print("ERROR: log file " + str(log_path) + " already exists.")
-                exit(1)
-        else:
-            if not tmp_log_path.exists():
-                print("ERROR: template log file " + str(tmp_log_path) + " does not exist.")
-                exit(1)
-            shutil.copy(tmp_log_path, log_path)
-            out_path.unlink(missing_ok=True)
+        if not NO_LOG:
+            if OLD_LOGS == OLD_OVERWRITE:
+                print("OVERWRITING ANY PRE-EXISTING LOG FILES")
+                sleep(5)
+                log_path.unlink(missing_ok=True)
+                tex_path.unlink(missing_ok=True)
+                csv_path.unlink(missing_ok=True)
+                out_path.unlink(missing_ok=True)
+            if log_path.exists():
+                if OLD_LOGS == OLD_ABORT:
+                    print("ERROR: log file " + str(log_path) + " already exists.")
+                    exit(1)
+            else:
+                if not tmp_log_path.exists():
+                    print("ERROR: template log file " + str(tmp_log_path) + " does not exist.")
+                    exit(1)
+                shutil.copy(tmp_log_path, log_path)
+                out_path.unlink(missing_ok=True)
 
     # evaluation ------------------------------------------------------------------------------------
-
-
-    if OLD_LOGS == OLD_APPEND:
-        print("re-running other results: ")
-        sleep(5)
-        data = d_azba
-        enc_mode = e_wmh
-        bs = bs_32
-        for shade in [shade_shadow]:
-            for cache_mode in [cache_voxel_es]:
-                for cache_prob in [1.]:# [0.1, 0.25, 0.5, 0.75, 0.9, 1.]:
-                    for size in [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000]:
-                        cache_size = [(["--cache-size", str(size)], "cs-" + str(size), 10)]
-                        prob =  [(["--shader-def", "CACHE_EJECT_PROB=" + str(int(cache_prob * 4294967295))], "_cshp-" + "{:.2f}".format(cache_prob), 9)] if cache_prob < 1. else [([], "", 9)]
-                        log_manual("\\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 " + str(cache_prob) + "}\n")
-                        volcanite(def_volc + cache_size + cache_mode + vcfg_name(data, shade) + rec_name(data) + enc_mode + prob
-                                            + img_name_jpg(data + enc_mode + cache_mode + shade + prob + cache_size)
-                                            + csgv_in_name(data + enc_mode + bs),
-                                            fallback_log="& -  % %name",
-                                            eval_name=concat_arg_ids(data + enc_mode + cache_mode + shade))
-                        log_newline()
-        exit(0)
-
-    exit(0)
-
     log_manual("# " + datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f") + "\n")
 
-    shade_tex = ["local shading", "shadow rays", "ambient occlusion", "path tracing"]
-    cache_mode_tex = ["no cache ", "voxel cache ", "voxel cache (es)", "brick cache ", "brick cache (sm) "]
+    for shade_i, shade in enumerate([shade_shadow]):
+        for enc_mode in [e_rans, e_wmh]:
+            for data in [d_cells, d_fiber, d_h01, d_azba]:
+                bs = bs_64 if data == d_h01 else bs_32
+                if enc_mode == e_rans:
+                    cache_mode = cache_brick
+                    cache_size = [(["--cache-size", "4095"], "", 1000)]
+                else:
+                    cache_mode = cache_no
+                    cache_size = [(["--cache-size", "0"], "", 1000)]
 
-    for shade_i, shade in enumerate([shade_local, shade_shadow, shade_ao]): # without shade_pt
-        log_manual("\\midrule\n")
-        log_manual("\\multicolumn{13}{c}{shading mode: " + shade_tex[shade_i] + "} ")
-        log_newline()
-        for cache_mode_i, cache_mode in enumerate([cache_no, cache_voxel, cache_voxel_es, cache_brick]):  # without cache_brick_sm as there's a bug
-            log_manual(cache_mode_tex[cache_mode_i] + "\n")
-            for enc_mode in [e_rans, e_wmh_nosb, e_wmh]:
-                for data in [d_cells, d_fiber, d_h01, d_azba]:
-                    bs = bs_64 if data == d_h01 else bs_32
-                    cache_size = [(["--cache-size", "1500" if (data == d_h01 and enc_mode != e_rans) else "4095"], "", 1000)]
-                    if (enc_mode == e_rans and cache_mode != cache_brick) or\
-                       (enc_mode == e_wmh_nosb and data == d_h01):
-                        log_manual("& - \n")
-                    else:
-                        volcanite(def_volc + cache_size + cache_mode + vcfg_name(data, shade) + rec_name(data) + enc_mode
-                                   + img_name_jpg(data + enc_mode + cache_mode + shade)
-                                   + csgv_in_name(data + enc_mode + bs),
-                                  fallback_log="& -  % %name",
-                                  eval_name=concat_arg_ids(data + enc_mode + cache_mode + shade))
-                        if not DRY_RUN:
-                            sleep(5)
+
+                video_arg = video_name(data + enc_mode + cache_mode + shade);
+                volcanite(def_volc + cache_size + cache_mode + vcfg_name(data, shade) + enc_mode
+                            + rec_name(data) + video_arg + csgv_in_name(data + enc_mode + bs))
+                
+                create_mp4(video_arg)
+                
+                if not DRY_RUN:
+                    sleep(5)
             log_newline()
             
 
