@@ -75,30 +75,40 @@ uint get_inv_lod(ivec3 voxel) {
     }
 #elif CACHE_MODE == CACHE_VOXELS
 
-#ifdef EMPTY_SPACE_UINT_SIZE
-    uint ess_permute_bits(uint i) {
-        // TODO: find a correct, collision-free permutation
-        return i;
-        // revert the LSB that are guaranteed to be included in the words
-        const int safe_bits_to_permute = findMSB(int(EMPTY_SPACE_BV_BIT_SIZE)) - 1;
-        return bitfieldInsert(i, bitfieldReverse(bitfieldExtract(i, 0, safe_bits_to_permute)), 0, safe_bits_to_permute);
-    }
+//    #undef CACHE_UVEC2_SIZE
+//    #define CACHE_UVEC2_SIZE 134217728
+// voxel cache sizes > 1 GB significantly decrese the performance
+#if CACHE_UVEC2_SIZE > 134217728
+    #define TARGET_CACHE_BLOCK_SIZE 134217728
+    #define CACHE_BLOCK_COUNT ((CACHE_UVEC2_SIZE + TARGET_CACHE_BLOCK_SIZE - 1) / TARGET_CACHE_BLOCK_SIZE)
+    #define CACHE_BLOCK_SIZE (CACHE_UVEC2_SIZE / CACHE_BLOCK_COUNT)
+#else
+    #define CACHE_BLOCK_SIZE CACHE_UVEC2_SIZE
 #endif
 
+//#ifdef EMPTY_SPACE_UINT_SIZE
+//    uint ess_permute_bits(uint i) {
+//        // TODO: find a correct, collision-free permutation
+//        // revert the LSB that are guaranteed to be included in the words
+//        const int safe_bits_to_permute = findMSB(int(EMPTY_SPACE_BV_BIT_SIZE)) - 1;
+//        return bitfieldInsert(i, bitfieldReverse(bitfieldExtract(i, 0, safe_bits_to_permute)), 0, safe_bits_to_permute);
+//    }
+//#endif
+
     uint _hash(uint a, uint x) {
-        const uint bits = findMSB(CACHE_UVEC2_SIZE);
+        const uint bits = findMSB(CACHE_BLOCK_SIZE);
         // (ax mod 2^w) / 2^(w-bits)
         return (a * x) >> (31 - bits); // mod 2^32 implicit
     }
 
     uvec3 _hash(uvec3 a, uvec3 x) {
-        const uint bits = findMSB(CACHE_UVEC2_SIZE);
+        const uint bits = findMSB(CACHE_BLOCK_SIZE);
         // (ax mod 2^w) / 2^(w-bits)
         return (a * x) >> (31 - bits); // mod 2^32 implicit
     }
 
     uvec4 _hash(uvec4 a, uvec4 x) {
-        const uint bits = findMSB(CACHE_UVEC2_SIZE);
+        const uint bits = findMSB(CACHE_BLOCK_SIZE);
         // (ax mod 2^w) / 2^(w-bits)
         return (a * x) >> (31 - bits); // mod 2^32 implicit
     }
@@ -111,7 +121,7 @@ uint get_inv_lod(ivec3 voxel) {
     // use a component-wise xor as in Hoskins 2014, Quilez 2017a cf. "Hash Functions for GPU Rendering" JCGT 9(3) (2020)
     uint hash1(uvec3 lod_voxel) {
         lod_voxel = _hash(uvec3(19u, 47u, 101u), hash_pcg3d(lod_voxel));
-        return (lod_voxel.x ^ lod_voxel.y ^ lod_voxel.z + 131u) % CACHE_UVEC2_SIZE;
+        return (lod_voxel.x ^ lod_voxel.y ^ lod_voxel.z + 131u) % CACHE_BLOCK_SIZE;
         // return (_hash(19u, voxel_id) ^ _hash(3u, voxel_id) ^ _hash(115u, voxel_id)) % CACHE_UVEC2_SIZE;
     }
 
@@ -124,7 +134,7 @@ uint get_inv_lod(ivec3 voxel) {
     uint hash2(uvec2 key1_pos1) {
         key1_pos1 = hash_pcg2d(key1_pos1);
         uvec4 h = _hash(uvec4(7u, 31u, 97u, 173u), key1_pos1.xyxy);
-        return (h.x ^ h.y ^ h.z ^ h.w) % CACHE_UVEC2_SIZE;
+        return (h.x ^ h.y ^ h.z ^ h.w) % CACHE_BLOCK_SIZE;
         //return (_hash(31u, voxel_id) ^ _hash(7u, voxel_id) ^ _hash(97u, voxel_id)) % CACHE_UVEC2_SIZE;
     }
 
@@ -149,9 +159,9 @@ uint get_inv_lod(ivec3 voxel) {
 #ifdef EMPTY_SPACE_UINT_SIZE
         uvec3 empty_space_base_voxel = uvec3(voxel) / g_empty_space_block_dim;
         // ess_permute_bits swizzles bits around to reduce collisions for the atomic operations
-        const uint empty_space_idx = ess_permute_bits(empty_space_base_voxel.x
-                                                      + empty_space_base_voxel.y * g_empty_space_dot_map.y
-                                                      + empty_space_base_voxel.z * g_empty_space_dot_map.z);
+        const uint empty_space_idx = empty_space_base_voxel.x
+                                    + empty_space_base_voxel.y * g_empty_space_dot_map.y
+                                    + empty_space_base_voxel.z * g_empty_space_dot_map.z;
         assertf(empty_space_idx < EMPTY_SPACE_BV_BIT_SIZE,
                 "accessing empty space idx out of bounds (idx, bound): %v2u",
                 uvec2(empty_space_idx, EMPTY_SPACE_BV_BIT_SIZE));
@@ -162,6 +172,8 @@ uint get_inv_lod(ivec3 voxel) {
 
         // map voxels from different LODs at the same area to identical indices.
         const uvec3 lod_voxel = (uvec3(voxel) >> (g_max_inv_lod - req_inv_lod)) << (g_max_inv_lod - req_inv_lod);
+        const uvec3 brick = uvec3(voxel) / BRICK_SIZE;
+        const uint brick_idx = brick_pos2idx(brick, g_brick_count);
 
         #define KEY_KEY_BITS 0x7FFFFFFFu
         #define KEY_TABLE2_BIT 0x80000000u
@@ -171,7 +183,13 @@ uint get_inv_lod(ivec3 voxel) {
         // the cache position is not directly dependent on the cache_key.
         const uint cache_key = key(uvec4(lod_voxel, req_inv_lod)) & KEY_KEY_BITS;
 
-        uint cache_pos = hash1(lod_voxel);
+        // cache is split into multiple smaller hash tables (blocks)
+#ifdef CACHE_BLOCK_COUNT
+        const uint cache_block_pos = (brick_idx * CACHE_BLOCK_COUNT / g_brick_idx_count) * CACHE_BLOCK_SIZE;
+#else
+        const uint cache_block_pos = 0u;
+#endif
+        const uint cache_pos = hash1(lod_voxel) + cache_block_pos;
         assertf(cache_pos < CACHE_UVEC2_SIZE, "invalid cache_pos %u", cache_pos);
 
         // check if the cache contains the voxel at the first or second lookup pos
@@ -179,25 +197,33 @@ uint get_inv_lod(ivec3 voxel) {
         // at the first position, the key should have its MSB set to 0
         if (cache_elem.x == cache_key) {
             return cache_elem.y;
-        } else {
-            uvec2 cache_elem2 = CSGV_DECODING_ARRAY[hash2(uvec2(cache_key, cache_pos))];
+        }
+        else {
+            uvec2 cache_elem2 = CSGV_DECODING_ARRAY[hash2(uvec2(cache_key, cache_pos)) + cache_block_pos];
             // at the second positoin, the key should have its MSB set to 1
-            if (cache_elem2.x == (cache_key | KEY_TABLE2_BIT))
+            if (cache_elem2.x == (cache_key | KEY_TABLE2_BIT)) {
                 return cache_elem2.y;
+            }
         }
 
         // otherwise, decode the element..
-        const uvec3 brick = uvec3(voxel) / BRICK_SIZE;
         const uvec3 brick_voxel = uvec3(voxel) - (brick * BRICK_SIZE);
-        const uint brick_idx = brick_pos2idx(brick, g_brick_count);
         const uint label = decompressCSGVVoxel(brick_idx, brick_voxel, req_inv_lod); // this is extremely expensive!
 
-    // #define CACHE_EJECT_PROB ((~0u) / 4u)
+//    #define CACHE_EJECT_PROB ((~0u) / 8u)
+//    #define CACHE_EJECT_PROB 0
     #ifdef CACHE_EJECT_PROB
-            // if an element would be ejected by inserting the new label, only insert with a certain probability 
-            if (cache_elem.x != INVALID && hash_pcg4d(uvec4(lod_voxel, g_frame * 111u + 1711u)).x < CACHE_EJECT_PROB) {
+        {
+            const uvec2 rnd = hash_pcg2d(uvec2(cache_key, g_frame));
+            // only one work item in the subgroup is allowed to write to the cache
+//            if (gl_WorkGroupID.x + gl_WorkGroupID.y * gl_WorkGroupSize.x != (rnd.x % (gl_WorkGroupSize.x * gl_WorkGroupSize.y))) {
+//                return label;
+//            }
+            // if an element would be ejected by inserting the new label, only insert with a certain probability
+            if (cache_elem.x != INVALID && rnd.y >= CACHE_EJECT_PROB) {
                 return label;
             }
+        }
     #endif
 
         // if the label is not visible, check if all other labels from the same set are not visible as well
@@ -234,7 +260,7 @@ uint get_inv_lod(ivec3 voxel) {
         if (cache_elem.x != INVALID && (cache_elem.x & KEY_TABLE2_BIT) == 0u) {
             // only if the ejected element is not already at its second location:
             // insert the ejected element to its 2nd cache position, possibly forcing another element out
-            CSGV_DECODING_ARRAY[hash2(uvec2(cache_elem.x, cache_pos))] = uvec2(cache_elem.x | KEY_TABLE2_BIT, cache_elem.y);
+            CSGV_DECODING_ARRAY[hash2(uvec2(cache_elem.x, cache_pos)) + cache_block_pos] = uvec2(cache_elem.x | KEY_TABLE2_BIT, cache_elem.y);
 
             // if the element already was at its second location, it will be re-inserted at its first position if it is
             // accessed again. this results in the cuckoo ping-pong loop between first and second position of elements.
