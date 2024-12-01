@@ -1,7 +1,7 @@
-#fmt: & \numbersMinAvgMax{%frame_min_ms}{%frame_avg_ms}{%frame_max_ms}  % %name | cache: %mem_cache_mb
+#fmt: & \numbersMinAvgMax{%frame_min_ms}{%frame_avg_ms}{%frame_max_ms}  % %name cache: %mem_cache_mb MB
 & \multicolumn{4}{c}{\gls{csgv} rANS} & \multicolumn{4}{|c}{\gls{csgvr}} & \multicolumn{4}{|c}{\gls{csgvr}+stop bits}\\
 & \cells{} & \fiber{} & \hone{} & \azba{} & \cells{}& \fiber{} & \hone{} & \azba{} & \cells{}& \fiber{} & \hone{} & \azba{}\\
-# 2024-11-27T14:55:33.362519
+# 2024-11-28T16:10:20.066915
 \midrule
 \multicolumn{13}{c}{shading mode: local shading} \\
 no cache 
@@ -9,70 +9,56 @@ no cache
 & - 
 & - 
 & - 
- & \numbersMinAvgMax{6.667}{30.23}{92.469}  % cells_wm_csh-n_local
- & \numbersMinAvgMax{0.001}{4.181}{26.585}  % fiber_wm_csh-n_local
+ & \numbersMinAvgMax{6.153}{29.848}{91.807}  % cells_local_wm_csh-n cache: 5.767 MB
+ & \numbersMinAvgMax{0.001}{3.405}{21.702}  % fiber_local_wm_csh-n cache: 6.699 MB
 & - 
- & \numbersMinAvgMax{0.001}{10.096}{47.208}  % azba_wm_csh-n_local
- & \numbersMinAvgMax{9.156}{47.801}{146.066}  % cells_wm-sb_csh-n_local
- & \numbersMinAvgMax{0.001}{5.666}{32.564}  % fiber_wm-sb_csh-n_local
- & \numbersMinAvgMax{1.25}{8.078}{159.194}  % h01_wm-sb_csh-n_local
- & \numbersMinAvgMax{0.001}{14.416}{65.314}  % azba_wm-sb_csh-n_local
+ & \numbersMinAvgMax{0.001}{9.878}{46.4}  % azba_local_wm_csh-n cache: 5.44 MB
+ & \numbersMinAvgMax{8.859}{47.37}{140.744}  % cells_local_wm-sb_csh-n cache: 5.767 MB
+ & \numbersMinAvgMax{0.001}{5.298}{31.621}  % fiber_local_wm-sb_csh-n cache: 6.699 MB
+ & \numbersMinAvgMax{0.947}{6.81}{129.942}  % h01_local_wm-sb_csh-n cache: 18.088 MB
+ & \numbersMinAvgMax{0.001}{14.189}{67.275}  % azba_local_wm-sb_csh-n cache: 5.44 MB
 \\
 voxel cache 
 & - 
 & - 
 & - 
 & - 
- & \numbersMinAvgMax{8.838}{488.375}{1023.976}  % cells_wm_csh-v_local
- & \numbersMinAvgMax{0.001}{35.673}{1179.912}  % fiber_wm_csh-v_local
+ & \numbersMinAvgMax{67.626}{546.65}{1117.077}  % cells_local_wm_csh-v cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{104.437}{1304.302}  % fiber_local_wm_csh-v cache: 4300.618 MB
 & - 
- & \numbersMinAvgMax{0.001}{271.632}{815.293}  % azba_wm_csh-v_local
- & \numbersMinAvgMax{2.372}{446.792}{1003.199}  % cells_wm-sb_csh-v_local
- & \numbersMinAvgMax{0.001}{22.31}{1079.579}  % fiber_wm-sb_csh-v_local
-& - 
- & \numbersMinAvgMax{0.001}{227.165}{593.874}  % azba_wm-sb_csh-v_local
+ & \numbersMinAvgMax{0.001}{270.463}{812.218}  % azba_local_wm_csh-v cache: 4299.358 MB
+ & \numbersMinAvgMax{63.999}{506.369}{1084.287}  % cells_local_wm-sb_csh-v cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{94.977}{1211.64}  % fiber_local_wm-sb_csh-v cache: 4300.618 MB
+ & \numbersMinAvgMax{0.375}{1.696}{196.885}  % h01_local_wm-sb_csh-v cache: 1590.952 MB
+ & \numbersMinAvgMax{0.001}{228.967}{628.279}  % azba_local_wm-sb_csh-v cache: 4299.358 MB
 \\
 voxel cache (es)
 & - 
 & - 
 & - 
 & - 
- & \numbersMinAvgMax{1.334}{13.971}{295.78}  % cells_wm_csh-v_es_local
- & \numbersMinAvgMax{0.001}{3.954}{56.699}  % fiber_wm_csh-v_es_local
+ & \numbersMinAvgMax{2.741}{15.918}{298.667}  % cells_local_wm_csh-v_es cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{5.073}{96.92}  % fiber_local_wm_csh-v_es cache: 4300.618 MB
 & - 
- & \numbersMinAvgMax{0.001}{125.35}{383.07}  % azba_wm_csh-v_es_local
- & \numbersMinAvgMax{1.2}{14.793}{430.632}  % cells_wm-sb_csh-v_es_local
- & \numbersMinAvgMax{0.001}{4.516}{56.665}  % fiber_wm-sb_csh-v_es_local
- & \numbersMinAvgMax{1.27}{5.945}{233.687}  % h01_wm-sb_csh-v_es_local | cache: 1590.952
- & \numbersMinAvgMax{0.001}{125.172}{383.645}  % azba_wm-sb_csh-v_es_local
+ & \numbersMinAvgMax{0.001}{125.306}{383.232}  % azba_local_wm_csh-v_es cache: 4299.358 MB
+ & \numbersMinAvgMax{2.79}{16.643}{448.789}  % cells_local_wm-sb_csh-v_es cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{5.785}{109.168}  % fiber_local_wm-sb_csh-v_es cache: 4300.618 MB
+ & \numbersMinAvgMax{0.732}{81.471}{1134.56}  % h01_local_wm-sb_csh-v_es cache: 1590.952 MB
+ & \numbersMinAvgMax{0.001}{125.415}{384.56}  % azba_local_wm-sb_csh-v_es cache: 4299.358 MB
 \\
 brick cache 
- & \numbersMinAvgMax{4.087}{12.903}{75.774}  % cells_rans_csh-b_local
- & \numbersMinAvgMax{0.001}{3.863}{28.552}  % fiber_rans_csh-b_local
- & \numbersMinAvgMax{2.659}{5.025}{12.514}  % h01_rans_csh-b_local
- & \numbersMinAvgMax{0.001}{5.707}{40.84}  % azba_rans_csh-b_local
- & \numbersMinAvgMax{1.668}{7.209}{54.194}  % cells_wm_csh-b_local
- & \numbersMinAvgMax{0.001}{2.478}{15.975}  % fiber_wm_csh-b_local
+ & \numbersMinAvgMax{2.975}{11.675}{77.981}  % cells_local_rans_csh-b cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{3.002}{21.295}  % fiber_local_rans_csh-b cache: 4300.618 MB
+ & \numbersMinAvgMax{2.314}{3.968}{8.708}  % h01_local_rans_csh-b cache: 4312.007 MB
+ & \numbersMinAvgMax{0.001}{5.334}{40.288}  % azba_local_rans_csh-b cache: 1845.69 MB
+ & \numbersMinAvgMax{1.312}{6.079}{57.37}  % cells_local_wm_csh-b cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{1.943}{10.935}  % fiber_local_wm_csh-b cache: 4300.618 MB
 & - 
- & \numbersMinAvgMax{0.001}{4.637}{28.443}  % azba_wm_csh-b_local
- & \numbersMinAvgMax{1.792}{8.034}{77.661}  % cells_wm-sb_csh-b_local
- & \numbersMinAvgMax{0.001}{2.625}{15.994}  % fiber_wm-sb_csh-b_local
- & \numbersMinAvgMax{17.026}{21.495}{92.874}  % h01_wm-sb_csh-b_local
- & \numbersMinAvgMax{0.001}{4.922}{33.935}  % azba_wm-sb_csh-b_local
-\\
-brick cache (sm) 
-& - 
-& - 
-& - 
-& - 
- & \numbersMinAvgMax{3.284}{11.928}{49.283}  % cells_wm_csh-bsm_local
- & \numbersMinAvgMax{0.001}{6.02}{94.823}  % fiber_wm_csh-bsm_local
-& - 
- & \numbersMinAvgMax{0.001}{4.851}{24.675}  % azba_wm_csh-bsm_local
- & \numbersMinAvgMax{1.492}{7.526}{84.521}  % cells_wm-sb_csh-bsm_local
- & \numbersMinAvgMax{0.001}{2.593}{16.151}  % fiber_wm-sb_csh-bsm_local
- & \numbersMinAvgMax{1.171}{4.718}{215.511}  % h01_wm-sb_csh-v_local | cache: 1590.952
- & \numbersMinAvgMax{0.001}{4.839}{30.197}  % azba_wm-sb_csh-bsm_local
+ & \numbersMinAvgMax{0.001}{3.875}{28.518}  % azba_local_wm_csh-b cache: 1845.69 MB
+ & \numbersMinAvgMax{1.234}{6.781}{88.656}  % cells_local_wm-sb_csh-b cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{2.042}{11.717}  % fiber_local_wm-sb_csh-b cache: 4300.618 MB
+ & \numbersMinAvgMax{16.826}{21.118}{91.565}  % h01_local_wm-sb_csh-b cache: 1590.952 MB
+ & \numbersMinAvgMax{0.001}{4.051}{35.382}  % azba_local_wm-sb_csh-b cache: 1845.69 MB
 \\
 \midrule
 \multicolumn{13}{c}{shading mode: shadow rays} \\
@@ -81,70 +67,56 @@ no cache
 & - 
 & - 
 & - 
- & \numbersMinAvgMax{7.263}{39.895}{136.935}  % cells_wm_csh-n_shadow
- & \numbersMinAvgMax{0.001}{14.039}{35.483}  % fiber_wm_csh-n_shadow
+ & \numbersMinAvgMax{7.158}{39.551}{134.267}  % cells_shadow_wm_csh-n cache: 5.767 MB
+ & \numbersMinAvgMax{0.001}{13.113}{35.613}  % fiber_shadow_wm_csh-n cache: 6.699 MB
 & - 
- & \numbersMinAvgMax{0.001}{13.113}{66.267}  % azba_wm_csh-n_shadow
- & \numbersMinAvgMax{10.531}{63.323}{201.113}  % cells_wm-sb_csh-n_shadow
- & \numbersMinAvgMax{0.001}{21.574}{56.232}  % fiber_wm-sb_csh-n_shadow
- & \numbersMinAvgMax{1.355}{10.074}{155.49}  % h01_wm-sb_csh-n_shadow
- & \numbersMinAvgMax{0.001}{18.812}{93.74}  % azba_wm-sb_csh-n_shadow
+ & \numbersMinAvgMax{0.001}{12.905}{66.207}  % azba_shadow_wm_csh-n cache: 5.44 MB
+ & \numbersMinAvgMax{10.423}{62.898}{206.927}  % cells_shadow_wm-sb_csh-n cache: 5.767 MB
+ & \numbersMinAvgMax{0.001}{20.657}{59.051}  % fiber_shadow_wm-sb_csh-n cache: 6.699 MB
+ & \numbersMinAvgMax{1.14}{8.945}{153.053}  % h01_shadow_wm-sb_csh-n cache: 18.088 MB
+ & \numbersMinAvgMax{0.001}{18.597}{95.777}  % azba_shadow_wm-sb_csh-n cache: 5.44 MB
 \\
 voxel cache 
 & - 
 & - 
 & - 
 & - 
- & \numbersMinAvgMax{11.122}{627.731}{1249.653}  % cells_wm_csh-v_shadow
- & \numbersMinAvgMax{0.001}{150.684}{1547.25}  % fiber_wm_csh-v_shadow
+ & \numbersMinAvgMax{72.14}{697.079}{1336.276}  % cells_shadow_wm_csh-v cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{325.212}{1711.452}  % fiber_shadow_wm_csh-v cache: 4300.618 MB
 & - 
- & \numbersMinAvgMax{0.001}{338.376}{1253.036}  % azba_wm_csh-v_shadow
- & \numbersMinAvgMax{3.063}{576.358}{1232.473}  % cells_wm-sb_csh-v_shadow
- & \numbersMinAvgMax{0.001}{94.786}{1406.733}  % fiber_wm-sb_csh-v_shadow
- & \numbersMinAvgMax{1.132}{3.883}{114.473}  % h01_wm-sb_csh-v_shadow | cache: 1590.952
- & \numbersMinAvgMax{0.001}{282.775}{887.268}  % azba_wm-sb_csh-v_shadow
+ & \numbersMinAvgMax{0.001}{335.887}{1244.011}  % azba_shadow_wm_csh-v cache: 4299.358 MB
+ & \numbersMinAvgMax{67.871}{647.547}{1295.51}  % cells_shadow_wm-sb_csh-v cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{295.68}{1563.854}  % fiber_shadow_wm-sb_csh-v cache: 4300.618 MB
+ & \numbersMinAvgMax{0.389}{1.859}{203.805}  % h01_shadow_wm-sb_csh-v cache: 1590.952 MB
+ & \numbersMinAvgMax{0.001}{284.204}{890.008}  % azba_shadow_wm-sb_csh-v cache: 4299.358 MB
 \\
 voxel cache (es)
 & - 
 & - 
 & - 
 & - 
- & \numbersMinAvgMax{1.365}{17.38}{341.768}  % cells_wm_csh-v_es_shadow
- & \numbersMinAvgMax{0.001}{8.451}{77.923}  % fiber_wm_csh-v_es_shadow
+ & \numbersMinAvgMax{3.222}{20.036}{305.917}  % cells_shadow_wm_csh-v_es cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{12.907}{150.908}  % fiber_shadow_wm_csh-v_es cache: 4300.618 MB
 & - 
- & \numbersMinAvgMax{0.001}{159.745}{612.706}  % azba_wm_csh-v_es_shadow
- & \numbersMinAvgMax{1.292}{18.227}{461.88}  % cells_wm-sb_csh-v_es_shadow
- & \numbersMinAvgMax{0.001}{9.153}{79.903}  % fiber_wm-sb_csh-v_es_shadow
- & \numbersMinAvgMax{0.222}{2.654}{146.838}  % h01_wm-sb_csh-v_es_shadow | cache: 1590.952
- & \numbersMinAvgMax{0.001}{159.319}{611.994}  % azba_wm-sb_csh-v_es_shadow
+ & \numbersMinAvgMax{0.001}{158.926}{610.151}  % azba_shadow_wm_csh-v_es cache: 4299.358 MB
+ & \numbersMinAvgMax{3.336}{20.93}{443.59}  % cells_shadow_wm-sb_csh-v_es cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{14.187}{172.12}  % fiber_shadow_wm-sb_csh-v_es cache: 4300.618 MB
+ & \numbersMinAvgMax{0.734}{85.649}{1221.261}  % h01_shadow_wm-sb_csh-v_es cache: 1590.952 MB
+ & \numbersMinAvgMax{0.001}{158.775}{610.2}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
 \\
 brick cache 
- & \numbersMinAvgMax{3.844}{13.942}{83.43}  % cells_rans_csh-b_shadow
- & \numbersMinAvgMax{0.001}{8.844}{28.928}  % fiber_rans_csh-b_shadow
- & \numbersMinAvgMax{2.768}{5.274}{12.861}  % h01_rans_csh-b_shadow
- & \numbersMinAvgMax{0.001}{6.545}{41.971}  % azba_rans_csh-b_shadow
- & \numbersMinAvgMax{2.29}{8.575}{60.401}  % cells_wm_csh-b_shadow
- & \numbersMinAvgMax{0.001}{7.789}{21.663}  % fiber_wm_csh-b_shadow
+ & \numbersMinAvgMax{3.081}{13.013}{82.396}  % cells_shadow_rans_csh-b cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{7.604}{25.529}  % fiber_shadow_rans_csh-b cache: 4300.618 MB
+ & \numbersMinAvgMax{2.366}{4.215}{51.784}  % h01_shadow_rans_csh-b cache: 4312.007 MB
+ & \numbersMinAvgMax{0.001}{6.241}{43.971}  % azba_shadow_rans_csh-b cache: 1845.69 MB
+ & \numbersMinAvgMax{1.329}{7.282}{65.978}  % cells_shadow_wm_csh-b cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{5.602}{13.781}  % fiber_shadow_wm_csh-b cache: 4300.618 MB
 & - 
- & \numbersMinAvgMax{0.001}{5.306}{30.303}  % azba_wm_csh-b_shadow
- & \numbersMinAvgMax{2.536}{9.192}{95.982}  % cells_wm-sb_csh-b_shadow
- & \numbersMinAvgMax{0.001}{7.67}{19.943}  % fiber_wm-sb_csh-b_shadow
- & \numbersMinAvgMax{17.057}{21.62}{94.814}  % h01_wm-sb_csh-b_shadow
- & \numbersMinAvgMax{0.001}{5.356}{39.733}  % azba_wm-sb_csh-b_shadow
-\\
-brick cache (sm) 
-& - 
-& - 
-& - 
-& - 
- & \numbersMinAvgMax{3.385}{11.909}{56.482}  % cells_wm_csh-bsm_shadow
- & \numbersMinAvgMax{0.001}{16.154}{96.372}  % fiber_wm_csh-bsm_shadow
-& - 
- & \numbersMinAvgMax{0.001}{5.533}{31.165}  % azba_wm_csh-bsm_shadow
- & \numbersMinAvgMax{2.51}{9.088}{90.204}  % cells_wm-sb_csh-bsm_shadow
- & \numbersMinAvgMax{0.001}{7.854}{21.229}  % fiber_wm-sb_csh-bsm_shadow
-& - 
- & \numbersMinAvgMax{0.001}{5.37}{33.338}  % azba_wm-sb_csh-bsm_shadow
+ & \numbersMinAvgMax{0.001}{4.703}{27.009}  % azba_shadow_wm_csh-b cache: 1845.69 MB
+ & \numbersMinAvgMax{1.382}{7.961}{90.719}  % cells_shadow_wm-sb_csh-b cache: 4299.686 MB
+ & \numbersMinAvgMax{0.001}{5.699}{13.87}  % fiber_shadow_wm-sb_csh-b cache: 4300.618 MB
+ & \numbersMinAvgMax{17.476}{21.208}{133.209}  % h01_shadow_wm-sb_csh-b cache: 1590.952 MB
+ & \numbersMinAvgMax{0.001}{4.849}{36.69}  % azba_shadow_wm-sb_csh-b cache: 1845.69 MB
 \\
 \midrule
 \multicolumn{13}{c}{shading mode: ambient occlusion} \\
@@ -153,162 +125,163 @@ no cache
 & - 
 & - 
 & - 
- & \numbersMinAvgMax{8.647}{47.092}{135.935}  % cells_wm_csh-n_ao
- & \numbersMinAvgMax{4.872}{20.526}{69.822}  % fiber_wm_csh-n_ao
+ & \numbersMinAvgMax{8.169}{46.734}{135.237}  % cells_ao_wm_csh-n cache: 5.767 MB
+ & \numbersMinAvgMax{4.694}{19.574}{68.677}  % fiber_ao_wm_csh-n cache: 6.699 MB
 & - 
- & \numbersMinAvgMax{9.956}{35.173}{80.614}  % azba_wm_csh-n_ao
- & \numbersMinAvgMax{12.284}{74.932}{200.674}  % cells_wm-sb_csh-n_ao
- & \numbersMinAvgMax{6.519}{29.763}{116.436}  % fiber_wm-sb_csh-n_ao
- & \numbersMinAvgMax{1.611}{15.387}{164.062}  % h01_wm-sb_csh-n_ao
- & \numbersMinAvgMax{14.886}{49.31}{113.9}  % azba_wm-sb_csh-n_ao
+ & \numbersMinAvgMax{9.875}{34.737}{80.838}  % azba_ao_wm_csh-n cache: 5.44 MB
+ & \numbersMinAvgMax{11.82}{74.569}{200.5}  % cells_ao_wm-sb_csh-n cache: 5.767 MB
+ & \numbersMinAvgMax{6.359}{28.814}{116.312}  % fiber_ao_wm-sb_csh-n cache: 6.699 MB
+ & \numbersMinAvgMax{1.525}{14.544}{184.931}  % h01_ao_wm-sb_csh-n cache: 18.088 MB
+ & \numbersMinAvgMax{14.545}{48.922}{112.082}  % azba_ao_wm-sb_csh-n cache: 5.44 MB
 \\
 voxel cache 
 & - 
 & - 
 & - 
 & - 
- & \numbersMinAvgMax{14.917}{568.614}{1113.195}  % cells_wm_csh-v_ao
- & \numbersMinAvgMax{3.215}{279.567}{1674.376}  % fiber_wm_csh-v_ao
+ & \numbersMinAvgMax{76.066}{633.998}{1202.742}  % cells_ao_wm_csh-v cache: 4299.686 MB
+ & \numbersMinAvgMax{38.619}{426.152}{1840.617}  % fiber_ao_wm_csh-v cache: 4300.618 MB
 & - 
- & \numbersMinAvgMax{219.182}{627.475}{1005.598}  % azba_wm_csh-v_ao
- & \numbersMinAvgMax{4.645}{509.061}{1128.098}  % cells_wm-sb_csh-v_ao
- & \numbersMinAvgMax{3.206}{191.935}{1516.783}  % fiber_wm-sb_csh-v_ao
- & \numbersMinAvgMax{1.175}{6.204}{134.531}  % h01_wm-sb_csh-v_ao | cache: 1590.952
- & \numbersMinAvgMax{211.667}{516.531}{667.892}  % azba_wm-sb_csh-v_ao
+ & \numbersMinAvgMax{216.396}{621.408}{996.652}  % azba_ao_wm_csh-v cache: 4299.358 MB
+ & \numbersMinAvgMax{71.41}{572.609}{1180.456}  % cells_ao_wm-sb_csh-v cache: 4299.686 MB
+ & \numbersMinAvgMax{37.126}{394.411}{1683.039}  % fiber_ao_wm-sb_csh-v cache: 4300.618 MB
+ & \numbersMinAvgMax{0.456}{2.282}{158.743}  % h01_ao_wm-sb_csh-v cache: 1590.952 MB
+ & \numbersMinAvgMax{211.298}{515.419}{665.838}  % azba_ao_wm-sb_csh-v cache: 4299.358 MB
 \\
 voxel cache (es)
 & - 
 & - 
 & - 
 & - 
- & \numbersMinAvgMax{2.608}{16.8}{341.63}  % cells_wm_csh-v_es_ao
- & \numbersMinAvgMax{1.064}{11.689}{76.195}  % fiber_wm_csh-v_es_ao
+ & \numbersMinAvgMax{3.376}{18.628}{342.337}  % cells_ao_wm_csh-v_es cache: 4299.686 MB
+ & \numbersMinAvgMax{6.405}{16.439}{149.88}  % fiber_ao_wm_csh-v_es cache: 4300.618 MB
 & - 
- & \numbersMinAvgMax{108.225}{263.427}{415.934}  % azba_wm_csh-v_es_ao
- & \numbersMinAvgMax{2.596}{17.829}{512.583}  % cells_wm-sb_csh-v_es_ao
- & \numbersMinAvgMax{1.294}{13.235}{88.626}  % fiber_wm-sb_csh-v_es_ao
- & \numbersMinAvgMax{0.234}{6.002}{221.686}  % h01_wm-sb_csh-v_es_ao | cache: 1590.952
- & \numbersMinAvgMax{107.984}{263.062}{415.95}  % azba_wm-sb_csh-v_es_ao
+ & \numbersMinAvgMax{107.178}{261.273}{413.431}  % azba_ao_wm_csh-v_es cache: 4299.358 MB
+ & \numbersMinAvgMax{3.965}{19.773}{476.916}  % cells_ao_wm-sb_csh-v_es cache: 4299.686 MB
+ & \numbersMinAvgMax{7.022}{18.442}{167.767}  % fiber_ao_wm-sb_csh-v_es cache: 4300.618 MB
+ & \numbersMinAvgMax{5.35}{117.304}{1860.445}  % h01_ao_wm-sb_csh-v_es cache: 1590.952 MB
+ & \numbersMinAvgMax{108.486}{264.302}{417.816}  % azba_ao_wm-sb_csh-v_es cache: 4299.358 MB
 \\
 brick cache 
- & \numbersMinAvgMax{5.113}{18.781}{86.347}  % cells_rans_csh-b_ao
- & \numbersMinAvgMax{1.776}{10.793}{39.727}  % fiber_rans_csh-b_ao
- & \numbersMinAvgMax{2.894}{6.051}{14.767}  % h01_rans_csh-b_ao
- & \numbersMinAvgMax{7.274}{17.669}{42.448}  % azba_rans_csh-b_ao
- & \numbersMinAvgMax{2.273}{10.477}{65.085}  % cells_wm_csh-b_ao
- & \numbersMinAvgMax{1.661}{8.962}{35.528}  % fiber_wm_csh-b_ao
+ & \numbersMinAvgMax{4.304}{17.932}{81.452}  % cells_ao_rans_csh-b cache: 4299.686 MB
+ & \numbersMinAvgMax{1.565}{9.467}{35.228}  % fiber_ao_rans_csh-b cache: 4300.618 MB
+ & \numbersMinAvgMax{2.552}{4.663}{44.732}  % h01_ao_rans_csh-b cache: 4312.007 MB
+ & \numbersMinAvgMax{6.852}{17.151}{45.22}  % azba_ao_rans_csh-b cache: 1845.69 MB
+ & \numbersMinAvgMax{1.554}{9.455}{66.721}  % cells_ao_wm_csh-b cache: 4299.686 MB
+ & \numbersMinAvgMax{1.417}{7.001}{25.004}  % fiber_ao_wm_csh-b cache: 4300.618 MB
 & - 
- & \numbersMinAvgMax{3.177}{12.356}{27.244}  % azba_wm_csh-b_ao
- & \numbersMinAvgMax{1.924}{11.618}{96.926}  % cells_wm-sb_csh-b_ao
- & \numbersMinAvgMax{1.659}{8.912}{32.673}  % fiber_wm-sb_csh-b_ao
- & \numbersMinAvgMax{17.407}{21.959}{105.686}  % h01_wm-sb_csh-b_ao
- & \numbersMinAvgMax{3.082}{12.729}{38.346}  % azba_wm-sb_csh-b_ao
+ & \numbersMinAvgMax{2.994}{11.766}{27.029}  % azba_ao_wm_csh-b cache: 1845.69 MB
+ & \numbersMinAvgMax{1.54}{10.789}{93.775}  % cells_ao_wm-sb_csh-b cache: 4299.686 MB
+ & \numbersMinAvgMax{1.42}{7.187}{26.135}  % fiber_ao_wm-sb_csh-b cache: 4300.618 MB
+ & \numbersMinAvgMax{16.339}{21.551}{150.403}  % h01_ao_wm-sb_csh-b cache: 1590.952 MB
+ & \numbersMinAvgMax{2.986}{12.154}{35.691}  % azba_ao_wm-sb_csh-b cache: 1845.69 MB
 \\
-brick cache (sm) 
-& - 
-& - 
-& - 
-& - 
- & \numbersMinAvgMax{3.32}{11.989}{57.114}  % cells_wm_csh-bsm_ao
- & \numbersMinAvgMax{1.987}{17.084}{96.834}  % fiber_wm_csh-bsm_ao
-& - 
- & \numbersMinAvgMax{3.598}{13.306}{29.755}  % azba_wm_csh-bsm_ao
- & \numbersMinAvgMax{1.968}{11.455}{89.645}  % cells_wm-sb_csh-bsm_ao
- & \numbersMinAvgMax{1.679}{9.002}{35.024}  % fiber_wm-sb_csh-bsm_ao
-& - 
- & \numbersMinAvgMax{3.128}{12.54}{35.806}  % azba_wm-sb_csh-bsm_ao
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.1}
+ & \numbersMinAvgMax{4.091}{11.166}{103.449}  % azba_shadow_wm-sb_csh-v_es cache: 1079.181 MB
 \\
-\midrule
-\multicolumn{13}{c}{shading mode: path tracing} \\
-no cache 
-& - 
-& - 
-& - 
-& - 
- & \numbersMinAvgMax{9.367}{57.918}{174.258}  % cells_wm_csh-n_pt
- & \numbersMinAvgMax{9.643}{48.734}{227.296}  % fiber_wm_csh-n_pt
-& - 
- & \numbersMinAvgMax{11.243}{39.042}{94.024}  % azba_wm_csh-n_pt
- & \numbersMinAvgMax{14.101}{93.048}{241.168}  % cells_wm-sb_csh-n_pt
- & \numbersMinAvgMax{12.773}{60.355}{279.283}  % fiber_wm-sb_csh-n_pt
- & \numbersMinAvgMax{2.239}{9.217}{108.187}  % h01_wm-sb_csh-n_pt
- & \numbersMinAvgMax{16.116}{54.704}{123.977}  % azba_wm-sb_csh-n_pt
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.25}
+ & \numbersMinAvgMax{3.715}{11.162}{103.184}  % azba_shadow_wm-sb_csh-v_es cache: 1079.181 MB
 \\
-voxel cache 
-& - 
-& - 
-& - 
-& - 
- & \numbersMinAvgMax{19.29}{624.381}{1187.147}  % cells_wm_csh-v_pt
- & \numbersMinAvgMax{12.339}{471.282}{2332.008}  % fiber_wm_csh-v_pt
-& - 
- & \numbersMinAvgMax{228.667}{678.667}{1103.633}  % azba_wm_csh-v_pt
- & \numbersMinAvgMax{5.751}{556.069}{1206.842}  % cells_wm-sb_csh-v_pt
- & \numbersMinAvgMax{4.488}{344.659}{2122.408}  % fiber_wm-sb_csh-v_pt
-& - 
- & \numbersMinAvgMax{223.45}{573.075}{775.214}  % azba_wm-sb_csh-v_pt
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.5}
+ & \numbersMinAvgMax{3.869}{11.128}{104.952}  % azba_shadow_wm-sb_csh-v_es cache: 1079.181 MB
 \\
-voxel cache (es)
-& - 
-& - 
-& - 
-& - 
- & \numbersMinAvgMax{2.701}{19.351}{374.295}  % cells_wm_csh-v_es_pt
- & \numbersMinAvgMax{2.014}{20.637}{124.989}  % fiber_wm_csh-v_es_pt
-& - 
- & \numbersMinAvgMax{112.237}{277.735}{444.635}  % azba_wm_csh-v_es_pt
- & \numbersMinAvgMax{2.197}{20.746}{526.457}  % cells_wm-sb_csh-v_es_pt
- & \numbersMinAvgMax{2.179}{22.539}{147.938}  % fiber_wm-sb_csh-v_es_pt
-& - 
- & \numbersMinAvgMax{111.027}{275.005}{440.296}  % azba_wm-sb_csh-v_es_pt
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.75}
+ & \numbersMinAvgMax{3.841}{11.071}{103.458}  % azba_shadow_wm-sb_csh-v_es cache: 1079.181 MB
 \\
-brick cache 
- & \numbersMinAvgMax{5.525}{20.145}{90.235}  % cells_rans_csh-b_pt
- & \numbersMinAvgMax{2.22}{13.075}{52.815}  % fiber_rans_csh-b_pt
- & \numbersMinAvgMax{3.474}{6.048}{25.741}  % h01_rans_csh-b_pt
- & \numbersMinAvgMax{7.599}{18.517}{44.236}  % azba_rans_csh-b_pt
- & \numbersMinAvgMax{2.561}{11.703}{70.745}  % cells_wm_csh-b_pt
- & \numbersMinAvgMax{2.107}{11.158}{42.27}  % fiber_wm_csh-b_pt
-& - 
- & \numbersMinAvgMax{3.405}{13.068}{29.562}  % azba_wm_csh-b_pt
- & \numbersMinAvgMax{2.253}{12.882}{100.016}  % cells_wm-sb_csh-b_pt
- & \numbersMinAvgMax{2.217}{11.312}{42.243}  % fiber_wm-sb_csh-b_pt
- & \numbersMinAvgMax{18.107}{21.983}{92.842}  % h01_wm-sb_csh-b_pt
- & \numbersMinAvgMax{3.4}{13.346}{36.794}  % azba_wm-sb_csh-b_pt
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.9}
+ & \numbersMinAvgMax{3.879}{11.191}{102.101}  % azba_shadow_wm-sb_csh-v_es cache: 1079.181 MB
 \\
-brick cache (sm) 
-& - 
-& - 
-& - 
-& - 
- & \numbersMinAvgMax{3.549}{12.075}{64.038}  % cells_wm_csh-bsm_pt
- & \numbersMinAvgMax{2.805}{17.16}{96.173}  % fiber_wm_csh-bsm_pt
-& - 
- & \numbersMinAvgMax{4.108}{14.427}{32.196}  % azba_wm_csh-bsm_pt
- & \numbersMinAvgMax{2.333}{12.679}{94.893}  % cells_wm-sb_csh-bsm_pt
- & \numbersMinAvgMax{2.104}{11.107}{43.336}  % fiber_wm-sb_csh-bsm_pt
-& - 
- & \numbersMinAvgMax{3.39}{13.233}{35.535}  % azba_wm-sb_csh-bsm_pt
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{3.944}{11.198}{104.965}  % azba_shadow_wm-sb_csh-v_es cache: 1079.181 MB
 \\
-############ RERUNS ############
-& -  % fiber_wm-sb_csh-v_local
-& -  % fiber_wm-sb_csh-v_ao
-& -  % fiber_wm-sb_csh-v_shadow
- & \numbersMinAvgMax{0.001}{2.734}{49.479}  % fiber_wm-sb_csh-v_local | cache: 1579.563
- & \numbersMinAvgMax{3.226}{11.006}{75.03}  % fiber_wm-sb_csh-v_ao | cache: 1579.563
- & \numbersMinAvgMax{0.001}{8.746}{67.979}  % fiber_wm-sb_csh-v_shadow | cache: 1579.563
-& -  % fiber_wm-sb_csh-v_local
- & \numbersMinAvgMax{0.001}{5.159}{30.644}  % fiber_wm-sb_csh-v_local | cache: 1579.563
- & \numbersMinAvgMax{6.064}{27.888}{112.534}  % fiber_wm-sb_csh-v_ao | cache: 1579.563
- & \numbersMinAvgMax{0.001}{20.237}{54.33}  % fiber_wm-sb_csh-v_shadow | cache: 1579.563
- & \numbersMinAvgMax{0.001}{4.786}{37.414}  % fiber_wm-sb_csh-v_local | cache: 1579.563
- & \numbersMinAvgMax{6.205}{20.739}{64.022}  % fiber_wm-sb_csh-v_ao | cache: 1579.563
- & \numbersMinAvgMax{0.001}{16.472}{51.715}  % fiber_wm-sb_csh-v_shadow | cache: 1579.563
-& -  % fiber_wm-sb_csh-v_local
-& -  % fiber_wm-sb_csh-v_local
- & \numbersMinAvgMax{0.001}{2.172}{38.155}  % fiber_wm-sb_csh-v_local | cache: 1579.563
- & \numbersMinAvgMax{3.014}{9.459}{60.659}  % fiber_wm-sb_csh-v_ao | cache: 1579.563
- & \numbersMinAvgMax{0.001}{6.764}{49.506}  % fiber_wm-sb_csh-v_shadow | cache: 1579.563
- & \numbersMinAvgMax{0.001}{3.194}{37.196}  % fiber_wm-sb_csh-v_local | cache: 1579.563
- & \numbersMinAvgMax{2.099}{12.389}{59.23}  % fiber_wm-sb_csh-v_ao | cache: 1579.563
- & \numbersMinAvgMax{0.001}{9.576}{49.859}  % fiber_wm-sb_csh-v_shadow | cache: 1579.563
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.1}
+ & \numbersMinAvgMax{102.159}{311.984}{610.774}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.25}
+ & \numbersMinAvgMax{101.587}{311.152}{610.535}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.5}
+ & \numbersMinAvgMax{101.97}{311.181}{610.945}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.75}
+ & \numbersMinAvgMax{101.79}{311.175}{610.653}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.9}
+ & \numbersMinAvgMax{101.807}{311.205}{610.553}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{102.113}{311.152}{610.466}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{4.289}{11.756}{101.826}  % azba_shadow_wm-sb_csh-v_es cache: 529.728 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{3.93}{11.359}{104.078}  % azba_shadow_wm-sb_csh-v_es cache: 1054.016 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{3.765}{12.179}{105.188}  % azba_shadow_wm-sb_csh-v_es cache: 1578.304 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{5.169}{15.868}{108.144}  % azba_shadow_wm-sb_csh-v_es cache: 2102.592 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{30.253}{90.78}{176.175}  % azba_shadow_wm-sb_csh-v_es cache: 2626.88 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{55.022}{168.401}{330.06}  % azba_shadow_wm-sb_csh-v_es cache: 3151.168 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{77.961}{237.698}{466.71}  % azba_shadow_wm-sb_csh-v_es cache: 3675.456 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{98.709}{302.29}{592.522}  % azba_shadow_wm-sb_csh-v_es cache: 4199.744 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{98.132}{281.142}{530.238}  % azba_shadow_wm-sb_csh-v_es cache: 4199.744 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{4.169}{12.596}{47.959}  % azba_shadow_wm-sb_csh-v_es cache: 542.31 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{3.675}{11.154}{60.177}  % azba_shadow_wm-sb_csh-v_es cache: 1079.181 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{9.387}{30.185}{69.867}  % azba_shadow_wm-sb_csh-v_es cache: 1616.052 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{5.458}{17.222}{63.629}  % azba_shadow_wm-sb_csh-v_es cache: 2152.923 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{9.482}{26.489}{66.785}  % azba_shadow_wm-sb_csh-v_es cache: 2689.794 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{4.64}{12.971}{67.836}  % azba_shadow_wm-sb_csh-v_es cache: 3226.665 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{14.938}{38.521}{70.504}  % azba_shadow_wm-sb_csh-v_es cache: 3763.536 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{22.067}{42.599}{88.806}  % azba_shadow_wm-sb_csh-v_es cache: 4299.358 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.001}
+ & \numbersMinAvgMax{3.657}{12.381}{52.56}  % azba_shadow_wm-sb_csh-v_es cache: 1054.016 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.01}
+ & \numbersMinAvgMax{3.609}{11.865}{62.467}  % azba_shadow_wm-sb_csh-v_es cache: 1054.016 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.1}
+ & \numbersMinAvgMax{3.731}{11.671}{56.001}  % azba_shadow_wm-sb_csh-v_es cache: 1054.016 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.25}
+ & \numbersMinAvgMax{3.687}{11.212}{52.026}  % azba_shadow_wm-sb_csh-v_es cache: 1054.016 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.5}
+ & \numbersMinAvgMax{3.696}{11.208}{50.332}  % azba_shadow_wm-sb_csh-v_es cache: 1054.016 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 0.9}
+ & \numbersMinAvgMax{3.742}{11.228}{56.136}  % azba_shadow_wm-sb_csh-v_es cache: 1054.016 MB
+\\
+\multicolumn{12}{l}{wm+sb\_azba\_csh-v-es\_b32 1.0}
+ & \numbersMinAvgMax{3.745}{11.246}{59.205}  % azba_shadow_wm-sb_csh-v_es cache: 1054.016 MB
+\\
