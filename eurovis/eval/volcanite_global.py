@@ -11,6 +11,11 @@ OLD_ABORT = 0
 OLD_APPEND = 1
 OLD_OVERWRITE = 2
 
+# CONFIG, SET IN EVALUATION SCRIPTS:
+# NO_LOG = False
+# VIDEO_CREATE = False
+# OLD_LOGS = OLD_OVERWRITE
+
 GIT_CHECKOUT = "mp/parallel-decode"
 OUTPUT_BASE_DIR =  "/home/maxpio/code/volcanite/eurovis/eval/out"
 VOLCANITE_BUILD_DIR = "/home/maxpio/code/volcanite/cmake-build-release"
