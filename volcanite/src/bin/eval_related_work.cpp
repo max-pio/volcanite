@@ -41,7 +41,7 @@ int eval_related_work(int argc, char *argv[]) {
     if(argc > 1) {
         path = std::string(argv[1]);
     } else {
-        Logger(WARN) << " add a path to a segmentation volume as a command line argument!"
+        Logger(WARN) << " add a path to a segmentation volume as a command line argument!";
     }
 
     double seconds, lzma_seconds;
@@ -51,22 +51,13 @@ int eval_related_work(int argc, char *argv[]) {
     Logger::s_minLevel = WARN; // disable all distracting messages
 
     // compresso
-    Logger(INFO) << "Compresso ------------------------------------------------------------------";
-    {
-        // Logger(INFO) << "test " << (compresso::test(path, 1, 8, 8, compresso::LZMA) ? "ok" : "error!");
-        compresso::Compress(path, 8, 8, 1, compresso::LZMA, cr, cr_lzma, seconds, lzma_seconds);
-        std::cout << "Compresso      Compression rate: " << std::fixed << std::setprecision(9) << (cr * 100.) << "% in " << seconds << std::endl;
-        std::cout << "Compresso LZMA Compression rate: " << std::fixed << std::setprecision(9) << (cr_lzma * 100.) << "% in " << lzma_seconds << std::endl;
-    }
-
-    // neuroglancer
-    Logger(INFO) << "Neuroglancer ---------------------------------------------------------------";
-    {
-        //Logger(INFO) << "test " << (neuroglancer::test(path, 8) ? "ok" : "error!");
-        neuroglancer::Compress(path, 8, cr, seconds);
-        std::cout << "Neuroglancer   Compression rate: " << std::fixed << std::setprecision(9) << cr << "% in "
-                  << seconds << std::endl;
-    }
+//    Logger(INFO) << "Compresso ------------------------------------------------------------------";
+//    {
+//        //std::cout << "test " << (compresso::test(path, 1, 8, 8, compresso::LZMA) ? "ok" : "error!");
+//        compresso::Compress(path, 1, 8, 8, compresso::LZMA, cr, cr_lzma, seconds, lzma_seconds);
+//        std::cout << "Compresso      Compression rate: " << std::fixed << std::setprecision(9) << (cr * 100.) << "% in " << seconds << std::endl;
+//        std::cout << "Compresso LZMA Compression rate: " << std::fixed << std::setprecision(9) << (cr_lzma * 100.) << "% in " << lzma_seconds << std::endl;
+//    }
 
     // hdf5
     // Logger(INFO) << "HDF5 ------------------------------------------------------------------";
@@ -125,6 +116,7 @@ int eval_related_work(int argc, char *argv[]) {
     }
 
     // Random Access Compressed Segmentation Volumes
+    CSGVCompressionEvaluationResults volume_info;
     Logger(INFO) << "CSGV-R+sb (one thread) ------------------------------------------------";
     {
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = 64,
@@ -148,13 +140,26 @@ int eval_related_work(int argc, char *argv[]) {
         std::cout << "CSGV-R HuffWM  Compression rate: " << std::fixed << std::setprecision(9)
                   << (eval_res.compression_rate * 100.) << "% in " << eval_res.compression_total_seconds << std::endl;
 
-        std::cout << "-------------" << std::endl;
-        std::cout << "Original Volume: " << (eval_res.original_volume_bytes * BYTE_TO_GB) << " GB"
-                  << " containing " << str(eval_res.volume_dim) << " voxels @ "
-                  << CompressedSegmentationVolume::getBytesForLabelCount(eval_res.volume_labels)
-                  << " bytes/voxel for " << eval_res.volume_labels << " labels. "
-                  << std::endl;
+
+        volume_info = eval_res;
     }
+
+    // neuroglancer
+    Logger(INFO) << "Neuroglancer ---------------------------------------------------------------";
+    {
+        //std::cout << "test " << (neuroglancer::test(path, 8) ? " ok" : " error!");
+        neuroglancer::Compress(path, 8, cr, seconds);
+        std::cout << "Neuroglancer   Compression rate: " << std::fixed << std::setprecision(9)
+                  << (cr * static_cast<float>(4u / CompressedSegmentationVolume::getBytesForLabelCount(volume_info.volume_labels))) << "% in "
+                  << seconds << std::endl;
+    }
+
+    std::cout << "-------------" << std::endl;
+    std::cout << "Original Volume: " << (volume_info.original_volume_bytes * BYTE_TO_GB) << " GB"
+              << " containing " << str(volume_info.volume_dim) << " voxels @ "
+              << CompressedSegmentationVolume::getBytesForLabelCount(volume_info.volume_labels)
+              << " bytes/voxel for " << volume_info.volume_labels << " labels. "
+              << std::endl;
 
     return 0;
 }

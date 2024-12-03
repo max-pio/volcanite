@@ -609,13 +609,12 @@ public:
 
 
     uint32_t getNumberOfUniqueLabelsInVolume() const {
-        std::vector<std::unordered_set<uint32_t>> _label_set(m_cpu_threads);
-        for (size_t i = 0; i < getBrickIndexCount(); i += m_cpu_threads) {
-            // process the next m_cpu_threads bricks in parallel
-            #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(i, _label_set)
-            {
-                unsigned int thread_id = omp_get_thread_num();
-                uint32_t n = i + thread_id;
+        std::vector<std::unordered_set<uint32_t>> label_set(m_cpu_threads);
+        // process the next m_cpu_threads bricks in parallel
+        #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(label_set)
+        {
+            unsigned int thread_id = omp_get_thread_num();
+            for (size_t n = thread_id; n < getBrickIndexCount(); n += m_cpu_threads) {
 
                 if (n < getBrickIndexCount()) {
                     auto brick_encoding = getBrickEncoding(n);
@@ -624,8 +623,8 @@ public:
 
                     for (int p = 1; p <= palette_size; p++) {
                         uint32_t label = brick_encoding[brick_encoding_length - p];
-                        if (!_label_set[thread_id].contains(label)) {
-                            _label_set[thread_id].insert(label);
+                        if (!label_set[thread_id].contains(label)) {
+                            label_set[thread_id].insert(label);
                         }
                     }
                 }
@@ -634,18 +633,18 @@ public:
 
         // gather all thread-private label sets into one global set (the first one)
         for (int thread_id = 1; thread_id < m_cpu_threads; thread_id++) {
-            for (const auto &label: _label_set[thread_id]) {
-                if (!_label_set[0].contains(label)) {
-                    _label_set[0].insert(label);
+            for (const auto &label: label_set[thread_id]) {
+                if (!label_set[0].contains(label)) {
+                    label_set[0].insert(label);
                 }
             }
-            _label_set[thread_id].clear();
+            label_set[thread_id].clear();
         }
 
 //        std::stringstream ss;
 //        ss << " Unique labels: ";
 //        uint32_t c = 0;
-//        for (const auto& l : _label_set[0]) {
+//        for (const auto& l : label_set[0]) {
 //            ss << l << ", ";
 //            if (c++ > 64) {
 //                ss << " ...";
@@ -653,7 +652,7 @@ public:
 //            }
 //        }
 //        Logger(DEBUG) << ss.str();
-        return _label_set[0].size();
+        return label_set[0].size();
     }
 
 private:

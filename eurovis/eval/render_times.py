@@ -175,8 +175,8 @@ if __name__ == "__main__":
     if not DRY_RUN:
         # checkout and build volcanite
         build_volcanite()
-        if not (Path(VOLCANITE_BUILD_DIR) / Path("volcanite")).exists():
-            print("ERROR: volcanite executable not found at " + str(Path(VOLCANITE_BUILD_DIR) / Path("volcanite")))
+        if not (Path(VOLCANITE_BUILD_DIR) / Path("volcanite/volcanite")).exists():
+            print("ERROR: volcanite executable not found at " + str(Path(VOLCANITE_BUILD_DIR) / Path("volcanite/volcanite")))
             exit(2)
 
         # set up log files

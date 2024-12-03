@@ -196,8 +196,8 @@ if __name__ == "__main__":
     if not DRY_RUN:
         # checkout and build volcanite
         build_volcanite()
-        if not (Path(VOLCANITE_BUILD_DIR) / Path("volcanite")).exists():
-            print("ERROR: volcanite executable not found at " + str(Path(VOLCANITE_BUILD_DIR) / Path("volcanite")))
+        if not (Path(VOLCANITE_BUILD_DIR) / Path("volcanite/volcanite")).exists():
+            print("ERROR: volcanite executable not found at " + str(Path(VOLCANITE_BUILD_DIR) / Path("volcanite/volcanite")))
             exit(2)
 
         # set up log files
@@ -224,9 +224,9 @@ if __name__ == "__main__":
     # evaluation ------------------------------------------------------------------------------------
     log_manual("# " + datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f") + "\n")
 
-    for shade_i, shade in enumerate([shade_shadow]):
-        for enc_mode in [e_rans, e_wmh]:
-            for data in [d_cells, d_fiber, d_h01, d_azba]:
+    for shade_i, shade in enumerate([shade_ao]):
+        for enc_mode in [e_rans, e_wmh]: #[e_rans, e_wmh]
+            for data in [d_cells, d_fiber]: #[d_cells, d_fiber, d_h01, d_azba]:
                 bs = bs_64 if data == d_h01 else bs_32
                 if enc_mode == e_rans:
                     cache_mode = cache_brick

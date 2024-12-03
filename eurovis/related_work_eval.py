@@ -8,7 +8,6 @@ import compresso
 import lzma
 from timeit import default_timer as timer
 import PIL.Image as Image
-import neuroglancer
 import tempfile
 #from tqdm import tqdm
 
@@ -36,14 +35,14 @@ def export_to_NRRD(path, out_type="uint32"):
     volume.astype(out_type).tofile(file)
     file.close()
 
-def export_numpy_to_hdf5(labels, path):
+def compress_hdf5(labels, path, orig_bytes_per_voxel):
     with h5py.File(path[:-4] + ".hdf5", "w") as f:
         start = timer()
         dset = f.create_dataset("data", shape=labels.shape, dtype='uint32',
                                 data=labels.flatten(), compression="gzip", chunks=(128, 128, 128))
         end = timer()
         bytes = dset.id.get_storage_size()
-        print("hdf5           Compression rate: " + str(bytes / (labels.shape[0] * labels.shape[1] * labels.shape[2] * 4)) + " in " + str(end - start) + "s")
+        print("hdf5           Compression rate: " + str(bytes / (labels.shape[0] * labels.shape[1] * labels.shape[2] * orig_bytes_per_voxel)) + " in " + str(end - start) + "s")
 
 
 def read_from_NRRD(path, in_type="uint32"):
@@ -69,17 +68,17 @@ def compress_difftree_lzma(path):
     file.close()
 
 
-def enc_compresso(labels, use_lzma):
+def enc_compresso(labels, use_lzma, orig_bytes_per_voxel):
     start = timer()
     compressed_labels = compresso.compress(labels, steps=(8,8,1))  # 3d numpy array -> compressed bytes
     if use_lzma:
         compressed_labels = lzma.compress(compressed_labels) #, preset=(9|lzma.PRESET_EXTREME))
     end = timer()
     if use_lzma:
-        print("Compresso LZMA Compression rate: " + str(len(compressed_labels)/(labels.shape[0] * labels.shape[1] * labels.shape[2] * 4)) + " in " + str(end - start) + "s")
+        print("Compresso LZMA Compression rate: " + str(len(compressed_labels)/(labels.shape[0] * labels.shape[1] * labels.shape[2] * orig_bytes_per_voxel)) + " in " + str(end - start) + "s")
     else:
         print("Compresso      Compression rate: " + str(
-            len(compressed_labels) / (labels.shape[0] * labels.shape[1] * labels.shape[2] * 4)) + " in " + str(
+            len(compressed_labels) / (labels.shape[0] * labels.shape[1] * labels.shape[2] * orig_bytes_per_voxel)) + " in " + str(
             end - start) + "s")
     # print("decompress")
     # start = timer()
@@ -109,7 +108,7 @@ def enc_compresso_chunks(zwidth, lzma):
 
 def enc_neuroglancer(labels):
     start = timer()
-    compressed_labels = neuroglancer.compress(labels)  # 3d numpy array -> compressed bytes
+    compressed_labels = compresso.compression.neuroglancer(labels)  # 3d numpy array -> compressed bytes
     end = timer()
     print("neuroglancer   Compression rate: "
           + str(len(compressed_labels) / (labels.shape[0] * labels.shape[1] * labels.shape[2] * 4))
@@ -137,8 +136,8 @@ def enc_slice_png(labels):
 
 if __name__ == '__main__':
 
-    path = "/home/maxpio/data/cellsinsilico/Big01/000/outdir/nrrd_uint32/cells_frame055.raw"
-    #path = "/home/maxpio/data/segmented_volumes/fiber_polymer/a/glassfibrereinforcedpolymer_unloaded_1579x1092x1651_2umVS_labeled_16bit.hdf5"
+    # path = "/home/maxpio/data/cellsinsilico/Big01/000/outdir/nrrd_uint32/cells_frame055.raw"
+    # path = "/home/maxpio/data/segmented_volumes/fiber_polymer/a/glassfibrereinforcedpolymer_unloaded_1579x1092x1651_2umVS_labeled_16bit.hdf5"
 
     if len(sys.argv) > 1:
         path = sys.argv[1]
@@ -151,19 +150,28 @@ if __name__ == '__main__':
         print("unrecognized filetyp")
         exit(1)
 
+    if "fiber" in path:
+        orig_bytes_per_voxel = 2
+    elif "azba" in path:
+        orig_bytes_per_voxel = 1
+    else:
+        orig_bytes_per_voxel = 4
+
+    print("Number of unique labels: " + str(len(np.unique(labels))) + " using " + str(orig_bytes_per_voxel) + " bytes / voxel")
+
     # HDF5------------------
-    with tempfile.TemporaryDirectory() as tmpdir:
-        export_numpy_to_hdf5(labels, tmpdir + "/hdf5_comp.hdf5")
+    # with tempfile.TemporaryDirectory() as tmpdir:
+    #     compress_hdf5(labels, tmpdir + "/hdf5_comp.hdf5", orig_bytes_per_voxel)
 
     ## Neuroglancer--------- (use C++ version)
-    # enc_neuroglancer(labels)
+    enc_neuroglancer(labels)
 
     ### PNG------------------
-    enc_slice_png(labels)
+    # enc_slice_png(labels)
 
     ## Compresso------------- (Use C++ version?)
-    enc_compresso(labels, False)
-    enc_compresso(labels, True)
+    # enc_compresso(labels, False, orig_bytes_per_voxel)
+    # enc_compresso(labels, True, orig_bytes_per_voxel)
 
     exit(0)
 

@@ -11,6 +11,7 @@ OLD_ABORT = 0
 OLD_APPEND = 1
 OLD_OVERWRITE = 2
 
+NO_LOG = False
 OLD_LOGS = OLD_OVERWRITE
 
 GIT_CHECKOUT = "mp/parallel-decode"
@@ -29,6 +30,11 @@ all_d = (d_cells, d_fiber, d_h01, d_azba)
 
 
 
+def concat_arg_ids(arg_args):
+    sorted_by_prio = sorted(arg_args, key=lambda a: a[2])
+    return ''.join([a[1] for a in sorted_by_prio])
+
+
 def build_eval_related_work():
     subp.run(["git", "checkout", GIT_CHECKOUT], cwd=VOLCANITE_BUILD_DIR)
     res = subp.run(["git", "pull"], cwd=VOLCANITE_BUILD_DIR)
@@ -40,10 +46,20 @@ def build_eval_related_work():
         print("Error: building volcanite returned " + str(res.returncode))
         exit(res.returncode)
 
+
+def log_output_txt(output):
+    print(output)
+    if NO_LOG or DRY_RUN:
+        return
+    with open(str(out_path), "a") as log_out:
+        log_out.write(output)
+
+
 def eval_related_work(arg_args, fallback_log=None, eval_name=None):
     if eval_name is None:
         eval_name = concat_arg_ids(arg_args)
     args = ["./eval_related_work"]
+
 
     # arg_args example:   [(["-b", "16"], "_b16"), (["-s", "0"], "_nb")]
     args = args + [a for args in arg_args for a in args[0]]
@@ -51,10 +67,11 @@ def eval_related_work(arg_args, fallback_log=None, eval_name=None):
     print(" ".join(args))
     print("-------------------------------")
     if not DRY_RUN:
-        res = subp.run(args, cwd="/home/maxpio/code/volcanite/cmake-build-release/eval_related_work")
+        res = subp.run(args, cwd="/home/maxpio/code/volcanite/cmake-build-release/volcanite", capture_output=True)
         if res.returncode != 0:
             print("Error: eval_related_work returned " + str(res.returncode))
             exit(res.returncode)
+        log_output_txt(res.stdout.decode())
 
 
 
@@ -79,8 +96,8 @@ if __name__ == "__main__":
     if not DRY_RUN:
         # checkout and build volcanite
         build_eval_related_work()
-        if not (Path(VOLCANITE_BUILD_DIR) / Path("eval_related_work")).exists():
-            print("ERROR: eval_related_work executable not found at " + str(Path(VOLCANITE_BUILD_DIR) / Path("eval_related_work")))
+        if not (Path(VOLCANITE_BUILD_DIR) / Path("volcanite/eval_related_work")).exists():
+            print("ERROR: eval_related_work executable not found at " + str(Path(VOLCANITE_BUILD_DIR) / Path("volcanite/eval_related_work")))
             exit(2)
 
         # set up log files
@@ -95,7 +112,7 @@ if __name__ == "__main__":
                 exit(1)
 
     # evaluation ------------------------------------------------------------------------------------
-    print("# " + datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f") + "\n")
+    log_output_txt("# " + datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f") + "\n")
 
     for data in [d_cells, d_fiber, d_h01_eval_chunk, d_azba]:
         eval_related_work(data)
