@@ -85,7 +85,6 @@ uint get_inv_lod(ivec3 voxel) {
     #if CACHE_BLOCK_COUNT == 1
         #undef CACHE_BLOCK_COUNT
     #endif
-    #undef TARGET_CACHE_BLOCK_SIZE
 #else
     #define CACHE_BLOCK_SIZE CACHE_UVEC2_SIZE
 #endif

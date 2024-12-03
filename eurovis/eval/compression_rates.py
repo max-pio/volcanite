@@ -131,7 +131,7 @@ def create_csv_tex_from_log():
 if __name__ == "__main__":
 
     DRY_RUN = False
-    if len(sys.args) > 1 and sys.args[0] == "dry":
+    if len(sys.argv) > 1 and "dry" in sys.argv[0]:
         DRY_RUN = True
         print("Performing dry run")
 
@@ -152,8 +152,8 @@ if __name__ == "__main__":
 
     # checkout and build volcanite
     build_volcanite()
-    if not (Path(VOLCANITE_BUILD_DIR) / Path("volcanite")).exists():
-        print("ERROR: volcanite executable not found at " + str(Path(VOLCANITE_BUILD_DIR) / Path("volcanite")))
+    if not (Path(VOLCANITE_BUILD_DIR) / Path("volcanite/volcanite")).exists():
+        print("ERROR: volcanite executable not found at " + str(Path(VOLCANITE_BUILD_DIR) / Path("volcanite/volcanite")))
         exit(2)
 
     # set up log files
@@ -178,8 +178,11 @@ if __name__ == "__main__":
 
     # evaluation ------------------------------------------------------------------------------------
 
+    create_csv_tex_from_log()
+    exit(0)
+
     # log_manual("# " + datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f") + "\n")
-    # # CELLS
+    # CELLS
     # data = d_cells
     # log_manual("\\midrule\n\\multirow{3}{*}{\\rotatebox{90}{\\cells{}}}\n")
     # bs = bs_16
@@ -238,7 +241,7 @@ if __name__ == "__main__":
     # log_manual("& $16$")
     # volcanite(def_volc + e_nibble + bs + csgv_out_name(data + e_nibble + bs) + data)
     # volcanite(def_volc + e_rans + bs + csgv_out_name(data + e_rans + bs) + data)
-    # log_manual("& & & % wm b16") # volcanite(def_volc + e_wmh_nosb + bs + csgv_out_name(data + e_wmh_nosb + bs) + data)
+    # volcanite(def_volc + e_wmh_nosb + bs + csgv_out_name(data + e_wmh_nosb + bs) + data)
     # volcanite(def_volc + e_wmh + bs + csgv_out_name(data + e_wmh + bs) + data)
     # #
     # log_newline()
@@ -261,29 +264,29 @@ if __name__ == "__main__":
     data = d_azba
     log_manual("\\midrule\n\\multirow{3}{*}{\\rotatebox{90}{\\azba{}}}\n")
     bs = bs_16
-    log_manual("& $16$\n")
-    volcanite(def_volc + e_nibble + bs + csgv_out_name(data + e_nibble + bs) + data)
-    volcanite(def_volc + e_rans + bs + csgv_out_name(data + e_rans + bs) + data)
-    volcanite(def_volc + e_wmh_nosb + bs + csgv_out_name(data + e_wmh_nosb + bs) + data)
-    volcanite(def_volc + e_wmh + bs + csgv_out_name(data + e_wmh + bs) + data)
+    # log_manual("& $16$\n")
+    # volcanite(def_volc + e_nibble + bs + csgv_out_name(data + e_nibble + bs) + data)
+    volcanite(def_volc + e_rans + bs + csgv_out_name(data + e_rans + bs) + data + [(["--freq-sampling", "1"], "", 1000)])
+    # volcanite(def_volc + e_wmh_nosb + bs + csgv_out_name(data + e_wmh_nosb + bs) + data)
+    # volcanite(def_volc + e_wmh + bs + csgv_out_name(data + e_wmh + bs) + data)
     #
-    log_newline()
+    # log_newline()
     bs = bs_32
-    log_manual("& $32$\n")
-    volcanite(def_volc + e_nibble + bs + csgv_out_name(data + e_nibble + bs) + data)
-    volcanite(def_volc + e_rans + bs + csgv_out_name(data + e_rans + bs) + data)
-    volcanite(def_volc + e_wmh_nosb + bs + csgv_out_name(data + e_wmh_nosb + bs) + data)
-    volcanite(def_volc + e_wmh + bs + csgv_out_name(data + e_wmh + bs) + data)
+    # log_manual("& $32$\n")
+    # volcanite(def_volc + e_nibble + bs + csgv_out_name(data + e_nibble + bs) + data)
+    volcanite(def_volc + e_rans + bs + csgv_out_name(data + e_rans + bs) + data + [(["--freq-sampling", "1"], "", 1000)])
+    # volcanite(def_volc + e_wmh_nosb + bs + csgv_out_name(data + e_wmh_nosb + bs) + data)
+    # volcanite(def_volc + e_wmh + bs + csgv_out_name(data + e_wmh + bs) + data)
     #
-    log_newline()
+    # log_newline()
     bs = bs_64
-    log_manual("& $64$\n")
-    volcanite(def_volc + e_nibble + bs + csgv_out_name(data + e_nibble + bs) + data)
-    volcanite(def_volc + e_rans + bs + csgv_out_name(data + e_rans + bs) + data)
-    volcanite(def_volc + e_wmh_nosb + bs + csgv_out_name(data + e_wmh_nosb + bs) + data)
-    volcanite(def_volc + e_wmh + bs + csgv_out_name(data + e_wmh + bs) + data)
-    log_newline()
+    # log_manual("& $64$\n")
+    # volcanite(def_volc + e_nibble + bs + csgv_out_name(data + e_nibble + bs) + data)
+    volcanite(def_volc + e_rans + bs + csgv_out_name(data + e_rans + bs) + data + [(["--freq-sampling", "1"], "", 1000)])
+    # volcanite(def_volc + e_wmh_nosb + bs + csgv_out_name(data + e_wmh_nosb + bs) + data)
+    # volcanite(def_volc + e_wmh + bs + csgv_out_name(data + e_wmh + bs) + data)
+    # log_newline()
 
 
     # cleanup and log file conversion ---------------------------------------------------------------
-    create_csv_tex_from_log()
+    # create_csv_tex_from_log()

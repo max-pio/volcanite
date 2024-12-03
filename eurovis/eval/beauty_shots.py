@@ -10,7 +10,7 @@ OLD_ABORT = 0
 OLD_APPEND = 1
 OLD_OVERWRITE = 2
 
-OLD_LOGS = OLD_OVERWRITE
+OLD_LOGS = OLD_APPEND
 GIT_CHECKOUT = "mp/parallel-decode"
 OUTPUT_BASE_DIR =  "/home/maxpio/code/volcanite/eurovis/eval/out"
 VOLCANITE_BUILD_DIR = "/home/maxpio/code/volcanite/cmake-build-release"
@@ -205,12 +205,16 @@ if __name__ == "__main__":
     shade_tex = ["shadow rays", "ambient occlusion", "path tracing"]
     cache_mode_tex = ["no cache ", "voxel cache (es)"]
 
-    for shade_i, shade in enumerate([shade_shadow, shade_ao]): # without shade_pt
-        for cache_mode_i, cache_mode in enumerate([cache_no, cache_voxel_es]):
+    for shade_i, shade in enumerate([shade_ao]): # without shade_pt
+        for cache_mode_i, cache_mode in enumerate([cache_voxel, cache_voxel_es]):
             for enc_mode in [e_wmh]:
                 for data in [d_cells, d_fiber, d_h01, d_azba]:
-                    bs = bs_64 if data == d_h01 else bs_32
-                    cache_size = [(["--cache-size", "1500" if (data == d_h01 and enc_mode != e_rans) else "4095"], "", 1000)]
+
+                    if data == d_h01 and cache_mode == cache_voxel_es:
+                        continue
+
+                    bs = bs_64 # if data == d_h01 else bs_32 (everything bs 64 do report the bs 64 compressed sizes in the teaser)
+                    cache_size = [(["--cache-size", "1024" if (cache_mode == cache_voxel_es) else "128"], "", 1000)]
                     volcanite(def_volc + cache_size + cache_mode + vcfg_name(data, shade) + enc_mode
                                 + img_name(data + enc_mode + cache_mode + shade)
                                 + csgv_in_name(data + enc_mode + bs),
@@ -218,7 +222,8 @@ if __name__ == "__main__":
                                 eval_name=concat_arg_ids(data + enc_mode + cache_mode + shade))
                     if not DRY_RUN:
                         sleep(5)
-            log_newline()
+
+                    log_newline()
             
 
     # cleanup and log file conversion ---------------------------------------------------------------
