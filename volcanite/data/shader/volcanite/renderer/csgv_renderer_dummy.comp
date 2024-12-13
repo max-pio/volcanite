@@ -50,9 +50,8 @@ void main() {
         vec4 prev_rgba = imageLoad(accumulationIn, pixel);
         uvec4 prev_valid_samples = imageLoad(accuSampleCountIn, pixel);
 
-
         imageStore(accumulationOut, pixel, prev_rgba);
         imageStore(accuSampleCountOut, pixel, prev_valid_samples);
-        imageStore(denoisingBuffer[0], pixel, prev_rgba);
+        imageStore(denoisingBuffer[0], pixel, prev_rgba / float(max(prev_valid_samples, 1u)));
     }
 }
