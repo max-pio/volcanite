@@ -1,7 +1,7 @@
 # Volcanite Segmentation Volume Renderer
-[![version](https://img.shields.io/badge/version-0.4.0-blue)](https://gitlab.kit.edu/max.piochowiak/volcanite/-/tags/0.4.0)
+[![version](https://img.shields.io/badge/version-0.5.0-blue)](https://gitlab.kit.edu/max.piochowiak/volcanite/-/tags/0.5.0)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![doi](https://img.shields.io/badge/doi-10.1109/TVCG.2023.3326573-blue?logo=ieee&logoColor=white)](https://www.doi.org/10.1109/TVCG.2023.3326573)
+<!--[![doi](https://img.shields.io/badge/doi-10.1109/TVCG.2023.3326573-blue?logo=ieee&logoColor=white)](https://www.doi.org/10.1109/TVCG.2023.3326573)-->
 
 Volcanite is a GPU renderer for segmentation volumes implemented using C++ and the Vulkan API.
 Segmentation volumes are voxel data sets that store an integer object label per voxel.
@@ -15,7 +15,7 @@ sets at compression rates that generally outperforming other methods.
 <sup>Data Set from *Emerging Tumor Development by Simulating Single-cell Events*, Rosenbauer J., Berghoff M., Schug A. (2020) bioRxiv</sup>
 
 ## Quick Start
-See the setup guides for [Ubuntu / Debian](doc/Setup.md#ubuntu--debian) or [Windows](doc/Setup.md#ubuntu--debian) respectively for a more detailed description on how to install all dependencies and how to build Volcanite.
+See the setup guides for [Ubuntu / Debian](doc/Setup.md#ubuntu--debian) or [Windows](doc/Setup.md#windows) respectively for a more detailed description on how to install all dependencies and how to build Volcanite.
 To install all required dependencies under Ubuntu, first install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home), the minimal build packages with
 ```
 sudo apt install -y build-essential cmake xorg-dev
@@ -55,6 +55,8 @@ The third party open source libraries that Volcanite uses and their licenses are
 [Development.md](doc/Development.md#licenses).  
 
 ## About
+Volcanite © 2024 Max Piochowiak
+
 Volcanite was created by [Max Piochowiak](https://cg.ivd.kit.edu/piochowiak/staff_index.php) with significant code
 contributions by [Reiner Dolp](https://cg.ivd.kit.edu/english/staff_2590.php). Additional contributions by Fabian
 Schiekel, Patrick Jaberg, and Mirco Werner. All contributors are affiliated with Karlsruhe Institute of Technology (KIT).

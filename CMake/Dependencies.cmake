@@ -18,6 +18,14 @@
 # extern GLM
 add_subdirectory(extern/glm)
 
+# required packages
+find_package(Vulkan REQUIRED)
+
+# extern shaderc
+set(SHADERC_SKIP_TESTS ON CACHE INTERNAL "")
+set(SHADERC_SKIP_EXAMPLES ON CACHE INTERNAL "")
+add_subdirectory(extern/shaderc)
+
 # extern rANS encoding library
 add_subdirectory(extern/ryg_rans)
 
@@ -47,6 +55,14 @@ if (ENABLE_HDF5_SUPPORT)
     endif ()
 endif ()
 
+# HDF5 uses the zlib library
+# zlib defines target UNDEFINED and is thus not identified by the <TARGET_RUNTIME_LIBRARIES> generator
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND ZLIB_FOUND)
+    cmake_path(GET ZLIB_INCLUDE_DIR PARENT_PATH ZLIB_DLL_PATH)
+    set(ZLIB_DLL_PATH ${ZLIB_DLL_PATH}/bin/zlib1.dll)
+    list(APPEND WINDOWS_RUNTIME_DLLS ${ZLIB_DLL_PATH})
+endif()
+
 # vtk library to load vti volume/image files
 option(ENABLE_VTK_SUPPORT  "Includes the vtk library for importing and exporting .vti files" ON)
 if (ENABLE_VTK_SUPPORT)
@@ -61,6 +77,7 @@ if (ENABLE_VTK_SUPPORT)
         message(WARNING "ENABLE_VTK_SUPPORT was set but vtk library could not be found.")
     endif ()
 endif ()
+
 
 # extern SQLiteCpp
 set(SQLITECPP_RUN_CPPLINT OFF CACHE INTERNAL "")
@@ -91,8 +108,19 @@ if(NOT HEADLESS)
     add_subdirectory(lib/vvv-glfw-app)
 endif()
 
-# eurovis related work:
-find_package(LibLZMA)
-if (NOT LIBLZMA_HAS_EASY_ENCODER)
-    message(FATAL_ERROR "could not find LZMA with easy encoder")
+# manage runtime libraries on windows
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    # MinGW stores runtime libraries next to the compiler executable
+    if (MINGW)
+        cmake_path(REMOVE_FILENAME CMAKE_CXX_COMPILER OUTPUT_VARIABLE MINGW_RUNTIME_DLL_PATH)
+        list(APPEND WINDOWS_RUNTIME_DLLS ${MINGW_RUNTIME_DLL_PATH}libwinpthread-1.dll ${MINGW_RUNTIME_DLL_PATH}libgomp-1.dll ${MINGW_RUNTIME_DLL_PATH}libssp-0.dll ${MINGW_RUNTIME_DLL_PATH}libstdc++-6.dll ${MINGW_RUNTIME_DLL_PATH}libgcc_s_seh-1.dll)
+        # even less safe: file(GLOB WINDOWS_RUNTIME_DLLS ${MINGW_RUNTIME_DLL_PATH}/*.dll)
+    endif()
+    set(VAR ${WINDOWS_RUNTIME_DLLS} CACHE INTERNAL "Paths to additional required runtime libraries (*.a, *.dll)")
+
+    if (MINGW_RUNTIME_DLL_PATH)
+        message("additional runtime libraries: ${WINDOWS_RUNTIME_DLLS}")
+    else()
+        message(WARNING "Unable to automatically parse compiler runtime DLL location. You may have to copy shared libraries (*.a, *.dll) to the binary folder.")
+    endif()
 endif()

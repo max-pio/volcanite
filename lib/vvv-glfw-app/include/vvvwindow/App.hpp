@@ -42,9 +42,10 @@ private:
         m_camera_controller(), m_gui(std::make_unique<GuiImgui>(this)), m_startup_resolution(1920, 1080)
         {
             // choose a camera controller for the renderer
+            m_renderer->setCamera(std::make_shared<Camera>(true));
             m_camera_controller.setCamera(&(*m_renderer->getCamera()));
 
-            auto video_directory = std::filesystem::absolute("volcanite_video");
+            auto video_directory = Paths::getHomeDirectory().append("volcanite_video");
             if(!std::filesystem::exists(video_directory) && !std::filesystem::create_directory(video_directory)) {
                 Logger(WARN) << "Could not create non-existing video export directory " << video_directory;
             }
@@ -198,7 +199,7 @@ private:
         ForEachInFlightFrame<vk::Semaphore> blitToSwapchainImageComplete;
         ForEachInFlightFrame<vk::Semaphore> renderCompleteSemaphore;
         ForEachInFlightFrame<AwaitableHandle> frameInFlightAwaitable;
-        //! points to the Awaitable index in `frameInFlightAwaitable`, which is the frame that uses this image. Can also be IMAGE_NOT_IN_FLIGHT
+        /// points to the Awaitable index in `frameInFlightAwaitable`, which is the frame that uses this image. Can also be IMAGE_NOT_IN_FLIGHT
         ForEachSwapchainImage<size_t> imageInFlightFrame;
 
         // Note: the number of required buffers is ForEachSwapchainImage if we prerecord everything once.

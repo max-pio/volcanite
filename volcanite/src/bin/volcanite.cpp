@@ -241,6 +241,7 @@ int tryImportRenderConfig(VolcaniteArgs& args, std::shared_ptr<CompressedSegment
     if(!args.rendering_config_file.empty()) {
         if (!renderer->readParameterFile(args.rendering_config_file, VOLCANITE_VERSION))
             return RET_INVALID_ARG;
+        Logger(DEBUG) << "imported parameters from " << args.rendering_config_file;
     }
     return 0;
 }

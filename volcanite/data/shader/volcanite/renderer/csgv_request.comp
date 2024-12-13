@@ -23,7 +23,7 @@
 layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
 
-#include "csgv_bindings.glsl"
+#include "volcanite/renderer/csgv_bindings.glsl"
 
 #include "cpp_glsl_include/csgv_constants.incl"
 #include "util.glsl"
@@ -63,14 +63,15 @@ void main() {
     // - the top pointers in the g_free_block_stacks point to the next free location in the LoD stack
 
     // find out for which brick we compute if it is visible
-    const uvec3 brick = gl_GlobalInvocationID.xyz;
+    uvec3 brick = gl_GlobalInvocationID.xyz;
     if (isHelperLane(brick, g_brick_count))
         return;
 
     // iterate over the whole palette in this brick (read the palette size from the header)
-    const uint brick_idx = brick_pos2idx(brick, g_brick_count);
-    const uint brick_info_pos = brick_idx * 4u;
-    assert(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)), "brick CUR_INV_LOD or INDEX are corrupted");
+    uint brick_idx = brick_pos2idx(brick, g_brick_count);
+    uint brick_info_pos = brick_idx * 4u;
+    // either none or both must be true: the brick has a position in the cache and the brick has a decoded LOD
+    assertf(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)), "brick CUR_INV_LOD or INDEX are corrupted (csgv_request) cache_idx, cur_lod: ", uvec2(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX], g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD]));
 
 
     //    // check if brick is already decoded (if anything changes, the decoder will release it)

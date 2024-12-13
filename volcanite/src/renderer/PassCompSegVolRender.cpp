@@ -127,6 +127,7 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
 }
 
 void PassCompSegVolRender::executeCommands(vk::CommandBuffer commandBuffer, CSGVRenderStage pipeline_index) {
+    assert((m_work_group_sizes[pipeline_index].width * m_work_group_sizes[pipeline_index].height * m_work_group_sizes[pipeline_index].depth) && "dispatching empty work group size");
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, m_pipelines.at(pipeline_index)); // each compute shader has one pipeline
     if (hasDescriptors()) {
         commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_pipelineLayout, 0, m_descriptorSets->getActive(), nullptr);

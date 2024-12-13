@@ -29,7 +29,7 @@
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/compression/CSGVChunkMerger.hpp"
 
-//#define RELABEL_IDS_FROM_CSV_SUFFIX "_relabel.csv"
+#define RELABEL_IDS_FROM_CSV_SUFFIX "_relabel.csv"
 
 using namespace vvv;
 
@@ -103,6 +103,23 @@ public:
             throw std::runtime_error(_msg.c_str());
         }
 
+#ifdef RELABEL_IDS_FROM_CSV_SUFFIX
+        std::unordered_map<uint32_t, uint32_t> id_types;
+        if (relabelVoxelsFromCSV(path + RELABEL_IDS_FROM_CSV_SUFFIX, id_types)) {
+            Logger(INFO, true) << "  CSV label remapping from " << path << RELABEL_IDS_FROM_CSV_SUFFIX;
+            size_t volume_size = volume->size();
+            uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
+            #pragma omp parallel for default(none) shared(data, id_types, volume_size)
+            for (int i = 0; i < volume_size; i++) {
+                if (id_types.find(data[i]) != id_types.end())
+                    data[i] = id_types[data[i]];
+                else
+                    data[i] = 0u;
+            }
+            Logger(INFO) << "  CSV label remapping from " << path << RELABEL_IDS_FROM_CSV_SUFFIX << " finished.";
+        }
+#endif
+
         // Remap all voxels to other labels. This usually happens because we computed a mapping in the attribute
         // database so that voxels are numbered in Z-order.
         if(label_remapping) {
@@ -111,27 +128,12 @@ public:
             auto voxels = volume->data().data();
             #pragma omp parallel for num_threads(cpu_threads) default(none) shared(voxels, voxel_count, label_remapping)
             for(size_t i = 0; i < voxel_count; i++) {
-                assert(label_remapping->contains(voxels[i]) && "label remapping does not contain voxel label");
+                if (!label_remapping->contains(voxels[i]))
+                    throw std::runtime_error("label remapping does not contain voxel label " + std::to_string(voxels[i]));
                 voxels[i] = (*label_remapping)[voxels[i]];
             }
-            Logger(DEBUG) << "Label remapping in " << t.elapsed() << " seconds";
+            Logger(DEBUG) << "Attribute data base label remapping finished in " << t.elapsed() << " seconds.";
         }
-
-#ifdef RELABEL_IDS_FROM_CSV_SUFFIX
-        std::unordered_map<uint32_t, uint32_t> id_types;
-        if (relabelVoxelsFromCSV(path + RELABEL_IDS_FROM_CSV_SUFFIX, id_types)) {
-            Logger(INFO) << "  relabeling ids from " << path << RELABEL_IDS_FROM_CSV_SUFFIX;
-            size_t volume_size = volume->size();
-            uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
-            #pragma omp parallel for default(none) shared(data, id_types, volume_size)
-            for (int i = 0; i < volume_size; i++) {
-                if(id_types.find(data[i]) != id_types.end())
-                    data[i] = id_types[data[i]];
-                else
-                    data[i] = 0u;
-            }
-        }
-#endif
     }
 
     struct CSGVCompressionConfig {

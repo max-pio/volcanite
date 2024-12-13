@@ -39,6 +39,7 @@ bool Paths::useSourcePaths;
 std::vector<std::string> split(const std::string& s, char delimiter) {
     // method from range-v3, released under the Boost Software License
     // https://github.com/ericniebler/range-v3/blob/master/test/view/split.cpp
+    // released under the Boost Software License 1.0
 
    std::vector<std::string> tokens;
    std::string token;
@@ -150,11 +151,11 @@ std::vector<std::filesystem::path> Paths::getShaderDirectories(){
 }
 
 std::filesystem::path Paths::getTempFileWithName(const std::string& name) {
-    create_directory(std::filesystem::temp_directory_path() / "vvv");
+    create_directory(std::filesystem::temp_directory_path() / "volcanite");
 #ifdef _WIN32
-    return std::filesystem::temp_directory_path() / "vvv" / (std::to_string(_getpid()) + "_" + name);
+    return std::filesystem::temp_directory_path() / "volcanite" / (std::to_string(_getpid()) + "_" + name);
 #else
-    return std::filesystem::temp_directory_path() / "vvv" / (std::to_string(getpid()) + "_" + name);
+    return std::filesystem::temp_directory_path() / "volcanite" / (std::to_string(getpid()) + "_" + name);
 #endif
 }
 

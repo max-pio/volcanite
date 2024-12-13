@@ -24,7 +24,6 @@ using namespace volcanite;
 using namespace vvv;
 
 int main() {
-
     const uint32_t cache_size_mb = 16;
 
     // initialize data paths to shaders
@@ -42,7 +41,6 @@ int main() {
     const auto volume = createDummySegmentationVolume(dim);
 
     CompressedSegmentationVolume csgv;
-    // Serial Decoding
     {
         Logger(INFO) << "Nibble";
         csgv.setCompressionOptions64(32, NIBBLE_ENC, OP_ALL, false);

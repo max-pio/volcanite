@@ -19,8 +19,12 @@
 #include <vvv/util/Logger.hpp>
 #include <glm/gtx/transform.hpp>
 
-#define GLFW_INCLUDE_NONE
+#ifndef GLFW_INCLUDE_NONE
+    #define GLFW_INCLUDE_NONE
+#endif
 #include <GLFW/glfw3.h>
+#include "stb/stb_image.hpp"
+
 
 #ifdef IMGUI
 #include "imgui/imgui.h"
@@ -239,6 +243,12 @@ namespace vvv {
 #endif
 
         commandBuffer.endRenderPass();
+
+        vk::ImageMemoryBarrier imageMemoryBarrierBack = ldrRendererOutput.texture->queueOwnershipTransfer(getQueueFamilyIndices().present.value(), vk::AccessFlagBits::eShaderRead,
+                                                                                                          ldrRendererOutput.queueFamilyIndex, vk::AccessFlagBits::eShaderWrite);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eComputeShader,
+                                      {}, 0, nullptr, 0, nullptr,
+                                      1, &imageMemoryBarrierBack);
     }
 
     std::thread Application::execAsyncAttached() {
@@ -397,6 +407,19 @@ namespace vvv {
         glfwSetWindowUserPointer(m_window, this);
         glfwSetFramebufferSizeCallback(m_window, framebufferResizeCallback);
         m_camera_controller.setWindow(m_window);
+
+        GLFWimage icon = {.pixels = nullptr};
+        if (vvv::Paths::hasDataPath("icons/volcanite_icon_256.png")) {
+            int icon_channels;
+            icon.pixels = stbi_load(vvv::Paths::findDataPath("icons/volcanite_icon_256.png").string().c_str(), &icon.width,
+                                    &icon.height, &icon_channels, STBI_rgb_alpha);
+        }
+        if (icon.pixels) {
+            glfwSetWindowIcon(m_window, 1, &icon);
+            stbi_image_free(icon.pixels);
+        } else {
+            Logger(WARN) << "Unable to load volcanite_icon_256.png application icon.";
+        }
     }
 
     void Application::destroyWindow() {
@@ -653,8 +676,9 @@ namespace vvv {
         const auto shaderDirectory = vvv::getShaderIncludeDirectory();
 
         m_renderpass.shaderFragment = new vvv::Shader(
-                {.filename = "blit.frag", .label = "Application.m_shaderFragment"});
-        m_renderpass.shaderVertex = new vvv::Shader({.filename = "blit.vert", .label = "Application.m_shaderVertex"});
+                SimpleGlslShaderRequest{.filename = "blit.frag", .label = "Application.m_shaderFragment"});
+        m_renderpass.shaderVertex = new vvv::Shader(
+                SimpleGlslShaderRequest{.filename = "blit.vert", .label = "Application.m_shaderVertex"});
     }
 
     void Application::destroyBlitShaders() {

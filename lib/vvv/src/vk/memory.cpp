@@ -97,7 +97,8 @@ std::pair<size_t, size_t> vvv::getMemoryHeapBudgetAndUsage(vvv::GpuContextRef ct
     return std::make_pair(budget_heap_memory, used_heap_memory);
 }
 
-// stolen from https://github.com/KhronosGroup/Vulkan-Hpp/blob/6d5d6661f39b7162027ad6f75d4d2e902eac4d55/samples/utils/utils.cpp
+// using code from https://github.com/KhronosGroup/Vulkan-Hpp/blob/6d5d6661f39b7162027ad6f75d4d2e902eac4d55/samples/utils/utils.cpp
+// released under the Apache License 2.0
 // another implementation available on the web is: https://github.com/nvpro-samples/nvpro_core/blob/f2c05e161bba9ab9a8c96c0173bf0edf7c168dfa/nvvk/images_vk.cpp#L108-L116
 void vvv::setImageLayout(vk::CommandBuffer const &commandBuffer, vk::Image image, vk::Format format, vk::ImageLayout oldImageLayout, vk::ImageLayout newImageLayout,
                     vk::PipelineStageFlags destinationStage) {

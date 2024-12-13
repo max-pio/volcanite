@@ -111,7 +111,7 @@ public:
         return !decompress_export_file.empty();
     }
 
-    static std::optional<VolcaniteArgs> parseArguments(int argc, char *argv[]) {
+    static std::optional<VolcaniteArgs> parseArguments(int argc, char *argv[], bool input_volume_required = true) {
         VolcaniteArgs va;
 
         using namespace TCLAP;
@@ -269,7 +269,7 @@ public:
             va.empty_space_resolution = emptySpaceResolutionArg.getValue();
             // if no input file was specified, try to open a file dialog
             std::string input_file = expandPath(inputpathArg.getValue());
-            if(input_file.empty()) {
+            if(input_file.empty() && input_volume_required) {
 #ifdef HEADLESS
                 throw ArgException("Must provide input file in headless mode", inputpathArg.longID(""));
 #else
@@ -299,14 +299,14 @@ public:
             }
             // .. or if we compress a volume
             else {
-                if(!(input_file.ends_with(".vti")
+                if(input_volume_required && !(input_file.ends_with(".vti")
                     || input_file.ends_with(".raw") || input_file.ends_with(".vraw")
                     || input_file.ends_with(".hdf5") || input_file.ends_with(".h5")
                     || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {
                     throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.h5|.raw|.vraw|.nrrd|.nhdr})", inputpathArg.longID(""));
                 }
 
-                if(!va.decompress_export_file.empty()) {
+                if(input_volume_required && !va.decompress_export_file.empty()) {
                     throw ArgException(decompresspathArg.longID() + " can only be used with a .csgv input file.", decompresspathArg.longID());
                 }
 

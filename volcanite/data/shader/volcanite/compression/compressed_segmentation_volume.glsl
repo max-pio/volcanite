@@ -22,7 +22,7 @@
 
 #include "cpp_glsl_include/csgv_constants.incl"
 
-#include "csgv_utils.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
 #include "morton.glsl"
 
 // some compile time invariants
@@ -36,6 +36,7 @@
 
 
 // Read Decoded Bricks (Cache Read) ------------------------------------------------------------------------------------
+
 uint _cache_pos2idx(const uvec3 voxel_pos_in_brick) {
     return morton3Dp2i(voxel_pos_in_brick);
 }
@@ -95,10 +96,10 @@ uint readCSGVPaletteBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, c
 /** Returns the label for the voxel position within the brick starting at the given base element.
  * @param decoded_inv_lod the state of the brick in CSGV_DECODING_ARRAY *must* be a full decoding up to this inv_lod
  * @param brick_voxel the coordinate of the lookup voxel on the *finest* lod, even if the lookup is for a coarser lod */
-uint readCSGVBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, const uint brick_start_base_element) {
-    // TODO: why pass decoded_inv_lod and decoded_brick_start_base_element? pass the brick_idx and read cache info here
+uint readCSGVBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, const uint decoded_brick_start_uint) {
+    // TODO: why pass decoded_inv_lod and decoded_brick_start_uint? pass the brick_idx and read cache info here
     uint lod_width = BRICK_SIZE >> decoded_inv_lod;
-    return readEntryFromCache(brick_start_base_element,
+    return readEntryFromCache(decoded_brick_start_uint,
                               (_cache_pos2idx(brick_voxel) / (lod_width * lod_width * lod_width)));
 }
 #endif // ifdef PALETTE_CACHE
@@ -160,13 +161,13 @@ void resetCSGVBrick(const uint decoded_brick_start_uint, const uint inv_lod) {
 #endif // CACHE_MODE == CACHE_BRICKS
 
 #if ENCODING_MODE == NIBBLE_ENC
-    #include "decoder/NibbleDecoder.glsl"
+    #include "volcanite/compression/decoder/NibbleDecoder.glsl"
 #elif ENCODING_MODE == SINGLE_TABLE_RANS_ENC || ENCODING_MODE == DOUBLE_TABLE_RANS_ENC
-    #include "decoder/RangeANSDecoder.glsl"
+    #include "volcanite/compression/decoder/RangeANSDecoder.glsl"
 #elif ENCODING_MODE == WAVELET_MATRIX_ENC
-    #include "decoder/WaveletMatrixDecoder.glsl"
+    #include "volcanite/compression/decoder/WaveletMatrixDecoder.glsl"
 #elif ENCODING_MODE == HUFFMAN_WM_ENC
-    #include "decoder/HuffmanWMDecoder.glsl"
+    #include "volcanite/compression/decoder/HuffmanWMDecoder.glsl"
 #else
     STATIC_FAIL(no_decoder_specified);
 #endif

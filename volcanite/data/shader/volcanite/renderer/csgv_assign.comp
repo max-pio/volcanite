@@ -22,7 +22,7 @@
 layout (local_size_x = 4, local_size_y = 4, local_size_z = 2) in;
 
 
-#include "csgv_bindings.glsl"
+#include "volcanite/renderer/csgv_bindings.glsl"
 
 // includes
 #include "util.glsl"
@@ -75,7 +75,7 @@ void main() {
 
     const uint brick_idx = brick_pos2idx(brick, g_brick_count);
     const uint brick_info_pos = brick_idx * 4u;
-    assert(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)), "brick CUR_INV_LOD or INDEX are corrupted");
+    assert(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)), "brick CUR_INV_LOD or INDEX are corrupted (csgv_assign)");
 
 
     // track how many bricks are decoded of each LOD

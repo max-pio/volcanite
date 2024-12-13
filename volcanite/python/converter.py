@@ -25,7 +25,6 @@ import PIL.Image as Image
 import nibabel as nib
 import gzip
 
-import matplotlib
 import matplotlib.pyplot as plt
 
 
@@ -169,7 +168,7 @@ def write_numpy(volume, path_out, dtype=None, compressed = True):
 
 # nifti
 def read_nifti(path_in):
-    return np.asarray(nib.load(path_in).dataobj)
+    return np.array(nib.load(path_in).dataobj)
 
 def write_nifti(volume, path_out, dtype=None):
     volume = guard_volume_dtype(volume, dtype)
@@ -331,15 +330,15 @@ def guard_volume_dtype(volume, dtype):
     vol_max = np.max(volume).astype('uint64')
 
     if (supported_max - supported_min) < (vol_max - vol_min):
-        print("1 Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
+        print("Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
               + " by normalization to range [" + str(supported_min) + "," + str(supported_max) + "].")
         volume = (volume - vol_min) / (vol_max - vol_min) * (supported_max - supported_min) + supported_min
     elif vol_min < supported_min:
-        print("2 Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
+        print("Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
               + " by offsetting values to [" + str(supported_min) + "," + str(vol_max - vol_min + supported_min) + "].")
         volume = volume - vol_min + supported_min
     elif vol_max > supported_max:
-        print("3 Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
+        print("Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
               + " by offsetting values to [" + str(vol_min - vol_max + supported_max) + "," + str(supported_max) + "].")
         volume = volume - vol_max + supported_max
 

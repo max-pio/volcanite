@@ -7,7 +7,7 @@
 
 #define ENALBE_CSGV_DEBUGGING
 
-#include "csgv_materials.glsl"
+#include "volcanite/renderer/csgv_materials.glsl"
 #include "debug_colormaps.glsl"
 
 #include "volcanite/bit_vector.glsl"

@@ -202,6 +202,7 @@ layout (std140, binding = 12) uniform resolve_info {
     bool g_tonemap_enable;
 };
 
+
 #define BACKGROUND_DEPTH 3.402823466e+38
 #define INVALID_DEPTH -3.402823466e+38
 

@@ -21,12 +21,13 @@
 #define STRINGIFY(x) #x
 #define MACRO_STRINGIFY(x) STRINGIFY(x)
 
+// TODO: remove SHADER_COMPILER_EXECUTABLE cmake macros. everything should use the internal shaderc compiler now.
 #cmakedefine SHADER_COMPILER_EXECUTABLE "@SHADER_COMPILER_EXECUTABLE@"
 #cmakedefine SHADER_INCLUDE_DIR "@SHADER_INCLUDE_DIR@"
 #cmakedefine DATA_INCLUDE_DIR "@DATA_INCLUDE_DIR@"
 #cmakedefine VVV_BUILD_TIME_ISO8601 "@VVV_BUILD_TIME_ISO8601@"
 
-#ifndef SHADER_COMPILER_EXECUTABLE 
+#ifndef SHADER_COMPILER_EXECUTABLE
 #define SHADER_COMPILER_EXECUTABLE "glslangValidator"
 #endif
 

@@ -62,7 +62,7 @@ function(makeVolcaniteExecutable name)
             # WIN32_EXECUTABLE TRUE # this hides the console window. Disabled, because we need to see the console output! maybe re-enable for distribution
             MACOSX_BUNDLE TRUE
             )
-    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap SQLiteCpp libvolcanite LibLZMA::LibLZMA)
+    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap SQLiteCpp libvolcanite)
     if(NOT HEADLESS)
         target_link_libraries(${name} PRIVATE LibVVV::libvvvwindow portable_file_dialogs)
     endif()
@@ -92,6 +92,15 @@ function(makeVolcaniteExecutable name)
     # these are used to find data/ files when binary is run without installing or packaging
     list(JOIN data_dirs "\;" data_dirs_escaped)
     target_compile_definitions(${name} PRIVATE "-DDATA_DIRS=\"${data_dirs_escaped}\"")
+
+    # copy runtime libraries to binary on windows
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        add_custom_command(TARGET ${name} POST_BUILD
+                           COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${name}> $<TARGET_FILE_DIR:${name}>
+                           COMMAND_EXPAND_LISTS)
+        add_custom_command(TARGET ${name} POST_BUILD
+                           COMMAND ${CMAKE_COMMAND} -E copy_if_different ${WINDOWS_RUNTIME_DLLS} $<TARGET_FILE_DIR:${name}>)
+    endif()
 endfunction()
 
 # same as makeExecutabe, but for libraries. Can be used to build a library from all shared project files and link that for each executable.
@@ -154,17 +163,58 @@ function(installVolcaniteExecutable name)
 
     # install all data dirs to [project]/data/
     foreach(path IN LISTS data_dirs)
-        install(DIRECTORY ${path} DESTINATION ${project_dir_name})
+        install(DIRECTORY ${path} DESTINATION ${CMAKE_INSTALL_BINDIR}/ COMPONENT applications)
     endforeach()
 
     # install binary to target folder
-    install(TARGETS ${name} DESTINATION ${project_dir_name})
+    install(TARGETS ${name} DESTINATION ${CMAKE_INSTALL_BINDIR}/ COMPONENT applications)
 
-    # use fixup_bundle to copy required dlls for windows
-    set(APPS \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${project_dir_name}/${name}${CMAKE_EXECUTABLE_SUFFIX})
-    install(CODE "
-        include(BundleUtilities)
-        message(\"fixup_bundle(\\\"${APPS}\\\")\")
-        fixup_bundle(\"${APPS}\" \"\" \"\")"
-        DESTINATION .)
+    # install license file
+    install(FILES ${PROJECT_SOURCE_DIR}/package_assets/LICENSE.txt DESTINATION ./ COMPONENT applications)
+    # install 3rd-party license files
+    install(FILES ${PROJECT_SOURCE_DIR}/package_assets/LICENSE_THIRD_PARTY.txt DESTINATION ./ COMPONENT applications)
+
+    # system dependent configuration
+    set(VOLCANITE_EXECUTABLE_NAME ${name})
+    if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+
+        # install .desktop entry and application icon
+        configure_file(
+                ${PROJECT_SOURCE_DIR}/package_assets/linux/Volcanite.desktop.in
+                ${CMAKE_CURRENT_BINARY_DIR}/${VOLCANITE_EXECUTABLE_NAME}.desktop)
+        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${VOLCANITE_EXECUTABLE_NAME}.desktop
+                DESTINATION share/applications COMPONENT applications)
+        install(FILES ${PROJECT_SOURCE_DIR}/package_assets/icons/volcanite_icon_256.png
+                DESTINATION share/icons
+                RENAME ${VOLCANITE_EXECUTABLE_NAME}_icon.png COMPONENT applications)
+
+        # add postinst, prerm scripts for CPACK_DEBIAN_APPLICATIONS_PACKAGE_CONTROL_EXTRA to create .desktop and binary symlinks
+        configure_file(
+                ${PROJECT_SOURCE_DIR}/package_assets/linux/shortcut_postinst.in
+                ${CMAKE_CURRENT_BINARY_DIR}/postinst)
+        configure_file(
+                ${PROJECT_SOURCE_DIR}/package_assets/linux/shortcut_prerm.in
+                ${CMAKE_CURRENT_BINARY_DIR}/prerm)
+
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        # install system runtime libraries
+        include(InstallRequiredSystemLibraries)
+        install(FILES ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS} DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT applications)
+
+        # install additionally specified runtime dll files
+        install(FILES $<TARGET_RUNTIME_DLLS:${name}>
+                DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT applications)
+        install(FILES ${WINDOWS_RUNTIME_DLLS}
+                DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT applications)
+
+        # use fixup_bundle to copy required dlls for windows
+        #    set(APPS \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${project_dir_name}/${name}${CMAKE_EXECUTABLE_SUFFIX})
+        #    install(CODE "
+        #        include(BundleUtilities)
+        #        message(\"fixup_bundle(\\\"${APPS}\\\")\")
+        #        fixup_bundle(\"${APPS}\" \"\" \"\")"
+        #        DESTINATION .)
+    endif()
+
 endfunction()
+

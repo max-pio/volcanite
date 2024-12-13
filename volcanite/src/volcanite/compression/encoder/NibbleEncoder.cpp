@@ -245,8 +245,6 @@ void NibbleEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, uint32_t
     // ToDo: support detail separation, stop bits, and palette delta operations in parallelDecodeBrick
     assert(!m_separate_detail && "detail separation not yet supported in parallelDecodeBrick");
     assert(target_inv_lod < getLodCountPerBrick() && "not enough LoDs in a brick to process target inv. LoD");
-    assert(glm::all(glm::equal(valid_brick_size, glm::uvec3(m_brick_size))) &&
-           "partially occupied bricks are not allowed in random access Nibble encoding");
 
     // first, set the whole brick to INVALID, so we know later which elements and LOD blocks were already processed
     // #pragma omp parallel for default(none) shared(m_brick_size, output_brick)

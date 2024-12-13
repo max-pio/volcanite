@@ -923,7 +923,7 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
 
     float total_seconds = totalTimer.elapsed();
     m_last_total_freq_prepass_seconds = total_seconds;
-    if(verbose) {
+    if (verbose) {
         Logger(INFO) << " Prepass Progress 100% in " << std::fixed << std::setprecision(3) << total_seconds
                      << "s operation freq: " << arrayToString(freq_out, 16) << " | "
                      << arrayToString(freq_out + 16, 16);

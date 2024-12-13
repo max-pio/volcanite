@@ -14,6 +14,7 @@
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
+#include "volcanite/compression/wavelet_tree/BitVector.hpp"
 
 #include <vvv/core/Buffer.hpp>
 #include <volcanite/StratifiedPixelSequence.hpp>
@@ -28,8 +29,6 @@
 #endif
 #ifdef IMGUI
     #include "imgui.h"
-#include "volcanite/compression/wavelet_tree/BitVector.hpp"
-
 #endif
 
 using namespace vvv;
@@ -139,9 +138,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     }
 
     // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts
-    // finished). Times out after 300 seconds and throws an exception.
+    // finished). Times out after 30 seconds and throws an exception.
     // Buffer upload synchronization is handled in PassCompSegVolRender
-    getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 300 * 1000000000ull);
+    getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 30 * 1000000000ull);
 
     // track timing of the last frame
     // TODO: renderFrame and thus the final timing finish will not be called after the last frame in HeadlessRendering
@@ -1017,7 +1016,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         // In model space, one voxel must be a unit cube. The normalization transform scales this down to world space [-0.5, 0.5]^3
         glm::mat4 world_to_model_space;
         // TODO: generalize switching model space axes in the GUI as axes selector [xyz, xzy, yxz, ...]) and remove the hacky fix
-//         if (m_compressed_segmentation_volume->getVolumeDim().y == 1224) {
+//         if (switch axes) {
 //             glm::mat4 _world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), voldim / normalized_volume_size), normalized_volume_size / 2.f);
 //             world_to_model_space = glm::mat4(_world_to_model_space[0], _world_to_model_space[2], _world_to_model_space[1], _world_to_model_space[3]);
 //         }
