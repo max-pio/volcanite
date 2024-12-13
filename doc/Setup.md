@@ -17,6 +17,8 @@ See [Headless Builds](#headless-builds).
 ```
 sudo apt install -y build-essential cmake xorg-dev
 ```
+On some distributions, the GLFW library additionally requires the following packages: `libxcursor-dev`, `libxi-dev`, `libxinerama-dev` and `libxrandr-dev`.
+
 4. Optional: Install optional packages:
 ```
 sudo apt install -y libhdf5-dev libvtk9-dev libtiff-dev libpugixml-dev

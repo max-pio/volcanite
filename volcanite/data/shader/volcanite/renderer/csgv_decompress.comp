@@ -44,6 +44,16 @@ void main() {
         return;
     }
 
+#ifdef VERIFY_BRICK_BEFORE_DECODING
+    if (!verifyBrickCompression(brick_idx)) {
+        // fill cache regions for bricks with broken encodings with INVALID
+        fillCSGVBrick(cache_idx * g_cache_base_element_uints, inv_lod, INVALID);
+        g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = inv_lod;
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = INVALID;
+        return;
+    }
+#endif
+
     // perform the decompression of the brick into the previously assigned cache region
 #if 1
     #ifdef SEPARATE_DETAIL

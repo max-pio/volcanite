@@ -233,10 +233,6 @@ bool verifyBrickCompression(const uint brick_idx) {
             debugPrintfEXT("encoding starts are not in ascending order");
             return false;
         }
-        else if(distance > BRICK_SIZE * BRICK_SIZE * BRICK_SIZE) {
-            debugPrintfEXT("encoding starts between LoDs are too far away");
-            return false;
-        }
     }
 
     // check palette start of first LoD being 0 and second LoD being 1

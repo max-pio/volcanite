@@ -33,7 +33,7 @@ bool pushFreeBlockStack(uint inv_lod, uint value) {
     uint pos = atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], 1u);
     if(pos > g_free_stack_capacity) {
         // no free index for us
-        assert(false, "couldn't push to free block stack because it is full");
+        // assert(false, "couldn't push to free block stack because it is full");
         atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], uint(-1));
         return false;
     }
@@ -155,9 +155,14 @@ void main() {
     if (deallocate) {
         assert(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID, "trying to deallocate an INVALID brick");
         bool push_successful = pushFreeBlockStack(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD], g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX]);
-        assert(push_successful, "freeStack is full preventing correct deallocate");
-        g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] = INVALID;
-        g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = INVALID;
+        // assert(push_successful, "freeStack is full preventing correct deallocate");
+        if (push_successful) {
+            g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] = INVALID;
+            g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = INVALID;
+        } else {
+            // do not allocate a new slot if the current slot cannot be released
+            allocate = false;
+        }
     }
 
     assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] == INVALID, "brick req. slot was not set to invalid before new frame");
@@ -168,7 +173,9 @@ void main() {
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = atomicAdd(g_assign_info[(lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_REQUESTED_BLOCKS], 1u);
     }
     else {
-        assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT || g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD], "we don't try to allocate even though we would need to!");
+        assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT
+              || g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD]
+              || g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT, "we don't try to allocate even though we would need to!");
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = INVALID;
     }
 
