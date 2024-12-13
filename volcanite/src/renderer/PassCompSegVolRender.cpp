@@ -42,15 +42,15 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
         Logger(DEBUG) << "hard reset brick cache";
     }
 
-    // block request and visibility classification
-    getCtx()->debugMarker->beginRegion(commandBuffer, "request", glm::vec4(0.f, 0.f, 0.9f, 1.f));
-    executeCommands(commandBuffer, REQUEST);
-    commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {},
-                                  {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite)},
-                                  nullptr, nullptr);
-    getCtx()->debugMarker->endRegion(commandBuffer);
-
     if (m_render_update_flags & UPDATE_RENDER_FRAME) {
+        // block request and visibility classification
+        getCtx()->debugMarker->beginRegion(commandBuffer, "request", glm::vec4(0.f, 0.f, 0.9f, 1.f));
+        executeCommands(commandBuffer, REQUEST);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {},
+                                      {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite)},
+                                      nullptr, nullptr);
+        getCtx()->debugMarker->endRegion(commandBuffer);
+
         // fetch new blocks at the end of the cache
         getCtx()->debugMarker->beginRegion(commandBuffer, "provision", glm::vec4(0.f, 0.3f, 0.6f, 1.f));
         executeCommands(commandBuffer, PROVISION);
