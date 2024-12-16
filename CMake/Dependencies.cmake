@@ -78,6 +78,22 @@ if (ENABLE_VTK_SUPPORT)
     endif ()
 endif ()
 
+option(ENABLE_TIFF_SUPPORT  "Includes the TIFF library for importing and exporting tiff files" OFF)
+if(ENABLE_TIFF_SUPPORT)
+    find_package(TIFF QUIET)
+    if(NOT TIFF_FOUND)
+        message(WARNING "ENABLE_TIFF_SUPPORT was set but TIFF library could not be found!")
+    endif ()
+endif()
+
+option(ENABLE_XML_SUPPORT  "Includes the PUGIXML library for processing XML data" ON)
+if(ENABLE_XML_SUPPORT)
+    find_package(PUGIXML QUIET)
+    if(NOT PUGIXML_FOUND)
+        message(WARNING "ENABLE_XML_SUPPORT was set but PUGIXML library could not be found!")
+    endif ()
+endif()
+
 
 # extern SQLiteCpp
 set(SQLITECPP_RUN_CPPLINT OFF CACHE INTERNAL "")
