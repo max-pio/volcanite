@@ -155,22 +155,6 @@ add_library(LibVVV::libvvv ALIAS libvvv)
 # optional packages
 find_package(OpenMP)
 
-option(USE_TIFF_SUPPORT  "Includes the TIFF library for importing and exporting tiff files" OFF)
-if(USE_TIFF_SUPPORT)
-    find_package(TIFF)
-    if(NOT TIFF_FOUND)
-        message(WARNING "USE_TIFF_SUPPORT was set but TIFF library could not be found!")
-    endif ()
-endif()
-
-option(USE_XML_SUPPORT  "Includes the PUGIXML library for processing XML data" ON)
-if(USE_XML_SUPPORT)
-    find_package(PUGIXML)
-    if(NOT PUGIXML_FOUND)
-        message(WARNING "USE_XML_SUPPORT was set but PUGIXML library could not be found!")
-    endif ()
-endif()
-
 # setting glslangValidator via the Vulkan package requires CMAKE 3.21
 # TODO: REMOVE set(SHADER_COMPILER_EXECUTABLE ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE})
 set(SHADER_COMPILER_EXECUTABLE ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE})
