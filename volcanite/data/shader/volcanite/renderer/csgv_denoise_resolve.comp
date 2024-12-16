@@ -96,10 +96,10 @@ float computeWeight(float depthCenter, float depthP, float phiDepth, float lumin
     float weightZ = (phiDepth == 0) ? 0.f : 1.f;
     weightZ = (phiDepth == 0) ? 0.f : abs(depthCenter - depthP) / phiDepth;
 
-    const float weightLillum = 1.f;
+    const float weightLillum = 0.f;
     //const float weightLillum = abs(luminanceIllumCenter - luminanceIllumP) / phiIllum;
 
-    const float weightIllum = exp(0.0 - max(weightLillum, 0.0) - max(weightZ, 0.0));
+    const float weightIllum = exp(-max(weightLillum, 0.0) - max(weightZ, 0.0));
     return weightIllum;
 }
 
@@ -137,7 +137,7 @@ float computeVarianceCenter(ivec2 ipos, const ivec2 viewport_size) {
 
 vec3 getAlbedoOfLabel(uint label) {
     // TODO: fix bugs with albedo demodulation
-    return vec3(1.f);
+    //return vec3(1.f);
 
     // the G buffer stores the invalid label for rays that hit no surface
     if (label == INVALID)
@@ -148,7 +148,7 @@ vec3 getAlbedoOfLabel(uint label) {
         assert(false, "G-buffer must not contain labels that are invisible");
         return vec3(1.f);
     } else {
-        return getColor(label, material).rgb;
+        return getColor(label, material).rgb * 0.95f + vec3(0.05f);
     }
 }
 
@@ -240,12 +240,12 @@ void main() {
     const int step_size = 1 << pc.denoising_iteration;
     // use a Gaussian instead of B-spline kernel (see Dolp et al. "A Fast GPU Schedule For À-Trous Wavelet-Based Denoisers")
     // we do not overlbur in the first iteration, as we found artifacts to be reduced with the constant Gauss kernel
-    // weights defined for 3x3 kernel [0.5, 1, 0.5] in 1D, convolved as [1 2 1]
-    //                                                            1/4 * [2 4 2]
-    //                                                                  [1 2 1]
+    // weights defined for 3x3 kernel [0.5, 1, 0.5] in 1D, outer product as [1 2 1]
+    //                                                                      [2 4 2]
+    //                                                                      [1 2 1]
     const vec4 kernel_weights = vec4(1.f, 0.5f * fade, 0.25f * fade * fade, 0.125f * fade * fade);
 
-    const float var =  1.f;//computeVarianceCenter(pixel, viewport_size);
+    const float var = 1.f; //computeVarianceCenter(pixel, viewport_size);
 
 //    // for upsampling: halluciante a g buffer sample from the (3,3)*step_size neighborhood
 //    {
@@ -277,11 +277,9 @@ void main() {
                 continue;
 
             // if upsampling is required and the pixel already received a color:
-            // do not blur in alter passes to prevent overblur!
-            if (!center_sampled || g_bilateral_enable) {
-                //if (weight_sum > 0.f) {
-                //    break;
-                //}
+            // do not blur in later passes to prevent overblur!
+            // also: do not blur if denoising is disabled
+            if (!center_sampled || !g_bilateral_enable) {
                 if (pixel_rgba.a >= 0.f) {
                     accum_rgba = pixel_rgba;
                     weight_sum = 1.f;
@@ -313,19 +311,19 @@ void main() {
             if (center_sampled) {
                 // quantized normals: either (+/-) 90 or (+/-) 180 degree angle
                 // => max(cos, 0) = weightN is either 0 or 1
-                if (label != center_label)
-                    continue;
-                if (any(notEqual(center_normal, normal)))// || all(equal(normal, vec3(0.f))))
+//                if (label != center_label)
+//                    continue;
+                if (any(notEqual(center_normal, normal)))
                     continue;
 
                 // in the first iteration: demodulate filter pixel radiance by filter pixel albedo
                 // only if not upsampling! there is no way to re-modulate if the center is not sampled.
-//                if (pc.denoising_iteration == 0u)
-//                    rgba.rgb /= getAlbedoOfLabel(label);
+                if (pc.denoising_iteration == 0u)
+                    rgba.rgb /= getAlbedoOfLabel(label);
             }
 
             const float kernel = kernel_weights[abs(dx)] * kernel_weights[abs(dy)];
-            const float w = 1.f; //computeWeight(center_normalized_depth, normalized_depth, phi_depth, pixel_luminance, luminance(rgba.rgb), phi_Lillumination);
+            const float w = 1.f;//(phi_depth == 0.f || !center_sampled) ? 1.f : exp(-abs(normalized_depth - center_normalized_depth) / phi_depth); //computeWeight(center_normalized_depth, normalized_depth, phi_depth, pixel_luminance, luminance(rgba.rgb), phi_Lillumination);
             weight = w * kernel;
 
             accum_rgba += rgba * weight;
@@ -355,7 +353,7 @@ void main() {
         // last iteration:              final pixel output in LDR
         // re-modulate with albedo
         if (center_sampled) {
-            accum_rgba.rgb *= getAlbedoOfLabel(center_label);
+            //accum_rgba.rgb *= getAlbedoOfLabel(center_label);
         }
         writeFinalFramebuffer(pixel, accum_rgba);
     }
