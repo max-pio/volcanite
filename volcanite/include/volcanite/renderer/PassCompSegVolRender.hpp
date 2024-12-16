@@ -74,7 +74,7 @@ public:
     }
 
     void setRenderUpdateFlagsForNextCall(uint32_t param_update_flags) { m_render_update_flags = param_update_flags; }
-    void setResolvePasses(int passes) { m_resolve_passes = static_cast<uint32_t>(passes); }
+    void setResolvePasses(int passes) { m_atrous_iterations = static_cast<uint32_t>(passes); }
 
 protected:
     struct PushConstants {
@@ -95,7 +95,7 @@ protected:
     vk::Extent3D m_work_group_sizes[8] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u},
                                           {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}};
     uint32_t m_render_update_flags = 0u;                /// among others: if the GPU cache reset should be triggered on the next call
-    uint32_t m_resolve_passes = 1u;
+    uint32_t m_atrous_iterations = 1u;
     const std::vector<std::string> m_shader_defines;   /// defines that are passed on to shader compilation
 };
 

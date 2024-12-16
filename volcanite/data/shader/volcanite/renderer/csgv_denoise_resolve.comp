@@ -197,7 +197,7 @@ void main() {
 
     // upsampling / denoising may be disabled or faded out
     const float fade = g_denoise_fade_enable ? min(1.f, g_denoise_fade_sigma / sqrt(g_camera_still_frames / (g_subsampling * g_subsampling))) : 1.f;
-    if (!g_svgf_enable || fade < 0.01f) {
+    if (!g_atrous_enabled || fade < 0.01f) {
         if (pc.denoising_iteration == pc.last_denoising_iteration) {
             writeFinalFramebuffer(pixel, imageLoad(denoisingBuffer[0], pixel));
         }
@@ -243,7 +243,7 @@ void main() {
     // weights defined for 3x3 kernel [0.5, 1, 0.5] in 1D, outer product as [1 2 1]
     //                                                                      [2 4 2]
     //                                                                      [1 2 1]
-    const vec4 kernel_weights = vec4(1.f, 0.5f * fade, 0.25f * fade * fade, 0.125f * fade * fade);
+    const vec4 kernel_weights = vec4(pc.denoising_iteration <= 0 ? 0.5f * fade : 1.f, 0.5f * fade, 0.25f * fade * fade, 0.125f * fade * fade);
 
     const float var = 1.f; //computeVarianceCenter(pixel, viewport_size);
 
@@ -279,7 +279,7 @@ void main() {
             // if upsampling is required and the pixel already received a color:
             // do not blur in later passes to prevent overblur!
             // also: do not blur if denoising is disabled
-            if (!center_sampled || !g_bilateral_enable) {
+            if (!center_sampled || !g_denoising_enabled) {
                 if (pixel_rgba.a >= 0.f) {
                     accum_rgba = pixel_rgba;
                     weight_sum = 1.f;

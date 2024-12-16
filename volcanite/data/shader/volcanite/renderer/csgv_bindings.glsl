@@ -185,8 +185,8 @@ layout (std140, binding = 12) uniform resolve_info {
     bool g_tonemap_enable;
 // denoising
     bool g_denoise;
-    bool g_bilateral_enable;
-    bool g_svgf_enable;
+    bool g_denoising_enabled;
+    bool g_atrous_enabled;
     float g_difference_depth_denoising;
     float g_spatial_sigma;
     float g_depth_sigma;

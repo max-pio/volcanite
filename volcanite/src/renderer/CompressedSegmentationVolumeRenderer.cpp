@@ -206,7 +206,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     // upload uniforms and set pass properties
     updateUniformDescriptorset();
     m_pass->setRenderUpdateFlagsForNextCall(m_render_update_flags);
-    m_pass->setResolvePasses(m_resolve_passes);
+    m_pass->setResolvePasses(m_atrous_iterations);
 
     m_ucamera_info->upload(m_pass->getActiveIndex());
     m_urender_info->upload(m_pass->getActiveIndex());
@@ -796,8 +796,8 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     // resolve shader parameters
     new_hash = 0ull;
     HASHP(m_background_color_a) HASHP(m_background_color_b) HASHP(m_tonemap_enabled)
-    HASHP(m_resolve_passes)
-    HASHP(m_bilateral_enabled) HASHP(m_svgf_enabled) HASHP(m_difference_depth_denoising)
+    HASHP(m_atrous_iterations)
+    HASHP(m_denoising_enabled) HASHP(m_atrous_enabled) HASHP(m_difference_depth_denoising)
     HASHP(m_spatial_sigma) HASHP(m_depth_sigma) HASHP(m_illumination_sigma) HASHP(m_denoise_fade_sigma)
     HASHP(m_denoise_filter_kernel_size) HASHP(m_denoise_fade_enabled)
     if (new_hash != m_presolve_hash) {
@@ -881,8 +881,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_uresolve_info->setUniform<glm::vec4>("g_background_color_b", m_background_color_b);
         m_uresolve_info->setUniform<uint32_t>("g_tonemap_enable", m_tonemap_enabled ? 1 : 0);
 	    // denoising
-        m_uresolve_info->setUniform<uint32_t>("g_bilateral_enable", m_bilateral_enabled ? 1 : 0);
-        m_uresolve_info->setUniform<uint32_t>("g_svgf_enable", m_svgf_enabled ? 1 : 0);
+        m_uresolve_info->setUniform<uint32_t>("g_denoising_enabled", m_denoising_enabled ? 1 : 0);
+        m_uresolve_info->setUniform<uint32_t>("g_atrous_enabled", m_atrous_enabled ? 1 : 0);
         m_uresolve_info->setUniform<float>("g_difference_depth_denoising", m_difference_depth_denoising);
         m_uresolve_info->setUniform<float>("g_spatial_sigma", m_spatial_sigma);
         m_uresolve_info->setUniform<float>("g_depth_sigma", m_depth_sigma);
@@ -1155,13 +1155,13 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
     g_dev->addSeparator();
     g_dev->addLabel("Denoising");
-    g_dev->addInt(&m_resolve_passes, "Resolve Passes", 1, 4, 1);
-    g_dev->addInt(&m_denoise_filter_kernel_size, "Denoise Filter Kernel Size", 0, 3, 1);
-    g_dev->addBool(&m_bilateral_enabled, "Enable Denoising");
+        g_dev->addBool(&m_atrous_enabled, "Enable À-Trous Post-Processing");
+    g_dev->addInt(&m_atrous_iterations, "Post-Process Iterations", 1, 4, 1);
+    g_dev->addInt(&m_denoise_filter_kernel_size, "Post-Process Kernel Size", 0, 3, 1);
+    g_dev->addBool(&m_denoising_enabled, "Enable Denoising");
 //    g_dev->addFloat(&m_difference_depth_denoising, "difference depth denoising", 0.001f, 1.f, 0.004, 3);
 //    g_dev->addFloat(&m_spatial_sigma, "Spatial Sigma", 0.001f, 5.f, 0.01, 2);
 //    g_dev->addFloat(&m_depth_sigma, "Depth Sigma", 0.001f, 5.f, 0.01, 2);
-    g_dev->addBool(&m_svgf_enabled, "Enable À-Trous Filter");
 //    g_dev->addFloat(&m_illumination_sigma, "Illumination Sigma", 0.01f, 10.f, 0.01, 2); // unnused for now
     g_dev->addBool(&m_denoise_fade_enabled, "Fade Denoiser Out");
     g_dev->addFloat(&m_denoise_fade_sigma, "Denoise Fade Sigma", 0.00f, 10.f, 0.01, 2);

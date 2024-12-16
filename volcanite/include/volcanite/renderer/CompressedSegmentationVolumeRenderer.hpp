@@ -232,14 +232,14 @@ private:
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
     // denoising
-    int m_resolve_passes = 3;
-    bool m_bilateral_enabled = false;
+    int m_atrous_iterations = 3;
+    bool m_denoising_enabled = false;
     int m_denoise_filter_kernel_size = 1;
     float m_difference_depth_denoising = 1.0f;
     float m_spatial_sigma = 2.0f;
     float m_depth_sigma = 0.1f;
     // svgf
-    bool m_svgf_enabled = true;
+    bool m_atrous_enabled = true;
     float m_illumination_sigma = 4.0f;
     bool m_denoise_fade_enabled = true;
     float m_denoise_fade_sigma = 1.f;

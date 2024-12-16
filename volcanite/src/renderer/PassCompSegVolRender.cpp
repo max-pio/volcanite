@@ -107,9 +107,9 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
         if (hasDescriptors()) {
             commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_pipelineLayout, 0, m_descriptorSets->getActive(), nullptr);
         }
-        for (uint32_t i = 0; i < m_resolve_passes; i++) {
+        for (uint32_t i = 0; i < m_atrous_iterations; i++) {
             commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite)}, nullptr, nullptr);
-            PushConstants pushConstants{.denoising_iteration=i, .last_denoising_iteration=(m_resolve_passes-1u)};
+            PushConstants pushConstants{.denoising_iteration=i, .last_denoising_iteration=(m_atrous_iterations-1u)};
             commandBuffer.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants), &pushConstants);
             commandBuffer.dispatch(m_work_group_sizes[RESOLVE].width, m_work_group_sizes[RESOLVE].height, m_work_group_sizes[RESOLVE].depth);
             commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
