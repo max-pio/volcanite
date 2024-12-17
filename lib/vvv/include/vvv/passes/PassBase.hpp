@@ -46,8 +46,8 @@ public:
     virtual ~PassBase() { assert(m_pipelines.empty() && "You must call freeResources() before destroying Pass objects"); }
 
     virtual void allocateResources();
-    //! Releases all vulkan resources including the shaders and pipelines returned by the subclassed creation methods.
-    //! Subclasses that override this method must call the parent method to release parent resources.
+    /// Releases all vulkan resources including the shaders and pipelines returned by the subclassed creation methods.
+    /// Subclasses that override this method must call the parent method to release parent resources.
     virtual void freeResources();
 
     //  a pass is either `TimelineSemaphoreWaitable execute(queue)` or `executeCommands(vk::CommandBuffer commandBuffer)`.
@@ -153,14 +153,14 @@ protected:
 
     void createCommandBuffers();
 
-    //! Creates all shaders that are used in this pass. Shader reflections from this pass are performed on this shader list.
+    /// Creates all shaders that are used in this pass. Shader reflections from this pass are performed on this shader list.
     virtual std::vector<std::shared_ptr<Shader>> createShaders() = 0;
 
     virtual std::vector<vk::PushConstantRange> definePushConstantRanges() { return {}; };
 
     void createPipelineLayout();
 
-    //! Creates one (single pass) or more (multi pass) pipelines. At this point, the pipeline layout is already created from the shaders.
+    /// Creates one (single pass) or more (multi pass) pipelines. At this point, the pipeline layout is already created from the shaders.
     virtual std::vector<vk::Pipeline> createPipelines() = 0;
 
     std::string m_label;
@@ -181,8 +181,8 @@ protected:
 
     uint32_t m_allDirtyMask;
 
-    //! a simple caching mechanic using a matrix of {Resource Id}x{Buffer Copy} bits to track if a resource needs to
-    //! be updated (is dirty) before use. Index with `m_isDirty[resourceId]`, then each bit corresponds to a buffer copy.
+    /// a simple caching mechanic using a matrix of {Resource Id}x{Buffer Copy} bits to track if a resource needs to
+    /// be updated (is dirty) before use. Index with `m_isDirty[resourceId]`, then each bit corresponds to a buffer copy.
     std::vector<uint32_t> m_isDirty;
 };
 

@@ -15,10 +15,10 @@ bool DEBUG_vis_lod_rectangles(ivec2 pixel, const bool enabled) {
     if (!enabled)
         return false;
 
-    for (uint lod = 0; lod < g_lod_count; lod++) {
+    for (uint lod = 0; lod < LOD_COUNT; lod++) {
         if (any(greaterThanEqual(abs(ivec2(pixel) - ivec2(imageSize(accumulationOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) - 2u)))) {
             if (all(lessThanEqual(abs(ivec2(pixel) - ivec2(imageSize(accumulationOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) + 2u)))) {
-                writePixel(pixel, vec4(colormap_viridis(float(g_lod_count - 1u - lod)/float(g_lod_count - 1u)), 1.f), BACKGROUND_DEPTH, invalidGBufferRG8());
+                writePixel(pixel, vec4(colormap_viridis(float(LOD_COUNT - 1u - lod)/float(LOD_COUNT - 1u)), 1.f), BACKGROUND_DEPTH, invalidGBufferRG8());
                 return true;
             }
         }
@@ -33,7 +33,7 @@ void DEBUG_vis_lod(RayMarchState state, inout vec4 surface_albedo_opacity, bool 
         return;
     uint lod = get_inv_lod(state.voxel);
     if (lod != INVALID) {
-        surface_albedo_opacity.rgb = (state.out_color.rgb + 3.f * colormap_viridis(float(lod)/float(g_lod_count - 1u))) / 4.f;
+        surface_albedo_opacity.rgb = (state.out_color.rgb + 3.f * colormap_viridis(float(lod)/float(LOD_COUNT - 1u))) / 4.f;
     }
 #endif
 }
@@ -115,17 +115,17 @@ void DEBUG_vis_brick_cache(inout RayMarchState state, bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
     if (!enabled)
         return;
-    uvec3 brick = uvec3(state.voxel) / g_brick_size;
-    uvec3 brick_voxel = uvec3(state.voxel) - (brick * g_brick_size);
+    uvec3 brick = uvec3(state.voxel) / BRICK_SIZE;
+    uvec3 brick_voxel = uvec3(state.voxel) - (brick * BRICK_SIZE);
     uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
 
     uint cache_start = g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX];
-    if (cache_start == INVALID || g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] >= g_lod_count) {
+    if (cache_start == INVALID || g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] >= LOD_COUNT) {
         state.out_color = vec4(1.f, 0.f, 0.f, 1.f);
         state.throughput = vec3(0.f);
-    } else if (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < g_lod_count) { // should always be true here
+    } else if (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT) { // should always be true here
         uint lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
-        state.out_color.rgb = colormap_viridis(float(lod - 1u)/float(g_lod_count - 2u));
+        state.out_color.rgb = colormap_viridis(float(lod - 1u)/float(LOD_COUNT - 2u));
         if (lod == 0u)
             state.out_color.rgb = vec3(1.f, 0.f, 0.f);
         state.out_color.a = 1.f;
@@ -149,7 +149,7 @@ void DEBUG_vis_brick_idx(inout RayMarchState state, bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
     if (!enabled)
         return;
-    uvec3 brick = uvec3(state.voxel) / g_brick_size;
+    uvec3 brick = uvec3(state.voxel) / BRICK_SIZE;
     uint brick_idx = brick_pos2idx(brick, g_brick_count);
     state.out_color = vec4(integer2colorlabel(brick_idx, false), 1.f);
     state.throughput = vec3(0.f);

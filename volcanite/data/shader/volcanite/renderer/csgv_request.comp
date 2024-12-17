@@ -17,23 +17,24 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_debug_printf : enable
 #extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_buffer_reference2 : require
 
 layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
 
-#include "csgv_bindings.glsl"
+#include "volcanite/renderer/csgv_bindings.glsl"
 
-// includes
-#include "cpp_glsl_include/csgv_constants.h"
+#include "cpp_glsl_include/csgv_constants.incl"
 #include "util.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
+#include "volcanite/renderer/csgv_materials.glsl"
 
 bool pushFreeBlockStack(uint inv_lod, uint value) {
-    uint pos = atomicAdd(g_free_block_stacks[(g_lod_count - 1u) * g_free_stack_capacity + (inv_lod - 1u)], 1u);
+    uint pos = atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], 1u);
     if(pos > g_free_stack_capacity) {
         // no free index for us
         assert(false, "couldn't push to free block stack because it is full");
-        atomicAdd(g_free_block_stacks[(g_lod_count - 1u) * g_free_stack_capacity + (inv_lod - 1u)], uint(-1));
+        atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], uint(-1));
         return false;
     }
     else {
@@ -46,10 +47,10 @@ bool pushFreeBlockStack(uint inv_lod, uint value) {
 void main() {
     // at the beginning of this shader:
     // cache element ownership
-    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < g_lod_count) <=> the brick owns a cache element
+    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick owns a cache element
     // - if BRICK_INFO_INDEX < INVALID, the brick owns a cache element in this position with size BRICK_INFO_CUR_INV_LOD
     // visibility
-    // - BRICK_INFO_REQ_INV_LOD < g_lod_count means the brick is visible in renderer AND had visible palette entries in the frame before
+    // - BRICK_INFO_REQ_INV_LOD < LOD_COUNT means the brick is visible in renderer AND had visible palette entries in the frame before
     // stacks
     // - ASSIGN_REQUESTED_BLOCKS was reset to zero before the shader execution started
     // - the top pointers in the g_free_block_stacks point to the next free location in the LoD stack
@@ -62,11 +63,12 @@ void main() {
     // iterate over the whole palette in this brick (read the palette size from the header)
     uint brick_idx = brick_pos2idx(brick, g_brick_count);
     uint brick_info_pos = brick_idx * 4u;
-    assert(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < g_lod_count)), "brick CUR_INV_LOD or INDEX are corrupted");
+    // either none or both must be true: the brick has a position in the cache and the brick has a decoded LOD
+    assertf(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)), "brick CUR_INV_LOD or INDEX are corrupted (csgv_request) cache_idx, cur_lod: ", uvec2(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX], g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD]));
 
 
     //    // check if brick is already decoded (if anything changes, the decoder will release it)
-    //    if(g_brick_info[brick_idx * 4u + BRICK_INFO_CUR_INV_LOD] < g_lod_count)
+    //    if(g_brick_info[brick_idx * 4u + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)
     //        return;
 
     bool potentially_visible = false;
@@ -74,7 +76,7 @@ void main() {
     uint brick_encoding_length = getBrickEncodingLength(brick_idx);
     EncodingRef brick_address = getBrickEncodingRef(brick_idx);
     // read total palette size from brick header
-    uint palette_size = brick_address.buf[getPaletteSizeHeaderIndex()];
+    uint palette_size = brick_address.buf[PALETTE_SIZE_HEADER_INDEX];
     assert(palette_size > 0u, "palette size 0 should not be possible");
     assert(palette_size < bitfieldExtract(~0u, 0, int(g_cache_palette_idx_bits)), "palette size exceeds available bits for cache palette indices");
     // check all entries in the palette if anything is visible (> 0)
@@ -87,9 +89,9 @@ void main() {
 
     // we can set a maximum LoD to decode to in the gui
     if(g_max_inv_lod == 0u) {
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = g_lod_count;
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT;
     }
-    else if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < g_lod_count) {
+    else if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < LOD_COUNT) {
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = min(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], g_max_inv_lod);
     }
 
@@ -99,18 +101,18 @@ void main() {
     // TODO: could assign the label from palette to brick directly to not be required to read g_encoding in the renderer
     if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == 0u) {
         assert(false, "requesting LoD 0 is not allowed!");
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = g_lod_count;
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT;
     }
 #endif
 
 #ifdef SEPARATE_DETAIL
     // if the detail for this brick is not available and it is currently not decoded, we can only decode it with the base levels
     // in this case, we request the detail level of the brick to be decoded
-    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == (g_lod_count - 1u)  // finest LoD (detail) requested for brick
-    && g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != (g_lod_count - 1u)  // brick is not yet decoded up to the finest LoD
+    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == (LOD_COUNT - 1u)  // finest LoD (detail) requested for brick
+    && g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != (LOD_COUNT - 1u)  // brick is not yet decoded up to the finest LoD
     && (g_detail_buffer_dirty == 1u || (g_detail_starts[brick_idx + 1u] - g_detail_starts[brick_idx]) == 0u)) {  // but the detail encoding is not available
 
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = g_lod_count - 2u;
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT - 2u;
         if(g_detail_requests[g_request_buffer_capacity] < g_request_buffer_capacity) {
             uint pos = atomicAdd(g_detail_requests[g_request_buffer_capacity], 1u);
             g_detail_requests[pos % g_request_buffer_capacity] = brick_idx;
@@ -125,26 +127,26 @@ void main() {
     bool allocate = false;
     // no visible palette entries: brick is empty space
     if (!potentially_visible) {
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = g_lod_count + 1u; // > lod_count is empty space
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT + 1u; // > lod_count is empty space
     }
     // bricks visibility status is unknown, we don't decode it yet since it isn't visible in the renderer currently
-    else if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= g_lod_count) {
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = g_lod_count;      // = lod_count is potentially visible
+    else if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT) {
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT;      // = lod_count is potentially visible
 
     }
-    // brick is already flagged as visible (REQ_INV_LOD < g_lod_count) but not decoded to the requested LoD
+    // brick is already flagged as visible (REQ_INV_LOD < LOD_COUNT) but not decoded to the requested LoD
     else if(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]){
         allocate = true;
     }
     // brick is visible and already decoded to its requested level. it should remain in cache.
     else {
-        assert(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < g_lod_count, "visible brick is not decoded");
+        assert(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT, "visible brick is not decoded");
         assert(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < g_cache_capacity, "visible brick has no cache index");
         deallocate = false;
     }
 
     // we can refuse to deallocate elements if the cache is filled below 75%, but only if it does not have to switch LOD
-//    const uint cache_top = (g_lod_count - 1u) * ASSIGN_ELEMS_PER_LOD;
+//    const uint cache_top = (LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD;
 //    if (!allocate && g_assign_info[cache_top] < g_cache_capacity / 4u * 3u) {
 //        deallocate = false;
 //    }
@@ -162,24 +164,24 @@ void main() {
     if (allocate) {
         // get us a unique slot index within our requested LoD
         uint lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
-        assertf(0u < lod && lod < g_lod_count, "lod=%u is not 0 < lod < lod_count while trying to allocate cache slot", lod);
+        assertf(0u < lod && lod < LOD_COUNT, "lod=%u is not 0 < lod < lod_count while trying to allocate cache slot", lod);
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = atomicAdd(g_assign_info[(lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_REQUESTED_BLOCKS], 1u);
     }
     else {
-        assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= g_lod_count || g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD], "we don't try to allocate even though we would need to!");
+        assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT || g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD], "we don't try to allocate even though we would need to!");
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = INVALID;
     }
 
     // after this shader execution:
     // cache element ownership
-    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < g_lod_count) <=> the brick still owns a cache element
+    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick still owns a cache element
     // - REQ_SLOT < INVALID <=> the brick needs a cache element <=> the REQ_SLOT is a valid entry for its REQ_LOD
     // - REQ_SLOT < INVALID => BRICK_INFO_INDEX == INVALID
     // - the ASSIGN_REQUESTED_BLOCKS for each LoD contains the number of requested blocks for this LoD.
     // - all SLOT indices < ASSIGN_REQUESTED_BLOCKS are uniquely assigned to one block each
     // visibility
-    // - BRICK_INFO_REQ_INV_LOD < g_lod_count means the brick is visible in renderer AND had visible palette entries in the frame before
-    // - BRICK_INFO_REQ_INV_LOD = g_lod_count means the brick contains visible labels in its palette
+    // - BRICK_INFO_REQ_INV_LOD < LOD_COUNT means the brick is visible in renderer AND had visible palette entries in the frame before
+    // - BRICK_INFO_REQ_INV_LOD = LOD_COUNT means the brick contains visible labels in its palette
     // - (BRICK_INFO_REQ_INV_LOD > g_loc_count) means that the brick is guaranteed to be invisible
     // stacks
     // - if a brick is no longer visible but held an element in cache, it was freed and added to the free_block_stack

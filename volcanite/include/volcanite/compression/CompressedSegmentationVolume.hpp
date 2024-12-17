@@ -23,8 +23,10 @@
 #include <span>
 
 #include "VolumeCompressionBase.hpp"
-#include "csgv_constants.h" // in data/shader/cpp_glsl_include
-#include "volcanite/compression/rans.hpp"
+#include "csgv_constants.incl" // in data/shader/cpp_glsl_include
+#include "volcanite/compression/encoder/CSGVBrickEncoder.hpp"
+#include "volcanite/compression/memory_mapping.hpp"
+
 #include "vvv/util/util.hpp"
 
 
@@ -93,37 +95,6 @@ namespace volcanite {
 class CompressedSegmentationVolume : public VolumeCompressionBase {
 
 private:
-    // list of neighbor vectors per index (8 indices in total) where each index has 3 ivec3 vectors of type {-1, 1}^3
-    static constexpr const glm::ivec3 neighbor[8][3] = {{glm::ivec3({-1, 0, 0}), glm::ivec3({0, -1, 0}), glm::ivec3({0, 0, -1})},
-                                                        {glm::ivec3({ 1, 0, 0}), glm::ivec3({0, -1, 0}), glm::ivec3({0, 0, -1})},
-                                                        {glm::ivec3({-1, 0, 0}), glm::ivec3({0,  1, 0}), glm::ivec3({0, 0, -1})},
-                                                        {glm::ivec3({ 1, 0, 0}), glm::ivec3({0,  1, 0}), glm::ivec3({0, 0, -1})},
-                                                        {glm::ivec3({-1, 0, 0}), glm::ivec3({0, -1, 0}), glm::ivec3({0, 0,  1})},
-                                                        {glm::ivec3({ 1, 0, 0}), glm::ivec3({0, -1, 0}), glm::ivec3({0, 0,  1})},
-                                                        {glm::ivec3({-1, 0, 0}), glm::ivec3({0,  1, 0}), glm::ivec3({0, 0,  1})},
-                                                        {glm::ivec3({ 1, 0, 0}), glm::ivec3({0,  1, 0}), glm::ivec3({0, 0,  1})}};
-
-    struct ReadState {
-        uint32_t idxE = 0u;             // used either as 4 bit element index or byte read index for rANS
-        uint32_t rans_state = 0u;       // state of the rANS decoder
-        bool in_detail_lod = false;     // if we are in the finest level-of-detail (only set in rANS double table mode)
-    };
-
-    /// Reads the next element from the brick encoding, possibly using the rANS decoder from this CompressedSegmentationVolume, and updates the state.
-    uint32_t readNextLodOperationFromEncoding(const uint32_t* brick_encoding, ReadState& state) const;
-
-    /// Enumerate the positions within a brick.
-    /// Because of how we encode the LODs, this enumeration is required to always be in an "octree manner".
-    /// Iterating over it with a step size of 2*2*2=8 should land on all start points of 2x2x2 bricks in the Octree and so on.
-    /// Morton and Hilbert curves for example satisfy this criterion.
-    static inline glm::uvec3 enumBrickPos(uint32_t i, uint32_t brick_size) {
-        return sfc::Morton3D::i2p(i);
-    }
-
-    static inline glm::uint32_t indexOfBrickPos(const glm::uvec3& p) {
-        return sfc::Morton3D::p2i(p);
-    }
-
     /// @return encoding array that contains the encoding of the given 1D brick index.
     [[nodiscard]] const std::vector<uint32_t>* getEncodingBufferForBrickIdx(uint32_t brick_idx) const {
         if(m_encodings.empty())
@@ -182,25 +153,6 @@ private:
         return m_detail_starts[brick_idx + 1u];
     }
 
-    /// Returns the current value in the brick at the neighbor_i neighbor position of brick_pos at the decoding stage at the given lod_width.
-    /// If the neighbor is not yet set in this level, the parent element of this neighbor is returned.
-    /// If the neighbor would lie outside the brick, UNASSIGNED is returned.
-    static uint32_t valueOfNeighbor(const uint32_t* brick, const glm::uvec3& brick_pos, uint32_t local_lod_i, uint32_t lod_width, uint32_t brick_size, int neighbor_i);
-
-    static uint32_t valueOfNeighbor(const MultiGridNode* grid, const MultiGridNode* parent_grid, const glm::uvec3& brick_pos, uint32_t local_lod_i, uint32_t lod_width, uint32_t brick_size, int neighbor_i);
-
-    /// Encodes a single brick from given start with size brick_size in the volume to the out vector.
-    /// @param volume the labeled voxel volume to encode.
-    /// @param out must have enough space reserved for adding all elements.
-    /// @param start the start position of the brick. Should be a multiple of the configured brick size.
-    /// @param volume_dim the volume size in voxels in each dimension
-    /// @return number of uint32_t elements written to out.
-    uint32_t encodeBrick(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out, glm::uvec3 start, glm::uvec3 volume_dim);
-
-
-    /// Computes operation frequencies and detail operation frequencies (the latter offset by 16) for the brick into the given brick_freq[32] array.
-    void freqEncodeBrick(const std::vector<uint32_t>& volume, size_t* brick_freq, glm::uvec3 start, glm::uvec3 volume_dim, bool detail_freq) const;
-
 public:
 
     /// Moves the detail encoding stream from each brick to the detail buffer. The detail starts buffer contains the start positions of such detail encodings afterwards.
@@ -210,24 +162,9 @@ public:
     /// @return the size of detail encoding / total encoding as a ratio between zero and one.
     float separateDetail();
 
-    /// Decompresses a single brick.
-    /// @param brick_idx is used to read the begin and endpoint of the encoding from the brick_starts buffer.
-    /// @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
-    /// @param valid_brick_size is used to clamp used voxels for border bricks. Values outside are undefined.
-    /// @param inv_lod the LOD until which to decompress, or rather, the decompression iterations. 0 is the coarsest and log2(brick_size) is the original / finest level.
-    void decodeBrick(uint32_t brick_idx, uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const;
-
-    /// Helper method to gather statistics for one single brick. Same as decodeBrick but also:
-    /// Unpacks the encoding for the given brick at a given LOD where a value of INVALID is written to octree entries/voxels that are not encoded because a STOP label occurred in a higher level.
-    /// The output_palette (if not nullptr) contains the values added by PALETTE_ADV in processed order as uvec4 {label, this_lod, voxel_in_brick_id, 0}
-    void decodeBrickWithDebugEncoding(uint32_t brick_idx, uint32_t* output_brick, uint32_t* output_encoding,
-                                             std::vector<glm::uvec4>* output_palette, glm::uvec3 valid_brick_size, int inv_lod) const;
-
-    void getBrickStatistics(std::map<std::string, float>& statistics, uint32_t brick_idx, glm::uvec3 valid_brick_size) const;
-
 public:
     explicit CompressedSegmentationVolume() : VolumeCompressionBase(), m_brick_size(0u), m_encodings(), m_brick_idx_to_enc_vector(~0u), m_brick_starts(), m_detail_encodings(), m_detail_starts(), m_volume_dim(-1),
-                                              m_rANS_mode(NO_RANS), m_separate_detail(false), m_cpu_threads(std::thread::hardware_concurrency()), m_max_brick_palette_count(0) {}
+                                              m_encoding_mode(NIBBLE_ENC), m_separate_detail(false), m_cpu_threads(std::thread::hardware_concurrency()), m_max_brick_palette_count(0) {}
 
     ~CompressedSegmentationVolume() { clear(); }
 
@@ -242,6 +179,9 @@ public:
             m_cpu_threads = hardware_concurrency;
         else
             m_cpu_threads = thread_count;
+
+        if (m_encoder)
+            m_encoder->setCPUThreadCount(m_cpu_threads);
     }
 
     /// Performs a pseudo compression pass to obtain operation frequency tables for later rANS encoding.
@@ -260,8 +200,7 @@ public:
     /// Decompresses the full volume up to a certain LoD into the vector out.
     void decompressLOD(int target_lod, std::vector<uint32_t>& out) const;
 
-
-    std::shared_ptr<std::vector<uint32_t>> decompress() override {
+    [[nodiscard]] std::shared_ptr<std::vector<uint32_t>> decompress() const override {
         std::shared_ptr<std::vector<uint32_t>> out = std::make_shared<std::vector<uint32_t>>();
         out->resize(static_cast<size_t>(m_volume_dim.x) * m_volume_dim.y * m_volume_dim.z);
         decompressLOD(0, *out);
@@ -276,12 +215,12 @@ public:
     void decompressBrickTo(uint32_t* out, glm::uvec3 brick, int inverse_lod, uint32_t* out_encoding_debug = nullptr, std::vector<glm::uvec4>* out_palette_debug = nullptr) const;
 
     /// Checks if all LOD levels are decompressed correctly. Any brick in each level should contain the max. occurring ID of all voxels within its bounds.
-    bool testLOD(const std::vector<uint32_t>& volume, glm::uvec3 volume_dim) const;
+    [[nodiscard]] bool testLOD(const std::vector<uint32_t>& volume, glm::uvec3 volume_dim) const;
 
     /// Tests if the original volume can be reconstructed without errors from the encoding and if all available LoDs
     /// can be reconstructed as defined by the reference multi grids per brick.
     /// @param compress_first if true, the volume is compressed before testing.
-    bool test(const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, bool compress_first=false) override {
+    [[nodiscard]] bool test(const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, bool compress_first=false) override {
         if(!VolumeCompressionBase::test(volume, volume_dim, compress_first)) {
             Logger(ERROR) << "skipping coarser levels of detail...";
             Logger(INFO) << "-------------------------------------------------------------";
@@ -349,10 +288,12 @@ public:
     }
     /// @return the size of the bricks detail encoding in number of uint32 elements.
     [[nodiscard]] uint32_t getBrickDetailEncodingLength(uint32_t brick_idx) const {
+        assert(isUsingSeparateDetail() && "Trying to access detail buffer length without detail separation.");
         return getBrickDetailEnd(brick_idx) - getBrickDetailStart(brick_idx);
     }
     /// @return a pointer ot a continuous uint32 memory region containing this brick's detail level encoding.
     [[nodiscard]] const uint32_t* getBrickDetailEncoding(uint32_t brick_idx) const {
+        assert(isUsingSeparateDetail() && "Trying to access detail buffer without detail separation.");
         if(brick_idx >= m_brick_starts.size() - 1)
             throw std::runtime_error("Trying to access out of bounds brick_idx " + std::to_string(brick_idx));
 
@@ -363,7 +304,7 @@ public:
     uint32_t getBrickPaletteLength(uint32_t brick_idx) const {
         if(brick_idx >= m_brick_starts.size() - 1)
             throw std::runtime_error("Trying to access out of bounds brick_idx " + std::to_string(brick_idx));
-        return getBrickEncoding(brick_idx)[getPaletteSizeHeaderIndex()];
+        return getBrickEncoding(brick_idx)[m_encoder->getPaletteSizeHeaderIndex()];
     }
     /// Returns the memory region containing the reverse palette of the brick.
     [[nodiscard]] std::span<const uint32_t> getBrickReversePalette(uint32_t brick_idx) const {
@@ -376,7 +317,7 @@ public:
 
     [[nodiscard]] glm::uvec3 getVolumeDim() const { return m_volume_dim; }
     [[nodiscard]] uint32_t getBrickSize() const { return m_brick_size; }
-    [[nodiscard]] inline uint32_t getLodCountPerBrick() const { return static_cast<uint32_t>(log2(m_brick_size)) + 1; }
+    [[nodiscard]] inline uint32_t getLodCountPerBrick() const { return glm::findMSB(m_brick_size) + 1; }
     [[nodiscard]] glm::uvec3 getBrickCount() const {
         if(m_brick_size <= 0u)
             throw std::runtime_error("Brick Size is 0");
@@ -390,95 +331,39 @@ public:
     /// encoding array index.
     [[nodiscard]] uint32_t getBrickIdxToEncVectorMapping() const { return m_brick_idx_to_enc_vector; }
 
-    static inline uint32_t brick_pos2idx(glm::uvec3 brick_pos, glm::uvec3 brick_count) {
-        return sfc::Cartesian::p2i(brick_pos, brick_count);
-    }
-    static inline glm::uvec3 brick_idx2pos(uint32_t brick_index, glm::uvec3 brick_count) {
-        return sfc::Cartesian::i2p(brick_index, brick_count);
-    }
-
-
-    [[nodiscard]] RANSMode getRANSMode() const { return m_rANS_mode; }
-    [[nodiscard]] bool isUsingRANS() const { return m_rANS_mode == SINGLE_TABLE_RANS || m_rANS_mode == DOUBLE_TABLE_RANS; }
-    [[nodiscard]] bool isUsingDetailFreq() const { return m_rANS_mode == DOUBLE_TABLE_RANS; }
+    [[nodiscard]] EncodingMode getEncodingMode() const { return m_encoding_mode; }
+    [[nodiscard]] bool isUsingRANS() const { return m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC; }
+    [[nodiscard]] bool isUsingDetailFreq() const { return m_encoding_mode == DOUBLE_TABLE_RANS_ENC; }
     [[nodiscard]] bool isUsingSeparateDetail() const { return m_separate_detail; }
 
     /// returns the maximum number of uint32 palette entries that any brick in the volume contains.
     [[nodiscard]] uint32_t getMaxBrickPaletteCount() const { return m_max_brick_palette_count; };
-    /// returns the size of the header at the beginning of each brick measured in uint32 entries.
-    [[nodiscard]] uint32_t getHeaderSize() const { return getLodCountPerBrick() * 2 + (isUsingSeparateDetail() ? 0 : 1); }
-    /// returns the index of the uint32_t element in the brick encoding / header that stores the palette size.
-    [[nodiscard]] uint32_t getPaletteSizeHeaderIndex() const { return getHeaderSize() - 1u; }
 
     /// Sets the options for the compression step. If using rANS, a frequency table as a uint32_t[16] array must be given for the base.
     /// If using detail separation (use_detail) and rANS, an additional frequency table must be given for the detail buffer.
-    void setCompressionOptions(uint32_t brick_size, RANSMode rANS_mode,
-                               const uint32_t* code_frequencies = nullptr, const uint32_t* detail_code_frequencies = nullptr) {
-        if(!m_encodings.empty()) {
-            Logger(WARN) << "CompressedSegmentationVolume was already compressed. Clearing old data on new config.";
-            clear();
-        }
-
-        if(!(brick_size > 0 && !(brick_size & (brick_size - 1))))
-            throw std::runtime_error("Brick size must be a power of two greater than zero!");
-
-        m_brick_size = brick_size;
-        m_rANS_mode = rANS_mode;
-
-        if(isUsingRANS()) {
-            if(code_frequencies == nullptr)
-                throw std::runtime_error("4 bit code frequencies must be given if using rANS!");
-            // normalize the symbol frequencies
-            std::vector<uint32_t> _code_frequencies = normalizeCodeFrequencies(code_frequencies);
-            m_rans.recomputeFrequencyTables(_code_frequencies.data());
-            if(isUsingDetailFreq()) {
-                assert(detail_code_frequencies != nullptr && "4 bit detail code frequencies must be given if using rANS and detail separation!");
-                std::vector<uint32_t> _detail_code_frequencies = normalizeCodeFrequencies(detail_code_frequencies);
-                m_detail_rans.recomputeFrequencyTables(_detail_code_frequencies.data());
-            }
-        }
-    }
+    void setCompressionOptions(uint32_t brick_size, EncodingMode encoding_mode,
+                               const uint32_t* code_frequencies = nullptr, const uint32_t* detail_code_frequencies = nullptr);
 
     /// Sets the options for the compression step. If using rANS, a 64 bit frequency table as a size_t[16] array must be given for the base.
     /// If an additional frequency table must be given for the finest LoD if rANS is used in double table mode.
     /// Detail separation (splitting off the operation stream of the finest LoD in a separated compressed file.
-    void setCompressionOptions64(uint32_t brick_size, RANSMode rANS_mode,
+    void setCompressionOptions64(uint32_t brick_size, EncodingMode encoding_mode,
                                  const size_t* code_frequencies = nullptr, const size_t* detail_code_frequencies = nullptr) {
-        if(!m_encodings.empty()) {
-            Logger(WARN) << "CompressedSegmentationVolume was already compressed. Clearing old data on new config.";
-            clear();
-        }
-
-        if(!(brick_size > 0 && !(brick_size & (brick_size - 1))))
-            throw std::runtime_error("Brick size must be a power of two greater than zero!");
-
-        m_brick_size = brick_size;
-        m_rANS_mode = rANS_mode;
-
-        if(isUsingRANS()) {
-            if(code_frequencies == nullptr)
-                throw std::runtime_error("4 bit code frequencies must be given if using rANS!");
-            // normalize the symbol frequencies
-            std::vector<uint32_t> _code_frequencies = normalizeCodeFrequencies(code_frequencies);
-            m_rans.recomputeFrequencyTables(_code_frequencies.data());
-            if(isUsingDetailFreq()) {
-                assert(detail_code_frequencies != nullptr && "4 bit detail code frequencies must be given if using rANS in double table mode!");
-                std::vector<uint32_t> _detail_code_frequencies = normalizeCodeFrequencies(detail_code_frequencies);
-                m_detail_rans.recomputeFrequencyTables(_detail_code_frequencies.data());
-            }
-        }
+        setCompressionOptions(brick_size, encoding_mode,
+                          code_frequencies ? normalizeCodeFrequencies(code_frequencies).data() : nullptr,
+                          detail_code_frequencies ? normalizeCodeFrequencies(detail_code_frequencies).data() : nullptr);
     }
 
     ///////////////////////////////////////////////////////////////////
     ///                   file export / import                      ///
     ///////////////////////////////////////////////////////////////////
-    static std::string getCSGVFileName(const std::string& filepath, uint32_t brick_size, RANSMode rANS_mode, bool separate_detail, const std::string& filetype= ".csgv") {
-        if(separate_detail && rANS_mode != DOUBLE_TABLE_RANS)
-            throw std::runtime_error("Detail separation can only be used when using rANS in double table mode!");
-        std::string rANS_str = (rANS_mode == SINGLE_TABLE_RANS ? "_rANS" : (rANS_mode == DOUBLE_TABLE_RANS ? "_rANS2" : ""));
-        return filepath.substr(0, filepath.rfind('.')) + "_bs" + std::to_string(brick_size) + rANS_str + (separate_detail ? "_ds" : "") + filetype;
+    static std::string getCSGVFileName(const std::string& filepath, uint32_t brick_size, EncodingMode rANS_mode, bool separate_detail, const std::string& filetype= ".csgv") {
+        return filepath.substr(0, filepath.rfind('.')) + "_bs" + std::to_string(brick_size)
+                                + "_" + EncodingMode_ShortSTR(rANS_mode) + (separate_detail ? "_ds" : "") + filetype;
     }
-    std::string getCSGVFileName(const std::string& filepath, const std::string filetype= ".csgv") { return getCSGVFileName(filepath, m_brick_size, m_rANS_mode, m_separate_detail, filetype); }
+    std::string getCSGVFileName(const std::string& filepath, const std::string filetype= ".csgv") {
+        return getCSGVFileName(filepath, m_brick_size, m_encoding_mode, m_separate_detail, filetype);
+    }
     bool importFromFile(const std::string& path, bool verbose = true, bool verify = true);
     void exportToFile(const std::string& path, bool verbose = true);
 
@@ -494,6 +379,7 @@ public:
         m_separate_detail = false;
         m_brick_idx_to_enc_vector = ~0u;
         m_max_brick_palette_count = 0u;
+        m_encoder = {};
     }
 
     size_t getCompressedSizeInBytes() const {
@@ -505,7 +391,7 @@ public:
     }
 
     /// @return the compression ratio as (compressed size) / (uncompressed uint32 volume size) in percent as a value between 0 and 100.
-    float getCompressionRatio() override {
+    float getCompressionRatio() const override {
         if(m_encodings.empty())
             throw std::runtime_error("CompressedSegmentationVolume must be compressed before calling getCompressionRatio()");
         return static_cast<float>(getCompressedSizeInBytes()) / static_cast<float>(m_volume_dim.x * m_volume_dim.y * m_volume_dim.z * sizeof(uint32_t)) * 100.f;
@@ -546,8 +432,23 @@ public:
     ///////////////////////////////////////////////////////////////////
     ///                 statistics and evaluation                   ///
     ///////////////////////////////////////////////////////////////////
+
+    void getBrickStatistics(std::map<std::string, float> &statistics, uint32_t brick_idx, glm::uvec3 valid_brick_size) const;
     [[nodiscard]] std::vector<std::map<std::string, float>> gatherBrickStatistics() const;
 
+    /// Exports a human readable back-to-back list of the center brick operation stream as hex codes.
+    /// The CSGV must not use any stream compression (i.e. no rANS encoding).
+    void exportSingleBrickOperationsHex(const std::string& path) const;
+
+    /// Exports back-to-back lists of brick operations to two files [path]_op.raw and [path]_op_starts.raw.\n
+    /// The output depends on the compression mode. If the CSGV uses rANS:\n
+    /// - op.raw contains back-to-back lists of the rANS compressed operation streams.\n
+    /// - op_starts.raw stores two uint32 numbers per brick:\n
+    /// If the CSGV does not use rANS:\n
+    /// - op.raw stores back-to-back operation lists of the bricks using one unsigned char per operation code.\n
+    /// - op_starts.raw stores two uint32 numbers per brick: the index (in 4 bit elements) of the brick's first
+    /// operation and the zero-indexed position of the first operations within the brick at which the fines LoD starts.\n
+    /// The op_starts.raw ends with one last dummy entry containing the total size of entries on op.raw and a zero.
     void exportAllBrickOperations(const std::string& path) const;
     void exportBrickOperationsToCSV(const std::string& path, uint32_t brick_idx) const;
 
@@ -571,7 +472,7 @@ public:
             bool greaterThanZero = freq[i] > 0u;
             out[i] = static_cast<uint32_t>(freq[i] / (code_freq_sum  / (1ul << 30u) + 1u));
             if(greaterThanZero && out[i] == 0u)
-                out[i] = 1u;        // existing symbols mustn't have a zero frequency
+                out[i] = 1u;        // existing symbols must not have a zero frequency
         }
         return out;
     }
@@ -586,36 +487,27 @@ public:
     [[nodiscard]] std::vector<uint32_t> getCurrentFrequencyTable() const {
         if(!isUsingRANS())
             throw std::runtime_error("Can't get a frequency table from a Compressed Segmentation Volume that's not using rANS!");
-        std::vector<uint32_t> freq(16);
-        m_rans.copyCurrentFrequencyTableTo(freq.data());
-        return freq;
+        return m_frequency_table;
     }
 
     [[nodiscard]] const std::vector<uint32_t> getCurrentDetailFrequencyTable() const {
         if(!isUsingDetailFreq())
             throw std::runtime_error("Can't get a detail frequency table from a Compressed Segmentation Volume that's not using rANS in double table mode.");
-        std::vector<uint32_t> freq(16);
-        m_detail_rans.copyCurrentFrequencyTableTo(freq.data());
-        return freq;
+        return m_detail_frequency_table;
     }
 
-    [[nodiscard]] std::string getGLSLSymbolArrayStringRANS() const {
-        std::stringstream ss;
-        ss << "uvec3[34](";
-        ss << m_rans.getGLSLSymbolArrayString();
-        ss << ",";
-        if(m_rANS_mode == DOUBLE_TABLE_RANS) {
-            ss << m_detail_rans.getGLSLSymbolArrayString();
-        } else {
-            // just some dummy entries so the shader compiles..
-            for (int i = 0; i <= 16; i++)
-                ss << (i < 16 ? "uvec3(0u, 0u, 0u)," : "uvec3(0u, 0u, 0u)");
-        }
-        ss << ")";
-        return ss.str();
+    [[nodiscard]] std::vector<std::string> getGLSLDefines() const {
+        std::vector<std::string> shader_defines = m_encoder->getGLSLDefines([this](const uint32_t brick_idx){
+                                                                                return getBrickEncodingSpan(brick_idx);
+                                                                            }, getBrickIndexCount());
+        if (isUsingSeparateDetail())
+            shader_defines.emplace_back("SEPARATE_DETAIL");
+        return shader_defines;
     }
 
     void printBrickInfo(glm::uvec3 brick, loglevel log_level = INFO) const;
+
+    void printBrickEncoding(uint32_t brick_idx) const;
 
     /// A quick way of checking some invariants of CSGV representations to verify the compressed volume.
     /// @return true if no errors are found, false otherwise.
@@ -627,16 +519,18 @@ private:
     uint32_t m_brick_size;                          ///< brick size of each dimension in voxels, must be power of 2
     glm::uvec3 m_volume_dim;                        ///< xyz dimensions of the original volume in voxels
     std::vector<std::vector<uint32_t>> m_encodings; ///< contains all encodings for all bricks split up by brick id into several vectors
-    // TODO: add user parameter to set a target size per encoding vector in MB
-    const uint32_t m_target_uints_per_split_encoding = 536870912u; /// targeted max. number of uint32 elements per encoding vector (536870912u -> 2 GB)
+    // TODO: add user parameter to set a target size per encoding vector in MB. Pass a config struct to setCompressionOptions(..)
+    uint32_t m_target_uints_per_split_encoding = 536870912u; /// targeted max. number of uint32 elements per encoding vector (536870912u -> 2 GB)
     uint32_t m_brick_idx_to_enc_vector = ~0u;       ///< dividing 1D brick idx by this value maps to split encoding vector index.
     std::vector<uint32_t> m_brick_starts;           ///< points to indices in m_encoding
     std::vector<std::vector<uint32_t>> m_detail_encodings; /// contains the finest LoDs of all bricks if detail separation is enabled
     std::vector<uint32_t> m_detail_starts;          ///< points to indices m_detail_encodings
 
-    RANS m_rans;
-    RANS m_detail_rans;
-    RANSMode m_rANS_mode;
+    std::unique_ptr<CSGVBrickEncoder> m_encoder = {};    ///< encodes single bricks with a certain encoding method
+    EncodingMode m_encoding_mode;
+    std::vector<uint32_t> m_frequency_table;        ///< operation frequencies within all, or within the base levels
+    std::vector<uint32_t> m_detail_frequency_table; ///< operation frequencies within the detail level
+
     bool m_separate_detail;
     uint32_t m_max_brick_palette_count;             ///< max. palette length of any brick as a number of label entries
 

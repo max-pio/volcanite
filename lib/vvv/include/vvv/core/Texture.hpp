@@ -169,15 +169,15 @@ public:
 
     /// @discouraged this is a shorthand that drains the GPU pipeline and waits on the host. It allocates intermediate memory in
     /// the size of the texture.
-    std::vector<uint8_t> download() { return capture({.hostWait = true}).second->download(); }
+    std::vector<uint8_t> download(uint32_t queueFamily=0u) { return capture({.queueFamily=queueFamily, .hostWait = true}).second->download(); }
 
     /// @discouraged this is a shorthand that drains the GPU pipeline and waits on the host.
-    void writeExr(const std::string path) {
+    void writeExr(const std::string path, uint32_t queueFamily) {
         throw std::runtime_error("texture EXR export is not available because tinyexr implementation is missing.");
     }
 
     /// @discouraged this is a shorthand that drains the GPU pipeline and waits on the host.
-    void writeHdr(const std::string path) {
+    void writeHdr(const std::string path, uint32_t queueFamily=0u) {
         const auto componentCount = FormatComponentCount(static_cast<VkFormat>(format));
 
         // Note: if four channels are given, alpha channel is dropped.
@@ -193,7 +193,7 @@ public:
 
         assert(componentSize == 4 && "expecting 32bit float");
 
-        const auto data = download();
+        const auto data = download(queueFamily);
 
         if (!stbi_write_hdr(path.c_str(), width, height, componentCount, reinterpret_cast<const float *>(data.data()))) {
             throw std::runtime_error("writing HDR file failed.");
@@ -201,7 +201,7 @@ public:
     }
 
     /// @discouraged this is a shorthand that drains the GPU pipeline and waits on the host.
-    void writePng(const std::string path) {
+    void writePng(const std::string path, uint32_t queueFamily=0u) {
         const auto componentCount = FormatComponentCount(static_cast<VkFormat>(format));
         assert((componentCount == 4 || componentCount == 3 || componentCount == 1)  && "expecting r, rg, rgb or rgba texture");
         const auto planeCount = FormatPlaneCount(static_cast<VkFormat>(format));
@@ -215,7 +215,7 @@ public:
 
         assert(componentSize == 1 && "expecting 8bit unsigned integers");
 
-        const auto data = download();
+        const auto data = download(queueFamily);
 
         const auto stride = componentCount * width;
 
@@ -224,7 +224,7 @@ public:
         }
     }
 
-    void writeJpeg(const std::string path, int quality = 70) {
+    void writeJpeg(const std::string path, int quality = 70, uint32_t queueFamily=0u) {
         const auto componentCount = FormatComponentCount(static_cast<VkFormat>(format));
 
         // Note: if four channels are given, alpha channel is dropped.
@@ -240,7 +240,7 @@ public:
 
         assert(componentSize == 1 && "expecting 8bit unsigned integers");
 
-        const auto data = download();
+        const auto data = download(queueFamily);
 
         if (!stbi_write_jpg(path.c_str(), width, height, componentCount, reinterpret_cast<const void *>(data.data()), quality)) {
             throw std::runtime_error("writing JPEG failed.");
@@ -249,7 +249,7 @@ public:
 
     /// Select an export image file type based on the file ending (png, jp(e)g, hdr, exr).
     /// May throw a runtime error if filesystem or image export functionality fails or if the file type is not supported.
-    void writeFile(const std::string path) {
+    void writeFile(const std::string path, uint32_t queueFamily=0u) {
         std::filesystem::path file = std::filesystem::absolute(path).lexically_normal();
         std::filesystem::path dir = file;
         std::filesystem::create_directories(dir.remove_filename());
@@ -275,13 +275,13 @@ public:
         }
 
         if(path.ends_with(".png"))
-            this->writePng(std::filesystem::absolute(file).lexically_normal().string());
+            this->writePng(std::filesystem::absolute(file).lexically_normal().string(), queueFamily);
         else if (path.ends_with(".jpg") || path.ends_with(".jpeg"))
-            this->writeJpeg(std::filesystem::absolute(file).lexically_normal().string(), 90);
+            this->writeJpeg(std::filesystem::absolute(file).lexically_normal().string(), 90, queueFamily);
         else if (path.ends_with(".exr"))
-            this->writeExr(std::filesystem::absolute(file).lexically_normal().string());
+            this->writeExr(std::filesystem::absolute(file).lexically_normal().string(), queueFamily);
         else if (path.ends_with(".hdr"))
-            this->writeHdr(std::filesystem::absolute(file).lexically_normal().string());
+            this->writeHdr(std::filesystem::absolute(file).lexically_normal().string(), queueFamily);
     }
 
     /// Combination of `capture` and `Buffer::download`.

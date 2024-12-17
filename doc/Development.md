@@ -11,12 +11,11 @@ If you have questions, feel free to contact [Max Piochowiak](mailto:max.piochowi
 
 ## Dependencies
 
-| Required Dependency | Min. Version      | Usage                                 | Ubuntu / Debian package name                                           |
-|---------------------|:------------------|---------------------------------------|------------------------------------------------------------------------|
-| CMake               | 3.16              | creating project build files          | `cmake`                                                                |
-| Vulkan SDK          | 1.3               | Vulkan development tools and headers  | Download from [https://vulkan.lunarg.com/](https://vulkan.lunarg.com/) |
-| glslangValidator    | 11:12.2           | SPIR-V shader compiler                | included in drivers, alternative package`glslang-tools`                |
-| X11 dev packages¹ ² | 1:7.7             | GLFW windowing library dependencies   | `xorg-dev`                                                             |
+| Required Dependency | Min. Version | Usage                                 | Ubuntu / Debian package name                                           |
+|---------------------|:-------------|---------------------------------------|------------------------------------------------------------------------|
+| CMake               | 3.21         | creating project build files          | `cmake`                                                                |
+| Vulkan SDK          | 1.3          | Vulkan development tools and headers  | Download from [https://vulkan.lunarg.com/](https://vulkan.lunarg.com/) |
+| X11 dev packages¹ ² | 1:7.7        | GLFW windowing library dependencies   | `xorg-dev`                                                             |
 
 ¹ If Volcanite is build with the CMake option [HEADLESS](Setup.md#headless-builds) set, the X11 dependencies are not
 required, but the application can only be run from the command line.
@@ -29,7 +28,6 @@ instead of `xorg-dev`.
 |---------------------|:-------------|-----------------------------------------|-------------------------------|
 | HDF5                | 1.10.7       | read .hdf5 segmentation volumes         | `libhdf5-dev`                 |
 | VTK                 | 9.1.0        | read .vti segmentation volumes          | `libvtk9-dev`                 |
-| SQLite              | 3.37.2       | read/write sqlite label attribute files | `libsqlite3-dev`              |
 | TIFF                | 4.3.0        | read TIFF volumes                       | `libtiff-dev`                 |
 | PugiXML             | 1.12.1       | parse XML data                          | `libpugixml-dev`              |
 | OpenMP              | 4.5          | CPU parallelization                     | included in compiler          |
@@ -113,7 +111,7 @@ The Volcanite project directory has its own [ReadMe](../volcanite/ReadMe.md) wit
 The Volcanite code directly includes or uses code from:
 * [GLFW](https://github.com/glfw/glfw), released under the Zlib license
 * [GLM](https://github.com/g-truc/glm), released under the MIT license
-* [HighFive](https://github.com/BlueBrain/HighFive?tab=readme-ov-file), released under teh BSL-1.0 license
+* [HighFive](https://github.com/BlueBrain/HighFive?tab=readme-ov-file), released under the BSL-1.0 license
 * [Dear ImGui](https://github.com/ocornut/imgui), released under the MIT license
 * [Portable File Dialogs](https://github.com/samhocevar/portable-file-dialogs), released under the WTFPL license
 * [ryg rANS](https://github.com/rygorous/ryg_rans), released by Fabian Giesen under the CC0 license

@@ -104,6 +104,8 @@ ffmpeg -f concat -safe 0 -i ~/vvv_video/video_timing.txt ~/vvv_video/video.mp4
 
 ## Command Line Interface
 
+To force selecting a certain Vulkan device for rendering, you can set the environment variable `VOLCANITE_DEVICE` to
+a requested index.
 The categorized command line arguments are explained below.
 The general usage of Volcanite is
 

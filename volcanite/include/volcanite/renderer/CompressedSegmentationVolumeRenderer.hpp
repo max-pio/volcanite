@@ -64,6 +64,7 @@ public:
     void configureExtensionsAndLayersAndFeatures(GpuContextRwPtr ctx) override {
         ctx->enableDeviceExtension("VK_EXT_memory_budget");
         ctx->physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
+        ctx->physicalDeviceFeatures().setShaderInt64(true);
     }
 
     /// Initializes Descriptorsets and calls pipeline initialization.
@@ -122,7 +123,9 @@ public:
 
         // save rendering parameters on GUI shutdown if requested
         if(!m_save_config_on_shutdown_path.empty()) {
-            writeParameterFile(m_save_config_on_shutdown_path, VOLCANITE_VERSION);
+            if (writeParameterFile(m_save_config_on_shutdown_path, VOLCANITE_VERSION)) {
+                Logger(DEBUG) << "exported parameters to " << m_save_config_on_shutdown_path;
+            }
         }
 
         m_gui_interface = nullptr;
@@ -180,14 +183,22 @@ public:
     /// Will save the renderer state to the path when the renderer is shut down
     void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = std::move(path); }
 
-    /// @brief Sets the target cache size for the renderer in MB.
+    /// @brief Configures the CSGV decoding and caching behaviour of the renderer.
     ///
+    /// @param cache_size_MB the target cache size for the renderer in MB.
     /// A size of 0 tries to allocate the maximum available GPU memory.
     /// The cache size must be specified before startup to have an effect.
     /// Actual cache size may be lower if less space is needed or not enough GPU memory is available.
     /// @param palettized_cached if true, the cache stores palette indices instead of labels. Allows to store larger
     /// portions of the volume in cache at the expense of a performance decrease.
-    void setCacheParameters(size_t cache_size_MB, bool palettized_cache) { m_target_cache_size_MB = cache_size_MB; m_use_palette_cache = palettized_cache; }
+    void setDecodingParameters(size_t cache_size_MB, bool palettized_cache) {
+        m_target_cache_size_MB = cache_size_MB;
+        if(m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
+            Logger(WARN) << "Cache size is currently limited to 4 GB maximum.";
+            m_target_cache_size_MB = 4294967295ul / 1024ul / 1024ul;
+        }
+        m_use_palette_cache = palettized_cache;
+    }
 
 private:
     /// Fills m_constructed_detail and m_constructed_detail_starts buffers with detail encodings of requested brick
@@ -263,6 +274,7 @@ private:
     vvv::AwaitableList updateAttributeBuffers();
     void updateUniformDescriptorset();
 
+    uint32_t m_queue_family_index = 0u;
     std::unique_ptr<PassCompSegVolRender> m_pass = nullptr;
     std::shared_ptr<Texture> m_accumulation_rgba_tex[2] = {nullptr, nullptr};
     std::shared_ptr<Texture> m_accumulation_samples_tex[2] = {nullptr, nullptr};
