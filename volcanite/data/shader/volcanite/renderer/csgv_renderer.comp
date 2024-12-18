@@ -334,7 +334,7 @@ void main() {
 
     // initialize ray marching state
     RayMarchState state;
-    state.rng = g_camera_still_frames;
+    state.rng = hash_pcg2d(uvec2(uint(blueNoise32x32_uint8(gl_GlobalInvocationID.xy)), (g_camera_still_frames << 10) | g_camera_still_frames)).x;
     state.label = INVALID;
     state.last_label = INVALID;
     state.path_length = 0;
@@ -460,10 +460,18 @@ void main() {
             // but if we previously stored an INVALID_DEPTH (< 0) at any point, it must not be overwritten.
             // This is also the point where the G-buffer state is set.
             if (state.path_length == 0) {
-                float ray_t = length((state.voxel + state.pos_in_voxel) - ray.origin);
+                vec3 model_space_pos = (state.voxel + state.pos_in_voxel);
+                vec3 world_space_pos = (g_model_to_world_space * vec4(model_space_pos, 1.f)).xyz;
+                // In world space, the data set goes from [-0.5, 0.5] along its longest axis
+                // The maximum distance of a unit cube edge of this size to the origin (0,0,0) is sqrt(3)/2
+                // = 0.8660254037. The depth distance is computed to the projected position of the camera on a sphere of
+                // of this size. The maximum possible distance (between two edges) is sqrt(3) = 1.73205080757.
+                // The depth value is therefore normalized by this value before writing to the depth buffer.
+                float depth = length(world_space_pos - g_camera_position_world_space)
+                              - (length(g_camera_position_world_space) - 0.8660254037f);
                 // TODO: directly write these values to the g-buffer instead of tracking them
-                state.depth_valid = min(state.depth_valid, ray_t);
-                state.packedGBuffer = packGBufferRGB16(state.label, state.normal, (ray_t - t_0) / (t_1 - t_0));
+                state.depth_valid = min(state.depth_valid, depth);
+                state.packedGBuffer = packGBufferRGB16(state.label, state.normal, depth / 1.73205080757f);
             }
             // opacity is always 1 on surface hit
             state.out_color.a = 1.f;
@@ -476,7 +484,7 @@ void main() {
 
             // emission
             if (g_materials[material].emission > 0.f) {
-                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_materials[material].emission;
+                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_materials[material].emission * dot(state.normal, -ray.direction);
             }
 
             // early ray termination if throughput is zero
@@ -527,7 +535,7 @@ void main() {
                 break;
 
             // Russian Roulette (only when this is not a ray to the light source / NEE)
-            if (state.path_length != SHADOW_RAY_PATH_LENGTH) {
+            if (state.path_length != SHADOW_RAY_PATH_LENGTH && state.path_length > 1u) {
                 float survival_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
                 if (nextRNG(pixel, state.rng).x > survival_probability) {
                     state.throughput = vec3(0.f);

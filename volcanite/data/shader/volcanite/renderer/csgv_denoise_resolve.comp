@@ -152,6 +152,16 @@ vec3 getAlbedoOfLabel(uint label) {
     }
 }
 
+vec3 color_rectify(vec3 color, ivec2 pixel) {
+    uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
+    if (sample_count == 0u)
+            return color;
+    vec4 prev_accum_rgba = imageLoad(accumulationOut, pixel) / float(sample_count);
+    vec3 hsv = rgb2hsv(prev_accum_rgba.rgb);
+    const vec3 d = vec3(0.f);
+    return hsv2rgb(clamp(rgb2hsv(color), hsv - d, hsv + d));
+}
+
 // inplace alpha blending of pixel_rgba with the background color that is visible for the primary ray through block_pixel
 vec4 blendWithBackground(ivec2 pixel, vec4 pixel_rgba) {
     // deterministic computation of the view ray
@@ -197,7 +207,7 @@ void main() {
 
     // upsampling / denoising may be disabled or faded out
     const float fade = g_denoise_fade_enable ? min(1.f, g_denoise_fade_sigma / sqrt(g_camera_still_frames / (g_subsampling * g_subsampling))) : 1.f;
-    if (!g_atrous_enabled || fade < 0.01f) {
+    if (!g_atrous_enabled || fade < 0.05f) {
         if (pc.denoising_iteration == pc.last_denoising_iteration) {
             writeFinalFramebuffer(pixel, imageLoad(denoisingBuffer[0], pixel));
         }
@@ -220,15 +230,14 @@ void main() {
     uint center_label;
     const bool center_sampled = unpackGBufferRGB16(imageLoad(gBuffer, pixel).rgb,
                                                    center_label, center_normal, center_normalized_depth);
-    if (pc.denoising_iteration == 0u) {
-        if (!center_sampled) {
+
+    vec3 center_albedo = vec3(0.f);
+    if (center_sampled) {
+        center_albedo = getAlbedoOfLabel(center_label);
+    } else if (pc.denoising_iteration == 0u) {
             // marking non-sampled pixels for the first iteration must happen here. Otherwise, the renderer shader
             // would have to read from gBuffer to check if the pixel received a sample in an earlier frame.
             pixel_rgba.a = -1.f;
-        } else {
-            // demodulade rgb by albedo
-            pixel_rgba.rgb /= getAlbedoOfLabel(center_label);
-        }
     }
 
     float pixel_luminance = luminance(pixel_rgba.rgb);
@@ -243,7 +252,12 @@ void main() {
     // weights defined for 3x3 kernel [0.5, 1, 0.5] in 1D, outer product as [1 2 1]
     //                                                                      [2 4 2]
     //                                                                      [1 2 1]
-    const vec4 kernel_weights = vec4(pc.denoising_iteration <= 0 ? 0.5f * fade : 1.f, 0.5f * fade, 0.25f * fade * fade, 0.125f * fade * fade);
+    const vec4[4] _kernel_for_sizes = {vec4(1.f, 1.f, 1.f, 1.f),
+                                       vec4(2.f, 1.f, 0.f, 0.f),
+                                       vec4(6.f, 4.f, 1.f, 0.f),
+                                       vec4(20.f, 15.f, 6.f, 1.f)};
+    const vec4 kernel_weights = pc.denoising_iteration == 0u ? vec4(1.f) :
+                                    _kernel_for_sizes[g_denoise_filter_kernel_size] * vec4(1.f, fade, fade, fade);
 
     const float var = 1.f; //computeVarianceCenter(pixel, viewport_size);
 
@@ -262,7 +276,7 @@ void main() {
     const float EPS = 0.01f;
     const float phi_Lillumination = g_illumination_sigma * sqrt(var) + EPS;
     //const float phi_Lillumination = 1.f; // unnused for now
-    const float phi_depth = max(center_normalized_depth / 2.f, 1e-8) * step_size;
+    const float phi_depth = 0.5f / g_world_to_model_space_scaling;//max(center_normalized_depth / g_world_to_model_space_scaling, 1e-8);
 
     vec4 accum_rgba = vec4(0.f);
     float weight = 1.f;
@@ -306,6 +320,8 @@ void main() {
                 continue;
             }
 
+            float albedo_weight = 1.f;
+
             // if the center pixel received a sample (valid G-Buffer): denoising - compute filter weights from G-Buffer
             // otherwise: upsampling - fill with blurred neighbor colors
             if (center_sampled) {
@@ -318,13 +334,18 @@ void main() {
 
                 // in the first iteration: demodulate filter pixel radiance by filter pixel albedo
                 // only if not upsampling! there is no way to re-modulate if the center is not sampled.
-                if (pc.denoising_iteration == 0u)
-                    rgba.rgb /= getAlbedoOfLabel(label);
+                if (pc.denoising_iteration >= 0u) {
+                    const vec3 albedo_distance = (rgb2hsv(getAlbedoOfLabel(label)) - rgb2hsv(center_albedo)) * 8.f;
+                    albedo_weight = 1.f / (1.f + dot(albedo_distance, albedo_distance));
+//                    if (any(notEqual(getAlbedoOfLabel(label), center_albedo)))
+//                        albedo_weight = 0.f;
+                }
             }
 
             const float kernel = kernel_weights[abs(dx)] * kernel_weights[abs(dy)];
-            const float w = (phi_depth == 0.f || !center_sampled) ? 1.f : exp(-abs(normalized_depth - center_normalized_depth) / phi_depth); //computeWeight(center_normalized_depth, normalized_depth, phi_depth, pixel_luminance, luminance(rgba.rgb), phi_Lillumination);
-            weight = w * kernel;
+            const float depth_weight = (phi_depth == 0.f || !center_sampled) ? 1.f : exp(-abs(normalized_depth - center_normalized_depth) / phi_depth);
+            //computeWeight(center_normalized_depth, normalized_depth, phi_depth, pixel_luminance, luminance(rgba.rgb), phi_Lillumination);
+            weight = kernel * depth_weight * albedo_weight;
 
             accum_rgba += rgba * weight;
             weight_sum += weight;
@@ -350,11 +371,7 @@ void main() {
         // store color for next iteration
         imageStore(denoisingBuffer[1u - (pc.denoising_iteration % 2u)], pixel, accum_rgba);
     } else {
-        // last iteration:              final pixel output in LDR
-        // re-modulate with albedo
-        if (center_sampled) {
-            accum_rgba.rgb *= getAlbedoOfLabel(center_label);
-        }
+        accum_rgba.a = pixel_rgba.a;
         writeFinalFramebuffer(pixel, accum_rgba);
     }
 }
