@@ -186,15 +186,26 @@ int _packedBlueNoise32x32[1024] = {
 0x58, 0x27, 0xD2, 0x9C, 0x0E, 0xAC, 0x65, 0x02, 0xBA, 0xD2, 0xF8, 0x2E, 0xAE, 0x21, 0xF1, 0x32};
 #endif
 
-// returns a [0,1] value of tileable 32x32 blue noise
+/// returns a [0,1] value of tileable 32x32 blue noise
 float blueNoise32x32(ivec2 xy) {
-    #ifdef USE_PACKED_BLUE_NOISE
+#ifdef USE_PACKED_BLUE_NOISE
     int index1D = (xy.x % 32) + (xy.y % 32)*32;
     int val = (_packedBlueNoise32x32[index1D / 4] >> ((index1D % 4)*8)) & 0xFF;
     return float(val)/255.f;
-    #else
+#else
     return float(_packedBlueNoise32x32[(xy.x % 32) + (xy.y % 32)*32])/255.f;
-    #endif
+#endif
+}
+
+/// returns a [0,255] value of tileable 32x32 blue noise
+uint blueNoise32x32_uint8(uvec2 xy) {
+#ifdef USE_PACKED_BLUE_NOISE
+    uint index1D = (xy.x % 32u) + (xy.y % 32u)*32u;
+    int val = (_packedBlueNoise32x32[index1D / 4] >> ((index1D % 4)*8)) & 0xFF;
+    return uint(val);
+#else
+    return uint(_packedBlueNoise32x32[(xy.x % 32u) + (xy.y % 32u)*32u]);
+#endif
 }
 
 float _perlinFade(float v) {
