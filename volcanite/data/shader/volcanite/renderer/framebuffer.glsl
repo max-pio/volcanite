@@ -117,7 +117,7 @@ uvec3 packGBufferRGB16(uint label, vec3 normal, float normalized_depth) {
 
 
 /// unpack the given RGB16 G-Buffer value into attributes. Returns false if the G-Buffer did not receive a sample yet.
-bool unpackGBufferRGB16(uvec3 g_buffer_packed, out uint label, out vec3 normal, out float normalized_depth) {
+bool unpackGBufferRGB16(uvec3 g_buffer_packed, inout uint label, out vec3 normal, out float normalized_depth) {
     if (isInvalidGBufferRGB16(g_buffer_packed)) {
         return false;
     }

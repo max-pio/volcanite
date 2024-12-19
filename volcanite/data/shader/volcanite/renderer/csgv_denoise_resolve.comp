@@ -215,44 +215,39 @@ void main() {
     }
 
     // read RGB radiance + alpha that was accumulated for this pixel so far.
-    // it was already normalized with the sample count
+    // it was already normalized by the sample count
     // an alpha value < 0 indicates that this pixel did not receive a single sample yet
     vec4 pixel_rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel);
-//    if (pc.denoising_iteration == 0) {
-//        uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
-//        pixel_color /= float(sample_count);
-//    }
 
     // unpack the G-Buffer for the current output pixel (center)
     // center_sampled is false if the pixel did not receive a sample yet -> requires upsampling!
     float center_normalized_depth;
     vec3 center_normal;
-    uint center_label;
+    uint center_label = INVALID;
+    vec3 center_albedo = vec3(0.f);
     const bool center_sampled = unpackGBufferRGB16(imageLoad(gBuffer, pixel).rgb,
                                                    center_label, center_normal, center_normalized_depth);
-
-    vec3 center_albedo = vec3(0.f);
     if (center_sampled) {
         center_albedo = getAlbedoOfLabel(center_label);
     } else if (pc.denoising_iteration == 0u) {
-            // marking non-sampled pixels for the first iteration must happen here. Otherwise, the renderer shader
-            // would have to read from gBuffer to check if the pixel received a sample in an earlier frame.
-            pixel_rgba.a = -1.f;
+        // marking non-sampled pixels for the first iteration must happen here. Otherwise, the renderer shader
+        // would have to read from gBuffer to check if the pixel received a sample in an earlier frame.
+        pixel_rgba = vec4(0.f, 0.f, 0.f, -1.f);
     }
 
-    float pixel_luminance = luminance(pixel_rgba.rgb);
+    //float pixel_luminance = luminance(pixel_rgba.rgb);
 
 
     // MULTI-PASS À-TROUS FILTER -----------------------------------------------------------------------------------
     // could become SVGF
-    // for now only À-Trous filter w/o any variance estimation or temporal accumulation
+    // for now only À-Trous filter without any variance estimation or temporal accumulation
     const int step_size = 1 << pc.denoising_iteration;
     // use a Gaussian instead of B-spline kernel (see Dolp et al. "A Fast GPU Schedule For À-Trous Wavelet-Based Denoisers")
     // we do not overlbur in the first iteration, as we found artifacts to be reduced with the constant Gauss kernel
-    // weights defined for 3x3 kernel [0.5, 1, 0.5] in 1D, outer product as [1 2 1]
+    // weights defined for 3x3 kernel [0.5, 1, 0.5] in 1D, outer product is [1 2 1]
     //                                                                      [2 4 2]
     //                                                                      [1 2 1]
-    const vec4[4] _kernel_for_sizes = {vec4(1.f, 1.f, 1.f, 1.f),
+    const vec4[4] _kernel_for_sizes = {vec4(1.f, 0.f, 0.f, 0.f),
                                        vec4(2.f, 1.f, 0.f, 0.f),
                                        vec4(6.f, 4.f, 1.f, 0.f),
                                        vec4(20.f, 15.f, 6.f, 1.f)};
@@ -261,8 +256,9 @@ void main() {
 
     const float var = 1.f; //computeVarianceCenter(pixel, viewport_size);
 
-//    // for upsampling: halluciante a g buffer sample from the (3,3)*step_size neighborhood
-//    {
+    // for upsampling: halluciante a g buffer sample from the (3,3)*step_size neighborhood
+    // TODO: this could become the denoising nested for loop as well (if the kernel size is 3x3)
+//    if (!center_sampled && pixel_rgba.a < 0.f) {
 //        // if two neighbors along one of the four axes have the same G-buffer, use it as the center pixel's G-buffer
 //        ivec2 axis_delta[4] = ivec2[](ivec2(1, 0), ivec2(0, 1), ivec2(1, 1), ivec2(-1, 1));
 //        // axis 0   axis 1    axis 2   axis 3
@@ -270,11 +266,27 @@ void main() {
 //        //  0 - 1    - - -    - - -    - - -
 //        //  - - -    - 1 -    - - 1    0 - -
 //
-//        // TODO implement G buffer hallucination in resolve pass
+//        uint axis_offset = blueNoise32x32_uint8(pixel) % 4u;
+//        for (uint a = axis_offset; a < 4 + axis_offset; a++) {
+//            // unpack both filter pixels
+//            float normalized_depth;
+//            vec3 normal;
+//            uint label1;
+//            uint label2;
+//            bool sampled1 = unpackGBufferRGB16(imageLoad(gBuffer, pixel - axis_delta[a % 4u]).rgb, label1, normal, normalized_depth);
+//            bool sampled2 = unpackGBufferRGB16(imageLoad(gBuffer, pixel + axis_delta[a % 4u]).rgb, label2, normal, normalized_depth);
+//
+//            if (sampled1 && sampled2 && label1 == label2) {
+//                center_normalized_depth = normalized_depth;
+//                center_normal = normal;
+//                center_label = label1;
+//                center_albedo = getAlbedoOfLabel(center_label);
+//            }
+//        }
 //    }
 
-    const float EPS = 0.01f;
-    const float phi_Lillumination = g_illumination_sigma * sqrt(var) + EPS;
+    // const float EPS = 0.01f;
+    // const float phi_Lillumination = g_illumination_sigma * sqrt(var) + EPS;
     //const float phi_Lillumination = 1.f; // unnused for now
     const float phi_depth = 0.5f / g_world_to_model_space_scaling;//max(center_normalized_depth / g_world_to_model_space_scaling, 1e-8);
 
@@ -284,21 +296,29 @@ void main() {
 
     for (int dy = -g_denoise_filter_kernel_size; dy <= g_denoise_filter_kernel_size; dy++) {
         for (int dx = -g_denoise_filter_kernel_size; dx <= g_denoise_filter_kernel_size; dx++) {
-            ivec2 filter_pixel = pixel - (ivec2(dx, dy) * step_size);
+            ivec2 filter_pixel = pixel + (ivec2(dx, dy) * step_size);
 
             // do not sample outside image plane, cast to uvec to catch values < 0
             if (isHelperLane(uvec2(filter_pixel), uvec2(viewport_size)))
                 continue;
 
-            // if upsampling is required and the pixel already received a color:
-            // do not blur in later passes to prevent overblur!
-            // also: do not blur if denoising is disabled
-            if (!center_sampled || !g_denoising_enabled) {
-                if (pixel_rgba.a >= 0.f) {
-                    accum_rgba = pixel_rgba;
-                    weight_sum = 1.f;
-                    break;
-                }
+            if (!center_sampled && accum_rgba.b > 0.f) {
+//                assert(imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel + floatBitsToInt(accum_rgba.rg)).a >= 0.f, " neighbor was not sampled");
+//                float normalized_depth;
+//                vec3 normal;
+//                uint label;
+//                assert(!unpackGBufferRGB16(imageLoad(gBuffer,  pixel + floatBitsToInt(accum_rgba.rg)).rgb, label, normal, normalized_depth), "neighbor no gbuffer");
+//                break;
+            }
+
+//            // if upsampling is required and the pixel already received a neighbor to copy from (.b > 0):
+//            // stop the search for a sampled neighbor
+//            // also: do not blur if denoising is disabled
+            if (//(!center_sampled  && pixel_rgba.b >= 0.f && pc.denoising_iteration > 0) ||
+            (!g_denoising_enabled && pixel_rgba.a >= 0.f)) {
+                accum_rgba = pixel_rgba;
+                weight_sum = 1.f;
+                break;
             }
 
             // unpack filter pixel
@@ -306,47 +326,60 @@ void main() {
             vec3 normal;
             uint label;
             bool sampled = unpackGBufferRGB16(imageLoad(gBuffer, filter_pixel).rgb, label, normal, normalized_depth);
-
-            // filter pixels that did not receive a sample yet are skipped:
-            // - in the first iteration, these are marked by the !sampled return value of the G-Buffer query
-            // - in later queries, these are marked with an rgba alpha value < 0
-            if (pc.denoising_iteration == 0 && !sampled)
-                continue;
-
             vec4 rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], filter_pixel);
 
-            // filter pixels that did not receive a single sample yet are marked with negative values and skipped
-            if (pc.denoising_iteration > 0 && rgba.a < 0.f) {
+            if (!center_sampled) {
+                vec2 added_delta = vec2(dx, dy) * step_size;
+                vec2 rgba_delta = vec2(rgba.rg) + added_delta;
+
+                float old_dist = accum_rgba.b > 0.f ? accum_rgba.b : 9999999.f;
+
+                if (sampled && dot(added_delta, added_delta) < old_dist) {
+                    // found a neighbor pixel that received a sample: store offset to that neighbor in .rg, mark .b=1
+                    accum_rgba = vec4(added_delta, dot(added_delta, added_delta), -1.f);
+                    weight_sum = 0.f;
+                } else if (!sampled && pc.denoising_iteration > 0 && rgba.b > 0.f
+                           && dot(rgba_delta, rgba_delta) < old_dist) {
+                    // the neighbor already stores an offset to a sampled pixel that has to
+                    // be propagated further to the current pixel
+                    accum_rgba = vec4(rgba_delta, dot(rgba_delta, rgba_delta), -1.f);
+                    weight_sum = 0.f;
+                }
+
                 continue;
             }
 
-            float albedo_weight = 1.f;
-
-            // if the center pixel received a sample (valid G-Buffer): denoising - compute filter weights from G-Buffer
-            // otherwise: upsampling - fill with blurred neighbor colors
-            if (center_sampled) {
-                // quantized normals: either (+/-) 90 or (+/-) 180 degree angle
-                // => max(cos, 0) = weightN is either 0 or 1
-//                if (label != center_label)
-//                    continue;
-                if (any(notEqual(center_normal, normal)))
-                    continue;
-
-                // in the first iteration: demodulate filter pixel radiance by filter pixel albedo
-                // only if not upsampling! there is no way to re-modulate if the center is not sampled.
-                if (pc.denoising_iteration >= 0u) {
-                    const vec3 albedo_distance = (rgb2hsv(getAlbedoOfLabel(label)) - rgb2hsv(center_albedo)) * 8.f;
-                    albedo_weight = 1.f / (1.f + dot(albedo_distance, albedo_distance));
-//                    if (any(notEqual(getAlbedoOfLabel(label), center_albedo)))
-//                        albedo_weight = 0.f;
-                }
+            // filter pixels that did not receive a sample yet are skipped for denoising:
+            // - in the first iteration, these are marked by the !sampled return value of the G-Buffer query
+            // - in later queries, these are marked with an rgba alpha value < 0
+            if (!sampled || (pc.denoising_iteration > 0 && rgba.a < 0.f)) {
+                continue;
             }
 
-            const float kernel = kernel_weights[abs(dx)] * kernel_weights[abs(dy)];
-            const float depth_weight = (phi_depth == 0.f || !center_sampled) ? 1.f : exp(-abs(normalized_depth - center_normalized_depth) / phi_depth);
-            //computeWeight(center_normalized_depth, normalized_depth, phi_depth, pixel_luminance, luminance(rgba.rgb), phi_Lillumination);
-            weight = kernel * depth_weight * albedo_weight;
+            // quantized normals: either (+/-) 90 or (+/-) 180 degree angle
+            // => max(cos, 0) = weightN is either 0 or 1
+            if (any(notEqual(center_normal, normal)))
+                continue;
 
+            // weight by albedo color distance (albedo demodulation would be better, but creates color noise along
+            // label region edges due to alising noise in the G-buffer from TAA)
+            // cheaper alternative: compare label
+            const vec3 albedo_distance = (rgb2hsv(getAlbedoOfLabel(label)) - rgb2hsv(center_albedo)) * 8.f;
+            const float albedo_weight = 1.f / (1.f + dot(albedo_distance, albedo_distance));
+
+//                // in the first iteration: demodulate filter pixel radiance by filter pixel albedo
+//                // only if not upsampling! there is no way to re-modulate if the center is not sampled.
+//                if (pc.denoising_iteration >= 0u) {
+//                    if (any(notEqual(getAlbedoOfLabel(label), center_albedo)))
+//                        albedo_weight = 0.f;
+//                }
+
+            const float depth_weight = (phi_depth == 0.f || !center_sampled) ? 1.f : exp(-abs(normalized_depth - center_normalized_depth) / phi_depth);
+
+            //computeWeight(center_normalized_depth, normalized_depth, phi_depth, pixel_luminance, luminance(rgba.rgb), phi_Lillumination);
+
+            const float kernel = kernel_weights[abs(dx)] * kernel_weights[abs(dy)];
+            weight = kernel * depth_weight * albedo_weight;
             accum_rgba += rgba * weight;
             weight_sum += weight;
         }
@@ -363,7 +396,7 @@ void main() {
 //        accum_rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel);
 
     if (pc.denoising_iteration < pc.last_denoising_iteration) {
-        //  before last iteration:      À-trous feedback to next denoising iteration kernel in HDR
+        // before last iteration:      À-trous feedback to next denoising iteration kernel in HDR
         // mark pixels from a filter step that did not receive a single rendered sample with a negative alpha value
         if (weight_sum <= 0.f)
             accum_rgba.a = -1.f;
@@ -371,7 +404,22 @@ void main() {
         // store color for next iteration
         imageStore(denoisingBuffer[1u - (pc.denoising_iteration % 2u)], pixel, accum_rgba);
     } else {
-        accum_rgba.a = pixel_rgba.a;
+        // accum_rgba stores the neighbor from which the color is copied for upsampling
+        if (!center_sampled) {
+            ivec2 offset = ivec2(accum_rgba.rg);
+//            if (offset.x == 0 && offset.y == 0)
+//                accum_rgba = vec4(1.f, 0.f, 1.f, 1.f);
+////            else if (accum_rgba.b == 2.f)
+////                accum_rgba = vec4(1.f, 1.f, 0.f, 1.f);
+//            else
+                accum_rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel + offset);
+            if (accum_rgba.a < 0.f)
+                accum_rgba = vec4(0.f, 1.f, 1.f, 1.f);
+        } else {
+            if (accum_rgba.a < 0.f)
+                accum_rgba = vec4(1.f, 1.f, 0.f, 1.f);
+        }
+//        accum_rgba.a = 1.f;
         writeFinalFramebuffer(pixel, accum_rgba);
     }
 }
