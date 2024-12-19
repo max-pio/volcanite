@@ -288,7 +288,7 @@ void main() {
     // const float EPS = 0.01f;
     // const float phi_Lillumination = g_illumination_sigma * sqrt(var) + EPS;
     //const float phi_Lillumination = 1.f; // unnused for now
-    const float phi_depth = 0.5f / g_world_to_model_space_scaling;//max(center_normalized_depth / g_world_to_model_space_scaling, 1e-8);
+    const float phi_depth = g_world_to_model_space_scaling * 2.f; //max(center_normalized_depth / g_world_to_model_space_scaling, 1e-8);
 
     vec4 accum_rgba = vec4(0.f);
     float weight = 1.f;
@@ -374,7 +374,7 @@ void main() {
 //                        albedo_weight = 0.f;
 //                }
 
-            const float depth_weight = (phi_depth == 0.f || !center_sampled) ? 1.f : exp(-abs(normalized_depth - center_normalized_depth) / phi_depth);
+            const float depth_weight = (phi_depth == 0.f || !center_sampled) ? 1.f : exp(-abs(normalized_depth - center_normalized_depth) * phi_depth);
 
             //computeWeight(center_normalized_depth, normalized_depth, phi_depth, pixel_luminance, luminance(rgba.rgb), phi_Lillumination);
 
