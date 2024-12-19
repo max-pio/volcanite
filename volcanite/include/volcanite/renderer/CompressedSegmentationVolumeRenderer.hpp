@@ -227,7 +227,7 @@ private:
     float m_light_intensity = 1.f;
     // voxel traversal
     int m_max_path_length = 32;
-    int m_max_steps = 2048;
+    int m_max_steps = 16384;
     glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);

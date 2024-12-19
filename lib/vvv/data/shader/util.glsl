@@ -89,6 +89,32 @@ vec3 hsv2rgb(vec3 c)  {
 }
 
 
+float luminance(vec3 v) {
+    return 0.2126 * v.x + 0.7152 * v.y + 0.0722 * v.z;
+}
+
+vec3 rgb2srgb(vec3 x) {
+    // simple mapping:
+    // return pow(x, 1.f / vec3(2.4f));
+    #pragma unroll
+    for (int i = 0; i < 3; i++) {
+        if (x[i] < 0.0031308f)
+        x[i] *= 12.92f;
+        else
+        x[i] = 1.055f * pow(x[i], 1.0f/2.4f) - 0.055f;
+    }
+    return x;
+}
+
+vec3 tonemap_ACES(vec3 x)  {
+    float a = 2.51f;
+    float b = 0.03f;
+    float c = 2.43f;
+    float d = 0.59f;
+    float e = 0.14f;
+    return clamp((x*(a*x+b))/(x*(c*x+d)+e), vec3(0.f), vec3(1.f));
+}
+
 vec3 integer2colorlabel(uint id, bool linear) {
     if(linear)
         return vec3(id%256, (id/256)%256, (id/65536)%256)/255.f;

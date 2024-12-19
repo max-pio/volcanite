@@ -117,7 +117,7 @@ uvec3 packGBufferRGB16(uint label, vec3 normal, float normalized_depth) {
 
 
 /// unpack the given RGB16 G-Buffer value into attributes. Returns false if the G-Buffer did not receive a sample yet.
-bool unpackGBufferRGB16(uvec3 g_buffer_packed, inout uint label, out vec3 normal, out float normalized_depth) {
+bool unpackGBufferRGB16(uvec3 g_buffer_packed, inout uint label, inout vec3 normal, inout float normalized_depth) {
     if (isInvalidGBufferRGB16(g_buffer_packed)) {
         return false;
     }
@@ -213,6 +213,9 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
             // half float range rounds to intinity from 65520 onwards -> clamp
             imageStore(accumulationOut, opix, min(accumulated_rgba_out, 65519.f));
             imageStore(accuSampleCountOut, opix, uvec4(sample_count_out));
+            // note: in theory, the denoisingBuffer could already contain the .a=-1 marker for pixels that did not
+            // receive a single rendered sample. but this would require to read the (possibly unchanged) G-buffer
+            // which is only writte to in this shader.
             imageStore(denoisingBuffer[0], opix, accumulated_rgba_out / float(max(sample_count_out, 1u)));
         }
     }

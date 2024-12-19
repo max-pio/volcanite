@@ -559,7 +559,8 @@ void main() {
 
     // apply incoming radiance from environment
     ray.direction = normalize(g_model_to_world_space_dir * ray.direction);
-    if (g_envmap_enable) {
+    // to reduce variance in the first frame (when the camera is moved), the envmap is disabled until the second frame
+    if (g_envmap_enable && g_camera_still_frames > 0u) {
         state.out_color.rgb += state.throughput * vec3(g_light_intensity) * dummy_envmap(ray.direction);
     }
     else {

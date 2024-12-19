@@ -201,8 +201,7 @@ float blueNoise32x32(ivec2 xy) {
 uint blueNoise32x32_uint8(uvec2 xy) {
 #ifdef USE_PACKED_BLUE_NOISE
     uint index1D = (xy.x % 32u) + (xy.y % 32u)*32u;
-    int val = (_packedBlueNoise32x32[index1D / 4] >> ((index1D % 4)*8)) & 0xFF;
-    return uint(val);
+    return uint(_packedBlueNoise32x32[index1D / 4u] >> ((index1D % 4u) * 8u)) & 0xFF;
 #else
     return uint(_packedBlueNoise32x32[(xy.x % 32u) + (xy.y % 32u)*32u]);
 #endif
