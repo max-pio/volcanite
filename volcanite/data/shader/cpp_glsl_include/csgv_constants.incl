@@ -144,6 +144,7 @@ namespace volcanite {
 #define OP_STOP_BIT 256
 #define OP_ALL 0xFFFFFFFF
 #define OP_ALL_WITHOUT_STOP (OP_ALL & (~OP_STOP_BIT))
+#define OP_ALL_WITHOUT_DELTA (OP_ALL & (~OP_PALETTE_D_BIT))
 
 #define INVALID 0xFFFFFFFFu    ///< UINT32_MAX all bits set to 1. Denotes undecoded values, invalid labels, errors..
 #define INVISIBLE_LABEL 0xFFFFFFFEu ///< UINT32_MAX-1. Denotes a voxel label that is invisible in the current config

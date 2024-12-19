@@ -902,14 +902,31 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
     }
 
     // prevent accidentally counting a zero frequency for rare symbols due to subsampling
+    // depending on the operation mask, different operation integers are possible:
+    constexpr uint32_t op_for_opmask[] = {OP_PARENT_BIT | OP_PALETTE_D_BIT,
+                                          OP_NEIGHBORX_BIT | OP_PALETTE_D_BIT,
+                                          OP_NEIGHBORY_BIT | OP_PALETTE_D_BIT,
+                                          OP_NEIGHBORZ_BIT | OP_PALETTE_D_BIT,
+                                          OP_ALL | OP_PALETTE_D_BIT,
+                                          OP_PALETTE_LAST_BIT | OP_PALETTE_D_BIT,
+                                          OP_PALETTE_D_BIT,
+                                          OP_PALETTE_D_BIT};
     if(subsampling_factor > 1u) {
         bool changed = false;
-        for(int i = 0; i < 16; i++) {
-            if (freq_out[i] == 0ul) {
+        #pragma omp parallel for default(none) shared(freq_out, changed, detail_freq, m_op_mask, op_for_opmask)
+        for(int i = 0; i < 8; i++) {
+            // base levels freq:
+            if (freq_out[i] == 0ul && (op_for_opmask[i] & m_op_mask)) {
                 changed = true;
                 freq_out[i] = 1ul;
             }
-            if(detail_freq && freq_out[i + 16] == 0ul) {
+            // base levels freq for stop bits:
+            if (freq_out[i + 8] == 0ul && (op_for_opmask[i] & m_op_mask) && (m_op_mask & OP_STOP_BIT)) {
+                changed = true;
+                freq_out[i + 8] = 1ul;
+            }
+            // detail freq: (no stop bits possible)
+            if (detail_freq && freq_out[i + 16] == 0ul && (op_for_opmask[i] & m_op_mask)) {
                 changed = true;
                 freq_out[i + 16] = 1ul;
             }

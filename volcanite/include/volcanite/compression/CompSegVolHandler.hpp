@@ -194,7 +194,9 @@ public:
         if(cfg.verbose) {
             std::string op_mask_str;
             if (cfg.op_mask == OP_ALL)
-                op_mask_str = "all";
+                op_mask_str = "ALL";
+            else if (cfg.op_mask == OP_ALL_WITHOUT_DELTA)
+                op_mask_str = "OPT";
             else {
                 if (cfg.op_mask & OP_PARENT_BIT)
                     op_mask_str.push_back('p');
@@ -306,7 +308,7 @@ public:
 
             if (cfg.verbose) {
                 Logger(DEBUG) << "frequencies: " << arrayToString(code_frequencies.data(), code_frequencies.size())
-                              << " detail frequencies: " << arrayToString(detail_code_frequencies.data(), detail_code_frequencies.size());
+                              << " | detail frequencies: " << arrayToString(detail_code_frequencies.data(), detail_code_frequencies.size());
             }
             Logger(DEBUG) << "";
             Logger(DEBUG) << "";

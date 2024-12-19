@@ -67,7 +67,7 @@ public:
     uint32_t brick_size = 32;
     EncodingMode encoding_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC;
     uint32_t freq_subsampling = 8;      // n^3 factor for subsampling bricks for frequency table computation with rANS
-    uint32_t operation_mask = OP_ALL;   // enables certain CSGV operations and stop bits through OP_*_BIT
+    uint32_t operation_mask = OP_ALL_WITHOUT_DELTA;   // enables certain CSGV operations and stop bits through OP_*_BIT
     bool random_access = false;         // encode bricks so that they support random access within a brick
 
     // evaluation and statistics
@@ -134,7 +134,7 @@ public:
             ValuesConstraint<uint32_t> allowedBrickSize(_allowedBrickSize);
             ValueArg<uint32_t> bricksizeArg("b", "brick-size", "Compress with given brick size.", false, va.brick_size, &allowedBrickSize);
             cmd.add(bricksizeArg);
-            ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits, or [a]ll", false, "a", "(a|p|n|x|y|z|l|d|s)*", cmd);
+            ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits. Quick: [a]ll or [o]ptimized.", false, "o", "(a|o|p|n|x|y|z|l|d|s)*", cmd);
             SwitchArg randomAccessArg("p", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
             // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
@@ -194,6 +194,8 @@ public:
                     switch (c) {
                         case 'a':
                             va.operation_mask |= OP_ALL;
+                        case 'o':
+                            va.operation_mask |= OP_ALL_WITHOUT_DELTA;
                         case 'p':
                             va.operation_mask |= OP_PARENT_BIT;
                             break;
