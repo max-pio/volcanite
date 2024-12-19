@@ -179,22 +179,22 @@ std::filesystem::path Paths::getLocalFileForDataPath(const std::filesystem::path
     return filename;
 }
 
-    std::filesystem::path Paths::getHomeDirectory() {
+std::filesystem::path Paths::getHomeDirectory() {
 #ifdef _WIN64
-        std::string drive = getenv("HOMEDRIVE");
-        std::string path = getenv("HOMEPATH");
-        if (drive.empty() || path.empty())
-            return {getenv("USERPROFILE")};
-        else
-            return {drive.append(path)};
+    std::string drive = getenv("HOMEDRIVE");
+    std::string path = getenv("HOMEPATH");
+    if (drive.empty() || path.empty())
+        return {getenv("USERPROFILE")};
+    else
+        return {drive.append(path)};
 #else
-        struct passwd* pwd = getpwuid(getuid());
-        if (pwd)
-            return {pwd->pw_dir};
-        else
-            return {getenv("HOME")};
+    struct passwd* pwd = getpwuid(getuid());
+    if (pwd)
+        return {pwd->pw_dir};
+    else
+        return {getenv("HOME")};
 #endif
-    }
+}
 
 
 }

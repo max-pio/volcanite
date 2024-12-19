@@ -21,6 +21,7 @@
 #include <map>
 #include <thread>
 #include <span>
+#include <unordered_set>
 
 #include "VolumeCompressionBase.hpp"
 #include "csgv_constants.incl" // in data/shader/cpp_glsl_include
@@ -33,6 +34,39 @@
 using namespace vvv;
 
 namespace volcanite {
+
+struct CSGVCompressionEvaluationResults {
+    double compression_mainpass_seconds = 0.;          ///< total compression time [s] without pre-pass and IO
+    double compression_prepass_seconds = 0.;
+    double compression_total_seconds = 0.;
+    double csgv_base_encoding_bytes = 0.;
+    double csgv_detail_encoding_bytes = 0.;
+    double csgv_bytes = 0.;
+    double compression_rate = -1.;
+    double compression_GB_per_s = 0.;
+    double original_volume_bytes = 0.;
+    glm::uvec3 volume_dim = {0u, 0u, 0u};
+    uint32_t volume_labels = 0u;
+//    uint32_t labels_per_brick_min = 0u;
+//    uint32_t labels_per_brick_avg = 0u;
+//    uint32_t labels_per_brick_max = 0u;
+//    uint32_t palette_size_min = 0u;
+//    uint32_t palette_size_avg = 0u;
+//    uint32_t palette_size_max = 0u;
+//    double brick_min_bytes = 0u;
+//    double brick_avg_bytes = 0u;
+//    double brick_max_bytes = 0u;
+//    double header_bytes = 0u;
+};
+
+struct CSGVDecompressionEvaluationResults {
+    double cpu_decoded_GB = 0.;
+    double cpu_decoded_seconds = -1.;
+    double cpu_GB_per_s = -1.;
+    double gpu_decoded_GB = 0.;
+    double gpu_decoded_seconds = -1.;
+    double gpu_GB_per_s = -1.;
+};
 
 // COMPRESSION
 //
@@ -93,6 +127,10 @@ namespace volcanite {
 //  The original encoding buffer then only contains lod_count - 1 LoDs.
 //
 class CompressedSegmentationVolume : public VolumeCompressionBase {
+
+
+friend class CompSegVolHandler;
+friend class CSGVChunkMerger;
 
 private:
     /// @return encoding array that contains the encoding of the given 1D brick index.
@@ -200,10 +238,17 @@ public:
     /// Decompresses the full volume up to a certain LoD into the vector out.
     void decompressLOD(int target_lod, std::vector<uint32_t>& out) const;
 
+    /// Decompresses the full volume up to a certain LoD into the vector out, parallelizing over the output voxels in the bricks.
+    /// Only available with parallel_decode enabled.
+    void parallelDecompressLOD(int target_lod, std::vector<uint32_t>& out) const;
+
     [[nodiscard]] std::shared_ptr<std::vector<uint32_t>> decompress() const override {
         std::shared_ptr<std::vector<uint32_t>> out = std::make_shared<std::vector<uint32_t>>();
         out->resize(static_cast<size_t>(m_volume_dim.x) * m_volume_dim.y * m_volume_dim.z);
-        decompressLOD(0, *out);
+        if (m_random_access)
+            parallelDecompressLOD(0, *out);
+        else
+            decompressLOD(0, *out);
         return out;
     }
 
@@ -335,21 +380,28 @@ public:
     [[nodiscard]] bool isUsingRANS() const { return m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC; }
     [[nodiscard]] bool isUsingDetailFreq() const { return m_encoding_mode == DOUBLE_TABLE_RANS_ENC; }
     [[nodiscard]] bool isUsingSeparateDetail() const { return m_separate_detail; }
+    [[nodiscard]] bool isUsingRandomAccess() const { return m_random_access; }
+    [[nodiscard]] uint32_t getOperationMask() const { return m_op_mask; }
+    [[nodiscard]] bool isUsingWaveletMatrix() const { return m_encoding_mode == WAVELET_MATRIX_ENC; }
 
     /// returns the maximum number of uint32 palette entries that any brick in the volume contains.
     [[nodiscard]] uint32_t getMaxBrickPaletteCount() const { return m_max_brick_palette_count; };
 
     /// Sets the options for the compression step. If using rANS, a frequency table as a uint32_t[16] array must be given for the base.
     /// If using detail separation (use_detail) and rANS, an additional frequency table must be given for the detail buffer.
-    void setCompressionOptions(uint32_t brick_size, EncodingMode encoding_mode,
+    /// @param op_mask combination of OP_*_BIT flags specifying if certain CSGV operations and stop bits are used
+    /// @param random_access if true, encodes in a format that supports in-brick random access
+    void setCompressionOptions(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask, bool random_access,
                                const uint32_t* code_frequencies = nullptr, const uint32_t* detail_code_frequencies = nullptr);
 
     /// Sets the options for the compression step. If using rANS, a 64 bit frequency table as a size_t[16] array must be given for the base.
     /// If an additional frequency table must be given for the finest LoD if rANS is used in double table mode.
     /// Detail separation (splitting off the operation stream of the finest LoD in a separated compressed file.
-    void setCompressionOptions64(uint32_t brick_size, EncodingMode encoding_mode,
+    /// @param op_mask combination of OP_*_BIT flags specifying if certain CSGV operations and stop bits are used
+    /// @param random_access if true, encodes in a format that supports in-brick random access
+    void setCompressionOptions64(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask, bool random_access,
                                  const size_t* code_frequencies = nullptr, const size_t* detail_code_frequencies = nullptr) {
-        setCompressionOptions(brick_size, encoding_mode,
+        setCompressionOptions(brick_size, encoding_mode, op_mask, random_access,
                           code_frequencies ? normalizeCodeFrequencies(code_frequencies).data() : nullptr,
                           detail_code_frequencies ? normalizeCodeFrequencies(detail_code_frequencies).data() : nullptr);
     }
@@ -376,6 +428,8 @@ public:
         m_brick_starts.clear();
         m_detail_encodings.clear();
         m_detail_starts.clear();
+        m_random_access = false;
+        m_op_mask = OP_ALL;
         m_separate_detail = false;
         m_brick_idx_to_enc_vector = ~0u;
         m_max_brick_palette_count = 0u;
@@ -392,28 +446,45 @@ public:
 
     /// @return the compression ratio as (compressed size) / (uncompressed uint32 volume size) in percent as a value between 0 and 100.
     float getCompressionRatio() const override {
+        uint32_t label_count = getNumberOfUniqueLabelsInVolume();
+        uint32_t bytes_per_voxel = getBytesForLabelCount(label_count);
         if(m_encodings.empty())
             throw std::runtime_error("CompressedSegmentationVolume must be compressed before calling getCompressionRatio()");
-        return static_cast<float>(getCompressedSizeInBytes()) / static_cast<float>(m_volume_dim.x * m_volume_dim.y * m_volume_dim.z * sizeof(uint32_t)) * 100.f;
+        return static_cast<float>(getCompressedSizeInBytes()) / static_cast<float>(m_volume_dim.x * m_volume_dim.y * m_volume_dim.z * bytes_per_voxel) * 100.f;
+    }
+
+
+    /// @return the number of bytes used to store an uncompressed voxel for label_count many unique labels
+    static uint32_t getBytesForLabelCount(uint32_t label_count) {
+        auto msb = glm::findMSB(label_count);
+        if (msb > 15)
+            return 4u;
+        else if (msb > 7)
+            return 2u;
+        else
+            return 1u;
     }
 
     /// @return multiline string describing size and compression rates of the encoded volume and encoding components.
     [[nodiscard]] std::string getEncodingInfoString() const {
-        double brick_starts_memory = static_cast<double>(m_brick_starts.size() * sizeof(uint32_t)) / 1000. / 1000.;
+        uint32_t label_count = getNumberOfUniqueLabelsInVolume();
+        uint32_t bytes_per_voxel = getBytesForLabelCount(label_count);
+        double brick_starts_memory = static_cast<double>(m_brick_starts.size() * sizeof(uint32_t)) * BYTE_TO_MB;
         double encoding_memory = 0.;
         for(const auto& e : m_encodings)
             encoding_memory += static_cast<double>(e.size() * sizeof(uint32_t));
-        encoding_memory = encoding_memory / 1000. / 1000.;
-        double detail_starts_memory = static_cast<double>(m_detail_starts.size() * sizeof(uint32_t)) / 1000. / 1000.;
+        encoding_memory = encoding_memory * BYTE_TO_MB;
+        double detail_starts_memory = static_cast<double>(m_detail_starts.size() * sizeof(uint32_t)) * BYTE_TO_MB;
         double detail_memory = 0.;
         for(const auto& d : m_detail_encodings)
-            detail_memory += static_cast<double>(d.size() * sizeof(uint32_t)) / 1000. / 1000.;
-        double volume_memory = static_cast<double>(static_cast<size_t>(m_volume_dim[0]) * m_volume_dim[1] * m_volume_dim[2] * sizeof(uint32_t)) / 1000. / 1000.;
+            detail_memory += static_cast<double>(d.size() * sizeof(uint32_t)) * BYTE_TO_MB;
+        double volume_memory = static_cast<double>(static_cast<size_t>(m_volume_dim[0]) * m_volume_dim[1] * m_volume_dim[2] * bytes_per_voxel) * BYTE_TO_MB;
         std::stringstream ss;
         ss << "start buffer (base  " << brick_starts_memory << "MB + detail " << detail_starts_memory
            << "MB) + encoding buffers (base " << encoding_memory << "MB + detail " << detail_memory << "MB) = "
            << (brick_starts_memory + encoding_memory + detail_starts_memory + detail_memory) << "MB / " << volume_memory
-           << "MB original size (" << (static_cast<double>(brick_starts_memory + encoding_memory + detail_starts_memory + detail_memory)/volume_memory*100.f) << "%) " << str(m_volume_dim) << " voxels."
+           << "MB original size (" << (static_cast<double>(brick_starts_memory + encoding_memory + detail_starts_memory + detail_memory)/volume_memory*100.f) << "%) "
+           << str(m_volume_dim) << " voxels (" << bytes_per_voxel << " byte/voxel) for " << label_count << " labels."
            << " max. brick palette size " << m_max_brick_palette_count << ".";
         if(m_encodings.size() > 1) {
             ss << "\n        Split encoding buffers (" << m_encodings.size() << "):";
@@ -459,6 +530,35 @@ public:
     /// Time needed for the frequency pre-pass in seconds.
     float getLastTotalFreqPrepassSeconds() const { return m_last_total_freq_prepass_seconds; }
 
+    CSGVCompressionEvaluationResults getLastEvaluationResults() {
+        uint32_t label_count = getNumberOfUniqueLabelsInVolume();
+        uint32_t bytes_per_voxel = getBytesForLabelCount(label_count);
+        double brick_starts_memory = static_cast<double>(m_brick_starts.size() * sizeof(uint32_t));
+        double base_encoding_memory = 0.;
+        for(const auto& e : m_encodings)
+            base_encoding_memory += static_cast<double>(e.size() * sizeof(uint32_t));
+        base_encoding_memory = base_encoding_memory;
+        double detail_starts_memory = static_cast<double>(m_detail_starts.size() * sizeof(uint32_t));
+        double detail_memory = 0.;
+        for(const auto& d : m_detail_encodings)
+            detail_memory += static_cast<double>(d.size() * sizeof(uint32_t));
+        double volume_memory = static_cast<double>(static_cast<size_t>(m_volume_dim[0]) * m_volume_dim[1] * m_volume_dim[2] * bytes_per_voxel);
+
+        CSGVCompressionEvaluationResults res;
+        res.csgv_base_encoding_bytes = brick_starts_memory + base_encoding_memory;
+        res.csgv_detail_encoding_bytes = detail_starts_memory + detail_memory;
+        res.csgv_bytes = brick_starts_memory + base_encoding_memory + detail_starts_memory + detail_memory;
+        res.compression_prepass_seconds = m_last_total_freq_prepass_seconds;
+        res.compression_mainpass_seconds = m_last_total_encoding_seconds;
+        res.compression_total_seconds = m_last_total_freq_prepass_seconds + m_last_total_encoding_seconds;
+        res.volume_dim = m_volume_dim;
+        res.volume_labels = label_count;
+        res.original_volume_bytes = volume_memory;
+        res.compression_rate = res.csgv_bytes / res.original_volume_bytes;
+        res.compression_GB_per_s = (res.original_volume_bytes * BYTE_TO_GB) / res.compression_total_seconds;
+        return res;
+    }
+
     ///////////////////////////////////////////////////////////////////
     ///                   rANS frequency tables                     ///
     ///////////////////////////////////////////////////////////////////
@@ -492,6 +592,8 @@ public:
         std::vector<std::string> shader_defines = m_encoder->getGLSLDefines([this](const uint32_t brick_idx){
                                                                                 return getBrickEncodingSpan(brick_idx);
                                                                             }, getBrickIndexCount());
+        if (isUsingRandomAccess())
+            shader_defines.emplace_back("RANDOM_ACCESS");
         if (isUsingSeparateDetail())
             shader_defines.emplace_back("SEPARATE_DETAIL");
         return shader_defines;
@@ -504,6 +606,42 @@ public:
     /// A quick way of checking some invariants of CSGV representations to verify the compressed volume.
     /// @return true if no errors are found, false otherwise.
     bool verifyCompression() const;
+
+
+    uint32_t getNumberOfUniqueLabelsInVolume() const {
+        std::vector<std::unordered_set<uint32_t>> label_set(m_cpu_threads);
+        // process the next m_cpu_threads bricks in parallel
+        #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(label_set)
+        {
+            unsigned int thread_id = omp_get_thread_num();
+            for (size_t n = thread_id; n < getBrickIndexCount(); n += m_cpu_threads) {
+
+                if (n < getBrickIndexCount()) {
+                    auto brick_encoding = getBrickEncoding(n);
+                    uint32_t brick_encoding_length = getBrickEncodingLength(n);
+                    uint32_t palette_size = getBrickPaletteLength(n);
+
+                    for (int p = 1; p <= palette_size; p++) {
+                        uint32_t label = brick_encoding[brick_encoding_length - p];
+                        if (!label_set[thread_id].contains(label)) {
+                            label_set[thread_id].insert(label);
+                        }
+                    }
+                }
+            }
+        }
+
+        // gather all thread-private label sets into one global set (the first one)
+        for (int thread_id = 1; thread_id < m_cpu_threads; thread_id++) {
+            for (const auto &label: label_set[thread_id]) {
+                if (!label_set[0].contains(label)) {
+                    label_set[0].insert(label);
+                }
+            }
+            label_set[thread_id].clear();
+        }
+        return label_set[0].size();
+    }
 
 private:
     uint32_t m_cpu_threads;                         ///< number of CPU threads to parallelize computations
@@ -520,6 +658,8 @@ private:
 
     std::unique_ptr<CSGVBrickEncoder> m_encoder = {};    ///< encodes single bricks with a certain encoding method
     EncodingMode m_encoding_mode;
+    uint32_t m_op_mask = OP_ALL;                    ///< if certain CSGV operations and stop bits are enabled
+    bool m_random_access = false;                   ///< encoding supports random access within a brick
 
     bool m_separate_detail;
     uint32_t m_max_brick_palette_count;             ///< max. palette length of any brick as a number of label entries

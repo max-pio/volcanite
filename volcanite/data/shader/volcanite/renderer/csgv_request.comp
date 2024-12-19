@@ -18,6 +18,7 @@
 #extension GL_EXT_debug_printf : enable
 #extension GL_EXT_buffer_reference_uvec2 : require
 #extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
 layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
@@ -28,6 +29,12 @@ layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 #include "util.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
 #include "volcanite/renderer/csgv_materials.glsl"
+
+#ifdef EMPTY_SPACE_UINT_SIZE
+    #include "volcanite/bit_vector.glsl"
+#endif
+
+#include "pcg_hash.glsl"
 
 bool pushFreeBlockStack(uint inv_lod, uint value) {
     uint pos = atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], 1u);
@@ -73,10 +80,10 @@ void main() {
 
     bool potentially_visible = false;
 
-    uint brick_encoding_length = getBrickEncodingLength(brick_idx);
+    const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
     EncodingRef brick_address = getBrickEncodingRef(brick_idx);
     // read total palette size from brick header
-    uint palette_size = brick_address.buf[PALETTE_SIZE_HEADER_INDEX];
+    const uint palette_size = brick_address.buf[PALETTE_SIZE_HEADER_INDEX];
     assert(palette_size > 0u, "palette size 0 should not be possible");
     assert(palette_size < bitfieldExtract(~0u, 0, int(g_cache_palette_idx_bits)), "palette size exceeds available bits for cache palette indices");
     // check all entries in the palette if anything is visible (> 0)
@@ -86,6 +93,38 @@ void main() {
             break;
         }
     }
+
+#if CACHE_MODE == CACHE_VOXELS
+//    // evict random elements from the cache
+//    {
+//        const uint evict_count = 0;
+//        uvec2 rnd = uvec2(brick_idx ^ (~g_frame), g_frame << 8);
+//        for (int i = 0; i < evict_count; i++) {
+//            rnd = hash_pcg2d(rnd);
+//            g_cache[(rnd.x % (CACHE_UINT_SIZE / 2)) * 2] = INVALID;
+//        }
+//    }
+#endif
+
+#ifdef EMPTY_SPACE_UINT_SIZE
+    // reset empty space buffer
+    // TODO: add bit masks for g_changed_flags (camera 1, rendering 2, material 4, postprocess 8..)
+    if (g_camera_still_frames == 0u) {
+        // fill the whole cache with INVALID information
+        BitVectorRef empty_space_bv = BitVectorRef(g_empty_space_bv_address);
+        for (uint id = brick_idx; id < EMPTY_SPACE_BV_WORD_SIZE; id += g_brick_idx_count) {
+            empty_space_bv.words[id] = BV_WORD_TYPE(0u);
+        }
+    }
+#endif
+
+#if CACHE_MODE != CACHE_BRICKS
+    // all following cache management is only necessary when caching bricks (and decoding them in the decompression stage).
+    // for other caching modes, all we care about is the empty space flagging of invisible bricks
+    // a value > lod_count is empty space, value == lod_count is potentially visible
+    g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT + uint(!potentially_visible);
+    return;
+#endif
 
     // we can set a maximum LoD to decode to in the gui
     if(g_max_inv_lod == 0u) {
@@ -146,10 +185,12 @@ void main() {
     }
 
     // we can refuse to deallocate elements if the cache is filled below 75%, but only if it does not have to switch LOD
-//    const uint cache_top = (LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD;
-//    if (!allocate && g_assign_info[cache_top] < g_cache_capacity / 4u * 3u) {
-//        deallocate = false;
-//    }
+#ifdef BRICK_CACHE_LAZY_EJECT
+    const uint cache_top = (LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD;
+    if (!allocate && g_assign_info[cache_top] < g_cache_capacity / 4u * 3u) {
+        deallocate = false;
+    }
+#endif
 
     // if we switch the LoD, both allocate and deallocate have to be carried out
     if (deallocate) {

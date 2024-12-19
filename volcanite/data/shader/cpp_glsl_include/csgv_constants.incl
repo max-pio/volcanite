@@ -19,19 +19,45 @@
 // This header contains compile time CompressedSegmentationVolume constants to be included in the
 // CPU encoding/decoding C++ classes as well as in the GLSL shaders for GPU decoding.
 
+#define KB_TO_BYTE 1000.
+#define MB_TO_BYTE (KB_TO_BYTE*KB_TO_BYTE)
+#define GB_TO_BYTE (KB_TO_BYTE*KB_TO_BYTE * KB_TO_BYTE)
+#define BYTE_TO_KB (1./KB_TO_BYTE)
+#define BYTE_TO_MB (BYTE_TO_KB*BYTE_TO_KB)
+#define BYTE_TO_GB (BYTE_TO_KB*BYTE_TO_KB*BYTE_TO_KB)
+
 // Compressed Segmentation Volume Constants ----------------------------------------------------------------------------
+
+// stream compression mode bit flags
+#define DOUBLE_ENCODING_BIT 1u
+#define RANS_BIT 2u
+#define WT_BIT 4u
+#define HUFFMAN_WT_BIT 8u
 
 #ifdef GL_core_profile
     #define CSGV_UINT uint
     #define NIBBLE_ENC 0
     #define SINGLE_TABLE_RANS_ENC 1
     #define DOUBLE_TABLE_RANS_ENC 2
+    #define WAVELET_MATRIX_ENC 4
+    #define HUFFMAN_WM_ENC 8
 #else
     #define CSGV_UINT uint32_t
 
 namespace volcanite {
     enum EncodingMode {NIBBLE_ENC=0,
-                       SINGLE_TABLE_RANS_ENC=1, DOUBLE_TABLE_RANS_ENC=2};
+                       SINGLE_TABLE_RANS_ENC=1, DOUBLE_TABLE_RANS_ENC=2,
+                       WAVELET_MATRIX_ENC=4, HUFFMAN_WM_ENC=8, DOUBLE_TABLE_HUFFMAN_WM_ENC=9};
+
+    // Bit Flags
+    //
+    // config:
+    // double encoder (start new encoder for the finest LOD): bit 0 (1)
+    //
+    // mutually exclusive:
+    // rANS: bit 1 (2)
+    // wavelet tree: bit 2 (4)
+    // Huffman wavelet tree: bit 3 (8)
 
     static constexpr const char* EncodingMode_STR(EncodingMode e) {
         switch (e) {
@@ -41,6 +67,10 @@ namespace volcanite {
                 return "rANS";
             case DOUBLE_TABLE_RANS_ENC:
                 return "rANS-DT";
+            case WAVELET_MATRIX_ENC:
+                return "WaveletMatrix";
+            case HUFFMAN_WM_ENC:
+                return "HuffmanWaveletMatrix";
             default:
                 throw std::runtime_error("Unknown encoding mode");
         }
@@ -54,6 +84,10 @@ namespace volcanite {
                 return "SINGLE_TABLE_RANS_ENC";
             case DOUBLE_TABLE_RANS_ENC:
                 return "DOUBLE_TABLE_RANS_ENC";
+            case WAVELET_MATRIX_ENC:
+                return "WAVELET_MATRIX_ENC";
+            case HUFFMAN_WM_ENC:
+                return "HUFFMAN_WM_ENC";
             default:
                 throw std::runtime_error("Unknown encoding mode");
         }
@@ -67,6 +101,10 @@ namespace volcanite {
                 return "r1";
             case DOUBLE_TABLE_RANS_ENC:
                 return "r2";
+            case WAVELET_MATRIX_ENC:
+                return "wm";
+            case HUFFMAN_WM_ENC:
+                return "w1";
             default:
                 throw std::runtime_error("Unknown encoding mode");
         }
@@ -86,6 +124,20 @@ namespace volcanite {
 #define PALETTE_LAST 5u ///< re-read palette last palette label, located 1 entry before the top pointer, again
 #define PALETTE_D 6u    ///< re-read palette label from D+2 entries before the top pointer. D follows in encoding stream.
 
+// operation bit masks to enable / disable certain operations in the encoding
+// note: defined as signed because GLSL preprocessors do not support uint arithmetic
+#define OP_PARENT_BIT 1
+#define OP_NEIGHBORX_BIT 2
+#define OP_NEIGHBORY_BIT 4
+#define OP_NEIGHBORZ_BIT 8
+#define OP_NEIGHBOR_BITS 14
+// PALETTE_ADV must always be enabled
+#define OP_PALETTE_LAST_BIT 32
+#define OP_PALETTE_D_BIT 128
+#define OP_STOP_BIT 256
+#define OP_ALL 0xFFFFFFFF
+#define OP_ALL_WITHOUT_STOP (OP_ALL & (~OP_STOP_BIT))
+#define OP_ALL_WITHOUT_DELTA (OP_ALL & (~OP_PALETTE_D_BIT))
 
 #define INVALID 0xFFFFFFFFu    ///< UINT32_MAX all bits set to 1. Denotes undecoded values, invalid labels, errors..
 #define INVISIBLE_LABEL 0xFFFFFFFEu ///< UINT32_MAX-1. Denotes a voxel label that is invisible in the current config
@@ -117,5 +169,10 @@ struct GPUSegmentedVolumeMaterial {
     float emission;                 ///< how much radiance the material emits, must be >= 0
     int wrapping;                   ///< wrapping mode to map labels to transfer function values: 0 = clamp, 1 = repeat
 };
+
+// Cache Modes
+#define CACHE_NOTHING 0
+#define CACHE_VOXELS 1
+#define CACHE_BRICKS 2
 
 #endif // CSGV_CONSTANTS_H

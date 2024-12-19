@@ -22,10 +22,25 @@
 /// Supported configuration compile time defines:
 ///   PALETTE_CACHE
 ///   SEPARATE_DETAIL
+///   RANDOM_ACCESS
+///   DECODE_FROM_SHARED_MEMORY
 
 #if ENCODING_MODE != NIBBLE_ENC
     STATIC_FAIL(expected_NIBBLE_ENC_encoding_mode);
 #endif
+
+#if defined(RANDOM_ACCESS) && defined(SEPARATE_DETAIL)
+    STATIC_FAIL(RANDOM_ACCESS_cannot_be_used_with_NIBBLE_ENC_and_DETAIL_SEPARATION);
+#endif
+
+#if !defined(RANDOM_ACCESS) && defined(DECODE_FROM_SHARED_MEMORY)
+    STATIC_FAIL(DECODE_FROM_SHARED_MEMORY_can_only_be_used_with_RANDOM_ACCESS);
+#endif
+
+#if defined(RANDOM_ACCESS) && (OP_MASK & OP_STOP_BIT)
+    STATIC_FAIL(OP_STOP_BIT_cannot_be_used_with_NIBBLE_ENC_and_RANDOM_ACCESS);
+#endif
+
 
 // UTILITY FUNCTIONS ---------------------------------------------------------------------------------------------------
 
@@ -34,6 +49,8 @@ uint _unpack4BitFromEncoding(EncodingRef brick_start, uint entry_id) {
 }
 
 // SERIAL ENCODING -----------------------------------------------------------------------------------------------------
+#ifndef RANDOM_ACCESS
+
 struct CSGVReadState {
     uint idxE;              ///< read position in brick encoding (counted in nibbles without rANS, in bytes with rANS)
 };
@@ -178,6 +195,163 @@ void decompressCSGVBrick(const uint brick_idx,
     }
 }
 
+#endif // no RANDOM_ACCESS
+// RANDOM ACCESS DECODING ----------------------------------------------------------------------------------------------
+#ifdef RANDOM_ACCESS
+
+#ifdef DECODE_FROM_SHARED_MEMORY
+    #define BRICK_ENCODING SHARED_BRICK_ENCODING
+    #define UNPACK_4BIT_FROM_ENC(entry_id)  _unpack4BitFromEncodingSharedMemory(entry_id)
+    #define RANK_4BIT_PALETE_ADV(enc_operation_index) _rank_palette_adv(enc_operation_index)
+#else
+    #define BRICK_ENCODING brick_encoding.buf
+    #define UNPACK_4BIT_FROM_ENC(entry_id)  _unpack4BitFromEncodingSharedMemory(brick_encoding, entry_id)
+    #define RANK_4BIT_PALETE_ADV(enc_operation_index) _rank_palette_adv(brick_encoding, enc_operation_index)
+#endif
+
+uint _unpack4BitFromEncodingSharedMemory(
+                                         #ifndef DECODE_FROM_SHARED_MEMORY
+                                            const EncodingRef brick_encoding,
+                                         #endif
+                                         uint entry_id) {
+    // ToDo: this is where the implementation of access(i) of the wavelet tree goes
+    return bitfieldExtract(BRICK_ENCODING[entry_id/8], 28 - int(entry_id % 8u) * 4, 4);
+}
+
+
+/** number of PALETTE_ADV occurrences before enc_operation_index. */
+uint _rank_palette_adv(
+                      #ifndef DECODE_FROM_SHARED_MEMORY
+                         const EncodingRef brick_encoding,
+                      #endif
+                      uint enc_operation_index
+                      ) {
+    // TODO: good lord this is expensive if we do it without an O(1) rank
+    uint occurrences = 0u;
+    for(uint entry_id = HEADER_SIZE; entry_id <= enc_operation_index; entry_id++) {
+        if ((UNPACK_4BIT_FROM_ENC(entry_id) & 7u) == PALETTE_ADV)
+        occurrences++;
+    }
+    return occurrences;
+}
+
+
+uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
+                            #ifndef DECODE_FROM_SHARED_MEMORY
+                                const EncodingRef brick_encoding,
+                            #endif
+                            const uint brick_encoding_length) {
+
+
+    // Start by reading the operations in the target inverse LoD's encoding:
+    uint inv_lod = target_inv_lod;
+    // operation index within in the current inv. LoD, starting at the target LoD
+    uint inv_lod_op_i = output_i;
+    // corresponding voxel position within the inv. LoD
+    uvec3 inv_lod_voxel = _cache_idx2pos(inv_lod_op_i);
+
+    // obtain encoding operation read index (4 bit)
+    uint enc_operation_index = BRICK_ENCODING[inv_lod] + inv_lod_op_i;
+    uint operation = UNPACK_4BIT_FROM_ENC(enc_operation_index);
+
+    assert(enc_operation_index < brick_encoding_length * 8u, "brick encoding out of bounds read");
+    // ToDo: handle stop bits
+    assert((operation & STOP_BIT) == 0u, "stop bit not yet supported in parallel decode");
+
+    // follow the chain of operations from the current output voxel up to an operation that accesses the palette
+    {
+        uint operation_lsb = operation & 7u;// extract least significant 3 bits
+
+        // equal to (operation_lsb != PALETTE_LAST && operation_lsb != PALETTE_ADV && operation_lsb != PALETTE_D)
+        while (operation_lsb < 4u) {
+            // find the read position for the next operation along the chain
+            if (operation_lsb == PARENT) {
+                // read from the parent in the next iteration
+                inv_lod--;
+                inv_lod_op_i /= 8u;
+                inv_lod_voxel = _cache_idx2pos(inv_lod_op_i);
+            }
+            // operation_lsb is NEIGHBOR_X, NEIGHBOR_Y, or NEIGHBOR_Z:
+            else {
+                // read from a neighbor in the next iteration
+                const uint neighbor_index = operation_lsb - NEIGHBOR_X;// X: 0, Y: 1, Z: 2
+                const uint child_index = inv_lod_op_i % 8u;
+
+                inv_lod_voxel += neighbor[child_index][neighbor_index];
+                inv_lod_op_i = _cache_pos2idx(inv_lod_voxel);
+
+                // ToDo: may be able to remove this later! for neighbors with later indices, we have to copy from its parent instead
+                if (any(greaterThan(neighbor[child_index][neighbor_index], ivec3(0)))) {
+                    inv_lod--;
+                    inv_lod_op_i /= 8u;
+                    inv_lod_voxel = _cache_idx2pos(inv_lod_op_i);
+                }
+            }
+
+            // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
+            enc_operation_index = BRICK_ENCODING[inv_lod] + inv_lod_op_i;
+            operation_lsb = UNPACK_4BIT_FROM_ENC(enc_operation_index) & 7u;
+        }
+
+        // at this point, the current operation accesses the palette: write the resulting palette entry
+        // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
+        uint palette_index = RANK_4BIT_PALETE_ADV(enc_operation_index - 1u);
+        // the actual palette index may be offset depending on the operation
+        if (operation_lsb == PALETTE_LAST) {
+            palette_index--;
+        }
+        assert(operation_lsb != PALETTE_D, "palette delta operation not supported in parallel decode");
+
+        return palette_index;
+    }
+}
+
+/** Decode a single voxel with index output_i in the target_inv_lod. Decoding is performed by chasing the operation
+ * references from the output voxel to a palette reference. If DECODE_FROM_SHARED_MEMORY is set, it is assumed that the
+ * brick encoding is located in a shared memory buffer uint SHARED_BRICK_ENCODING[]. */
+void decompressCSGVVoxelToCache(const uint output_i, const uint target_inv_lod, const uvec3 valid_brick_size,
+#ifndef DECODE_FROM_SHARED_MEMORY
+                         const EncodingRef brick_encoding,
+#endif
+                         const uint brick_encoding_length, const uint decoded_brick_start_uint) {
+
+    uint palette_index = getPaletteIndexOfCSGVVoxel(output_i, target_inv_lod,
+                                                #ifndef DECODE_FROM_SHARED_MEMORY
+                                                    brick_encoding,
+                                                #endif
+                                                    brick_encoding_length);
+
+        // Write to the index in the output array. The output array's positions are in Morton order.
+#ifdef PALETTE_CACHE
+    // TODO: This is a race condition! Different threads write to (different bits of) the same uint in the cache
+    writeEntryToCache(decoded_brick_start_uint, output_i, palette_index + 1u);
+#else
+    writeEntryToCache(decoded_brick_start_uint, output_i, BRICK_ENCODING[brick_encoding_length - 1u - palette_index]);
+#endif
+}
+
+#ifndef DECODE_FROM_SHARED_MEMORY
+uint decompressCSGVVoxel(const uint brick_idx, const uvec3 brick_voxel, const uint target_inv_lod) {
+    assertf(brick_idx < g_brick_idx_count, "brick idx out of bounds (is, bound) %v2u", uvec2(brick_idx, g_brick_idx_count));
+    assertf(all(lessThan(brick_voxel, uvec3(BRICK_SIZE))), "brick voxel out of brick size bounds, is: %v3u", brick_voxel);
+
+    EncodingRef brick_encoding = getBrickEncodingRef(brick_idx);
+    const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
+
+    // const uint lod_width = BRICK_SIZE >> target_inv_lod;
+    // const uint voxel_idx = _cache_pos2idx(brick_voxel) / (lod_width * lod_width * lod_width);
+    // same as:
+    const uint voxel_idx = _cache_pos2idx(brick_voxel) / (1u << (3 * (findMSB(BRICK_SIZE) - target_inv_lod)));
+
+    uint palette_index = getPaletteIndexOfCSGVVoxel(voxel_idx, target_inv_lod,
+                                                    brick_encoding, brick_encoding_length);
+
+    return brick_encoding.buf[brick_encoding_length - 1u - palette_index];
+}
+#endif
+
+#endif // RANDOM_ACCESS
+
 // DEBUGGING AND STATISTICS --------------------------------------------------------------------------------------------
 
 bool verifyBrickCompression(const uint brick_idx) {
@@ -185,17 +359,16 @@ bool verifyBrickCompression(const uint brick_idx) {
     // Obtain a reference to the uint buffer containing this bricks encoding.
     EncodingRef brick_encoding = getBrickEncodingRef(brick_idx);
     const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
-    const uint header_size = LOD_COUNT * 2 + 1u;
     const uint header_start_lods = LOD_COUNT;
 
     // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
-    if (brick_encoding_length < header_size + 1u + 1u) {
-        debugPrintfEXT("brick encoding is shorter than minimum. (header size + 1 encoding + 1 palette) = %u but is %u", header_size + 2u, brick_encoding_length);
+    if (brick_encoding_length < HEADER_SIZE + 1u + 1u) {
+        debugPrintfEXT("brick encoding is shorter than minimum. (header size + 1 encoding + 1 palette) = %u but is %u", HEADER_SIZE + 2u, brick_encoding_length);
         return false;
     }
 
-    // check first header entry being header_size * 8
-    if(brick_encoding.buf[0] != header_size * 8u) {
+    // check first header entry being HEADER_SIZE * 8
+    if(brick_encoding.buf[0] != HEADER_SIZE * 8u) {
         debugPrintfEXT("first encoding starts 4bit must be header*8");
         return false;
     }
@@ -215,15 +388,16 @@ bool verifyBrickCompression(const uint brick_idx) {
         }
     }
 
-    // check palette start of first LoD being 0 and second LoD being 1
-    if (brick_encoding.buf[header_start_lods] != 0u) {
-        debugPrintfEXT("first palette start must be 0");
-        return false;
-    }
-    if (brick_encoding.buf[header_start_lods + 1u] != 1u) {
-        debugPrintfEXT("second palette start must be 1");
-        return false;
-    }
+    // Brick headers do no longer store LOD palette starts
+//    // check palette start of first LoD being 0 and second LoD being 1
+//    if (brick_encoding.buf[header_start_lods] != 0u) {
+//        debugPrintfEXT("first palette start must be 0");
+//        return false;
+//    }
+//    if (brick_encoding.buf[header_start_lods + 1u] != 1u) {
+//        debugPrintfEXT("second palette start must be 1");
+//        return false;
+//    }
 
     //    // check palette starts being in ascending order
     //    for(int l = 2u; l <= LOD_COUNT + 1; l++) {

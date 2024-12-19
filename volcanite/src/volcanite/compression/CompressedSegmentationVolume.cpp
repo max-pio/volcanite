@@ -17,6 +17,7 @@
 
 #include "volcanite/compression/encoder/NibbleEncoder.hpp"
 #include "volcanite/compression/encoder/RangeANSEncoder.hpp"
+#include "volcanite/compression/encoder/WaveletMatrixEncoder.hpp"
 
 #include <map>
 #include <sstream>
@@ -27,6 +28,7 @@ using namespace vvv;
 namespace volcanite {
 
 void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, EncodingMode encoding_mode,
+                                                         uint32_t op_mask,  bool random_access,
                                                          const uint32_t* code_frequencies,
                                                          const uint32_t* detail_code_frequencies) {
     if(!(brick_size > 0 && !(brick_size & (brick_size - 1))))
@@ -38,22 +40,28 @@ void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, En
 
     m_brick_size = brick_size;
     m_encoding_mode = encoding_mode;
+    m_op_mask = op_mask;
+    m_random_access = random_access;
 
     // TODO: replace with switch / case
     // set up the respective brick encoder
     if (m_encoding_mode == NIBBLE_ENC) {
-        m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode);
+        m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     }
     else if (m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
         if(code_frequencies == nullptr)
             throw std::runtime_error("Operation frequencies must be given if using rANS.");
+        if (random_access)
+            throw std::runtime_error("Random access encoding is not compatible with rANS.");
 
         // normalize the symbol frequencies and setup encoder
-        m_encoder = std::make_unique<RangeANSEncoder>(m_brick_size, m_encoding_mode,
+        m_encoder = std::make_unique<RangeANSEncoder>(m_brick_size, m_encoding_mode, m_op_mask,
                                     normalizeCodeFrequencies(code_frequencies).data(),
                                     (m_encoding_mode == DOUBLE_TABLE_RANS_ENC)
                                     ? normalizeCodeFrequencies(detail_code_frequencies).data()
                                     : nullptr);
+    } else if (m_encoding_mode == WAVELET_MATRIX_ENC || m_encoding_mode == HUFFMAN_WM_ENC) {
+        m_encoder = std::make_unique<WaveletMatrixEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     } else {
         throw std::runtime_error("No CSGB brick encoder for given encoding mode available.");
     }
@@ -62,6 +70,9 @@ void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, En
 }
 
 float CompressedSegmentationVolume::separateDetail() {
+    if (m_random_access)
+        throw std::runtime_error("Detail separation and random access cannot be combined.");
+
     if(!m_detail_encodings.empty() || m_separate_detail)
         throw std::runtime_error("Detail separation was already performed!");
     if(m_encodings.empty())
@@ -162,6 +173,11 @@ bool CompressedSegmentationVolume::verifyCompression() const {
     if(m_encodings.empty())
         throw std::runtime_error("Segmentation volume is not yet compressed!");
 
+    if (static_cast<size_t>(m_volume_dim.x) * m_volume_dim.y * m_volume_dim.z == 0ull) {
+        Logger(ERROR) << "  volume size is zero with voxel dimension " << str(m_volume_dim);
+        return false;
+    }
+
     bool is_ok = true;
     glm::uvec3 brick_count = getBrickCount();
     size_t last_brick = getBrickIndexCount() - 1ul;
@@ -171,7 +187,7 @@ bool CompressedSegmentationVolume::verifyCompression() const {
         // any m_brick_idx_to_enc_vector-th entry in brick_starts is the end of the last brick in the previous array
         uint32_t size_from_brick_starts = m_brick_starts[std::min(static_cast<uint32_t>(last_brick + 1), (i+1) * m_brick_idx_to_enc_vector)];
         if (m_encodings.at(i).size() != size_from_brick_starts) {
-            Logger(ERROR) << "Found errors: split encoding array [" << i << "] size differs from size tracked in brick starts (is "
+            Logger(ERROR) << "  split encoding array [" << i << "] size differs from size tracked in brick starts (is "
                           << m_encodings.at(i).size() << " expected " << size_from_brick_starts << ").";
             return false;
         }
@@ -301,7 +317,10 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
             if (brick_index + thread_id < brick_index_count) {
                 glm::uvec3 brick = brick_idx2pos(brick_index + thread_id, brickCount);
                 // compress the current brick
-                encoded_element_count[thread_id] = m_encoder->encodeBrick(volume, encodedBrick[thread_id], brick * m_brick_size, m_volume_dim);
+                if (m_random_access)
+                    encoded_element_count[thread_id] = m_encoder->encodeBrickForRandomAccess(volume, encodedBrick[thread_id], brick * m_brick_size, m_volume_dim);
+                else
+                    encoded_element_count[thread_id] = m_encoder->encodeBrick(volume, encodedBrick[thread_id], brick * m_brick_size, m_volume_dim);
 
                 assert(encoded_element_count[thread_id] < encodedBrick[thread_id].size()
                         && "Buffer overflow for encoded brick.");
@@ -420,6 +439,8 @@ void CompressedSegmentationVolume::decompressLOD(int target_lod, std::vector<uin
     const glm::uvec3 brickCount = getBrickCount();
     int inv_lod = getLodCountPerBrick() - 1u - target_lod;
     assert(inv_lod >= 0);
+    if (m_random_access)
+       Logger(WARN) << "Call parallelDecompressLOD() for CSGV that are compressed with random access enabled.";
 
     // this would run in parallel on the GPU later!
     glm::uvec3 brick_pos;
@@ -480,12 +501,18 @@ void CompressedSegmentationVolume::decompressBrickTo(uint32_t* out, glm::uvec3 b
                                                            glm::uvec3(m_brick_size)), inverse_lod);
     }
     else {
-        m_encoder->decodeBrick(getBrickEncoding(brick_idx), getBrickEncodingLength(brick_idx),
-                               m_separate_detail ? getBrickDetailEncoding(brick_idx) : nullptr,
-                               m_separate_detail ? getBrickDetailEncodingLength(brick_idx) : 0u,
-                               out, glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u),
-                               glm::uvec3(m_brick_size)), inverse_lod);
-
+        if (m_random_access) {
+            m_encoder->parallelDecodeBrick(getBrickEncoding(brick_idx), getBrickEncodingLength(brick_idx),
+                                           out, glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u),
+                                           glm::uvec3(m_brick_size)), inverse_lod);
+        }
+        else {
+            m_encoder->decodeBrick(getBrickEncoding(brick_idx), getBrickEncodingLength(brick_idx),
+                                   m_separate_detail ? getBrickDetailEncoding(brick_idx) : nullptr,
+                                   m_separate_detail ? getBrickDetailEncodingLength(brick_idx) : 0u,
+                                   out, glm::clamp(m_volume_dim - brick_pos * m_brick_size, glm::uvec3(0u),
+                                   glm::uvec3(m_brick_size)), inverse_lod);
+        }
 
     }
 }
@@ -512,7 +539,10 @@ bool CompressedSegmentationVolume::testLOD(const std::vector<uint32_t> &volume, 
     for (uint32_t width = 2; width <= m_brick_size; width *= 2) {
         timer.restart();
         Logger(INFO, true) << "Decode LOD " << lod << " with block width " << width;
-        decompressLOD(lod, out);
+        if (m_random_access)
+            parallelDecompressLOD(lod, out);
+        else
+            decompressLOD(lod, out);
         Logger(INFO) << "Decode LOD " << lod << " with block width " << width << " in " << timer.elapsed() << "s done. Test:";
         if (volume.size() != out.size()) {
             Logger(ERROR) << "Compressed in and out sizes don't match";
@@ -534,7 +564,7 @@ bool CompressedSegmentationVolume::testLOD(const std::vector<uint32_t> &volume, 
 
                     // construct target multigrid for this brick (a bit efficient since we only test one level here..)
                     std::vector<MultiGridNode> multigrid;
-                    constructMultiGrid(multigrid, volume, volume_dim, brick * m_brick_size, m_brick_size);
+                    constructMultiGrid(multigrid, volume, volume_dim, brick * m_brick_size, m_brick_size, false, false);
 
                     // check all elements of this LoD
                     glm::uvec3 pos_in_brick;
@@ -614,11 +644,11 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
      * 0003: allows separating the detail buffer
      * 0004: remove RLE flag
      * 0010: paper release version
-     * 0011: use rANS_mode instead of use_rANS, allow detail separation only with DOUBLE_TABLE_RANS_ENC
+     * 0011: use encoding_mode instead of use_rANS, allow detail separation only with DOUBLE_TABLE_RANS
      * 0012: store max. brick palette size
      * 0013: split encoding buffers
      * 0014: re-ordered operation codes by occurring frequency to Parent,X,Y,Z,PaletteA,PaletteL,PaletteD
-     * 0015: encoders handle specialized export data like frequency tables
+     * 0015: random access, op mask, encoders handle specialized export data like frequency tables
      */
     file.write(magic_header, 8);
     file.write(version, 4);
@@ -627,11 +657,10 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
     file.write(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
     file.write(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
     file.write(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode)); // since 0011
-    uint32_t all_set = ~0u;
-    file.write(reinterpret_cast<char *>(&all_set), sizeof(uint32_t)); // since 015 (placeholder for research branch)
+    file.write(reinterpret_cast<char *>(&m_random_access), sizeof(bool)); // since 015
     file.write(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t)); // since 012
 
-    file.write(reinterpret_cast<char *>(&all_set), sizeof(uint32_t)); // since 015 (placeholder for research branch)
+    file.write(reinterpret_cast<char *>(&m_op_mask), sizeof(uint32_t)); // since 015
     m_encoder->exportToFile(file);
 
     // mapping of brick indices to encoding arrays
@@ -694,7 +723,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     int _numeric_version = std::stoi(std::string(_version));
 
     // backwards compatibility code:
-    if (std::string(_version) != "0014" && std::string(_version) != "0015") {
+    if (std::string(_version) != "0015") {
         Logger(ERROR) << "Import does not support version " << _version << " of Compressed Segmentation Volume file " << path << ". Skipping.";
         return false;
     }
@@ -703,25 +732,24 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     fin.read(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
     fin.read(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
     fin.read(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode));
-    uint32_t tmp;
-    if (_numeric_version >= 15)  // since 015 (placeholder for research branch)
-        fin.read(reinterpret_cast<char *>(&tmp), sizeof(uint32_t));
+    fin.read(reinterpret_cast<char *>(&m_random_access), sizeof(bool));
     fin.read(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t));
-    if (_numeric_version >= 15)  // since 015 (placeholder for research branch)
-        fin.read(reinterpret_cast<char *>(&tmp), sizeof(uint32_t));
 
     // update encoder
+    fin.read(reinterpret_cast<char *>(&m_op_mask), sizeof(uint32_t));
     if (m_encoding_mode == NIBBLE_ENC) {
-        m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode);
+        m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     } else if (m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
-        m_encoder = std::make_unique<RangeANSEncoder>(m_brick_size, m_encoding_mode);
+        m_encoder = std::make_unique<RangeANSEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
+    } else if (m_encoding_mode == WAVELET_MATRIX_ENC || m_encoding_mode == HUFFMAN_WM_ENC) {
+        m_encoder = std::make_unique<WaveletMatrixEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     } else {
         throw std::runtime_error("No CSGV brick encoder for given encoding mode available.");
     }
     m_encoder->importFromFile(fin);
 
-    // mapping of brick indices to encoding arrays
-    fin.read(reinterpret_cast<char *>(&m_brick_idx_to_enc_vector), sizeof(uint32_t)); // since 0013
+    fin.read(reinterpret_cast<char *>(&m_brick_idx_to_enc_vector), sizeof(uint32_t));
+    // read the data directly to our members
     size_t size;
     fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
     m_brick_starts.resize(size);
@@ -765,7 +793,9 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     fin.close();
     if(verbose)
         Logger(DEBUG) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim)
-                      << " voxels and " << str(getBrickCount()) << " = " << getBrickIndexCount()
+                      << " = " << (static_cast<size_t>(m_volume_dim.x) * m_volume_dim.y * m_volume_dim.z)
+                      << " voxels and " << getNumberOfUniqueLabelsInVolume() << " unique labels,"
+                      << " encoded in " << str(getBrickCount()) << " = " << getBrickIndexCount() << " bricks"
                       << " [b=" << m_brick_size << ",e=" << EncodingMode_STR(m_encoding_mode) << "]"
                       << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
 
@@ -826,11 +856,18 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
                     unsigned int thread_id = omp_get_thread_num();
                     if (brick.x + thread_id*subsampling_factor < brickCount.x) {
                         // compress the current brick
-                        m_encoder->freqEncodeBrick(volume, brick_freq[thread_id],
-                                                   glm::uvec3(brick.x + thread_id * subsampling_factor,
-                                                              brick.y, brick.z) *
-                                                   m_brick_size, m_volume_dim, detail_freq);
-
+                        if (m_random_access) {
+                            m_encoder->freqEncodeBrickForRandomAccess(volume, brick_freq[thread_id],
+                                                                      glm::uvec3(brick.x + thread_id*subsampling_factor,
+                                                                                 brick.y, brick.z) *
+                                                                      m_brick_size, m_volume_dim, detail_freq);
+                        }
+                        else {
+                            m_encoder->freqEncodeBrick(volume, brick_freq[thread_id],
+                                                       glm::uvec3(brick.x + thread_id * subsampling_factor,
+                                                                  brick.y, brick.z) *
+                                                       m_brick_size, m_volume_dim, detail_freq);
+                        }
                     }
                 }
 
@@ -865,14 +902,31 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
     }
 
     // prevent accidentally counting a zero frequency for rare symbols due to subsampling
+    // depending on the operation mask, different operation integers are possible:
+    constexpr uint32_t op_for_opmask[] = {OP_PARENT_BIT | OP_PALETTE_D_BIT,
+                                          OP_NEIGHBORX_BIT | OP_PALETTE_D_BIT,
+                                          OP_NEIGHBORY_BIT | OP_PALETTE_D_BIT,
+                                          OP_NEIGHBORZ_BIT | OP_PALETTE_D_BIT,
+                                          OP_ALL | OP_PALETTE_D_BIT,
+                                          OP_PALETTE_LAST_BIT | OP_PALETTE_D_BIT,
+                                          OP_PALETTE_D_BIT,
+                                          OP_PALETTE_D_BIT};
     if(subsampling_factor > 1u) {
         bool changed = false;
-        for(int i = 0; i < 16; i++) {
-            if (freq_out[i] == 0ul) {
+        #pragma omp parallel for default(none) shared(freq_out, changed, detail_freq, m_op_mask, op_for_opmask)
+        for(int i = 0; i < 8; i++) {
+            // base levels freq:
+            if (freq_out[i] == 0ul && (op_for_opmask[i] & m_op_mask)) {
                 changed = true;
                 freq_out[i] = 1ul;
             }
-            if(detail_freq && freq_out[i + 16] == 0ul) {
+            // base levels freq for stop bits:
+            if (freq_out[i + 8] == 0ul && (op_for_opmask[i] & m_op_mask) && (m_op_mask & OP_STOP_BIT)) {
+                changed = true;
+                freq_out[i + 8] = 1ul;
+            }
+            // detail freq: (no stop bits possible)
+            if (detail_freq && freq_out[i + 16] == 0ul && (op_for_opmask[i] & m_op_mask)) {
                 changed = true;
                 freq_out[i + 16] = 1ul;
             }

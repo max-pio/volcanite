@@ -63,7 +63,7 @@ void main() {
 #ifdef NO_UPSAMPLING
     const int current_block_size = 1;
 #else
-    const int current_block_size = clamp(g_subsampling / (1 << int(log2(sqrt(g_camera_still_frames + 1)))), 1, g_subsampling);
+    const int current_block_size = clamp(g_subsampling / (1 << int(log2(sqrt(float(g_camera_still_frames + 1))))), 1, g_subsampling);
 #endif
     pixel *= current_block_size;
 
@@ -117,6 +117,7 @@ void main() {
     }
 
     DEBUG_img_cache(pixel, block_rgba_sum, false);
+    DEBUG_img_empty_space_bv(pixel, block_rgba_sum, false);
 
     // output to display image
     if (current_block_size == 1) {

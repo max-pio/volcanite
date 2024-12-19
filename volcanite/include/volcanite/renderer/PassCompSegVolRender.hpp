@@ -50,10 +50,11 @@ public:
     };
 
     PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering, uint32_t queueFamilyIndex,
-                         std::vector<std::string> shaderDefines = {},
+                         std::vector<std::string> shaderDefines = {}, bool parallel_decode = false, bool enable_cache_stages = true,
                          vk::ImageUsageFlags outputImageUsage = {}, const std::string& label = "PassCompSegVolRender")
         : PassCompute(ctx, label, multiBuffering, queueFamilyIndex),
-          WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_shader_defines(std::move(shaderDefines)) {}
+          WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_shader_defines(std::move(shaderDefines)),
+          m_parallel_decode(parallel_decode), m_enable_cache_stages(enable_cache_stages) {}
 
     AwaitableHandle execute(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override;
 
@@ -63,7 +64,12 @@ public:
         setGlobalInvocationSize(REQUEST, brick_count.x, brick_count.y, brick_count.z);
         setGlobalInvocationSize(PROVISION, lod_count-1u, 1u, 1u);
         setGlobalInvocationSize(ASSIGN, brick_count.x, brick_count.y, brick_count.z);
-        setGlobalInvocationSize(DECOMPRESS, brick_count.x, brick_count.y, brick_count.z);
+        if (m_parallel_decode) {
+            const uint32_t subgroup_size = getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize;
+            setGlobalInvocationSize(DECOMPRESS, brick_count.x * brick_count.y * brick_count.z * subgroup_size, 1u, 1u);
+        } else {
+            setGlobalInvocationSize(DECOMPRESS, brick_count.x, brick_count.y, brick_count.z);
+        }
     }
     void setImageInfo(uint32_t width, uint32_t height) {
         setGlobalInvocationSize(RENDERING, width, height, 1u);
@@ -88,6 +94,8 @@ protected:
                                           {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}};
     uint32_t m_render_update_flags = 0u;                /// among others: if the GPU cache reset should be triggered on the next call
     const std::vector<std::string> m_shader_defines;   /// defines that are passed on to shader compilation
+    bool m_parallel_decode = false;                    /// if decompression is parallelized within one brick
+    bool m_enable_cache_stages = true;                 /// if the cache provision, assign, and decompress stages are executed. only required when caching full bricks.
 };
 
 } // namespace volcanite

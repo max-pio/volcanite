@@ -25,12 +25,23 @@
 #include "volcanite/compression/csgv_utils.glsl"
 #include "morton.glsl"
 
+// some compile time invariants
+#if defined(RANDOM_ACCESS) && defined(PALETTE_CACHE)
+    STATIC_FAIL(random_access_cannot_be_used_with_palette_cache);
+#endif
+
+#if !defined(RANDOM_ACCESS) && defined(DECODE_FROM_SHARED_MEMORY)
+    STATIC_FAIL(DECODE_FROM_SHARED_MEMORY_can_only_be_used_with_RANDOM_ACCESS);
+#endif
+
 
 // Read Decoded Bricks (Cache Read) ------------------------------------------------------------------------------------
 
 uint _cache_pos2idx(const uvec3 voxel_pos_in_brick) {
     return morton3Dp2i(voxel_pos_in_brick);
 }
+
+#if CACHE_MODE == CACHE_BRICKS
 
 /** Returns the label at the cache_idx_in_brick-th entry from the brick's cache region. The region starts at
  * decoded_brick_start_uint in the cache array. If a palletized cache is used, the palette index of the label is
@@ -95,6 +106,7 @@ uint readCSGVBrick(const uvec3 brick_voxel, const uint decoded_inv_lod, const ui
 }
 #endif // ifdef PALETTE_CACHE
 
+#endif // CACHE_MODE == CACHE_BRICKS
 // Decoding (Cache Write) ----------------------------------------------------------------------------------------------
 #ifndef CSGV_READ_ONLY
 
@@ -113,6 +125,7 @@ const ivec3 neighbor[8][3] = {  {ivec3(-1, 0, 0), ivec3(0, -1, 0), ivec3(0, 0, -
                                 {ivec3( 1, 0, 0), ivec3(0,  1, 0), ivec3(0, 0,  1)}};
 
 
+#if CACHE_MODE == CACHE_BRICKS
 uint _valueOfNeighborCache(const uvec3 brick_pos, const uint local_lod_i, const uint lod_width, const int neighbor_i, const uint decoded_brick_start_uint) {
     // Find the position of the neighbor and convert it to a memory index.
     ivec3 neighbor_pos = ivec3(brick_pos) + neighbor[local_lod_i][neighbor_i] * int(lod_width);
@@ -147,10 +160,16 @@ void resetCSGVBrick(const uint decoded_brick_start_uint, const uint inv_lod) {
 #endif
 }
 
+#endif // CACHE_MODE == CACHE_BRICKS
+
 #if ENCODING_MODE == NIBBLE_ENC
     #include "volcanite/compression/decoder/NibbleDecoder.glsl"
 #elif ENCODING_MODE == SINGLE_TABLE_RANS_ENC || ENCODING_MODE == DOUBLE_TABLE_RANS_ENC
     #include "volcanite/compression/decoder/RangeANSDecoder.glsl"
+#elif ENCODING_MODE == WAVELET_MATRIX_ENC
+    #include "volcanite/compression/decoder/WaveletMatrixDecoder.glsl"
+#elif ENCODING_MODE == HUFFMAN_WM_ENC
+    #include "volcanite/compression/decoder/HuffmanWMDecoder.glsl"
 #else
     STATIC_FAIL(no_decoder_specified);
 #endif

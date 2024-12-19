@@ -14,6 +14,7 @@
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
+#include "volcanite/compression/wavelet_tree/BitVector.hpp"
 
 #include <vvv/core/Buffer.hpp>
 #include <volcanite/StratifiedPixelSequence.hpp>
@@ -137,21 +138,33 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     }
 
     // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts
-    // finished). Times out after 15 seconds and throws an exception.
+    // finished). Times out after 30 seconds and throws an exception.
     // Buffer upload synchronization is handled in PassCompSegVolRender
-    getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 15 * 1000000000ull);
+    getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 30 * 1000000000ull);
 
-    // if a screenshot export was requested, we do this here
+    // track timing of the last frame
+    // TODO: renderFrame and thus the final timing finish will not be called after the last frame in HeadlessRendering
+    if (m_enable_frame_time_tracking && m_last_frame_start_time.has_value()) {
+        m_last_frame_times.emplace_back(std::chrono::duration_cast<std::chrono::nanoseconds >(
+                std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value()).count() / 1000000.);
+        m_last_frame_start_time.reset();
+    }
+
+    // if a screenshot export was requested, we do this here (not timed)
     if(m_download_frame_to_image_file.has_value() && m_mostRecentFrame.has_value()) {
         Logger(INFO) << "exporting screenshot to " << m_download_frame_to_image_file.value();
         try {
-            m_mostRecentFrame->texture->writeFile(m_download_frame_to_image_file.value());
+            m_mostRecentFrame->texture->writeFile(m_download_frame_to_image_file.value(), m_queue_family_index);
         }
         catch(const std::runtime_error& e) {
             Logger(ERROR) << "image export error: " << e.what();
         }
         m_download_frame_to_image_file = {};
     }
+
+    // time tracking start (on host side to consider semaphores, CPU work as well, not just the GPU render times)
+    if (m_enable_frame_time_tracking)
+        m_last_frame_start_time = std::chrono::high_resolution_clock::now();
 
     // check if any previous detail upload is finished
     if (m_detail_stage == DetailUploading) {
@@ -244,7 +257,6 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     m_pass->setStorageImage("accuSampleCountOut", *m_accumulation_samples_tex[1u - (m_frame % 2u)]);
     // 16 bit packed gBuffer texture storing
     m_pass->setStorageImage("gBuffer", *m_g_buffer_tex);
-
 
     std::vector<std::shared_ptr<Awaitable>> renderAwaitableList = {};
     const auto renderingFinished = m_pass->execute(renderAwaitableList, awaitBinaryAwaitableList, signalBinarySemaphore);
@@ -356,6 +368,74 @@ void CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers() {
     // Logger(DEBUG) << " CPU detail construction in " << detail_construction_timer.elapsed() * 1000.f << " ms.";
 }
 
+void CompressedSegmentationVolumeRenderer::setCompressedSegmentationVolume(
+        std::shared_ptr<CompressedSegmentationVolume> csgv, std::shared_ptr<CSGVDatabase> db) {
+    if(!csgv)
+        throw std::runtime_error("CompressedSegmentationVolume must not be null");
+    if(!db)
+        throw std::runtime_error("CompressedSegmentationVolume database must not be null");
+
+
+    if(csgv->getBrickCount().x < csgv->getLodCountPerBrick()) {
+        Logger(DEBUG) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
+                     ") in one dimension than there are brick level-of-details (" << csgv->getLodCountPerBrick() <<
+                     "). This may break some shaders. Advice: Re-Compress with a smaller brick-size.";
+    }
+    m_compressed_segmentation_volume = std::move(csgv);
+    m_data_changed = true;
+
+    // check how many bits are required to store cache indices
+    if(m_use_palette_cache) {
+        // must be (max_palette_count + 1), need an additional magic number (= 0) for not yet written output voxels
+        m_cache_palette_idx_bits = static_cast<uint32_t>(glm::ceil(
+                glm::log2(static_cast<double>(m_compressed_segmentation_volume->getMaxBrickPaletteCount()) + 1.0)));
+        m_cache_indices_per_uint = 32u / m_cache_palette_idx_bits;
+        m_cache_base_element_uints = (8u + m_cache_indices_per_uint - 1u) /
+                                     m_cache_indices_per_uint;  // = ceil(8 / m_palette_indices_per_uint)
+    } else {
+        // without paletting, the cache stores explicit 32 bit labels = one label per uint
+        m_cache_palette_idx_bits = 32u;
+        m_cache_indices_per_uint = 1u;
+        m_cache_base_element_uints = 8;
+    }
+
+    // when a database is provided, we use it for attribute visualization
+    m_csgv_db = std::move(db);
+    m_attribute_start_position.resize(m_csgv_db->getAttributeCount(), -1);
+    // update transfer function limits
+    for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
+        if (m_materials[m].discrAttribute >= 0) {
+            m_materials[m].discrInterval = m_csgv_db->getAttributeMinMax().at(m_materials[m].discrAttribute);
+            if (m == 0 && m_materials[m].discrInterval.x == 0u)
+                m_materials[m].discrInterval.x = 1u;
+        }
+        m_materials[m].tfMinMax = m_csgv_db->getAttributeMinMax().at(m_materials[m].tfAttribute);
+    }
+
+    // determine the block size of the empty space skipping grid
+    if (m_empty_space_block_dim > 0u) {
+        glm::uvec3 ess_dim;
+        // check if the ESS volume dimension supports the block size (has to be indexed with 32 bits)
+        do {
+            glm::uvec3 vol_dim = m_compressed_segmentation_volume->getVolumeDim();
+            ess_dim = vol_dim / m_empty_space_block_dim;
+            if (static_cast<size_t>(ess_dim.x) * ess_dim.y * ess_dim.z <= 0xFFFFFFFFull)
+                break;
+            m_empty_space_block_dim *= 2ul;
+        } while (true);
+        if (m_empty_space_block_dim > m_compressed_segmentation_volume->getBrickSize()) {
+            throw std::runtime_error("Brick size is too small to create empty space skipping structure.");
+        }
+
+        // each cell of the empty space skipping grid requires one bit. the bit vector is stored in BV_WordType elements.
+        // ceil(ceil(cell_count / 8) / sizeof(BV_WORD_TYPE)) * sizeof(BV_WORD_TYPE)
+        m_empty_space_buffer_size = (ess_dim.x * ess_dim.y * ess_dim.z + sizeof(BV_WordType) * 8u - 1) / 8u; // bytes
+        m_empty_space_buffer_size = ((m_empty_space_buffer_size + sizeof(BV_WordType) - 1) / sizeof(BV_WordType)) * sizeof(BV_WordType);  // bytes for words
+    } else {
+        m_empty_space_buffer_size = 0u;
+    }
+}
+
 void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     if(!m_compressed_segmentation_volume || m_compressed_segmentation_volume->getAllEncodings()->empty())
         throw std::runtime_error("CompressedSegmentationVolume not initialized!");
@@ -446,13 +526,30 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     // GPU statistics buffer
     m_gpu_stats_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_gpu_stats_buffer", .byteSize = sizeof(GPUStats), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
 
+    // empty space skipping buffer TODO: only use m_empty_space_buffer with m_cache_mode == CACHE_VOXELS?
+    if (m_empty_space_buffer_size > 0ul) {
+        m_empty_space_buffer = std::make_shared<Buffer>(ctx,
+                                                        BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_empty_space_buffer", .byteSize = m_empty_space_buffer_size, .usage =
+                                                        vk::BufferUsageFlagBits::eStorageBuffer |
+                                                        vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+        Buffer::deviceAddressUvec2(m_empty_space_buffer->getDeviceAddress(), &m_empty_space_buffer_address.x);
+    } else {
+        m_empty_space_buffer = nullptr;
+        m_empty_space_buffer_address = glm::uvec2(0u);
+    }
+
     // cache for decompressed bricks
     m_free_stack_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_free_stack_buffer", .byteSize = (m_free_stack_capacity * (lods_in_volume - 1u) + (lods_in_volume + 1u)) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_cache_info_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_info_buffer", .byteSize = bricks_in_volume*sizeof(uint32_t)*4u, .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     m_assign_info_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_assign_buffer", .byteSize = (1u + (lods_in_volume - 1u) * 3u) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     // cache size is determined depending on the cache mode
     uint32_t cache_uint_size = 0ul;
-    {
+    if (m_cache_mode == CACHE_NOTHING) {
+        cache_uint_size = 1ul; // minimal size as the cache is not used regardless
+    } else if (m_cache_mode == CACHE_VOXELS) {
+        cache_uint_size = m_target_cache_size_MB * 1024 * 1024 / sizeof(uint32_t);
+        Logger(INFO) << "Allocating cache with size " << m_target_cache_size_MB << " MB";
+    } else if (m_cache_mode == CACHE_BRICKS) {
         // limit cache size to maximum available GPU memory
         auto heap_budget_and_usage = getMemoryHeapBudgetAndUsage(*ctx);
         size_t free_heap_size = heap_budget_and_usage.first - heap_budget_and_usage.second;
@@ -506,7 +603,8 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
         Logger(INFO) << "Allocating cache with size " << m_target_cache_size_MB << " MB at " << (m_cache_base_element_uints * 32u / 8u) << " bits per label";
     }
     size_t maxGPUBufferSize = getCtx()->getPhysicalDevice().getProperties().limits.maxStorageBufferRange;
-    m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = cache_uint_size * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = cache_uint_size * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+    Buffer::deviceAddressUvec2(m_cache_buffer->getDeviceAddress(), &m_cache_buffer_address.x);
 
     updateDeviceMemoryUsage();
     Logger(INFO) << "Device memory after initialization: " << m_gui_device_mem_text;
@@ -574,6 +672,7 @@ void CompressedSegmentationVolumeRenderer::releaseResources() {
     m_cache_info_buffer = nullptr;
     m_free_stack_buffer = nullptr;
     m_cache_buffer = nullptr;
+    m_empty_space_buffer = nullptr;
     m_attribute_buffer = nullptr;
     m_materials_buffer = nullptr;
     for(auto& e : m_split_encoding_buffers)
@@ -601,12 +700,27 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
     if (m_use_palette_cache)
         shader_defines.emplace_back("PALETTE_CACHE");
+    if (m_decode_from_shared_memory)
+        shader_defines.emplace_back("DECODE_FROM_SHARED_MEMORY");
+    shader_defines.emplace_back("CACHE_MODE=" + std::to_string(m_cache_mode));
+    if (m_cache_mode == CACHE_VOXELS) {
+        shader_defines.push_back(
+                "CACHE_UVEC2_SIZE=" + std::to_string(m_target_cache_size_MB * 1024 * 1024 / sizeof(glm::uvec2)));
+    }
+    if (m_empty_space_buffer_size > 0) {
+        shader_defines.push_back(
+                "EMPTY_SPACE_UINT_SIZE=" + std::to_string(m_empty_space_buffer_size / sizeof(uint32_t)));
+    }
     shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
+    if (!m_additional_shader_defs.empty())
+        shader_defines.push_back(m_additional_shader_defs);
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if (getCtx()->getWsi())
-        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), m_queue_family_index, shader_defines);
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), m_queue_family_index, shader_defines,
+                                                        m_compressed_segmentation_volume->isUsingRandomAccess(), m_cache_mode==CACHE_BRICKS);
     else
-        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, m_queue_family_index, shader_defines);
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, m_queue_family_index, shader_defines,
+                                                        m_compressed_segmentation_volume->isUsingRandomAccess(), m_cache_mode==CACHE_BRICKS);
     m_pass->allocateResources();
     m_ucamera_info = m_pass->getUniformSet("camera_info");
     m_urender_info = m_pass->getUniformSet("render_info");
@@ -789,6 +903,10 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     if (m_clear_cache_every_frame || m_pcache_reset) {
         m_render_update_flags |= UPDATE_CLEAR_CACHE;
         m_pcache_reset = false;
+        if (m_cache_mode == CACHE_VOXELS) {
+            // trigger empty space bit vector update as well
+            m_render_update_flags |= UPDATE_PMATERIAL;
+        }
     }
 
     // reset render frame accumulation if any parameters that influence rendering changed
@@ -804,6 +922,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
         // TODO: half float precision for the accumulation buffer only allows for 2048 single samples per pixel
         if (m_accumulated_frames < 2048 * (1 << 2 * m_subsampling)) {
             m_render_update_flags |= UPDATE_RENDER_FRAME;
+            m_render_update_flags |= UPDATE_PRESOLVE;
         }
     }
 
@@ -933,6 +1052,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
     if (m_frame == 0u) {
         m_usegmented_volume_info->setUniform<glm::uvec3>("g_vol_dim", m_compressed_segmentation_volume->getVolumeDim());
         m_usegmented_volume_info->setUniform<glm::uvec3>("g_brick_count", m_compressed_segmentation_volume->getBrickCount());
+        m_usegmented_volume_info->setUniform<uint32_t>("g_brick_idx_count", m_compressed_segmentation_volume->getBrickIndexCount());
         // cache management
         m_usegmented_volume_info->setUniform<uint32_t>("g_free_stack_capacity", m_free_stack_capacity);
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_capacity", m_cache_capacity);
@@ -941,6 +1061,28 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_usegmented_volume_info->setUniform<uint32_t>("g_cache_palette_idx_bits", m_cache_palette_idx_bits);
         // encoding and detail encoding buffer management
         m_usegmented_volume_info->setUniform<uint32_t>("g_brick_idx_to_enc_vector", m_compressed_segmentation_volume->getBrickIdxToEncVectorMapping());
+        m_usegmented_volume_info->setUniform<glm::uvec2>("g_cache_buffer_address", m_cache_buffer_address);
+        m_usegmented_volume_info->setUniform<glm::uvec2>("g_empty_space_bv_address", m_empty_space_buffer_address);
+        if (m_empty_space_buffer_size > 0) {
+            if (m_empty_space_block_dim == 0u)
+                throw std::runtime_error("empty space block size cannot be 0");
+            if (m_empty_space_block_dim > m_compressed_segmentation_volume->getBrickSize())
+                throw std::runtime_error("empty space block dimension must not be greater than the brick size");
+
+            m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_block_dim", m_empty_space_block_dim);
+            uint32_t empty_space_set_size = m_empty_space_block_dim * m_empty_space_block_dim * m_empty_space_block_dim;
+            m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_set_size", empty_space_set_size);
+
+            const glm::uvec3 empty_space_dim = m_compressed_segmentation_volume->getVolumeDim() / m_empty_space_block_dim;
+            const glm::uvec3 empty_space_dot_map = {1, empty_space_dim.x, empty_space_dim.x * empty_space_dim.y};
+            assert(static_cast<size_t>(empty_space_dim.x) * empty_space_dim.y * empty_space_dim.z <= 0xFFFFFFFFull
+                   && "empty space dim too large to be indexed in 32 bit. decrease empty space block size.");
+            m_usegmented_volume_info->setUniform<glm::uvec3>("g_empty_space_dot_map", empty_space_dot_map);
+        } else {
+            m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_block_dim", 0u);
+            m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_set_size", 0u);
+            m_usegmented_volume_info->setUniform<glm::uvec3>("g_empty_space_dot_map", glm::uvec3{0});
+        }
         m_usegmented_volume_info->setUniform<glm::uvec2>("g_detail_buffer_address", m_detail_buffer_address);
         m_usegmented_volume_info->setUniform<uint32_t>("g_request_buffer_capacity", m_max_detail_requests_per_frame);
     }
@@ -978,11 +1120,11 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_gen->addSeparator();
     g_gen->addAction([this]() {
 #ifdef HEADLESS
-        m_download_frame_to_image_file = "./volcanite_output.png";
+        exportCurrentFrameToImage("./volcanite_output.png");
 #else
         if (!pfd::settings::available()) {
             Logger(WARN) << "Can not open file dialog for screenshot export. Using default file ./volcanite_output.png";
-            m_download_frame_to_image_file = "./volcanite_output.png";
+            exportCurrentFrameToImage("./volcanite_output.png");
             return;
         }
 
@@ -990,13 +1132,12 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         auto selected_file = pfd::save_file("Save Screenshot", pfd::path::home(),
                                             { "Image File (.png .jpg .jpeg)", "*.png *.jpg *.jpeg", "All Files", "*" });
         if(!selected_file.result().empty()) {
-            m_download_frame_to_image_file = selected_file.result();
-            if(!m_download_frame_to_image_file->ends_with(".png"))
-                m_download_frame_to_image_file->append(".png");
+            exportCurrentFrameToImage(selected_file.result());
         }
 #endif
     }, "Screenshot");
     //
+    g_gen->addAction([this]() { printGPUMemoryUsage(); }, "Print GPU Memory Usage");
 #ifndef HEADLESS
 #ifdef IMGUI
     g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
@@ -1057,6 +1198,11 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
+    g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(1080, 1920); }, "1080x1920 FullHD");
+#ifdef IMGUI
+    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize( 2160, 3840); }, "2160x3840 4K");
     //g_dis->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
 
     // Materials
@@ -1081,7 +1227,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                    break;
                                case 1:
                                    // global shadows
-                                   m_factor_ambient = 0.4f;
+                                   m_factor_ambient = 0.25f;
                                    m_light_intensity = 1.f;
                                    m_global_illumination_enabled = true;
                                    m_shadow_pathtracing_ratio = 0.f;
@@ -1090,8 +1236,8 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                    break;
                                case 2:
                                    // ambient occlusion
-                                   m_factor_ambient = 0.4f;
-                                   m_light_intensity = 1.f;
+                                   m_factor_ambient = 0.1f;
+                                   m_light_intensity = 1.22f;
                                    m_global_illumination_enabled = true;
                                    m_shadow_pathtracing_ratio = 1.f;
                                    m_max_path_length = 1;
@@ -1135,6 +1281,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addBool(&m_show_envmap, "Show Environment Map");
     g_dev->addBool(&m_show_normals, "Show Normals");
     g_dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
+    g_dev->addAction([this](){ getCamera()->position_look_at_world_space = {0, 0, 0}; }, "Center Camera");
     g_dev->addAction([this]() { m_pcache_reset = true; }, "Hard Reset Brick Cache");
     g_dev->addBool(&m_clear_cache_every_frame, "Clear Cache Every Frame");
     g_dev->addBool(&m_clear_accum_every_frame, "Clear Accumulation Every Frame");
@@ -1242,54 +1389,115 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     }
 
     void CompressedSegmentationVolumeRenderer::printGPUMemoryUsage() {
-
-        size_t textures = 0ul;
-        if (m_accumulation_rgba_tex[0]) {
-            textures += m_accumulation_rgba_tex[0]->memorySize() + m_accumulation_rgba_tex[1]->memorySize();
-            textures += m_accumulation_samples_tex[0]->memorySize() + m_accumulation_samples_tex[1]->memorySize();
-            for (const auto &t: *m_inpaintedOutColor)
-                textures += t->memorySize();
-        }
-
-        size_t uniform_buffers = 0ul;
-        if (m_urender_info) {
-            uniform_buffers += m_urender_info->getByteSize() + m_usegmented_volume_info->getByteSize()
-                             + m_uresolve_info->getByteSize() + m_ucamera_info->getByteSize();
-        }
-
-        size_t materials = 0ul;
-        if (m_materials_buffer) {
-            materials += m_materials_buffer->getByteSize() + m_attribute_buffer->getByteSize();
-            for (const auto &t: m_materialTransferFunctions)
-                materials += t->texture().memorySize();
-        }
-
-        size_t cache = 0ul;
-        if (m_cache_buffer) {
-            cache += m_cache_info_buffer->getByteSize() + m_cache_buffer->getByteSize()
-                   + m_free_stack_buffer->getByteSize() + m_assign_info_buffer->getByteSize()
-                   + (m_detail_requests_buffer ? m_detail_requests_buffer->getByteSize() : 0ul);
-        }
-
-        size_t encoding = 0ul;
-        if (m_brick_starts_buffer) {
-            encoding += m_split_encoding_buffer_addresses_buffer->getByteSize() + m_brick_starts_buffer->getByteSize();
-            for (const auto &b: m_split_encoding_buffers)
-                encoding += b->getByteSize();
-            if (m_detail_buffer) {
-                encoding += m_detail_buffer->getByteSize() + m_detail_starts_buffer->getByteSize();
-            }
-        }
-
-        size_t total_used = getMemoryHeapBudgetAndUsage(*getCtx()).second;
-        Logger(INFO) << "[GPU Memory] " << std::fixed << std::setprecision(3)
-                    << "Framebuffers: " << static_cast<double>(textures) / 1024. / 1024. / 1024. << " GB | "
-                    << "Uniform Buffers: " << static_cast<double>(uniform_buffers) / 1024. / 1024. / 1024. << " GB | "
-                    << "Materials: " << static_cast<double>(materials) / 1024. / 1024. / 1024. << " GB | "
-                    << "Encoding: " << static_cast<double>(encoding) / 1024. / 1024. / 1024. << " GB | "
-                    << "Cache: " << static_cast<double>(cache) / 1024. / 1024. / 1024. << " GB   | "
-                    << " = " << static_cast<double>(textures + uniform_buffers + materials + encoding + cache) / 1024. / 1024. / 1024. << " GB"
-                    << " / " << static_cast<double>(total_used) / 1024. / 1024. / 1024. << " GB";
+        CSGVRenderEvaluationResults res = getLastEvaluationResults();
+        Logger(INFO)  << "[GPU Memory] " << std::fixed << std::setprecision(3)
+                      << "Framebuffers: " << res.mem_framebuffers_bytes * BYTE_TO_GB << " GB | "
+                      << "Uniform Buffers: " << res.mem_ubos_bytes * BYTE_TO_GB << " GB | "
+                      << "Materials: " << res.mem_materials_bytes * BYTE_TO_GB << " GB | "
+                      << "Encoding: " << res.mem_encoding_bytes * BYTE_TO_GB << " GB | "
+                      << "Cache: " << res.mem_cache_bytes * BYTE_TO_GB << " GB | "
+                      << "Empty Space: " << res.mem_empty_space_bytes * BYTE_TO_GB << " GB | "
+                      << "  = " << res.mem_framebuffers_bytes + res.mem_ubos_bytes
+                      + res.mem_materials_bytes + res.mem_encoding_bytes + res.mem_cache_bytes + res.mem_empty_space_bytes * BYTE_TO_GB << " GB"
+                      << " / " << res.mem_total_bytes * BYTE_TO_GB << " GB";
     }
+
+    CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluationResults() {
+        CSGVRenderEvaluationResults results;        
+
+        // obtain GPU memory consumption
+        if (m_inpaintedOutColor != nullptr) {
+            size_t textures = 0ul;
+            if (m_accumulation_rgba_tex[0]) {
+                textures += m_accumulation_rgba_tex[0]->memorySize() + m_accumulation_rgba_tex[1]->memorySize();
+                textures += m_accumulation_samples_tex[0]->memorySize() + m_accumulation_samples_tex[1]->memorySize();
+                for (const auto &t: *m_inpaintedOutColor)
+                    textures += t->memorySize();
+            }
+            results.mem_framebuffers_bytes = textures;
+
+            size_t uniform_buffers = 0ul;
+            if (m_urender_info) {
+                uniform_buffers += m_urender_info->getByteSize() + m_usegmented_volume_info->getByteSize()
+                                   + m_uresolve_info->getByteSize() + m_ucamera_info->getByteSize();
+            }
+            results.mem_ubos_bytes = uniform_buffers;
+
+            size_t materials = 0ul;
+            if (m_materials_buffer) {
+                materials += m_materials_buffer->getByteSize() + m_attribute_buffer->getByteSize();
+                for (const auto &t: m_materialTransferFunctions) {
+                    if (t)
+                        materials += t->texture().memorySize();
+                }
+            }
+            results.mem_materials_bytes = materials;
+
+            size_t cache = 0ul;
+            if (m_cache_buffer) {
+                cache += m_cache_info_buffer->getByteSize() + m_cache_buffer->getByteSize()
+                         + m_free_stack_buffer->getByteSize() + m_assign_info_buffer->getByteSize()
+                         + (m_detail_requests_buffer ? m_detail_requests_buffer->getByteSize() : 0ul);
+            }
+            results.mem_cache_bytes = cache;
+
+            size_t empty_space = 0ul;
+            if (m_empty_space_buffer) {
+                empty_space = m_empty_space_buffer->getByteSize();
+            }
+            results.mem_empty_space_bytes = empty_space;
+
+            size_t encoding = 0ul;
+            if (m_brick_starts_buffer) {
+                encoding +=
+                        m_split_encoding_buffer_addresses_buffer->getByteSize() + m_brick_starts_buffer->getByteSize();
+                for (const auto &b: m_split_encoding_buffers)
+                    encoding += b->getByteSize();
+                if (m_detail_buffer) {
+                    encoding += m_detail_buffer->getByteSize() + m_detail_starts_buffer->getByteSize();
+                }
+            }
+            results.mem_encoding_bytes = encoding;
+
+            results.mem_total_bytes = getMemoryHeapBudgetAndUsage(*getCtx()).second;
+        }
+
+        // frame times are only available if tracking was enabled via setEvalTracking(true)
+        if (m_enable_frame_time_tracking) {
+            Logger(WARN) << "Querying rendering results before frame time tracking was stopped";
+        }
+        if (!m_last_frame_times.empty()) {
+            double min = std::numeric_limits<double>::max();
+            double m1 = 0.;
+            double m2 = 0.;
+            double max = -1.;
+            for(int i = 0; i < m_last_frame_times.size(); i++) {
+                const auto& ms = m_last_frame_times[i];
+                if (i < 16)
+                    results.frame_ms[i] = ms;
+                min = std::min(min, ms);
+                max = std::max(max, ms);
+                m1 += ms;
+                m2 += ms * ms;
+            }
+            for(int i = m_last_frame_times.size(); i < 16; i++)
+                results.frame_ms[i] = 0.;
+            auto frame_time_cpy = m_last_frame_times;
+            nth_element(frame_time_cpy.begin(),
+                        frame_time_cpy.begin()+(frame_time_cpy.size() / 2),
+                        frame_time_cpy.end());
+            results.frame_min_ms = min;
+            results.frame_avg_ms = m1 / m_last_frame_times.size();
+            results.frame_sdv_ms = std::sqrt((m2 / m_last_frame_times.size()) - results.frame_avg_ms * results.frame_avg_ms);
+            results.frame_med_ms = *(frame_time_cpy.begin()+(frame_time_cpy.size() / 2));
+            results.frame_max_ms = max;
+            results.accumulated_frames = m_last_frame_times.size();
+            Logger(DEBUG) << "CSGV rendering evaluation: "
+                               << results.frame_min_ms << " / " << results.frame_avg_ms << " / " << results.frame_max_ms
+                               << " [ms/frame] (min/avg/max) | " << results.accumulated_frames << " total frames";
+        }
+        return results;
+    }
+
 
 } // namespace volcanite

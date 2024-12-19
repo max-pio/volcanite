@@ -169,7 +169,15 @@ public:
 
     /// @discouraged this is a shorthand that drains the GPU pipeline and waits on the host. It allocates intermediate memory in
     /// the size of the texture.
-    std::vector<uint8_t> download(uint32_t queueFamily=0u) { return capture({.queueFamily=queueFamily, .hostWait = true}).second->download(); }
+    std::vector<uint8_t> download(uint32_t queueFamily=0u) {
+        // add full image barrier for download to host
+        m_ctx->executeCommands([&](vk::CommandBuffer commandBuffer) {
+            vk::ImageSubresourceRange imageSubresourceRange(aspectMask, 0, 1, 0, 1);
+            vk::ImageMemoryBarrier imageMemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eHostWrite, descriptor.imageLayout, descriptor.imageLayout, queueFamily, queueFamily,image, imageSubresourceRange);
+            commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eHost, {}, nullptr, nullptr, imageMemoryBarrier);
+        });
+        return capture({.queueFamily=queueFamily, .hostWait = true}).second->download();
+    }
 
     /// @discouraged this is a shorthand that drains the GPU pipeline and waits on the host.
     void writeExr(const std::string path, uint32_t queueFamily) {

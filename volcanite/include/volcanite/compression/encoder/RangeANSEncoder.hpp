@@ -22,17 +22,17 @@ namespace volcanite {
 class RangeANSEncoder : public CSGVSerialBrickEncoder {
 
 public:
-    RangeANSEncoder(uint32_t brick_size, EncodingMode encoding_mode)
-            : CSGVSerialBrickEncoder(brick_size, encoding_mode) {
+    RangeANSEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask)
+            : CSGVSerialBrickEncoder(brick_size, encoding_mode, op_mask) {
         if (encoding_mode != SINGLE_TABLE_RANS_ENC && encoding_mode != DOUBLE_TABLE_RANS_ENC)
             throw std::runtime_error("NibbleEncoder must be used with SINGLE_TABLE_RANS or DOUBLE_TABLE_RANS"
                                      " encoding mode.");
         m_rans_initialized = false;
     }
 
-    RangeANSEncoder(uint32_t brick_size, EncodingMode encoding_mode,
+    RangeANSEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask,
                     const uint32_t code_frequencies[16], const uint32_t detail_code_frequencies[16])
-            : CSGVSerialBrickEncoder(brick_size, encoding_mode) {
+            : CSGVSerialBrickEncoder(brick_size, encoding_mode, op_mask) {
         if (encoding_mode != SINGLE_TABLE_RANS_ENC && encoding_mode != DOUBLE_TABLE_RANS_ENC)
             throw std::runtime_error("NibbleEncoder must be used with SINGLE_TABLE_RANS or DOUBLE_TABLE_RANS"
                                      " encoding mode.");

@@ -70,6 +70,7 @@ The encoders may support different functionality, with optional methods in brace
 * (decoding with debug information, i.e. the list of CSGV operations)
 * (computing operation frequency tables for variable bit-length encoding)
 * (detail level separation in the encoding stream)
+* (random access decoding of single voxels)
 
 The CPU encoders specify a set of compile time defines for the shader compiler.
 This includes specialized configuration for a certain encoder as well as a set of common parameters:

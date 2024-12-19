@@ -22,6 +22,11 @@ layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly res
     uint buf[];
 };
 
+layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict UVec4ArrayRef
+{
+    uvec4 buf[];
+};
+
 // TODO: use push constants for camera parameters and uniform buffers for things that change rarely
 
 // static information that does not change as long as the segmentation volume or cache parameters are not udpated
@@ -30,6 +35,7 @@ layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uvec3 g_vol_dim;                // xyz dimension of the original volume
     // uint g_vol_max_label;        // unused: maximum label in the segmented volume
     uvec3 g_brick_count;            // number of bricks in each xyz dimension for the encoded volume
+    uint g_brick_idx_count;         // number of brick indicies (brick_count.x * .y * .z)
 // cache management
     uint g_free_stack_capacity;     // number of max. stack elements in each LoD of the free_block_stack
     uint g_cache_capacity;          // number of base elements that can be held in cache at the same time
@@ -38,6 +44,11 @@ layout(std140, set=0, binding=0) uniform segmented_volume_info {
     uint g_cache_palette_idx_bits;  // size of one index of one output element in the cache measured in bits
 // encoding and detail encoding buffer management
     uint g_brick_idx_to_enc_vector; // dividing the brick index by this number yields its encoding vector index
+    uvec2 g_cache_buffer_address;
+    uvec2 g_empty_space_bv_address; // empty space bit vector: 0 = voxel set potentially visible, 1 = no visible labels
+    uint g_empty_space_block_dim;   // a block of [g_empty_space_block_dim]^3 voxels is grouped into an empty space set
+    uint g_empty_space_set_size;    // how many voxels are grouped into one bit (= g_empty_space_block_dim^3)
+    uvec3 g_empty_space_dot_map;    // dot(voxel / es_block_size, es_dot_map) yields the 1D empty space index of voxel
     uvec2 g_detail_buffer_address;
     uint g_request_buffer_capacity; // the size of the request buffer for brick detail encodings
 };
@@ -101,11 +112,17 @@ layout(std430, binding = 5) buffer restrict free_block_stacks
 
 layout(std430, binding = 6) buffer restrict brick_cache
 {
-// contains g_cache_capacity base elements made up by (base_element_size) uints to fit 2x2x2=8 output voxels.
-// the g_brick_info[].CACHE_INDEX points to a base element from which on it is decoded into N
-// base elements, where N depends on the LoD that this is decoded to. The higher the inv. lod
-// the higher is N because more base elements are needed to store the finer brick resolution.
+#if CACHE_MODE == CACHE_VOXELS
+    // contains CACHE_UVEC2_SIZE elements as (voxel_id_key, voxel_label).
+    // a voxel_id_key of INVALID denotes an empty cache cell
+    uvec2 g_cache[];
+#else
+    // contains g_cache_capacity base elements made up by (base_element_size) uints to fit 2x2x2=8 output voxels.
+    // the g_brick_info[].CACHE_INDEX points to a base element from which on it is decoded into N
+    // base elements, where N depends on the LoD that this is decoded to. The higher the inv. lod
+    // the higher is N because more base elements are needed to store the finer brick resolution.
     uint g_cache[];
+#endif
 };
 
 #ifdef SEPARATE_DETAIL

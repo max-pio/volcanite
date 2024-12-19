@@ -57,7 +57,11 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
         csgvDatabase->updateDummyMinMax(*csgv);
 
     const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
-    renderer->setDecodingParameters(args.cache_size_MB, args.cache_palettized);
+    renderer->setDecodingParameters({.cache_size_MB=args.cache_size_MB,
+                                     .palettized_cache=args.cache_palettized,
+                                     .decode_from_shared_memory=false,
+                                     .cache_mode=args.cache_mode,
+                                     .empty_space_resolution=args.empty_space_resolution});
     renderer->setCompressedSegmentationVolume(csgv, csgvDatabase);
     // not setting render config: use default values
     renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
@@ -85,9 +89,13 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
 
 static const std::string OUT_DIR = "./render_test/";
 static const std::vector<VolcaniteArgs> RENDERING_TEST_CONFIGS = {
-        {.screenshot_output_file=OUT_DIR + "nibble_32.png", .brick_size=32, .encoding_mode=NIBBLE_ENC},
-        {.screenshot_output_file=OUT_DIR + "rANSd_64_cache-palette.png", .cache_palettized=true, .brick_size=64, .encoding_mode=SINGLE_TABLE_RANS_ENC},
-        {.screenshot_output_file=OUT_DIR + "rANS_16_stream-lod.png", .stream_lod=true, .brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC}
+        {.brick_size=32, .encoding_mode=NIBBLE_ENC, .screenshot_output_file=OUT_DIR + "nibble_32.png"},
+        {.cache_palettized=true, .brick_size=64, .encoding_mode=SINGLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANSd_64_cache-palette.png"},
+        {.stream_lod=true, .brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANS_16_stream-lod.png"},
+        {.brick_size=16, .encoding_mode=NIBBLE_ENC, .operation_mask=OP_ALL_WITHOUT_STOP, .random_access=true, .screenshot_output_file=OUT_DIR + "nibble_16_ra.png"},
+        {.cache_mode=CACHE_BRICKS, .brick_size=64, .encoding_mode=HUFFMAN_WM_ENC, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_32_ra_cache_brck.png"},
+        {.cache_mode=CACHE_VOXELS, .empty_space_resolution=2u, .brick_size=16, .encoding_mode=HUFFMAN_WM_ENC,  .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_32_ra_cache_none.png"},
+        {.cache_mode=CACHE_NOTHING, .brick_size=32, .encoding_mode=HUFFMAN_WM_ENC, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_32_ra_cache_voxl.png"},
     };
 
 glm::vec4 CIE_rgb2xyz(const glm::vec4& rgba) {
@@ -168,7 +176,7 @@ int main() {
     // create headless rendering engine with GPU context
 
     // create dummy segmentation volume
-    glm::uvec3 dim = {100, 80, 95};
+    glm::uvec3 dim = {133, 70, 194};
     const auto volume = createDummySegmentationVolume(dim);
 
     // create compressed segmentation volume
@@ -189,10 +197,10 @@ int main() {
         csgv->clear();
         if (args.encoding_mode == SINGLE_TABLE_RANS_ENC || args.encoding_mode == DOUBLE_TABLE_RANS_ENC) {
             // obtain frequency table(s)
-            csgv->setCompressionOptions64(args.brick_size, NIBBLE_ENC);
+            csgv->setCompressionOptions64(args.brick_size, NIBBLE_ENC, args.operation_mask, args.random_access);
             csgv->compressForFrequencyTable(volume.dataConst(), dim, freq, 2, args.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
         }
-        csgv->setCompressionOptions64(args.brick_size, args.encoding_mode, freq, freq + 16);
+        csgv->setCompressionOptions64(args.brick_size, args.encoding_mode, args.operation_mask, args.random_access, freq, freq + 16);
         csgv->compress(volume.dataConst(), dim, false);
         // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
         if(args.stream_lod && !csgv->isUsingSeparateDetail()) {

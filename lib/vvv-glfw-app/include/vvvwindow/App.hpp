@@ -50,7 +50,7 @@ private:
                 Logger(WARN) << "Could not create non-existing video export directory " << video_directory;
             }
             else {
-                m_record_file_path = video_directory.generic_string() + "/vvv_record_file.rec";
+                m_record_file_path = video_directory.generic_string() + "/volcanite_record_file.rec";
                 m_video_file_path = video_directory.generic_string() + "/video";
             }
         };

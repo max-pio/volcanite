@@ -25,8 +25,8 @@ namespace volcanite {
 class CSGVSerialBrickEncoder : public CSGVBrickEncoder {
 
 public:
-    CSGVSerialBrickEncoder(uint32_t brick_size, EncodingMode encoding_mode)
-            : CSGVBrickEncoder(brick_size, encoding_mode) {}
+    CSGVSerialBrickEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask=OP_ALL)
+            : CSGVBrickEncoder(brick_size, encoding_mode, op_mask) {}
 
     // SERIAL ENCODING -------------------------------------------------------------------------------------------------
 
@@ -56,6 +56,8 @@ public:
     virtual uint32_t separateDetail(const uint32_t* brick_encoding, uint32_t brick_encoding_length,
                                 uint32_t* base_encoding_out, uint32_t* detail_encoding_out) const override {
 
+        assert(!m_separate_detail && "encoder already marks detail level as separated");
+
         // obtain brick information before the content is overwritten:
         const uint32_t header_size = getHeaderSize();
         const uint32_t lod_count = getLodCountPerBrick();
@@ -69,14 +71,13 @@ public:
 
         // copy the first part of the header (LOD starts from 0 to L-2 without the detail level), to the base encoding buffer.
         // the header is missing one element (start pos. of the detail layer) now, so we have to adjust the lod start entries.
-        memmove(base_encoding_out, brick_encoding, (lod_count - 1u) * sizeof(uint32_t));
         for(int l = 0; l < (lod_count - 1u); l++)
-            base_encoding_out[l] -= 8u;
-        // move the palette part of the encoding header one element to the front
+            base_encoding_out[l] = brick_encoding[l] - 8u;
+
+        // move the palette size entry in the encoding header one element to the front
         // (because the encoding_start entry for the detail buffer is now missing in between)
-        memmove(base_encoding_out + (lod_count - 1u),
-                brick_encoding + lod_count,
-                (lod_count + 1u) * sizeof(uint32_t));
+        assert(lod_count == getPaletteSizeHeaderIndex());
+        base_encoding_out[lod_count - 1] = brick_encoding[getPaletteSizeHeaderIndex()];
         // move the base encoding
         memmove(base_encoding_out + (header_size - 1u),
                 brick_encoding + header_size,
@@ -103,6 +104,7 @@ public:
 
     // VARIABLE BIT-LENGTH ENCODING ------------------------------------------------------------------------------------
 
+    /// Computes operation frequencies and detail operation frequencies (the latter offset by 16) for the brick into the given brick_freq[32] array.
     void freqEncodeBrick(const std::vector<uint32_t>& volume, size_t* brick_freq, glm::uvec3 start,
                          glm::uvec3 volume_dim, bool detail_freq) const override;
 
@@ -124,6 +126,15 @@ public:
 
     /// returns the index of the uint32_t element in the brick encoding / header that stores the palette size.
     [[nodiscard]] virtual uint32_t getPaletteSizeHeaderIndex() const override { return getHeaderSize() - 1u; }
+
+    /// @returns a list of shader defines used during decoding which are passed to the shader compilation stage
+    [[nodiscard]] virtual std::vector<std::string>
+    getGLSLDefines(std::function<std::span<const uint32_t>(uint32_t)> getBrickEncodingSpan,
+                   uint32_t brick_idx_count) const {
+        auto defines = CSGVBrickEncoder::getGLSLDefines(getBrickEncodingSpan, brick_idx_count);
+        defines.emplace_back("HEADER_SIZE=" + std::to_string(getHeaderSize()));
+        return defines;
+    }
 
     // DEBUGGING AND STATISTICS ----------------------------------------------------------------------------------------
 
@@ -170,7 +181,7 @@ protected:
     virtual uint32_t readNextLodOperationFromEncoding(const uint32_t* brick_encoding, ReadState& state) const = 0;
 
     /// returns the size of the header at the beginning of each brick measured in uint32 entries.
-    [[nodiscard]] uint32_t getHeaderSize() const { return getLodCountPerBrick() * 2 + (m_separate_detail ? 0 : 1); }
+    [[nodiscard]] uint32_t getHeaderSize() const { return getLodCountPerBrick() + (m_separate_detail ? 0 : 1); }
 };
 
 } // namespace volcanite

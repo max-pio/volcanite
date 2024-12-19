@@ -32,12 +32,38 @@
 
 namespace volcanite {
 
+struct CSGVRenderEvaluationResults {
+    double frame_min_ms = -1.;
+    double frame_avg_ms = -1.;
+    double frame_sdv_ms = -1.;
+    double frame_med_ms = -1.;
+    double frame_max_ms = -1.;
+    double frame_ms[16] = {-1.};
+    double total_ms = 0.f;
+    double mem_framebuffers_bytes = 0.;
+    double mem_ubos_bytes = 0.;
+    double mem_materials_bytes = 0.;
+    double mem_encoding_bytes = 0.;
+    double mem_cache_bytes = 0.;
+    double mem_empty_space_bytes = 0.;
+    double mem_total_bytes = 0.;
+    int accumulated_frames = 0;
+//    double spp_min = 0.f;
+//    double spp_avg = 0.f;
+//    double spp_max = 0.f;
+//    double samples_total = 0.f;
+
+};
+
 class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuContext {
 
 public:
     CompressedSegmentationVolumeRenderer(bool release_version = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false),
                                                                          m_pcamera_hash(0ul), m_resolution(1920, 1080), m_accumulated_frames(0), m_frame(0u),
                                                                          m_release_version(release_version) {
+        // initialize camera in orbital mode
+        m_camera = std::make_shared<vvv::Camera>(true);
+
         // initialize the shading materials with something reasonable
         for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
             auto &mat = m_materials[m];
@@ -65,6 +91,7 @@ public:
         ctx->enableDeviceExtension("VK_EXT_memory_budget");
         ctx->physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
         ctx->physicalDeviceFeatures().setShaderInt64(true);
+        ctx->physicalDeviceFeaturesV12().setShaderBufferInt64Atomics(true);
     }
 
     /// Initializes Descriptorsets and calls pipeline initialization.
@@ -131,47 +158,7 @@ public:
         m_gui_interface = nullptr;
     }
 
-    void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> csgv, std::shared_ptr<CSGVDatabase> db) {
-        if(!csgv)
-            throw std::runtime_error("CompressedSegmentationVolume must not be null");
-        if(!db)
-            throw std::runtime_error("CompressedSegmentationVolume database must not be null");
-
-
-        if(csgv->getBrickCount().x < csgv->getLodCountPerBrick()) {
-            Logger(DEBUG) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
-                         ") in one dimension than there are brick level-of-details (" << csgv->getLodCountPerBrick() <<
-                         "). This may break some shaders. Advice: Re-Compress with a smaller brick-size.";
-        }
-        m_compressed_segmentation_volume = std::move(csgv);
-        m_data_changed = true;
-
-        // check how many bits are required to store cache indices
-        if(m_use_palette_cache) {
-            // must be (max_palette_count + 1), need an additional magic number (= 0) for not yet written output voxels
-            m_cache_palette_idx_bits = static_cast<uint32_t>(glm::ceil(
-                    glm::log2(static_cast<double>(m_compressed_segmentation_volume->getMaxBrickPaletteCount()) + 1.0)));
-            m_cache_indices_per_uint = 32u / m_cache_palette_idx_bits;
-            m_cache_base_element_uints = (8u + m_cache_indices_per_uint - 1u) /
-                                         m_cache_indices_per_uint;  // = ceil(8 / m_palette_indices_per_uint)
-        } else {
-            // without paletting, the cache stores explicit 32 bit labels = one label per uint
-            m_cache_palette_idx_bits = 32u;
-            m_cache_indices_per_uint = 1u;
-            m_cache_base_element_uints = 8;
-        }
-
-        // when a database is provided, we use it for attribute visualization
-        m_csgv_db = std::move(db);
-        m_attribute_start_position.resize(m_csgv_db->getAttributeCount(), -1);
-        // update transfer function limits
-        for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
-            if(m_materials[m].discrAttribute >= 0) {
-                m_materials[m].discrInterval = m_csgv_db->getAttributeMinMax().at(m_materials[m].discrAttribute);
-            }
-            m_materials[m].tfMinMax = m_csgv_db->getAttributeMinMax().at(m_materials[m].tfAttribute);
-        }
-    }
+    void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> csgv, std::shared_ptr<CSGVDatabase> db);
 
     /// Creates and populates all GPU buffers for the currently set compressed segmentation volume data set.
     /// Blocks until all buffer acquisitions and uploads are finished.
@@ -179,9 +166,18 @@ public:
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
-    int getTargetAccumulationFrames() { return m_target_accum_frames; }
+    [[nodiscard]] int getTargetAccumulationFrames() const { return m_target_accum_frames; }
     /// Will save the renderer state to the path when the renderer is shut down
     void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = std::move(path); }
+
+    struct CSGVRenderingConfig {
+        size_t cache_size_MB = 1024;
+        bool palettized_cache = false;
+        bool decode_from_shared_memory = false; ///< requires random access and CACHE_BRICKS cache_mode
+        uint32_t cache_mode = CACHE_BRICKS;     ///< CACHE_NOTHING, CACHE_VOXELS, or CACHE_BRICKS (req. w.o. random access)
+        uint32_t empty_space_resolution = 2u;   ///< n³ voxels are grouped into one empty space entry. 0 to disable.
+        std::string shader_defines = "";        ///< Space separated additional definitions passed on to shader compilers 
+    };
 
     /// @brief Configures the CSGV decoding and caching behaviour of the renderer.
     ///
@@ -191,14 +187,57 @@ public:
     /// Actual cache size may be lower if less space is needed or not enough GPU memory is available.
     /// @param palettized_cached if true, the cache stores palette indices instead of labels. Allows to store larger
     /// portions of the volume in cache at the expense of a performance decrease.
-    void setDecodingParameters(size_t cache_size_MB, bool palettized_cache) {
-        m_target_cache_size_MB = cache_size_MB;
+    /// @param decode_from_shared_memory if true, the encoding will be copied to shared memory before decoding.
+    /// only works in combination with a random access encoding.
+    void setDecodingParameters(CSGVRenderingConfig config) {
+        // TODO: instead of copying all CSGVRenderingConfig parameters, simply store such a struct as member
+        m_target_cache_size_MB = config.cache_size_MB;
         if(m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
             Logger(WARN) << "Cache size is currently limited to 4 GB maximum.";
             m_target_cache_size_MB = 4294967295ul / 1024ul / 1024ul;
         }
-        m_use_palette_cache = palettized_cache;
+        m_use_palette_cache = config.palettized_cache;
+        m_decode_from_shared_memory = config.decode_from_shared_memory;
+        if (config.cache_mode > 2)
+            throw std::runtime_error("Invalid cache mode " + std::to_string(config.cache_mode));
+        m_cache_mode = config.cache_mode;
+        m_empty_space_block_dim = config.empty_space_resolution;
+        m_additional_shader_defs = config.shader_defines;
     }
+
+    // evaluation and statistics
+    void startFrameTimeTracking() override { m_enable_frame_time_tracking = true; m_last_frame_times.clear(); m_last_frame_start_time.reset(); }
+    /// Stops the tracking. Should be immediately called after last renderNextFrame. If awaitLastFrameFinished is set,
+    /// either to {} or an awaitable list, the method waits for the awaitables to finish and adds a final timing
+    /// measurement for the last frame. Query the results with getLastEvaluationResults()
+    void stopFrameTimeTracking(std::optional<AwaitableList> awaitLastFrameFinished) override {
+        // if the last frame is rendering, wait for completion and track
+        if (awaitLastFrameFinished.has_value()) {
+            getCtx()->sync->hostWaitOnDevice(awaitLastFrameFinished.value(), 60 * 1000000000ull);
+            if (m_enable_frame_time_tracking && m_last_frame_start_time.has_value()) {
+                m_last_frame_times.emplace_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value()).count()) /
+                                                1000000.);
+                m_last_frame_start_time.reset();
+            }
+        }
+        m_enable_frame_time_tracking = false;
+        m_last_frame_start_time.reset();
+    }
+
+    void exportCurrentFrameToImage(std::string image_path) override {
+        if(!image_path.ends_with(".png")
+           && !image_path.ends_with(".jpg")
+           && !image_path.ends_with(".jpeg")) {
+            image_path.append(".png");
+        }
+        m_download_frame_to_image_file = image_path;
+    }
+
+    /// Returns statistics about frame times and GPU memory consumption. Frame times are only available if tracking was
+    /// enabled via startFrameTimeTracking(). Tracking should have been stopped with stopFrameTimeTracking() when called.
+    CSGVRenderEvaluationResults getLastEvaluationResults();
+    void printGPUMemoryUsage();
 
 private:
     /// Fills m_constructed_detail and m_constructed_detail_starts buffers with detail encodings of requested brick
@@ -206,7 +245,6 @@ private:
     /// m_detail_stage being set to DetailAwaitingUpload.
     void updateCPUDetailBuffers();
 
-    void printGPUMemoryUsage();
 
 private:
     // (gui) parameters:
@@ -215,9 +253,9 @@ private:
     std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
     float m_factor_ambient = 0.4f;
     // shading and post processing
-    glm::vec4 m_background_color_a = glm::vec4(0.9f, 0.9f, 0.95f, 1.f);
+    glm::vec4 m_background_color_a = glm::vec4(1.f, 1.f, 1.f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
-    int m_subsampling = 1;
+    int m_subsampling = 0;
     bool m_tonemap_enabled = false;
     bool m_global_illumination_enabled = false;
     bool m_envmap_enabled = false;
@@ -272,6 +310,8 @@ private:
     std::vector<bool> m_gpu_material_changed = std::vector<bool>(SEGMENTED_VOLUME_MATERIAL_COUNT, true);
     std::vector<GPUSegmentedVolumeMaterial> m_gpu_materials{SEGMENTED_VOLUME_MATERIAL_COUNT};
 
+    bool m_decode_from_shared_memory = false;   ///< if true, the encoding is copied to shared memory before decoding. Requires random access encoding.
+    uint32_t m_cache_mode = CACHE_BRICKS;       ///< if full bricks are decoded into the cache or single voxels, or if no cache is used at all
     // palettized cache
     bool m_use_palette_cache = false;           ///< if the cache stores indices into brick palettes instead of the actual indexed labels
     uint32_t m_cache_palette_idx_bits = 32u;    ///< the GPU cache can store palette indices with fewer than 32 bits per entry
@@ -279,9 +319,14 @@ private:
     uint32_t m_cache_base_element_uints = 8;    ///< number of uints needed to store 2x2x2 output voxels
     size_t m_target_cache_size_MB = 0u;         ///< user parameter: 0 to use as much GPU memory as possible
     size_t m_cache_capacity = 0ul;              ///< this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x (sizeof(uint)=32) / m_palette_indices_per_uint bytes large
+    uint32_t m_empty_space_block_dim = 2ul;                ///< block_size^3 voxels are grouped together into one empty space bit
+    size_t m_empty_space_buffer_size = 0ul;                 ///< byte size of the empty space skipping bit vector (dividable by 16)
     const size_t m_free_stack_capacity = 262144ul;          ///< how many elements (one uint = 4B each) fit into the free stack of EACH LoD > 0. We need max. volume_size/brick_size/lod_width³ elements. a capacity of 262144 equals 1MB * (lod_count-1)
     std::shared_ptr<Buffer> m_cache_info_buffer = nullptr;
     std::shared_ptr<Buffer> m_cache_buffer = nullptr;       ///< cache_capacity * 2x2x2 uints
+    glm::uvec2 m_cache_buffer_address = {};
+    std::shared_ptr<Buffer> m_empty_space_buffer = nullptr; ///< bit vector storing if a set of voxels is empty space
+    glm::uvec2 m_empty_space_buffer_address = {};
     std::shared_ptr<Buffer> m_free_stack_buffer = nullptr;  ///< (lod_count - 1) * free_stack_capacity uints followed by (lod_count - 1) stack counters [free_stack_top[1], ..., fst[N-1])
     std::shared_ptr<Buffer> m_assign_info_buffer = nullptr; ///< (lod_count - 1) * 3 * uint assign infos for the LoDs + 1 * uint atomic top-index for the cache buffer
 
@@ -315,7 +360,21 @@ private:
     std::pair<std::shared_ptr<vvv::Awaitable>, std::shared_ptr<Buffer>> m_detail_staging = {nullptr, nullptr};
     size_t m_parameter_hash_at_last_reset = 0u;
 
+    uint32_t m_render_update_flags = 0u;          ///< each bit marks if a set of rendering parameters changed in this frame
+
+    size_t m_pcamera_hash = ~0u;                  ///< hash of the last camera parameters
+    size_t m_prender_hash = ~0u;                  ///< hash of the last rendering parameters
+    bool m_pmaterial_reset = true;                ///< if the material parameters where changed since the last frame
+    size_t m_presolve_hash = ~0u;                 ///< hash of the last resolve shader parameters
+    bool m_pcache_reset = true;                   ///< if the cache must reset this frame
+    uint32_t m_accumulated_frames = 0u;
+    vk::Extent2D m_resolution;
+
+    uint32_t m_frame;
+    std::optional<RendererOutput> m_mostRecentFrame = {};
+
     // debugging
+    bool m_release_version = false;               ///< if this is used in a release where development parameters are hidden
     struct GPUStats {
         uint32_t gpu_blocks_decoded[6];
         uint32_t gpu_blocks_in_cache[6];
@@ -323,21 +382,13 @@ private:
         uint32_t gpu_raymarch_samples;
         uint32_t gpu_bbox_hits;
     } m_last_gpu_stats = {};
+    std::string m_additional_shader_defs = "";
+
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
 
-    bool m_release_version = false;               ///< if this is used in a release where development parameters are hidden
-
-    uint32_t m_render_update_flags = 0u;          ///< each bit marks if a set of rendering parameters changed in this frame
-    size_t m_pcamera_hash = ~0u;                  ///< hash of the last camera parameters
-    size_t m_prender_hash = ~0u;                  ///< hash of the last rendering parameters
-    bool m_pmaterial_reset = true;                ///< if the material parameters where changed since the last frame
-    size_t m_presolve_hash = ~0u;                 ///< hash of the last resolve shader parameters
-    bool m_pcache_reset = true;                   ///< if the cache must reset this frame
-    uint32_t m_accumulated_frames = 0u;
-
-    vk::Extent2D m_resolution;
-    uint32_t m_frame;
-    std::optional<RendererOutput> m_mostRecentFrame = {};
+    bool m_enable_frame_time_tracking = false;
+    std::optional<std::chrono::high_resolution_clock::time_point> m_last_frame_start_time = {};
+    std::vector<double> m_last_frame_times = {};
 };
 
 } // namespace volcanite

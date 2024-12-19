@@ -79,13 +79,13 @@ int volcanite_synth_volume_main(int argc, char *argv[]) {
     auto volume = createDummySegmentationVolume(volume_dim);
 
     // compress volume
-    size_t freq[32];
+    size_t operation_freq[32];
     if (args.encoding_mode == SINGLE_TABLE_RANS_ENC || args.encoding_mode == DOUBLE_TABLE_RANS_ENC) {
         // obtain frequency table(s)
-        compressedSegmentationVolume->setCompressionOptions64(args.brick_size, NIBBLE_ENC);
-        compressedSegmentationVolume->compressForFrequencyTable(volume.dataConst(), volume_dim, freq, 2, args.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
+        compressedSegmentationVolume->setCompressionOptions64(args.brick_size, NIBBLE_ENC, args.operation_mask, args.random_access);
+        compressedSegmentationVolume->compressForFrequencyTable(volume.dataConst(), volume_dim, operation_freq, args.freq_subsampling, args.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
     }
-    compressedSegmentationVolume->setCompressionOptions64(args.brick_size, args.encoding_mode, freq, freq + 16);
+    compressedSegmentationVolume->setCompressionOptions64(args.brick_size, args.encoding_mode, args.operation_mask, args.random_access, operation_freq, operation_freq + 16);
     compressedSegmentationVolume->compress(volume.dataConst(), volume_dim, false);
     // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
     if(args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
@@ -111,7 +111,11 @@ int volcanite_synth_volume_main(int argc, char *argv[]) {
             csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
 
         const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
-        renderer->setDecodingParameters(args.cache_size_MB, args.cache_palettized);
+        renderer->setDecodingParameters({.cache_size_MB=args.cache_size_MB,
+                                         .palettized_cache=args.cache_palettized,
+                                         .decode_from_shared_memory=args.decode_from_shared_memory,
+                                         .cache_mode=args.cache_mode,
+                                         .empty_space_resolution=args.empty_space_resolution});
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
 
         // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)

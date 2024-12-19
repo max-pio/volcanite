@@ -15,6 +15,10 @@ layout (local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 #define CSGV_DECODING_ARRAY g_cache
 #include "volcanite/compression/compressed_segmentation_volume.glsl"
 
+#ifdef RANDOM_ACCESS
+    STATIC_ASSERT(serial_decoding_cannot_be_used_with_RANDOM_ACCESS);
+#endif
+
 void main() {
     const uint brick_idx = gl_GlobalInvocationID.x + pc.brick_idx_offset;
     if (isHelperLane(brick_idx, g_brick_idx_count))

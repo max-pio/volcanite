@@ -37,19 +37,25 @@ namespace volcanite {
 class CSGVBenchmarkPass : public PassCompute {
 
     public:
-        CSGVBenchmarkPass(CompressedSegmentationVolume* csgv, GpuContextPtr ctx, bool use_palette_cache,
-                             uint32_t cache_size_MB = 1024, const std::string& label = "CSGVBenchmark")
+        CSGVBenchmarkPass(CompressedSegmentationVolume* csgv, GpuContextPtr ctx,
+                             uint32_t cache_size_MB = 1024, bool palette_cache = false,
+                             bool decode_from_shared_memory = false, const std::string& label = "CSGVBenchmark")
                 : WithGpuContext(ctx),
                   WithMultiBuffering(NoMultiBuffering),
                   PassCompute(ctx, label, NoMultiBuffering, ctx->getQueueFamilyIndices().compute.value()), m_csgv(csgv),
-                  m_use_palette_cache(use_palette_cache),
-                  m_cache_bytes(cache_size_MB * 1024 * 1024), m_shader_defines(csgv->getGLSLDefines()) {
+                  m_decode_from_shared_memory(decode_from_shared_memory), m_cache_bytes(cache_size_MB * 1024ull * 1024ull),
+                  m_use_palette_cache(palette_cache), m_shader_defines(csgv->getGLSLDefines()) {
 
             // obtain shader compilation and execution parameters
             m_shader_defines.emplace_back("SUBGROUP_SIZE=" + std::to_string(
                                                 getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
+            m_shader_defines.emplace_back("CACHE_MODE=" + std::to_string(CACHE_BRICKS));
             if (m_use_palette_cache)
                 m_shader_defines.emplace_back("PALETTE_CACHE");
+            if (m_csgv->isUsingRandomAccess())
+                m_shader_defines.emplace_back("RANDOM_ACCESS");
+            if (m_decode_from_shared_memory)
+                m_shader_defines.emplace_back("DECODE_FROM_SHARED_MEMORY");
 
             // check how many bits are required to store cache indices
             if(m_use_palette_cache) {
@@ -82,7 +88,13 @@ class CSGVBenchmarkPass : public PassCompute {
                 m_cache_bytes = required_cache_bytes;
             }
             m_execution_iterations = (brick_idx_count + m_bricks_per_execution - 1u) / m_bricks_per_execution;
-            m_decompression_workgroup_size = vk::Extent3D{m_bricks_per_execution, 1u, 1u};
+
+            if (m_csgv->isUsingRandomAccess()) {
+                const uint32_t subgroup_size = getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize;
+                m_decompression_workgroup_size = vk::Extent3D{m_bricks_per_execution * subgroup_size, 1u, 1u};
+            } else {
+                m_decompression_workgroup_size = vk::Extent3D{m_bricks_per_execution, 1u, 1u};
+            }
 
             // allocate all shader and command buffer resources
             allocateResources();
@@ -163,10 +175,11 @@ protected:
         uint32_t m_bricks_per_execution;             ///< how many bricks can be decompressed in one execution
         uint32_t m_execution_iterations;             ///< how many executions are requried to decode all bricks
         vk::Extent3D m_decompression_workgroup_size = {0u, 0u, 0u};
-        size_t m_cache_bytes = 1024 * 1024 * 1024;   ///< cache size in bytes
+        size_t m_cache_bytes = 1024ull * 1024 * 1024;   ///< cache size in bytes
+        bool m_decode_from_shared_memory = false;    ///< if true, the encoding is copied to shared memory before decoding. Requires random access encoding.
 
 
-    // GPU resources and buffers
+        // GPU resources and buffers
         std::shared_ptr<UniformReflected> m_usegmented_volume_info = nullptr;
         // cache to store decompressed bricks
         std::shared_ptr<Buffer> m_cache_buffer = nullptr; ///< cache for decoding bricks
@@ -189,6 +202,7 @@ protected:
         float m_timestamp_period;
         std::vector<uint64_t> m_time_stamps;
         vk::QueryPool m_query_pool_timestamps;
+        int m_cache_heat_up_iterations = 0;
 };
 
 } // namespace volcanite

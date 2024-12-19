@@ -36,17 +36,17 @@ int main() {
     ctx.createGpuContext();
     Logger(INFO) << "Create GPU context (ok)";
 
+    // create dummy segmentation volume
+    glm::uvec3 dim = {100, 80, 95};
+    const auto volume = createDummySegmentationVolume(dim);
+
     CompressedSegmentationVolume csgv;
     {
-        // create dummy segmentation volume
-        glm::uvec3 dim = {100, 80, 95};
-        const auto volume = createDummySegmentationVolume(dim);
-
         Logger(INFO) << "Nibble";
-        csgv.setCompressionOptions64(32, NIBBLE_ENC);
+        csgv.setCompressionOptions64(32, NIBBLE_ENC, OP_ALL, false);
         csgv.compress(volume.dataConst(), dim, false);
         {
-            CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb);
+            CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, false, false);
             std::shared_ptr<Awaitable> awaitable = benchmark.execute();
             ctx.sync->hostWaitOnDevice({awaitable});
             benchmark.freeResources();
@@ -55,12 +55,12 @@ int main() {
 
         Logger(INFO) << "Range ANS with Palettized Cache";
         size_t freq[32];
-        csgv.setCompressionOptions64(64, NIBBLE_ENC);
+        csgv.setCompressionOptions64(64, NIBBLE_ENC, OP_ALL, false);
         csgv.compressForFrequencyTable(volume.dataConst(), dim, freq, 2, false, false);
-        csgv.setCompressionOptions64(64, SINGLE_TABLE_RANS_ENC, freq, freq + 16);
+        csgv.setCompressionOptions64(64, SINGLE_TABLE_RANS_ENC, OP_ALL, false, freq, freq + 16);
         csgv.compress(volume.dataConst(), dim, false);
         {
-            CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb);
+            CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, true, false);
             std::shared_ptr<Awaitable> awaitable = benchmark.execute();
             ctx.sync->hostWaitOnDevice({awaitable});
             benchmark.freeResources();
@@ -68,16 +68,66 @@ int main() {
         csgv.clear();
 
         Logger(INFO) << "Double Table Range ANS";
-        csgv.setCompressionOptions64(16, NIBBLE_ENC);
+        csgv.setCompressionOptions64(16, NIBBLE_ENC, OP_ALL, false);
         csgv.compressForFrequencyTable(volume.dataConst(), dim, freq, 2, true, false);
-        csgv.setCompressionOptions64(16, DOUBLE_TABLE_RANS_ENC, freq, freq + 16);
+        csgv.setCompressionOptions64(16, DOUBLE_TABLE_RANS_ENC, OP_ALL, false, freq, freq + 16);
         csgv.compress(volume.dataConst(), dim, false);
         {
-            CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb);
+            CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, false, false);
             std::shared_ptr<Awaitable> awaitable = benchmark.execute();
             ctx.sync->hostWaitOnDevice({awaitable});
             benchmark.freeResources();
         }
+    }
+
+    // Random Access Decoding
+    {
+        Logger(INFO) << "Random Access Nibble";
+        csgv.setCompressionOptions64(32, NIBBLE_ENC, OP_ALL_WITHOUT_STOP, true);
+        csgv.compress(volume.dataConst(), dim, false);
+        {
+            CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, false, false);
+            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
+            ctx.sync->hostWaitOnDevice({awaitable});
+            benchmark.freeResources();
+        }
+        Logger(INFO) << "Random Access Nibble (Shared Memory)";
+        {
+            CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, false, true);
+            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
+            ctx.sync->hostWaitOnDevice({awaitable});
+            benchmark.freeResources();
+        }
+        csgv.clear();
+
+//        Logger(INFO) << "Random Access Wavelet Matrix";
+//        csgv.setCompressionOptions64(64, WAVELET_MATRIX_ENC, OP_ALL_WITHOUT_STOP_BIT, false);
+//        csgv.compress(volume.dataConst(), dim, false);
+//        {
+//            CSGVBenchmarkPass benchmark(&csgv, &ctx, false, cache_size_mb, true);
+//            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
+//            ctx.sync->hostWaitOnDevice({awaitable});
+//            benchmark.freeResources();
+//        }
+//        csgv.clear();
+//
+        Logger(INFO) << "Random Access Huffman Shaped Wavelet Matrix";
+        csgv.setCompressionOptions64(16, HUFFMAN_WM_ENC, OP_ALL, true);
+        csgv.compress(volume.dataConst(), dim, false);
+        {
+            CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, false, false);
+            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
+            ctx.sync->hostWaitOnDevice({awaitable});
+            benchmark.freeResources();
+        }
+        Logger(INFO) << "Random Access Huffman Shaped Wavelet Matrix (Shared Memory)";
+        {
+            CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, false, true);
+            std::shared_ptr<Awaitable> awaitable = benchmark.execute();
+            ctx.sync->hostWaitOnDevice({awaitable});
+            benchmark.freeResources();
+        }
+        csgv.clear();
     }
 
     return 0;

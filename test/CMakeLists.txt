@@ -49,5 +49,6 @@ macro(makeVolcaniteTest name)
 endmacro(makeVolcaniteTest)
 
 makeVolcaniteTest(csgv_test)
+makeVolcaniteTest(csgv_random_access_test)
 makeVolcaniteTest(csgv_gpu_test)
 makeVolcaniteTest(volcanite_render_test)
