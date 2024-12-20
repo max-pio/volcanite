@@ -1255,6 +1255,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                    m_global_illumination_enabled = false;
                                    m_envmap_enabled = false;
                                    m_target_accum_frames = frames_for_one_spp * 8;
+                                   m_denoising_enabled = false;
                                    break;
                                case 1:
                                    // global shadows
@@ -1264,6 +1265,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                    m_shadow_pathtracing_ratio = 0.f;
                                    m_envmap_enabled = false;
                                    m_target_accum_frames = frames_for_one_spp * 8;
+                                   m_denoising_enabled = false;
                                    break;
                                case 2:
                                    // ambient occlusion
@@ -1274,6 +1276,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                    m_max_path_length = 1;
                                    m_envmap_enabled = false;
                                    m_target_accum_frames = glm::min(frames_for_one_spp * 256, 4096);
+                                   m_denoising_enabled = true;
                                    break;
                                case 3:
                                    // path tracing
@@ -1284,6 +1287,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                    m_max_path_length = 32;
                                    m_envmap_enabled = true;
                                    m_target_accum_frames = glm::min(frames_for_one_spp * 1024, 4096);
+                                   m_denoising_enabled = true;
                                    break;
                            }
                        }, "Rendering Preset");
@@ -1309,7 +1313,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addBool(&m_denoising_enabled, "Enable Denoising");
 //    g_dev->addFloat(&m_difference_depth_denoising, "difference depth denoising", 0.001f, 1.f, 0.004, 3);
 //    g_dev->addFloat(&m_spatial_sigma, "Spatial Sigma", 0.001f, 5.f, 0.01, 2);
-//    g_dev->addFloat(&m_depth_sigma, "Depth Sigma", 0.001f, 5.f, 0.01, 2);
+    g_dev->addFloat(&m_depth_sigma, "Depth Sigma", 0.001f, 100.f, 0.01, 3);
 //    g_dev->addFloat(&m_illumination_sigma, "Illumination Sigma", 0.01f, 10.f, 0.01, 2); // unnused for now
     g_dev->addBool(&m_denoise_fade_enabled, "Fade Denoiser Out");
     g_dev->addFloat(&m_denoise_fade_sigma, "Denoise Fade Sigma", 0.00f, 10.f, 0.01, 2);

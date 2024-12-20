@@ -143,7 +143,7 @@ void main() {
                                        vec4(20.f, 15.f, 6.f, 1.f)};
     const vec4 kernel_weights = pc.denoising_iteration == 0u ? vec4(1.f) :
                                     _kernel_for_sizes[g_denoise_filter_kernel_size] * vec4(1.f, fade, fade, fade);
-    const float phi_depth = g_world_to_model_space_scaling; // higher: more blurring above depth discontinuities
+    const float phi_depth = g_world_to_model_space_scaling * g_depth_sigma; // higher: more blurring above depth discontinuities
 
     vec4 accum_rgba = vec4(0.f);
     float weight = 1.f;

@@ -275,7 +275,7 @@ private:
     int m_denoise_filter_kernel_size = 1;
     float m_difference_depth_denoising = 1.0f;
     float m_spatial_sigma = 2.0f;
-    float m_depth_sigma = 0.1f;
+    float m_depth_sigma = 1.f;
     // svgf
     bool m_atrous_enabled = true;
     float m_illumination_sigma = 4.0f;
