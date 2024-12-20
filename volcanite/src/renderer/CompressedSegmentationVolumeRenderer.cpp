@@ -216,7 +216,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         return m_mostRecentFrame.value();
     }
 
-    // upload uniforms
+    // upload uniforms and set pass properties
     updateUniformDescriptorset();
 
     m_ucamera_info->upload(m_pass->getActiveIndex());
@@ -255,8 +255,12 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     m_pass->setStorageImage("accumulationOut", *m_accumulation_rgba_tex[1u - (m_frame % 2u)]);
     m_pass->setStorageImage("accuSampleCountIn", *m_accumulation_samples_tex[m_frame % 2u]);
     m_pass->setStorageImage("accuSampleCountOut", *m_accumulation_samples_tex[1u - (m_frame % 2u)]);
-    // 16 bit packed gBuffer texture storing
+    // 24 bit packed gBuffer texture
     m_pass->setStorageImage("gBuffer", *m_g_buffer_tex);
+
+    // ping pong texture for resolve passes
+    m_pass->setStorageImageArray("denoisingBuffer", 0, *m_denoise_tex[0], vk::ImageLayout::eGeneral, false);
+    m_pass->setStorageImageArray("denoisingBuffer", 1, *m_denoise_tex[1], vk::ImageLayout::eGeneral, false);
 
     std::vector<std::shared_ptr<Awaitable>> renderAwaitableList = {};
     const auto renderingFinished = m_pass->execute(renderAwaitableList, awaitBinaryAwaitableList, signalBinarySemaphore);
@@ -792,6 +796,13 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
     }
+    // TODO: use 16 bit precision for denoising buffer
+    m_denoise_tex = m_pass->reflectTextureArray("denoisingBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    for (auto & texture : m_denoise_tex) {
+        texture->ensureResources();
+        const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
+        reinitDone.push_back(layoutTransformDone);
+    }
     m_inpaintedOutColor = m_pass->reflectTextures(
         "inpaintedOutColor", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8B8A8Unorm, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     for (auto& texture : *m_inpaintedOutColor){
@@ -799,7 +810,7 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
         reinitDone.push_back(layoutTransformDone);
     }
-    m_g_buffer_tex = m_pass->reflectTexture("gBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR8G8Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_g_buffer_tex = m_pass->reflectTexture("gBuffer", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Uint, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     {
         m_g_buffer_tex->ensureResources();
         const auto layoutTransformDone = m_g_buffer_tex->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
@@ -837,6 +848,10 @@ void CompressedSegmentationVolumeRenderer::releaseSwapchain() {
         m_accumulation_samples_tex[0] = nullptr;
     if(m_accumulation_samples_tex[1])
         m_accumulation_samples_tex[1] = nullptr;
+    if(m_denoise_tex[0])
+        m_denoise_tex[0] = nullptr;
+    if(m_denoise_tex[1])
+        m_denoise_tex[1] = nullptr;
     if (m_inpaintedOutColor)
         m_inpaintedOutColor.reset();// = nullptr;
     if(m_g_buffer_tex)
@@ -894,6 +909,10 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     // resolve shader parameters
     new_hash = 0ull;
     HASHP(m_background_color_a) HASHP(m_background_color_b) HASHP(m_tonemap_enabled)
+    HASHP(m_atrous_iterations)
+    HASHP(m_denoising_enabled) HASHP(m_atrous_enabled) HASHP(m_difference_depth_denoising)
+    HASHP(m_spatial_sigma) HASHP(m_depth_sigma) HASHP(m_illumination_sigma) HASHP(m_denoise_fade_sigma)
+    HASHP(m_denoise_filter_kernel_size) HASHP(m_denoise_fade_enabled)
     if (new_hash != m_presolve_hash) {
         m_render_update_flags |= UPDATE_PRESOLVE;
         m_presolve_hash = new_hash;
@@ -927,6 +946,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     }
 
     m_pass->setRenderUpdateFlagsForNextCall(m_render_update_flags);
+    m_pass->setResolvePasses(m_atrous_iterations);
     #undef HASHP
 }
 
@@ -981,6 +1001,17 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_uresolve_info->setUniform<glm::vec4>("g_background_color_a", m_background_color_a);
         m_uresolve_info->setUniform<glm::vec4>("g_background_color_b", m_background_color_b);
         m_uresolve_info->setUniform<uint32_t>("g_tonemap_enable", m_tonemap_enabled ? 1 : 0);
+        // denoising
+        m_uresolve_info->setUniform<uint32_t>("g_denoising_enabled", m_denoising_enabled ? 1 : 0);
+        m_uresolve_info->setUniform<uint32_t>("g_atrous_enabled", m_atrous_enabled ? 1 : 0);
+        m_uresolve_info->setUniform<float>("g_difference_depth_denoising", m_difference_depth_denoising);
+        m_uresolve_info->setUniform<float>("g_spatial_sigma", m_spatial_sigma);
+        m_uresolve_info->setUniform<float>("g_depth_sigma", m_depth_sigma);
+        m_uresolve_info->setUniform<float>("g_illumination_sigma", m_illumination_sigma);
+        m_uresolve_info->setUniform<float>("g_denoise_fade_sigma", m_denoise_fade_sigma);
+        m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
+        m_uresolve_info->setUniform<int>("g_denoise_filter_kernel_size",m_denoise_filter_kernel_size);
+        m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
     }
 
     // render info uniform
@@ -1270,6 +1301,19 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addInt(&m_max_steps, "Max DDA Steps", 16, 1 << 16u, 16);
     g_dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
     g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
+    g_dev->addSeparator();
+    g_dev->addLabel("Denoising");
+        g_dev->addBool(&m_atrous_enabled, "Enable À-Trous Post-Processing");
+    g_dev->addInt(&m_atrous_iterations, "Post-Process Iterations", 1, 4, 1);
+    g_dev->addInt(&m_denoise_filter_kernel_size, "Post-Process Kernel Size", 0, 3, 1);
+    g_dev->addBool(&m_denoising_enabled, "Enable Denoising");
+//    g_dev->addFloat(&m_difference_depth_denoising, "difference depth denoising", 0.001f, 1.f, 0.004, 3);
+//    g_dev->addFloat(&m_spatial_sigma, "Spatial Sigma", 0.001f, 5.f, 0.01, 2);
+//    g_dev->addFloat(&m_depth_sigma, "Depth Sigma", 0.001f, 5.f, 0.01, 2);
+//    g_dev->addFloat(&m_illumination_sigma, "Illumination Sigma", 0.01f, 10.f, 0.01, 2); // unnused for now
+    g_dev->addBool(&m_denoise_fade_enabled, "Fade Denoiser Out");
+    g_dev->addFloat(&m_denoise_fade_sigma, "Denoise Fade Sigma", 0.00f, 10.f, 0.01, 2);
+    g_dev->addSeparator();
     g_dev->addBool(&m_tonemap_enabled, "Tone Mapping");
     g_dev->addSeparator();
     g_dev->addLabel("Debug");

@@ -71,7 +71,7 @@ void main() {
     uint brick_idx = brick_pos2idx(brick, g_brick_count);
     uint brick_info_pos = brick_idx * 4u;
     // either none or both must be true: the brick has a position in the cache and the brick has a decoded LOD
-    assertf(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)), "brick CUR_INV_LOD or INDEX are corrupted (csgv_request) cache_idx, cur_lod: ", uvec2(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX], g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD]));
+    assertf(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)), "brick CUR_INV_LOD or INDEX are corrupted (csgv_request) cache_idx, cur_lod: %v2u", uvec2(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX], g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD]));
 
 
     //    // check if brick is already decoded (if anything changes, the decoder will release it)

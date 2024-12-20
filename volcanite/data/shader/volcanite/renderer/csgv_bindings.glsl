@@ -200,6 +200,17 @@ layout (std140, binding = 12) uniform resolve_info {
     vec4 g_background_color_a;
     vec4 g_background_color_b;
     bool g_tonemap_enable;
+// denoising
+    bool g_denoise;
+    bool g_denoising_enabled;
+    bool g_atrous_enabled;
+    float g_difference_depth_denoising;
+    float g_spatial_sigma;
+    float g_depth_sigma;
+    float g_illumination_sigma;
+    float g_denoise_fade_sigma;
+    bool g_denoise_fade_enable;
+    int g_denoise_filter_kernel_size;
 };
 
 #define BACKGROUND_DEPTH 3.402823466e+38
@@ -211,6 +222,7 @@ layout (binding = 21, r16ui) uniform restrict readonly uimage2D accuSampleCountI
 layout (binding = 22, r16ui) uniform restrict uimage2D accuSampleCountOut;
 
 layout (binding = 20, rg8ui) uniform restrict uimage2D gBuffer;
+layout(binding = 23, rgba32f) uniform image2D denoisingBuffer[2];
 layout (binding = 15, rgba8) uniform restrict writeonly image2D inpaintedOutColor;
 
 
@@ -234,3 +246,10 @@ layout(std430, binding = 18) buffer restrict readonly materials
 };
 
 layout(binding = 19) uniform sampler1D s_transferFunctions[SEGMENTED_VOLUME_MATERIAL_COUNT];
+
+
+layout(push_constant) uniform PushConstants
+{
+    uint denoising_iteration;   // denoising iteration variable for ping pong svgf-buffer
+    uint last_denoising_iteration;
+} pc;

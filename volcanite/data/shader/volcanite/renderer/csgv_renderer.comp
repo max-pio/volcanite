@@ -369,7 +369,7 @@ struct RayMarchState {
     vec3 normal;        ///< normal at the current position
     uint label;         ///< label at the current position
     uint last_label;    ///< label of the previous position
-    uvec2 packedGBuffer;///< G-Buffer containing validity, label on hit, depth, and normal
+    uvec3 packedGBuffer;///< G-Buffer containing validity, label on hit, depth, and normal
 
     // path tracing
     vec4 out_color;     ///< (radiance) color to be written to the color buffer
@@ -487,6 +487,23 @@ void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
     // DEBUG_check_state_and_ray(state, ray, __LINE__);
 }
 
+//// Lense model and code based on Ray Tracing Gems 2
+//// TODO (Max) What about license here??
+//Ray generate_thin_lens_ray(const Ray pinhole_ray, const ivec2 pixel, const vec2 pixelN, const vec2 rand) {
+//    vec2 lens_offset = sampleUniformDisc(pixel, g_camera_still_frames);
+//    float focused = g_image_plane * g_focal_length / (g_focal_length - g_image_plane);
+//
+//    // dot product projects the ray behind the camera, when z is neg therefore the focus_point and image is behind the camera
+//    vec3 focus_point = pinhole_ray.direction * (focused / dot(pinhole_ray.direction , vec3(0.f, 0.f, pinhole_ray.direction.z > 0 ? -1.f : 1.f)));
+////    vec3 focus_point = pinhole_ray.direction * (focused / dot(pinhole_ray.direction , vec3(0.f, 0.f, -1.f)));
+//    float circle_of_confusion_radius = g_focal_length / (2.f * g_f_stop);
+//
+//    vec3 origin = vec3(1.f, 0.f, 0.f) * (lens_offset.x * circle_of_confusion_radius) + vec3(0.f, 1.f, 0.f) * (lens_offset.y * circle_of_confusion_radius);
+//
+//    return Ray(origin, normalize(focus_point - origin));
+//}
+
+
 void main() {
     // obtain pixel and fragment coordinates
     ivec2 viewport_size = imageSize(accumulationOut);
@@ -507,6 +524,15 @@ void main() {
     ray.origin = (g_world_to_model_space * vec4(ray.origin, 1.f)).xyz;
     ray.direction = normalize(g_world_to_model_space_dir * ray.direction);
 
+//    if (g_dof_enable) {
+//        const vec2 pixelN = fragCoord * 2.f - 1; // map pixel in [-1, 1]^2
+//        ray = generate_thin_lens_ray(ray, ivec2(pixel + subpixel_offset), pixelN, randomVec3(pixel, g_camera_still_frames).xy); // in camera space -> transform to model space
+//
+//        ray.origin = (g_world_to_model_space * vec4(ray.origin + g_camera_position_world_space, 1.f)).xyz;
+//        ray.direction = normalize(g_world_to_model_space_dir * ray.direction);
+//    }
+
+
     // In world space, we hit a small cuboid (largest dimension is 1) centered around the origin.
     // We transform this AABB to model space, where each voxel has unit size:
     float t_0, t_1;
@@ -517,7 +543,7 @@ void main() {
     // if the ray does not hit the data set, directly output the background
     if (t_0 >= t_1) {
         ray.direction = normalize(g_model_to_world_space_dir * ray.direction);
-        writePixel(pixel, vec4(0.f), BACKGROUND_DEPTH, noHitGBufferRG8());
+        writePixel(pixel, vec4(0.f), BACKGROUND_DEPTH, noHitGBufferRGB16());
         return;
     }
 
@@ -525,7 +551,7 @@ void main() {
 
     // initialize ray marching state
     RayMarchState state;
-    state.rng = g_camera_still_frames;
+    state.rng = hash_pcg2d(uvec2(uint(blueNoise32x32_uint8(gl_GlobalInvocationID.xy)), (g_camera_still_frames << 10) | g_camera_still_frames)).x;
     state.label = INVALID;
     state.last_label = INVALID;
     state.path_length = 0;
@@ -533,7 +559,7 @@ void main() {
     state.out_color = vec4(0.f);
     state.depth_valid = BACKGROUND_DEPTH;
     state.normal = vec3(0.f);
-    state.packedGBuffer = noHitGBufferRG8();
+    state.packedGBuffer = noHitGBufferRGB16();
 
     // initialize DDA traversal with t_0  offset to prevent aliasing
     dda_init(state, ray, t_0 - 0.01f);
@@ -651,10 +677,18 @@ void main() {
             // but if we previously stored an INVALID_DEPTH (< 0) at any point, it must not be overwritten.
             // This is also the point where the G-buffer state is set.
             if (state.path_length == 0) {
-                float ray_t = length((state.voxel + state.pos_in_voxel) - ray.origin);
+                vec3 model_space_pos = (state.voxel + state.pos_in_voxel);
+                vec3 world_space_pos = (g_model_to_world_space * vec4(model_space_pos, 1.f)).xyz;
+                // In world space, the data set goes from [-0.5, 0.5] along its longest axis
+                // The maximum distance of a unit cube edge of this size to the origin (0,0,0) is sqrt(3)/2
+                // = 0.8660254037. The depth distance is computed to the projected position of the camera on a sphere of
+                // of this size. The maximum possible distance (between two edges) is sqrt(3) = 1.73205080757.
+                // The depth value is therefore normalized by this value before writing to the depth buffer.
+                float depth = length(world_space_pos - g_camera_position_world_space)
+                              - (length(g_camera_position_world_space) - 0.8660254037f);
                 // TODO: directly write these values to the g-buffer instead of tracking them
-                state.depth_valid = min(state.depth_valid, ray_t);
-                state.packedGBuffer = packGBufferRG8(state.label, state.normal, (ray_t - t_0) / (t_1 - t_0));
+                state.depth_valid = min(state.depth_valid, depth);
+                state.packedGBuffer = packGBufferRGB16(state.label, state.normal, depth / 1.73205080757f);
             }
             // opacity is always 1 on surface hit
             state.out_color.a = 1.f;
@@ -667,7 +701,7 @@ void main() {
 
             // emission
             if (g_materials[material].emission > 0.f) {
-                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_materials[material].emission;
+                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_materials[material].emission * dot(state.normal, -ray.direction);
             }
 
             // early ray termination if throughput is zero
@@ -718,7 +752,7 @@ void main() {
                 break;
 
             // Russian Roulette (only when this is not a ray to the light source / NEE)
-            if (state.path_length != SHADOW_RAY_PATH_LENGTH) {
+            if (state.path_length != SHADOW_RAY_PATH_LENGTH && state.path_length > 1u) {
                 float survival_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
                 if (nextRNG(pixel, state.rng).x > survival_probability) {
                     state.throughput = vec3(0.f);
@@ -742,6 +776,7 @@ void main() {
 
     // apply incoming radiance from environment
     ray.direction = normalize(g_model_to_world_space_dir * ray.direction);
+    // to reduce variance in the first frame (when the camera is moved), the envmap is disabled until the second frame
     if (g_envmap_enable) {
         state.out_color.rgb += state.throughput * vec3(g_light_intensity) * dummy_envmap(ray.direction);
     }

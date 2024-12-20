@@ -56,7 +56,9 @@ public:
           WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_shader_defines(std::move(shaderDefines)),
           m_parallel_decode(parallel_decode), m_enable_cache_stages(enable_cache_stages) {}
 
-    AwaitableHandle execute(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override;
+    AwaitableHandle execute(AwaitableList awaitBeforeExecution = {},
+                            BinaryAwaitableList awaitBinaryAwaitableList = {},
+                            vk::Semaphore *signalBinarySemaphore = nullptr) override;
 
 
     void setVolumeInfo(glm::uvec3 brick_count, uint32_t lod_count) {
@@ -78,8 +80,14 @@ public:
     }
 
     void setRenderUpdateFlagsForNextCall(uint32_t param_update_flags) { m_render_update_flags = param_update_flags; }
+    void setResolvePasses(int passes) { m_atrous_iterations = static_cast<uint32_t>(passes); }
 
 protected:
+    struct PushConstants {
+        uint32_t denoising_iteration;   // denoising iteration variable for ping pong svgf-buffer
+        uint32_t last_denoising_iteration;
+    };
+
     std::vector<std::shared_ptr<Shader>> createShaders() override;
     std::vector<vk::PushConstantRange> definePushConstantRanges() override;
 
@@ -93,6 +101,7 @@ protected:
     vk::Extent3D m_work_group_sizes[8] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u},
                                           {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}};
     uint32_t m_render_update_flags = 0u;                /// among others: if the GPU cache reset should be triggered on the next call
+    uint32_t m_atrous_iterations = 1u;
     const std::vector<std::string> m_shader_defines;   /// defines that are passed on to shader compilation
     bool m_parallel_decode = false;                    /// if decompression is parallelized within one brick
     bool m_enable_cache_stages = true;                 /// if the cache provision, assign, and decompress stages are executed. only required when caching full bricks.
