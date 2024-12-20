@@ -13,13 +13,13 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https:#www.gnu.org/licenses/>.
 
-# this file defines makeExecutable() and installExecutable()-Functions, which can be used to add new executables to the VVV project.
+# this file defines makeVolcaniteExecutable() and installVolcaniteExecutable()-Functions, which can be used to add new executables to the VVV project.
 
-# howto use makeExecutable  and installExecutable in your projects CMakeLists:
-# 1. add source/header files with custom list variables makeExecutable(NAME ${HEADERS} ${SOURCES}) note: the src/bin/NAME.cpp is always added
+# howto use makeVolcaniteExecutable  and installVolcaniteExecutable in your projects CMakeLists:
+# 1. add source/header files with custom list variables makeVolcaniteExecutable(NAME ${HEADERS} ${SOURCES}) note: the src/bin/NAME.cpp is always added
 # 2. add libraries for the executable with target_link_libraries(NAME ..) note: libvvvwindow and libvvv are always added
 # 3. add custom include include directories with target_include_directories(NAME ..) note: PRIVATE include/ is always added
-# 4. add additional data/ paths to installExecutable(NAME ${ADDITIONAL_DATA_DIRS}) note: data/ is always added.
+# 4. add additional data/ paths to installVolcaniteExecutable(NAME ${ADDITIONAL_DATA_DIRS}) note: data/ is always added.
 
 # Add a new executable which uses libvvv and libvvvwindow.
 ## adds a dependency for a new custom copy target to the existing target name which copies the /data subfolder of the current current list directory to the binary data directory.
@@ -51,18 +51,25 @@
 
 
 # Add executables from subdirectories
-# howto use makeExecutable in your projects CMakeLists:
-# 1. add source/header files with custom list variables makeExecutable(NAME ${HEADERS} ${SOURCES}) note: the src/bin/NAME.cpp is always added
+# howto use makeVolcaniteExecutable in your projects CMakeLists:
+# 1. add source/header files with custom list variables makeVolcaniteExecutable(NAME ${HEADERS} ${SOURCES}) note: the src/bin/NAME.cpp is always added
 # 2. add libraries for the executable with target_link_libraries(NAME ..) note: libvvvwindow and libvvv are always added
 # 3. add custom include include directories with target_include_directories(NAME ..) note: PRIVATE include/ is always added
 # 4. ensure that all runtime data that has to be copied to the binary data directory is within your data subfolder and all shaders are in data/shader
-function(makeExecutable name)
-    add_executable(${name} ${CMAKE_CURRENT_LIST_DIR}/src/bin/${name}.cpp ${ARGN})
+function(makeVolcaniteExecutable name)
+
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        # add windows icon and resources
+        add_executable(${name} ${CMAKE_CURRENT_LIST_DIR}/src/bin/${name}.cpp ${ARGN}
+                       ${PROJECT_SOURCE_DIR}/package_assets/windows/volcanite.rc)
+    else()
+        add_executable(${name} ${CMAKE_CURRENT_LIST_DIR}/src/bin/${name}.cpp ${ARGN})
+    endif()
     set_target_properties(${name} PROPERTIES
             # WIN32_EXECUTABLE TRUE # this hides the console window. Disabled, because we need to see the console output! maybe re-enable for distribution
             MACOSX_BUNDLE TRUE
             )
-    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap libvolcanite)
+    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap SQLiteCpp libvolcanite)
     if(NOT HEADLESS)
         target_link_libraries(${name} PRIVATE LibVVV::libvvvwindow portable_file_dialogs)
     endif()
@@ -92,12 +99,21 @@ function(makeExecutable name)
     # these are used to find data/ files when binary is run without installing or packaging
     list(JOIN data_dirs "\;" data_dirs_escaped)
     target_compile_definitions(${name} PRIVATE "-DDATA_DIRS=\"${data_dirs_escaped}\"")
+
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        # copy runtime libraries to binary on windows
+        add_custom_command(TARGET ${name} POST_BUILD
+                           COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${name}> $<TARGET_FILE_DIR:${name}>
+                           COMMAND_EXPAND_LISTS)
+        add_custom_command(TARGET ${name} POST_BUILD
+                           COMMAND ${CMAKE_COMMAND} -E copy_if_different ${WINDOWS_RUNTIME_DLLS} $<TARGET_FILE_DIR:${name}>)
+    endif()
 endfunction()
 
 # same as makeExecutabe, but for libraries. Can be used to build a library from all shared project files and link that for each executable.
-function(makeLibrary name)
+function(makeVolcaniteLibrary name)
     add_library(${name} ${ARGN})
-    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap)
+    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap SQLiteCpp)
     if(NOT HEADLESS)
         target_link_libraries(${name} PRIVATE LibVVV::libvvvwindow portable_file_dialogs)
     endif()
@@ -134,7 +150,7 @@ endfunction()
 # This will add install()-definitions for this executable. This includes copying all dependent data/-Folders upon `ninja install` or packaging the data/-Files with `cpack`.
 # Also, required variables for finding the data/-Folders at runtime is passed as compile definitions.
 # Ensure that target_link_libraries() is executed before this function as these libraries are searched for data/-Directories.
-function(installExecutable name)
+function(installVolcaniteExecutable name)
     set(data_dirs "")
 
     # get all INTERFACE_DATA_DIR properties to copy those data dirs into the project install directory
@@ -154,18 +170,50 @@ function(installExecutable name)
 
     # install all data dirs to [project]/data/
     foreach(path IN LISTS data_dirs)
-        install(DIRECTORY ${path} DESTINATION ${project_dir_name})
+        install(DIRECTORY ${path} DESTINATION ${CMAKE_INSTALL_BINDIR}/ COMPONENT applications)
     endforeach()
 
     # install binary to target folder
-    install(TARGETS ${name} DESTINATION ${project_dir_name})
+    install(TARGETS ${name} DESTINATION ${CMAKE_INSTALL_BINDIR}/ COMPONENT applications)
 
-    # use fixup_bundle to copy required dlls for windows
-    set(APPS \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${project_dir_name}/${name}${CMAKE_EXECUTABLE_SUFFIX})
-    install(CODE "
-        include(BundleUtilities)
-        message(\"fixup_bundle(\\\"${APPS}\\\")\")
-        fixup_bundle(\"${APPS}\" \"\" \"\")"
-        DESTINATION .)
+    # install license file
+    install(FILES ${PROJECT_SOURCE_DIR}/package_assets/LICENSE.txt DESTINATION ./ COMPONENT applications)
+    # install 3rd-party license files
+    install(FILES ${PROJECT_SOURCE_DIR}/package_assets/LICENSE_THIRD_PARTY.txt DESTINATION ./ COMPONENT applications)
+
+    # system dependent configuration
+    set(VOLCANITE_EXECUTABLE_NAME ${name})
+    if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+
+        # install .desktop entry and application icon
+        configure_file(
+                ${PROJECT_SOURCE_DIR}/package_assets/linux/Volcanite.desktop.in
+                ${CMAKE_CURRENT_BINARY_DIR}/${VOLCANITE_EXECUTABLE_NAME}.desktop)
+        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${VOLCANITE_EXECUTABLE_NAME}.desktop
+                DESTINATION share/applications COMPONENT applications)
+        install(FILES ${PROJECT_SOURCE_DIR}/package_assets/icons/volcanite_icon_256.png
+                DESTINATION share/icons
+                RENAME ${VOLCANITE_EXECUTABLE_NAME}_icon.png COMPONENT applications)
+
+        # add postinst, prerm scripts for CPACK_DEBIAN_APPLICATIONS_PACKAGE_CONTROL_EXTRA to create .desktop and binary symlinks
+        configure_file(
+                ${PROJECT_SOURCE_DIR}/package_assets/linux/shortcut_postinst.in
+                ${CMAKE_CURRENT_BINARY_DIR}/postinst)
+        configure_file(
+                ${PROJECT_SOURCE_DIR}/package_assets/linux/shortcut_prerm.in
+                ${CMAKE_CURRENT_BINARY_DIR}/prerm)
+
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        # install system runtime libraries
+        include(InstallRequiredSystemLibraries)
+        install(FILES ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS} DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT applications)
+
+        # install additionally specified runtime dll files
+        install(FILES $<TARGET_RUNTIME_DLLS:${name}>
+                DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT applications)
+        install(FILES ${WINDOWS_RUNTIME_DLLS}
+                DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT applications)
+    endif()
+
 endfunction()
 

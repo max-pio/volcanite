@@ -22,12 +22,12 @@
 
 layout (local_size_x = 8, local_size_y = 8) in;
 
-#include "csgv_bindings.glsl"
 #include "util.glsl"
-#include "framebuffer.glsl"
-#include "dummy_envmap.glsl"
+#include "volcanite/renderer/csgv_bindings.glsl"
+#include "volcanite/renderer/framebuffer.glsl"
+#include "volcanite/renderer/dummy_envmap.glsl"
 
-#include "csgv_debug_resolve.glsl"
+#include "volcanite/renderer/csgv_debug_resolve.glsl"
 
 vec3 rgb2srgb(vec3 x) {
     return pow(x, vec3(2.2f));
@@ -61,9 +61,9 @@ void main() {
     // we output a low resolution image were multiple pixel are merged into one if the image does not have all pixels set yet
 //#define NO_UPSAMPLING
 #ifdef NO_UPSAMPLING
-    const int current_block_size = 1;
+    const int current_block_size = 0;
 #else
-    const int current_block_size = clamp(g_subsampling / (1 << int(log2(sqrt(g_camera_still_frames + 1)))), 1, g_subsampling);
+    const int current_block_size = clamp(g_subsampling / (1 << int(log2(sqrt(float(g_camera_still_frames + 1))))), 1, g_subsampling);
 #endif
     pixel *= current_block_size;
 
@@ -117,6 +117,7 @@ void main() {
     }
 
     DEBUG_img_cache(pixel, block_rgba_sum, false);
+    DEBUG_img_empty_space_bv(pixel, block_rgba_sum, false);
 
     // output to display image
     if (current_block_size == 1) {

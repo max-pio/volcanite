@@ -27,8 +27,45 @@
 
 namespace vvv {
 
+/// Imports a comma ',' separated CSV file that contains only numerical values as data points and returns a vector
+/// containing the value list of each row as float numbers. The first CSV row is assumed to contain the column names.
+/// @param column_names a vector into which the column names of the CSV file will be written
+/// @return a vector where the i-th element contains the list of values in the i-th CSV file row
+std::vector<std::vector<float>> csv_float_import(const std::string& csv_path, std::vector<std::string>& column_names);
 
-void csv_export(const std::vector<std::map<std::string, float>>& s, const std::string& path);
+template<typename T>
+void csv_export(const std::vector<std::map<std::string, T>>& s, const std::string& path)  {
+    std::ofstream fout(path, std::ios::out);
+    assert(fout.is_open());
+
+    std::stringstream ss;
+    std::vector<std::string> attributes;
+    int i = 0;
+    for(auto const& entry: s[0]) {
+        attributes.push_back(entry.first);
+        ss << entry.first;
+        if(i++ < s[0].size()-1)
+            ss << ",";
+    }
+    ss << "\n";
+    fout << ss.str();
+    for(const auto& m: s) {
+        ss.str(std::string());
+        for(i = 0; i < attributes.size(); i++) {
+            T v = m.at(attributes[i]);
+            if(std::is_floating_point<T>() && v == std::floor(v))
+                ss << std::to_string(static_cast<long long>(v));
+            else
+                ss << v;
+            if(i < attributes.size()-1)
+                ss << ",";
+        }
+        ss << "\n";
+        fout << ss.str();
+    }
+
+    fout.close();
+}
 
 
 } // namespace vvv

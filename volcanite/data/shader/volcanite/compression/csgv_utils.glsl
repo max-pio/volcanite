@@ -16,17 +16,7 @@
 #ifndef CSGV_UTILS_GLSL
 #define CSGV_UTILS_GLSL
 
-#include "cpp_glsl_include/csgv_constants.h"
-
-#ifdef NDEBUG
-    #define assert(X, S)
-    #define assertf(X, S, P)
-#else
-    #define assert(X, S) if(!(X)) debugPrintfEXT(S)
-    #define assertf(X, S, P) if(!(X)) debugPrintfEXT(S, P)
-#endif
-
-#define STATIC_FAIL(S) {S()}
+#include "cpp_glsl_include/csgv_constants.incl"
 
 #define SIZEOF(Type) (uint64_t(Type(uint64_t(0))+1))
 

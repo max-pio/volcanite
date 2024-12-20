@@ -22,11 +22,19 @@ namespace volcanite {
 class RangeANSEncoder : public CSGVSerialBrickEncoder {
 
 public:
-    RangeANSEncoder(uint32_t brick_size, EncodingMode encoding_mode,
-                    const uint32_t code_frequencies[16], const uint32_t detail_code_frequencies[16])
-            : CSGVSerialBrickEncoder(brick_size, encoding_mode) {
+    RangeANSEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask)
+            : CSGVSerialBrickEncoder(brick_size, encoding_mode, op_mask) {
         if (encoding_mode != SINGLE_TABLE_RANS_ENC && encoding_mode != DOUBLE_TABLE_RANS_ENC)
-            throw std::runtime_error("RangeANSEncoder must be used with SINGLE_TABLE_RANS_ENC or DOUBLE_TABLE_RANS_ENC"
+            throw std::runtime_error("NibbleEncoder must be used with SINGLE_TABLE_RANS or DOUBLE_TABLE_RANS"
+                                     " encoding mode.");
+        m_rans_initialized = false;
+    }
+
+    RangeANSEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask,
+                    const uint32_t code_frequencies[16], const uint32_t detail_code_frequencies[16])
+            : CSGVSerialBrickEncoder(brick_size, encoding_mode, op_mask) {
+        if (encoding_mode != SINGLE_TABLE_RANS_ENC && encoding_mode != DOUBLE_TABLE_RANS_ENC)
+            throw std::runtime_error("NibbleEncoder must be used with SINGLE_TABLE_RANS or DOUBLE_TABLE_RANS"
                                      " encoding mode.");
 
         m_rans.recomputeFrequencyTables(code_frequencies);
@@ -35,22 +43,61 @@ public:
                 throw std::runtime_error("Detail code frequencies must be given if using double table rANS encoding!");
             m_detail_rans.recomputeFrequencyTables(detail_code_frequencies);
         }
+        m_rans_initialized = true;
     }
 
     // VARIABLE BIT LENGTH ENCODING ------------------------------------------------------------------------------------
 
     [[nodiscard]] std::vector<uint32_t> getCurrentFrequencyTable() const {
+        assert(m_rans_initialized);
+
         std::vector<uint32_t> freq(16);
         m_rans.copyCurrentFrequencyTableTo(freq.data());
         return freq;
     }
 
     [[nodiscard]] std::vector<uint32_t> getCurrentDetailFrequencyTable() const {
+        assert(m_rans_initialized);
+
         if (m_encoding_mode != DOUBLE_TABLE_RANS_ENC)
-            throw std::runtime_error("Cannot get a detail frequency table from a Compressed Segmentation Volume that's not using rANS in double table mode.");
+            throw std::runtime_error("Can't get a detail frequency table from a Compressed Segmentation Volume that's not using rANS in double table mode.");
         std::vector<uint32_t> freq(16);
         m_detail_rans.copyCurrentFrequencyTableTo(freq.data());
         return freq;
+    }
+
+    // FILE IMPORT AND EXPORT ------------------------------------------------------------------------------------------
+
+    void exportToFile(std::ostream& out) override {
+        CSGVSerialBrickEncoder::exportToFile(out);
+
+        auto freq_table = getCurrentFrequencyTable();
+        for (int i = 0; i < 16; i++)
+            out.write(reinterpret_cast<char *>(&freq_table[i]), sizeof(uint32_t));
+        if (m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
+            auto detail_freq_table = getCurrentDetailFrequencyTable();
+            for (int i = 0; i < 16; i++)
+                out.write(reinterpret_cast<char *>(&detail_freq_table[i]), sizeof(uint32_t));
+        }
+    }
+
+    bool importFromFile(std::istream& in) override {
+        if (!CSGVSerialBrickEncoder::importFromFile(in))
+            return false;
+
+        uint32_t code_frequencies[16];
+        uint32_t detail_code_frequencies[16];
+        for (int i = 0; i < 16; i++)
+            in.read(reinterpret_cast<char *>(&code_frequencies[i]), sizeof(uint32_t));
+        m_rans.recomputeFrequencyTables(code_frequencies);
+        if (m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
+            for (int i = 0; i < 16; i++)
+                in.read(reinterpret_cast<char *>(&detail_code_frequencies[i]), sizeof(uint32_t));
+            m_detail_rans.recomputeFrequencyTables(detail_code_frequencies);
+        }
+
+        m_rans_initialized = true;
+        return true;
     }
 
     // COMPONENT AND SHADER INTERFACE ----------------------------------------------------------------------------------

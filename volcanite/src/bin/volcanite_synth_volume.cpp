@@ -74,16 +74,23 @@ int volcanite_synth_volume_main(int argc, char *argv[]) {
     std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();
     csgvDatabase->createDummy();
 
-    // Create Synthetic Volume and Compress
+    // create synthetic volume
     glm::uvec3 volume_dim = {100, 80, 95};
     auto volume = createDummySegmentationVolume(volume_dim);
 
-    // TODO: parse command line arguments
+    // compress volume
     size_t operation_freq[32];
-    compressedSegmentationVolume->setCompressionOptions64(32, NIBBLE_ENC);
-    compressedSegmentationVolume->compressForFrequencyTable(volume.dataConst(), volume_dim, operation_freq, 2, true, false);
-    compressedSegmentationVolume->setCompressionOptions64(32, DOUBLE_TABLE_RANS_ENC, operation_freq, operation_freq + 16);
+    if (args.encoding_mode == SINGLE_TABLE_RANS_ENC || args.encoding_mode == DOUBLE_TABLE_RANS_ENC) {
+        // obtain frequency table(s)
+        compressedSegmentationVolume->setCompressionOptions64(args.brick_size, NIBBLE_ENC, args.operation_mask, args.random_access);
+        compressedSegmentationVolume->compressForFrequencyTable(volume.dataConst(), volume_dim, operation_freq, args.freq_subsampling, args.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
+    }
+    compressedSegmentationVolume->setCompressionOptions64(args.brick_size, args.encoding_mode, args.operation_mask, args.random_access, operation_freq, operation_freq + 16);
     compressedSegmentationVolume->compress(volume.dataConst(), volume_dim, false);
+    // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
+    if(args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
+        compressedSegmentationVolume->separateDetail();
+    }
 
 
     // we only need the rendering part for screenshots or the interactive app
@@ -104,7 +111,11 @@ int volcanite_synth_volume_main(int argc, char *argv[]) {
             csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
 
         const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
-        renderer->setDecodingParameters(args.cache_size_MB, args.cache_palettized);
+        renderer->setDecodingParameters({.cache_size_MB=args.cache_size_MB,
+                                         .palettized_cache=args.cache_palettized,
+                                         .decode_from_shared_memory=args.decode_from_shared_memory,
+                                         .cache_mode=args.cache_mode,
+                                         .empty_space_resolution=args.empty_space_resolution});
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
 
         // if a screenshot file is given, we first run the headless mode to export a single image (no GUI window)

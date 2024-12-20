@@ -26,7 +26,7 @@
 #include <map>
 #include <thread>
 #include <bit>
-#include "csgv_constants.h"
+#include "csgv_constants.incl"
 
 namespace volcanite {
 
@@ -34,7 +34,7 @@ struct MultiGridNode;
 
 /// @brief The brick encoder handle encoding and decoding of the segmentation volume within a single brick.
 /// This is an abstract class from which different encoders are implemented. While the abstract interface specifies
-/// methods for serial and variable bit length encoding, a given subclass may not implement all of them.
+/// methods for serial, variable bit length, and random access encoding, a given subclass may not implement all of them.
 /// The brick size is a template for the encoder to allow compile time optimizations. The encoder stores no state but
 /// only its general configuration instead. It does not check if it decodes a brick from a memory region in the same way
 /// it was encoded.\n\n
@@ -44,8 +44,8 @@ struct MultiGridNode;
 class CSGVBrickEncoder {
 
     public:CSGVBrickEncoder() = delete;
-    explicit CSGVBrickEncoder(uint32_t brick_size, EncodingMode encoding_mode)
-         : m_brick_size(brick_size), m_encoding_mode(encoding_mode),
+    explicit CSGVBrickEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask=OP_ALL)
+         : m_brick_size(brick_size), m_encoding_mode(encoding_mode), m_op_mask(op_mask),
            m_separate_detail(false), m_cpu_threads(std::thread::hardware_concurrency()) {
         assert(std::popcount(brick_size) == 1u && "Encoding brick size must be a positive power of two.");
     }
@@ -87,13 +87,57 @@ class CSGVBrickEncoder {
         throw std::logic_error("CSGV brick encoder does not implement detail separation.");
     }
 
+    // RANDOM ACCESS DECODING ------------------------------------------------------------------------------------------
+
+    /// Encodes a single brick from given start with size brick_size in the volume to the out vector for in-brick random
+    /// access. This allows in-brick parallel decoding.
+    /// @param volume the labeled voxel volume to encode.
+    /// @param out must have enough space reserved for adding all elements.
+    /// @param start the start position of the brick. Should be a multiple of the configured brick size.
+    /// @param volume_dim the volume size in voxels in each dimension
+    /// @return number of uint32_t elements written to out
+    [[nodiscard]] virtual uint32_t encodeBrickForRandomAccess(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out, glm::uvec3 start, glm::uvec3 volume_dim) const {
+        throw std::logic_error("CSGV brick encoder does not implement random access encoding.");
+    }
+
+    /// Decodes a single voxel from the brick encoding. Requires random_access to be enabled for random access
+    /// within a brick. Must be used with a plain 4 bit encoding.
+    /// @param output_i the voxel's brick encoding index within the target inverse lod
+    /// @param target_inv_lod the target inverse level-of-detail of the voxel to decode
+    /// @param brick_encoding uint32 pointer to the start of the brick encoding
+    /// @param brick_encoding_length the length in uint32 elements of the brick encoding
+    /// @returns the label of the brick voxel corresponding to the brick encoding index output_i
+    virtual uint32_t decompressCSGVBrickVoxel(const uint32_t output_i, const uint32_t target_inv_lod,
+                                             const glm::uvec3 valid_brick_size,
+                                             const uint32_t* brick_encoding, const uint32_t brick_encoding_length) const {
+        throw std::logic_error("CSGV brick encoder does not implement random access encoding.");
+    }
+
+    /// Decompresses a single brick in parallel.
+    /// @param brick_idx is used to read the begin and endpoint of the encoding from the brick_starts buffer.
+    /// @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
+    /// @param valid_brick_size is used to clamp used voxels for border bricks. Values outside are undefined.
+    /// @param target_inv_lod the LOD until which to decompress. 0 is the coarsest and log2(brick_size) is the original / finest level.
+    virtual void parallelDecodeBrick(const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
+                                     uint32_t* output_brick, glm::uvec3 valid_brick_size, int target_inv_lod) const {
+        throw std::logic_error("CSGV brick encoder does not implement random access encoding.");
+    }
+
     // VARIABLE BIT-LENGTH ENCODING ------------------------------------------------------------------------------------
+
+    // TODO: the CSGV encoders should not expose frequency tables but handle them inside their object only
 
     /// Computes operation frequencies and detail operation frequencies (the latter offset by 16) for the brick into the given brick_freq[32] array.
     virtual void freqEncodeBrick(const std::vector<uint32_t>& volume, size_t* brick_freq, glm::uvec3 start,
                                  glm::uvec3 volume_dim, bool detail_freq) const {
         throw std::logic_error("CSGV brick encoder does not implement variable bit length encoding.");
     };
+
+    /// Computes operation frequencies and detail operation frequencies (the latter offset by 16) for the brick into the given brick_freq[32] array.
+    virtual void freqEncodeBrickForRandomAccess(const std::vector<uint32_t>& volume, size_t* brick_freq,
+                                                glm::uvec3 start, glm::uvec3 volume_dim, bool detail_freq) const {
+        throw std::logic_error("CSGV brick encoder does not implement random access encoding.");
+    }
 
     // COMPONENT AND SHADER INTERFACE ----------------------------------------------------------------------------------
 
@@ -106,11 +150,22 @@ class CSGVBrickEncoder {
         std::vector<std::string> defines{"ENCODING_MODE=" + std::to_string(m_encoding_mode),
                                          "BRICK_SIZE=" + std::to_string(m_brick_size),
                                          "LOD_COUNT=" + std::to_string(getLodCountPerBrick()),
-                                         "PALETTE_SIZE_HEADER_INDEX=" + std::to_string(getPaletteSizeHeaderIndex())};
+                                         "PALETTE_SIZE_HEADER_INDEX=" + std::to_string(getPaletteSizeHeaderIndex()),
+                                         "OP_MASK=" + std::to_string(m_op_mask)};
         if (m_separate_detail)
             defines.emplace_back("SEPARATE_DETAIL");
         return defines;
     }
+
+    // FILE IMPORT AND EXPORT ------------------------------------------------------------------------------------------
+
+    /// Exports all specialized configuration information of this encoder (e.g. frequency tables) that are not handled
+    /// by the encoder base class or CompressedSegmentationVolume class.
+    virtual void exportToFile(std::ostream& out) {}
+
+    /// Imports specialized configuration information from the stream.
+    /// @return true on success, false otherwise.
+    virtual bool importFromFile(std::istream& in) { return true; }
 
     // DEBUGGING AND STATISTICS ----------------------------------------------------------------------------------------
 
@@ -145,9 +200,7 @@ class CSGVBrickEncoder {
 
     virtual void getBrickStatistics(std::map<std::string, float>& statistics,
                                     const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
-                                    glm::uvec3 valid_brick_size) const {
-        throw std::logic_error("CSGV brick encoder does not implement statistics export.");
-    }
+                                    glm::uvec3 valid_brick_size) const {}
 
     // CONFIGURATION ---------------------------------------------------------------------------------------------------
     void setCPUThreadCount(uint32_t thread_count = 0u) {
@@ -164,6 +217,7 @@ protected:
     // configuration
     uint32_t m_brick_size;
     EncodingMode m_encoding_mode;
+    uint32_t m_op_mask;             ///< mask for enabling / disabling certain CSGV operations
     bool m_separate_detail;
     uint32_t m_cpu_threads;
 

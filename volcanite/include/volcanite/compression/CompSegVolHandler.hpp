@@ -25,7 +25,7 @@
 #include "vvv/util/Paths.hpp"
 #include "vvv/volren/Volume.hpp"
 
-#include "csgv_constants.h"
+#include "csgv_constants.incl"
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/compression/CSGVChunkMerger.hpp"
 
@@ -103,6 +103,23 @@ public:
             throw std::runtime_error(_msg.c_str());
         }
 
+#ifdef RELABEL_IDS_FROM_CSV_SUFFIX
+        std::unordered_map<uint32_t, uint32_t> id_types;
+        if (relabelVoxelsFromCSV(path + RELABEL_IDS_FROM_CSV_SUFFIX, id_types)) {
+            Logger(INFO, true) << "  CSV label remapping from " << path << RELABEL_IDS_FROM_CSV_SUFFIX;
+            size_t volume_size = volume->size();
+            uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
+            #pragma omp parallel for default(none) shared(data, id_types, volume_size)
+            for (int i = 0; i < volume_size; i++) {
+                if (id_types.find(data[i]) != id_types.end())
+                    data[i] = id_types[data[i]];
+                else
+                    data[i] = 0u;
+            }
+            Logger(INFO) << "  CSV label remapping from " << path << RELABEL_IDS_FROM_CSV_SUFFIX << " finished.";
+        }
+#endif
+
         // Remap all voxels to other labels. This usually happens because we computed a mapping in the attribute
         // database so that voxels are numbered in Z-order.
         if(label_remapping) {
@@ -111,32 +128,19 @@ public:
             auto voxels = volume->data().data();
             #pragma omp parallel for num_threads(cpu_threads) default(none) shared(voxels, voxel_count, label_remapping)
             for(size_t i = 0; i < voxel_count; i++) {
-                assert(label_remapping->contains(voxels[i]) && "label remapping does not contain voxel label");
+                if (!label_remapping->contains(voxels[i]))
+                    throw std::runtime_error("label remapping does not contain voxel label " + std::to_string(voxels[i]));
                 voxels[i] = (*label_remapping)[voxels[i]];
             }
-            Logger(DEBUG) << "Label remapping in " << t.elapsed() << " seconds";
+            Logger(DEBUG) << "Attribute data base label remapping finished in " << t.elapsed() << " seconds.";
         }
-
-#ifdef RELABEL_IDS_FROM_CSV_SUFFIX
-        std::unordered_map<uint32_t, uint32_t> id_types;
-        if (relabelVoxelsFromCSV(path + RELABEL_IDS_FROM_CSV_SUFFIX, id_types)) {
-            Logger(INFO) << "  relabeling ids from " << path << RELABEL_IDS_FROM_CSV_SUFFIX;
-            size_t volume_size = volume->size();
-            uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
-            #pragma omp parallel for default(none) shared(data, id_types, volume_size)
-            for (int i = 0; i < volume_size; i++) {
-                if(id_types.find(data[i]) != id_types.end())
-                    data[i] = id_types[data[i]];
-                else
-                    data[i] = 0u;
-            }
-        }
-#endif
     }
 
     struct CSGVCompressionConfig {
         int brick_dim = 32;
         EncodingMode encoding_mode = DOUBLE_TABLE_RANS_ENC;
+        uint32_t op_mask = OP_ALL;
+        bool random_access = false;
         std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> label_remapping = nullptr;
         uint32_t cpu_threads = 0u;
         bool use_detail_separation = false;
@@ -162,6 +166,8 @@ public:
             throw std::runtime_error("Frequency subsampling must be at least 1 (= no subsampling).");
         if (cfg.use_detail_separation)
             Logger(WARN) << "Using detail separation is not recommended at compression stage and may be removed later.";
+        if (cfg.random_access && cfg.encoding_mode != NIBBLE_ENC && cfg.encoding_mode != WAVELET_MATRIX_ENC && cfg.encoding_mode != HUFFMAN_WM_ENC)
+            throw std::runtime_error("Random access can only be used in combination with wavelet matrix or nibble encoding.");
 
         std::shared_ptr<Volume<uint32_t>> volume = nullptr;
         glm::ivec3 volume_dim(0);
@@ -186,10 +192,32 @@ public:
 
 
         if(cfg.verbose) {
-
+            std::string op_mask_str;
+            if (cfg.op_mask == OP_ALL)
+                op_mask_str = "ALL";
+            else if (cfg.op_mask == OP_ALL_WITHOUT_DELTA)
+                op_mask_str = "OPT";
+            else {
+                if (cfg.op_mask & OP_PARENT_BIT)
+                    op_mask_str.push_back('p');
+                if (cfg.op_mask & OP_NEIGHBORY_BIT)
+                    op_mask_str.push_back('x');
+                if (cfg.op_mask & OP_NEIGHBORY_BIT)
+                    op_mask_str.push_back('y');
+                if (cfg.op_mask & OP_NEIGHBORZ_BIT)
+                    op_mask_str.push_back('z');
+                if (cfg.op_mask & OP_PALETTE_LAST_BIT)
+                    op_mask_str.push_back('l');
+                if (cfg.op_mask & OP_PALETTE_D_BIT)
+                    op_mask_str.push_back('d');
+                if (cfg.op_mask & OP_STOP_BIT)
+                    op_mask_str.push_back('s');
+            }
             Logger(INFO) << "Compressing " << volume_input_path
                          << (cfg.chunked_input_data ? " with chunk indices " + str(cfg.max_file_index) : "")
                          << " to " << csgv_path << " [b=" << cfg.brick_dim << ", e=" << EncodingMode_STR(cfg.encoding_mode)
+                         << ", op=" << op_mask_str
+                         << (cfg.random_access ? ", p" : "") << "]"
                          << (cfg.use_detail_separation ? " with lod separation" : "");
 
         }
@@ -250,7 +278,7 @@ public:
                             volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
 
                             size_t tmp_code_frequencies[32];
-                            csgv->setCompressionOptions(cfg.brick_dim, NIBBLE_ENC);
+                            csgv->setCompressionOptions(cfg.brick_dim, NIBBLE_ENC, cfg.op_mask, cfg.random_access);
                             csgv->compressForFrequencyTable(volume->data(), volume_dim, tmp_code_frequencies, cfg.freq_subsampling, cfg.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
                             for (int i = 0; i < 16; i++) {
                                 code_frequencies[i] += tmp_code_frequencies[i];
@@ -280,7 +308,7 @@ public:
 
             if (cfg.verbose) {
                 Logger(DEBUG) << "frequencies: " << arrayToString(code_frequencies.data(), code_frequencies.size())
-                              << " detail frequencies: " << arrayToString(detail_code_frequencies.data(), detail_code_frequencies.size());
+                              << " | detail frequencies: " << arrayToString(detail_code_frequencies.data(), detail_code_frequencies.size());
             }
             Logger(DEBUG) << "";
             Logger(DEBUG) << "";
@@ -308,7 +336,7 @@ public:
 
                         // perform the actual compression
                         csgv->clear();
-                        csgv->setCompressionOptions64(cfg.brick_dim, cfg.encoding_mode,
+                        csgv->setCompressionOptions64(cfg.brick_dim, cfg.encoding_mode, cfg.op_mask, cfg.random_access,
                                                       code_frequencies.data(), detail_code_frequencies.data());
                         csgv->compress(volume->data(), volume_dim, cfg.verbose);
                         total_encoding_seconds += csgv->getLastTotalEncodingSeconds();
@@ -361,6 +389,8 @@ public:
             if(!csgv)
                 return nullptr;
             csgv->setCPUThreadCount(cpu_threads);
+            csgv->m_last_total_freq_prepass_seconds = total_freq_prepass_seconds;
+            csgv->m_last_total_encoding_seconds = total_encoding_seconds;
         }
 
         // create a log file

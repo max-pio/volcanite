@@ -42,6 +42,7 @@ add_library(LibVVV::libvvvwindow ALIAS libvvvwindow)
 # add defines
 target_compile_definitions(libvvvwindow PRIVATE -DVULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)
 target_compile_definitions(libvvvwindow PRIVATE -DVULKAN_HPP_STORAGE_SHARED=1)
+target_compile_definitions(libvvvwindow PRIVATE -DGLFW_INCLUDE_NONE)
 
 # find other packages
 #set(THREADS_PREFER_PTHREAD_FLAG ON)

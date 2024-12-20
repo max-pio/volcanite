@@ -1,21 +1,171 @@
 #ifndef VOLCANITE_CSGV_DEBUG_RESOLVE_GLSL
 #define VOLCANITE_CSGV_DEBUG_RESOLVE_GLSL
 
-// For better readability in csgv_renderer.comp, most of the debug visualizations and functionality is encapsualted in
-// functions in this header. As these functions use other definitions from csgv_renderer.comp it should be included
+// For better readability in csgv_*_resolve.comp, most of the debug visualizations and functionality is encapsualted in
+// functions in this header. As these functions use other definitions from csgv_*_resolve.comp it should be included
 // right above its main() function.
 
 #define ENALBE_CSGV_DEBUGGING
 
-#include "csgv_materials.glsl"
+#include "volcanite/renderer/csgv_materials.glsl"
 #include "debug_colormaps.glsl"
+#include "volcanite/renderer/framebuffer.glsl"
+#include "pcg_hash.glsl"
 
-// blend a cache visualization over the pixels color
+#include "volcanite/bit_vector.glsl"
+
+// blend a cache visualization over the pixel's color
 void DEBUG_img_cache(ivec2 pixel, inout vec4 color, bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
     if (!enabled)
         return;
+
+    const ivec2 viewport_size = imageSize(inpaintedOutColor);
+
+    #if CACHE_MODE == CACHE_VOXELS
+        // map the pixel to a cache cell [region]
+        const int size = 4;
+        const uint elems_per_pixel = max(CACHE_UVEC2_SIZE / (viewport_size.x * viewport_size.y / size), 1u);
+
+        const uint idx = elems_per_pixel * uint((pixel.x / size) + (pixel.y / size) * viewport_size.x);
+
+        if (idx >= CACHE_UVEC2_SIZE)
+            return;
+
+        // accumulate information for all of the pixel's cache cels
+        uint entry_count = 0u;
+        uint visible_count = 0u;
+        vec3 label = vec3(0.f);
+        for (uint i = idx; i < idx + elems_per_pixel; i++) {
+            if (i < CACHE_UVEC2_SIZE && g_cache[i].x != INVALID) {
+                entry_count++;
+                if (isLabelVisible(g_cache[i].y)) {
+                    visible_count++;
+                    label += colormap_viridis(float(g_cache[i].y % 96) / 96.f);
+                } else {
+                    label += mix(vec3(1.f, 0.f, 1.f), vec3(0.8f), (0.5f * sin(float(g_frame) / 8.f) + 0.5f));
+                }
+            }
+        }
+
+        // display the rendering in grayscale in the background
+        color = vec4(vec3(dot(color.rgb, vec3(1.f / 3.f))), color.a);
+
+        // present the cache state as colored output
+        vec3 display;
+        if (entry_count == 0) {
+            display = vec3(1.f);
+        } else {
+            const int mode = 2;
+            switch (mode) {
+                // label
+                case 0:
+                display = label / float(entry_count);
+                break;
+                // occupied entries
+                case 1:
+                display = colormap_viridis(float(entry_count) / float(elems_per_pixel));
+                break;
+                // proportion of invisible labels
+                case 2:
+                display = colormap_viridis(float(visible_count) / float(entry_count));
+                break;
+            }
+        }
+
+        // blend colored cache vis with background
+        const float alpha = 0.8f;
+        color = vec4((1.f - alpha) * color.rgb + alpha * display, 1.f);
+    #endif
+
 #endif
 }
+
+// blend a visualization of the empty space bit vector over the pixel's color
+void DEBUG_img_empty_space_bv(ivec2 pixel, inout vec4 color, bool enabled) {
+#ifdef ENALBE_CSGV_DEBUGGING
+    if (!enabled)
+        return;
+
+    const ivec2 viewport_size = imageSize(inpaintedOutColor);
+
+    // map the pixel to a cache cell [region]
+    const int size = 4;
+    const uvec3 empty_space_dim = g_vol_dim / g_empty_space_block_dim;
+    const uint empty_space_set_count = empty_space_dim.x * empty_space_dim.y * empty_space_dim.z;
+    const uint elems_per_pixel = max(empty_space_set_count / (viewport_size.x * viewport_size.y / size), 1u);
+    const uint idx = elems_per_pixel * uint((pixel.x / size) + (pixel.y / size) * viewport_size.x);
+
+    if (idx >= empty_space_set_count)
+        return;
+
+    BitVectorRef empty_space_bv = BitVectorRef(g_empty_space_bv_address);
+
+    // accumulate information for all of the pixel's empty space bit vector cells
+    uint empty_count = 0u;
+    for (uint i = idx; i < idx + elems_per_pixel; i++) {
+        if (i > empty_space_set_count)
+            break;
+
+        if (BV_ACCESS(empty_space_bv.words, i) > 0u) {
+            empty_count++;
+        }
+    }
+
+    // display the rendering in grayscale in the background
+    color = vec4(vec3(dot(color.rgb, vec3(1.f / 3.f))), color.a);
+    // the redder, the more invisible
+    vec3 display = vec3(1.f, 0.f, 0.f);
+
+    // blend colored cache vis with background
+    const float alpha = float(empty_count) / float(elems_per_pixel);
+    color = vec4((1.f - alpha) * color.rgb + alpha * display, 1.f);
+
+#endif
+}
+
+void DEBUG_img_g_buffer(ivec2 pixel, inout vec4 color, bool enabled) {
+#ifdef ENALBE_CSGV_DEBUGGING
+    if (!enabled)
+        return;
+
+    float normalized_depth;
+    vec3 normal;
+    uint label;
+    uvec3 packed_g_buffer = imageLoad(gBuffer, pixel).rgb;
+    bool sampled = unpackGBufferRGB16(packed_g_buffer, label, normal, normalized_depth);
+
+    const ivec2 viewport_size = imageSize(inpaintedOutColor);
+    const ivec2 split_point = viewport_size / 2;
+
+
+
+    if (!sampled) {
+        // not sampled
+        color = vec4(1.f, 0.f, float(g_frame % 120) / 120.f, 1.f);
+    } else if (!isSurfaceHitGBufferRGB16(packed_g_buffer)) {
+        // no surface hit
+        color = vec4(0.f, 0.f, 0.f, 1.f);
+    } else if (pixel.x < split_point.x && pixel.y < split_point.y) {
+        // albedo
+        color = vec4(getAlbedoOfLabel(label), 1.f);
+    } else if (pixel.x < split_point.x && pixel.y >= split_point.y) {
+        // normal
+        color = vec4(-min(normal, vec3(0.f)) * 0.5f + max(normal, vec3(0.f)), 1.f);
+    } else if (pixel.x >= split_point.x && pixel.y < split_point.y) {
+        // depth
+        color = vec4(vec3(normalized_depth), 1.f);
+    } else {
+        // label
+        if (label == INVALID) {
+            color = vec4(1.f, 0.f, 1.f, 1.f);
+        } else {
+            uint hash = hash_pcg2d(uvec2(label)).x;
+            color = vec4(colormap_turbo(float(hash & 4093u) / 4093.f), 1.f);
+        }
+    }
+#endif
+}
+
 
 #endif // VOLCANITE_CSGV_DEBUG_RESOLVE_GLSL

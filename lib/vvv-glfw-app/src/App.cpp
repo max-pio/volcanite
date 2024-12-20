@@ -19,8 +19,12 @@
 #include <vvv/util/Logger.hpp>
 #include <glm/gtx/transform.hpp>
 
-#define GLFW_INCLUDE_NONE
+#ifndef GLFW_INCLUDE_NONE
+    #define GLFW_INCLUDE_NONE
+#endif
 #include <GLFW/glfw3.h>
+#include "stb/stb_image.hpp"
+
 
 #ifdef IMGUI
 #include "imgui/imgui.h"
@@ -258,8 +262,8 @@ namespace vvv {
         if (!m_resources_acquired)
             acquireResources();
 
-        double accumulatedTime{0.0};
-        size_t frameCount{0};
+        double accum_display_time{0.0};
+        size_t accum_display_frame_count{0};
 
         while (!glfwWindowShouldClose(m_window)) {
             double startTime = glfwGetTime();
@@ -278,27 +282,27 @@ namespace vvv {
             renderFrame();
             processVideoRecording();
 
+            // update frame time tracking
+            double frame_time = (glfwGetTime() - startTime) * 1000.;
+            avg_ms += frame_time;
+            var_ms += (frame_time * frame_time);
+            min_ms = std::min(min_ms, frame_time);
+            max_ms = std::max(max_ms, frame_time);
+            avg_ms_samples++;
+
             // print FPS in window title
-            double endTime = glfwGetTime();
-            accumulatedTime += endTime - startTime;
-            ++frameCount;
-            if (0.5 < accumulatedTime) {
-                assert(0 < frameCount);
+            accum_display_frame_count++;
+            accum_display_time += frame_time;
+            if (500 < accum_display_time) {
+                assert(0 < accum_display_frame_count);
 
                 std::ostringstream oss;
-                double frame_time = accumulatedTime / static_cast<double>(frameCount);
-                oss << getAppName() << "  " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms)";
+                double display_frame_time = accum_display_time / static_cast<double>(accum_display_frame_count);
+                oss << getAppName() << "  " << (1000. / display_frame_time) << " fps (" << display_frame_time << "ms)";
                 glfwSetWindowTitle(m_window, oss.str().c_str());
 
-                accumulatedTime = 0.0;
-                frameCount = 0;
-
-                frame_time *= 1000.;
-                avg_ms += frame_time;
-                var_ms += (frame_time * frame_time);
-                min_ms = std::min(min_ms, frame_time);
-                max_ms = std::max(max_ms, frame_time);
-                avg_ms_samples++;
+                accum_display_time = 0.0;
+                accum_display_frame_count = 0;
             }
         }
 
@@ -403,6 +407,19 @@ namespace vvv {
         glfwSetWindowUserPointer(m_window, this);
         glfwSetFramebufferSizeCallback(m_window, framebufferResizeCallback);
         m_camera_controller.setWindow(m_window);
+
+        GLFWimage icon = {.pixels = nullptr};
+        if (vvv::Paths::hasDataPath("icons/volcanite_icon_256.png")) {
+            int icon_channels;
+            icon.pixels = stbi_load(vvv::Paths::findDataPath("icons/volcanite_icon_256.png").string().c_str(), &icon.width,
+                                    &icon.height, &icon_channels, STBI_rgb_alpha);
+        }
+        if (icon.pixels) {
+            glfwSetWindowIcon(m_window, 1, &icon);
+            stbi_image_free(icon.pixels);
+        } else {
+            Logger(WARN) << "Unable to load volcanite_icon_256.png application icon.";
+        }
     }
 
     void Application::destroyWindow() {
@@ -659,8 +676,9 @@ namespace vvv {
         const auto shaderDirectory = vvv::getShaderIncludeDirectory();
 
         m_renderpass.shaderFragment = new vvv::Shader(
-                {.filename = "blit.frag", .label = "Application.m_shaderFragment"});
-        m_renderpass.shaderVertex = new vvv::Shader({.filename = "blit.vert", .label = "Application.m_shaderVertex"});
+                SimpleGlslShaderRequest{.filename = "blit.frag", .label = "Application.m_shaderFragment"});
+        m_renderpass.shaderVertex = new vvv::Shader(
+                SimpleGlslShaderRequest{.filename = "blit.vert", .label = "Application.m_shaderVertex"});
     }
 
     void Application::destroyBlitShaders() {
@@ -816,7 +834,7 @@ namespace vvv {
                 vvv::Logger(vvv::INFO) << "min / avg (std.dev.) / max [ms/frame]";
                 vvv::Logger(vvv::INFO) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms << " ("
                                        << std::sqrt(var_ms - (avg_ms * avg_ms)) << ") " << " / " << max_ms
-                                       << " total avg ms " << avg_ms;
+                                       << " | " << avg_ms_samples << " frames rendered.";
             } else {
                 m_record_out = std::ofstream(m_record_file_path, std::ios::out | std::ios::binary);
                 if (!m_record_out->is_open()) {
@@ -853,7 +871,7 @@ namespace vvv {
                 var_ms /= static_cast<double>(avg_ms_samples);
                 vvv::Logger(vvv::WARN) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms
                                        << " ($\\sigma=" << std::sqrt(var_ms - (avg_ms * avg_ms)) << "$) " << " / "
-                                       << max_ms << " total avg ms " << avg_ms;
+                                       << max_ms << " total avg ms " << avg_ms << " | " << avg_ms_samples << " frames rendered.";
             }
                 // start replay
             else {
@@ -940,7 +958,7 @@ namespace vvv {
                 var_ms /= static_cast<double>(avg_ms_samples);
                 vvv::Logger(vvv::WARN) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms
                                        << " ($\\sigma=" << std::sqrt(var_ms - (avg_ms * avg_ms)) << "$) " << " / "
-                                       << max_ms;
+                                       << max_ms  << " | " << avg_ms_samples << " frames rendered.";
             }
         }
     }

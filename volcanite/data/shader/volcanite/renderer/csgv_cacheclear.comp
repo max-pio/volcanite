@@ -22,14 +22,18 @@
 layout (local_size_x = 8, local_size_y = 4, local_size_z = 4) in;
 
 
-#include "csgv_bindings.glsl"
+#include "volcanite/renderer/csgv_bindings.glsl"
 
 // includes
-#include "cpp_glsl_include/csgv_constants.h"
+#include "cpp_glsl_include/csgv_constants.incl"
 #include "util.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
 
 void main() {
+#if CACHE_MODE == CACHE_NOTHING
+    return;
+#endif
+
     uvec3 brick = gl_GlobalInvocationID.xyz;
     if(isHelperLane(brick, g_brick_count))
         return;
@@ -69,4 +73,11 @@ void main() {
     g_brick_info[brick_idx * 4u + BRICK_INFO_CUR_INV_LOD] = INVALID;
     g_brick_info[brick_idx * 4u + BRICK_INFO_CACHE_INDEX] = INVALID;
     g_brick_info[brick_idx * 4u + BRICK_INFO_REQ_SLOT] = INVALID;
+
+    #if (CACHE_MODE == CACHE_VOXELS)
+        // reset all cache elements
+        for (uint id = brick_idx; id < CACHE_UVEC2_SIZE; id += g_brick_idx_count) {
+            g_cache[id].x = INVALID;
+        }
+    #endif
 }

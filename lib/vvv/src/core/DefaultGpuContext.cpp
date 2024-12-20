@@ -367,17 +367,17 @@ void vvv::DefaultGpuContext::createPhysicalDevice() {
     std::optional<int> firstSelection = {};
 
     // parse env variable
-    char* envStr = std::getenv("VVV_DEVICE");
+    char* envStr = std::getenv("VOLCANITE_DEVICE");
     if (envStr) {
         try {
             int selection = std::stoi(std::string(envStr));
             if (selection >= 0 && selection < devices.size())
                 envSelection = selection;
-            else Logger(WARN) << "Environment variable VVV_DEVICE is out of range. VVV_DEVICE will be ignored.";
+            else Logger(WARN) << "Environment variable VOLCANITE_DEVICE is out of range. VOLCANITE_DEVICE will be ignored.";
         } catch(std::invalid_argument& e) {
-            Logger(WARN) << "Environment variable VVV_DEVICE is not a valid number. VVV_DEVICE will be ignored.";
+            Logger(WARN) << "Environment variable VOLCANITE_DEVICE is not a valid number. VOLCANITE_DEVICE will be ignored.";
         } catch(std::out_of_range& e) {
-            Logger(WARN) << "Environment variable VVV_DEVICE is not a valid number. VVV_DEVICE will be ignored.";
+            Logger(WARN) << "Environment variable VOLCANITE_DEVICE is not a valid number. VOLCANITE_DEVICE will be ignored.";
         }
     }
 

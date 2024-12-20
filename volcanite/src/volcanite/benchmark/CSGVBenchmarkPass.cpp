@@ -22,7 +22,8 @@ namespace volcanite {
     AwaitableHandle CSGVBenchmarkPass::execute(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore* signalBinarySemaphore) {
 
         Logger(INFO) << "GPU decompression with a cache size of " << m_cache_bytes / 1000 / 1000 << "MB in "
-                     << m_execution_iterations << " iterations.";
+                     << m_execution_iterations << " iterations (with " << m_cache_heat_up_iterations
+                     << " cache heat up iterations each)";
 
         // fill command buffer
         auto &commandBuffer = m_commandBuffer->getActive();
@@ -43,29 +44,44 @@ namespace volcanite {
             PushConstants pc{.brick_idx_offset = i * m_bricks_per_execution, .target_inv_lod=(m_csgv->getLodCountPerBrick() - 1u)};
             commandBuffer.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants), &pc);
 
-            getCtx()->debugMarker->beginRegion(commandBuffer, "decompress", glm::vec4(0.f, 1.f, 0.f, 1.f));
-            commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, m_pipelines.at(0)); // each compute shader has one pipeline
+            commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute,
+                                       m_pipelines.at(0)); // each compute shader has one pipeline
             if (hasDescriptors()) {
-                commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_pipelineLayout, 0, m_descriptorSets->getActive(), nullptr);
+                commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_pipelineLayout, 0,
+                                                 m_descriptorSets->getActive(), nullptr);
             }
 
-            // barrier so that all executions finish writing to the cache
-            commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer | vk::PipelineStageFlagBits::eAllCommands,
-                                          vk::PipelineStageFlagBits::eComputeShader, {},
-                                          {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite | vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eMemoryRead)},
-                                          nullptr, nullptr);
+            for (int heatup_i = 0; heatup_i <= m_cache_heat_up_iterations; heatup_i++) {
+                getCtx()->debugMarker->beginRegion(commandBuffer, "decompress", glm::vec4(0.f, 1.f, 0.f, 1.f));
 
-            // dispatch decompression of bricks and measure runtime
-            commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eTopOfPipe, m_query_pool_timestamps, 2*i);
-            commandBuffer.dispatch(m_decompression_workgroup_size.width, m_decompression_workgroup_size.height, m_decompression_workgroup_size.depth);
-            commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, m_query_pool_timestamps, 2*i + 1);
 
-            // barrier so that all executions finish writing to the cache
-            commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
-                                          vk::PipelineStageFlagBits::eComputeShader, {},
-                                          {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)},
-                                          nullptr, nullptr);
-            getCtx()->debugMarker->endRegion(commandBuffer);
+                // barrier so that all executions finish writing to the cache
+                commandBuffer.pipelineBarrier(
+                        vk::PipelineStageFlagBits::eTransfer | vk::PipelineStageFlagBits::eAllCommands,
+                        vk::PipelineStageFlagBits::eComputeShader, {},
+                        {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite | vk::AccessFlagBits::eTransferWrite,
+                                           vk::AccessFlagBits::eMemoryRead)},
+                        nullptr, nullptr);
+
+                // dispatch decompression of bricks and measure runtime
+                if (heatup_i == m_cache_heat_up_iterations)
+                    commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eTopOfPipe,
+                                                 m_query_pool_timestamps, 2 * i);
+                commandBuffer.dispatch(m_decompression_workgroup_size.width, m_decompression_workgroup_size.height,
+                                       m_decompression_workgroup_size.depth);
+                if (heatup_i == m_cache_heat_up_iterations)
+                    commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe,
+                                                 m_query_pool_timestamps, 2 * i + 1);
+
+                // barrier so that all executions finish writing to the cache
+                commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                                              vk::PipelineStageFlagBits::eComputeShader, {},
+                                              {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite,
+                                                                 vk::AccessFlagBits::eMemoryRead)},
+                                              nullptr, nullptr);
+                getCtx()->debugMarker->endRegion(commandBuffer); // decompress
+
+            }
         }
 
         commandBuffer.end();
@@ -207,10 +223,17 @@ namespace volcanite {
             Logger(ERROR) << err.errorText;
             return ShaderCompileErrorCallbackAction::THROW;
         };
-        return {std::make_shared<Shader>(
-                SimpleGlslShaderRequest{.filename="volcanite/benchmark/bench_decompress.comp",
-                                        .defines= m_shader_defines, .label="bench_decompress.comp"},
-                compileErrorCallback)};
+        if (m_csgv->isUsingRandomAccess()) {
+            return {std::make_shared<Shader>(
+                    SimpleGlslShaderRequest{.filename="volcanite/benchmark/bench_decompress_subgroup_parallel.comp",
+                                            .defines= m_shader_defines, .label="bench_decompress_subgroup_parallel.comp"},
+                    compileErrorCallback)};
+        } else {
+            return {std::make_shared<Shader>(
+                    SimpleGlslShaderRequest{.filename="volcanite/benchmark/bench_decompress.comp",
+                                            .defines= m_shader_defines, .label="bench_decompress.comp"},
+                    compileErrorCallback)};
+        }
     }
 
     std::vector<vk::PushConstantRange> CSGVBenchmarkPass::definePushConstantRanges() {

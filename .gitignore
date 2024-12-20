@@ -5,6 +5,9 @@ compile_commands.json
 .ipynb_checkpoints/
 *.pkl
 
+# gitlab merge conflict backups
+**/**.orig
+
 # ignore shaders generated during application execution
 *.spv
 
@@ -13,6 +16,13 @@ compile_commands.json
 **/python/config/*
 **/.idea/*
 **/python/internal/*
+**/.venv/*
+
+# large evaluation files
+/eurovis/eval/**/**.csgv
+/eurovis/eval/out/**/**.png
+/eurovis/eval/out/**/**.jpg
+/eurovis/eval/out/**/**.mp4
 
 # operating system and IDE specific ignores
 /.idea*
@@ -23,8 +33,11 @@ compile_commands.json
 /.vs
 /out
 /CMakeSettings.json
+**/**.code-workspace
 
 # vulkan, volcanite and imgui specific ignores
 /imgui.ini
 /vulkan_pipeline_cache.data
 /projects/volcanite/python/data/*
+/extern/shaderc/third_party/spirv-tools/build_overrides/*
+

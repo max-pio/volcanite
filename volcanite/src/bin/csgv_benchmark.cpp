@@ -96,6 +96,8 @@ int volcanite_main(int argc, char *argv[]) {
         // we open a precomputed csgv database for this volume if it exists or create it otherwise
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),
                 .encoding_mode = args.encoding_mode,
+                .op_mask = args.operation_mask,
+                .random_access = args.random_access,
                 .label_remapping = nullptr,
                 .cpu_threads = args.threads,
                 .use_detail_separation = args.stream_lod,
@@ -168,7 +170,8 @@ int volcanite_main(int argc, char *argv[]) {
     ctx.physicalDeviceFeaturesV12().setBufferDeviceAddress(true);
     ctx.physicalDeviceFeaturesV12().setHostQueryReset(true);
     ctx.createGpuContext();
-    CSGVBenchmarkPass benchmark(&(*compressedSegmentationVolume), &ctx, args.cache_size_MB, args.cache_palettized);
+    CSGVBenchmarkPass benchmark(&(*compressedSegmentationVolume), &ctx, args.cache_size_MB,
+                                args.cache_palettized, args.decode_from_shared_memory);
 
     std::shared_ptr<Awaitable> awaitable = benchmark.execute();
     ctx.sync->hostWaitOnDevice({awaitable});
@@ -178,7 +181,7 @@ int volcanite_main(int argc, char *argv[]) {
         execution_time = benchmark.getExecutionTimeMS();
     } while (execution_time == 0.f);
 
-    size_t volume_size_byte = compressedSegmentationVolume->getVolumeDim().x
+    size_t volume_size_byte = static_cast<size_t>(compressedSegmentationVolume->getVolumeDim().x)
                               * compressedSegmentationVolume->getVolumeDim().y
                               * compressedSegmentationVolume->getVolumeDim().z
                               * sizeof(uint32_t);

@@ -8,7 +8,7 @@
 layout (local_size_x = 4, local_size_y = 4, local_size_z = 2) in;
 
 
-#include "csgv_bindings.glsl"
+#include "volcanite/renderer/csgv_bindings.glsl"
 
 #include "util.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
@@ -29,8 +29,7 @@ void main() {
     g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = max(LOD_COUNT, g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]);
 
     // if this brick has a valid request slot, it requests decompression. Otherwise, it can be ignored.
-    uint slot = g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT];
-    if(slot == INVALID) {
+    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] == INVALID) {
         return;
     }
 
@@ -44,6 +43,16 @@ void main() {
         return;
     }
 
+#ifdef VERIFY_BRICK_BEFORE_DECODING
+    if (!verifyBrickCompression(brick_idx)) {
+        // fill cache regions for bricks with broken encodings with INVALID
+        fillCSGVBrick(cache_idx * g_cache_base_element_uints, inv_lod, INVALID);
+        g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = inv_lod;
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = INVALID;
+        return;
+    }
+#endif
+
     // perform the decompression of the brick into the previously assigned cache region
 #if 1
     #ifdef SEPARATE_DETAIL
@@ -54,7 +63,7 @@ void main() {
     decompressCSGVBrick(brick_idx, valid_brick_size, 0u, inv_lod, cache_idx * g_cache_base_element_uints);
 #else
     // fill the cache with "random" indices into the brick's palette
-    //fillCSGVBrick(cache_idx * g_cache_base_element_uints, inv_lod, 1u + (brick_idx % (getBrickPaletteLength(brick_idx) - 1u)));
+    fillCSGVBrick(cache_idx * g_cache_base_element_uints, inv_lod, brick_idx % getBrickPaletteSize(brick_idx));
 #endif
 
     // the brick was successfuly decompressed into the cache into the requested inverse LOD, the request can be removed.

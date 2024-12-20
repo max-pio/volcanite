@@ -95,15 +95,17 @@ Move the camera focus position with the `W` `A` `S` `D` + `Q` `E` keys.
 Pressing `R` performs a constant rotation around the y-axis.
 
 Hitting `F9` starts recording the camera pose and frame time of frame until it is pressed again.
-Both resulting output files are stored in the user home directory in a subfolder `vvv_video`.
+Both resulting output files are stored in a subfolder `volcanite_video`.
 The record can be replayed by hitting `F10`.
 `F11` replays the record and outputs a PNG image for each frame that can later be concatenated to a video using an external program like ffmpeg:
 ```
-ffmpeg -f concat -safe 0 -i ~/vvv_video/video_timing.txt ~/vvv_video/video.mp4
+ffmpeg -f concat -safe 0 -i ./volcanite_video/video_timing.txt ./volcanite_video/video.mp4
 ```
 
 ## Command Line Interface
 
+To force selecting a certain Vulkan device for rendering, you can set the environment variable `VOLCANITE_DEVICE` to
+a requested index.
 The categorized command line arguments are explained below.
 The general usage of Volcanite is
 

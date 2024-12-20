@@ -29,6 +29,10 @@ float getAttribute(uint label, uint attributeStart) {
 
 /// Returns the first material where the discriminator attribute falls into the discriminator interval, -1 for invisible
 int getMaterial(uint label) {
+#if CACHE_MODE == CACHE_VOXELS
+    if (label == INVISIBLE_LABEL)
+        return -1;
+#endif
     for(int m = 0; m <= g_max_active_material; m++) {
         if(getAttribute(label, g_materials[m].discrAttributeStart) >= g_materials[m].discrIntervalMin
             && getAttribute(label, g_materials[m].discrAttributeStart) <= g_materials[m].discrIntervalMax)
@@ -39,7 +43,11 @@ int getMaterial(uint label) {
 }
 
 bool isLabelVisible(uint label) {
+#if CACHE_MODE == CACHE_VOXELS
+    return label != INVISIBLE_LABEL && getMaterial(label) >= 0;
+#else
     return getMaterial(label) >= 0;
+#endif
 }
 
 vec4 getColor(uint label, int material) {

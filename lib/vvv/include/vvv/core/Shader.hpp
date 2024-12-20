@@ -22,41 +22,42 @@
 #include "preamble.hpp"
 
 #include "SPIRV-Reflect/spirv_reflect.h"
-#include <vvv/config.hpp>
 #include <vvv/util/Logger.hpp>
 
 #include <filesystem>
 
 namespace vvv {
 
-//! Handles all information needed to compile a shader into a module
+/// Handles all information needed to compile a shader into a module
 struct GlslShaderRequest {
-    //! A path to the file with the GLSL source code
+    /// A path to the file with the GLSL source code
     std::filesystem::path shader_file_path;
-    //! The director(ies) which are searched for includes
+    /// The director(ies) which are searched for includes
     std::vector<std::filesystem::path> include_paths;
-    //! The name of the function that serves as entry point
+    /// The name of the function that serves as entry point
     std::string entry_point = "main";
-    //! A single bit from VkShaderStageFlagBits to indicate the targeted shader
-    //! stage
+    /// A single bit from VkShaderStageFlagBits to indicate the targeted shader
+    /// stage
     vk::ShaderStageFlagBits stage;
-    //! A list of strings providing the defines, either as "IDENTIFIER" or
-    //! "IDENTIFIER=VALUE". Do not use white space, these strings go into the
-    //! command line unmodified.
+    /// A list of strings providing the defines, either as "IDENTIFIER" or
+    /// "IDENTIFIER=VALUE". Do not use white space, these strings go into the
+    /// command line unmodified.
     std::vector<std::string> defines = {};
-    //! A debug label for the shader
-    std::string label = "";
+    /// A debug label for the shader
+    std::string label;
+    /// Enable higher shader compiler optimization levels
+    bool optimize;
 
     // allow use in std::map<GlslShaderRequest,T>
     auto operator<=>(const GlslShaderRequest&) const = default;
 };
 
-//! Handles all information needed to compile a shader into a module.
-//! Simplified version of `ShaderRequest`. The shader filename and includes
-//! within are relative to the default shader directroy. The stage is
-//! derived from the file extension.
+/// Handles all information needed to compile a shader into a module.
+/// Simplified version of `ShaderRequest`. The shader filename and includes
+/// within are relative to the default shader directroy. The stage is
+/// derived from the file extension. Compiler optimization is enabled.
 struct SimpleGlslShaderRequest {
-    //! path relative to the shader include directory
+    /// path relative to the shader include directory
     std::string filename;
     std::vector<std::string> defines = {};
     std::string label = "";
@@ -100,24 +101,22 @@ enum class ShaderCompileErrorCallbackAction {
 using ShaderCompileErrorCallback = std::function<ShaderCompileErrorCallbackAction(const ShaderCompileError&)>;
 
 
-//! Bundles a Vulkan shader module with its SPIRV code
+/// Bundles a Vulkan shader module with its SPIRV code
 struct Shader {
 
-    //! The size of the compiled SPIRV code in bytes
-    size_t spirv_size;
-    //! The compiled SPIRV code
-    void *spirv_code;
+    /// The compiled SPIRV code
+    std::vector<uint32_t> spirv_binary;
 
     std::string label;
 
     explicit Shader(const GlslShaderRequest& req, const ShaderCompileErrorCallback& compileErrorCallback = nullptr);
     explicit Shader(const SimpleGlslShaderRequest& req, const ShaderCompileErrorCallback& compileErrorCallback = nullptr);
 
-    explicit Shader(size_t spirv_size, void *spirv_code, std::string label = "") : spirv_size(spirv_size), spirv_code(spirv_code), label(label) { reflectShader(); }
+    explicit Shader(size_t spirv_size, const std::vector<uint32_t>& spirv_code, const std::string& label = "") : spirv_binary(spirv_code), label(label) { reflectShader(); }
 
-    explicit Shader(std::string &filename) : Shader(SimpleGlslShaderRequest{.filename = filename}) {}
-    Shader(std::string filename, std::vector<std::string> defines) : Shader(SimpleGlslShaderRequest{.filename = filename, .defines = defines}) {}
-    Shader(std::string filename, std::vector<std::string> defines, std::string label) : Shader(SimpleGlslShaderRequest{.filename = filename, .defines = defines, .label = label}) {}
+    explicit Shader(const std::string& filename) : Shader(SimpleGlslShaderRequest{.filename = filename}) {}
+    Shader(const std::string& filename, const std::vector<std::string>& defines) : Shader(SimpleGlslShaderRequest{.filename = filename, .defines = defines}) {}
+    Shader(const std::string& filename, const std::vector<std::string>& defines, const std::string& label) : Shader(SimpleGlslShaderRequest{.filename = filename, .defines = defines, .label = label}) {}
 
     vk::PipelineShaderStageCreateInfo *pipelineShaderStageCreateInfo(vvv::GpuContextPtr ctx);
     vk::ShaderModule shaderModule(vvv::GpuContextPtr ctx);
@@ -128,10 +127,7 @@ struct Shader {
             m_shaderModule = nullptr;
         }
 
-        if(spirv_code) {
-            free(spirv_code);
-            spirv_code = nullptr;
-        }
+        spirv_binary.clear();
     }
 
     std::vector<DescriptorSetLayout> reflectDescriptorLayouts() const;
@@ -236,11 +232,16 @@ struct Shader {
 
 private:
     void createShader(const GlslShaderRequest& request, const ShaderCompileErrorCallback& compileErrorCallback = nullptr);
-    [[nodiscard]] static std::filesystem::path compileGlslShader(const GlslShaderRequest& request);
+    /// compile a GLSL shader to a spirv file by calling a compiler via the command line
+    [[nodiscard]] static std::filesystem::path compileGlslShaderCMD(const GlslShaderRequest& request);
+    /// Directly compile the GLSL shader form the request for this shader.
+    /// @param write_spirv_tmp_file if true, the spirv shader is written to a tmp file
+    /// @return the path of the compiled spirv binary if writing to a spirv tmp file was successful
+    std::optional<std::filesystem::path> compileGlslShader(const GlslShaderRequest& request, bool write_spirv_tmp_file=true);
     void loadSpirvFromFile(const std::filesystem::path& path);
     void reflectShader();
 
-    std::optional<std::filesystem::path> getPrecompiledLocalSpirvPath(const SimpleGlslShaderRequest& request);
+    static std::optional<std::filesystem::path> getPrecompiledLocalSpirvPath(const SimpleGlslShaderRequest& request);
 
 
     vk::ShaderModule m_shaderModule = nullptr;

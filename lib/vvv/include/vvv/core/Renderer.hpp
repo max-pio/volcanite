@@ -194,6 +194,24 @@ public:
         return success;
     }
 
+    virtual void startFrameTimeTracking() {
+        throw std::logic_error("Renderer does not implement frame time tracking.");
+    }
+    /// Stops the tracking. Should be immediately called after last renderNextFrame. If awaitLastFrameFinished is set,
+    /// either to {} or an awaitable list, the method waits for the awaitables to finish and adds a final timing
+    /// measurement for the last frame. Query the results with getLastEvaluationResults()
+    virtual void stopFrameTimeTracking(std::optional<AwaitableList> awaitLastFrameFinished = {}) {
+        throw std::logic_error("Renderer does not implement frame time tracking.");
+    }
+
+    /// Called after renderNextFrame to download and export the currently rendered image on the next call of
+    /// renderNextFrame.
+    /// @param image_path a path to a non-existing png, jpg, or jpeg file
+    virtual void exportCurrentFrameToImage(std::string image_path) {
+        throw std::logic_error("Renderer does not implement image export");
+    }
+
+
 protected:
     std::shared_ptr<Camera> m_camera = nullptr;
     vvv::GuiInterface* m_gui_interface = nullptr;

@@ -39,8 +39,6 @@ private:
             : DefaultGpuContext({.debugUtilities = std::move(debugUtilities), .appName = std::move(appName)}),
             m_renderer(std::move(renderer)), m_pendingRecreation(false), m_gui(std::make_unique<DummyGuiInterface>())
     {
-        // choose a camera controller for the renderer
-        m_renderer->setCamera(std::make_shared<vvv::Camera>(true));
     };
 
 public:
@@ -58,9 +56,16 @@ public:
     void releaseResources();
 
     /// Run the renderloop for number_of_frames taking ownership of the current thread.
-    /// If a frame finished callback is passed it is called everytime a frame finished with the current texture output
-    /// @return the final Texture of the render loop
-    std::shared_ptr<Texture> renderFrames(size_t number_of_frames, void (*frameFinishedCallback)(Texture*) = nullptr);
+    /// @param number_of_frames number of frames to render. can be zero if record_file_in is given to use record length.
+    /// @param record_file_in a previously recorded camera path that is played when rendering the frames. "" for none.
+    /// @param video_fmt_file_out image file path string that contains a single replacement field {*} for
+    /// <a href="https://en.cppreference.com/w/cpp/utility/format/format">std::format</a> for the integer frame index.
+    /// Example: "./out{:3}.png"
+    /// @param frameFinishedCallback is called everytime a frame finished with the current texture output.
+    /// @return the final Texture of the render loop.
+    std::shared_ptr<Texture> renderFrames(size_t number_of_frames, std::string record_file_in = "",
+                                          std::string video_fmt_file_out = "",
+                                          void (*frameFinishedCallback)(RendererOutput*) = nullptr);
 
 //    /// Run the renderloop without taking ownership of the current thread.
 //    /// You MUST NOT call `execAsync` or `exec` to invoke a second instance of the renderloop until the forked renderloop terminates.

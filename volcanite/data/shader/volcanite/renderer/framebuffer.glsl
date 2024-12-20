@@ -60,80 +60,87 @@ ivec2 pixelFromInvocationID() {
 // Two ping-pong accumulation buffers:
 //   - [RGBA16f] RGBA radiance and opacity accumulated
 //   - [R16u]    accumulated (valid) sample count
-// One G-Buffer [RG16u]:
+// One G-Buffer [RGB16u]:
 //   - x component is 0xFF for pixels that did not receive any sample yet
 //   - else: first two bits of x component are 11 (== 3u) if no surface was hit. normal is (0,0,0)
 //   - else: first 3 bits contain normal, other bits contain depth, and label
 
-/// return a value that can be stored in an RG8 format to indicate an unset G-Buffer entry, for pixels that did receive
-/// any sample yet. these pixels should be omitted in the resolve pass.
-uvec2 invalidGBufferRG8() {
-    // all bits set for x marks invalid
-    return uvec2(0xFF, 0xFF);
+/// return a value that can be stored in an RGB16 format to indicate an unset G-Buffer entry, for pixels that did not
+/// receive any sample yet. these pixels should be omitted in the resolve pass.
+uvec3 invalidGBufferRGB16() {
+    // first two normal axis bits set to 1 and normal sign bit set to 1 = (************111) => not sampled
+    // additionally: maximum depth, INVALID label
+    return uvec3(0xFFFF, 0xFFFF, 0xFFFF);
 }
 
-// return a value that can be stored in an RG8 format to indicate a G-Buffer for a pixel that received a sample during
+// return a value that can be stored in an RGB16 format to indicate a G-Buffer for a pixel that received a sample during
 // rendering but did not hit any visibile surface.
-uvec2 noHitGBufferRG8() {
-    // assign maximum depth and mark first two bits (normal axis) as
-    return uvec2(3u, 0xFF);
+uvec3 noHitGBufferRGB16() {
+    // first two normal axis bits set to 1 and normal sign bit set to 0 = (************011) => sampled, no surface hit
+    // additionally: maximum depth, INVALID label
+    return uvec3(65531u, 0xFFFF, 0xFFFF);
 }
 
-// returns true if this packed G-buffer entry is marking the pixel as "not set" / invalid
-bool isInvalidGBufferRG8(uvec2 g_buffer_packed) {
-    return g_buffer_packed.x == 0xFF;
+// returns true if this packed G-buffer entry is marking the pixel as not sampled
+bool isInvalidGBufferRGB16(uvec3 g_buffer_packed) {
+    return g_buffer_packed.x == 0xFFFF;
 }
 
 // returns true if this packed G-buffer entry is for a pixel that is rendered and hit a visible surface.
-bool isSurfaceHitGBuffer(uvec2 g_buffer_packed) {
-    return (g_buffer_packed.x & 0x3u) < 3u;
+bool isSurfaceHitGBufferRGB16(uvec3 g_buffer_packed) {
+    return g_buffer_packed.x != 65531u;
 }
 
 /// pack the given attributes in a value that can be stored in an RG8 format
-uvec2 packGBufferRG8(uint label, vec3 normal, float normalized_depth) {
+uvec3 packGBufferRGB16(uint label, vec3 normal, float normalized_depth) {
 
     // a note from the AMD developer performance guide: (https://gpuopen.com/learn/rdna-performance-guide/)
     // "put highly correlated bits in the Most Significant Bits (MSBs) and noisy data in the Least Significant Bits"
-    uvec2 packed = uvec2(0u);
+    uvec3 packed = uvec3(0u);
 
-    // 3 bits for axis-aligned normal, i.e. -/+ {(1,0,0) | (0,1,0) | (0,0,1)}
-    // first two bits denote the axis: 00=x 01=y 10=z or a "no-hit" G-Buffer sample with 11
-    packed.x |= clamp(uint(dot(abs(normal), vec3(0.f, 1.f, 2.f))), 0u, 2u);
-    // third bit is the sign: 0 positive, 1 negative
+    // 3 bits for the axis-aligned normal, i.e. -/+ {(1,0,0) | (0,1,0) | (0,0,1)}
+    // first two bits denote the axis: 00=x 01=y 10=z or a "not sampled" or "no-hit" G-Buffer sample with 11
+    packed.x = clamp(uint(dot(abs(normal), vec3(0.f, 1.f, 2.f))), 0u, 2u);
+    // third bit for the sign: 0 positive, 1 negative
     packed.x |= dot(normal, vec3(1.f, 1.f, 1.f)) < 0.f ? 4u : 0u;
 
-    // 5 bits for label hash
-    packed.x |= ((label ^ (label >> 16)) % 32) << 3;
+    // 13 bits for depth
+    packed.x |= uint(clamp(normalized_depth, 0.f, 0.9998f) * 8192.f) << 3;
 
-    // 8 bits for depth
-    packed.y = uint(clamp(normalized_depth, 0.f, 0.996f) * 256.f);
+    // 32 bits for the label at the first surface hit (implicitly encodes the albedo color as well)
+    packed.y = label & 0xFFFFu;
+    packed.z = label >> 16u;
 
+    // TODO: could return packed RGB16 g-buffer as u16vec3 to save registers
     return packed;
 }
 
-/// unpack the given RG8 G-Buffer value into attributes. Returns false if the G-Buffer did not receive a sample yet.
-bool unpackGBufferRG8(uvec2 g_buffer_packed, out uint label, out vec3 normal, out float normalized_depth) {
-    // .x all bits set denotes an unset G-Buffer
-    if (isInvalidGBufferRG8(g_buffer_packed)) {
+
+/// unpack the given RGB16 G-Buffer value into attributes. Returns false if the G-Buffer did not receive a sample yet.
+bool unpackGBufferRGB16(uvec3 g_buffer_packed, inout uint label, inout vec3 normal, inout float normalized_depth) {
+    if (isInvalidGBufferRGB16(g_buffer_packed)) {
         return false;
     }
 
     // 3 bits for normal, if the first two bits are both set, it is undefined (no-hit ray)
     normal = vec3(0.f);
-    if (isSurfaceHitGBuffer(g_buffer_packed))
+    if (isSurfaceHitGBufferRGB16(g_buffer_packed))
         normal[(g_buffer_packed.x & 0x3u)] = 1.f - 2.f * float((g_buffer_packed.x >> 2) & 0x1u);
 
-    // 5 bits for label hash. This is not bijective, so we just return the hash
-    label = (g_buffer_packed.x >> 3u) & 0x1Fu;
+    // 13 bits normalized depth between 0 and 1
+    normalized_depth = float(g_buffer_packed.x >> 3) / 8192.f;
 
-    // normalized depth between 0 and 1
-    normalized_depth = float(g_buffer_packed.y) / 255.f;
+    // 32 bits for the label (split into y and z component)
+    label = g_buffer_packed.y | (g_buffer_packed.z << 16u);
+
     return true;
 }
 
+// accumulation buffer:
+
 bool isDepthValid(float depth) { return depth >= 0.f; }
 
-void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec2 g_buffer_packed) {
+void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_packed) {
 
     // invalidate any nan samples
     if (any(isnan(new_rgba)) || any(isinf(new_rgba)) || isnan(depth_valid) || isinf(depth_valid)) {
@@ -143,61 +150,73 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec2 g_buffer_pa
 
     // if subsamplign is enabled, we only render one pixel per [g_subsampling]^2 block
     ivec2 subpixel;
+    ivec2 pixel_block_start = (pixel/g_subsampling)*g_subsampling;
     for (subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
         for (subpixel.x = 0; subpixel.x < g_subsampling; subpixel.x++) {
-            ivec2 opix = (pixel/g_subsampling)*g_subsampling + subpixel;
+            ivec2 opix = pixel_block_start + subpixel;
 
-            vec4 accumulated_rgba;
+            vec4 accumulated_rgba_out;
+            uint sample_count_out;
 
             // first frame: reset
             if (g_camera_still_frames == 0u) {
                 // writing other pixel: initialize RGBA accumulation with 0 and invalid G-Buffer, set 0 SPP
                 if (any(notEqual(opix, pixel))) {
-                    accumulated_rgba = vec4(0.f);
-                    imageStore(accuSampleCountOut, opix, uvec4(0u));
-                    imageStore(gBuffer, opix, uvec4(invalidGBufferRG8(), 0u, 0u));
+                    accumulated_rgba_out = vec4(0.f);
+                    sample_count_out = 0u;
+//                    imageStore(accuSampleCountOut, opix, uvec4(0u));
+                    imageStore(gBuffer, opix, uvec4(invalidGBufferRGB16(), 0u));
                 }
                 // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame
                 else {
-                    accumulated_rgba = new_rgba;
-                    imageStore(accuSampleCountOut, opix, uvec4(isDepthValid(depth_valid) ? 1u : 0u));
-                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
+                    accumulated_rgba_out = new_rgba;
+                    sample_count_out = isDepthValid(depth_valid) ? 1u : 0u;
+//                    imageStore(accuSampleCountOut, opix, uvec4(isDepthValid(depth_valid) ? 1u : 0u));
+                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u));
                 }
             }
             // later frames: accumulation
             else {
                 vec4 prev_rgba = imageLoad(accumulationIn, opix);
-                uint prev_valid_samples = imageLoad(accuSampleCountIn, opix).r;
+                uint prev_sample_count = imageLoad(accuSampleCountIn, opix).r;
 
                 // writing other pixel: just copy from previous to current frame
                 if (any(notEqual(opix, pixel))) {
-                    accumulated_rgba = prev_rgba;
-                    imageStore(accuSampleCountOut, opix, uvec4(prev_valid_samples));
+                    accumulated_rgba_out = prev_rgba;
+                    sample_count_out = prev_sample_count;
+//                    imageStore(accuSampleCountOut, opix, uvec4(prev_valid_samples));
                     // G-buffer remains unchanged
                 }
                 // writing our pixel, but invalid new sample (from not yet decoded brick)
                 else if (!isDepthValid(depth_valid)) {
-                    if (prev_valid_samples > 0u) {
+                    if (prev_sample_count > 0u) {
                         // the accumulation buffer already contains a valid accumulation: skip this invalid sample
-                        accumulated_rgba = prev_rgba;
+                        accumulated_rgba_out = prev_rgba;
                         // G-buffer remains unchanged
                     } else {
                         // the accumulation buffer is not set
-                        accumulated_rgba = new_rgba;
-                        imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
+                        accumulated_rgba_out = new_rgba;
+                        imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u));
                     }
-                    imageStore(accuSampleCountOut, opix, uvec4(prev_valid_samples));
+                    sample_count_out = prev_sample_count;
+//                    imageStore(accuSampleCountOut, opix, uvec4(prev_valid_samples));
                 }
                 // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
                 else {
-                    accumulated_rgba = new_rgba + (prev_valid_samples > 0u ? prev_rgba : vec4(0.f));
-                    imageStore(accuSampleCountOut, opix, uvec4(1u + prev_valid_samples));
-                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u, 0u));
+                    accumulated_rgba_out = new_rgba + (prev_sample_count > 0u ? prev_rgba : vec4(0.f));
+                    sample_count_out = prev_sample_count + 1u;
+//                    imageStore(accuSampleCountOut, opix, uvec4(1u + prev_valid_samples));
+                    imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u));
                 }
             }
 
             // half float range rounds to intinity from 65520 onwards -> clamp
-            imageStore(accumulationOut, opix, min(accumulated_rgba, 65519.f));
+            imageStore(accumulationOut, opix, min(accumulated_rgba_out, 65519.f));
+            imageStore(accuSampleCountOut, opix, uvec4(sample_count_out));
+            // note: in theory, the denoisingBuffer could already contain the .a=-1 marker for pixels that did not
+            // receive a single rendered sample. but this would require to read the (possibly unchanged) G-buffer
+            // which is only writte to in this shader.
+            imageStore(denoisingBuffer[0], opix, accumulated_rgba_out / float(max(sample_count_out, 1u)));
         }
     }
 }

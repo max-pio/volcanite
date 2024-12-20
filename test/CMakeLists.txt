@@ -14,7 +14,7 @@
 #  along with this program.  If not, see <https:#www.gnu.org/licenses/>.
 
 
-macro(makeTest name)
+macro(makeVolcaniteTest name)
     add_executable(${name} ${name}.cpp)
 
     target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap libvolcanite)
@@ -46,8 +46,9 @@ macro(makeTest name)
     target_compile_definitions(${name} PRIVATE "-DDATA_DIRS=\"${data_dirs_escaped}\"")
 
     add_test(NAME ${name}  COMMAND ${name} ${ARGN})
-endmacro(makeTest)
+endmacro(makeVolcaniteTest)
 
-makeTest(csgv_test)
-makeTest(csgv_gpu_test)
-makeTest(volcanite_render_test)
+makeVolcaniteTest(csgv_test)
+makeVolcaniteTest(csgv_random_access_test)
+makeVolcaniteTest(csgv_gpu_test)
+makeVolcaniteTest(volcanite_render_test)

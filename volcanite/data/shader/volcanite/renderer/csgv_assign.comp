@@ -22,7 +22,7 @@
 layout (local_size_x = 4, local_size_y = 4, local_size_z = 2) in;
 
 
-#include "csgv_bindings.glsl"
+#include "volcanite/renderer/csgv_bindings.glsl"
 
 // includes
 #include "util.glsl"
@@ -70,7 +70,7 @@ void main() {
     // do some debug checks
     if(!isHelperLane(brick, uvec3(1u))) {
         const uint cache_top = (LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD;
-        assertf(g_assign_info[cache_top] <= g_cache_capacity, "cache counter is over capacity!", g_assign_info[cache_top]);
+        assertf(g_assign_info[cache_top] <= g_cache_capacity, "cache counter is over capacity! cache top: %u", g_assign_info[cache_top]);
     }
 
     const uint brick_idx = brick_pos2idx(brick, g_brick_count);

@@ -26,7 +26,7 @@
 
 #include "vvv/util/Logger.hpp"
 #include "CSGVPathUtils.hpp"
-#include "csgv_constants.h"
+#include "csgv_constants.incl"
 
 using namespace vvv;
 
@@ -45,11 +45,13 @@ public:
 
     // rendering args
     std::string rendering_config_file;
-    std::string screenshot_output_file;
     uint32_t render_resolution[2] = {1920, 1080};
     bool stream_lod = false;
     size_t cache_size_MB = 1024ul;
+    uint32_t cache_mode = CACHE_BRICKS;
     bool cache_palettized = false;
+    bool decode_from_shared_memory = false;
+    uint32_t empty_space_resolution = 2u;    // in cache mode CACHE_VOXELS, groups n³ voxels into one empty space entry
     bool show_development_gui = false;
 
     // attribute args
@@ -65,9 +67,18 @@ public:
     uint32_t brick_size = 32;
     EncodingMode encoding_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC;
     uint32_t freq_subsampling = 8;      // n^3 factor for subsampling bricks for frequency table computation with rANS
+    uint32_t operation_mask = OP_ALL_WITHOUT_DELTA;   // enables certain CSGV operations and stop bits through OP_*_BIT
+    bool random_access = false;         // encode bricks so that they support random access within a brick
 
+    // evaluation and statistics
+    std::string screenshot_output_file; // png or jpg output file path to export the last frame from headless rendering
+    std::string video_output_fmt_file;  // output image file path string accepted by std::format for immediate frames
     bool run_tests = false;
     bool export_stats = false;
+    std::string record_in_file = "";    // file that stores a previously exported camera path for replay in headless
+    std::string eval_logfile = {};      // file into which rendering evaluation results are written as 'append'
+    std::string eval_name = {};         // name of the evaluation run that can be accessed in the log file as "%name"
+    std::string shader_defines = "";     // string of shader defines that will be passed on to the shader compiler
 
 
     static std::string getHelpString() {
@@ -123,23 +134,41 @@ public:
             ValuesConstraint<uint32_t> allowedBrickSize(_allowedBrickSize);
             ValueArg<uint32_t> bricksizeArg("b", "brick-size", "Compress with given brick size.", false, va.brick_size, &allowedBrickSize);
             cmd.add(bricksizeArg);
+            ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits. Quick: [a]ll or [o]ptimized.", false, "o", "(a|o|p|n|x|y|z|l|d|s)*", cmd);
+            SwitchArg randomAccessArg("p", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
+            // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
+            ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path. Must be used with -i.", false, va.record_in_file, "file", cmd);
+            ValueArg<std::string> evalLogFileArg("", "eval-logfile", "File into which rendering evaluation results are appended after all frames finished rendering the screenshot image. Must be used with -i.", false, va.eval_logfile, "file", cmd);
+            ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"%name\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
+            ValueArg<std::string> shaderDefineArg("", "shader-def", "String of ; separated definitions that will be passed on to the shader. e.g. 'MY_VAL=64;MY_DEF'. Use with care.", false, va.shader_defines, "string", cmd);
+
 
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
-            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{label column name referenced by volume}]]\".", false, "", "database[,table[,label]]", cmd);
+            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{label co'lumn name referenced by volume}]]\".", false, "", "database[,table[,label]]", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal all development render parameters in GUI.", cmd);
             ValueArg<uint32_t> cacheSizeMBArg("", "cache-size", "Size in MB of the renderer's brick cache. 0 to allocate all available.", false, va.cache_size_MB, "size", cmd);
             SwitchArg cachePalettizedArg("", "cache-palette", "Store palette indices in brick cache instead of labels.", cmd);
+            std::vector<char> _allowedCacheUnits = {'n', 'v', 'b'};
+            ValuesConstraint<char> allowedCacheUnits(_allowedCacheUnits);
+            ValueArg<char> cacheModeArg("", "cache-mode", "Content in the cache: [n] no cache [v] single voxels [b] full bricks (default)", false, _allowedCacheUnits[va.cache_mode], &allowedCacheUnits);
+            cmd.add(cacheModeArg);
+            SwitchArg decodedSharedMemoryArg("", "decode-sm", "Copy brick encodings to shared memory before decoding.", cmd);
+            std::vector<uint32_t> _allowedESSRes = {0, 1, 2, 4, 8, 16, 32, 64};
+            ValuesConstraint<uint32_t> allowedESSRes(_allowedESSRes);
+            ValueArg<uint32_t> emptySpaceResolutionArg("", "empty-space-res", "Groups n³ voxels into one empty space entry. Requires cache-mode v. Set 0 to disable empty space skipping.", false, va.empty_space_resolution, &allowedESSRes);
+            cmd.add(emptySpaceResolutionArg);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
+            ValueArg<std::string> videoArg("v", "video", "Formatted file path with single {} placeholder to export intermediate images when rendering -i. Example: ./out{:04}.jpg", false, va.video_output_fmt_file, "formatted file", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
             ValueArg<std::string> renderconfigArg("", "config", "Import render parameters from config file.", false, va.rendering_config_file, "file", cmd);
             // general arguments
             SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
-            SwitchArg verboseArg("v", "verbose", "Verbose debug output.", cmd);
+            SwitchArg verboseArg("", "verbose", "Verbose debug output.", cmd);
 
             // input file (file ending determines if we are on the import/decompress side (.csgv) or can specify compression options (other)
             UnlabeledValueArg<std::string> inputpathArg("input", "Either a previously compressed .csgv file to render or a segmented volume to compress or render.", false, "", "volume", cmd, true);
@@ -157,10 +186,58 @@ public:
 #endif
             va.decompress_export_file = expandPath(decompresspathArg.getValue());
             va.compress_export_file = expandPath(compresspathArg.getValue());
-            va.export_stats = statsArg.getValue();
+            {
+                std::string op_codes = opMaskArg.getValue();
+                std::transform(op_codes.begin(), op_codes.end(), op_codes.begin(), ::tolower);
+                va.operation_mask = 0;
+                for (const auto& c : opMaskArg.getValue()) {
+                    switch (c) {
+                        case 'a':
+                            va.operation_mask |= OP_ALL;
+                        case 'o':
+                            va.operation_mask |= OP_ALL_WITHOUT_DELTA;
+                        case 'p':
+                            va.operation_mask |= OP_PARENT_BIT;
+                            break;
+                        case 'x':
+                            va.operation_mask |= OP_NEIGHBORX_BIT;
+                            break;
+                        case 'y':
+                            va.operation_mask |= OP_NEIGHBORY_BIT;
+                            break;
+                        case 'z':
+                            va.operation_mask |= OP_NEIGHBORZ_BIT;
+                            break;
+                        case 'n':
+                            va.operation_mask |= OP_NEIGHBOR_BITS;
+                            break;
+                        case 'l':
+                            va.operation_mask |= OP_PALETTE_LAST_BIT;
+                            break;
+                        case 'd':
+                            va.operation_mask |= OP_PALETTE_D_BIT;
+                            break;
+                        case 's':
+                            va.operation_mask |= OP_STOP_BIT;
+                            break;
+                        default:
+                            throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d,s only", opMaskArg.longID());
+                    }
+                }
+            }
+            va.random_access = randomAccessArg.getValue();
             // rendering arguments
             va.rendering_config_file = expandPath(renderconfigArg.getValue());
             va.screenshot_output_file = expandPath(imageArg.getValue());
+            va.video_output_fmt_file = expandPath(videoArg.getValue());
+            if (!va.video_output_fmt_file.empty()) {
+                try {
+                    size_t test_frame_idx = 123;
+                    auto f = std::vformat(va.video_output_fmt_file, std::make_format_args(test_frame_idx));
+                } catch(std::format_error err) {
+                    throw ArgException(videoArg.longID() + " must be a formatted image file path string containing a single {} replacement field. Example: ./out{:04}.jpg", videoArg.longID());
+                }
+            }
             if(!resolutionArg.getValue().empty()) {
                 std::stringstream ss(resolutionArg.getValue());
                 ss >> va.render_resolution[0];
@@ -174,7 +251,24 @@ public:
             va.stream_lod = streamlodArg.getValue();
             va.cache_size_MB = cacheSizeMBArg.getValue();
             va.cache_palettized = cachePalettizedArg.getValue();
+            if(va.cache_palettized && va.random_access)
+                throw ArgException(cachePalettizedArg.longID() + " can not be used in combination with " + randomAccessArg.longID(), cachePalettizedArg.longID());
+            switch (cacheModeArg.getValue()) {
+                case 'n':
+                    va.cache_mode = CACHE_NOTHING;
+                    break;
+                case 'v':
+                    va.cache_mode = CACHE_VOXELS;
+                    break;
+                case 'b':
+                    va.cache_mode = CACHE_BRICKS;
+                    break;
+            }
+            va.decode_from_shared_memory = decodedSharedMemoryArg.getValue();
+            if(va.decode_from_shared_memory && !va.random_access)
+                throw ArgException(decodedSharedMemoryArg.longID() + " must be used in combination with " + randomAccessArg.longID(), decodedSharedMemoryArg.longID());
             va.show_development_gui = devArg.getValue();
+            va.empty_space_resolution = emptySpaceResolutionArg.getValue();
             // if no input file was specified, try to open a file dialog
             std::string input_file = expandPath(inputpathArg.getValue());
             if(input_file.empty() && input_volume_required) {
@@ -219,22 +313,10 @@ public:
                 }
 
                 // attribute arguments (if we import a .csgv file, the attributes are already stored in a database along with it)
-#ifndef LIB_SQLITE3
-                if(labelRemappingArg.getValue()) {
-                    throw ArgException(labelRemappingArg.longID() + " must not be set as SQLite3 library is not available.", labelRemappingArg.longID());
-                }
-                if(!attributeArg.getValue().empty()) {
-                    throw ArgException(attributeArg.longID() + " is not available as SQLite3 library is not available.", attributeArg.longID());
-                }
-                va.label_remapping = false;
-                va.attribute_database = "";
-                va.attribute_table = "";
-                va.attribute_label = "";
-#else
                 va.label_remapping = labelRemappingArg.getValue();
                 if(!attributeArg.getValue().empty()) {
                     va.label_remapping = true;
-                    const std::string attribute_info = attributeArg.getValue();
+                    const std::string& attribute_info = attributeArg.getValue();
                     auto comma0 = attribute_info.find(',', 0);
                     auto comma1 = attribute_info.find(',', comma0 + 1);
 
@@ -252,12 +334,17 @@ public:
                     if(!std::filesystem::exists(va.attribute_database))
                         throw ArgException(attributeArg.longID() + " attribute database file does not exists or can not be accessed.", attributeArg.longID());
                 }
-#endif
 
                 // compression arguments
                 va.brick_size = bricksizeArg.getValue();
-                const EncodingMode _strengths[] = {NIBBLE_ENC, SINGLE_TABLE_RANS_ENC, DOUBLE_TABLE_RANS_ENC};
-                va.encoding_mode = _strengths[strengthArg.getValue()];
+                if (va.random_access) {
+                    // TODO: WAVELET_MATRIX_ENC does not make sense for S=1 as it has worse compression rates than NIBBLE_ENC
+                    const EncodingMode _strengths[] = {NIBBLE_ENC, WAVELET_MATRIX_ENC, HUFFMAN_WM_ENC};
+                    va.encoding_mode = _strengths[strengthArg.getValue()];
+                } else {
+                    const EncodingMode _strengths[] = {NIBBLE_ENC, SINGLE_TABLE_RANS_ENC, DOUBLE_TABLE_RANS_ENC};
+                    va.encoding_mode = _strengths[strengthArg.getValue()];
+                }
                 va.freq_subsampling = subsamplingArg.getValue();
                 va.threads = threadsArg.getValue();
                 va.chunked = !chunkedArg.getValue().empty();
@@ -299,6 +386,16 @@ public:
                 }
                 va.run_tests = testArg.getValue();
             }
+            va.export_stats = statsArg.getValue();
+            va.record_in_file = expandPath(recordInFileArg.getValue());
+            va.eval_logfile = expandPath(evalLogFileArg.getValue());
+            va.eval_name = evalNameArg.getValue();
+            if (!va.eval_name.empty() && va.eval_logfile.empty()) {
+                throw ArgException("Evaluation log file must be used in combination with --eval-logfile",
+                                   evalNameArg.longID(""));
+            }
+            va.shader_defines = shaderDefineArg.getValue();
+            std::replace(va.shader_defines.begin(), va.shader_defines.end(), ';', ' ');
 
             return va;
         }

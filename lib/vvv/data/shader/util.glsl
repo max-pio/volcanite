@@ -16,6 +16,16 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#ifdef NDEBUG
+    #define assert(X, S)
+    #define assertf(X, S, P)
+#else
+    #define assert(X, S) if(!(X)) debugPrintfEXT(S)
+    #define assertf(X, S, P) if(!(X)) debugPrintfEXT(S, P)
+#endif
+
+#define STATIC_FAIL(S) {S()}
+
 #ifndef PI
     #define PI 3.14159265359f
 #endif
@@ -57,16 +67,52 @@ bool isHelperLane(uint invocationIdx, uint targetSize) {
     return invocationIdx.x >= targetSize.x;
 }
 
+// color converters released by Sam Hocevar into the public domain (CC0)
+// see: https://www.shadertoy.com/view/tstcDX
 vec3 hsl2rgb(in vec3 c) {
     vec3 rgb = clamp( abs(mod(c.x*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0, 0.0, 1.0 );
     return c.z + c.y * (rgb-0.5)*(1.0-abs(2.0*c.z-1.0));
 }
+vec3 rgb2hsv(vec3 c) {
+    const vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
 
-vec3 hsv2rgb(vec3 c)
-{
-    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    float d = q.x - min(q.w, q.y);
+    const float e = 1.0e-10;
+    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+vec3 hsv2rgb(vec3 c)  {
+    const vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
     vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
     return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+
+float luminance(vec3 v) {
+    return 0.2126 * v.x + 0.7152 * v.y + 0.0722 * v.z;
+}
+
+vec3 rgb2srgb(vec3 x) {
+    // simple mapping:
+    // return pow(x, 1.f / vec3(2.4f));
+    #pragma unroll
+    for (int i = 0; i < 3; i++) {
+        if (x[i] < 0.0031308f)
+        x[i] *= 12.92f;
+        else
+        x[i] = 1.055f * pow(x[i], 1.0f/2.4f) - 0.055f;
+    }
+    return x;
+}
+
+vec3 tonemap_ACES(vec3 x)  {
+    float a = 2.51f;
+    float b = 0.03f;
+    float c = 2.43f;
+    float d = 0.59f;
+    float e = 0.14f;
+    return clamp((x*(a*x+b))/(x*(c*x+d)+e), vec3(0.f), vec3(1.f));
 }
 
 vec3 integer2colorlabel(uint id, bool linear) {
