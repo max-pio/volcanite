@@ -206,8 +206,8 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                             Logger(WARN) << "Can not open file dialog for import PNG. Choose other segmentation volume transfer function colormap";
                             break;
                         }
-                        auto selected_file = pfd::open_file("Import PNG", pfd::path::home(),
-                                                            {"Image File (.png)", "*.png"});
+                        auto selected_file = pfd::open_file("Color Map Image File", pfd::path::home(),
+                                                            {"Image File", "*.jpg *.jpeg *.bmp *.gif *.png *.pic *.pnm"});
                         if (!selected_file.result().empty()) {
                             int img_width, img_height, img_channels;
                             if (unsigned char* image = stbi_load(selected_file.result().at(0).c_str(),
