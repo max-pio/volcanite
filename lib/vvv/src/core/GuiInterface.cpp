@@ -26,6 +26,7 @@ namespace vvv {
         GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapConfig& d = colormapConfig[material];
         // transfer functions are currently fully opaque
         if(mat.tf->m_controlPointsOpacity.size() != 4) {
+            mat.tf->m_interpolationColorSpace = VectorTransferFunction::RGB;
             mat.tf->m_controlPointsOpacity.resize(4);
             mat.tf->m_controlPointsOpacity[0] = 0.f;
             mat.tf->m_controlPointsOpacity[1] = 1.f;
@@ -34,6 +35,7 @@ namespace vvv {
         }
         switch(d.type) {
             case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFSolidColor:
+                mat.tf->m_interpolationColorSpace = VectorTransferFunction::RGB;
                 if(mat.tf->m_controlPointsRgb.size() != 8) {
                     mat.tf->m_controlPointsRgb.resize(8);
                 }
@@ -47,6 +49,7 @@ namespace vvv {
                 mat.tf->m_controlPointsRgb[7] = d.color[0].b;
                 break;
             case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFDivergent: {
+                mat.tf->m_interpolationColorSpace = VectorTransferFunction::CIELAB;
                 if(mat.tf->m_controlPointsRgb.size() != 12) {
                     mat.tf->m_controlPointsRgb.resize(12);
                 }
@@ -61,7 +64,7 @@ namespace vvv {
                 mat.tf->m_controlPointsRgb[11] = d.color[1].b;
 
                 // interpolate colors in CIELAB space and convert back to rgb
-                glm::vec3 colMid = mat.tf->sampleColor(0.5f, VectorTransferFunction::ColorSpace::CIELAB);
+                glm::vec3 colMid = mat.tf->sampleColor(0.5f);
 
                 mat.tf->m_controlPointsRgb[4] = 0.5f;
                 mat.tf->m_controlPointsRgb[5] = colMid.r;
@@ -71,10 +74,12 @@ namespace vvv {
                 break;
             }
             case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFPrecomputed:
+                mat.tf->m_interpolationColorSpace = VectorTransferFunction::RGB;
                 mat.tf->m_controlPointsRgb = colormaps::colormaps.at(getAvailableColormaps()[d.precomputedIdx]);
                 break;
             case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFImport: {
-                int targetSizeControlPointsRgb = d.validElementCount * 4;
+                mat.tf->m_interpolationColorSpace = VectorTransferFunction::RGB;
+                int targetSizeControlPointsRgb = d.color.size() * 4;
                 if (mat.tf->m_controlPointsRgb.size() != targetSizeControlPointsRgb) {
                     mat.tf->m_controlPointsRgb.resize(targetSizeControlPointsRgb);
                 }
@@ -98,35 +103,29 @@ namespace vvv {
         }
     }
 
-    void GuiInterface::GuiTFSegmentedVolumeEntry::initializeSingleColormap(int matId) {
+    void GuiInterface::GuiTFSegmentedVolumeEntry::initializeSingleColormap(const int matId) {
         // initialize all colormaps with a good default map if they are not initialized yet
         if (colormapConfig[matId].precomputedIdx < 0)
             colormapConfig[matId].precomputedIdx = getDefaultColorMapIdx();
         colormapConfig[matId].color.clear();
-        if (colormapConfig[matId].validElementCount <= 0) {
+        if (colormapConfig[matId].color.size() <= 0) {
             // validElementCount should only be >0 when loading a config file
             switch (colormapConfig[matId].type) {
                 case SVTFSolidColor:
-                    colormapConfig[matId].validElementCount = 1;
-                    colormapConfig[matId].color.resize(colormapConfig[matId].validElementCount);
+                    colormapConfig[matId].color.resize(1);
                     colormapConfig[matId].color[0] = glm::vec3(0.2298f, 0.2987f, 0.7537f);
                     break;
                 case SVTFDivergent:
-                    colormapConfig[matId].validElementCount = 2;
-                    colormapConfig[matId].color.resize(colormapConfig[matId].validElementCount);
+                    colormapConfig[matId].color.resize(2);
                     colormapConfig[matId].color[0] = glm::vec3(0.2298f, 0.2987f, 0.7537f);
                     colormapConfig[matId].color[1] = glm::vec3(0.7057f, 0.01556f, 0.1502f);
                     break;
                 case SVTFPrecomputed:
-                    colormapConfig[matId].validElementCount = 0;
-                    colormapConfig[matId].color.resize(colormapConfig[matId].validElementCount);
+                    colormapConfig[matId].color.clear();
                     break;
                 case SVTFImport:
-                    colormapConfig[matId].validElementCount = maxPixelsForColormap;
-                    colormapConfig[matId].color.resize(colormapConfig[matId].validElementCount);
-                    for (int i = 0; i < colormapConfig[matId].validElementCount; i++) {
-                        colormapConfig[matId].color[i] = glm::vec3(static_cast<float>(i) / colormapConfig[matId].validElementCount);
-                    }
+                    colormapConfig[matId].color.resize(1);
+                    colormapConfig[matId].color[0] = glm::vec3(1.f);
                     break;
                 default:
                     Logger(WARN) << "unknown segmentation volume transfer function colormap " << colormapConfig[matId].type;

@@ -225,8 +225,8 @@ namespace vvv {
                         vstr.append(std::to_string(mat.wrapping) + " ");
                         //
                         const auto& cm = e->colormapConfig[i];
-                        vstr.append(std::to_string(cm.validElementCount) + " ");
-                        for(int j = 0; j < cm.validElementCount; j++) {
+                        vstr.append(std::to_string(cm.color.size()) + " ");
+                        for(int j = 0; j < cm.color.size(); j++) {
                             auto &c = cm.color[j];
                             vstr.append(std::to_string(c.r) + " " + std::to_string(c.g) + " " + std::to_string(c.b) + " ");
                         }
@@ -412,8 +412,14 @@ namespace vvv {
                             tempLineStream >> mat.wrapping;
                             //
                             auto& cm = e->colormapConfig[m];
-                            tempLineStream >> cm.validElementCount;
-                            for(int i = 0; i < cm.validElementCount; i++) {
+                            size_t colormap_control_points = 0;
+                            tempLineStream >> colormap_control_points;
+                            if (colormap_control_points == 0 || colormap_control_points > 65536) {
+                                Logger(ERROR) << "Invalid color map control point count " << colormap_control_points;
+                                return false;
+                            }
+                            cm.color.resize(colormap_control_points);
+                            for(int i = 0; i < cm.color.size(); i++) {
                                 glm::vec3& c = cm.color[i];
                                 tempLineStream >> c.r;
                                 tempLineStream >> c.g;

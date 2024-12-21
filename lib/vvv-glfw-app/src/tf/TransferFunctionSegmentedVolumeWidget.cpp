@@ -38,7 +38,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
     displayMaterialCount = glm::min(displayMaterialCount, static_cast<int>(e->materials->size()));
     for(int m = 0; m < displayMaterialCount; m++) {
         SegmentedVolumeMaterial& mat = (*e->materials)[m];
-        GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapConfig& d = e->colormapConfig[m];
+        GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapConfig& colormap_config = e->colormapConfig[m];
 
         bool materialChanged = false;
         bool colormapChanged = false;
@@ -138,14 +138,16 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
 
             ImGui::PushID(id++);
             std::string types[] = {"Solid Color", "Divergent Colormap", "Precomputed Colormap", "PNG Import"};
-            if (ImGui::BeginCombo("", types[d.type].c_str())) {
+            if (ImGui::BeginCombo("", types[colormap_config.type].c_str())) {
                 for (int i = 0; i < 4; i++) {
-                    const bool is_selected = i == d.type;
+                    const bool is_selected = i == colormap_config.type;
                     if (ImGui::Selectable(types[i].c_str(), is_selected)) {
-                        d.type = static_cast< GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapType>(i);
-                        d.validElementCount = -1;
-                        e->initializeSingleColormap(m);
-                        colormapChanged = true;
+                        auto old_type = colormap_config.type;
+                        colormap_config.type = static_cast< GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapType>(i);
+                        if (colormap_config.type != old_type) {
+                            e->initializeSingleColormap(m);
+                            colormapChanged = true;
+                        }
                     }
                     if (is_selected)
                         ImGui::SetItemDefaultFocus();
@@ -153,32 +155,32 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                 ImGui::EndCombo();
             }
             ImGui::PopID();
-            switch (d.type) {
+            switch (colormap_config.type) {
                 case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFSolidColor:
                     ImGui::PushID(id++);
                     ImGui::NextColumn();
-                    colormapChanged |= ImGui::ColorEdit3("", &d.color[0].r);
+                    colormapChanged |= ImGui::ColorEdit3("", &colormap_config.color[0].r);
                     ImGui::PopID();
                     break;
                 case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFDivergent:
                     ImGui::PushID(id++);
                     ImGui::NextColumn();
-                    colormapChanged |= ImGui::ColorEdit3("", &d.color[0].r);
+                    colormapChanged |= ImGui::ColorEdit3("", &colormap_config.color[0].r);
                     ImGui::PopID();
                     ImGui::NextColumn();
                     ImGui::NextColumn();
                     ImGui::PushID(id++);
-                    colormapChanged |= ImGui::ColorEdit3("", &d.color[1].r);
+                    colormapChanged |= ImGui::ColorEdit3("", &colormap_config.color[1].r);
                     ImGui::PopID();
                     break;
                 case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFPrecomputed:
                     ImGui::PushID(id++);
                     ImGui::NextColumn();
-                    if (ImGui::BeginCombo("",GuiInterface::GuiTFSegmentedVolumeEntry::getAvailableColormaps()[d.precomputedIdx].c_str())) {
+                    if (ImGui::BeginCombo("",GuiInterface::GuiTFSegmentedVolumeEntry::getAvailableColormaps()[colormap_config.precomputedIdx].c_str())) {
                         for (int i = 0; i < GuiInterface::GuiTFSegmentedVolumeEntry::getAvailableColormaps().size(); i++) {
-                            const bool is_selected = i == d.precomputedIdx;
+                            const bool is_selected = i == colormap_config.precomputedIdx;
                             if (ImGui::Selectable(GuiInterface::GuiTFSegmentedVolumeEntry::getAvailableColormaps()[i].c_str(), is_selected)) {
-                                d.precomputedIdx = i;
+                                colormap_config.precomputedIdx = i;
                                 colormapChanged = true;
                             }
                             if (is_selected)
@@ -198,6 +200,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
 //                    ImGui::NextColumn();
 
                     ImGui::PushID(id++);
+                    ImGui::NextColumn();
                     if(ImGui::Button("Choose Colormap File")) {
                         if(!pfd::settings::available()) {
                             Logger(WARN) << "Can not open file dialog for import PNG. Choose other segmentation volume transfer function colormap";
@@ -205,29 +208,32 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                         }
                         auto selected_file = pfd::open_file("Import PNG", pfd::path::home(),
                                                             {"Image File (.png)", "*.png"});
-                        int img_width, img_height, img_channels;
-                        unsigned char* image = stbi_load(selected_file.result().at(0).c_str(), &img_width, &img_height, &img_channels, STBI_rgb_alpha);
-                        if(!image) {
-                            Logger(ERROR) << "Failed to load png colormap: " << stbi_failure_reason();
+                        if (!selected_file.result().empty()) {
+                            int img_width, img_height, img_channels;
+                            if (unsigned char* image = stbi_load(selected_file.result().at(0).c_str(),
+                                                                 &img_width, &img_height, &img_channels,
+                                                                 STBI_rgb_alpha); image) {
+                                static constexpr int MAX_COLORMAP_CONTROL_POINTS = 256;
+                                colormap_config.color.resize(glm::min(MAX_COLORMAP_CONTROL_POINTS, img_width));
+                                const int center_line_offset = (img_height / (2*4)) * img_width;
+                                for (int c = 0; c < colormap_config.color.size(); c++) {
+                                    int pixel = static_cast<int>(static_cast<double>(c) / colormap_config.color.size() * img_width);
+                                    pixel = center_line_offset + 4u * glm::clamp(pixel, 0, img_width - 1);
+                                    colormap_config.color[c] = glm::vec3(image[pixel], image[pixel + 1], image[pixel + 2]) / 255.f;
+                                }
+                                stbi_image_free(image);
+                                colormapChanged = true;
+                            } else {
+                                Logger(ERROR) << "Failed to load png colormap: " << stbi_failure_reason();
+                            }
                         }
-                        d.color.clear();
-                        d.validElementCount = glm::min(GuiInterface::GuiTFSegmentedVolumeEntry::maxPixelsForColormap, img_width);
-                        float step_size = static_cast<float>(img_width) / d.validElementCount;
-                        float i = 0;
-                        while (i < img_width) {
-                            int index = static_cast<int>(i) * 4;
-                            d.color.emplace_back(glm::vec3(image[index], image[index + 1], image[index + 2]) / 255.f);
-                            i += step_size;
-                        }
-                        stbi_image_free(image);
-                        colormapChanged = true;
                     }
                     ImGui::PopID();
                     ImGui::NextColumn();
                     break;
                 }
                 default:
-                    Logger(WARN) << "unknown segmentation volume transfer function colormap " << d.type;
+                    Logger(WARN) << "unknown segmentation volume transfer function colormap " << colormap_config.type;
             }
             ImGui::Columns(); // colormap column layout
             if (colormapChanged) {
@@ -246,10 +252,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                      x <= static_cast<int>(colormap_canvas_p1.x) - 5; x++) {
                     float value_x = (x - colormap_canvas_p0.x - 5) / (colormap_canvas_sz.x - 10);
                     glm::vec3 color;
-                    if (d.type == GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapType::SVTFDivergent)
-                        color = mat.tf->sampleColor(value_x, VectorTransferFunction::ColorSpace::CIELAB);
-                    else
-                        color = mat.tf->sampleColor(value_x, VectorTransferFunction::ColorSpace::RGB);
+                    color = mat.tf->sampleColor(value_x);
                     draw_list->AddRectFilled({static_cast<float>(x), colormap_canvas_p0.y + 5},
                                              {static_cast<float>(x + 1), colormap_canvas_p1.y - 5},
                                              ImGui::GetColorU32(ImVec4(color.r, color.g, color.b, 1)));

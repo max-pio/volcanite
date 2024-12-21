@@ -131,7 +131,7 @@ void GuiTF1DData::renderCanvas(glm::vec2 canvas_p0, glm::vec2 canvas_sz) {
     // Draw Colormap
     for (int x = static_cast<int>(canvas_p0.x) + 5; x <= static_cast<int>(canvas_p1.x) - 5; x++) {
         float value_x = (x - canvas_p0.x - 5) / (canvas_sz.x - 10);
-        auto color = entry.value->sampleColor(value_x, VectorTransferFunction::ColorSpace::RGB);
+        auto color = entry.value->sampleColor(value_x);
         draw_list->AddRectFilled({static_cast<float>(x), canvas_p0.y + 5}, {static_cast<float>(x + 1), canvas_p1.y - 5}, ImGui::GetColorU32(ImVec4(color.r, color.g, color.b, 1)));
     }
 

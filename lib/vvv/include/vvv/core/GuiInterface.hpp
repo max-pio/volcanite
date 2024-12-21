@@ -127,7 +127,6 @@ public:
             ColorMapType type = SVTFPrecomputed;
             int precomputedIdx = getDefaultColorMapIdx();
             std::vector<glm::vec3> color = {};
-            int validElementCount;
         };
         const static int maxPixelsForColormap = 256;
         std::vector<ColorMapConfig> colormapConfig = {};

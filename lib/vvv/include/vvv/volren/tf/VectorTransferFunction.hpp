@@ -26,13 +26,14 @@ namespace vvv {
 /// A vectorized representation of a transfer function. Should be rasterized to a `DiscreteTransferFunction` before usage.
 class VectorTransferFunction {
 public:
+    enum ColorSpace {RGB = 0, CIELAB};
     static const std::vector<float> linearOpacityRamp;
     static const std::vector<float> fullyOpaque;
 
     std::vector<float> m_controlPointsRgb;
     std::vector<float> m_controlPointsOpacity;
-
-    enum ColorSpace {RGB = 0, CIELAB};
+    ColorSpace m_interpolationColorSpace = ColorSpace::RGB;     ///< color space in which values are interpolated
+                                                                ///< note that the control points
 
     /// @brief Create a linearly interpolated transfer function from control points.
     ///
@@ -69,8 +70,8 @@ public:
 
     /// Discretize the spline into equidistant samples
     /// @param width width of the transfer function defining the quality of the discretization
-    std::shared_ptr<TransferFunction1D> rasterize(vvv::GpuContextPtr ctx, size_t width, ColorSpace cSpace) const {
-        auto samples = rasterize<uint16_t>(width, cSpace);
+    std::shared_ptr<TransferFunction1D> rasterize(vvv::GpuContextPtr ctx, size_t width) const {
+        auto samples = rasterize<uint16_t>(width);
 
         return std::make_shared<TransferFunction1D>(ctx, samples, ChannelOpacityState::PostMultiplied);
     }
@@ -79,7 +80,7 @@ public:
     ///
     /// @param width number of equidistant samples
     /// @return straight/post-multiplied rgba values
-    template <typename T, typename W> std::vector<T> rasterize(W width, ColorSpace cSpace) const {
+    template <typename T, typename W> std::vector<T> rasterize(W width) const {
         static_assert(std::is_unsigned_v<W>, "width of the rasterized TF must be unsigned integer!" );
         assert(width > 0);
 
@@ -87,7 +88,7 @@ public:
 
         for (int i = 0; i < (width * 4); i += 4) {
             const auto samplePosition = std::clamp(static_cast<float>(i) / (4 * (width - 1)), 0.0f, 1.0f);
-            const auto color = sampleColor(samplePosition, cSpace);
+            const auto color = sampleColor(samplePosition);
             samples[i + 0] = std::round(std::numeric_limits<T>::min() + color.r * (std::numeric_limits<T>::max() - std::numeric_limits<T>::min()));
             samples[i + 1] = std::round(std::numeric_limits<T>::min() + color.g * (std::numeric_limits<T>::max() - std::numeric_limits<T>::min()));
             samples[i + 2] = std::round(std::numeric_limits<T>::min() + color.b * (std::numeric_limits<T>::max() - std::numeric_limits<T>::min()));
@@ -122,14 +123,14 @@ public:
         throw std::runtime_error("invalid sample position");
     }
 
-    glm::vec3 sampleColor(double samplePosition, ColorSpace cSpace) const {
+    glm::vec3 sampleColor(double samplePosition) const {
         size_t lower = 0;
-        float positionMin = m_controlPointsRgb[0];
-        float positionMax = m_controlPointsRgb[m_controlPointsRgb.size() - 1 - 3];
+        const float positionMin = m_controlPointsRgb[0];
+        const float positionMax = m_controlPointsRgb[m_controlPointsRgb.size() - 1 - 3];
 
         // transform unit range samplePosition to the range of the transfer function
         samplePosition = samplePosition * (positionMax - positionMin) + positionMin;
-        switch(cSpace){
+        switch(m_interpolationColorSpace){
             case RGB:
                 for (size_t upper = 0; upper < m_controlPointsRgb.size(); upper += 4) {
                     float upperPosition = m_controlPointsRgb[upper];
