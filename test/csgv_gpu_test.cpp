@@ -18,7 +18,7 @@
 #include "volcanite/utility/segmentation_volume_synthesis.hpp"
 
 #include "vvv/core/DefaultGpuContext.hpp"
-#include "volcanite/benchmark/CSGVBenchmarkPass.hpp"
+#include "volcanite/eval/CSGVBenchmarkPass.hpp"
 
 using namespace volcanite;
 using namespace vvv;

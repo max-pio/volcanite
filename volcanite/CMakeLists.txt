@@ -22,7 +22,8 @@ set(VOLCANITE_HEADERS
         include/volcanite/VolcaniteArgs.hpp
         include/volcanite/StratifiedPixelSequence.hpp
         data/shader/cpp_glsl_include/csgv_constants.incl
-        include/volcanite/benchmark/CSGVBenchmarkPass.hpp
+        include/volcanite/eval/CSGVBenchmarkPass.hpp
+        include/volcanite/eval/EvaluationLogExport.hpp
         include/volcanite/compression/VolumeCompressionBase.hpp
         include/volcanite/compression/encoder/CSGVBrickEncoder.hpp
         include/volcanite/compression/encoder/CSGVSerialBrickEncoder.hpp
@@ -52,7 +53,8 @@ set(VOLCANITE_HEADERS
         )
 
 set(VOLCANITE_SOURCES
-        src/volcanite/benchmark/CSGVBenchmarkPass.cpp
+        src/volcanite/eval/CSGVBenchmarkPass.cpp
+        src/volcanite/eval/EvaluationLogExport.cpp
         src/volcanite/compression/encoder/CSGVBrickEncoder.cpp
         src/volcanite/compression/encoder/CSGVSerialBrickEncoder.cpp
         src/volcanite/compression/encoder/NibbleEncoder.cpp

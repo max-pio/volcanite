@@ -32,29 +32,6 @@
 
 namespace volcanite {
 
-struct CSGVRenderEvaluationResults {
-    double frame_min_ms = -1.;
-    double frame_avg_ms = -1.;
-    double frame_sdv_ms = -1.;
-    double frame_med_ms = -1.;
-    double frame_max_ms = -1.;
-    double frame_ms[16] = {-1.};
-    double total_ms = 0.f;
-    double mem_framebuffers_bytes = 0.;
-    double mem_ubos_bytes = 0.;
-    double mem_materials_bytes = 0.;
-    double mem_encoding_bytes = 0.;
-    double mem_cache_bytes = 0.;
-    double mem_empty_space_bytes = 0.;
-    double mem_total_bytes = 0.;
-    int accumulated_frames = 0;
-//    double spp_min = 0.f;
-//    double spp_avg = 0.f;
-//    double spp_max = 0.f;
-//    double samples_total = 0.f;
-
-};
-
 class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuContext {
 
 public:

@@ -25,7 +25,7 @@
 #include "volcanite/compression/CompSegVolHandler.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "vvv/volren/Volume.hpp"
-#include "volcanite/benchmark/CSGVBenchmarkPass.hpp"
+#include "volcanite/eval/CSGVBenchmarkPass.hpp"
 
 using namespace volcanite;
 

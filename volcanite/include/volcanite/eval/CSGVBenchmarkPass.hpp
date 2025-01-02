@@ -15,8 +15,6 @@
 
 #pragma once
 
-#pragma once
-
 #include <memory>
 #include <optional>
 #include <glm/glm.hpp>
@@ -24,7 +22,6 @@
 
 #include "vvv/core/Renderer.hpp"
 #include "vvv/core/Shader.hpp"
-#include "vvv/util/hash_memory.hpp"
 #include "vvv/reflection/UniformReflection.hpp"
 #include "vvv/passes/PassCompute.hpp"
 

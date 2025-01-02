@@ -22,6 +22,7 @@
 #include <thread>
 #include <span>
 #include <unordered_set>
+#include <volcanite/eval/EvaluationLogExport.hpp>
 
 #include "VolumeCompressionBase.hpp"
 #include "csgv_constants.incl" // in data/shader/cpp_glsl_include
@@ -34,39 +35,6 @@
 using namespace vvv;
 
 namespace volcanite {
-
-struct CSGVCompressionEvaluationResults {
-    double compression_mainpass_seconds = 0.;          ///< total compression time [s] without pre-pass and IO
-    double compression_prepass_seconds = 0.;
-    double compression_total_seconds = 0.;
-    double csgv_base_encoding_bytes = 0.;
-    double csgv_detail_encoding_bytes = 0.;
-    double csgv_bytes = 0.;
-    double compression_rate = -1.;
-    double compression_GB_per_s = 0.;
-    double original_volume_bytes = 0.;
-    glm::uvec3 volume_dim = {0u, 0u, 0u};
-    uint32_t volume_labels = 0u;
-//    uint32_t labels_per_brick_min = 0u;
-//    uint32_t labels_per_brick_avg = 0u;
-//    uint32_t labels_per_brick_max = 0u;
-//    uint32_t palette_size_min = 0u;
-//    uint32_t palette_size_avg = 0u;
-//    uint32_t palette_size_max = 0u;
-//    double brick_min_bytes = 0u;
-//    double brick_avg_bytes = 0u;
-//    double brick_max_bytes = 0u;
-//    double header_bytes = 0u;
-};
-
-struct CSGVDecompressionEvaluationResults {
-    double cpu_decoded_GB = 0.;
-    double cpu_decoded_seconds = -1.;
-    double cpu_GB_per_s = -1.;
-    double gpu_decoded_GB = 0.;
-    double gpu_decoded_seconds = -1.;
-    double gpu_GB_per_s = -1.;
-};
 
 // COMPRESSION
 //

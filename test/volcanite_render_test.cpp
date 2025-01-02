@@ -22,7 +22,7 @@
 #include "volcanite/utility/segmentation_volume_synthesis.hpp"
 
 #include "vvv/core/DefaultGpuContext.hpp"
-#include "volcanite/benchmark/CSGVBenchmarkPass.hpp"
+#include "volcanite/eval/CSGVBenchmarkPass.hpp"
 #include "volcanite/VolcaniteArgs.hpp"
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "vvv/core/HeadlessRendering.hpp"

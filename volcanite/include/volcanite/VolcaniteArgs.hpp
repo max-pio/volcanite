@@ -15,10 +15,6 @@
 
 #pragma once
 
-#include <string>
-#include <sstream>
-#include <iostream>
-#include <optional>
 #include <tclap/CmdLine.h>
 #ifndef HEADLESS
     #include "portable-file-dialogs.h"
@@ -27,6 +23,12 @@
 #include "vvv/util/Logger.hpp"
 #include "CSGVPathUtils.hpp"
 #include "csgv_constants.incl"
+
+#include <optional>
+#include <string>
+#include <string_view>
+#include <sstream>
+#include <ranges>
 
 using namespace vvv;
 
@@ -76,9 +78,9 @@ public:
     bool run_tests = false;
     bool export_stats = false;
     std::string record_in_file = "";    // file that stores a previously exported camera path for replay in headless
-    std::string eval_logfile = {};      // file into which rendering evaluation results are written as 'append'
+    std::vector<std::string> eval_logfiles = {}; // files into which evaluation results are exported (with 'append')
     std::string eval_name = {};         // name of the evaluation run that can be accessed in the log file as "%name"
-    std::string shader_defines = "";     // string of shader defines that will be passed on to the shader compiler
+    std::string shader_defines = "";    // string of shader defines that will be passed on to the shader compiler
 
 
     static std::string getHelpString() {
@@ -140,7 +142,7 @@ public:
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
             ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path. Must be used with -i.", false, va.record_in_file, "file", cmd);
-            ValueArg<std::string> evalLogFileArg("", "eval-logfile", "File into which rendering evaluation results are appended after all frames finished rendering the screenshot image. Must be used with -i.", false, va.eval_logfile, "file", cmd);
+            ValueArg<std::string> evalLogFilesArg("", "eval-logfiles", "Comma separated files into which evaluation results are appended.", false, "", "file", cmd);
             ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"%name\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
             ValueArg<std::string> shaderDefineArg("", "shader-def", "String of ; separated definitions that will be passed on to the shader. e.g. 'MY_VAL=64;MY_DEF'. Use with care.", false, va.shader_defines, "string", cmd);
 
@@ -388,10 +390,17 @@ public:
             }
             va.export_stats = statsArg.getValue();
             va.record_in_file = expandPath(recordInFileArg.getValue());
-            va.eval_logfile = expandPath(evalLogFileArg.getValue());
+            std::string comma_separated_logfiles = evalLogFilesArg.getValue();
+            va.eval_logfiles.clear();
+            for (const std::string_view& logfile : comma_separated_logfiles | std::views::split(',')
+                    | std::views::transform([](auto &&range) -> std::string_view {
+                        return {range.begin(), range.end()};
+                    })) {
+                va.eval_logfiles.emplace_back(expandPath(std::string(logfile)));
+            }
             va.eval_name = evalNameArg.getValue();
-            if (!va.eval_name.empty() && va.eval_logfile.empty()) {
-                throw ArgException("Evaluation log file must be used in combination with --eval-logfile",
+            if (!va.eval_name.empty() && va.eval_logfiles.empty()) {
+                throw ArgException("Evaluation name must be used in combination with --eval-logfile",
                                    evalNameArg.longID(""));
             }
             va.shader_defines = shaderDefineArg.getValue();

@@ -44,6 +44,8 @@
 #else
     #define CSGV_UINT uint32_t
 
+#include <stdexcept>
+
 namespace volcanite {
     enum EncodingMode {NIBBLE_ENC=0,
                        SINGLE_TABLE_RANS_ENC=1, DOUBLE_TABLE_RANS_ENC=2,
