@@ -21,26 +21,19 @@ class VolcaniteLogFile:
     """
     
     @classmethod
-    def __create_fallback_string(cls, log_file_template: Path, replace_with: str = "") -> str | None:
-        """Reads the format string from the log file template and replaces all placeholders with replace_with."""
+    def __create_fallback_string(cls, log_file: Path, replace_with: str = "") -> str | None:
+        """Reads the format string from the log file and replaces all placeholders with replace_with."""
+
+        with open(log_file, "r") as f:
+            template_file = f.read()
 
         format_string: str = ""
-        #     std::ifstream file = std::ifstream(log_file_template);
-        #     if (file.is_open()) {
-        #         std::string line;
-        #         std::getline(file, line);
-        #         while (line.starts_with("#fmt:")) {
-        #             line = line.substr(5);
-        #             format_string += (line + "\n");
-        #             std::getline(file, line);
-        #         }
-        #         if (format_string.ends_with('\n'))
-        #             format_string.pop_back(); // remove trailing '\n'
-        #         file.close();
-        #     } else {
-        #         Logger(ERROR) << "Could not open pre-existing evaluation log file " << log_file_template;
-        #         return 5;
-        #     }
+        lines = template_file.split("\n")
+        i = 0
+        while lines[i].startswith("#fmt:"):
+            format_string += lines[i][5:] + "\n"
+            i += 1
+        format_string = format_string[:-1] # remove trailing '\n'
 
         possible_keys: list[str] = [# "name", name can be used in the fallback string
                                     "time", "args",
@@ -53,21 +46,34 @@ class VolcaniteLogFile:
                                     "mem_cache_mb", "mem_emptyspace_mb", "mem_total_mb",
                                     "render_frames"]
         for possible_key in possible_keys:
-            format_string.replace("%" + possible_key, replace_with)
+            format_string = format_string.replace("%" + possible_key, replace_with)
         return format_string
 
-    def __init__(self, log_file: Path, log_file_template: Path):
+    def __init__(self, log_file: Path, log_file_template: Path | None):
         self.log_file: Path = log_file
         self.__log_file_template: Path = log_file_template
-        if not self.__log_file_template.exists():
+        if log_file_template and not self.__log_file_template.exists():
             raise IOError("Template log file " + str(self.__log_file_template) + " does not exist.")
-        self.fallback_log: str = VolcaniteLogFile.__create_fallback_string(self.__log_file_template)
+
+        self.fallback_log: str = ""
+        if self.log_file.exists():
+            self.fallback_log = VolcaniteLogFile.__create_fallback_string(self.log_file)
+
+    def get_log_file(self):
+        return self.log_file
+
+    def get_template(self):
+        return self.__log_file_template
 
     def setup(self, old_log_policy: ExistingPolicy = ExistingPolicy.ABORT):
         """
         Ensures that the log_file exists at its location.
         :param old_log_policy: handling of existing log files, either 'abort' (default), 'append', or 'overwrite'
         """
+
+        if self.__log_file_template is None and not (self.log_file.exists() and old_log_policy == ExistingPolicy.APPEND):
+            raise ValueError("log_file_template must be given if not appending to existing log file")
+
         if self.log_file.exists():
             if old_log_policy == ExistingPolicy.ABORT:
                 raise IOError("Log file " + str(self.log_file) + " exist and existing policy is 'abort'")
@@ -83,6 +89,8 @@ class VolcaniteLogFile:
 
         if not self.log_file.exists():
             raise IOError(f"Could not create log file {self.log_file} (template {self.__log_file_template})")
+
+        self.fallback_log = VolcaniteLogFile.__create_fallback_string(self.log_file)
 
     def log_manual(self, output: str, end: str = "\n") -> None:
         with open(str(self.log_file), "a") as log_out:
@@ -125,7 +133,7 @@ class VolcaniteEvaluation:
 
     def __init__(self, eval_out_directory: str, existing_policy: ExistingPolicy = ExistingPolicy.ABORT, name: str = None,
                  # TODO: template_log_files could be encapsulated in a class: either copy file or defined as python str
-                 template_log_files: list[str] = None, new_log_file_names: list[str] = None,
+                 template_log_files: list[str] = None, log_file_names: list[str] = None,
                  enable_log: bool = True, dry_run: bool = False, auto_init: bool = True):
         """
         Encapsulates one evaluation. The evaluation results are stored in a single directory (eval_out_directory).
@@ -136,13 +144,13 @@ class VolcaniteEvaluation:
         :param existing_policy: how to proceed if the evaluation directory already exists
         :param name: name of the evaluation
         :param template_log_files: all templates from which Volcanite evaluation log files are created in the directory
-        :param new_log_file_names: if not None, a new name for each evaluation log file in the order of the templates
+        :param log_file_names: if not None, a new name for each evaluation log file in the order of the templates
         :param enable_log: if false, no log files are exported by Volcanite
         :param dry_run: if true, Volcanite calls are only printed to the command line but not executed
         :param auto_init: if True, the directory is automatically set up. Otherwise, initialize() must be called later
         """
-        if new_log_file_names and len(new_log_file_names) != len(template_log_files):
-            raise ValueError("new_log_file_names and template_log_files must have the same length")
+        if log_file_names and template_log_files and len(log_file_names) != len(template_log_files):
+            raise ValueError("template_log_files and new_log_file_names must have the same length")
         self.eval_out_directory: Path = Path(eval_out_directory)
         self.existing_policy: ExistingPolicy = existing_policy
         self.name: str = self.eval_out_directory.stem if name is None else name
@@ -151,11 +159,15 @@ class VolcaniteEvaluation:
 
         # create log file links
         self.log_files: list[VolcaniteLogFile] = []
-        for i, tlf in enumerate(template_log_files):
-            if new_log_file_names:
-                self.log_files.append(VolcaniteLogFile(self.eval_out_directory / Path(new_log_file_names[i]), Path(tlf)))
-            else:
-                self.log_files.append(VolcaniteLogFile(self.eval_out_directory / Path(tlf).name, Path(tlf)))
+        if template_log_files:
+            for i, tlf in enumerate(template_log_files):
+                if log_file_names:
+                    self.log_files.append(VolcaniteLogFile(self.eval_out_directory / Path(log_file_names[i]), Path(tlf)))
+                else:
+                    self.log_files.append(VolcaniteLogFile(self.eval_out_directory / Path(tlf).name, Path(tlf)))
+        elif log_file_names:
+            for nlf in log_file_names:
+                self.log_files.append(VolcaniteLogFile(self.eval_out_directory / Path(nlf), None))
 
         self.__initialized = False
         if auto_init:
@@ -277,16 +289,16 @@ class VolcaniteArg:
     @classmethod
     def arg_csgv_export(cls, args: list[Self]) -> Self:
         cls.__error_if_not_initialized()
-        return VolcaniteArg(["-c", str(cls.__csgv_directory) + "/" + cls.concat_ids(args) + ".csgv"], "", 1000)
+        return cls(["-c", str(cls.__csgv_directory) + "/" + cls.concat_ids(args) + ".csgv"], "", 1000)
     @classmethod
     def arg_csgv_import(cls, args: list[Self]) -> Self:
         cls.__error_if_not_initialized()
-        return VolcaniteArg([str(cls.__csgv_directory) + "/" + cls.concat_ids(args) + ".csgv"], "", 1000)
+        return cls([str(cls.__csgv_directory) + "/" + cls.concat_ids(args) + ".csgv"], "", 1000)
 
     @classmethod
     def arg_image_export(cls, args: list[Self], filetype: str = "png") -> Self:
         cls.__error_if_not_initialized()
-        return VolcaniteArg(["-i", str(cls.__eval_directory) + "/" + cls.concat_ids(args) + "." + filetype], "", 1000)
+        return cls(["-i", str(cls.__eval_directory) + "/" + cls.concat_ids(args) + "." + filetype], "", 1000)
 
     @classmethod
     def arg_video_export(cls, args, create_dir=True) -> Self:
@@ -294,17 +306,17 @@ class VolcaniteArg:
         video_dir = (Path(cls.__eval_directory) / Path(cls.concat_ids(args))).absolute()
         if create_dir:
             video_dir.mkdir(parents=True, exist_ok=True)
-        return VolcaniteArg(["-v", str(video_dir) + "/" + cls.concat_ids(args) + "_{:04}.jpg"], "", 1000)
+        return cls(["-v", str(video_dir) + "/" + cls.concat_ids(args) + "_{:04}.jpg"], "", 1000)
 
     @classmethod
     def arg_vcfg_import(cls, args: list[Self], resolution: str = "1920x1080") -> Self:
         cls.__error_if_not_initialized()
-        return VolcaniteArg(["--config", str(cls.__vcfg_directory / Path(cls.concat_ids(args) + ".vcfg")), "--resolution", resolution], "", 1000)
+        return cls(["--config", str(cls.__vcfg_directory / Path(cls.concat_ids(args) + ".vcfg")), "--resolution", resolution], "", 1000)
 
     @classmethod
     def arg_rec_import(cls, args: list[Self]) -> Self:
         cls.__error_if_not_initialized()
-        return VolcaniteArg(["--record-in", str(cls.__vcfg_directory / Path(cls.concat_ids(args) + ".rec"))], "", 1000)
+        return cls(["--record-in", str(cls.__vcfg_directory / Path(cls.concat_ids(args) + ".rec"))], "", 1000)
 
     @classmethod
     def arg_dataset(cls, data_path: str, identifier: str | None = None,
@@ -324,10 +336,10 @@ class VolcaniteArg:
             if chunks:
                 identifier = identifier.format("0-" + str(chunks[0]), "0-" + str(chunks[1]), "0-" + str(chunks[2]))
         if chunks:
-            return VolcaniteArg([data_path, "--chunked", str(chunks[0]) + "," + str(chunks[1]) + "," + str(chunks[2])],
+            return cls([data_path, "--chunked", str(chunks[0]) + "," + str(chunks[1]) + "," + str(chunks[2])],
                                 identifier, 0)
         else:
-            return VolcaniteArg([data_path], identifier, 0)
+            return cls([data_path], identifier, 0)
 
 
 # several default VolcaniteArgs:
@@ -355,8 +367,8 @@ VolcaniteArg.args_default = {"verbose": VolcaniteArg(["--verbose"], "", 1000),
 class VolcaniteExec:
     """
     Interface for compiling and executing Volcanite.
-    :var volcanite_src_directory: the directory in which the Volcanite git repository is located.
-
+    :var volcanite_src_directory: the directory in which the Volcanite git repository is located
+    :var evaluation: the VolcaniteEvaluation including the evaluation output directory, name and all log files
     :var git_checkout: git commit or branch that is pulled and build before the first execution of Volcanite
     :var build_subdir: the build sub-directory in the specified Volcanite source directory
     """
@@ -378,6 +390,12 @@ class VolcaniteExec:
         return (f"{datetime.now().strftime("%Y.%m.%d-%H:%M:%S")} [{self.evaluation.name}]"
                 f" exe:{"off" if self.evaluation.dry_run else "on"} log:{"on" if self.evaluation.log_files else "off"}"
                 f" build {self.git_checkout}@{self.__build_dir()}")
+
+    def logs_info_str(self):
+        log_strs = []
+        for l in self.evaluation.log_files:
+            log_strs.append(f"{l.get_log_file()} [{l.get_template()}] fallback: '{l.fallback_log}'")
+        return log_strs
 
     def __build_dir(self) -> str:
         """Returns the absolute path to the directory in which Volcanite is build as string."""
@@ -475,14 +493,17 @@ if __name__ == "__main__":
                  "azba": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/azba/AZBA.hdf5", "azba")}
 
     # setup the evaluation output directory and the log files
-    evaluation = VolcaniteEvaluation("/home/maxpio/data/eval/out/my_test_eval", ExistingPolicy.MOVE, "my_test_eval",
-                                     ["/home/maxpio/data/tmp_logs/my_test_eval/my_test_eval.csv",
-                                      "/home/maxpio/data/tmp_logs/my_test_eval/my_test_eval.tex"],
+    evaluation = VolcaniteEvaluation("/home/maxpio/data/eval/out/my_test_eval", ExistingPolicy.APPEND, "my_test_eval",
+                                     #["/home/maxpio/data/tmp_logs/my_test_eval/my_test_eval.csv",
+                                     #"/home/maxpio/data/tmp_logs/my_test_eval/my_test_eval.tex"],
+                                     log_file_names=["my_test_eval.csv", "my_test_eval.tex"],
                                      enable_log=True, dry_run=True)
 
     volcanite = VolcaniteExec(evaluation, "main", "cmake-build-release")
     volcanite.build()
     print(volcanite.info_str())
+    for l in volcanite.logs_info_str():
+        print("  " + l)
 
     for arg_shade in VolcaniteArg.args_shading.values():
         args = [args_data["cells"]] + [arg_shade]
