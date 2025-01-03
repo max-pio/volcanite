@@ -133,6 +133,7 @@ int EvaluationLogExport::write_eval_logfile(const std::string& eval_logfile, con
             while (line.starts_with("#fmt:")) {
                 line = line.substr(5);
                 format_string += (line + "\n");
+                std::getline(file, line);
             }
             if (format_string.ends_with('\n'))
                 format_string.pop_back(); // remove trailing '\n'
