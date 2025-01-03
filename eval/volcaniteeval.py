@@ -124,6 +124,7 @@ class VolcaniteEvaluation:
     """
 
     def __init__(self, eval_out_directory: str, existing_policy: ExistingPolicy = ExistingPolicy.ABORT, name: str = None,
+                 # TODO: template_log_files could be encapsulated in a class: either copy file or defined as python str
                  template_log_files: list[str] = None, new_log_file_names: list[str] = None,
                  enable_log: bool = True, dry_run: bool = False, auto_init: bool = True):
         """
@@ -143,7 +144,7 @@ class VolcaniteEvaluation:
         if new_log_file_names and len(new_log_file_names) != len(template_log_files):
             raise ValueError("new_log_file_names and template_log_files must have the same length")
         self.eval_out_directory: Path = Path(eval_out_directory)
-        self.existing_policy: ExistingPolicy = ExistingPolicy.ABORT
+        self.existing_policy: ExistingPolicy = existing_policy
         self.name: str = self.eval_out_directory.stem if name is None else name
         self.enable_log = enable_log
         self.dry_run = dry_run
@@ -373,6 +374,11 @@ class VolcaniteExec:
         self.build_subdir = build_subdir
         self.__is_build = False
 
+    def info_str(self):
+        return (f"{datetime.now().strftime("%Y.%m.%d-%H:%M:%S")} [{self.evaluation.name}]"
+                f" exe:{"off" if self.evaluation.dry_run else "on"} log:{"on" if self.evaluation.log_files else "off"}"
+                f" build {self.git_checkout}@{self.__build_dir()}")
+
     def __build_dir(self) -> str:
         """Returns the absolute path to the directory in which Volcanite is build as string."""
         return str((VolcaniteExec.volcanite_src_directory / Path(self.build_subdir)).resolve())
@@ -402,7 +408,7 @@ class VolcaniteExec:
         :param eval_name: name of this evaluation run. can be referenced in log files as %name
         """
 
-        if not self.__is_build:
+        if not self.__is_build and not self.evaluation.dry_run:
             print("Compiling volcanite executable as Volcanite was not build yet..")
             self.build()
 
@@ -463,25 +469,29 @@ class VolcaniteExec:
 
 if __name__ == "__main__":
     # create the data set VolcaniteArgs
-    arg_data = {"cells": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/cells/cells_frame055.raw", "cells"),
-                "fiber": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/fiber/fiberpolymer_1579x1092x1651_16bit.hdf5", "fiber"),
-                "h01": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/h01/chunks/x{}y{}z{}.hdf5", "h01", chunks=(4,5,5)),
-                "azba": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/azba/AZBA.hdf5", "azba")}
+    args_data = {"cells": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/cells/cells_frame055.raw", "cells"),
+                 "fiber": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/fiber/fiberpolymer_1579x1092x1651_16bit.hdf5", "fiber"),
+                 "h01": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/h01/chunks/x{}y{}z{}.hdf5", "h01", chunks=(4,5,5)),
+                 "azba": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/azba/AZBA.hdf5", "azba")}
 
     # setup the evaluation output directory and the log files
-    evaluation = VolcaniteEvaluation("~/data/eval/out", ExistingPolicy.MOVE, "my_test_eval",
-                                     ["~/data/tmp_logs/my_test_eval/my_test_eval.csv",
-                                      "~/data/tmp_logs/my_test_eval/my_test_eval.tex"],
+    evaluation = VolcaniteEvaluation("/home/maxpio/data/eval/out/my_test_eval", ExistingPolicy.MOVE, "my_test_eval",
+                                     ["/home/maxpio/data/tmp_logs/my_test_eval/my_test_eval.csv",
+                                      "/home/maxpio/data/tmp_logs/my_test_eval/my_test_eval.tex"],
                                      enable_log=True, dry_run=True)
 
     volcanite = VolcaniteExec(evaluation, "main", "cmake-build-release")
     volcanite.build()
+    print(volcanite.info_str())
 
     for arg_shade in VolcaniteArg.args_shading.values():
-        for log in evaluation.get_all_logs():
-            log.log_manual(arg_shade.identifier)
+        args = [args_data["cells"]] + [arg_shade]
+        name = VolcaniteArg.concat_ids(args)
 
-        volcanite.exec([arg_shade, arg_data["cells"]])
+        for log in evaluation.get_all_logs():
+            log.log_manual(name)
+
+        volcanite.exec(args, name)
 
 
 
