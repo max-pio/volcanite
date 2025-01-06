@@ -16,6 +16,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include <glm/glm.hpp>
 
 #include "csgv_constants.incl"
@@ -88,6 +89,9 @@ private:
                                                   CSGVRenderEvaluationResults render_res);
 
 public:
+
+    static std::vector<std::string> get_all_evaluation_keys();
+
     static int write_eval_logfile(const std::string& eval_logfile, const std::string& eval_name, int argc, char *argv[],
                                    CSGVCompressionEvaluationResults comp_res,
                                    CSGVDecompressionEvaluationResults decomp_res,

@@ -71,10 +71,12 @@ This is even if the maximum label is higher than $2^B$.
 #### Decompression
 (currently not yet supported)
 
-| Key   | Value                                  |
-|-------|----------------------------------------|
-| decomp_cpu_gb_per_s | Decompression throughput (CPU) [GB/s]  |
-| decomp_gpu_gb_per_s | Decompression throughput (GPU) [GB/s]  |
+| Key                 | Value                                 |
+|---------------------|---------------------------------------|
+| decomp_cpu_gb_per_s | Decompression throughput (CPU) [GB/s] |
+| decomp_cpu_s        | Decompression time (CPU) [s]          |
+| decomp_gpu_gb_per_s | Decompression throughput (GPU) [GB/s] |
+| decomp_gpu_s        | Decompression time (GPU) [s]          |
 
 #### Rendering
 
@@ -87,6 +89,7 @@ These results are only available if an image `-i` or video `-v` is rendered.
 | frame_sdv_ms         | standard deviation of frame time [ms]              |
 | frame_med_ms         | median frame time [ms]                             |
 | frame_max_ms         | maximum frame time [ms]                            |
+| frame_ms_00 to *_15  | render time of the first 16 frames [ms]            |  
 | render_total_ms      | total render time for all frames [ms]              |
 | rendered_frames      | number of rendered frames                          |
 | mem_framebuffer_mb   | GPU memory for frame buffers [MB]                  |

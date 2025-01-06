@@ -80,6 +80,7 @@ public:
     std::string record_in_file = "";    // file that stores a previously exported camera path for replay in headless
     std::vector<std::string> eval_logfiles = {}; // files into which evaluation results are exported (with 'append')
     std::string eval_name = {};         // name of the evaluation run that can be accessed in the log file as "%name"
+    bool print_eval_keys = false;       // if true, prints all available evaluation log keys to the console on startup
     std::string shader_defines = "";    // string of shader defines that will be passed on to the shader compiler
 
 

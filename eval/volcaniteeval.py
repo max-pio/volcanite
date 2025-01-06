@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 import re
 from datetime import datetime
+from time import sleep
 from typing import Self
 
 class ExistingPolicy(Enum):
@@ -228,11 +229,16 @@ class VolcaniteEvaluation:
             if self.existing_policy == ExistingPolicy.ABORT:
                 raise IOError("Evaluation directory " + str(self.eval_out_directory) + " exist and existing policy is 'abort'")
             elif self.existing_policy == ExistingPolicy.MOVE:
-                shutil.move(self.eval_out_directory, str(self.eval_out_directory.resolve()) + "_" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+                new_location = str(self.eval_out_directory.resolve()) + "_" + datetime.now().strftime("%Y%m%d-%H%M%S")
+                print("Moving existing directory " + str(self.eval_out_directory) + " to " + new_location)
+                shutil.move(self.eval_out_directory, new_location)
             elif self.existing_policy == ExistingPolicy.DELETE:
+                print("Deleting existing evaluation directory.. " + str(self.eval_out_directory))
+                sleep(5)
                 shutil.rmtree(self.eval_out_directory)
 
             if self.existing_policy == ExistingPolicy.APPEND:
+                print("Appending results to directory " + str(self.eval_out_directory))
                 create = False
 
         # setup log files
@@ -497,11 +503,12 @@ class VolcaniteExec:
             raise RuntimeError(f"Error: building target volcanite returned {res.returncode}")
         self.__is_build = True
 
-    def exec(self, args : list[VolcaniteArg], eval_name: str = None):
+    def exec(self, args : list[VolcaniteArg], eval_name: str = None, headless: bool = True):
         """
         Executes volcanite with the specified arguments. Volcanite is compiled first if it was not build yet.
         :param args: list of VolcaniteArgs to be passed to the Volcanite call
         :param eval_name: name of this evaluation run. can be referenced in log files as %name
+        :param headless: if true, the --headless argument is added to the execution
         """
 
         if not self.__is_build and not self.evaluation.dry_run:
@@ -512,6 +519,8 @@ class VolcaniteExec:
         if eval_name is None:
             eval_name = VolcaniteArg.concat_ids(args)
         exec_call_args: list[str] = ["./volcanite"]
+        if headless:
+            exec_call_args += ["--headless"]
         if self.evaluation.enable_log:
             exec_call_args += ["--eval-logfiles", str(','.join([str(log.log_file.resolve())
                                                                 for log in self.evaluation.log_files]))]
@@ -568,7 +577,7 @@ if __name__ == "__main__":
     args_data = {"cells": VolcaniteArg.arg_dataset("/home/maxpio/data/cellsinsilico/Big01/000_longer/outdir/nrrd_uint32/cells_frame065_100x100x100.raw", "cells100")}
 
     # setup the evaluation output directory and the log files
-    evaluation = VolcaniteEvaluation("/home/maxpio/data/eval/out/my_test_eval", ExistingPolicy.APPEND, "my_test_eval",
+    evaluation = VolcaniteEvaluation("/home/maxpio/data/eval/out/my_test_eval", ExistingPolicy.DELETE, "my_test_eval",
                                      [VolcaniteLogFileCfg("results.txt",
                                                                   fmts=["{name},{comprate_pcnt:.3}%"],
                                                                   headers=["Name,Compression Rate [%]"])],

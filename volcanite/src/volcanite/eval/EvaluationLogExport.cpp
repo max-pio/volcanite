@@ -23,32 +23,20 @@
 #include <sstream>
 #include <vector>
 
-#include <fmt/include/fmt/core.h>
+#define FMT_HEADER_ONLY
+#include "fmt/include/fmt/format.h"
+#include "fmt/include/fmt/args.h"
+
 
 using namespace vvv;
 
 namespace volcanite {
 
-std::string dtos(double v, int decimal_places=3) {
-    v = std::round(v * pow(10., decimal_places)) / pow(10., decimal_places);
-    std::string s = std::to_string(v);
-    auto decpos = s.rfind('.');
-    int skipped_chars = 0;
-    if (decpos != std::string::npos) {
-        auto lpos = s.end() - 1;
-        while (*(lpos - skipped_chars) == '0')
-            skipped_chars++;
-        if (*(lpos - skipped_chars) == '.')
-            skipped_chars++;
-    }
-    return s.substr(0, s.size() - skipped_chars);
-}
-
-std::string EvaluationLogExport::format_evaluation_string(std::string format_string, const std::string& eval_name,
-                                                             int argc, char *argv[],
-                                                             CSGVCompressionEvaluationResults comp_res,
-                                                             CSGVDecompressionEvaluationResults decomp_res,
-                                                             CSGVRenderEvaluationResults render_res) {
+fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::string& eval_name,
+                                                                   int argc, char *argv[],
+                                                                   CSGVCompressionEvaluationResults comp_res,
+                                                                   CSGVDecompressionEvaluationResults decomp_res,
+                                                                   CSGVRenderEvaluationResults render_res) {
     // obtain time stamp
     auto t = std::time(nullptr);
     auto tm = *std::localtime(&t);
@@ -62,69 +50,76 @@ std::string EvaluationLogExport::format_evaluation_string(std::string format_str
             args_ss << " "; // if arguments should be comma separated, this would be ","
     }
 
-    // the list of replacement specifiers and the replacement values:
-    std::vector<fmt::arg> replace_str = {
-            {"name", eval_name.empty() ? ("eval-" + time_stamp_ss.str()) : eval_name},
-            {"time", time_stamp_ss.str()},
-            {"args", args_ss.str()},
-            // compression
-            {"comprate", dtos(comp_res.compression_rate)},
-            {"comprate_pcnt", dtos(comp_res.compression_rate * 100.)},
-            {"comp_s", dtos(comp_res.compression_total_seconds)},
-            {"comp_mainpass_s", dtos(comp_res.compression_mainpass_seconds)},
-            {"comp_prepass_s", dtos(comp_res.compression_prepass_seconds)},
-            {"comp_gb_per_s", dtos(comp_res.compression_GB_per_s)},
-            {"csgv_gb", dtos(comp_res.csgv_bytes * BYTE_TO_GB)},
-            {"orig_gb", dtos(comp_res.original_volume_bytes * BYTE_TO_GB)},
-            {"orig_bytes_per_voxel", dtos(comp_res.original_volume_bytes * BYTE_TO_GB)},
-            {"volume_dim", std::to_string(comp_res.volume_dim.x) + "x" + std::to_string(comp_res.volume_dim.y) + "x"
-                            + std::to_string(comp_res.volume_dim.z)},
-            {"volume_labels", comp_res.volume_labels)},
-            // decompression
-            {"decomp_cpu_gb_per_s", dtos(decomp_res.cpu_GB_per_s)},
-            {"decomp_gpu_gb_per_s", dtos(decomp_res.gpu_GB_per_s)},
-            // rendering
-            {"frame_min_ms", dtos(render_res.frame_min_ms)},
-            {"frame_avg_ms", dtos(render_res.frame_avg_ms)},
-            {"frame_sdv_ms", dtos(render_res.frame_sdv_ms)},
-            {"frame_med_ms", dtos(render_res.frame_med_ms)},
-            {"frame_max_ms", dtos(render_res.frame_max_ms)},
-            {"render_total_ms", dtos(render_res.total_ms)},
-            {"mem_framebuffer_mb", dtos(render_res.mem_framebuffers_bytes * BYTE_TO_MB)},
-            {"mem_uniformbuffer_mb", dtos(render_res.mem_ubos_bytes * BYTE_TO_MB)},
-            {"mem_materials_mb", dtos(render_res.mem_materials_bytes * BYTE_TO_MB)},
-            {"mem_encoding_mb", dtos(render_res.mem_encoding_bytes * BYTE_TO_MB)},
-            {"mem_cache_mb", dtos(render_res.mem_cache_bytes * BYTE_TO_MB)},
-            {"mem_emptyspace_mb", dtos(render_res.mem_empty_space_bytes * BYTE_TO_MB)},
-            {"mem_total_mb", dtos(render_res.mem_total_bytes * BYTE_TO_MB)},
-            {"rendered_frames", dtos(render_res.accumulated_frames)},
-    };
+    fmt::dynamic_format_arg_store<fmt::format_context> fmt_args;
+    fmt_args.push_back(fmt::arg("name", eval_name.empty() ? ("eval-" + time_stamp_ss.str()) : eval_name));
+    fmt_args.push_back(fmt::arg("time", time_stamp_ss.str()));
+    fmt_args.push_back(fmt::arg("args", args_ss.str()));
+    // compression
+    fmt_args.push_back(fmt::arg("comprate", comp_res.compression_rate));
+    fmt_args.push_back(fmt::arg("comprate_pcnt", comp_res.compression_rate * 100.));
+    fmt_args.push_back(fmt::arg("comp_s", comp_res.compression_total_seconds));
+    fmt_args.push_back(fmt::arg("comp_mainpass_s", comp_res.compression_mainpass_seconds));
+    fmt_args.push_back(fmt::arg("comp_prepass_s", comp_res.compression_prepass_seconds));
+    fmt_args.push_back(fmt::arg("comp_gb_per_s", comp_res.compression_GB_per_s));
+    fmt_args.push_back(fmt::arg("csgv_gb", comp_res.csgv_bytes * BYTE_TO_GB));
+    fmt_args.push_back(fmt::arg("orig_gb", comp_res.original_volume_bytes * BYTE_TO_GB));
+    fmt_args.push_back(fmt::arg("orig_bytes_per_voxel", comp_res.original_volume_bytes_per_voxel));
+    fmt_args.push_back(fmt::arg("volume_dim", std::to_string(comp_res.volume_dim.x) + "x" + std::to_string(comp_res.volume_dim.y) + "x"
+                            + std::to_string(comp_res.volume_dim.z)));
+    fmt_args.push_back(fmt::arg("volume_labels", comp_res.volume_labels));
+    // decompression
+    fmt_args.push_back(fmt::arg("decomp_cpu_gb_per_s", decomp_res.cpu_GB_per_s));
+    fmt_args.push_back(fmt::arg("decomp_cpu_s", decomp_res.cpu_decoded_seconds));
+    fmt_args.push_back(fmt::arg("decomp_gpu_gb_per_s", decomp_res.gpu_GB_per_s));
+    fmt_args.push_back(fmt::arg("decomp_gpu_s", decomp_res.gpu_decoded_seconds));
+    // rendering
+    fmt_args.push_back(fmt::arg("frame_min_ms", render_res.frame_min_ms));
+    fmt_args.push_back(fmt::arg("frame_avg_ms", render_res.frame_avg_ms));
+    fmt_args.push_back(fmt::arg("frame_sdv_ms", render_res.frame_sdv_ms));
+    fmt_args.push_back(fmt::arg("frame_med_ms", render_res.frame_med_ms));
+    fmt_args.push_back(fmt::arg("frame_max_ms", render_res.frame_max_ms));
     for (int i = 0; i < 10; i++) {
-        replace_str.emplace_back("frame_ms_0" + std::to_string(i), dtos(render_res.frame_ms[i]));
+        fmt_args.push_back(fmt::arg(("frame_ms_0" + std::to_string(i)).c_str(), render_res.frame_ms[i]));
         if (i < 6)
-            replace_str.emplace_back("frame_ms_1" + std::to_string(i), dtos(render_res.frame_ms[10 + i]));
+            fmt_args.push_back(fmt::arg(("frame_ms_1" + std::to_string(i)).c_str(), render_res.frame_ms[10 + i]));
     }
+    fmt_args.push_back(fmt::arg("render_total_max", render_res.total_ms));
+    fmt_args.push_back(fmt::arg("rendered_frames", render_res.accumulated_frames));
+    fmt_args.push_back(fmt::arg("mem_framebuffer_mb", render_res.mem_framebuffers_bytes * BYTE_TO_MB));
+    fmt_args.push_back(fmt::arg("mem_uniformbuffer_mb", render_res.mem_ubos_bytes * BYTE_TO_MB));
+    fmt_args.push_back(fmt::arg("mem_materials_mb", render_res.mem_materials_bytes * BYTE_TO_MB));
+    fmt_args.push_back(fmt::arg("mem_encoding_Mb", render_res.mem_encoding_bytes * BYTE_TO_MB));
+    fmt_args.push_back(fmt::arg("mem_cache_mb", render_res.mem_cache_bytes * BYTE_TO_MB));
+    fmt_args.push_back(fmt::arg("mem_emptyspace_mb", render_res.mem_empty_space_bytes * BYTE_TO_MB));
+    fmt_args.push_back(fmt::arg("mem_total_mb", render_res.mem_total_bytes * BYTE_TO_MB));
+    return std::move(fmt_args);
+}
+
+std::string EvaluationLogExport::format_evaluation_string(std::string format_string, const std::string& eval_name,
+                                                             int argc, char *argv[],
+                                                             CSGVCompressionEvaluationResults comp_res,
+                                                             CSGVDecompressionEvaluationResults decomp_res,
+                                                             CSGVRenderEvaluationResults render_res) {
 
     // replace all occurrences of all specifiers
-    bool replaced;
-    do {
-        replaced = false;
-        for (const auto& r: replace_str) {
-            auto replace_key = "%" + r.first;
-            auto pos = format_string.find(replace_key);
-            if (pos != std::string::npos) {
-                format_string.replace(pos, replace_key.size(), r.second);
-                replaced = true;
-            }
-        }
-    } while (replaced);
-    return format_string;
+    fmt::dynamic_format_arg_store<fmt::format_context> fmt_args = create_fmt_args(eval_name, argc, argv,
+                                                                                  comp_res, decomp_res, render_res);
+    return fmt::vformat(format_string, fmt_args);
+}
+
+std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
+    fmt::dynamic_format_arg_store<fmt::format_context> fmt_args = create_fmt_args("", 0, nullptr, {}, {}, {});
+    std::vector<std::string> keys;
+    for (const auto& arg : fmt_args) {
+        keys.emplace_back(arg.name);
+    }
+    return keys;
 }
 
 int EvaluationLogExport::write_eval_logfile(const std::string& eval_logfile, const std::string& eval_name, int argc, char *argv[],
-                       CSGVCompressionEvaluationResults comp_res,
-                       CSGVDecompressionEvaluationResults decomp_res,
-                       CSGVRenderEvaluationResults render_res) {
+                                            CSGVCompressionEvaluationResults comp_res,
+                                            CSGVDecompressionEvaluationResults decomp_res,
+                                            CSGVRenderEvaluationResults render_res) {
     bool logfile_exists = std::filesystem::exists(eval_logfile);
     std::string format_string;
     std::string header_string;
