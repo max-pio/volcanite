@@ -32,54 +32,69 @@ class VolcaniteLogFile:
                                     "mem_framebuffer_mb", "mem_uniformbuffer_mb", "mem_materials_mb", "mem_encoding_ms",
                                     "mem_cache_mb", "mem_emptyspace_mb", "mem_total_mb",
                                     "render_frames"]
+        format_string = '\n'.join(self.__fmt_strs)
         for possible_key in possible_keys:
             format_string = format_string.replace("%" + possible_key, replace_with)
         return format_string
 
-    def __init__(self, log_file: Path, fmt_strs: list[str], header_strings: list[str]):
+    @classmethod
+    def get_fmt_and_remainder_lines_from_file(cls, log_file: Path) -> tuple[list[str], list[str]]:
+        """
+        Obtains the format strings from the first [0, N) lines starting with '#fmt:' and the remaining lines [N, ..].
+        If the file does not contain evaluatoin results yet, the remaining lines can be assumed to be the header lines.
+        :return: a list of format strings and header / remaining lines from the file.
+        """
+        if not log_file.exists():
+            raise IOError("File " + str(log_file) + " does not exist.")
+
+        with open(log_file, "r") as f:
+            lines = f.read().split("\n")
+
+        format_strings: list[str] = []
+        i = 0
+        while lines[i].startswith("#fmt:"):
+            format_strings.append(lines[i][5:])
+            i += 1
+        header_strings: list[str] = lines[i::]
+        return format_strings, header_strings
+
+    def __init__(self, log_file: Path, fmt_strs: list[str], header_strings: list[str],
+                 fallback_log_line: str | None, use_fmt_from_existing_log: bool = True):
+        """
+        Creates a Volcanite log file handle.
+        :param log_file: path at which to store the log file.
+        :param fmt_strs: the format strings used in the log file.
+        :param header_strings: the header lines stored after the fmt strings in the log file at initialization.
+        :param fallback_log_line: line written to log_file if a Volcanite run fails. May only use {name} key.
+        :param use_fmt_from_existing_log: if True: use the fmt strings from the current log file if it already exists.
+        """
         self.log_file: Path = log_file
         self.__fmt_strs = fmt_strs
         self.__header_strings = header_strings
 
         self.fallback_log: str = ""
-        if self.log_file.exists():
-            self.fallback_log = VolcaniteLogFile.__create_fallback_string(self.log_file)
+        if use_fmt_from_existing_log and self.log_file.exists():
+            self.__fmt_strs, _ = VolcaniteLogFile.get_fmt_and_remainder_lines_from_file(self.log_file)
+        self.__fallback_log = fallback_log_line if fallback_log_line is not None else self.__create_fallback_string()
 
     @classmethod
-    def from_template_file(cls, log_file: Path, template_log_file: Path) -> Self:
-        if not template_log_file.exists():
-            raise IOError("Template log file " + str(template_log_file) + " does not exist.")
-
-        with open(template_log_file, "r") as f:
-            lines = f.read().split("\n")
-
-        format_string: list[str] = []
-        i = 0
-        while lines[i].startswith("#fmt:"):
-            format_string += lines[i][5:] + "\n"
-            i += 1
-        format_string = format_string[:-1] # remove trailing '\n'
-
-        return cls(log_file=log_file, fmt_strs=format_string.split(","))
-        self.__format_strings = format_strings
-        self.__header_strings = header_strings
-
-    def from_format_string(self):
+    def create_from_template_log_file(cls, log_file: Path, template_log_file: Path,
+                                      fallback_log_line: str | None, use_fmt_from_existing_log: bool = True) -> Self:
+        format_strings, header_strings = cls.get_fmt_and_remainder_lines_from_file(template_log_file)
+        return cls(log_file=log_file, fmt_strs=format_strings, header_strings=header_strings,
+                   fallback_log_line=fallback_log_line, use_fmt_from_existing_log=use_fmt_from_existing_log)
 
     def get_log_file(self) -> Path:
         return self.log_file
 
-    def get_template(self) -> Path:
-        return self.__log_file_template
+    def get_fmt_and_header_lines(self) -> tuple[list[str], list[str]]:
+        return self.__fmt_strs, self.__header_strings
 
     def setup(self, old_log_policy: ExistingPolicy = ExistingPolicy.ABORT):
         """
         Ensures that the log_file exists at its location.
         :param old_log_policy: handling of existing log files, either 'abort' (default), 'append', or 'overwrite'
         """
-
-        if self.__log_file_template is None and not (self.log_file.exists() and old_log_policy == ExistingPolicy.APPEND):
-            raise ValueError("log_file_template must be given if not appending to existing log file")
 
         if self.log_file.exists():
             if old_log_policy == ExistingPolicy.ABORT:
@@ -90,20 +105,22 @@ class VolcaniteLogFile:
                 self.log_file.unlink()
 
             if old_log_policy != ExistingPolicy.APPEND:
-                shutil.copy(self.__log_file_template, self.log_file)
+                with(open(self.log_file, "w")) as f:
+                    f.writelines(self.__fmt_strs)
+                    f.writelines(self.__header_strings)
         else:
-            shutil.copy(self.__log_file_template, self.log_file)
+            with(open(self.log_file, "w")) as f:
+                f.writelines(self.__fmt_strs)
+                f.writelines(self.__header_strings)
 
         if not self.log_file.exists():
-            raise IOError(f"Could not create log file {self.log_file} (template {self.__log_file_template})")
-
-        self.fallback_log = VolcaniteLogFile.__create_fallback_string(self.log_file)
+            raise IOError(f"Could not create log file {self.log_file}")
 
     def log_manual(self, output: str, end: str = "\n") -> None:
         with open(str(self.log_file), "a") as log_out:
             log_out.write(output + end)
 
-    def create_formatted_copy(self, dest: str, newline_separator: str = None, remove_line_prefixes: list[str] = None,
+    def create_formatted_copy(self, dest: Path, newline_separator: str = None, remove_line_prefixes: list[str] = None,
                               replace_map: dict[str, str] = None):
         """
         Copies the current log file to dest and re-formats the file:
@@ -116,23 +133,58 @@ class VolcaniteLogFile:
         with open(self.log_file, 'r') as log_in:
             formatted_log = log_in.read()
             # remove all lines starting with any of the remove_line_prefixes:
-            for remove_line_prefix in remove_line_prefixes:
-                formatted_log = re.sub(r'^{}.*\n'.format(remove_line_prefix), '', formatted_log, re.MULTILINE)
+            if remove_line_prefixes:
+                for remove_line_prefix in remove_line_prefixes:
+                    formatted_log = re.sub(r"^{}.*\n".format(remove_line_prefix), "", formatted_log, flags=re.MULTILINE)
             # remove all existing newlines, replace all newline_separators with a newline:
             if newline_separator:
-                formatted_log = formatted_log.replace('\n', '')
-                formatted_log = formatted_log.replace('\\\\', '\n')
+                formatted_log = formatted_log.replace("\n", "")
+                formatted_log = formatted_log.replace(newline_separator, "\n")
             # replace all keys with the
-            for repl in replace_map.items():
-                formatted_log = formatted_log.replace(repl[0], repl[1])
+            if replace_map:
+                for repl in replace_map.items():
+                    formatted_log = formatted_log.replace(repl[0], repl[1])
             with open(dest, 'w') as file_out:
                 file_out.write(formatted_log)
+            print(f"create formated copy of {self.log_file} to {dest}")
 
     @classmethod
     def initialize_log_files(cls, log_files : list[Self], old_logs: ExistingPolicy = ExistingPolicy.ABORT):
         for log_file in log_files:
             log_file.setup(old_logs)
 
+class VolcaniteLogFileCfg:
+    def __init__(self, log_file_name: str | None, fmts: list[str] | None = None, headers: list[str] | None = None,
+                 template_log_file: Path | None = None, fallback_log_line: str | None = None,
+                 use_fmt_from_existing_log: bool = True):
+        """
+        Specifies initializion of a Volcanite log file within an evaluation directory.
+        If template_Log_file is given:\n
+         * the format and header strings are read from that file.
+         * If no log_file_name is given, the file name of the template log file is used
+        If no template_log_file is given, the log_file_name, fmt_strings, and header_strings must be set.
+        :param log_file_name: name of the log file in the evaluation directory
+        :param fmts: list of format strings for initializing the log file
+        :param headers: list of header strings for initializing the log file
+        :param template_log_file: template log file from which the fmt_strings and header_strings are read
+        :param fallback_log_line: line that is logged to file if Volcanite run fails. may only use {name} key
+        :param use_fmt_from_existing_log: if the fmt strings from an existing log file are used if logs are appended
+        """
+        if template_log_file is None:
+            if log_file_name is None or fmts is None or headers is None:
+                raise ValueError("log_file_name and fmt_strings and header_strings must not be None when no"
+                                 " template_log_file is given.")
+        else:
+            if fmts or headers:
+                raise ValueError("fmt_strings and header_strings cannot be used in combination with template_log_file")
+            if not template_log_file.exists():
+                raise FileNotFoundError(f"Template log file {template_log_file} does not exist.")
+        self.log_file_name = log_file_name
+        self.fmt_strs = fmts
+        self.header_strings = headers
+        self.template_log_file = template_log_file
+        self.fallback_log_line = fallback_log_line
+        self.use_fmt_from_existing_log = use_fmt_from_existing_log
 
 class VolcaniteEvaluation:
     """
@@ -142,9 +194,8 @@ class VolcaniteEvaluation:
     :var name: name of the evaluation
     """
 
-    def __init__(self, eval_out_directory: str, existing_policy: ExistingPolicy = ExistingPolicy.ABORT, name: str = None,
-                 # TODO: template_log_files could be encapsulated in a class: either copy file or defined as python str
-                 template_log_files: list[str] = None, log_file_names: list[str] = None,
+    def __init__(self, eval_out_directory: str, existing_policy: ExistingPolicy = ExistingPolicy.ABORT, eval_name: str = None,
+                 log_files: list[VolcaniteLogFileCfg] = None,
                  enable_log: bool = True, dry_run: bool = False, auto_init: bool = True):
         """
         Encapsulates one evaluation. The evaluation results are stored in a single directory (eval_out_directory).
@@ -153,32 +204,19 @@ class VolcaniteEvaluation:
         appends new results to the existing logs, moves the old directory to a backup path, or deletes the old directory.
         :param eval_out_directory: directory in which to store evaluation results
         :param existing_policy: how to proceed if the evaluation directory already exists
-        :param name: name of the evaluation
-        :param template_log_files: all templates from which Volcanite evaluation log files are created in the directory
-        :param log_file_names: if not None, a new name for each evaluation log file in the order of the templates
+        :param eval_name: name of the evaluation
+        :param log_files: specifies which Volcanite evaluation log files are created and/or used in the directory
         :param enable_log: if false, no log files are exported by Volcanite
         :param dry_run: if true, Volcanite calls are only printed to the command line but not executed
         :param auto_init: if True, the directory is automatically set up. Otherwise, initialize() must be called later
         """
-        if log_file_names and template_log_files and len(log_file_names) != len(template_log_files):
-            raise ValueError("template_log_files and new_log_file_names must have the same length")
         self.eval_out_directory: Path = Path(eval_out_directory)
         self.existing_policy: ExistingPolicy = existing_policy
-        self.name: str = self.eval_out_directory.stem if name is None else name
-        self.enable_log = enable_log
-        self.dry_run = dry_run
-
-        # create log file links
-        self.log_files: list[VolcaniteLogFile] = []
-        if template_log_files:
-            for i, tlf in enumerate(template_log_files):
-                if log_file_names:
-                    self.log_files.append(VolcaniteLogFile(self.eval_out_directory / Path(log_file_names[i]), Path(tlf)))
-                else:
-                    self.log_files.append(VolcaniteLogFile(self.eval_out_directory / Path(tlf).name, Path(tlf)))
-        elif log_file_names:
-            for nlf in log_file_names:
-                self.log_files.append(VolcaniteLogFile(self.eval_out_directory / Path(nlf), None))
+        self.name: str = self.eval_out_directory.stem if eval_name is None else eval_name
+        self.log_file_configs: list[VolcaniteLogFileCfg] = log_files
+        self.log_files: list[VolcaniteLogFile] | None = None
+        self.enable_log: bool = enable_log
+        self.dry_run: bool = dry_run
 
         self.__initialized = False
         if auto_init:
@@ -197,6 +235,20 @@ class VolcaniteEvaluation:
             if self.existing_policy == ExistingPolicy.APPEND:
                 create = False
 
+        # setup log files
+        self.log_files: list[VolcaniteLogFile] = []
+        for cfg in self.log_file_configs:
+            if cfg.template_log_file is None:
+                self.log_files.append(VolcaniteLogFile(log_file = self.eval_out_directory / cfg.log_file_name,
+                                                       fmt_strs=cfg.fmt_strs, header_strings=cfg.header_strings,
+                                                       fallback_log_line=cfg.fallback_log_line,
+                                                       use_fmt_from_existing_log=cfg.use_fmt_from_existing_log))
+            else:
+                self.log_files.append(VolcaniteLogFile.create_from_template_log_file(log_file=self.eval_out_directory / cfg.log_file_name,
+                                                                                     template_log_file=cfg.template_log_file,
+                                                                                     fallback_log_line=cfg.fallback_log_line,
+                                                                                     use_fmt_from_existing_log=cfg.use_fmt_from_existing_log))
+
         if create:
             # create evaluation output directory
             self.eval_out_directory.mkdir(parents=True, exist_ok=True)
@@ -213,9 +265,12 @@ class VolcaniteEvaluation:
         return self.__initialized
 
     def get_log(self, filename: str = None) -> VolcaniteLogFile:
+        """
+        :return: the first log file in the log file lists or the log file handle for the given file name
+        """
         if filename is None:
             return self.log_files[0]
-        return next((_log for _log in self.log_files if _log.log_file.name == filename), None)
+        return next((_log for _log in self.log_files if _log.log_file_name.name == filename), None)
 
     def get_all_logs(self) -> list[VolcaniteLogFile]:
         return self.log_files
@@ -394,6 +449,10 @@ class VolcaniteExec:
         :param git_checkout: git commit, tag, or branch name that is checked out before building volcanite
         :param build_subdir: directory in the git repository in which Volcanite is build (default: cmake-build-release)
         """
+        # build directory must have a depth of one
+        if len(Path(build_subdir).parents) != 1:
+            raise ValueError("Volcanite build sub-directory must have a path depth of one")
+
         self.evaluation = evaluation
         self.git_checkout = git_checkout
         self.build_subdir = build_subdir
@@ -407,7 +466,7 @@ class VolcaniteExec:
     def logs_info_str(self):
         log_strs = []
         for l in self.evaluation.log_files:
-            log_strs.append(f"{l.get_log_file()} [{l.get_template()}] fallback: '{l.fallback_log}'")
+            log_strs.append(f"{l.get_log_file()} [{' '.join(l.get_fmt_and_header_lines()[0])}] fallback: '{l.fallback_log}'")
         return log_strs
 
     def __build_dir(self) -> str:
@@ -424,15 +483,18 @@ class VolcaniteExec:
         subp.run(["git", "checkout", self.git_checkout], cwd=self.__build_dir())
         res = subp.run(["git", "pull"], cwd=self.__build_dir())
         if res.returncode != 0:
-            print("Error: git pull returned " + str(res.returncode))
-            exit(res.returncode)
+            raise RuntimeError(f"Error: git pull returned {res.returncode}")
 
-        if
+        if not Path(self.__build_dir()).exists():
+            Path(self.__build_dir()).mkdir(parents=True, exist_ok=True)
+            build_type = "-DCMAKE_BUILD_TYPE=Debug" if "deb" in self.build_subdir.lower() else "-DCMAKE_BUILD_TYPE=Release"
+            res = subp.run(["cmake", build_type, ".."], cwd=self.__build_dir())
+            if res.returncode != 0:
+                raise RuntimeError(f"Error: cmake returned {res.returncode}")
 
         res = subp.run(["cmake", "--build", ".", "--target", "volcanite"], cwd=self.__build_dir())
         if res.returncode != 0:
-            print("Error: building volcanite returned " + str(res.returncode))
-            exit(res.returncode)
+            raise RuntimeError(f"Error: building target volcanite returned {res.returncode}")
         self.__is_build = True
 
     def exec(self, args : list[VolcaniteArg], eval_name: str = None):
@@ -473,7 +535,7 @@ class VolcaniteExec:
                             print("Error: Volcanite returned " + str(res.returncode))
                             log.log_manual(log.fallback_log.replace("%name", eval_name) + "\n")
                         else:
-                            raise RuntimeError("Volcanite returned " + str(res.returncode) + " and no fallback log exists for " + str(log.log_file))
+                            raise RuntimeError("Volcanite returned " + str(res.returncode) + " and no fallback log exists for " + str(log.log_file_name))
                 else:
                     raise RuntimeError("Volcanite returned " + str(res.returncode))
 
@@ -502,7 +564,7 @@ class VolcaniteExec:
             subp.run(cmd, cwd=str(_dir.absolute()), shell=True)
 
 if __name__ == "__main__":
-    # create the data set VolcaniteArgs
+    # create the VolcaniteArg dictionary for all data sets
     args_data = {"cells": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/cells/cells_frame055.raw", "cells"),
                  "fiber": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/fiber/fiberpolymer_1579x1092x1651_16bit.hdf5", "fiber"),
                  "h01": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/h01/chunks/x{}y{}z{}.hdf5", "h01", chunks=(4,5,5)),
@@ -510,26 +572,30 @@ if __name__ == "__main__":
 
     # setup the evaluation output directory and the log files
     evaluation = VolcaniteEvaluation("/home/maxpio/data/eval/out/my_test_eval", ExistingPolicy.APPEND, "my_test_eval",
-                                     [VolcaniteLogFile("results.txt",
-                                                       fmts=["{name},{comprate_pcnt}%"],
-                                                       headers=["Name,Compression Rate [%]"])],
-                                     log_file_names=["my_test_eval.csv", "my_test_eval.tex"],
+                                     [VolcaniteLogFileCfg("results.txt",
+                                                                  fmts=["{name},{comprate_pcnt:.3}%"],
+                                                                  headers=["Name,Compression Rate [%]"])],
                                      enable_log=True, dry_run=True)
 
     volcanite = VolcaniteExec(evaluation, "main", "cmake-build-release")
     volcanite.checkout_and_build()
+
+    # print evaluation information to console
     print(volcanite.info_str())
-    for l in volcanite.logs_info_str():
-        print("  " + l)
+    print('\n'.join(volcanite.logs_info_str()))
 
+    # iterate over all configuration combinations and execute Volcanite
     for arg_shade in VolcaniteArg.args_shading.values():
-        args = [args_data["cells"], [arg_shade]]
-        name = VolcaniteArg.concat_ids(args)
+        for arg_data in args_data.values():
+            args = [arg_data, arg_shade]
+            name = VolcaniteArg.concat_ids(args)
 
-        for log in evaluation.get_all_logs():
-            log.log_manual(name)
+            # manually log a comment line to the log file
+            evaluation.get_log().log_manual("#Running evaluation: " + name)
+            # execute Volcanite and passe the Volcanite log file
+            volcanite.exec(args, name)
 
-        volcanite.exec(args, name)
-
-
+    # create a copy of the log file without comment lines that start with # which includes the #fmt: strings
+    evaluation.get_log().create_formatted_copy(evaluation.eval_out_directory / Path("results.csv"),
+                                               remove_line_prefixes=["#"])
 
