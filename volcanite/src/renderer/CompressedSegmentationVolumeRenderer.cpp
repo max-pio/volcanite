@@ -1516,6 +1516,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             Logger(WARN) << "Querying rendering results before frame time tracking was stopped";
         }
         if (!m_last_frame_times.empty()) {
+            double total = 0.f;
             double min = std::numeric_limits<double>::max();
             double m1 = 0.;
             double m2 = 0.;
@@ -1528,6 +1529,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                 max = std::max(max, ms);
                 m1 += ms;
                 m2 += ms * ms;
+                total += ms;
             }
             for(int i = m_last_frame_times.size(); i < 16; i++)
                 results.frame_ms[i] = 0.;
@@ -1540,6 +1542,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             results.frame_sdv_ms = std::sqrt((m2 / m_last_frame_times.size()) - results.frame_avg_ms * results.frame_avg_ms);
             results.frame_med_ms = *(frame_time_cpy.begin()+(frame_time_cpy.size() / 2));
             results.frame_max_ms = max;
+            results.total_ms = total;
             results.accumulated_frames = m_last_frame_times.size();
             Logger(DEBUG) << "CSGV rendering evaluation: "
                                << results.frame_min_ms << " / " << results.frame_avg_ms << " / " << results.frame_max_ms

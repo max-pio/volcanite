@@ -67,15 +67,18 @@ std::string EvaluationLogExport::format_evaluation_string(std::string format_str
             {"time", time_stamp_ss.str()},
             {"args", args_ss.str()},
             // compression
-            {"cr", dtos(comp_res.compression_rate * 100.)},
+            {"comprate", dtos(comp_res.compression_rate)},
+            {"comprate_pcnt", dtos(comp_res.compression_rate * 100.)},
             {"comp_s", dtos(comp_res.compression_total_seconds)},
             {"comp_mainpass_s", dtos(comp_res.compression_mainpass_seconds)},
             {"comp_prepass_s", dtos(comp_res.compression_prepass_seconds)},
             {"comp_gb_per_s", dtos(comp_res.compression_GB_per_s)},
             {"csgv_gb", dtos(comp_res.csgv_bytes * BYTE_TO_GB)},
             {"orig_gb", dtos(comp_res.original_volume_bytes * BYTE_TO_GB)},
+            {"orig_bytes_per_voxel", dtos(comp_res.original_volume_bytes * BYTE_TO_GB)},
             {"volume_dim", std::to_string(comp_res.volume_dim.x) + "x" + std::to_string(comp_res.volume_dim.y) + "x"
                             + std::to_string(comp_res.volume_dim.z)},
+            {"volume_labels", comp_res.volume_labels)},
             // decompression
             {"decomp_cpu_gb_per_s", dtos(decomp_res.cpu_GB_per_s)},
             {"decomp_gpu_gb_per_s", dtos(decomp_res.gpu_GB_per_s)},
@@ -93,7 +96,7 @@ std::string EvaluationLogExport::format_evaluation_string(std::string format_str
             {"mem_cache_mb", dtos(render_res.mem_cache_bytes * BYTE_TO_MB)},
             {"mem_emptyspace_mb", dtos(render_res.mem_empty_space_bytes * BYTE_TO_MB)},
             {"mem_total_mb", dtos(render_res.mem_total_bytes * BYTE_TO_MB)},
-            {"render_frames", dtos(render_res.accumulated_frames)},
+            {"rendered_frames", dtos(render_res.accumulated_frames)},
     };
     for (int i = 0; i < 10; i++) {
         replace_str.emplace_back("frame_ms_0" + std::to_string(i), dtos(render_res.frame_ms[i]));
@@ -106,7 +109,6 @@ std::string EvaluationLogExport::format_evaluation_string(std::string format_str
     do {
         replaced = false;
         for (const auto& r: replace_str) {
-            // TODO: support a std::vformat style replacement to control decimal points etc.
             auto replace_key = "%" + r.first;
             auto pos = format_string.find(replace_key);
             if (pos != std::string::npos) {
@@ -171,16 +173,13 @@ int EvaluationLogExport::write_eval_logfile(const std::string& eval_logfile, con
     }
 
     /* All first lines starting with #fmt: are concatenated into the format string
-     *   #fmt:#header,time
+     *   #fmt:#title,time
      *   #fmt:%name,%time
      * becomes:
-     *   #header,time\n%name,%time
+     *   #title,time\n%name,%time
      * which will be written out as:
-     *   #header,time
+     *   #title,time
      *   my_name,XX-XX-XXTXX:XX:XX
-     *
-     * To remove all comment lines from a file:
-     * sed -i '/#/d' ./[eval_logfile]
      */
 
     // write out the current format string if this is a new file

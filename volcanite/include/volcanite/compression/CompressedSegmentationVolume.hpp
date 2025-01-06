@@ -522,6 +522,7 @@ public:
         res.volume_dim = m_volume_dim;
         res.volume_labels = label_count;
         res.original_volume_bytes = volume_memory;
+        res.original_volume_bytes_per_voxel = static_cast<int>(bytes_per_voxel);
         res.compression_rate = res.csgv_bytes / res.original_volume_bytes;
         res.compression_GB_per_s = (res.original_volume_bytes * BYTE_TO_GB) / res.compression_total_seconds;
         return res;

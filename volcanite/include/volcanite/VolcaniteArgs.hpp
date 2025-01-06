@@ -141,7 +141,7 @@ public:
             // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
-            ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path. Must be used with -i.", false, va.record_in_file, "file", cmd);
+            ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path. Must be used with -i or -v.", false, va.record_in_file, "file", cmd);
             ValueArg<std::string> evalLogFilesArg("", "eval-logfiles", "Comma separated files into which evaluation results are appended.", false, "", "file", cmd);
             ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"%name\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
             ValueArg<std::string> shaderDefineArg("", "shader-def", "String of ; separated definitions that will be passed on to the shader. e.g. 'MY_VAL=64;MY_DEF'. Use with care.", false, va.shader_defines, "string", cmd);

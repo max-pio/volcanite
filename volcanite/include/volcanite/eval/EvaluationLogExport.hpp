@@ -32,6 +32,7 @@ struct CSGVCompressionEvaluationResults {
     double compression_rate = -1.;
     double compression_GB_per_s = 0.;
     double original_volume_bytes = 0.;
+    int original_volume_bytes_per_voxel = 0;
     glm::uvec3 volume_dim = {0u, 0u, 0u};
     uint32_t volume_labels = 0u;
     //    uint32_t labels_per_brick_min = 0u;

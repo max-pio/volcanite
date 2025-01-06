@@ -19,22 +19,9 @@ class VolcaniteLogFile:
     If a fallback_log is given, it is appended to the log_file when a Volcanite run fails instead of aborting the
     evaluation. It may use the %name placeholder for the name of the current evaluation.
     """
-    
-    @classmethod
-    def __create_fallback_string(cls, log_file: Path, replace_with: str = "") -> str | None:
+
+    def __create_fallback_string(self, replace_with: str = "") -> str | None:
         """Reads the format string from the log file and replaces all placeholders with replace_with."""
-
-        with open(log_file, "r") as f:
-            template_file = f.read()
-
-        format_string: str = ""
-        lines = template_file.split("\n")
-        i = 0
-        while lines[i].startswith("#fmt:"):
-            format_string += lines[i][5:] + "\n"
-            i += 1
-        format_string = format_string[:-1] # remove trailing '\n'
-
         possible_keys: list[str] = [# "name", name can be used in the fallback string
                                     "time", "args",
                                     "cr", "comp_s", "comp_mainpass_s", "comp_prepass_s", "comp_gb_per_s"
@@ -49,20 +36,40 @@ class VolcaniteLogFile:
             format_string = format_string.replace("%" + possible_key, replace_with)
         return format_string
 
-    def __init__(self, log_file: Path, log_file_template: Path | None):
+    def __init__(self, log_file: Path, fmt_strs: list[str], header_strings: list[str]):
         self.log_file: Path = log_file
-        self.__log_file_template: Path = log_file_template
-        if log_file_template and not self.__log_file_template.exists():
-            raise IOError("Template log file " + str(self.__log_file_template) + " does not exist.")
+        self.__fmt_strs = fmt_strs
+        self.__header_strings = header_strings
 
         self.fallback_log: str = ""
         if self.log_file.exists():
             self.fallback_log = VolcaniteLogFile.__create_fallback_string(self.log_file)
 
-    def get_log_file(self):
+    @classmethod
+    def from_template_file(cls, log_file: Path, template_log_file: Path) -> Self:
+        if not template_log_file.exists():
+            raise IOError("Template log file " + str(template_log_file) + " does not exist.")
+
+        with open(template_log_file, "r") as f:
+            lines = f.read().split("\n")
+
+        format_string: list[str] = []
+        i = 0
+        while lines[i].startswith("#fmt:"):
+            format_string += lines[i][5:] + "\n"
+            i += 1
+        format_string = format_string[:-1] # remove trailing '\n'
+
+        return cls(log_file=log_file, fmt_strs=format_string.split(","))
+        self.__format_strings = format_strings
+        self.__header_strings = header_strings
+
+    def from_format_string(self):
+
+    def get_log_file(self) -> Path:
         return self.log_file
 
-    def get_template(self):
+    def get_template(self) -> Path:
         return self.__log_file_template
 
     def setup(self, old_log_policy: ExistingPolicy = ExistingPolicy.ABORT):
@@ -96,22 +103,26 @@ class VolcaniteLogFile:
         with open(str(self.log_file), "a") as log_out:
             log_out.write(output + end)
 
-    def create_formatted_copy(self, dest: str, newline_separator: str = None, remove_line_prefix: str = None,
+    def create_formatted_copy(self, dest: str, newline_separator: str = None, remove_line_prefixes: list[str] = None,
                               replace_map: dict[str, str] = None):
         """
         Copies the current log file to dest and re-formats the file:
-        Removes all lines starting with the remove_line_prefix if it is given.
+        Removes all lines starting with one of the remove_line_prefixes if given.
         Removes existing line breaks and creates new line breaks at any occurring newline_separator if it is given.
         Uses the replace_map to replace any key with its value if it is given.
         """
         if not self.log_file.exists():
             raise FileNotFoundError(f"Log file {self.log_file} does not exist")
         with open(self.log_file, 'r') as log_in:
-            input_log = log_in.read()
-            formatted_log = re.sub(r'^{}.*\n'.format(remove_line_prefix), '', input_log, re.MULTILINE) if newline_separator else input_log
+            formatted_log = log_in.read()
+            # remove all lines starting with any of the remove_line_prefixes:
+            for remove_line_prefix in remove_line_prefixes:
+                formatted_log = re.sub(r'^{}.*\n'.format(remove_line_prefix), '', formatted_log, re.MULTILINE)
+            # remove all existing newlines, replace all newline_separators with a newline:
             if newline_separator:
                 formatted_log = formatted_log.replace('\n', '')
                 formatted_log = formatted_log.replace('\\\\', '\n')
+            # replace all keys with the
             for repl in replace_map.items():
                 formatted_log = formatted_log.replace(repl[0], repl[1])
             with open(dest, 'w') as file_out:
@@ -198,13 +209,15 @@ class VolcaniteEvaluation:
 
         self.__initialized = True
 
-    def is_initialized(self):
+    def is_initialized(self) -> bool:
         return self.__initialized
 
-    def get_log(self, filename: str):
-        return next((log for log in self.log_files if log.log_file.name == filename), None)
+    def get_log(self, filename: str = None) -> VolcaniteLogFile:
+        if filename is None:
+            return self.log_files[0]
+        return next((_log for _log in self.log_files if _log.log_file.name == filename), None)
 
-    def get_all_logs(self):
+    def get_all_logs(self) -> list[VolcaniteLogFile]:
         return self.log_files
 
 
@@ -401,7 +414,7 @@ class VolcaniteExec:
         """Returns the absolute path to the directory in which Volcanite is build as string."""
         return str((VolcaniteExec.volcanite_src_directory / Path(self.build_subdir)).resolve())
 
-    def build(self):
+    def checkout_and_build(self):
         """Checks out the git commit and builds volcanite into the configured build sub-directory."""
 
         if self.evaluation.dry_run:
@@ -413,6 +426,9 @@ class VolcaniteExec:
         if res.returncode != 0:
             print("Error: git pull returned " + str(res.returncode))
             exit(res.returncode)
+
+        if
+
         res = subp.run(["cmake", "--build", ".", "--target", "volcanite"], cwd=self.__build_dir())
         if res.returncode != 0:
             print("Error: building volcanite returned " + str(res.returncode))
@@ -428,7 +444,7 @@ class VolcaniteExec:
 
         if not self.__is_build and not self.evaluation.dry_run:
             print("Compiling volcanite executable as Volcanite was not build yet..")
-            self.build()
+            self.checkout_and_build()
 
         # construct the volcanite call with all its arguments
         if eval_name is None:
@@ -494,19 +510,20 @@ if __name__ == "__main__":
 
     # setup the evaluation output directory and the log files
     evaluation = VolcaniteEvaluation("/home/maxpio/data/eval/out/my_test_eval", ExistingPolicy.APPEND, "my_test_eval",
-                                     #["/home/maxpio/data/tmp_logs/my_test_eval/my_test_eval.csv",
-                                     #"/home/maxpio/data/tmp_logs/my_test_eval/my_test_eval.tex"],
+                                     [VolcaniteLogFile("results.txt",
+                                                       fmts=["{name},{comprate_pcnt}%"],
+                                                       headers=["Name,Compression Rate [%]"])],
                                      log_file_names=["my_test_eval.csv", "my_test_eval.tex"],
                                      enable_log=True, dry_run=True)
 
     volcanite = VolcaniteExec(evaluation, "main", "cmake-build-release")
-    volcanite.build()
+    volcanite.checkout_and_build()
     print(volcanite.info_str())
     for l in volcanite.logs_info_str():
         print("  " + l)
 
     for arg_shade in VolcaniteArg.args_shading.values():
-        args = [args_data["cells"]] + [arg_shade]
+        args = [args_data["cells"], [arg_shade]]
         name = VolcaniteArg.concat_ids(args)
 
         for log in evaluation.get_all_logs():
