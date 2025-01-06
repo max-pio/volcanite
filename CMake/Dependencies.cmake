@@ -29,6 +29,9 @@ add_subdirectory(extern/shaderc)
 # extern rANS encoding library
 add_subdirectory(extern/ryg_rans)
 
+# extern fmt formatting library
+add_subdirectory(extern/fmt)
+
 # extern TCLAP for command line argument parsing
 add_subdirectory(extern/tclap)
 add_library(tclap::tclap ALIAS TCLAP)

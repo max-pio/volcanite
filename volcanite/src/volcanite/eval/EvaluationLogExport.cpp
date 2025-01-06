@@ -20,9 +20,10 @@
 #include <iomanip>
 #include <filesystem>
 #include <fstream>
-#include <format>
 #include <sstream>
 #include <vector>
+
+#include <fmt/include/fmt/core.h>
 
 using namespace vvv;
 
@@ -62,7 +63,7 @@ std::string EvaluationLogExport::format_evaluation_string(std::string format_str
     }
 
     // the list of replacement specifiers and the replacement values:
-    std::vector<std::pair<std::string, std::string>> replace_str = {
+    std::vector<fmt::arg> replace_str = {
             {"name", eval_name.empty() ? ("eval-" + time_stamp_ss.str()) : eval_name},
             {"time", time_stamp_ss.str()},
             {"args", args_ss.str()},

@@ -32,7 +32,6 @@
 #include "volcanite/compression/CSGVDatabase.hpp"
 #include "volcanite/eval/EvaluationLogExport.hpp"
 
-
 using namespace volcanite;
 
 constexpr int RET_SUCCESS = 0;

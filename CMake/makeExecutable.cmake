@@ -69,7 +69,7 @@ function(makeVolcaniteExecutable name)
             # WIN32_EXECUTABLE TRUE # this hides the console window. Disabled, because we need to see the console output! maybe re-enable for distribution
             MACOSX_BUNDLE TRUE
             )
-    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap SQLiteCpp libvolcanite)
+    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap fmt::fmt-header-only SQLiteCpp libvolcanite)
     if(NOT HEADLESS)
         target_link_libraries(${name} PRIVATE LibVVV::libvvvwindow portable_file_dialogs)
     endif()

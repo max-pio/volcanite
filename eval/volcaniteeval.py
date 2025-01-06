@@ -283,7 +283,7 @@ class VolcaniteArg:
     deterministic order.
 
     :var args_encoding: CSGV encoding mode arguments
-    :var args_brick_size: CSGV brick size arguments
+    :var args_brick_size: CSGV brick size arguments ["16","32","64"]
     :var args_cache_mode: render cache mode arguments
     :var args_shading: render shading mode arguments
     :var args_default: default arguments for any evaluation run
@@ -565,19 +565,16 @@ class VolcaniteExec:
 
 if __name__ == "__main__":
     # create the VolcaniteArg dictionary for all data sets
-    args_data = {"cells": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/cells/cells_frame055.raw", "cells"),
-                 "fiber": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/fiber/fiberpolymer_1579x1092x1651_16bit.hdf5", "fiber"),
-                 "h01": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/h01/chunks/x{}y{}z{}.hdf5", "h01", chunks=(4,5,5)),
-                 "azba": VolcaniteArg.arg_dataset("/home/maxpio/data/ev/azba/AZBA.hdf5", "azba")}
+    args_data = {"cells": VolcaniteArg.arg_dataset("/home/maxpio/data/cellsinsilico/Big01/000_longer/outdir/nrrd_uint32/cells_frame065_100x100x100.raw", "cells100")}
 
     # setup the evaluation output directory and the log files
     evaluation = VolcaniteEvaluation("/home/maxpio/data/eval/out/my_test_eval", ExistingPolicy.APPEND, "my_test_eval",
                                      [VolcaniteLogFileCfg("results.txt",
                                                                   fmts=["{name},{comprate_pcnt:.3}%"],
                                                                   headers=["Name,Compression Rate [%]"])],
-                                     enable_log=True, dry_run=True)
+                                     enable_log=True, dry_run=False)
 
-    volcanite = VolcaniteExec(evaluation, "main", "cmake-build-release")
+    volcanite = VolcaniteExec(evaluation, "mp/eval", "cmake-build-release")
     volcanite.checkout_and_build()
 
     # print evaluation information to console
@@ -585,7 +582,7 @@ if __name__ == "__main__":
     print('\n'.join(volcanite.logs_info_str()))
 
     # iterate over all configuration combinations and execute Volcanite
-    for arg_shade in VolcaniteArg.args_shading.values():
+    for arg_shade in [VolcaniteArg.args_brick_size['16']]:
         for arg_data in args_data.values():
             args = [arg_data, arg_shade]
             name = VolcaniteArg.concat_ids(args)
