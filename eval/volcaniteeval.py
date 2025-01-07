@@ -78,6 +78,7 @@ class VolcaniteLogFile:
         if use_fmt_from_existing_log and self.log_file.exists():
             self.__fmt_strs, _ = VolcaniteLogFile.get_fmt_and_remainder_lines_from_file(self.log_file)
         self.__fallback_log = fallback_log_line if fallback_log_line is not None else self.__create_fallback_string()
+        self.disable_manual_logs = False
 
     @classmethod
     def create_from_template_log_file(cls, log_file: Path, template_log_file: Path,
@@ -119,6 +120,8 @@ class VolcaniteLogFile:
             raise IOError(f"Could not create log file {self.log_file}")
 
     def log_manual(self, output: str, end: str = "\n") -> None:
+        if self.disable_manual_logs:
+            return
         with open(str(self.log_file), "a") as log_out:
             log_out.write(output + end)
 
@@ -225,22 +228,26 @@ class VolcaniteEvaluation:
             self.initialize()
 
     def initialize(self):
-        create: bool = True
-        if self.eval_out_directory.exists():
-            if self.existing_policy == ExistingPolicy.ABORT:
-                raise IOError("Evaluation directory " + str(self.eval_out_directory) + " exist and existing policy is 'abort'")
-            elif self.existing_policy == ExistingPolicy.MOVE:
-                new_location = str(self.eval_out_directory.resolve()) + "_" + datetime.now().strftime("%Y%m%d-%H%M%S")
-                print("Moving existing directory " + str(self.eval_out_directory) + " to " + new_location)
-                shutil.move(self.eval_out_directory, new_location)
-            elif self.existing_policy == ExistingPolicy.DELETE:
-                print("Deleting existing evaluation directory.. " + str(self.eval_out_directory))
-                sleep(5)
-                shutil.rmtree(self.eval_out_directory)
+        if self.dry_run:
+            print("Skipping evaluation initialization in dry run")
+            create: bool = False
+        else:
+            create: bool = True
+            if self.eval_out_directory.exists():
+                if self.existing_policy == ExistingPolicy.ABORT:
+                    raise IOError("Evaluation directory " + str(self.eval_out_directory) + " exist and existing policy is 'abort'")
+                elif self.existing_policy == ExistingPolicy.MOVE:
+                    new_location = str(self.eval_out_directory.resolve()) + "_" + datetime.now().strftime("%Y%m%d-%H%M%S")
+                    print("Moving existing directory " + str(self.eval_out_directory) + " to " + new_location)
+                    shutil.move(self.eval_out_directory, new_location)
+                elif self.existing_policy == ExistingPolicy.DELETE:
+                    print("Deleting existing evaluation directory.. " + str(self.eval_out_directory))
+                    sleep(5)
+                    shutil.rmtree(self.eval_out_directory)
 
-            if self.existing_policy == ExistingPolicy.APPEND:
-                print("Appending results to directory " + str(self.eval_out_directory))
-                create = False
+                if self.existing_policy == ExistingPolicy.APPEND:
+                    print("Appending results to directory " + str(self.eval_out_directory))
+                    create = False
 
         # setup log files
         self.log_files: list[VolcaniteLogFile] = []
@@ -255,6 +262,8 @@ class VolcaniteEvaluation:
                                                                                      template_log_file=cfg.template_log_file,
                                                                                      fallback_log_line=cfg.fallback_log_line,
                                                                                      use_fmt_from_existing_log=cfg.use_fmt_from_existing_log))
+            if self.dry_run:
+                self.log_files[-1].disable_manual_logs = True
 
         if create:
             # create evaluation output directory
@@ -263,7 +272,7 @@ class VolcaniteEvaluation:
             for log_file in self.log_files:
                 log_file.setup()
 
-        if not self.eval_out_directory.exists():
+        if not self.dry_run and not self.eval_out_directory.exists():
             raise IOError(f"Could not create evaluation directory {self.eval_out_directory}")
 
         self.__initialized = True
@@ -453,7 +462,7 @@ class VolcaniteExec:
         print("    " + " ".join(call_args))
         return subp.run(call_args, *args, **kwargs)
 
-    def __init__(self, evaluation: VolcaniteEvaluation, git_checkout : str = "main", build_subdir : str = "cmake-build-release"):
+    def __init__(self, evaluation: VolcaniteEvaluation, git_checkout : str | None = None, build_subdir : str = "cmake-build-release"):
         """
         Creates a Volcanite executor for the given evaluation.
         :param evaluation: the VolcaniteEvaluation including the evaluation output directory, name and all log files
@@ -472,7 +481,7 @@ class VolcaniteExec:
     def info_str(self):
         return (f"{datetime.now().strftime("%Y.%m.%d-%H:%M:%S")} [{self.evaluation.name}]"
                 f" exe:{"off" if self.evaluation.dry_run else "on"} log:{"on" if self.evaluation.log_files else "off"}"
-                f" build {self.git_checkout}@{self.__build_dir()}")
+                f" build {str(self.git_checkout) + "@" if self.git_checkout else ""}{self.__build_dir()}")
 
     def logs_info_str(self):
         log_strs = []
@@ -485,16 +494,17 @@ class VolcaniteExec:
         return VolcaniteExec.volcanite_src_directory / Path(self.build_subdir)
 
     def checkout_and_build(self):
-        """Checks out the git commit and builds volcanite into the configured build sub-directory."""
+        """Checks out the git commit (if configured) and builds volcanite into the configured build sub-directory."""
 
         if self.evaluation.dry_run:
             print("Skipping Volcanite build in dry run")
             return
 
-        self.run_log(["git", "checkout", self.git_checkout], cwd=VolcaniteExec.volcanite_src_directory)
-        res = self.run_log(["git", "pull"], cwd=VolcaniteExec.volcanite_src_directory)
-        if res.returncode != 0:
-            raise RuntimeError(f"Error: git pull returned {res.returncode}")
+        if self.git_checkout:
+            self.run_log(["git", "checkout", self.git_checkout], cwd=VolcaniteExec.volcanite_src_directory)
+            res = self.run_log(["git", "pull"], cwd=VolcaniteExec.volcanite_src_directory)
+            if res.returncode != 0:
+                raise RuntimeError(f"Error: git pull returned {res.returncode}")
 
         if not self.__build_dir().exists():
             self.__build_dir().mkdir(parents=True, exist_ok=True)
