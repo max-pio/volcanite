@@ -23,34 +23,34 @@ int main() {
 
     // create dummy segmentation volume
     glm::uvec3 dim = {100, 80, 130};
-    const auto volume = createDummySegmentationVolume(dim);
+    const auto volume = createDummySegmentationVolume({.dim=dim});
 
     CompressedSegmentationVolume csgv;
     {
         Logger(INFO) << "Random Access 4 Bit";
         csgv.setCompressionOptions64(32, NIBBLE_ENC, OP_ALL_WITHOUT_STOP, true);
-        if (!csgv.test(volume.dataConst(), dim, true))
+        if (!csgv.test(volume->dataConst(), dim, true))
             return 1;
     }
     csgv.clear();
     {
         Logger(INFO) << "Random Access Wavelet Matrix";
         csgv.setCompressionOptions64(16, WAVELET_MATRIX_ENC, OP_ALL_WITHOUT_STOP, true);
-        if (!csgv.test(volume.dataConst(), dim, true))
+        if (!csgv.test(volume->dataConst(), dim, true))
             return 2;
     }
     csgv.clear();
     {
         Logger(INFO) << "Random Access Huffman Wavelet Matrix";
         csgv.setCompressionOptions64(32, HUFFMAN_WM_ENC, OP_ALL_WITHOUT_STOP, true);
-        if (!csgv.test(volume.dataConst(), dim, true))
+        if (!csgv.test(volume->dataConst(), dim, true))
             return 3;
     }
     csgv.clear();
     {
         Logger(INFO) << "Random Access Huffman Wavelet Matrix with Stop Bits";
         csgv.setCompressionOptions64(64, HUFFMAN_WM_ENC, OP_ALL, true);
-        if (!csgv.test(volume.dataConst(), dim, true))
+        if (!csgv.test(volume->dataConst(), dim, true))
             return 4;
     }
 

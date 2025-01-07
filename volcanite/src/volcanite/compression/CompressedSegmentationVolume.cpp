@@ -920,8 +920,8 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
                 changed = true;
                 freq_out[i] = 1ul;
             }
-            // base levels freq for stop bits:
-            if (freq_out[i + 8] == 0ul && (op_for_opmask[i] & m_op_mask) && (m_op_mask & OP_STOP_BIT)) {
+            // base levels freq for stop bits (and with delta values for PALETTE_DELTA operation):
+            if (freq_out[i + 8] == 0ul && (op_for_opmask[i] & m_op_mask) && (m_op_mask & (OP_PALETTE_D_BIT | OP_STOP_BIT))) {
                 changed = true;
                 freq_out[i + 8] = 1ul;
             }
@@ -929,6 +929,11 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
             if (detail_freq && freq_out[i + 16] == 0ul && (op_for_opmask[i] & m_op_mask)) {
                 changed = true;
                 freq_out[i + 16] = 1ul;
+            }
+            // detail freq values >= 8 only for delta values in palette delta
+            if (detail_freq && freq_out[i + 24] == 0ul && (m_op_mask & OP_PALETTE_D_BIT)) {
+                changed = true;
+                freq_out[i + 24] = 1ul;
             }
         }
         if (changed)

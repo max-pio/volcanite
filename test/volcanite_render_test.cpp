@@ -177,7 +177,7 @@ int main() {
 
     // create dummy segmentation volume
     glm::uvec3 dim = {133, 70, 194};
-    const auto volume = createDummySegmentationVolume(dim);
+    const auto volume = createDummySegmentationVolume({.dim=dim});
 
     // create compressed segmentation volume
     std::shared_ptr<CompressedSegmentationVolume> csgv = std::make_shared<CompressedSegmentationVolume>();
@@ -198,10 +198,10 @@ int main() {
         if (args.encoding_mode == SINGLE_TABLE_RANS_ENC || args.encoding_mode == DOUBLE_TABLE_RANS_ENC) {
             // obtain frequency table(s)
             csgv->setCompressionOptions64(args.brick_size, NIBBLE_ENC, args.operation_mask, args.random_access);
-            csgv->compressForFrequencyTable(volume.dataConst(), dim, freq, 2, args.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
+            csgv->compressForFrequencyTable(volume->dataConst(), dim, freq, 2, args.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
         }
         csgv->setCompressionOptions64(args.brick_size, args.encoding_mode, args.operation_mask, args.random_access, freq, freq + 16);
-        csgv->compress(volume.dataConst(), dim, false);
+        csgv->compress(volume->dataConst(), dim, false);
         // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
         if(args.stream_lod && !csgv->isUsingSeparateDetail()) {
             csgv->separateDetail();
