@@ -1,5 +1,6 @@
 import subprocess as subp
 from enum import Enum
+from os import PathLike
 from pathlib import Path
 import shutil
 import re
@@ -111,8 +112,8 @@ class VolcaniteLogFile:
                     f.writelines(self.__header_strings)
         else:
             with(open(self.log_file, "w")) as f:
-                f.writelines(self.__fmt_strs)
-                f.writelines(self.__header_strings)
+                f.writelines("#fmt:" + line + "\n" for line in self.__fmt_strs)
+                f.writelines(line + "\n" for line in self.__header_strings)
 
         if not self.log_file.exists():
             raise IOError(f"Could not create log file {self.log_file}")
@@ -437,7 +438,6 @@ VolcaniteArg.args_shading = {"local": VolcaniteArg([], "_local", 0.5),
 VolcaniteArg.args_default = {"verbose": VolcaniteArg(["--verbose"], "", 1000),
                              "headless": VolcaniteArg(["--headless"], "", 1000)}
 
-
 class VolcaniteExec:
     """
     Interface for compiling and executing Volcanite.
@@ -447,6 +447,11 @@ class VolcaniteExec:
     :var build_subdir: the build sub-directory in the specified Volcanite source directory
     """
     volcanite_src_directory = Path(__file__).parent.parent.resolve()
+
+    @staticmethod
+    def run_log(call_args: list[str], *args, **kwargs):
+        print("    " + " ".join(call_args))
+        return subp.run(call_args, *args, **kwargs)
 
     def __init__(self, evaluation: VolcaniteEvaluation, git_checkout : str = "main", build_subdir : str = "cmake-build-release"):
         """
@@ -475,9 +480,9 @@ class VolcaniteExec:
             log_strs.append(f"{l.get_log_file()} [{' '.join(l.get_fmt_and_header_lines()[0])}] fallback: '{l.fallback_log}'")
         return log_strs
 
-    def __build_dir(self) -> str:
+    def __build_dir(self) -> Path:
         """Returns the absolute path to the directory in which Volcanite is build as string."""
-        return str((VolcaniteExec.volcanite_src_directory / Path(self.build_subdir)).resolve())
+        return VolcaniteExec.volcanite_src_directory / Path(self.build_subdir)
 
     def checkout_and_build(self):
         """Checks out the git commit and builds volcanite into the configured build sub-directory."""
@@ -486,19 +491,19 @@ class VolcaniteExec:
             print("Skipping Volcanite build in dry run")
             return
 
-        subp.run(["git", "checkout", self.git_checkout], cwd=self.__build_dir())
-        res = subp.run(["git", "pull"], cwd=self.__build_dir())
+        self.run_log(["git", "checkout", self.git_checkout], cwd=VolcaniteExec.volcanite_src_directory)
+        res = self.run_log(["git", "pull"], cwd=VolcaniteExec.volcanite_src_directory)
         if res.returncode != 0:
             raise RuntimeError(f"Error: git pull returned {res.returncode}")
 
-        if not Path(self.__build_dir()).exists():
-            Path(self.__build_dir()).mkdir(parents=True, exist_ok=True)
+        if not self.__build_dir().exists():
+            self.__build_dir().mkdir(parents=True, exist_ok=True)
             build_type = "-DCMAKE_BUILD_TYPE=Debug" if "deb" in self.build_subdir.lower() else "-DCMAKE_BUILD_TYPE=Release"
-            res = subp.run(["cmake", build_type, ".."], cwd=self.__build_dir())
+            res = self.run_log(["cmake", build_type, ".."], cwd=self.__build_dir())
             if res.returncode != 0:
                 raise RuntimeError(f"Error: cmake returned {res.returncode}")
 
-        res = subp.run(["cmake", "--build", ".", "--target", "volcanite"], cwd=self.__build_dir())
+        res = self.run_log(["cmake", "--build", ".", "-j", "--target", "volcanite"], cwd=self.__build_dir())
         if res.returncode != 0:
             raise RuntimeError(f"Error: building target volcanite returned {res.returncode}")
         self.__is_build = True
@@ -535,7 +540,7 @@ class VolcaniteExec:
         print(" ".join(exec_call_args))
         print("-------------------------------")
         if not self.evaluation.dry_run:
-            res = subp.run(exec_call_args, cwd=self.__build_dir() + "/volcanite")
+            res = self.run_log(exec_call_args, cwd=self.__build_dir() / Path("volcanite"))
             if res.returncode != 0:
                 print("Error: volcanite returned " + str(res.returncode))
                 if self.evaluation.enable_log:
@@ -568,9 +573,10 @@ class VolcaniteExec:
             _name = Path(video_path).name
             prefix = _name[:_name.find("{")]
             files = prefix + "*" + _name[_name.rfind("}")+1:]
-            cmd = "ffmpeg -n -framerate 60 -pattern_type glob -i '" + files + "' -c:v libx264 -pix_fmt yuv420p " + prefix + ".mp4"
-            print("Creating video file in " + str(_dir.absolute()) + " with\n  " + cmd)
-            subp.run(cmd, cwd=str(_dir.absolute()), shell=True)
+            cmd = ["ffmpeg -n -framerate 60 -pattern_type glob -i '" + files + "' -c:v libx264 -pix_fmt yuv420p " + prefix + ".mp4"]
+            print("Creating video file in " + str(_dir.absolute()) + " with\n  " + cmd[0])
+            VolcaniteExec.run_log(cmd, cwd=str(_dir.absolute()), shell=True)
+
 
 if __name__ == "__main__":
     # create the VolcaniteArg dictionary for all data sets
@@ -593,13 +599,13 @@ if __name__ == "__main__":
     # iterate over all configuration combinations and execute Volcanite
     for arg_shade in [VolcaniteArg.args_brick_size['16']]:
         for arg_data in args_data.values():
-            args = [arg_data, arg_shade]
-            name = VolcaniteArg.concat_ids(args)
+            vargs = [arg_data, arg_shade]
+            name = VolcaniteArg.concat_ids(vargs)
 
             # manually log a comment line to the log file
             evaluation.get_log().log_manual("#Running evaluation: " + name)
-            # execute Volcanite and passe the Volcanite log file
-            volcanite.exec(args, name)
+            # execute Volcanite and pass the Volcanite log file
+            volcanite.exec(vargs, name)
 
     # create a copy of the log file without comment lines that start with # which includes the #fmt: strings
     evaluation.get_log().create_formatted_copy(evaluation.eval_out_directory / Path("results.csv"),

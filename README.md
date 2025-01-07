@@ -25,7 +25,7 @@ a wider range of file formats*.
 Build the `volcanite` executable with
 ```
 mkdir cmake-build-release && cd cmake-build-release
-cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . --target volcanite
+cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . -j --target volcanite
 ```
 
 Start Volcanite, either providing a path to a segmentation volume as a commandline argument with

@@ -26,7 +26,7 @@ sudo apt install -y libhdf5-dev libvtk9-dev libtiff-dev libpugixml-dev
 5. Build the project. Run in project root directory:
 ```
 mkdir cmake-build-release && cd cmake-build-release
-cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . --target volcanite
+cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . -j --target volcanite
 ```
 
 Instead of the commandline build from step 5, you can alternatively open the CMake project with an IDE of your choice, e.g. CLion or MS Visual Studio Code.
@@ -53,13 +53,13 @@ cd vcpkg; .\bootstrap-vcpkg.bat
 **CMake** Build either using the CMake GUI or by running the following commands in the project root directory:
 ```
 mkdir cmake-build-release && cd cmake-build-release
-cmake -DCMAKE_BUILD_TYPE=Release && cmake --build . --target volcanite
+cmake -DCMAKE_BUILD_TYPE=Release && cmake --build . -j --target volcanite
 ```
 
 If you use vkpcg, you have to pass the toolchain file to CMake with:
 ```
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]/scripts/buildsystems/vcpkg.cmake ..
-cmake --build . --target volcanite
+cmake --build . -j --target volcanite
 ```
 
 **Visual Studio** 
@@ -107,7 +107,7 @@ To start Volcanite without opening a window, pass the optional command line argu
 
 Volcanite can be built without any windowing system and GUI window dependencies by enabling the CMake option `HEADLESS`, e.g. with
 ```
-cmake -DHEADLESS=ON -DCMAKE_BUILD_TYPE=Release .. && cmake --build . --target volcanite
+cmake -DHEADLESS=ON -DCMAKE_BUILD_TYPE=Release .. && cmake --build . -j --target volcanite
 ```
 In this case, the `xorg-dev` package is not required.
 GPU drivers and the Vulkan SDK still need to be available and Volcanite can only be run with the `--headless` argument.

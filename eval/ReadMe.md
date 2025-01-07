@@ -152,13 +152,13 @@ print('\n'.join(volcanite.logs_info_str()))
 # iterate over all configuration combinations and execute Volcanite
 for arg_shade in VolcaniteArg.args_shading.values():
     for arg_data in args_data:
-        args = [arg_data, arg_shade]
-        name = VolcaniteArg.concat_ids(args)
+        vargs = [arg_data, arg_shade]
+        name = VolcaniteArg.concat_ids(vargs)
     
         # manually log a comment line to the log file
         evaluation.get_log().log_manual("# Running evaluation: " + name)
         # execute Volcanite and passe the Volcanite log file  
-        volcanite.exec(args, name)
+        volcanite.exec(vargs, name)
         
 # create a copy of the log file without comment lines that start with # which includes the #fmt: strings
 evaluation.get_log().create_formatted_copy("/volcanite-eval/my_test_eval/results.csv",
