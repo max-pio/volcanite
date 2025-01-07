@@ -27,7 +27,7 @@ namespace volcanite {
         glm::uvec3 dim = {100, 100, 100};               /// dimensions of the volume in voxels
         glm::uvec3 min_region_dim = {1u, 1u, 1u};       /// target minimum size of each region
         glm::uvec3 max_region_dim = {32u, 32u, 32u};    /// target maximum size of each region
-        unsigned long long seed = 1ull;                 /// random seed
+        unsigned long long seed = 4194968861ull;        /// random seed
         uint32_t voxels_per_label = 8192u;              /// smaller values increase the number of labels
         uint32_t max_label = ~0u;                       /// maximum possible label value
     };

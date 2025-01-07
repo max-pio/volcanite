@@ -30,9 +30,13 @@ cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . -j --target volcanite
 
 Start Volcanite, either providing a path to a segmentation volume as a commandline argument with
 ```
-./projects/volcanite/volcanite /path/to/your/segmentation/volume
+./volcanite/volcanite /path/to/your/segmentation/volume
 ```
 or by using the file dialog to select a volume file.
+If you have no segmentation volume at hand, you can create a synthetic dummy volume by passing `#synth` as input volume.
+If your segmentation volume format is not supported by Volcanite, have a look at the [converter.py](../volcanite/python/converter.py) script to 
+convert it into one of the supported file formats.
+
 Run `./volcanite --help` for a complete list of arguments and commands.
 See [Usage.md](doc/Usage.md#supported-segmentation-volume-file-formats) for a list of currently supported formats.
 You can find a collection of example data sets listed in [ExampleData.md](doc/ExampleData.md).

@@ -175,7 +175,7 @@ public:
             SwitchArg verboseArg("", "verbose", "Verbose debug output.", cmd);
 
             // input file (file ending determines if we are on the import/decompress side (.csgv) or can specify compression options (other)
-            UnlabeledValueArg<std::string> inputpathArg("input", "Either a previously compressed .csgv file to render or a segmented volume to compress or render.", false, "", "volume", cmd, true);
+            UnlabeledValueArg<std::string> inputpathArg("input", "Either a previously compressed .csgv file to render, or a segmentation volume file to compress or render. #synth to create and process a synthetic volume.", false, "", "(<volume file>|#synth[_args*])", cmd, true);
 
             // parse arguments
             cmd.parse(argc, argv);
@@ -185,7 +185,7 @@ public:
             va.headless = headlessArg.getValue();
 #ifdef HEADLESS
             if(!va.headless) {
-                throw ArgException("Volcanite was build with CMake option HEADLESS set. You must run volcanite with --headless option and can not view interactive windows.", headlessArg.longID());
+                throw ArgException("Volcanite was build with CMake option HEADLESS set. volcanite must be run with --headless option and can not use interactive windows.", headlessArg.longID());
             }
 #endif
             va.decompress_export_file = expandPath(decompresspathArg.getValue());
@@ -291,7 +291,7 @@ public:
                 auto selected_file = pfd::open_file("Open Segmentation Volume", pfd::path::home(),
                                                     { "Segmentation Volumes (.csgv .vti .hdf5 .h5 .raw .vraw .nrrd .nhdr)", "*.csgv *.vti *.hdf5 *.h5 *.raw *.vraw *.nrrd *.nhdr", "All Files", "*" });
                 if(selected_file.result().empty()) {
-                    throw ArgException("No input file was provided", inputpathArg.longID(""));
+                    throw ArgException("No input file was provided. Pass #synth as input file to create a synthetic volume.", inputpathArg.longID(""));
                 }
 
                 input_file = selected_file.result().at(0);
