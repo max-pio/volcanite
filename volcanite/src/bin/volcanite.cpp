@@ -13,9 +13,7 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include <string>
 #include "vvv/util/Logger.hpp"
-#include "vvv/util/detect_debugger.hpp"
 #include "vvv/core/HeadlessRendering.hpp"
 #ifdef HEADLESS
     #include "vvv/headless_entrypoint.hpp"
@@ -24,14 +22,15 @@
     #include "vvvwindow/entrypoint.hpp"
 #endif
 
-#include "volcanite/utility/args_and_csgv_provider.hpp"
+#include "volcanite/util/args_and_csgv_provider.hpp"
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/VolcaniteArgs.hpp"
-#include "volcanite/compression/CompSegVolHandler.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "volcanite/compression/CSGVDatabase.hpp"
 #include "volcanite/eval/EvaluationLogExport.hpp"
+
+#include <string>
 
 using namespace volcanite;
 
@@ -63,7 +62,7 @@ int volcanite_main(int argc, char *argv[]) {
 
     VolcaniteArgs args;
     std::shared_ptr<volcanite::CompressedSegmentationVolume> compressedSegmentationVolume;
-    std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();
+    std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase;
     auto ret = volcanite_provide_args_and_csgv(args, compressedSegmentationVolume, csgvDatabase, argc, argv);
     if (ret != RET_SUCCESS) { return ret; }
 

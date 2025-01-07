@@ -28,7 +28,7 @@
 #include "csgv_constants.incl"
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/compression/CSGVChunkMerger.hpp"
-#include "volcanite/utility/segmentation_volume_synthesis.hpp"
+#include "volcanite/util/segmentation_volume_synthesis.hpp"
 
 #define RELABEL_IDS_FROM_CSV_SUFFIX "_relabel.csv"
 

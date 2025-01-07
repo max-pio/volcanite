@@ -45,8 +45,8 @@ set(VOLCANITE_HEADERS
         include/volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp
         include/volcanite/renderer/PassCompSegVolRender.hpp
-        include/volcanite/utility/args_and_csgv_provider.hpp
-        include/volcanite/utility/segmentation_volume_synthesis.hpp
+        include/volcanite/util/args_and_csgv_provider.hpp
+        include/volcanite/util/segmentation_volume_synthesis.hpp
         # eurovis related work:
         include/related_work/cpp-compresso.h
         include/related_work/compress_segmentation.h

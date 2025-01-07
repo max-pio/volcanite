@@ -15,7 +15,7 @@
 
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "vvv/volren/Volume.hpp"
-#include "volcanite/utility/segmentation_volume_synthesis.hpp"
+#include "volcanite/util/segmentation_volume_synthesis.hpp"
 
 using namespace volcanite;
 

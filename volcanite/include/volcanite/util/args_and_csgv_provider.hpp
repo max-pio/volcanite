@@ -36,10 +36,22 @@ constexpr int RET_COMPR_ERROR = 3;
 constexpr int RET_RENDER_ERROR = 4;
 constexpr int RET_IO_ERROR = 5;
 
+/// Parses the argc command line arguments in argv to fill the VolcaniteArgs struct and to load, compress, or create
+/// the specified CSGV compressed segmentation volume and its attribute data base. This is a helper method for different
+/// executable entry points of Volcanite.
+/// @param args the parsed and updated VolcaniteArgs
+/// @param compressedSegmentationVolume CSGV object if loading/importing/creating was successful, nullptr otherwise
+/// @param csgvDatabase CSGV attribute data base object if creation was successful, nullptr otherwise
+/// @param argc number of command line arguments in argv
+/// @param argv command line arguments
+/// @returns RET_SUCCESS on success or an error code otherwise
 int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
                                     std::shared_ptr<CompressedSegmentationVolume>& compressedSegmentationVolume,
                                     std::shared_ptr<CSGVDatabase>& csgvDatabase,
                                     int argc, char* argv[]) {
+
+    compressedSegmentationVolume = nullptr;
+    csgvDatabase = nullptr;
 
     // parse command line arguments
     {
@@ -107,6 +119,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
 
         // we open a precomputed csgv database for this volume if it exists or create it otherwise
         std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> label_remapping = nullptr;
+        csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();
         if(args.label_remapping) {
             std::string database_path = stripFileExtension(complete_csgv_path) + "_csgv.db3";
             MiniTimer t;

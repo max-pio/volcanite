@@ -1,4 +1,4 @@
-#include "volcanite/utility/segmentation_volume_synthesis.hpp"
+#include "volcanite/util/segmentation_volume_synthesis.hpp"
 
 #include <ranges>
 #include "vvv/volren/Volume.hpp"
