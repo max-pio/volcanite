@@ -72,14 +72,22 @@ int volcanite_main(int argc, char *argv[]) {
     VolcaniteArgs args;
     {
         auto _args = VolcaniteArgs::parseArguments(argc, argv);
-        if(!_args.has_value()) {
+        if (!_args.has_value()) {
             Logger(ERROR) << "Exiting because of invalid arguments. See volcanite --help for available commands.";
             return RET_INVALID_ARG;
         }
         args = _args.value();
+        if (args.print_eval_keys) {
+            Logger(INFO) << "Available evaluation log keys (used with --eval-log):";
+            const auto keys = EvaluationLogExport::get_all_evaluation_keys();
+            for (const auto& key : keys) {
+                Logger(INFO) << " " << key;
+            }
+            return RET_SUCCESS;
+        }
     }
 
-    if(!vvv::debuggerIsAttached() && !args.verbose)
+    if (!vvv::debuggerIsAttached() && !args.verbose)
         Logger::s_minLevel = INFO;
 
     std::shared_ptr<volcanite::CompressedSegmentationVolume> compressedSegmentationVolume;

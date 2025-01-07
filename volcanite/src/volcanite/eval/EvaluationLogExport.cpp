@@ -24,6 +24,8 @@
 #include <vector>
 
 #define FMT_HEADER_ONLY
+#include <complex>
+
 #include "fmt/include/fmt/format.h"
 #include "fmt/include/fmt/args.h"
 
@@ -108,12 +110,14 @@ std::string EvaluationLogExport::format_evaluation_string(std::string format_str
 }
 
 std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
-    fmt::dynamic_format_arg_store<fmt::format_context> fmt_args = create_fmt_args("", 0, nullptr, {}, {}, {});
-    std::vector<std::string> keys;
-    for (const auto& arg : fmt_args) {
-        keys.emplace_back(arg.name);
-    }
-    return keys;
+    return {
+        "name","time","args","comprate","comprate_pcnt","comp_s","comp_mainpass_s","comp_prepass_s",
+        "comp_gb_per_s","csgv_gb","orig_gb","orig_bytes_per_voxel","volume_dim","volume_labels",
+        "decomp_cpu_gb_per_s","decomp_cpu_s","decomp_gpu_gb_per_s","decomp_gpu_s","frame_min_ms",
+        "frame_avg_ms","frame_sdv_ms","frame_med_ms","frame_max_ms","frame_ms_[00...15]",
+        "render_total_max","rendered_frames","mem_framebuffer_mb","mem_uniformbuffer_mb",
+        "mem_materials_mb","mem_encoding_Mb","mem_cache_mb","mem_emptyspace_mb", "mem_total_mb",
+    };
 }
 
 int EvaluationLogExport::write_eval_logfile(const std::string& eval_logfile, const std::string& eval_name, int argc, char *argv[],

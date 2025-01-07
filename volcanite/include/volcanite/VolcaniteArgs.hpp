@@ -145,6 +145,7 @@ public:
             ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path. Must be used with -i or -v.", false, va.record_in_file, "file", cmd);
             ValueArg<std::string> evalLogFilesArg("", "eval-logfiles", "Comma separated files into which evaluation results are appended.", false, "", "file", cmd);
             ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"%name\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
+            SwitchArg evalPrintArg("", "eval-print-keys", "Print all available evaluation keys to the console and exit.", cmd);
             ValueArg<std::string> shaderDefineArg("", "shader-def", "String of ; separated definitions that will be passed on to the shader. e.g. 'MY_VAL=64;MY_DEF'. Use with care.", false, va.shader_defines, "string", cmd);
 
 
@@ -273,6 +274,7 @@ public:
             va.show_development_gui = devArg.getValue();
             va.empty_space_resolution = emptySpaceResolutionArg.getValue();
             // if no input file was specified, try to open a file dialog
+            input_volume_required = input_volume_required && !evalPrintArg.getValue();
             std::string input_file = expandPath(inputpathArg.getValue());
             if(input_file.empty() && input_volume_required) {
 #ifdef HEADLESS
@@ -404,6 +406,7 @@ public:
                 throw ArgException("Evaluation name must be used in combination with --eval-logfile",
                                    evalNameArg.longID(""));
             }
+            va.print_eval_keys = evalPrintArg.getValue();
             va.shader_defines = shaderDefineArg.getValue();
             std::replace(va.shader_defines.begin(), va.shader_defines.end(), ';', ' ');
 
