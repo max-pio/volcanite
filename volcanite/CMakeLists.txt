@@ -45,6 +45,7 @@ set(VOLCANITE_HEADERS
         include/volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp
         include/volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp
         include/volcanite/renderer/PassCompSegVolRender.hpp
+        include/volcanite/utility/args_and_csgv_provider.hpp
         include/volcanite/utility/segmentation_volume_synthesis.hpp
         # eurovis related work:
         include/related_work/cpp-compresso.h
@@ -70,6 +71,7 @@ set(VOLCANITE_SOURCES
         src/volcanite/compression/wavelet_tree/prefix_counting.cpp
         src/volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.cpp
         src/volcanite/compression/wavelet_tree/WaveletMatrix.cpp
+        src/util/segmentation_volume_synthesis.cpp
         src/renderer/CompressedSegmentationVolumeRenderer.cpp
         src/renderer/CompressedSegmentationVolumeBrickViewer.cpp
         src/renderer/PassCompSegVolRender.cpp
@@ -88,7 +90,6 @@ installVolcaniteExecutable(volcanite)
 
 # development executables:
 makeVolcaniteExecutable(csgv_benchmark)
-makeVolcaniteExecutable(volcanite_synth_volume)
 makeVolcaniteExecutable(csgv_brick_viewer)
 
 # eurovis related work:

@@ -28,6 +28,7 @@
 #include "csgv_constants.incl"
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/compression/CSGVChunkMerger.hpp"
+#include "volcanite/utility/segmentation_volume_synthesis.hpp"
 
 #define RELABEL_IDS_FROM_CSV_SUFFIX "_relabel.csv"
 
@@ -98,7 +99,9 @@ public:
             volume = Volume<uint32_t>::load_vti(path);
         else if (path.ends_with(".nrrd") || path.ends_with(".nhdr"))
             volume = Volume<uint32_t>::load_nrrd(path);
-        else {
+        else if (path.starts_with("#synth")) {
+            volume = createDummySegmentationVolume(path);
+        } else {
             std::string _msg = "Segmentation volume filetype of " + path + " not supported!";
             throw std::runtime_error(_msg.c_str());
         }

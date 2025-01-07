@@ -274,8 +274,10 @@ public:
             va.show_development_gui = devArg.getValue();
             va.empty_space_resolution = emptySpaceResolutionArg.getValue();
             // if no input file was specified, try to open a file dialog
+            std::string input_file = inputpathArg.getValue();
+            if (!input_file.starts_with("#synth"))
+                input_file = expandPath(input_file);
             input_volume_required = input_volume_required && !evalPrintArg.getValue();
-            std::string input_file = expandPath(inputpathArg.getValue());
             if(input_file.empty() && input_volume_required) {
 #ifdef HEADLESS
                 throw ArgException("Must provide input file in headless mode", inputpathArg.longID(""));
@@ -306,7 +308,7 @@ public:
             }
             // .. or if we compress a volume
             else {
-                if(input_volume_required && !(input_file.ends_with(".vti")
+                if(input_volume_required && !(input_file.starts_with("#synth") || input_file.ends_with(".vti")
                     || input_file.ends_with(".raw") || input_file.ends_with(".vraw")
                     || input_file.ends_with(".hdf5") || input_file.ends_with(".h5")
                     || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {
