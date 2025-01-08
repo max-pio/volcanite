@@ -32,15 +32,15 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegment
                                                         cfg.dim[0] * cfg.dim[1] * cfg.dim[2]);
     memset(volume->data().data(), 0, cfg.dim[0] * cfg.dim[1] * cfg.dim[2] * sizeof(uint32_t));
 
-    const size_t number_of_areas = static_cast<size_t>(cfg.dim[0] * cfg.dim[1] * cfg.dim[2] + 8192u - 1u) / 8192ull;
+    const size_t number_of_areas = static_cast<size_t>(cfg.dim[0] * cfg.dim[1] * cfg.dim[2] + cfg.voxels_per_label - 1u) / cfg.voxels_per_label;
 
     Logger(INFO) << "Creating synthetic segmentation volume with dimension " << str(cfg.dim)
-                      << " and approx. " << number_of_areas << " label regions";
+                      << " and approx. " << number_of_areas << " label regions, " << cfg.voxels_per_label << " voxels/label.";
     for (size_t i = 0; i < number_of_areas; i++) {
         uint32_t label = V_RND_UINT();
-        uint32_t w = V_RND_UINT() % 32 + 1;
-        uint32_t h = V_RND_UINT() % 32 + 1;
-        uint32_t d = V_RND_UINT() % 32 + 1;
+        uint32_t w = V_RND_UINT() % (cfg.max_region_dim.x - cfg.min_region_dim.x) + cfg.min_region_dim.x;
+        uint32_t h = V_RND_UINT() % (cfg.max_region_dim.y - cfg.min_region_dim.y) + cfg.min_region_dim.y;
+        uint32_t d = V_RND_UINT() % (cfg.max_region_dim.z - cfg.min_region_dim.z) + cfg.min_region_dim.z;
         int x_min = static_cast<int>(V_RND_UINT() % cfg.dim[0]) - static_cast<int>(w / 2);
         int y_min = static_cast<int>(V_RND_UINT() % cfg.dim[1]) - static_cast<int>(h / 2);
         int z_min = static_cast<int>(V_RND_UINT() % cfg.dim[2]) - static_cast<int>(d / 2);
@@ -134,13 +134,13 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
     if (!processed.contains('r')) {
         double voxel_width = glm::pow(static_cast<double>(cfg.voxels_per_label), 1./3.);
         constexpr double min_ratio = 0.75, max_ratio = 1.25;
-        cfg.min_region_dim = glm::max(glm::uvec3(voxel_width * min_ratio), glm::uvec3(1u));
-        cfg.max_region_dim = glm::max(glm::uvec3(voxel_width * max_ratio), cfg.min_region_dim);
+        cfg.min_region_dim = glm::max(glm::uvec3(static_cast<uint32_t>(voxel_width * min_ratio)), glm::uvec3(1u));
+        cfg.max_region_dim = glm::max(glm::uvec3(static_cast<uint32_t>(voxel_width * max_ratio)), cfg.min_region_dim);
     }
     // automatically choose label count if only region size is specified
     else if (!processed.contains('l')) {
         glm::uvec3 avg_reg = glm::max((cfg.min_region_dim + cfg.max_region_dim) / 2u, glm::uvec3(1u));
-        cfg.voxels_per_label = glm::max((cfg.dim.x * cfg.dim.y * cfg.dim.z) / (avg_reg.x * avg_reg.y * avg_reg.z), 1u);
+        cfg.voxels_per_label = avg_reg.x * avg_reg.y * avg_reg.z;
     }
 
     return createDummySegmentationVolume(cfg);

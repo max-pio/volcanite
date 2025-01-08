@@ -199,8 +199,8 @@ class VolcaniteEvaluation:
     :var name: name of the evaluation
     """
 
-    def __init__(self, eval_out_directory: str, existing_policy: ExistingPolicy = ExistingPolicy.ABORT, eval_name: str = None,
-                 log_files: list[VolcaniteLogFileCfg] = None,
+    def __init__(self, eval_out_directory: PathLike, existing_policy: ExistingPolicy = ExistingPolicy.ABORT,
+                 eval_name: str = None, log_files: list[VolcaniteLogFileCfg] = None,
                  enable_log: bool = True, dry_run: bool = False, auto_init: bool = True):
         """
         Encapsulates one evaluation. The evaluation results are stored in a single directory (eval_out_directory).
@@ -215,7 +215,7 @@ class VolcaniteEvaluation:
         :param dry_run: if true, Volcanite calls are only printed to the command line but not executed
         :param auto_init: if True, the directory is automatically set up. Otherwise, initialize() must be called later
         """
-        self.eval_out_directory: Path = Path(eval_out_directory)
+        self.eval_out_directory: Path = Path(eval_out_directory).resolve()
         self.existing_policy: ExistingPolicy = existing_policy
         self.name: str = self.eval_out_directory.stem if eval_name is None else eval_name
         self.log_file_configs: list[VolcaniteLogFileCfg] = log_files
@@ -277,6 +277,11 @@ class VolcaniteEvaluation:
 
         self.__initialized = True
 
+        # automatically register this evaluation with the VolcaniteArgs if it has none
+        if VolcaniteArg.get_eval_directory() is None:
+            VolcaniteArg.setup_directories(veval=self, csgv_directory=VolcaniteArg.get_csgv_directory(),
+                                           vcfg_directory=VolcaniteArg.get_vcfg_directory())
+
     def is_initialized(self) -> bool:
         return self.__initialized
 
@@ -303,6 +308,7 @@ class VolcaniteArg:
     :var args_cache_mode: render cache mode arguments
     :var args_shading: render shading mode arguments
     :var args_default: default arguments for any evaluation run
+    :var args_datasynth: synthetic data sets with increasing label region size (decreasing label density)
     """
 
     args_encoding: dict[str, Self] = {}
@@ -310,28 +316,33 @@ class VolcaniteArg:
     args_cache_mode: dict[str, Self] = {}
     args_shading: dict[str, Self] = {}
     args_default: dict[str, Self] = {}
+    args_datasynth: dict[str, Self] = {}
 
     __csgv_directory: Path = None
     __vcfg_directory: Path = None
     __eval_directory: Path = None
 
     @classmethod
-    def setup_directories(cls, csgv_directory: str, vcfg_directory: str, evaluation: VolcaniteEvaluation):
+    def setup_directories(cls, veval: VolcaniteEvaluation | None = None,
+                          csgv_directory: PathLike | None = None, vcfg_directory: PathLike | None = None):
         """
-        Sets static paths to directories that are referenced when creating certain VolcaniteArgs
-        :param csgv_directory: directory where newly compressed CSGV files are stored (and can be re-imported from)
-        :param vcfg_directory: directory containing the config files
-        :param evaluation: the Volcanite evaluation specifying the evaluation output direcotry for images and videos
+        Sets static paths to directories that are referenced when creating certain VolcaniteArgs.
+        :param csgv_directory: directory where newly compressed CSGV files are exported to and imported from
+        :param vcfg_directory: directory containing config and rec files for the argument sets
+        :param veval: the Volcanite evaluation specifying the evaluation output directory for images and videos
         """
-        cls.__csgv_directory = Path(csgv_directory)
-        cls.__vcfg_directory = Path(vcfg_directory)
-        cls.__eval_directory = evaluation.eval_out_directory
+        if not veval:
+            raise ValueError("VolcaniteEvaluation must not be None")
 
-        if not cls.__csgv_directory.exists():
+        cls.__csgv_directory = Path(csgv_directory) if csgv_directory else None
+        cls.__vcfg_directory = Path(vcfg_directory) if vcfg_directory else None
+        cls.__eval_directory = veval.eval_out_directory if veval else None
+
+        if cls.__csgv_directory and not cls.__csgv_directory.exists():
             raise FileNotFoundError(f"CSGV directory {cls.__csgv_directory} not found")
-        if not cls.__vcfg_directory.exists():
+        if cls.__vcfg_directory and not cls.__vcfg_directory.exists():
             raise FileNotFoundError(f"vcfg config directory {cls.__vcfg_directory} not found")
-        if not cls.__eval_directory.exists():
+        if cls.__eval_directory and not cls.__eval_directory.exists():
             raise FileNotFoundError(f"Evaluation output directory {cls.__eval_directory} not found")
 
     @classmethod
@@ -345,12 +356,6 @@ class VolcaniteArg:
     @classmethod
     def get_eval_directory(cls):
         return cls.__eval_directory
-
-    @classmethod
-    def __error_if_not_initialized(cls):
-        if not (cls.__csgv_directory and cls.__vcfg_directory and cls.__eval_directory):
-            raise RuntimeError("VolcaniteArg static directories must be initialized before usage"
-                               "(VolcaniteArg.set_directories)")
 
     def __init__(self, args: list[str], identifier: str, priority: float):
         """
@@ -372,21 +377,29 @@ class VolcaniteArg:
 
     @classmethod
     def arg_csgv_export(cls, args: list[Self]) -> Self:
-        cls.__error_if_not_initialized()
+        if cls.__csgv_directory is None:
+            raise RuntimeError("VolcaniteArg static csgv directory must be initialized before usage"
+                               "(VolcaniteArg.set_directories)")
         return cls(["-c", str(cls.__csgv_directory) + "/" + cls.concat_ids(args) + ".csgv"], "", 1000)
     @classmethod
     def arg_csgv_import(cls, args: list[Self]) -> Self:
-        cls.__error_if_not_initialized()
+        if cls.__csgv_directory is None:
+            raise RuntimeError("VolcaniteArg static csgv directory must be initialized before usage"
+                               "(VolcaniteArg.set_directories)")
         return cls([str(cls.__csgv_directory) + "/" + cls.concat_ids(args) + ".csgv"], "", 1000)
 
     @classmethod
     def arg_image_export(cls, args: list[Self], filetype: str = "png") -> Self:
-        cls.__error_if_not_initialized()
+        if cls.__eval_directory is None:
+            raise RuntimeError("VolcaniteArg static evaluation directory must be initialized before usage"
+                               "(VolcaniteArg.set_directories)")
         return cls(["-i", str(cls.__eval_directory) + "/" + cls.concat_ids(args) + "." + filetype], "", 1000)
 
     @classmethod
     def arg_video_export(cls, args, create_dir=True) -> Self:
-        cls.__error_if_not_initialized()
+        if cls.__eval_directory is None:
+            raise RuntimeError("VolcaniteArg static evaluation directory must be initialized before usage"
+                               "(VolcaniteArg.set_directories)")
         video_dir = (Path(cls.__eval_directory) / Path(cls.concat_ids(args))).absolute()
         if create_dir:
             video_dir.mkdir(parents=True, exist_ok=True)
@@ -394,12 +407,16 @@ class VolcaniteArg:
 
     @classmethod
     def arg_vcfg_import(cls, args: list[Self], resolution: str = "1920x1080") -> Self:
-        cls.__error_if_not_initialized()
+        if cls.__vcfg_directory is None:
+            raise RuntimeError("VolcaniteArg static vcfg directory must be initialized before usage"
+                               "(VolcaniteArg.set_directories)")
         return cls(["--config", str(cls.__vcfg_directory / Path(cls.concat_ids(args) + ".vcfg")), "--resolution", resolution], "", 1000)
 
     @classmethod
     def arg_rec_import(cls, args: list[Self]) -> Self:
-        cls.__error_if_not_initialized()
+        if cls.__vcfg_directory is None:
+            raise RuntimeError("VolcaniteArg static vcfg directory must be initialized before usage"
+                               "(VolcaniteArg.set_directories)")
         return cls(["--record-in", str(cls.__vcfg_directory / Path(cls.concat_ids(args) + ".rec"))], "", 1000)
 
     @classmethod
@@ -444,6 +461,10 @@ VolcaniteArg.args_shading = {"local": VolcaniteArg([], "_local", 0.5),
                              "shadow": VolcaniteArg([], "_shadow", 0.5),
                              "ao": VolcaniteArg([], "_ao", 0.5),
                              "pt": VolcaniteArg([], "_pt", 0.5)}
+VolcaniteArg.args_datasynth = {"8": VolcaniteArg(["#synth_1024x1024x1024_r6x6x6-10x10x10"], "dSynth8", 0),
+                            "32": VolcaniteArg(["#synth_1024x1024x1024_r24x24x24-40x40x40"], "dSynth32", 0),
+                            "128": VolcaniteArg(["#synth_1024x1024x1024_r96x96x96-160x160x160"], "dSynth128", 0),
+                            "512": VolcaniteArg(["#synth_1024x1024x1024_r384x384x384-640x640x640"], "dSynth512", 0)}
 VolcaniteArg.args_default = {"verbose": VolcaniteArg(["--verbose"], "", 1000),
                              "headless": VolcaniteArg(["--headless"], "", 1000)}
 
@@ -458,8 +479,9 @@ class VolcaniteExec:
     volcanite_src_directory = Path(__file__).parent.parent.resolve()
 
     @staticmethod
-    def run_log(call_args: list[str], *args, **kwargs):
-        print("    " + " ".join(call_args))
+    def run_log(call_args: list[str], print_log=True, *args, **kwargs):
+        if print_log:
+            print("> " + " ".join(call_args))
         return subp.run(call_args, *args, **kwargs)
 
     def __init__(self, evaluation: VolcaniteEvaluation, git_checkout : str | None = None, build_subdir : str = "cmake-build-release"):
@@ -550,7 +572,7 @@ class VolcaniteExec:
         print(" ".join(exec_call_args))
         print("-------------------------------")
         if not self.evaluation.dry_run:
-            res = self.run_log(exec_call_args, cwd=self.__build_dir() / Path("volcanite"))
+            res = self.run_log(exec_call_args, print_log=False, cwd=self.__build_dir() / Path("volcanite"))
             if res.returncode != 0:
                 print("Error: volcanite returned " + str(res.returncode))
                 if self.evaluation.enable_log:
@@ -559,9 +581,9 @@ class VolcaniteExec:
                             print("Error: Volcanite returned " + str(res.returncode))
                             log.log_manual(log.fallback_log.replace("%name", eval_name) + "\n")
                         else:
-                            raise RuntimeError("Volcanite returned " + str(res.returncode) + " and no fallback log exists for " + str(log.log_file_name))
+                            raise RuntimeError(f"Volcanite returned {res.returncode} and no fallback log exists for {log.log_file_name}")
                 else:
-                    raise RuntimeError("Volcanite returned " + str(res.returncode))
+                    raise RuntimeError(f"Volcanite returned {res.returncode}")
 
     @staticmethod
     def create_mp4(args : list[VolcaniteArg]):
@@ -589,17 +611,14 @@ class VolcaniteExec:
 
 
 if __name__ == "__main__":
-    # create the VolcaniteArg dictionary for all data sets
-    args_data = {"cells": VolcaniteArg.arg_dataset("/home/maxpio/data/cellsinsilico/Big01/000_longer/outdir/nrrd_uint32/cells_frame065_100x100x100.raw", "cells100")}
-
     # setup the evaluation output directory and the log files
-    evaluation = VolcaniteEvaluation("/home/maxpio/data/eval/out/my_test_eval", ExistingPolicy.DELETE, "my_test_eval",
+    evaluation = VolcaniteEvaluation("./my_test_eval", ExistingPolicy.DELETE, "my_test_eval",
                                      [VolcaniteLogFileCfg("results.txt",
-                                                                  fmts=["{name},{comprate_pcnt:.3}%"],
-                                                                  headers=["Name,Compression Rate [%]"])],
+                                                                  fmts=["{name},{comprate_pcnt:.3},{frame_avg_ms}"],
+                                                                  headers=["Name,Compression Rate [%],frame avg [ms]"])],
                                      enable_log=True, dry_run=False)
 
-    volcanite = VolcaniteExec(evaluation, "mp/eval", "cmake-build-release")
+    volcanite = VolcaniteExec(evaluation, None, "cmake-build-release")
     volcanite.checkout_and_build()
 
     # print evaluation information to console
@@ -607,15 +626,14 @@ if __name__ == "__main__":
     print('\n'.join(volcanite.logs_info_str()))
 
     # iterate over all configuration combinations and execute Volcanite
-    for arg_shade in [VolcaniteArg.args_brick_size['16']]:
-        for arg_data in args_data.values():
-            vargs = [arg_data, arg_shade]
-            name = VolcaniteArg.concat_ids(vargs)
+    for arg_data in VolcaniteArg.args_datasynth.values():
+        vargs = [arg_data, VolcaniteArg.arg_image_export([arg_data])]
+        name = VolcaniteArg.concat_ids(vargs)
 
-            # manually log a comment line to the log file
-            evaluation.get_log().log_manual("#Running evaluation: " + name)
-            # execute Volcanite and pass the Volcanite log file
-            volcanite.exec(vargs, name)
+        # manually log a comment line to the log file
+        evaluation.get_log().log_manual("#Running evaluation: " + name)
+        # execute Volcanite and pass the Volcanite log file
+        volcanite.exec(vargs, name)
 
     # create a copy of the log file without comment lines that start with # which includes the #fmt: strings
     evaluation.get_log().create_formatted_copy(evaluation.eval_out_directory / Path("results.csv"),
