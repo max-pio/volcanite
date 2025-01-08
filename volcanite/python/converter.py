@@ -226,6 +226,9 @@ def copy_as_gzip(path_in):
     with open(path_in, 'rb') as file_in, gzip.open(path_in + ".gz", 'wb') as file_out:
         file_out.writelines(file_in)
 
+def supported_formats() -> list[str]:
+    """Returns a list of supported segmentation volume file formats."""
+    return ["vraw", "raw", "nrrd", "hdf5", "h5", "tiff", "png", "np", "npz", "nii", "nii.gz", "vti"]
 
 def write_volume(volume, path_out, dtype=None, guaranteee_c_order=True, apply_gzip=False):
     """Automatically selects the writer for the respective format based on path_out file extension."""

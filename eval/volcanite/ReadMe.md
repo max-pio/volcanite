@@ -128,7 +128,7 @@ Afterward, any call to `exec(args, name)` will execute Volcanite with the given 
 ### Example
 
 ```python
-import volcaniteeval as ve
+import volcanite.volcaniteeval as ve
 
 # create the VolcaniteArg dictionary for all data sets
 args_data = {"cells": ve.VolcaniteArg.arg_dataset("/data/cells_segmentation.raw", "cells"),

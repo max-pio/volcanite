@@ -446,6 +446,7 @@ class VolcaniteArg:
 # several default VolcaniteArgs:
 VolcaniteArg.args_encoding = {"nibble": VolcaniteArg(["-s", "0"], "_nb", 1),
                               "nibble_ra": VolcaniteArg(["-s", "0", "-p", "-o", "pnls"], "_nb-ra", 1),
+                              "rANS1": VolcaniteArg(["-s", "1"], "_rans1", 1),
                               "rANS": VolcaniteArg(["-s", "2"], "_rans", 1),
                               "wmh_nosb": VolcaniteArg(["-s", "2", "-p", "-o", "pnl", "p"], "_wm-sb", 1),
                               "wmh": VolcaniteArg(["-s", "2", "-p", "-o" ,"pnls"], "_wm-sb", 1)}
@@ -461,22 +462,20 @@ VolcaniteArg.args_shading = {"local": VolcaniteArg([], "_local", 0.5),
                              "shadow": VolcaniteArg([], "_shadow", 0.5),
                              "ao": VolcaniteArg([], "_ao", 0.5),
                              "pt": VolcaniteArg([], "_pt", 0.5)}
-VolcaniteArg.args_datasynth = {"8": VolcaniteArg(["#synth_1024x1024x1024_r6x6x6-10x10x10"], "dSynth8", 0),
-                            "32": VolcaniteArg(["#synth_1024x1024x1024_r24x24x24-40x40x40"], "dSynth32", 0),
-                            "128": VolcaniteArg(["#synth_1024x1024x1024_r96x96x96-160x160x160"], "dSynth128", 0),
-                            "512": VolcaniteArg(["#synth_1024x1024x1024_r384x384x384-640x640x640"], "dSynth512", 0)}
+VolcaniteArg.args_datasynth = {"dSynth8": VolcaniteArg(["#synth_1024x1024x1024_r6x6x6-10x10x10"], "dSynth8", 0),
+                            "dSynth32": VolcaniteArg(["#synth_1024x1024x1024_r24x24x24-40x40x40"], "dSynth32", 0),
+                            "dSynth128": VolcaniteArg(["#synth_1024x1024x1024_r96x96x96-160x160x160"], "dSynth128", 0),
+                            "dSynth512": VolcaniteArg(["#synth_1024x1024x1024_r384x384x384-640x640x640"], "dSynth512", 0)}
 VolcaniteArg.args_default = {"verbose": VolcaniteArg(["--verbose"], "", 1000),
                              "headless": VolcaniteArg(["--headless"], "", 1000)}
 
 class VolcaniteExec:
     """
     Interface for compiling and executing Volcanite.
-    :var volcanite_src_directory: the directory in which the Volcanite git repository is located
     :var evaluation: the VolcaniteEvaluation including the evaluation output directory, name and all log files
     :var git_checkout: git commit or branch that is pulled and build before the first execution of Volcanite
     :var build_subdir: the build sub-directory in the specified Volcanite source directory
     """
-    volcanite_src_directory = Path(__file__).parent.parent.resolve()
 
     @staticmethod
     def run_log(call_args: list[str], print_log=True, *args, **kwargs):
@@ -484,11 +483,13 @@ class VolcaniteExec:
             print("> " + " ".join(call_args))
         return subp.run(call_args, *args, **kwargs)
 
-    def __init__(self, evaluation: VolcaniteEvaluation, git_checkout : str | None = None, build_subdir : str = "cmake-build-release"):
+    def __init__(self, evaluation: VolcaniteEvaluation, git_base_dir: PathLike | None = None,
+                 git_checkout : str | None = None, build_subdir: PathLike | str = "cmake-build-release"):
         """
         Creates a Volcanite executor for the given evaluation.
         :param evaluation: the VolcaniteEvaluation including the evaluation output directory, name and all log files
-        :param git_checkout: git commit, tag, or branch name that is checked out before building volcanite
+        :param git_base_dir: the base directory of the Volcanite git repository
+        :param git_checkout: git commit, tag, or branch name that is checked out before building Volcanite
         :param build_subdir: directory in the git repository in which Volcanite is build (default: cmake-build-release)
         """
         # build directory must have a depth of one
@@ -497,7 +498,14 @@ class VolcaniteExec:
 
         self.evaluation = evaluation
         self.git_checkout = git_checkout
-        self.build_subdir = build_subdir
+        if git_base_dir:
+            self.git_base_dir = Path(git_base_dir)
+        else:
+            self.git_base_dir = Path(subp.Popen(['git', 'rev-parse', '--show-toplevel'], stdout=subp.PIPE).communicate()[0].rstrip().decode('utf-8'))
+            print(f"obtained volcanite git base directory {self.git_base_dir} with 'git rev-parse --show-toplevel'")
+        if self.git_base_dir.name != "volcanite":
+            print(f"Warning: expected git base directory to be named volcanite but is {self.git_base_dir.name}")
+        self.build_subdir = Path(build_subdir)
         self.__is_build = False
 
     def info_str(self):
@@ -513,7 +521,7 @@ class VolcaniteExec:
 
     def __build_dir(self) -> Path:
         """Returns the absolute path to the directory in which Volcanite is build as string."""
-        return VolcaniteExec.volcanite_src_directory / Path(self.build_subdir)
+        return self.git_base_dir / self.build_subdir
 
     def checkout_and_build(self):
         """Checks out the git commit (if configured) and builds volcanite into the configured build sub-directory."""
@@ -523,8 +531,8 @@ class VolcaniteExec:
             return
 
         if self.git_checkout:
-            self.run_log(["git", "checkout", self.git_checkout], cwd=VolcaniteExec.volcanite_src_directory)
-            res = self.run_log(["git", "pull"], cwd=VolcaniteExec.volcanite_src_directory)
+            self.run_log(["git", "checkout", self.git_checkout], cwd=self.git_base_dir)
+            res = self.run_log(["git", "pull"], cwd=self.git_base_dir)
             if res.returncode != 0:
                 raise RuntimeError(f"Error: git pull returned {res.returncode}")
 
@@ -608,34 +616,4 @@ class VolcaniteExec:
             cmd = ["ffmpeg -n -framerate 60 -pattern_type glob -i '" + files + "' -c:v libx264 -pix_fmt yuv420p " + prefix + ".mp4"]
             print("Creating video file in " + str(_dir.absolute()) + " with\n  " + cmd[0])
             VolcaniteExec.run_log(cmd, cwd=str(_dir.absolute()), shell=True)
-
-
-if __name__ == "__main__":
-    # setup the evaluation output directory and the log files
-    evaluation = VolcaniteEvaluation("./my_test_eval", ExistingPolicy.DELETE, "my_test_eval",
-                                     [VolcaniteLogFileCfg("results.txt",
-                                                                  fmts=["{name},{comprate_pcnt:.3},{frame_avg_ms}"],
-                                                                  headers=["Name,Compression Rate [%],frame avg [ms]"])],
-                                     enable_log=True, dry_run=False)
-
-    volcanite = VolcaniteExec(evaluation, None, "cmake-build-release")
-    volcanite.checkout_and_build()
-
-    # print evaluation information to console
-    print(volcanite.info_str())
-    print('\n'.join(volcanite.logs_info_str()))
-
-    # iterate over all configuration combinations and execute Volcanite
-    for arg_data in VolcaniteArg.args_datasynth.values():
-        vargs = [arg_data, VolcaniteArg.arg_image_export([arg_data])]
-        name = VolcaniteArg.concat_ids(vargs)
-
-        # manually log a comment line to the log file
-        evaluation.get_log().log_manual("#Running evaluation: " + name)
-        # execute Volcanite and pass the Volcanite log file
-        volcanite.exec(vargs, name)
-
-    # create a copy of the log file without comment lines that start with # which includes the #fmt: strings
-    evaluation.get_log().create_formatted_copy(evaluation.eval_out_directory / Path("results.csv"),
-                                               remove_line_prefixes=["#"])
 
