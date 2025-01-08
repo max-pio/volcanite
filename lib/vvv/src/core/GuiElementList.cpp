@@ -276,8 +276,8 @@ namespace vvv {
         while(std::getline(in, line)) {
             std::istringstream tempLineStream(line);
 
-            // empty line indicates end of window
-            // return so next window can be read
+            // empty line indicates end of element list
+            // return so next element list can be read
             if (line.empty()) {
                 return true;
             }
@@ -414,7 +414,7 @@ namespace vvv {
                             auto& cm = e->colormapConfig[m];
                             size_t colormap_control_points = 0;
                             tempLineStream >> colormap_control_points;
-                            if (colormap_control_points == 0 || colormap_control_points > 65536) {
+                            if (colormap_control_points > 65536) {
                                 Logger(ERROR) << "Invalid color map control point count " << colormap_control_points;
                                 return false;
                             }

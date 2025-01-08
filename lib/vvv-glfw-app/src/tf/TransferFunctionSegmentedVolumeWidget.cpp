@@ -18,10 +18,13 @@
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui_impl_vulkan.h>
 
+#include "vvv/util/Paths.hpp"
+
 #ifndef HEADLESS
     #include "portable-file-dialogs.h"
     #include "stb/stb_image.hpp"
 #endif
+
 void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
     int id = static_cast<int>(e->id);
 
@@ -206,7 +209,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                             Logger(WARN) << "Can not open file dialog for import PNG. Choose other segmentation volume transfer function colormap";
                             break;
                         }
-                        auto selected_file = pfd::open_file("Color Map Image File", pfd::path::home(),
+                        auto selected_file = pfd::open_file("Color Map Image File", Paths::getHomeDirectory().string() + "/*",
                                                             {"Image File", "*.jpg *.jpeg *.bmp *.gif *.png *.pic *.pnm"});
                         if (!selected_file.result().empty()) {
                             int img_width, img_height, img_channels;

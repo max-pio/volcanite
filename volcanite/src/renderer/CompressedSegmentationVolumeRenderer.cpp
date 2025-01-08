@@ -1161,7 +1161,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         }
 
         // Open a file dialog to choose a file
-        auto selected_file = pfd::save_file("Save Screenshot", pfd::path::home(),
+        auto selected_file = pfd::save_file("Save Screenshot", Paths::getHomeDirectory().string() + "/*",
                                             { "Image File (.png .jpg .jpeg)", "*.png *.jpg *.jpeg", "All Files", "*" });
         if(!selected_file.result().empty()) {
             exportCurrentFrameToImage(selected_file.result());
@@ -1182,7 +1182,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         }
 
         // Open a file dialog to choose a file
-        auto selected_file = pfd::open_file("Import Parameters", pfd::path::home(),
+        auto selected_file = pfd::open_file("Import Parameters", Paths::getHomeDirectory().string() + "/*",
                                             { "Parameter Config (.vcfg)", "*.vcfg", "All Files", "*" });
         if(!selected_file.result().empty()) {
             file = selected_file.result().at(0);
@@ -1201,7 +1201,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         }
 
         // Open a file dialog to choose a file
-        auto selected_file = pfd::save_file("Export Parameters", pfd::path::home(),
+        auto selected_file = pfd::save_file("Export Parameters", Paths::getHomeDirectory().string() + "/*",
                                             { "Parameter Config (.vcfg)", "*.vcfg", "All Files", "*" });
         if(!selected_file.result().empty())
             file = selected_file.result();

@@ -288,7 +288,7 @@ public:
                     throw ArgException("Must provide input file as file dialogs are unavailable", inputpathArg.longID(""));
 
                 // Open a file dialog to choose a file
-                auto selected_file = pfd::open_file("Open Segmentation Volume", pfd::path::home(),
+                auto selected_file = pfd::open_file("Open Segmentation Volume", Paths::getHomeDirectory().string() + "/*",
                                                     { "Segmentation Volumes (.csgv .vti .hdf5 .h5 .raw .vraw .nrrd .nhdr)", "*.csgv *.vti *.hdf5 *.h5 *.raw *.vraw *.nrrd *.nhdr", "All Files", "*" });
                 if(selected_file.result().empty()) {
                     throw ArgException("No input file was provided. Pass #synth as input file to create a synthetic volume.", inputpathArg.longID(""));

@@ -123,32 +123,16 @@ public:
             Logger(WARN) << "Unexpected config version " << tmp << " instead of " << expected_version_string;
             return false;
         }
-        if (!m_camera) {
-            Logger(WARN) << "Cannot read renderer parameters as camera is not set!";
-            return false;
-        }
-        in >> tmp; // "[Camera]"
-        if(tmp != "[Camera]") {
-            Logger(WARN) << "Expecting [Camera] parameter block but got " << tmp;
-            return false;
-        }
-        m_camera->readFrom(in, true);
-        if (!in.good()) {
-            Logger(WARN) << "Error reading camera parameters from file.";
-            return false;
-        }
+
+        // read next one section after the other
         if(!m_gui_interface) {
             // If you receive this warning: Did you forget to call Renderer::initGui(gui) from the base class initGui?
             Logger(WARN) << "Cannot read renderer parameters as gui interface is not set!";
             return false;
         }
-        if(!m_gui_interface->readParameters(in))
+        if(!m_gui_interface->readParameters(in, m_camera.get()))
             return false;
-        if (!in.good()) {
-            Logger(WARN) << "Error reading render parameters from file.";
-            return false;
-        }
-        in >> tmp;
+
         if(!(in.rdstate() & std::istream::eofbit))
             Logger(WARN) << "Possible parameter import error. Did not reach end of file.";
         return true;

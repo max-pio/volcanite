@@ -155,9 +155,9 @@ int volcanite_main(int argc, char *argv[]) {
         // only start the application if we are not in headless mode
         if (!args.headless) {
             // export the state of the renderer next to the input or csgv volume when the app is closed
-            if(!args.performCompression() || args.compress_export_file.empty())
+            if (!args.performCompression())
                 renderer->saveConfigOnShutdown(stripFileExtension(args.input_file) + ".vcfg");
-            else
+            else if (!args.compress_export_file.empty())
                 renderer->saveConfigOnShutdown(stripFileExtension(args.compress_export_file) + ".vcfg");
 
             bool vsync = true;  // TODO: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config

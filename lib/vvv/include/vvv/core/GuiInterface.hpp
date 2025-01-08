@@ -274,14 +274,6 @@ protected:
         }
 
         virtual bool readParameters(std::istream& in) {
-            std::string tmp;
-            // read window name
-            while(tmp.empty() && in.good())
-                std::getline(in, tmp); // one empty line
-            if(tmp != "[" + m_name + "]") {
-                Logger(WARN) << "Reading window parameters for " << tmp << " instead of expected " << m_name << ":";
-                return false;
-            }
             for(auto& c: m_columns) {
                 if(!c.readParameters(in))
                     return false;
@@ -341,11 +333,53 @@ public:
         return true;
     }
 
-    bool readParameters(std::istream& in) {
-        for(auto& w: m_windows) {
-            if(!w.second.readParameters(in))
+    bool readParameters(std::istream& in, Camera* camera = nullptr) {
+        // TODO: camera should be registered in one of the windows
+        std::string tmp;
+        std::getline(in, tmp);
+        while (!(in.rdstate() & std::istream::eofbit)) {
+            // read a section name, decide for which window the parameters are read:
+            // read window name (skip empty lines until section key)
+            while((tmp.empty() || tmp.front() != '[' || tmp.back() != ']') && in.good()) {
+                std::getline(in, tmp);
+                if (!tmp.empty())
+                    Logger(WARN) << "Parameter import skipping non-key line " << tmp;
+            }
+            if (tmp.front() != '[' or tmp.back() != ']') {
+                Logger(WARN) << "Parameter import error: Got  " << tmp << " instead of section key [<NAME>]";
                 return false;
+            }
+            std::string name = tmp.substr(1, tmp.size()-2);
+
+            if (tmp == "[Camera]") {
+                if (!camera) {
+                    Logger(WARN) << "Parameter import error: Reading [Camera] but camera is not set!";
+                    return false;
+                }
+                camera->readFrom(in, true);
+            } else {
+                bool found = false;
+                for(auto& w: m_windows) {
+                    if (w.second.getName() == name) {
+                        // read parameters until an empty line marks the end of this section
+                        if(!w.second.readParameters(in))
+                            return false;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    Logger(WARN) << "Parameter import read unkown key " << tmp << ".";
+                }
+            }
+
+            if (!in.good()) {
+                Logger(WARN) << "Parameter import error after reading section " << tmp << ".";
+                return false;
+            }
+            std::getline(in, tmp);
         }
+
         return true;
     }
 
