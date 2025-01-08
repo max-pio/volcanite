@@ -3,13 +3,13 @@
 #include <ranges>
 #include "vvv/volren/Volume.hpp"
 #include "vvv/util/Logger.hpp"
+#include "glm/glm.hpp"
 
 using namespace vvv;
 
 namespace volcanite {
 
 std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegmentationVolumeCfg cfg) {
-    Logger(INFO) << "Creating synthetic segmentation volume with dimension " << str(cfg.dim);
 
     if (glm::any(glm::greaterThan(cfg.min_region_dim, cfg.max_region_dim)))
         throw std::invalid_argument("Synthetic segmentation volume minimum region dimensions must be smaller than"
@@ -32,8 +32,11 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegment
                                                         cfg.dim[0] * cfg.dim[1] * cfg.dim[2]);
     memset(volume->data().data(), 0, cfg.dim[0] * cfg.dim[1] * cfg.dim[2] * sizeof(uint32_t));
 
-    const int number_of_areas = static_cast<int>((cfg.dim[0] * cfg.dim[1] * cfg.dim[2] + 8192u - 1u) / 8192u);
-    for (int i = 0; i < number_of_areas; i++) {
+    const size_t number_of_areas = static_cast<size_t>(cfg.dim[0] * cfg.dim[1] * cfg.dim[2] + 8192u - 1u) / 8192ull;
+
+    Logger(INFO) << "Creating synthetic segmentation volume with dimension " << str(cfg.dim)
+                      << " and approx. " << number_of_areas << " label regions";
+    for (size_t i = 0; i < number_of_areas; i++) {
         uint32_t label = V_RND_UINT();
         uint32_t w = V_RND_UINT() % 32 + 1;
         uint32_t h = V_RND_UINT() % 32 + 1;
@@ -68,7 +71,8 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
 
     std::set<unsigned char> processed = {};
 
-    for (const auto arg: std::views::split(descr, "_")
+    constexpr std::string_view split{"_"};
+    for (const auto arg: std::views::split(descr, split)
                          | std::ranges::views::transform([](auto &&subrange) {
             const auto size = std::ranges::distance(subrange);
             return size ? std::string_view(&*subrange.begin(), size) : std::string_view();
@@ -124,6 +128,19 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
             err << "Synthetic volume descriptor " << descr << " contains invalid key " << arg;
             throw std::invalid_argument(err.str());
         }
+    }
+
+    // automatically choose region sizes based on label density if not explicitly set
+    if (!processed.contains('r')) {
+        double voxel_width = glm::pow(static_cast<double>(cfg.voxels_per_label), 1./3.);
+        constexpr double min_ratio = 0.75, max_ratio = 1.25;
+        cfg.min_region_dim = glm::max(glm::uvec3(voxel_width * min_ratio), glm::uvec3(1u));
+        cfg.max_region_dim = glm::max(glm::uvec3(voxel_width * max_ratio), cfg.min_region_dim);
+    }
+    // automatically choose label count if only region size is specified
+    else if (!processed.contains('l')) {
+        glm::uvec3 avg_reg = glm::max((cfg.min_region_dim + cfg.max_region_dim) / 2u, glm::uvec3(1u));
+        cfg.voxels_per_label = glm::max((cfg.dim.x * cfg.dim.y * cfg.dim.z) / (avg_reg.x * avg_reg.y * avg_reg.z), 1u);
     }
 
     return createDummySegmentationVolume(cfg);
