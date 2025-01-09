@@ -148,7 +148,7 @@ if __name__ == '__main__':
         epilog='')
 
     parser.add_argument("data_set", help="data set url or example name. 'list-examples' lists available names.")
-    parser.add_argument("-o", "--output_dir", help="empty/non-existing directory where data is stored.")
+    parser.add_argument("-d", "--directory", help="empty/non-existing directory where data is stored.")
     parser.add_argument("-s", "--size", type=int, nargs=3, help="size of downloaded volume in voxels (default: full volume).")
     parser.add_argument("-f", "--filetype", default="hdf5", help="file type in which chunks are stored.")
     parser.add_argument("-o", "--origin", help="origin of the sub-volume in the full data set")
