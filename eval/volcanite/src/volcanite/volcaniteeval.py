@@ -550,7 +550,7 @@ class VolcaniteExec:
 
     def exec(self, args : list[VolcaniteArg], eval_name: str = None, headless: bool = True):
         """
-        Executes volcanite with the specified arguments. Volcanite is compiled first if it was not build yet.
+        Executes Volcanite with the specified arguments. Volcanite is compiled first if it was not build yet.
         :param args: list of VolcaniteArgs to be passed to the Volcanite call
         :param eval_name: name of this evaluation run. can be referenced in log files as %name
         :param headless: if true, the --headless argument is added to the execution
@@ -592,6 +592,10 @@ class VolcaniteExec:
                             raise RuntimeError(f"Volcanite returned {res.returncode} and no fallback log exists for {log.log_file_name}")
                 else:
                     raise RuntimeError(f"Volcanite returned {res.returncode}")
+
+    def run_volcanite(self, args : str):
+        """Executes Volcanite with args as argument string and no special evaluation log file handling."""
+        return self.run_log(["./volcanite"] + args.split(' '), print_log=True, cwd=self.__build_dir() / Path("volcanite"))
 
     @staticmethod
     def create_mp4(args : list[VolcaniteArg]):

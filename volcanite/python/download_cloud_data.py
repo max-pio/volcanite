@@ -151,7 +151,8 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--output_dir", help="empty/non-existing directory where data is stored.")
     parser.add_argument("-s", "--size", type=int, nargs=3, help="size of downloaded volume in voxels (default: full volume).")
     parser.add_argument("-f", "--filetype", default="hdf5", help="file type in which chunks are stored.")
-    parser.add_argument("-c", "--chunk_size", type=int, nargs=3, help="volume is split into chunks of this size. should be dividable by 64.")
+    parser.add_argument("-o", "--origin", help="origin of the sub-volume in the full data set")
+    parser.add_argument("-c", "--chunk_size", type=int, nargs=3, default=(1024,1024,1024), help="volume is split into chunks of this size. should be dividable by 64.")
     parser.add_argument("-v", "--verbose", action="store_true")
 
     args = parser.parse_args()
