@@ -127,7 +127,9 @@ class CloudDataDownload:
                           f"{(z + origin[0], y + origin[1], x + origin[2])}"
                           f" to {(z_end + origin[0], y_end + origin[1], x_end + origin[2])}", end='')
 
-                    output_file = output_dir / Path("x{}y{}z{}.{}".format(x // chunk_size[2], y // chunk_size[1], z // chunk_size[0], output_format))
+                    # file naming conventino uses XYZ instead of ZYX index order
+                    output_file = output_dir / Path("x{}y{}z{}.{}".format(z // chunk_size[0], y // chunk_size[1], x // chunk_size[2], output_format))
+
                     if not output_file.exists():
                         cur_slice = np.array(self.__dataset[(z + origin[0]):z_end, (y + origin[1]):y_end, (x + origin[2]):x_end]).astype('uint32')
                         converter.write_volume(cur_slice, str(output_file.resolve()), "uint32", True, False)
