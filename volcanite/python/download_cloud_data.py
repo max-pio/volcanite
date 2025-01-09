@@ -115,23 +115,24 @@ class CloudDataDownload:
         print(f"{time.strftime("%H:%M:%S")} Start download of {int(total_chunk_count)} chunks. Uncompressed uint32"
               f" array is {total_gb} GB.")
         chunk_id = 0
-        for z in range(0, end[0] - origin[0], chunk_size[0]):
-            for y in range(0, end[1] - origin[1], chunk_size[1]):
-                for x in range(0, end[2] - origin[2], chunk_size[2]):
-                    z_end = min(full_dim[0], z + chunk_size[0] + origin[0])
-                    y_end = min(full_dim[1], y + chunk_size[1] + origin[1])
-                    x_end = min(full_dim[2], x + chunk_size[2] + origin[2])
+        for idx_0 in range(0, end[0] - origin[0], chunk_size[0]):
+            for idx_1 in range(0, end[1] - origin[1], chunk_size[1]):
+                for idx_2 in range(0, end[2] - origin[2], chunk_size[2]):
+                    end = (min(full_dim[0], idx_0 + chunk_size[0] + origin[0]),
+                           min(full_dim[1], idx_1 + chunk_size[1] + origin[1]),
+                           min(full_dim[2], idx_2 + chunk_size[2] + origin[2]))
 
                     print(f"{time.strftime("%H:%M:%S")} {int(chunk_id / total_chunk_count * 100.)} % processing chunk "
-                          f"x{x // chunk_size[2]}y{y // chunk_size[1]}z{z // chunk_size[0]} from ZYX "
-                          f"{(z + origin[0], y + origin[1], x + origin[2])}"
-                          f" to {(z_end + origin[0], y_end + origin[1], x_end + origin[2])}", end='')
+                          f"x{idx_0 // chunk_size[0]}y{idx_1 // chunk_size[1]}z{idx_2 // chunk_size[2]} from "
+                          f"{(idx_0 + origin[0], idx_1 + origin[1], idx_2 + origin[2])}"
+                          f" to {(end[0], end[1], end[2])}", end='')
 
-                    # file naming conventino uses XYZ instead of ZYX index order
-                    output_file = output_dir / Path("x{}y{}z{}.{}".format(z // chunk_size[0], y // chunk_size[1], x // chunk_size[2], output_format))
+                    output_file = output_dir / Path("x{}y{}z{}.{}".format(idx_0 // chunk_size[0], idx_1 // chunk_size[1], idx_2 // chunk_size[2], output_format))
 
                     if not output_file.exists():
-                        cur_slice = np.array(self.__dataset[(z + origin[0]):z_end, (y + origin[1]):y_end, (x + origin[2]):x_end]).astype('uint32')
+                        cur_slice = np.array(self.__dataset[(idx_0 + origin[0]):end[0],
+                                                            (idx_1 + origin[1]):end[1],
+                                                            (idx_2 + origin[2]):end[2]]).astype('uint32')
                         converter.write_volume(cur_slice, str(output_file.resolve()), "uint32", True, False)
                         print(" done.")
                     else:
@@ -177,4 +178,3 @@ if __name__ == '__main__':
     else:
         data.download(Path(args.directory), args.size, args.origin, args.chunk_size)
         exit(0)
-
