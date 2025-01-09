@@ -95,7 +95,7 @@ class CloudDataDownload:
         if (chunk_size[0] % 64) or (chunk_size[1] % 64) or (chunk_size[2] % 64):
             print("WARNING: chunk size should be dividable by 64 in each dimension for Volcanite compatibility.")
 
-        print(f"Downloading from {volume_size} volume {self.__dataset_url} to {output_dir}\n"
+        print(f"Downloading from {full_dim} volume {self.__dataset_url} to {output_dir}\n"
               f"sub-volume: {origin}:{end}, chunk size {chunk_size}")
 
         chunk_count = np.ceil(np.array([end[0] - origin[0], end[1] - origin[1], end[2] - origin[2]]) / np.array(chunk_size))
@@ -103,12 +103,12 @@ class CloudDataDownload:
 
         total_gb = (end[0] - origin[0]) * (end[1] - origin[1]) * (end[2] - origin[2]) * 4 / 1024 / 1024 / 1024
         if total_gb > 2048:
-            confirm = input(f"WARNING: attempting to download volume with (uncompressed) size of {total_gb} GB. Continue? (y/n)").lower()
+            confirm = input(f"WARNING: attempting to download volume with (uncompressed) size of {total_gb} GB. Continue? (y/n) ").lower()
             if confirm != 'y':
                 exit(1)
-        chunk_gb = chunk_size[0] * chunk_size[1] * chunk_size[2] * 4 / 1024 / 1024
+        chunk_gb = chunk_size[0] * chunk_size[1] * chunk_size[2] * 4 / 1024 / 1024 / 1024
         if chunk_gb > 4:
-            confirm = input(f"WARNING: attempting to download volume as chunks with an (uncompressed) size of {chunk_gb} GB per file. Continue? (y/n)").lower()
+            confirm = input(f"WARNING: attempting to download volume as chunks with an (uncompressed) size of {chunk_gb} GB per file. Continue? (y/n) ").lower()
             if confirm != 'y':
                 exit(1)
 
@@ -124,13 +124,13 @@ class CloudDataDownload:
 
                     print(f"{time.strftime("%H:%M:%S")} {int(chunk_id / total_chunk_count * 100.)} % processing chunk "
                           f"x{x // chunk_size[2]}y{y // chunk_size[1]}z{z // chunk_size[0]} from ZYX "
-                          f"{(z + origin[0], y + origin[1], z + origin[2])}"
+                          f"{(z + origin[0], y + origin[1], x + origin[2])}"
                           f" to {(z_end + origin[0], y_end + origin[1], x_end + origin[2])}", end='')
 
                     output_file = output_dir / Path("x{}y{}z{}.{}".format(x // chunk_size[2], y // chunk_size[1], z // chunk_size[0], output_format))
                     if not output_file.exists():
                         cur_slice = np.array(self.__dataset[(z + origin[0]):z_end, (y + origin[1]):y_end, (x + origin[2]):x_end]).astype('uint32')
-                        converter.write_volume(cur_slice, output_file, "uint32", True, False)
+                        converter.write_volume(cur_slice, str(output_file.resolve()), "uint32", True, False)
                         print(" done.")
                     else:
                         print(" already exists. skipping.")
@@ -151,7 +151,7 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--directory", help="empty/non-existing directory where data is stored.")
     parser.add_argument("-s", "--size", type=int, nargs=3, help="size of downloaded volume in voxels (default: full volume).")
     parser.add_argument("-f", "--filetype", default="hdf5", help="file type in which chunks are stored.")
-    parser.add_argument("-o", "--origin", help="origin of the sub-volume in the full data set")
+    parser.add_argument("-o", "--origin", type=int, nargs=3, help="origin of the sub-volume in the full data set")
     parser.add_argument("-c", "--chunk_size", type=int, nargs=3, default=(1024,1024,1024), help="volume is split into chunks of this size. should be dividable by 64.")
     parser.add_argument("-v", "--verbose", action="store_true")
 
@@ -168,11 +168,11 @@ if __name__ == '__main__':
     data = CloudDataDownload(data_set_url)
 
     # if no output directory is given, only print the shape of the volume if it is accessible
-    if args.output_dir is None:
+    if args.directory is None:
         print("Volume " + data_set_url + " is available with a size of " + str(data.get_shape())
-              + ". Specify a download directory with -o /path/to/dir/")
+              + ". Specify a download directory with -d /path/to/dir/")
         exit(0)
     else:
-        data.download(args.output_dir, args.size, args.origin, args.chunk_size)
+        data.download(Path(args.directory), args.size, args.origin, args.chunk_size)
         exit(0)
 
