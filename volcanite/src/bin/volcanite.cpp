@@ -53,7 +53,6 @@ int tryImportRenderConfig(VolcaniteArgs& args, std::shared_ptr<CompressedSegment
     if(!args.rendering_config_file.empty()) {
         if (!renderer->readParameterFile(args.rendering_config_file, VOLCANITE_VERSION))
             return RET_INVALID_ARG;
-        Logger(DEBUG) << "imported parameters from " << args.rendering_config_file;
     }
     return 0;
 }
@@ -126,8 +125,10 @@ int volcanite_main(int argc, char *argv[]) {
             auto texture = renderEngine->renderFrames(accumulation_frames,
                                                       args.record_in_file,
                                                       args.video_output_fmt_file);
-            if (!args.eval_logfiles.empty())
+            if (!args.eval_logfiles.empty()) {
                 renderer->stopFrameTimeTracking({}); // stopFrameTimeTracking is already called by renderEngine
+                renderer->writeParameterFile(stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg");
+            }
 
             // export final frame
             if (!args.screenshot_output_file.empty()

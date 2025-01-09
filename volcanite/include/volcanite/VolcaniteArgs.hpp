@@ -231,7 +231,8 @@ public:
             }
             va.random_access = randomAccessArg.getValue();
             // rendering arguments
-            va.rendering_config_file = expandPath(renderconfigArg.getValue());
+            // TODO: cleanup: not expanding config_file path here, may be a preset in the CompressedSegmentationVolumeRenderer
+            va.rendering_config_file = renderconfigArg.getValue();
             va.screenshot_output_file = expandPath(imageArg.getValue());
             va.video_output_fmt_file = expandPath(videoArg.getValue());
             if (!va.video_output_fmt_file.empty()) {

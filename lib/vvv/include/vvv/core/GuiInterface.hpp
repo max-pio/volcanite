@@ -341,9 +341,9 @@ public:
             // read a section name, decide for which window the parameters are read:
             // read window name (skip empty lines until section key)
             while((tmp.empty() || tmp.front() != '[' || tmp.back() != ']') && in.good()) {
-                std::getline(in, tmp);
                 if (!tmp.empty())
                     Logger(WARN) << "Parameter import skipping non-key line " << tmp;
+                std::getline(in, tmp);
             }
             if (tmp.front() != '[' or tmp.back() != ']') {
                 Logger(WARN) << "Parameter import error: Got  " << tmp << " instead of section key [<NAME>]";

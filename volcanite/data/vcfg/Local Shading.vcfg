@@ -1,0 +1,13 @@
+Version 0.5.0
+
+[Development]
+Enable_Denoising: 0
+
+
+[Rendering]
+Rendering_Preset: Local~Shading
+Constant_Color: 0.400000
+Light_Intensity: 1.000000
+Global_Illumination: 0
+Environment_Map: 0
+

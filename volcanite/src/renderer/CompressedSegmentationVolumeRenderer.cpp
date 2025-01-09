@@ -1244,53 +1244,21 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
     // Path Tracing / Rendering
     static int gui_preset_selection = 0;
-    g_render->addCombo(&gui_preset_selection, {"Local Shading", "Global Shadows", "Ambient Occlusion", "Path Tracing"},
+    g_render->addCombo(&gui_preset_selection, m_data_vcfg_presets,
                        [this](int i) {
-                           // how many frames have to be accumulated so that each pixel received one sample
-                           int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
-                           switch(i) {
-                               case 0:
-                                   // local shading
-                                   m_factor_ambient = 0.4f;
-                                   m_light_intensity = 1.f;
-                                   m_global_illumination_enabled = false;
-                                   m_envmap_enabled = false;
-                                   m_target_accum_frames = frames_for_one_spp * 8;
-                                   m_denoising_enabled = false;
-                                   break;
-                               case 1:
-                                   // global shadows
-                                   m_factor_ambient = 0.25f;
-                                   m_light_intensity = 1.f;
-                                   m_global_illumination_enabled = true;
-                                   m_shadow_pathtracing_ratio = 0.f;
-                                   m_envmap_enabled = false;
-                                   m_target_accum_frames = frames_for_one_spp * 8;
-                                   m_denoising_enabled = false;
-                                   break;
-                               case 2:
-                                   // ambient occlusion
-                                   m_factor_ambient = 0.1f;
-                                   m_light_intensity = 1.22f;
-                                   m_global_illumination_enabled = true;
-                                   m_shadow_pathtracing_ratio = 1.f;
-                                   m_max_path_length = 1;
-                                   m_envmap_enabled = false;
-                                   m_target_accum_frames = glm::min(frames_for_one_spp * 256, 4096);
-                                   m_denoising_enabled = true;
-                                   break;
-                               case 3:
-                                   // path tracing
-                                   m_factor_ambient = 0.f;
-                                   m_light_intensity = 1.f;
-                                   m_global_illumination_enabled = true;
-                                   m_shadow_pathtracing_ratio = 1.f;
-                                   m_max_path_length = 32;
-                                   m_envmap_enabled = true;
-                                   m_target_accum_frames = glm::min(frames_for_one_spp * 1024, 4096);
-                                   m_denoising_enabled = true;
-                                   break;
-                           }
+                            // how many frames have to be accumulated so that each pixel received one sample
+                            if (i >= 0 && i < m_data_vcfg_presets.size())
+                                readParameterFile(std::filesystem::path(m_data_vcfg_presets[i]));
+
+                            // compute min. number of accumulation frames
+                            const int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
+                            if (m_global_illumination_enabled && m_shadow_pathtracing_ratio > 0.) {
+                                // ambient occlusion / path tracing need some frames to converge (1024 SPP)
+                                m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 1024);
+                            } else {
+                                // everything deterministic, nees only AA
+                                m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 16);
+                            }
                        }, "Rendering Preset");
     g_render->addFloat(&m_factor_ambient, "Constant Color", 0.0f, 1.f, 0.05f, 2);
     g_render->addSeparator();

@@ -1,0 +1,20 @@
+Version 0.5.0
+
+[Development]
+Enable_À-Trous_Post-Processing: 1
+Post-Process_Iterations: 4
+Post-Process_Kernel_Size: 1
+Enable_Denoising: 1
+Depth_Sigma: 1.000000
+Fade_Denoiser_Out: 1
+Denoise_Fade_Sigma: 1.000000
+
+[Rendering]
+Rendering_Preset: Path~Tracing
+Constant_Color: 0.000000
+Light_Intensity: 1.000000
+Global_Illumination: 1
+Direct_Light_/_Pathtracing_Ratio: 1.000000
+Environment_Map: 1
+Path_Length: 32
+

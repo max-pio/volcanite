@@ -41,6 +41,14 @@ public:
         // initialize camera in orbital mode
         m_camera = std::make_shared<vvv::Camera>(true);
 
+        // get the names of all available vcfg preset files in data subdirectory
+        m_data_vcfg_presets.clear();
+        for (const auto & entry : std::filesystem::directory_iterator(Paths::findDataPath("vcfg"))) {
+            if (entry.path().has_extension() && entry.path().extension() == ".vcfg") {
+                m_data_vcfg_presets.emplace_back(entry.path().stem());
+            }
+        }
+
         // initialize the shading materials with something reasonable
         for(int m = 0; m < SEGMENTED_VOLUME_MATERIAL_COUNT; m++) {
             auto &mat = m_materials[m];
@@ -145,7 +153,16 @@ public:
 
     [[nodiscard]] int getTargetAccumulationFrames() const { return m_target_accum_frames; }
     /// Will save the renderer state to the path when the renderer is shut down
-    void saveConfigOnShutdown(std::string path) { m_save_config_on_shutdown_path = std::move(path); }
+    void saveConfigOnShutdown(const std::string& path) { m_save_config_on_shutdown_path = expandPath(path); }
+
+    bool readParameterFile(const std::string& path, const std::string& version_string="") override {
+        // first check if the given path matches the name of one of the preset files
+        for (const auto& preset: m_data_vcfg_presets) {
+            if (preset == path)
+                return Renderer::readParameterFile(Paths::findDataPath("vcfg") / std::filesystem::path(preset + ".vcfg"), version_string);
+        }
+        return Renderer::readParameterFile(expandPath(path), version_string);
+    }
 
     struct CSGVRenderingConfig {
         size_t cache_size_MB = 1024;
@@ -208,7 +225,7 @@ public:
            && !image_path.ends_with(".jpeg")) {
             image_path.append(".png");
         }
-        m_download_frame_to_image_file = image_path;
+        m_download_frame_to_image_file = expandPath(image_path);
     }
 
     /// Returns statistics about frame times and GPU memory consumption. Frame times are only available if tracking was
@@ -276,6 +293,7 @@ private:
     std::string m_gui_device_mem_text;
     std::optional<std::string> m_download_frame_to_image_file = {};
     std::string m_save_config_on_shutdown_path = {};
+    std::vector<std::string> m_data_vcfg_presets = {};                  /// names of preset vcfg files in data subfolder
 
     void updateDeviceMemoryUsage();
     void updateSegmentedVolumeMaterial(int m);

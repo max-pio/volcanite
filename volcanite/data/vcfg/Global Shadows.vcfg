@@ -1,0 +1,13 @@
+Version 0.5.0
+
+[Development]
+Enable_Denoising: 0
+
+[Rendering]
+Rendering_Preset: Global~Shadows
+Constant_Color: 0.250000
+Light_Intensity: 1.000000
+Global_Illumination: 1
+Direct_Light_/_Pathtracing_Ratio: 0.000000
+Environment_Map: 0
+
