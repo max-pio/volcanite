@@ -78,9 +78,9 @@ class CloudDataDownload:
             origin = (max(0, self.__dataset.shape[0] // 2 - volume_size[0] // 2),
                       max(0, self.__dataset.shape[1] // 2 - volume_size[1] // 2),
                       max(0, self.__dataset.shape[2] // 2 - volume_size[2] // 2))
-        end = (min(full_dim[0], origin[0] + volume_size[0]),
-               min(full_dim[1], origin[1] + volume_size[1]),
-               min(full_dim[2], origin[2] + volume_size[2]))
+        total_end = (min(full_dim[0], origin[0] + volume_size[0]),
+                     min(full_dim[1], origin[1] + volume_size[1]),
+                     min(full_dim[2], origin[2] + volume_size[2]))
 
         # create output directory
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -96,12 +96,12 @@ class CloudDataDownload:
             print("WARNING: chunk size should be dividable by 64 in each dimension for Volcanite compatibility.")
 
         print(f"Downloading from {full_dim} volume {self.__dataset_url} to {output_dir}\n"
-              f"sub-volume: {origin}:{end}, chunk size {chunk_size}")
+              f"sub-volume: {origin}:{total_end}, chunk size {chunk_size}")
 
-        chunk_count = np.ceil(np.array([end[0] - origin[0], end[1] - origin[1], end[2] - origin[2]]) / np.array(chunk_size))
+        chunk_count = np.ceil(np.array([total_end[0] - origin[0], total_end[1] - origin[1], total_end[2] - origin[2]]) / np.array(chunk_size))
         total_chunk_count = chunk_count[0] * chunk_count[1] * chunk_count[2]
 
-        total_gb = (end[0] - origin[0]) * (end[1] - origin[1]) * (end[2] - origin[2]) * 4 / 1024 / 1024 / 1024
+        total_gb = (total_end[0] - origin[0]) * (total_end[1] - origin[1]) * (total_end[2] - origin[2]) * 4 / 1024 / 1024 / 1024
         if total_gb > 2048:
             confirm = input(f"WARNING: attempting to download volume with (uncompressed) size of {total_gb} GB. Continue? (y/n) ").lower()
             if confirm != 'y':
@@ -115,24 +115,24 @@ class CloudDataDownload:
         print(f"{time.strftime("%H:%M:%S")} Start download of {int(total_chunk_count)} chunks. Uncompressed uint32"
               f" array is {total_gb} GB.")
         chunk_id = 0
-        for idx_0 in range(0, end[0] - origin[0], chunk_size[0]):
-            for idx_1 in range(0, end[1] - origin[1], chunk_size[1]):
-                for idx_2 in range(0, end[2] - origin[2], chunk_size[2]):
-                    end = (min(full_dim[0], idx_0 + chunk_size[0] + origin[0]),
-                           min(full_dim[1], idx_1 + chunk_size[1] + origin[1]),
-                           min(full_dim[2], idx_2 + chunk_size[2] + origin[2]))
+        for idx_0 in range(0, total_end[0] - origin[0], chunk_size[0]):
+            for idx_1 in range(0, total_end[1] - origin[1], chunk_size[1]):
+                for idx_2 in range(0, total_end[2] - origin[2], chunk_size[2]):
+                    start = origin + (idx_0, idx_1, idx_2)
+                    end = (min(total_end[0], start[0] + chunk_size[0]),
+                           min(total_end[1], start[1] + chunk_size[1]),
+                           min(total_end[2], start[2] + chunk_size[2]))
 
                     print(f"{time.strftime("%H:%M:%S")} {int(chunk_id / total_chunk_count * 100.)} % processing chunk "
                           f"x{idx_0 // chunk_size[0]}y{idx_1 // chunk_size[1]}z{idx_2 // chunk_size[2]} from "
-                          f"{(idx_0 + origin[0], idx_1 + origin[1], idx_2 + origin[2])}"
-                          f" to {(end[0], end[1], end[2])}", end='')
+                          f"{start} to {end}", end='')
 
                     output_file = output_dir / Path("x{}y{}z{}.{}".format(idx_0 // chunk_size[0], idx_1 // chunk_size[1], idx_2 // chunk_size[2], output_format))
 
                     if not output_file.exists():
-                        cur_slice = np.array(self.__dataset[(idx_0 + origin[0]):end[0],
-                                                            (idx_1 + origin[1]):end[1],
-                                                            (idx_2 + origin[2]):end[2]]).astype('uint32')
+                        cur_slice = np.array(self.__dataset[start[0]:end[0],
+                                                            start[1]:end[1],
+                                                            start[2]:end[2]]).astype('uint32')
                         converter.write_volume(cur_slice, str(output_file.resolve()), "uint32", True, False)
                         print(" done.")
                     else:
