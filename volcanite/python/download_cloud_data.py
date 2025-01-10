@@ -94,7 +94,8 @@ class CloudDataDownload:
         if (chunk_size[0] % 64) or (chunk_size[1] % 64) or (chunk_size[2] % 64):
             print("WARNING: chunk size should be dividable by 64 in each dimension for Volcanite compatibility.")
 
-        print(f"Downloading from {full_dim} volume {self.__dataset_url} to {output_dir}\n"
+        print(f"Downloading from {full_dim} volume {self.__dataset_url} to "
+              f"{(output_dir / Path(output_name.format('[X]', '[Y]', '[Z]', output_format)))}\n"
               f"sub-volume: {origin}:{total_end}, chunk size {chunk_size}")
 
         chunk_count = np.ceil(np.array([total_end[0] - origin[0], total_end[1] - origin[1], total_end[2] - origin[2]]) / np.array(chunk_size))
@@ -160,7 +161,7 @@ if __name__ == '__main__':
     parser.add_argument("-f", "--filetype", default="hdf5", help="file type in which chunks are stored.")
     parser.add_argument("-o", "--origin", type=int, nargs=3, help="origin of the sub-volume in the full data set.")
     parser.add_argument("-c", "--chunk_size", type=int, nargs=3, default=(1024,1024,1024), help="volume is split into chunks of this size. should be dividable by 64.")
-    parser.add_argument("-f", "--finish", action="store_true", default=False, help="ignore non-empty output directory and skip existing chunk files.")
+    parser.add_argument("-a", "--append", action="store_true", default=False, help="ignore non-empty output directory and skip existing chunk files.")
     parser.add_argument("-n", "--name", help="file name prefix for chunks that will be extended to [name]_x{}y{}z{}.[filetype]")
     parser.add_argument("-v", "--verbose", action="store_true")
 
@@ -172,13 +173,16 @@ if __name__ == '__main__':
         print("Available short keys for data_set argument:\n  " + "\n  ".join(example_data.keys()))
         exit(0)
     data_set_url = example_data[args.data_set] if args.data_set in example_data else args.data_set
-    if args.name:
-        output_name = args.name + "_"
+    if not args.name is None:
+        if not args.name:
+            output_name = ""
+        else:
+            output_nmae = args.name + "_"
     elif args.data_set in example_data:
         output_name = args.data_set + "_"
     else:
         output_name = ""
-    output_name.append("x{}y{}z{}.{}")
+    output_name = output_name + "x{}y{}z{}.{}"
 
     # obtain dataset
     data = CloudDataDownload(data_set_url)
@@ -190,5 +194,5 @@ if __name__ == '__main__':
         exit(0)
     else:
         data.download(output_dir=Path(args.directory), output_name=output_name, volume_size=args.size, origin=args.origin,
-                      chunk_size=args.chunk_size, continue_download=args.finish)
+                      chunk_size=args.chunk_size, continue_download=args.append)
         exit(0)
