@@ -71,14 +71,24 @@ class CloudDataDownload:
         # and make our life easier: just convert everything to numpy arrays
         full_dim = np.array(self.get_shape())
         volume_size = full_dim if volume_size is None else np.clip(volume_size, (0,0,0), full_dim)
-        origin = np.clip(full_dim // 2 - volume_size // 2, np.array(0,0,0), full_dim) if origin is None else np.clip(origin, (0,0,0), full_dim)
+        origin = np.clip(full_dim // 2 - volume_size // 2, (0,0,0), full_dim) if origin is None else np.clip(origin, (0,0,0), full_dim)
         total_end = np.clip(full_dim, origin, origin + volume_size)
         chunk_size = np.clip((1024, 1024, 1024), (0,0,0), volume_size) if chunk_size is None else np.clip(chunk_size, (0,0,0), volume_size)
 
+        chunk_count = np.ceil(np.array([total_end[0] - origin[0], total_end[1] - origin[1], total_end[2] - origin[2]]) / np.array(chunk_size)).astype("uint32")
+        total_chunk_count = int(chunk_count[0] * chunk_count[1] * chunk_count[2])
+
         # create output directory
         output_dir.mkdir(parents=True, exist_ok=True)
+        info_file_path = output_dir / Path(output_name.format(int(chunk_count[0]) - 1,
+                                                              int(chunk_count[1]) - 1,
+                                                              int(chunk_count[2]) - 1, "txt"))
+        if not info_file_path.exists():
+            continue_download = False
         if not continue_download and os.listdir(output_dir):
-            raise IOError(f"output directory {output_dir} must be empty")
+            if not continue_download:
+                raise IOError(f"output directory {output_dir} must be empty when starting new download")
+
         if volume_size[0] <= 0 or volume_size[1] <= 0 or volume_size[2] <= 0:
             raise ValueError("volume_size dimensions must be positive")
         if origin[0] < 0 or origin[1] < 0 or origin[2] < 0:
@@ -91,9 +101,6 @@ class CloudDataDownload:
         print(f"Downloading from {full_dim} volume {self.__dataset_url} to "
               f"{(output_dir / Path(output_name.format('[X]', '[Y]', '[Z]', output_format)))}\n"
               f"sub-volume: {origin}:{total_end}, chunk size {chunk_size}")
-
-        chunk_count = np.ceil(np.array([total_end[0] - origin[0], total_end[1] - origin[1], total_end[2] - origin[2]]) / np.array(chunk_size))
-        total_chunk_count = int(chunk_count[0] * chunk_count[1] * chunk_count[2])
 
         total_gb = (total_end[0] - origin[0]) * (total_end[1] - origin[1]) * (total_end[2] - origin[2]) * 4 / 1024 / 1024 / 1024
         if total_gb > 2048:
@@ -109,6 +116,17 @@ class CloudDataDownload:
         print(f"{time.strftime("%H:%M:%S")} {"Continue" if continue_download else "Start"} download of"
               f" {total_chunk_count} chunks. Uncompressed uint32 array is {total_gb} GiB.")
         time.sleep(2)
+
+        # write an information file
+        with open(info_file_path, 'w') as readme:
+            readme.write(f"{time.strftime("%Y.%m.%d %H:%M:%S")} downloaded from {data_set_url}\n")
+            readme.write(f"original volume has size {full_dim}.\n\ndownloaded volume")
+            readme.write(f"  subset size: {volume_size}\n")
+            readme.write(f"  subset region: {origin} to {total_end}\n")
+            readme.write(f"  chunk size: {chunk_size}\n")
+            readme.write(f"  chunk count: {chunk_count}\n")
+            readme.write(f"  format: {output_format}\n")
+            readme.close()
 
         chunk_id = 0
         for idx_0 in range(0, total_end[0] - origin[0], chunk_size[0]):
