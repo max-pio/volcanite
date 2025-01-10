@@ -1244,13 +1244,16 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
     // Path Tracing / Rendering
     static int gui_preset_selection = 0;
-    g_render->addCombo(&gui_preset_selection, m_data_vcfg_presets,
+    std::vector<std::string> vcfg_preset_names;
+    std::ranges::transform(m_data_vcfg_presets, std::back_inserter(vcfg_preset_names),
+        [](const std::pair<std::string, std::filesystem::path>& c){return c.first;});
+    g_render->addCombo(&gui_preset_selection, vcfg_preset_names,
                        [this](int i) {
                             // how many frames have to be accumulated so that each pixel received one sample
                             if (i >= 0 && i < m_data_vcfg_presets.size())
-                                readParameterFile(std::filesystem::path(m_data_vcfg_presets[i]));
+                                readParameterFile(m_data_vcfg_presets[i].second);
 
-                            // compute min. number of accumulation frames
+                            // compute min. required number of total accumulation samples per pixel
                             const int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
                             if (m_global_illumination_enabled && m_shadow_pathtracing_ratio > 0.) {
                                 // ambient occlusion / path tracing need some frames to converge (1024 SPP)
@@ -1303,6 +1306,10 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addBool(&m_clear_cache_every_frame, "Clear Cache Every Frame");
     g_dev->addBool(&m_clear_accum_every_frame, "Clear Accumulation Every Frame");
     g_dev->addSeparator();
+
+    // import initial config (if requested)
+    if (m_init_vcfg_file.has_value())
+        CompressedSegmentationVolumeRenderer::readParameterFile(m_init_vcfg_file.value());
 }
 
     void CompressedSegmentationVolumeRenderer::updateDeviceMemoryUsage() {

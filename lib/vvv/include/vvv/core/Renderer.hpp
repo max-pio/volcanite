@@ -152,8 +152,7 @@ public:
         // Try to load selected config path
         // Load backup config in case of failure
         bool success = true;
-        std::ifstream in(path);
-        if(in.is_open()) {
+        if(std::ifstream in(path); in.is_open()) {
             if (!readParameters(in, expected_version_string)) {
                 Logger(WARN) << "Could not import rendering parameters from " << path;
 

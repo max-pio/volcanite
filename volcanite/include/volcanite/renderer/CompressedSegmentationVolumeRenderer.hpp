@@ -21,8 +21,6 @@
 #include <utility>
 
 #include "vvv/core/Renderer.hpp"
-#include "vvv/core/Shader.hpp"
-#include "vvv/util/hash_memory.hpp"
 #include "vvv/reflection/UniformReflection.hpp"
 #include "vvv/passes/PassCompute.hpp"
 
@@ -41,11 +39,46 @@ public:
         // initialize camera in orbital mode
         m_camera = std::make_shared<vvv::Camera>(true);
 
-        // get the names of all available vcfg preset files in data subdirectory
+        // get all available vcfg presets from the vcfg data directory
+        // either form an init.txt or by gathering all files
         m_data_vcfg_presets.clear();
-        for (const auto & entry : std::filesystem::directory_iterator(Paths::findDataPath("vcfg"))) {
-            if (entry.path().has_extension() && entry.path().extension() == ".vcfg") {
-                m_data_vcfg_presets.emplace_back(entry.path().stem());
+        if (Paths::hasDataPath("vcfg")) {
+            auto vcfg_data_dir = Paths::findDataPath("vcfg");
+            if (std::filesystem::is_directory(vcfg_data_dir)) {
+                auto init_file_path = vcfg_data_dir / std::filesystem::path("init.txt");
+                bool imported_from_init_file = false;
+                if (std::filesystem::exists(init_file_path)) {
+                    if (std::ifstream init_file(init_file_path); init_file.is_open()) {
+                        std::string name_str, path_str;
+                        while (!init_file.eof()) {
+                            // init file contains lines of:
+                            std::getline(init_file, name_str, ':');
+                            std::getline(init_file, path_str);
+                            if (name_str == "__init__") {
+                                Logger(ERROR) << "init from " << (vcfg_data_dir / std::filesystem::path(path_str));
+                                m_init_vcfg_file = vcfg_data_dir / std::filesystem::path(path_str);
+                            } else {
+                                Logger(ERROR) << name_str << ":  " << (vcfg_data_dir / std::filesystem::path(path_str));
+                                m_data_vcfg_presets.emplace_back(name_str,
+                                                                vcfg_data_dir / std::filesystem::path(path_str));
+                            }
+                        }
+                        if (init_file.fail() || init_file.bad())
+                            Logger(WARN) << "Error reading vcfg preset initialization file " << init_file_path;
+                        else
+                            imported_from_init_file = true;
+                    } else {
+                        Logger(WARN) << "Could not open vcfg preset initialization file " << init_file_path;
+                    }
+                }
+                if (!imported_from_init_file) {
+                    m_data_vcfg_presets.clear();
+                    for (const auto & entry : std::filesystem::directory_iterator(vcfg_data_dir)) {
+                        if (entry.path().has_extension() && entry.path().extension() == ".vcfg") {
+                            m_data_vcfg_presets.emplace_back(entry.path().stem(), entry.path());
+                        }
+                    }
+                }
             }
         }
 
@@ -156,10 +189,22 @@ public:
     void saveConfigOnShutdown(const std::string& path) { m_save_config_on_shutdown_path = expandPath(path); }
 
     bool readParameterFile(const std::string& path, const std::string& version_string="") override {
+        auto to_tag = [](std::string str) -> std::string {
+            std::ranges::transform(str, str.begin(),[](const unsigned char c) {
+                                                                        return std::tolower(c); });
+            auto it = std::ranges::remove_if(str, [](const unsigned char c) {
+                                                                        return c == ' ' || c == '_' || c == '-'; });
+            str.erase(it.begin(), it.end());
+            return str;
+        };
         // first check if the given path matches the name of one of the preset files
-        for (const auto& preset: m_data_vcfg_presets) {
-            if (preset == path)
-                return Renderer::readParameterFile(Paths::findDataPath("vcfg") / std::filesystem::path(preset + ".vcfg"), version_string);
+        if (path.find('.') == std::string::npos && path.find('~') == std::string::npos
+            && path.find('/') == std::string::npos && path.find('\\') == std::string::npos) {
+            for (const auto&[vcfg_name, vcfg_path]: m_data_vcfg_presets) {
+                Logger(INFO) << path << " --> " << to_tag(path) << " | " << to_tag(vcfg_name);
+                if (to_tag(path) == to_tag(vcfg_name))
+                    return Renderer::readParameterFile(Paths::findDataPath("vcfg") / vcfg_path, version_string);
+            }
         }
         return Renderer::readParameterFile(expandPath(path), version_string);
     }
@@ -255,7 +300,7 @@ private:
     bool m_envmap_enabled = false;
     float m_shadow_pathtracing_ratio = 1.0f;
     glm::vec2 m_ambient_occlusion_dist_strength = glm::vec2(15.f, 0.5f);
-    glm::vec3 m_light_direction = glm::vec3(0.309426f, 0.721995f, 0.618853f);
+    glm::vec3 m_light_direction = glm::vec3(-0.309426f, 0.721995f, -0.618853f);
     float m_light_intensity = 1.f;
     // voxel traversal
     int m_max_path_length = 32;
@@ -293,7 +338,8 @@ private:
     std::string m_gui_device_mem_text;
     std::optional<std::string> m_download_frame_to_image_file = {};
     std::string m_save_config_on_shutdown_path = {};
-    std::vector<std::string> m_data_vcfg_presets = {};                  /// names of preset vcfg files in data subfolder
+    std::vector<std::pair<std::string, std::filesystem::path>> m_data_vcfg_presets = {};  /// names and paths of preset vcfg files in data subfolder
+    std::optional<std::filesystem::path> m_init_vcfg_file = {};     /// vcfg config file that will be loaded after GUI is initialized
 
     void updateDeviceMemoryUsage();
     void updateSegmentedVolumeMaterial(int m);

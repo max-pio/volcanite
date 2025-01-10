@@ -1,0 +1,5 @@
+Local Shading:local_shading.vcfg
+Global Shadows:global_shadows.vcfg
+Ambient Occlusion:ambient_occlusion.vcfg
+Path Tracing:path_tracing.vcfg
+__init__:global_shadows.vcfg
