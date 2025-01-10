@@ -119,7 +119,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
 
         // we open a precomputed csgv database for this volume if it exists or create it otherwise
         std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> label_remapping = nullptr;
-        csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();
+        csgvDatabase = std::make_shared<CSGVDatabase>();
         if(args.label_remapping) {
             std::string database_path = stripFileExtension(complete_csgv_path) + "_csgv.db3";
             MiniTimer t;
@@ -180,16 +180,18 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
 
 
         // try to load a precomputed database
+        csgvDatabase = std::make_shared<CSGVDatabase>();
         std::string database_path = stripFileExtension(args.input_file) + "_csgv.db3";
         if(std::filesystem::exists(database_path)) {
             MiniTimer t;
             csgvDatabase->importFromSqlite(database_path);
             if (args.verbose)
-                Logger(INFO) << "Imported attribute database " << database_path << " in " << t.elapsed() << " seconds";
+                Logger(DEBUG) << "Imported attribute database " << database_path << " in " << t.elapsed() << " seconds";
         }
         else {
             csgvDatabase->createDummy();
-            Logger(INFO) << "No attribute database " << database_path << " found. Using dummy database.";
+            if (args.verbose)
+                Logger(DEBUG) << "No attribute database " << database_path << " found. Using dummy database.";
         }
 
         if(args.verbose) {

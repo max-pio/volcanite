@@ -49,7 +49,6 @@ class CloudDataDownload:
                                       read=True, context=context).result()[ts.d['channel'][0]]
         else:
             raise ValueError("unknown cloud storage")
-        # print("Accessing data set " + str(path) + " with shape (ZYX) " + str(_dataset.shape) + " chunks: " + str(np.ceil(np.array(_dataset.shape) / CHUNK_SIZE).astype('int')))
 
     def __init__(self, data_url: str):
         """Obtains a handle to the given bossdb or tensorstore cloud data set."""
@@ -61,9 +60,9 @@ class CloudDataDownload:
         """:returns: the dimensions of the full volume."""
         return self.__dataset.shape
 
-    def download(self, output_dir : Path, volume_size: tuple[int, int, int] | None = None,
+    def download(self, output_dir : Path, volume_size: tuple[int, int, int] | None = None, output_name: str = "x{}y{}z{}.{}",
                  origin : tuple[int, int, int] | None = None, chunk_size : tuple[int, int, int] | None = (1024, 1024, 1024),
-                 output_format : str = "hdf5"):
+                 output_format : str = "hdf5", continue_download: bool = False):
 
         if not output_format in converter.supported_formats():
             raise ValueError(f"unknown output format {output_format} is not in " + ",".join(converter.supported_formats()))
@@ -84,7 +83,7 @@ class CloudDataDownload:
 
         # create output directory
         output_dir.mkdir(parents=True, exist_ok=True)
-        if os.listdir(output_dir):
+        if not continue_download and os.listdir(output_dir):
             raise IOError(f"output directory {output_dir} must be empty")
         if volume_size[0] <= 0 or volume_size[1] <= 0 or volume_size[2] <= 0:
             raise ValueError("volume_size dimensions must be positive")
@@ -112,13 +111,15 @@ class CloudDataDownload:
             if confirm != 'y':
                 exit(1)
 
-        print(f"{time.strftime("%H:%M:%S")} Start download of {int(total_chunk_count)} chunks. Uncompressed uint32"
-              f" array is {total_gb} GB.")
+        print(f"{time.strftime("%H:%M:%S")} {"Continue" if continue_download else "Start"} download of"
+              f" {int(total_chunk_count)} chunks. Uncompressed uint32 array is {total_gb} GB.")
+        time.sleep(2)
+
         chunk_id = 0
         for idx_0 in range(0, total_end[0] - origin[0], chunk_size[0]):
             for idx_1 in range(0, total_end[1] - origin[1], chunk_size[1]):
                 for idx_2 in range(0, total_end[2] - origin[2], chunk_size[2]):
-                    start = origin + (idx_0, idx_1, idx_2)
+                    start = (origin[0] + idx_0, origin[1] + idx_1, origin[2] + idx_2)
                     end = (min(total_end[0], start[0] + chunk_size[0]),
                            min(total_end[1], start[1] + chunk_size[1]),
                            min(total_end[2], start[2] + chunk_size[2]))
@@ -127,7 +128,10 @@ class CloudDataDownload:
                           f"x{idx_0 // chunk_size[0]}y{idx_1 // chunk_size[1]}z{idx_2 // chunk_size[2]} from "
                           f"{start} to {end}", end='')
 
-                    output_file = output_dir / Path("x{}y{}z{}.{}".format(idx_0 // chunk_size[0], idx_1 // chunk_size[1], idx_2 // chunk_size[2], output_format))
+                    output_file = output_dir / Path(output_name.format(idx_0 // chunk_size[0],
+                                                                       idx_1 // chunk_size[1],
+                                                                       idx_2 // chunk_size[2],
+                                                                       output_format))
 
                     if not output_file.exists():
                         cur_slice = np.array(self.__dataset[start[0]:end[0],
@@ -154,8 +158,10 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--directory", help="empty/non-existing directory where data is stored.")
     parser.add_argument("-s", "--size", type=int, nargs=3, help="size of downloaded volume in voxels (default: full volume).")
     parser.add_argument("-f", "--filetype", default="hdf5", help="file type in which chunks are stored.")
-    parser.add_argument("-o", "--origin", type=int, nargs=3, help="origin of the sub-volume in the full data set")
+    parser.add_argument("-o", "--origin", type=int, nargs=3, help="origin of the sub-volume in the full data set.")
     parser.add_argument("-c", "--chunk_size", type=int, nargs=3, default=(1024,1024,1024), help="volume is split into chunks of this size. should be dividable by 64.")
+    parser.add_argument("-f", "--finish", action="store_true", default=False, help="ignore non-empty output directory and skip existing chunk files.")
+    parser.add_argument("-n", "--name", help="file name prefix for chunks that will be extended to [name]_x{}y{}z{}.[filetype]")
     parser.add_argument("-v", "--verbose", action="store_true")
 
     args = parser.parse_args()
@@ -166,6 +172,13 @@ if __name__ == '__main__':
         print("Available short keys for data_set argument:\n  " + "\n  ".join(example_data.keys()))
         exit(0)
     data_set_url = example_data[args.data_set] if args.data_set in example_data else args.data_set
+    if args.name:
+        output_name = args.name + "_"
+    elif args.data_set in example_data:
+        output_name = args.data_set + "_"
+    else:
+        output_name = ""
+    output_name.append("x{}y{}z{}.{}")
 
     # obtain dataset
     data = CloudDataDownload(data_set_url)
@@ -176,5 +189,6 @@ if __name__ == '__main__':
               + ". Specify a download directory with -d /path/to/dir/")
         exit(0)
     else:
-        data.download(Path(args.directory), args.size, args.origin, args.chunk_size)
+        data.download(output_dir=Path(args.directory), output_name=output_name, volume_size=args.size, origin=args.origin,
+                      chunk_size=args.chunk_size, continue_download=args.finish)
         exit(0)
