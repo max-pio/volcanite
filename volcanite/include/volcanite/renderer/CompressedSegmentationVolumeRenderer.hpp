@@ -55,10 +55,8 @@ public:
                             std::getline(init_file, name_str, ':');
                             std::getline(init_file, path_str);
                             if (name_str == "__init__") {
-                                Logger(ERROR) << "init from " << (vcfg_data_dir / std::filesystem::path(path_str));
                                 m_init_vcfg_file = vcfg_data_dir / std::filesystem::path(path_str);
                             } else {
-                                Logger(ERROR) << name_str << ":  " << (vcfg_data_dir / std::filesystem::path(path_str));
                                 m_data_vcfg_presets.emplace_back(name_str,
                                                                 vcfg_data_dir / std::filesystem::path(path_str));
                             }
@@ -201,7 +199,6 @@ public:
         if (path.find('.') == std::string::npos && path.find('~') == std::string::npos
             && path.find('/') == std::string::npos && path.find('\\') == std::string::npos) {
             for (const auto&[vcfg_name, vcfg_path]: m_data_vcfg_presets) {
-                Logger(INFO) << path << " --> " << to_tag(path) << " | " << to_tag(vcfg_name);
                 if (to_tag(path) == to_tag(vcfg_name))
                     return Renderer::readParameterFile(Paths::findDataPath("vcfg") / vcfg_path, version_string);
             }

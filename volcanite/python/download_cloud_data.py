@@ -67,19 +67,13 @@ class CloudDataDownload:
         if not output_format in converter.supported_formats():
             raise ValueError(f"unknown output format {output_format} is not in " + ",".join(converter.supported_formats()))
 
-        # determine start / end volume sizes
-        full_dim = self.get_shape()
-        if volume_size is None:
-            volume_size = full_dim
-        if chunk_size is None:
-            chunk_size = full_dim
-        if origin is None:
-            origin = (max(0, self.__dataset.shape[0] // 2 - volume_size[0] // 2),
-                      max(0, self.__dataset.shape[1] // 2 - volume_size[1] // 2),
-                      max(0, self.__dataset.shape[2] // 2 - volume_size[2] // 2))
-        total_end = (min(full_dim[0], origin[0] + volume_size[0]),
-                     min(full_dim[1], origin[1] + volume_size[1]),
-                     min(full_dim[2], origin[2] + volume_size[2]))
+        # determine and clip (default) arguments, start / end volume sizes
+        # and make our life easier: just convert everything to numpy arrays
+        full_dim = np.array(self.get_shape())
+        volume_size = full_dim if volume_size is None else np.clip(volume_size, (0,0,0), full_dim)
+        origin = np.clip(full_dim // 2 - volume_size // 2, np.array(0,0,0), full_dim) if origin is None else np.clip(origin, (0,0,0), full_dim)
+        total_end = np.clip(full_dim, origin, origin + volume_size)
+        chunk_size = np.clip((1024, 1024, 1024), (0,0,0), volume_size) if chunk_size is None else np.clip(chunk_size, (0,0,0), volume_size)
 
         # create output directory
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -99,31 +93,30 @@ class CloudDataDownload:
               f"sub-volume: {origin}:{total_end}, chunk size {chunk_size}")
 
         chunk_count = np.ceil(np.array([total_end[0] - origin[0], total_end[1] - origin[1], total_end[2] - origin[2]]) / np.array(chunk_size))
-        total_chunk_count = chunk_count[0] * chunk_count[1] * chunk_count[2]
+        total_chunk_count = int(chunk_count[0] * chunk_count[1] * chunk_count[2])
 
         total_gb = (total_end[0] - origin[0]) * (total_end[1] - origin[1]) * (total_end[2] - origin[2]) * 4 / 1024 / 1024 / 1024
         if total_gb > 2048:
-            confirm = input(f"WARNING: attempting to download volume with (uncompressed) size of {total_gb} GB. Continue? (y/n) ").lower()
+            confirm = input(f"WARNING: attempting to download volume with (uncompressed) size of {total_gb} GiB. Continue? (y/n) ").lower()
             if confirm != 'y':
                 exit(1)
         chunk_gb = chunk_size[0] * chunk_size[1] * chunk_size[2] * 4 / 1024 / 1024 / 1024
         if chunk_gb > 4:
-            confirm = input(f"WARNING: attempting to download volume as chunks with an (uncompressed) size of {chunk_gb} GB per file. Continue? (y/n) ").lower()
+            confirm = input(f"WARNING: attempting to download volume as chunks with an (uncompressed) size of up to {chunk_gb} GiB per file. Continue? (y/n) ").lower()
             if confirm != 'y':
                 exit(1)
 
         print(f"{time.strftime("%H:%M:%S")} {"Continue" if continue_download else "Start"} download of"
-              f" {int(total_chunk_count)} chunks. Uncompressed uint32 array is {total_gb} GB.")
+              f" {total_chunk_count} chunks. Uncompressed uint32 array is {total_gb} GiB.")
         time.sleep(2)
 
         chunk_id = 0
         for idx_0 in range(0, total_end[0] - origin[0], chunk_size[0]):
             for idx_1 in range(0, total_end[1] - origin[1], chunk_size[1]):
                 for idx_2 in range(0, total_end[2] - origin[2], chunk_size[2]):
-                    start = (origin[0] + idx_0, origin[1] + idx_1, origin[2] + idx_2)
-                    end = (min(total_end[0], start[0] + chunk_size[0]),
-                           min(total_end[1], start[1] + chunk_size[1]),
-                           min(total_end[2], start[2] + chunk_size[2]))
+                    offset = np.array((idx_0, idx_1, idx_2))
+                    start = origin + offset
+                    end = np.clip(start + chunk_size, start, total_end)
 
                     print(f"{time.strftime("%H:%M:%S")} {int(chunk_id / total_chunk_count * 100.)} % processing chunk "
                           f"x{idx_0 // chunk_size[0]}y{idx_1 // chunk_size[1]}z{idx_2 // chunk_size[2]} from "
@@ -177,7 +170,7 @@ if __name__ == '__main__':
         if not args.name:
             output_name = ""
         else:
-            output_nmae = args.name + "_"
+            output_name = args.name + "_"
     elif args.data_set in example_data:
         output_name = args.data_set + "_"
     else:
