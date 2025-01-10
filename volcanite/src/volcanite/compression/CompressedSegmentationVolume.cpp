@@ -831,7 +831,7 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
         Logger(INFO) << " brick count: " << str(brickCount) << " = " << getBrickIndexCount() << " with brick size " << m_brick_size << "^3";
     }
 
-    Logger(INFO, true) << " Prepass Progress 0.0%";
+    Logger(INFO, true) << " " << getLabel() << " Prepass Progress 0.0%";
     MiniTimer progressTimer;
     MiniTimer totalTimer;
     int bricks_since_last_update = 0;
@@ -877,7 +877,7 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
                 if (progressTimer.elapsed() >= PROGRESS_UPDATE_INTERVAL) {
                     float bricks_per_second = static_cast<float>(bricks_since_last_update / progressTimer.elapsed());
                     std::stringstream stream;
-                    stream << " Prepass Progress " << std::fixed << std::setprecision(1)
+                    stream << " " << getLabel() << " Prepass Progress " << std::fixed << std::setprecision(1)
                            << static_cast<float>(brick_idx) / static_cast<float>(getBrickIndexCount() /
                                 subsampling_factor / subsampling_factor / subsampling_factor) * 100.f << "%"
                            << " (" << std::setprecision(2)
@@ -893,12 +893,14 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
 
 
     // sum up the frequencies
-    #pragma omp parallel for default(none) shared(freq_out, brick_freq)
+    #pragma omp parallel for default(none) shared(freq_out, brick_freq, subsampling_factor)
     for(int i = 0; i < 32; i++) {
         freq_out[i] = 0ul;
         for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
             freq_out[i] += brick_freq[thread_id][i];
         }
+        // scale up the values for the missing bricks
+        freq_out[i] *= subsampling_factor * subsampling_factor * subsampling_factor;
     }
 
     // prevent accidentally counting a zero frequency for rare symbols due to subsampling
@@ -912,32 +914,34 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
                                           OP_PALETTE_D_BIT,
                                           OP_PALETTE_D_BIT};
     if(subsampling_factor > 1u) {
-        bool changed = false;
-        #pragma omp parallel for default(none) shared(freq_out, changed, detail_freq, m_op_mask, op_for_opmask)
+        std::vector<int> changed_symbols = {};
         for(int i = 0; i < 8; i++) {
             // base levels freq:
             if (freq_out[i] == 0ul && (op_for_opmask[i] & m_op_mask)) {
-                changed = true;
+                changed_symbols.push_back(i);
                 freq_out[i] = 1ul;
             }
             // base levels freq for stop bits (and with delta values for PALETTE_DELTA operation):
             if (freq_out[i + 8] == 0ul && (op_for_opmask[i] & m_op_mask) && (m_op_mask & (OP_PALETTE_D_BIT | OP_STOP_BIT))) {
-                changed = true;
+                changed_symbols.push_back(i + 8);
                 freq_out[i + 8] = 1ul;
             }
             // detail freq: (no stop bits possible)
             if (detail_freq && freq_out[i + 16] == 0ul && (op_for_opmask[i] & m_op_mask)) {
-                changed = true;
+                changed_symbols.push_back(i + 16);
                 freq_out[i + 16] = 1ul;
             }
             // detail freq values >= 8 only for delta values in palette delta
             if (detail_freq && freq_out[i + 24] == 0ul && (m_op_mask & OP_PALETTE_D_BIT)) {
-                changed = true;
+                changed_symbols.push_back(i + 24);
                 freq_out[i + 24] = 1ul;
             }
         }
-        if (changed)
-            Logger(WARN) << " set zero symbol freq. to 1 to avoid missing symbols due to frequency pass subsampling.";
+        if (!changed_symbols.empty()) {
+            std::ranges::sort(changed_symbols);
+            Logger(DEBUG) << " set symbol freq. for " << array_string(changed_symbols.data(), changed_symbols.size())
+                              << " from 0 to 1 to avoid missing symbols due to frequency pass subsampling.";
+        }
     }
 
     // reset rANS mode to previously configured value
@@ -946,11 +950,12 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
     float total_seconds = totalTimer.elapsed();
     m_last_total_freq_prepass_seconds = total_seconds;
     if (verbose) {
-        Logger(INFO) << " Prepass Progress 100% in " << std::fixed << std::setprecision(3) << total_seconds
-                     << "s operation freq: " << arrayToString(freq_out, 16) << " | "
+        Logger(INFO) << " " << getLabel() << " Prepass Progress 100% in " << std::fixed << std::setprecision(3)
+                     << total_seconds << "s operation freq: " << arrayToString(freq_out, 16) << " | "
                      << arrayToString(freq_out + 16, 16);
     } else {
-        Logger(INFO) << " Prepass Progress 100% in " << std::fixed << std::setprecision(3) << total_seconds << "s";
+        Logger(INFO) << " " << getLabel() << " Prepass Progress 100% in "
+                          << std::fixed << std::setprecision(3) << total_seconds << "s";
     }
 }
 

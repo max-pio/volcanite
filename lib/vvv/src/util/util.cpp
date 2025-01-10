@@ -25,36 +25,6 @@ glm::mat4 vvv::removeTranslation(glm::mat4 mat) {
     return mat;
 }
 
-inline std::string vvv::array_string(float* v, int n) {
-    std::string out = "{";
-    for(int i = 0; i < n ; i++) {
-        if(i > 0)
-            out += ", ";
-        out += std::to_string(v[i]);
-    }
-    return out + "}";
-}
-
-inline std::string vvv::array_string(int* v, int n) {
-    std::string out = "{";
-    for(int i = 0; i < n ; i++) {
-        if(i > 0)
-            out += ", ";
-        out += std::to_string(v[i]);
-    }
-    return out + "}";
-}
-
-inline std::string vvv::array_string(unsigned int* v, int n) {
-    std::string out = "{";
-    for(int i = 0; i < n ; i++) {
-        if(i > 0)
-            out += ", ";
-        out += std::to_string(v[i]);
-    }
-    return out + "}";
-}
-
 std::string vvv::str(glm::vec2 v) { return array_string(&v.x, 2); }
 std::string vvv::str(glm::vec3 v) { return array_string(&v.x, 3); }
 std::string vvv::str(glm::vec4 v) { return array_string(&v.x, 4); }

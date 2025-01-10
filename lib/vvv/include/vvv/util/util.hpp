@@ -67,10 +67,19 @@ glm::mat4 removeTranslation(glm::mat4 mat);
 
 template <typename T> size_t vectorByteSize(const typename std::vector<T> &vec) { return sizeof(T) * vec.size(); }
 
-/// Constructs a string of a memory consecutive float array with n elements.
-inline std::string array_string(float* v, int n);
-inline std::string array_string(int* v, int n);
-inline std::string array_string(unsigned int* v, int n);
+/// Constructs a string representation of an array with n elements.
+template <typename T>
+std::string array_string(const T* v, const size_t n) {
+    std::stringstream out;
+    out << "{";
+    for(size_t i = 0; i < n ; i++) {
+        if(i > 0)
+            out << ", ";
+        out << v[i];
+    }
+    out << "}";
+    return out.str();
+}
 
 std::string str(glm::vec2 v);
 std::string str(glm::vec3 v);

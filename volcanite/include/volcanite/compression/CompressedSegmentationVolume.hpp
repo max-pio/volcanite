@@ -387,6 +387,7 @@ public:
     bool importFromFile(const std::string& path, bool verbose = true, bool verify = true);
     void exportToFile(const std::string& path, bool verbose = true);
 
+    void setLabel(const std::string& label) { m_label = label; }
     const std::string& getLabel() { return m_label; }
 
     void clear() {

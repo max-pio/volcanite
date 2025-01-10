@@ -271,9 +271,11 @@ public:
                 Logger(DEBUG) << "operation frequency prepass:";
                 // note: this is a hardcoded frequency subsampling (1/8th of all chunks) on a chunk level. Ccompression
                 // time is dominated by file i/o and reading fewer chunks makes everything much faster.
-                for (int z = 0; z <= cfg.max_file_index.z; z+=2) {
-                    for (int y = 0; y <= cfg.max_file_index.y; y+=2) {
-                        for (int x = 0; x <= cfg.max_file_index.x; x+=2) {
+                const int chunk_skip = ((cfg.max_file_index.z + cfg.max_file_index.z + cfg.max_file_index.z) > 4
+                                         && cfg.freq_subsampling > 1) ? 2 : 1;
+                for (int z = 0; z <= cfg.max_file_index.z; z += chunk_skip) {
+                    for (int y = 0; y <= cfg.max_file_index.y; y += chunk_skip) {
+                        for (int x = 0; x <= cfg.max_file_index.x; x += chunk_skip) {
                             // create new file path for the compressed version of this single chunk
                             std::string chunk_input_path = cfg.chunked_input_data ? formatChunkPath(volume_input_path, x, y, z) : volume_input_path;
 
@@ -281,6 +283,7 @@ public:
                             volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
 
                             size_t tmp_code_frequencies[32];
+                            csgv->setLabel(chunk_input_path);
                             csgv->setCompressionOptions(cfg.brick_dim, NIBBLE_ENC, cfg.op_mask, cfg.random_access);
                             csgv->compressForFrequencyTable(volume->data(), volume_dim, tmp_code_frequencies, cfg.freq_subsampling, cfg.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
                             for (int i = 0; i < 16; i++) {
@@ -339,6 +342,7 @@ public:
 
                         // perform the actual compression
                         csgv->clear();
+                        csgv->setLabel(chunk_input_path);
                         csgv->setCompressionOptions64(cfg.brick_dim, cfg.encoding_mode, cfg.op_mask, cfg.random_access,
                                                       code_frequencies.data(), detail_code_frequencies.data());
                         csgv->compress(volume->data(), volume_dim, cfg.verbose);
@@ -392,8 +396,8 @@ public:
             if(!csgv)
                 return nullptr;
             csgv->setCPUThreadCount(cpu_threads);
-            csgv->m_last_total_freq_prepass_seconds = total_freq_prepass_seconds;
-            csgv->m_last_total_encoding_seconds = total_encoding_seconds;
+            csgv->m_last_total_freq_prepass_seconds = static_cast<float>(total_freq_prepass_seconds);
+            csgv->m_last_total_encoding_seconds = static_cast<float>(total_encoding_seconds);
         }
 
         // create a log file
