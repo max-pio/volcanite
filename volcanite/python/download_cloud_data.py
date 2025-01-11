@@ -36,7 +36,7 @@ class CloudDataDownload:
         if self.__dataset_url[:6] == "bossdb":
             # obtain data set from bossdb
             self.__dataset = array(self.__dataset_url, axis_order="XYZ")
-            self.__axis_transpose_to_xyz = (2,1,0) # TODO: obtain axis order (XYZ, ZYX..) from data set
+            # self.__axis_transpose_to_xyz = TODO: obtain axis order (XYZ, ZYX..) from data set
         elif self.__dataset_url[:2] == "gs":
             # TODO use intern[cloudvolume] to download from google cloud as well
             # obtain data set form google storage
@@ -49,16 +49,16 @@ class CloudDataDownload:
                                       'path': _gs_path,
                                       'scale_metadata': {'resolution': [8, 8, 33]}},
                                       read=True, context=context).result()[ts.d['channel'][0]]
-            self.__axis_transpose_to_xyz = (2,1,0) # TODO: obtain axis order (XYZ, ZYX..) from data set
+            # self.__axis_transpose_to_xyz = TODO: obtain axis order (XYZ, ZYX..) from data set
         else:
             raise ValueError("unknown cloud storage")
 
-    def __init__(self, data_url: str):
+    def __init__(self, url: str, axis_transpose_to_xyz: tuple[int, int, int] | None = None):
         """Obtains a handle to the given bossdb or tensorstore cloud data set."""
 
-        self.__axis_transpose_to_xyz = (0,1,2)
+        self.__axis_transpose_to_xyz = axis_transpose_to_xyz if axis_transpose_to_xyz else (2,1,0)
         self.__dataset = None
-        self.__dataset_url = data_url
+        self.__dataset_url = url
         self.__obtain_cloud_dataset()
 
     def get_dataset(self):
@@ -67,18 +67,14 @@ class CloudDataDownload:
     def get_shape(self):
         return self.__dataset.shape
 
+    def get_axis_transpose(self):
+        return self.__axis_transpose_to_xyz
+
     def read_chunk(self, start : tuple[int, int, int] | np.ndarray, end : tuple[int, int, int] | np.ndarray):
         result = np.array(self.__dataset[start[0]:end[0],
                                        start[1]:end[1],
                                        start[2]:end[2]], dtype='uint32')
         return result.transpose(self.__axis_transpose_to_xyz).reshape(end - start, order='C')
-
-    def check_test_vis(self, origin : tuple[int, int, int] | None = None, chunk_size : tuple[int, int, int] | None = (1024, 1024, 1024)):
-        full_dim = np.array(self.__dataset.shape)
-        chunk_size = np.clip(np.array(chunk_size, dtype='int'), (1, 1, 1), full_dim // 2)
-        origin = np.clip(full_dim // 2 - chunk_size // 2, (0,0,0), full_dim) if origin is None else np.clip(origin, (0,0,0), full_dim)
-        print(origin, chunk_size)
-        converter.debug_vis(self.read_chunk(origin, origin + chunk_size))
 
     def download(self, output_dir : Path, volume_size: tuple[int, int, int] | None = None, output_name: str = "x{}y{}z{}.{}",
                  origin : tuple[int, int, int] | None = None, chunk_size : tuple[int, int, int] | None = (1024, 1024, 1024),
@@ -187,8 +183,9 @@ if __name__ == '__main__':
     parser.add_argument("data_set", help="data set url or example name. 'list-examples' lists available names.")
     parser.add_argument("-d", "--directory", help="empty/non-existing directory where data is stored.")
     parser.add_argument("-s", "--size", type=int, nargs=3, help="size of downloaded volume in voxels (default: full volume).")
-    parser.add_argument("-t", "--filetype", default="hdf5", help="file type in which chunks are stored.")
+    parser.add_argument("-f", "--filetype", default="hdf5", help="file type in which chunks are stored.")
     parser.add_argument("-o", "--origin", type=int, nargs=3, help="origin of the sub-volume in the full data set.")
+    parser.add_argument("-t" "--transpose", type=int, nargs=3, help="axis transpose in chunks to achieve XYZ order: a permutation of 0 1 2", default=(2,1,0))
     parser.add_argument("-c", "--chunk_size", type=int, nargs=3, default=(1024,1024,1024), help="volume is split into chunks of this size. should be dividable by 64.")
     parser.add_argument("-a", "--append", action="store_true", default=False, help="ignore non-empty output directory and skip existing chunk files.")
     parser.add_argument("-n", "--name", help="file name prefix for chunks that will be extended to [name]_x{}y{}z{}.[filetype]")
@@ -215,14 +212,15 @@ if __name__ == '__main__':
     output_name = output_name + "x{}y{}z{}.{}"
 
     # obtain dataset
-    data = CloudDataDownload(data_set_url)
+    data = CloudDataDownload(data_set_url, axis_transpose_to_xyz=args.transpose)
+
+    # to download and visualize one small chunk
+    # converter.debug_vis(data.read_chunk(data.get_shape() // 2 - (200, 100, 16), (400, 200, 32)))
 
     # if no output directory is given, only print the shape of the volume if it is accessible
     if args.directory is None:
-        print(f"Volume {data_set_url} is available with size {data.get_shape()}, order {data.get_order()}. "
-              f"Specify a download directory with -d /path/to/dir/")
-        # show a quick visualization to check if the indexing order is correct
-        data.check_test_vis(origin=None, chunk_size=np.clip(args.chunk_size, (1,1,1), (1024,1024,1024)))
+        print(f"Volume {data_set_url} is available with size {data.get_shape()}, assuming axis order"
+              f" {data.get_axis_transpose()}. Specify a download directory with -d /path/to/dir/")
         exit(0)
     else:
         data.download(output_dir=Path(args.directory), output_name=output_name, output_format=args.filetype,
