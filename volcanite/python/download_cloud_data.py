@@ -185,7 +185,7 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--size", type=int, nargs=3, help="size of downloaded volume in voxels (default: full volume).")
     parser.add_argument("-f", "--filetype", default="hdf5", help="file type in which chunks are stored.")
     parser.add_argument("-o", "--origin", type=int, nargs=3, help="origin of the sub-volume in the full data set.")
-    parser.add_argument("-t" "--transpose", type=int, nargs=3, help="axis transpose in chunks to achieve XYZ order: a permutation of 0 1 2", default=(2,1,0))
+    parser.add_argument("-t", "--transpose", type=int, nargs=3, help="axis transpose in chunks to achieve XYZ order: a permutation of 0 1 2", default=(2,1,0))
     parser.add_argument("-c", "--chunk_size", type=int, nargs=3, default=(1024,1024,1024), help="volume is split into chunks of this size. should be dividable by 64.")
     parser.add_argument("-a", "--append", action="store_true", default=False, help="ignore non-empty output directory and skip existing chunk files.")
     parser.add_argument("-n", "--name", help="file name prefix for chunks that will be extended to [name]_x{}y{}z{}.[filetype]")
