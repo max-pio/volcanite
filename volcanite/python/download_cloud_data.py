@@ -35,8 +35,10 @@ class CloudDataDownload:
         # https://bossdb.org/get-started
         if self.__dataset_url[:6] == "bossdb":
             # obtain data set from bossdb
-            self.__dataset = array(self.__dataset_url)
+            self.__dataset = array(self.__dataset_url, axis_order="XYZ")
+            self.__axis_transpose_to_xyz = (2,1,0) # TODO: obtain axis order (XYZ, ZYX..) from data set
         elif self.__dataset_url[:2] == "gs":
+            # TODO use intern[cloudvolume] to download from google cloud as well
             # obtain data set form google storage
             context = ts.Context({'cache_pool': {'total_bytes_limit': 1000000000}})
             _path = self.__dataset_url[5:]
@@ -47,18 +49,36 @@ class CloudDataDownload:
                                       'path': _gs_path,
                                       'scale_metadata': {'resolution': [8, 8, 33]}},
                                       read=True, context=context).result()[ts.d['channel'][0]]
+            self.__axis_transpose_to_xyz = (2,1,0) # TODO: obtain axis order (XYZ, ZYX..) from data set
         else:
             raise ValueError("unknown cloud storage")
 
     def __init__(self, data_url: str):
         """Obtains a handle to the given bossdb or tensorstore cloud data set."""
 
+        self.__axis_transpose_to_xyz = (0,1,2)
+        self.__dataset = None
         self.__dataset_url = data_url
         self.__obtain_cloud_dataset()
 
-    def get_shape(self) -> tuple[int, int, int]:
-        """:returns: the dimensions of the full volume."""
+    def get_dataset(self):
+        return self.__dataset
+
+    def get_shape(self):
         return self.__dataset.shape
+
+    def read_chunk(self, start : tuple[int, int, int] | np.ndarray, end : tuple[int, int, int] | np.ndarray):
+        result = np.array(self.__dataset[start[0]:end[0],
+                                       start[1]:end[1],
+                                       start[2]:end[2]], dtype='uint32')
+        return result.transpose(self.__axis_transpose_to_xyz).reshape(end - start, order='C')
+
+    def check_test_vis(self, origin : tuple[int, int, int] | None = None, chunk_size : tuple[int, int, int] | None = (1024, 1024, 1024)):
+        full_dim = np.array(self.__dataset.shape)
+        chunk_size = np.clip(np.array(chunk_size, dtype='int'), (1, 1, 1), full_dim // 2)
+        origin = np.clip(full_dim // 2 - chunk_size // 2, (0,0,0), full_dim) if origin is None else np.clip(origin, (0,0,0), full_dim)
+        print(origin, chunk_size)
+        converter.debug_vis(self.read_chunk(origin, origin + chunk_size))
 
     def download(self, output_dir : Path, volume_size: tuple[int, int, int] | None = None, output_name: str = "x{}y{}z{}.{}",
                  origin : tuple[int, int, int] | None = None, chunk_size : tuple[int, int, int] | None = (1024, 1024, 1024),
@@ -69,7 +89,7 @@ class CloudDataDownload:
 
         # determine and clip (default) arguments, start / end volume sizes
         # and make our life easier: just convert everything to numpy arrays
-        full_dim = np.array(self.get_shape())
+        full_dim = np.array(self.__dataset.shape)
         volume_size = full_dim if volume_size is None else np.clip(volume_size, (0,0,0), full_dim)
         origin = np.clip(full_dim // 2 - volume_size // 2, (0,0,0), full_dim) if origin is None else np.clip(origin, (0,0,0), full_dim)
         total_end = np.clip(full_dim, origin, origin + volume_size)
@@ -129,16 +149,16 @@ class CloudDataDownload:
             readme.close()
 
         chunk_id = 0
-        for idx_0 in range(0, total_end[0] - origin[0], chunk_size[0]):
+        for idx_2 in range(0, total_end[2] - origin[2], chunk_size[2]):
             for idx_1 in range(0, total_end[1] - origin[1], chunk_size[1]):
-                for idx_2 in range(0, total_end[2] - origin[2], chunk_size[2]):
+                for idx_0 in range(0, total_end[0] - origin[0], chunk_size[0]):
                     offset = np.array((idx_0, idx_1, idx_2))
                     start = origin + offset
                     end = np.clip(start + chunk_size, start, total_end)
 
-                    print(f"{time.strftime("%H:%M:%S")} {int(chunk_id / total_chunk_count * 100.)} % processing chunk "
+                    print(f"{time.strftime("%H:%M:%S")} {(int(chunk_id / total_chunk_count * 100.)):02} % processing chunk "
                           f"x{idx_0 // chunk_size[0]}y{idx_1 // chunk_size[1]}z{idx_2 // chunk_size[2]} from "
-                          f"{start} to {end}", end='')
+                          f"{start} to {end} ({end - start})", end='')
 
                     output_file = output_dir / Path(output_name.format(idx_0 // chunk_size[0],
                                                                        idx_1 // chunk_size[1],
@@ -146,9 +166,7 @@ class CloudDataDownload:
                                                                        output_format))
 
                     if not output_file.exists():
-                        cur_slice = np.array(self.__dataset[start[0]:end[0],
-                                                            start[1]:end[1],
-                                                            start[2]:end[2]]).astype('uint32')
+                        cur_slice = self.read_chunk(start, end)
                         converter.write_volume(cur_slice, str(output_file.resolve()), "uint32", True, False)
                         print(" done.")
                     else:
@@ -169,7 +187,7 @@ if __name__ == '__main__':
     parser.add_argument("data_set", help="data set url or example name. 'list-examples' lists available names.")
     parser.add_argument("-d", "--directory", help="empty/non-existing directory where data is stored.")
     parser.add_argument("-s", "--size", type=int, nargs=3, help="size of downloaded volume in voxels (default: full volume).")
-    parser.add_argument("-f", "--filetype", default="hdf5", help="file type in which chunks are stored.")
+    parser.add_argument("-t", "--filetype", default="hdf5", help="file type in which chunks are stored.")
     parser.add_argument("-o", "--origin", type=int, nargs=3, help="origin of the sub-volume in the full data set.")
     parser.add_argument("-c", "--chunk_size", type=int, nargs=3, default=(1024,1024,1024), help="volume is split into chunks of this size. should be dividable by 64.")
     parser.add_argument("-a", "--append", action="store_true", default=False, help="ignore non-empty output directory and skip existing chunk files.")
@@ -179,7 +197,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     example_data = {'h01': "gs://h01-release/data/20210601/c3/",
-                    "witvliet2020": "bossdb://witvliet2020/Dataset_8/segmentation"}
+                    "witvliet2020": "bossdb://witvliet2020/Dataset_8/segmentation",
+                    }
     if args.data_set == "list-examples":
         print("Available short keys for data_set argument:\n  " + "\n  ".join(example_data.keys()))
         exit(0)
@@ -200,10 +219,13 @@ if __name__ == '__main__':
 
     # if no output directory is given, only print the shape of the volume if it is accessible
     if args.directory is None:
-        print("Volume " + data_set_url + " is available with a size of " + str(data.get_shape())
-              + ". Specify a download directory with -d /path/to/dir/")
+        print(f"Volume {data_set_url} is available with size {data.get_shape()}, order {data.get_order()}. "
+              f"Specify a download directory with -d /path/to/dir/")
+        # show a quick visualization to check if the indexing order is correct
+        data.check_test_vis(origin=None, chunk_size=np.clip(args.chunk_size, (1,1,1), (1024,1024,1024)))
         exit(0)
     else:
-        data.download(output_dir=Path(args.directory), output_name=output_name, volume_size=args.size, origin=args.origin,
+        data.download(output_dir=Path(args.directory), output_name=output_name, output_format=args.filetype,
+                      volume_size=args.size, origin=args.origin,
                       chunk_size=args.chunk_size, continue_download=args.append)
         exit(0)

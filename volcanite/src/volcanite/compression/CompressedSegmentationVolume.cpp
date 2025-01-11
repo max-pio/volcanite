@@ -187,7 +187,8 @@ bool CompressedSegmentationVolume::verifyCompression() const {
         // any m_brick_idx_to_enc_vector-th entry in brick_starts is the end of the last brick in the previous array
         uint32_t size_from_brick_starts = m_brick_starts[std::min(static_cast<uint32_t>(last_brick + 1), (i+1) * m_brick_idx_to_enc_vector)];
         if (m_encodings.at(i).size() != size_from_brick_starts) {
-            Logger(ERROR) << "  split encoding array [" << i << "] size differs from size tracked in brick starts (is "
+            Logger(ERROR) << "  split encoding array [" << i << "/" << (m_encodings.size() - 1)
+                          << "] size differs from size tracked in brick starts (is "
                           << m_encodings.at(i).size() << " expected " << size_from_brick_starts << ").";
             return false;
         }
@@ -947,7 +948,7 @@ void CompressedSegmentationVolume::compressForFrequencyTable(const std::vector<u
     // reset rANS mode to previously configured value
     m_encoding_mode = old_rANS_mode;
 
-    float total_seconds = totalTimer.elapsed();
+    float total_seconds = static_cast<float>(totalTimer.elapsed());
     m_last_total_freq_prepass_seconds = total_seconds;
     if (verbose) {
         Logger(INFO) << " " << getLabel() << " Prepass Progress 100% in " << std::fixed << std::setprecision(3)

@@ -75,8 +75,8 @@ public:
      * @param max_input_csgv_index inclusive last x y z tile indices to merge
      */
     std::shared_ptr<CompressedSegmentationVolume> mergeCompressedSegmentationVolumeChunksFromFiles(const std::string& output_csgv_path,
-                                                                                                          const std::string& input_csgv_template_path,
-                                                                                                          glm::ivec3 max_input_csgv_index) {
+                                                                                                   const std::string& input_csgv_template_path,
+                                                                                                   glm::ivec3 max_input_csgv_index) {
         // TODO: make target_uints_per_split_encoding a parameter for merging or obtain it from the first input chunk
         // target a size of ~2GB per split encoding vector
         uint32_t target_uints_per_split_encoding = 536870912u;
@@ -96,6 +96,14 @@ public:
         for(uint32_t c = 0; c < total_chunk_count; c++) {
             glm::ivec3 chunk_index = sfc::Cartesian::i2p(c, chunk_count);
             chunks[c].importFromFile(formatChunkPath(input_csgv_template_path, chunk_index.x, chunk_index.y, chunk_index.z), false, false);
+
+            // double check here as verifying the compression is cheap
+            if (!chunks[c].verifyCompression()) {
+                Logger(ERROR) << "Verification error when importing compressed chunk "
+                            << formatChunkPath(input_csgv_template_path, chunk_index.x, chunk_index.y, chunk_index.z)
+                            << " during merging.";
+                return nullptr;
+            }
 
             // keep track of maximum pallette entry count over all chunks
             max_brick_palette_count = glm::max(max_brick_palette_count, chunks[c].getMaxBrickPaletteCount());
@@ -185,7 +193,7 @@ public:
         // split encoding vector management
         uint32_t brick_idx_to_enc_vector = ~0u;
         size_t split_encoding_count = 1u;
-        size_t encoding_size = 0ul;
+        size_t encoding_size = 0ull;
 
         // temporary encoding_file layout:
         // (split encoding count)x:
@@ -223,9 +231,14 @@ public:
             }
             // Check if we have to start a new split encoding "vector" before writing the next brick's encoding.
             if(brick_idx / brick_idx_to_enc_vector >= split_encoding_count) {
-                if(encoding_size > target_uints_per_split_encoding) {
-                    Logger(WARN) << "Brick index to encoding vector mapping is underestimating sizes. Writing split encoding with "
-                                 << (static_cast<size_t>(encoding_size) * sizeof(uint32_t)) << " bytes.";
+                if (encoding_size != encoding_size_uint32_t) {
+                    Logger(ERROR) << "Split encoding size overflow for array " << (split_encoding_count - 1)
+                                       << ", uint size " << encoding_size;
+                    return nullptr;
+                } else if(encoding_size > target_uints_per_split_encoding) {
+                    Logger(DEBUG) << "Brick index to encoding array mapping is underestimating sizes: "
+                                      << "Split array " << (split_encoding_count - 1) << " with "
+                                      << (static_cast<size_t>(encoding_size) * sizeof(uint32_t)) << " bytes.";
                 }
 
                 // write size of now finished previous split encoding to the previously reserved encoding size location
@@ -239,7 +252,7 @@ public:
                 encoding_file.write(reinterpret_cast<const char *>(&encoding_size), sizeof(size_t));
 
                 split_encoding_count++;
-                encoding_size = 0u;
+                encoding_size = 0ull;
             }
 
             // write current brick's encoding
@@ -258,6 +271,10 @@ public:
         {
             // final dummy brick_starts entry to denote the length of the last brick encoding
             uint32_t encoding_size_uint32_t = static_cast<uint32_t>(encoding_size);
+            if (encoding_size_uint32_t != encoding_size) {
+                Logger(ERROR) << "Split encoding size overflow for array " << (split_encoding_count - 1) << ", size " << encoding_size;
+                return nullptr;
+            }
             brickstarts_file.write(reinterpret_cast<const char *>(&encoding_size_uint32_t), sizeof(uint32_t));
             // write the size of the current split encoding
             encoding_file.seekp(encoding_size_file_pos);
@@ -367,8 +384,11 @@ public:
 
         std::shared_ptr<CompressedSegmentationVolume> full_csgv = std::make_shared<volcanite::CompressedSegmentationVolume>();
         bool reimport_success = full_csgv->importFromFile(output_csgv_path, false, true);
-        if(!reimport_success)
-            throw std::runtime_error("Error re-importing exported merged Compressed Segmentation Volume from " + output_csgv_path);
+        if(!reimport_success) {
+            Logger(ERROR) << "Error re-importing exported merged Compressed Segmentation Volume from "
+                               << output_csgv_path;
+            return nullptr;
+        }
 
         return full_csgv;
     }

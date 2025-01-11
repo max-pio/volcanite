@@ -25,6 +25,7 @@ import PIL.Image as Image
 import nibabel as nib
 import gzip
 
+import matplotlib
 import matplotlib.pyplot as plt
 
 
@@ -45,7 +46,7 @@ def read_vraw(path_in):
         type = file.readline()[:-1].decode('utf8')
         # read binary payload
         vraw_volume = np.fromfile(file, dtype=type)
-        vraw_volume = vraw_volume.reshape([int(shape_str[2]), int(shape_str[1]), int(shape_str[0])])
+        vraw_volume = vraw_volume.reshape([int(shape_str[0]), int(shape_str[1]), int(shape_str[2])])
     return vraw_volume
 
 
@@ -56,15 +57,10 @@ def write_vraw(volume, out_path, dtype=None):
         # [DimX] [DimY] [DimZ]
         # [data type]
         file.write(
-            (str(volume.shape[2]) + " " + str(volume.shape[1]) + " " + str(volume.shape[0]) + "\n").encode('utf8'))
+            (str(volume.shape[0]) + " " + str(volume.shape[1]) + " " + str(volume.shape[2]) + "\n").encode('utf8'))
         file.write((str(volume.dtype) + "\n").encode('utf8'))
         # write binary
-        np.ascontiguousarray(volume.astype(volume.dtype)).tofile(file)
-        # for z in range(volume.shape[0]):
-        #     for y in range(volume.shape[1]):
-        #         for x in range(volume.shape[2]):
-        #             file.write(volume[z, y, x])
-
+        volume.astype(volume.dtype).tofile(file)
 
 # NRRD4
 def read_nrrd(path_in):
@@ -81,7 +77,7 @@ def write_nrrd(volume, out_path, dtype=None):
         file.write("space: left-posterior-superior\n".encode('utf8'))
         file.write("kinds: domain domain domain\n".encode('utf8'))
         file.write(
-            ("sizes: " + str(volume.shape[2]) + " " + str(volume.shape[1]) + " " + str(volume.shape[0]) + "\n").encode(
+            ("sizes: " + str(volume.shape[0]) + " " + str(volume.shape[1]) + " " + str(volume.shape[2]) + "\n").encode(
                 'utf8'))
         file.write("endian: little\n".encode('utf8'))
         file.write("encoding: raw\n".encode('utf8'))
@@ -100,7 +96,7 @@ def read_hdf5(path_in):
 def write_hdf5(volume, path_out, dtype=None):
     volume = guard_volume_dtype(volume, dtype)
     with h5py.File(path_out, "w") as f:
-        f.create_dataset("data", shape=volume.shape, dtype=volume.dtype, data=volume.data, compression="gzip")
+        f.create_dataset("data", data=volume, compression="gzip")
 
 
 # Sliced TIFF
@@ -143,12 +139,11 @@ def write_sliced_png(volume, path_out_format):
     if get_format_key_count(path_out_format) != 1:
         raise Exception("File path must contain exactly 1 python string format key")
 
-    #    for z in tqdm(range(labels.shape[0])):
     for z in range(volume.shape[0]):
-        slice = np.stack([volume[z] % 256, (volume[z] / 256) % 256, (volume[z] / (256 * 256)) % 256,
-                          (volume[z] / (256 * 256 * 256) % 256)], axis=-1)
-        image = Image.fromarray(slice.astype('uint8'))
-        image.save(path_out_format.format(z), 'png', compress_level=9)
+        png_slice = np.stack([volume[z] % 256, (volume[z] / 256) % 256, (volume[z] / (256 * 256)) % 256,
+                              (volume[z] / (256 * 256 * 256) % 256)], axis=-1)
+        image = Image.fromarray(png_slice.astype('uint8'))
+        image.save(path_out_format.format(z), 'png')
 
 # numpy
 def read_numpy(path_in):
@@ -215,10 +210,7 @@ def strip_file_extension(path):
     return os.path.splitext(path)[0]
 
 def guarantee_c_order(_volume):
-    if np.isfortran(_volume):
-        return np.reshape(_volume.flatten(order='F'), _volume.shape)
-    else:
-        return _volume
+    return np.ascontiguousarray(_volume)
 
 def copy_as_gzip(path_in):
     """For an input file volume.abc, creates a second file volume.abc.gz compressed with gzip DEFLATE."""
@@ -245,9 +237,9 @@ def write_volume(volume, path_out, dtype=None, guaranteee_c_order=True, apply_gz
     elif extension == "hdf5" or extension == "h5":
         write_hdf5(volume, path_out, dtype)
     elif extension == "tiff":
-        write_sliced_tiff(volume, path_out, dtype)
+        write_sliced_tiff(volume, path_out)
     elif extension == "png":
-        write_sliced_png(volume, path_out, dtype)
+        write_sliced_png(volume, path_out)
     elif extension == "np":
         write_numpy(volume, path_out, dtype, False)
     elif extension == "npz":
