@@ -462,10 +462,10 @@ VolcaniteArg.args_shading = {"local": VolcaniteArg([], "_local", 0.5),
                              "shadow": VolcaniteArg([], "_shadow", 0.5),
                              "ao": VolcaniteArg([], "_ao", 0.5),
                              "pt": VolcaniteArg([], "_pt", 0.5)}
-VolcaniteArg.args_datasynth = {"dSynth8": VolcaniteArg(["#synth_1024x1024x1024_r6x6x6-10x10x10"], "dSynth8", 0),
-                            "dSynth32": VolcaniteArg(["#synth_1024x1024x1024_r24x24x24-40x40x40"], "dSynth32", 0),
-                            "dSynth128": VolcaniteArg(["#synth_1024x1024x1024_r96x96x96-160x160x160"], "dSynth128", 0),
-                            "dSynth512": VolcaniteArg(["#synth_1024x1024x1024_r384x384x384-640x640x640"], "dSynth512", 0)}
+VolcaniteArg.args_datasynth = {"dSynth8": VolcaniteArg(["+synth_1024x1024x1024_r6x6x6-10x10x10"], "dSynth8", 0),
+                            "dSynth32": VolcaniteArg(["+synth_1024x1024x1024_r24x24x24-40x40x40"], "dSynth32", 0),
+                            "dSynth128": VolcaniteArg(["+synth_1024x1024x1024_r96x96x96-160x160x160"], "dSynth128", 0),
+                            "dSynth512": VolcaniteArg(["+synth_1024x1024x1024_r384x384x384-640x640x640"], "dSynth512", 0)}
 VolcaniteArg.args_default = {"verbose": VolcaniteArg(["--verbose"], "", 1000),
                              "headless": VolcaniteArg(["--headless"], "", 1000)}
 

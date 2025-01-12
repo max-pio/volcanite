@@ -99,7 +99,7 @@ public:
             volume = Volume<uint32_t>::load_vti(path);
         else if (path.ends_with(".nrrd") || path.ends_with(".nhdr"))
             volume = Volume<uint32_t>::load_nrrd(path);
-        else if (path.starts_with("#synth")) {
+        else if (path.starts_with(CSGV_SYNTH_PREFIX_STR)) {
             volume = createDummySegmentationVolume(path);
         } else {
             std::string _msg = "Segmentation volume filetype of " + path + " not supported!";

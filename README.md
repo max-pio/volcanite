@@ -33,7 +33,7 @@ Start Volcanite, either providing a path to a segmentation volume as a commandli
 ./volcanite/volcanite /path/to/your/segmentation/volume
 ```
 or by using the file dialog to select a volume file.
-If you have no segmentation volume at hand, you can create a synthetic dummy volume by passing `#synth` as input volume.
+If you have no segmentation volume at hand, you can create a synthetic dummy volume by passing `+synth` as input volume.
 If your segmentation volume format is not supported by Volcanite, have a look at the [converter.py](../volcanite/python/converter.py) script to 
 convert it into one of the supported file formats.
 

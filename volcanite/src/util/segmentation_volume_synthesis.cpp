@@ -1,5 +1,7 @@
 #include "volcanite/util/segmentation_volume_synthesis.hpp"
 
+#include "csgv_constants.incl"
+
 #include <ranges>
 #include "vvv/volren/Volume.hpp"
 #include "vvv/util/Logger.hpp"
@@ -64,8 +66,8 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegment
 
 
 std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view descr) {
-    if (!descr.starts_with("#synth"))
-        throw std::invalid_argument("Synthetic volume descriptor must start with #synth");
+    if (!descr.starts_with(CSGV_SYNTH_PREFIX_STR))
+        throw std::invalid_argument("Synthetic volume descriptor must start with +synth");
 
     SyntheticSegmentationVolumeCfg cfg;
 
@@ -82,7 +84,7 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
         ss << arg;
         unsigned char c;
 
-        if (arg == "#synth") {
+        if (arg == CSGV_SYNTH_PREFIX_STR) {
             continue;
         } else if (arg.starts_with("l")) {
             if (processed.contains('l'))

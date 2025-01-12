@@ -175,7 +175,7 @@ public:
             SwitchArg verboseArg("", "verbose", "Verbose debug output.", cmd);
 
             // input file (file ending determines if we are on the import/decompress side (.csgv) or can specify compression options (other)
-            UnlabeledValueArg<std::string> inputpathArg("input", "Either a previously compressed .csgv file to render, or a segmentation volume file to compress or render. #synth to create and process a synthetic volume.", false, "", "(<volume file>|#synth[_args*])", cmd, true);
+            UnlabeledValueArg<std::string> inputpathArg("input", "Either a previously compressed .csgv file to render, or a segmentation volume file to compress or render. +synth to create and process a synthetic volume.", false, "", "(<volume file>|+synth[_args*])", cmd, true);
 
             // parse arguments
             cmd.parse(argc, argv);
@@ -276,7 +276,7 @@ public:
             va.empty_space_resolution = emptySpaceResolutionArg.getValue();
             // if no input file was specified, try to open a file dialog
             std::string input_file = inputpathArg.getValue();
-            if (!input_file.starts_with("#synth"))
+            if (!input_file.starts_with(CSGV_SYNTH_PREFIX_STR))
                 input_file = expandPath(input_file);
             input_volume_required = input_volume_required && !evalPrintArg.getValue();
             if(input_file.empty() && input_volume_required) {
@@ -292,7 +292,7 @@ public:
                 auto selected_file = pfd::open_file("Open Segmentation Volume", Paths::getHomeDirectory().string() + "/*",
                                                     { "Segmentation Volumes (.csgv .vti .hdf5 .h5 .raw .vraw .nrrd .nhdr)", "*.csgv *.vti *.hdf5 *.h5 *.raw *.vraw *.nrrd *.nhdr", "All Files", "*" });
                 if(selected_file.result().empty()) {
-                    throw ArgException("No input file was provided. Pass #synth as input file to create a synthetic volume.", inputpathArg.longID(""));
+                    throw ArgException("No input file was provided. Pass +synth as input file to create a synthetic volume.", inputpathArg.longID(""));
                 }
 
                 input_file = selected_file.result().at(0);
@@ -309,7 +309,7 @@ public:
             }
             // .. or if we compress a volume
             else {
-                if(input_volume_required && !(input_file.starts_with("#synth") || input_file.ends_with(".vti")
+                if(input_volume_required && !(input_file.starts_with(CSGV_SYNTH_PREFIX_STR) || input_file.ends_with(".vti")
                     || input_file.ends_with(".raw") || input_file.ends_with(".vraw")
                     || input_file.ends_with(".hdf5") || input_file.ends_with(".h5")
                     || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {

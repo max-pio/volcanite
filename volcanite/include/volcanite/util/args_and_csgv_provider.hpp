@@ -88,7 +88,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
         if(!use_temporary_output_file) {
             complete_csgv_path = args.compress_export_file;
         }
-        else if (!args.input_file.starts_with("#synth")){
+        else if (!args.input_file.starts_with(CSGV_SYNTH_PREFIX_STR)){
             std::string potential_path = stripFileExtension(args.input_file) + ".csgv";
             // this only works if the input path is not a formatted chunked input path,
             if (!args.chunked && !std::filesystem::exists(potential_path)) {

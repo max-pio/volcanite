@@ -21,8 +21,6 @@ using namespace vvv;
 
 namespace volcanite {
 
-    constexpr unsigned char VOLCANITE_SYNTH_PATH_PREFIX[] = "#synth";
-
     struct SyntheticSegmentationVolumeCfg {
         glm::uvec3 dim = {100, 100, 100};               /// dimensions of the volume in voxels
         glm::uvec3 min_region_dim = {10u, 10u, 10u};      /// target minimum size of each region
@@ -48,7 +46,7 @@ namespace volcanite {
     /// multiple regions have the same label.
     /// The descriptor must follow this syntax:\n
     /// @code
-    /// #synth_[args]
+    /// +synth_[args]
     /// @endcode{.cpp}
     /// where args is a _ separated list of the following keys:\n
     /// {W}x{H}x{D}  width, height, and depth of the volume in voxels\n
