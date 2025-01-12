@@ -73,6 +73,13 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
 
     std::set<unsigned char> processed = {};
 
+    constexpr auto help_str = "+synth[_arg]* with arg in\n"
+                              "  d[x]x[y]x[z]: volume dimension [x,y,z]"
+                              "  l[v]: voxels per label (higher > fewer labels) [v]\n"
+                              "  max[v]: maximum label value [v]\n"
+                              "  r[a]x[b]x[c]-[s]x[t]x[u]: target label region size min. [a,b,c], max. [s,t,u]\n"
+                              "  s[v]: deterministic random seed [v]. for chunked, set to s{}[v]{}[v]{}";
+
     constexpr std::string_view split{"_"};
     for (const auto arg: std::views::split(descr, split)
                          | std::ranges::views::transform([](auto &&subrange) {
@@ -80,12 +87,25 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
             return size ? std::string_view(&*subrange.begin(), size) : std::string_view();
         })) {
 
+        if (arg.starts_with("--")) // ignore rest: useful for appending the chunk placeholders +synth_--x{}y{}z{}
+            break;
+
         std::stringstream ss;
         ss << arg;
         unsigned char c;
 
         if (arg == CSGV_SYNTH_PREFIX_STR) {
             continue;
+        } else if (arg.starts_with("d")) {
+            if (processed.contains('d'))
+                throw std::invalid_argument("Synthetic volume descriptor key r duplicate");
+            processed.insert('d');
+            ss >> c; // d
+            ss >> cfg.dim.x;
+            ss >> c; // x
+            ss >> cfg.dim.y;
+            ss >> c; // x
+            ss >> cfg.dim.z;
         } else if (arg.starts_with("l")) {
             if (processed.contains('l'))
                 throw std::invalid_argument("Synthetic volume descriptor key l duplicate");
@@ -114,6 +134,12 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
             ss >> cfg.max_region_dim.y;
             ss >> c; // x
             ss >> cfg.max_region_dim.z;
+        } else if (arg.starts_with("s")) {
+            if (processed.contains('s'))
+                throw std::invalid_argument("Synthetic volume descriptor key s duplicate");
+            processed.insert('s');
+            ss >> c; // s
+            ss >> cfg.seed;
         } else {
             if (processed.contains('_'))
                 throw std::invalid_argument("Synthetic volume descriptor contains unknown key");
