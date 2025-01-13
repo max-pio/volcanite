@@ -366,9 +366,7 @@ void CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers() {
 #endif
 
     // GPU upload can only start if all current rendering is finished and is thus dispatched in the render loop
-    // TODO: GPU upload *can* take place during rendering but not during decompression stages. sync more precisely.
     m_detail_stage = DetailAwaitingUpload;
-    // Logger(DEBUG) << " CPU detail construction in " << detail_construction_timer.elapsed() * 1000.f << " ms.";
 }
 
 void CompressedSegmentationVolumeRenderer::setCompressedSegmentationVolume(
