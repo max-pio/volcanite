@@ -155,8 +155,6 @@ class CSGVBrickEncoder {
                                          "LOD_COUNT=" + std::to_string(getLodCountPerBrick()),
                                          "PALETTE_SIZE_HEADER_INDEX=" + std::to_string(getPaletteSizeHeaderIndex()),
                                          "OP_MASK=" + std::to_string(m_op_mask)};
-        if (m_separate_detail)
-            defines.emplace_back("SEPARATE_DETAIL");
         return defines;
     }
 

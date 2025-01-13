@@ -49,8 +49,6 @@ class CSGVBenchmarkPass : public PassCompute {
             m_shader_defines.emplace_back("CACHE_MODE=" + std::to_string(CACHE_BRICKS));
             if (m_use_palette_cache)
                 m_shader_defines.emplace_back("PALETTE_CACHE");
-            if (m_csgv->isUsingRandomAccess())
-                m_shader_defines.emplace_back("RANDOM_ACCESS");
             if (m_decode_from_shared_memory)
                 m_shader_defines.emplace_back("DECODE_FROM_SHARED_MEMORY");
 

@@ -115,18 +115,23 @@ float CompressedSegmentationVolume::separateDetail() {
     m_brick_starts[0] = 0u;
     // keeping track of the start and end of the next brick is required, as brick ends (= next brick's start) contents
     // are overwritten on the go.
-    uint32_t next_old_brick_start = getBrickStart(0);
+    uint32_t next_old_brick_start = getBrickStart(0); // is zero
     uint32_t next_old_brick_length = getBrickEncodingLength(0);
     // note: it is possible to process all split encoding arrays in parallel, but this would increase memory load
-    uint32_t currentBaseEncodingStart = 0u;
+    uint32_t cur_base_enc_brick_end = 0u;
     for (uint32_t brick_idx = 0u; brick_idx < brick_idx_count; brick_idx++) {
 
         uint32_t detail_start = m_detail_starts[brick_idx];
-        // Check if we have to start a new split encoding "vector" before writing the next brick's encoding.
-        if (brick_idx / m_brick_idx_to_enc_vector > m_detail_encodings.size() - 1u) {
+        // if this is the first brick in a split encoding array:
+        if (brick_idx / m_brick_idx_to_enc_vector >= m_detail_encodings.size()) {
             // start a new detail encoding array
             m_detail_encodings.emplace_back(split_detail_encoding_sizes.at(brick_idx / m_brick_idx_to_enc_vector));
             detail_start = 0u;
+            // finish the last (now completed) base encoding vector and shrink to fit
+            m_encodings.at((brick_idx - 1u) / m_brick_idx_to_enc_vector).resize(m_brick_starts[brick_idx]);
+            cur_base_enc_brick_end = 0u;
+            assert(brick_idx % m_brick_idx_to_enc_vector == 0 && "new split encoding does not start with first brick");
+            assert(next_old_brick_start == 0u && "base encoding and new detail encoding start at different split points");
         }
         uint32_t detail_encoding_size = m_detail_starts[brick_idx+1] - detail_start;
 
@@ -134,41 +139,21 @@ float CompressedSegmentationVolume::separateDetail() {
         auto& mut_encoding = m_encodings[brick_idx / m_brick_idx_to_enc_vector];
 
         // determine the new output position of this brick in the base encoding output array (overwriting old content)
-        uint32_t* new_base_encoding_start = mut_encoding.data() + currentBaseEncodingStart;
-        {
-            auto detail_size = m_encoder->getDetailLengthBeforeSeparation(mut_encoding.data() + next_old_brick_start, next_old_brick_length);
-            if (detail_size > m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).size() - detail_start) {
-                std::stringstream err;
-                err << "detail encoding " << (brick_idx / m_brick_idx_to_enc_vector) << " out of " << (m_encodings.size() -1)
-                << " detail encoding overflow, has size " << detail_size << " but only space for " <<  (m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).size() - detail_start);
-                err << " start " << detail_start << ". Split sizes:\n";
-                for (const auto& it : split_detail_encoding_sizes) {
-                    err << it << ", \n";
-                }
-                throw std::runtime_error(err.str());
-            }
-        }
+        // TODO: the first brick in a split encoding must start at 0 instead of currentBaseEncBrickEnd, but this has to be correct to mark the end
         uint32_t op_base_encoding_length = m_encoder->separateDetail({mut_encoding.begin() + next_old_brick_start, next_old_brick_length},
-                                                                     {mut_encoding.data() + currentBaseEncodingStart, mut_encoding.size() - currentBaseEncodingStart},
+                                                                     {mut_encoding.data() + cur_base_enc_brick_end, mut_encoding.size() - cur_base_enc_brick_end},
                                                                      {&(m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).at(detail_start)),
                                                                          m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).size() - detail_start});
-        assert(op_base_encoding_length < getBrickEncodingLength(brick_idx) && "new base encoding size larger than old brick encoding after separateDetail");
+        assert(op_base_encoding_length < next_old_brick_length && "new base encoding size larger than old brick encoding after separateDetail");
 
-        currentBaseEncodingStart += op_base_encoding_length;
+        cur_base_enc_brick_end += op_base_encoding_length;
         // read the next brick information before updating the brick end (= overwrite the next brick's start)
         if (brick_idx < brick_idx_count - 1u) {
             next_old_brick_start = getBrickStart(brick_idx + 1);
             next_old_brick_length = getBrickEncodingLength(brick_idx + 1);
         }
-        m_brick_starts[brick_idx+1] = currentBaseEncodingStart;
-
-        // if this is the first brick in a split encoding array:
-        // the previous split encoding array was processed completely: shrink it down to a tight fit
-        if (brick_idx > 0 && brick_idx % m_brick_idx_to_enc_vector == 0) {
-            m_encodings.at((brick_idx - 1u) / m_brick_idx_to_enc_vector).resize(m_brick_starts[brick_idx]);
-            currentBaseEncodingStart = 0u;
-        }
-    }
+        m_brick_starts[brick_idx+1] = cur_base_enc_brick_end;
+   }
     // shrink last encoding buffer
     m_encodings.back().resize(m_brick_starts[brick_idx_count]);
 
