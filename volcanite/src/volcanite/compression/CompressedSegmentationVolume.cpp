@@ -141,7 +141,7 @@ float CompressedSegmentationVolume::separateDetail() {
                 std::stringstream err;
                 err << "detail encoding " << (brick_idx / m_brick_idx_to_enc_vector) << " out of " << (m_encodings.size() -1)
                 << " detail encoding overflow, has size " << detail_size << " but only space for " <<  (m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).size() - detail_start);
-                err << ". Split sizes:\n";
+                err << " start " << detail_start << ". Split sizes:\n";
                 for (const auto& it : split_detail_encoding_sizes) {
                     err << it << ", \n";
                 }
