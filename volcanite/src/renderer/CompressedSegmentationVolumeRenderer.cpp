@@ -167,17 +167,6 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     if (m_enable_frame_time_tracking)
         m_last_frame_start_time = std::chrono::high_resolution_clock::now();
 
-    // check if any previous detail upload is finished
-    if (m_detail_stage == DetailUploading) {
-        if ((m_detail_starts_staging.first == nullptr || getCtx()->sync->isAwaitableResolved(m_detail_starts_staging.first))
-            && (m_detail_staging.first == nullptr || getCtx()->sync->isAwaitableResolved(m_detail_staging.first))) {
-            // we can now free the staging buffers for the detail upload because they are no longer uploading / in a dirty state
-            m_detail_starts_staging = {nullptr,nullptr};
-            m_detail_staging = {nullptr, nullptr};
-            m_detail_stage = DetailReady;
-        }
-    }
-
     // if any previous detail construction is finished, download next brick indices for which the detail level is required
     if (m_detail_stage == DetailReady && m_frame > 0u) {
         if (m_compressed_segmentation_volume->isUsingSeparateDetail()) {
@@ -227,9 +216,14 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
     // start asynchronous detail upload if scheduled
     if (m_detail_stage == DetailAwaitingUpload && m_constructed_detail_starts.back() > 0u) {
-        m_detail_starts_staging = m_detail_starts_buffer->uploadWithStagingBuffer(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t), {.queueFamily = m_queue_family_index});
-        m_detail_staging = m_detail_buffer->uploadWithStagingBuffer(m_constructed_detail.data(), m_constructed_detail_starts.back() * sizeof(uint32_t), {.queueFamily = m_queue_family_index});
         m_detail_stage = DetailUploading;
+        std::thread detail_upload_thread([this]() {
+            // start the buffer copies and uploads. if everything finished, DetailReady is reached and thread terminates
+            m_detail_starts_buffer->upload(m_constructed_detail_starts.data(), m_constructed_detail_starts.size() * sizeof(uint32_t));
+            m_detail_buffer->upload(m_constructed_detail.data(), m_constructed_detail_starts.back() * sizeof(uint32_t));
+            m_detail_stage = DetailReady;
+        });
+        detail_upload_thread.detach();
     }
 
     // download GPU debug information and statistics
@@ -326,6 +320,7 @@ void CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers() {
     // 2. for ALL bricks: compute prefix sum of sizes, assuming an added 0 size if brick is not requested. Store in m_detail_starts
     uint32_t next_requested_id = 0u;
     uint32_t total_detail_size = 0u;
+    uint32_t _total_bricks_in_buffer = 0u;
     for (int i = 0; i < m_constructed_detail_starts.size(); i++) {
         m_constructed_detail_starts[i] = total_detail_size;
 
@@ -334,10 +329,13 @@ void CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers() {
             uint32_t brick_detail_size = m_compressed_segmentation_volume->getBrickDetailEncodingLength(i);
             if ((total_detail_size + brick_detail_size) <= m_detail_capacity) {
                 total_detail_size += brick_detail_size;
-//                        next_requested_id++;
+                _total_bricks_in_buffer++;
             }
+
             // even if the previous brick did not fit, we can try the next ones
-            next_requested_id++;
+            // TODO: m_detail_requests may contain duplicates! use a hash set on the GPU instead, remove atomics
+            while (next_requested_id < detail_request_count && i == m_detail_requests[next_requested_id])
+                next_requested_id++;
         }
     }
     // 3. in parallel: copy all detail encodings to the m_detail_encodings
@@ -358,19 +356,17 @@ void CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers() {
 
 #if 0
     if (m_constructed_detail_starts.back() > 0u) {
-                std::stringstream ss;
-                ss << "Total size: " << m_constructed_detail_starts.back() << " for bricks ";
-                for (int i = 0; i < requested_id_count; i++) {
-                    ss << requested_ids[i] << " ";
-                }
-                Logger(INFO) << ss.str();
-            }
+        std::stringstream ss;
+        ss << "Upload detail (" << total_bricks_in_buffer << " bricks) of size: " << m_constructed_detail_starts.back() << " for bricks ";
+        for (int i = 0; i < glm::min(detail_request_count, 8u); i++) {
+            ss << m_detail_requests[i] << " ";
+        }
+        Logger(INFO) << ss.str();
+    }
 #endif
 
     // GPU upload can only start if all current rendering is finished and is thus dispatched in the render loop
-    // TODO: GPU upload *can* take place during rendering but not during decompression stages. sync more precisely.
     m_detail_stage = DetailAwaitingUpload;
-    // Logger(DEBUG) << " CPU detail construction in " << detail_construction_timer.elapsed() * 1000.f << " ms.";
 }
 
 void CompressedSegmentationVolumeRenderer::setCompressedSegmentationVolume(
@@ -494,8 +490,8 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
 
         m_detail_requests.resize(m_max_detail_requests_per_frame + 2u);
         m_detail_requests_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_requests_buffer", .byteSize = (m_max_detail_requests_per_frame + 2u) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
-        m_detail_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_starts_buffer", .byteSize = (bricks_in_volume + 1u)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
-        m_detail_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_buffer", .byteSize = m_detail_capacity * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
+        m_detail_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_starts_buffer", .byteSize = (bricks_in_volume + 1u)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
+        m_detail_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_buffer", .byteSize = m_detail_capacity * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
         Buffer::deviceAddressUvec2(m_detail_buffer->getDeviceAddress(), &m_detail_buffer_address.x);
 
         m_constructed_detail_starts.resize(bricks_in_volume + 1u, 0u);
@@ -867,7 +863,7 @@ void CompressedSegmentationVolumeRenderer::resetGPU() {
 }
 
 void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
-#define HASHP(PARAM) new_hash = hashMemory(&PARAM, sizeof(PARAM), new_hash);
+    #define HASHP(PARAM) new_hash = hashMemory(&PARAM, sizeof(PARAM), new_hash);
 
     m_render_update_flags = 0u;
     size_t new_hash;
@@ -891,7 +887,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_voxel_size) HASHP(m_bboxMin) HASHP(m_bboxMax)
     // HASHP(m_subblock_start) HASHP(m_subblock_size) HASHP(m_subblock_enabled)
     // general rendering config
-    HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_blue_noise) HASHP(m_max_steps) HASHP(m_detail_stage)
+    HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_blue_noise) HASHP(m_max_steps)
     // (debug) rendering parameters
     HASHP(m_show_model_space)  HASHP(m_show_normals) HASHP(m_show_lod) HASHP(m_show_brick_cache) HASHP(m_show_envmap)
     HASHP(m_show_step_count)
