@@ -75,10 +75,13 @@ class CSGVBrickEncoder {
 
     /// Splits the encoding for the brick at brick_encoding into the base encoding including its palette at
     /// base_encoding_out and the encoding of the finest level-of-detail at detail_encoding_out.
-    /// @param brick_encoding region in the same buffer into which base_encoding out points
+    /// @param brick_encoding input brick encoding that is not separated
+    /// @param base_encoding_out target to copy the base encoding level to. may overlap with brick_encoding.
+    /// @param detail_encoding_out target to copy the detail encoding level to. must not overlap with brick_encoding.
     /// @returns the new base encoding size in numbers of uint32
-    virtual uint32_t separateDetail(const uint32_t* brick_encoding, uint32_t brick_encoding_length,
-                                    uint32_t* base_encoding_out, uint32_t* detail_encoding_out) const {
+    virtual uint32_t separateDetail(const std::span<uint32_t> brick_encoding,
+                                    std::span<glm::uint32> base_encoding_out,
+                                    std::span<glm::uint32> detail_encoding_out) const {
         throw std::logic_error("CSGV brick encoder does not implement detail separation.");
     }
 

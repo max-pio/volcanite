@@ -131,14 +131,28 @@ float CompressedSegmentationVolume::separateDetail() {
         uint32_t detail_encoding_size = m_detail_starts[brick_idx+1] - detail_start;
 
         // operate directly on the current brick base encoding array
-        uint32_t* mut_encoding = m_encodings[brick_idx / m_brick_idx_to_enc_vector].data();
+        auto& mut_encoding = m_encodings[brick_idx / m_brick_idx_to_enc_vector];
 
         // determine the new output position of this brick in the base encoding output array (overwriting old content)
-        uint32_t* new_base_encoding_start = mut_encoding + currentBaseEncodingStart;
-        uint32_t op_base_encoding_length = m_encoder->separateDetail(mut_encoding + next_old_brick_start,
-                                                                     next_old_brick_length,
-                                                                     new_base_encoding_start,
-                                                                     &(m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).at(detail_start)));
+        uint32_t* new_base_encoding_start = mut_encoding.data() + currentBaseEncodingStart;
+        {
+            auto detail_size = m_encoder->getDetailLengthBeforeSeparation(mut_encoding.data() + next_old_brick_start, next_old_brick_length);
+            if (detail_size > m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).size() - detail_start) {
+                std::stringstream err;
+                err << "detail encoding " << (brick_idx / m_brick_idx_to_enc_vector) << " out of " << (m_encodings.size() -1)
+                << " detail encoding overflow, has size " << detail_size << " but only space for " <<  (m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).size() - detail_start);
+                err << ". Split sizes:\n";
+                for (const auto& it : split_detail_encoding_sizes) {
+                    err << it << ", \n";
+                }
+                throw std::runtime_error(err.str());
+            }
+        }
+        uint32_t op_base_encoding_length = m_encoder->separateDetail({mut_encoding.begin() + next_old_brick_start, next_old_brick_length},
+                                                                     {mut_encoding.data() + currentBaseEncodingStart, mut_encoding.size() - currentBaseEncodingStart},
+                                                                     {&(m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).at(detail_start)),
+                                                                         m_detail_encodings.at(brick_idx / m_brick_idx_to_enc_vector).size() - detail_start});
+        assert(op_base_encoding_length < getBrickEncodingLength(brick_idx) && "new base encoding size larger than old brick encoding after separateDetail");
 
         currentBaseEncodingStart += op_base_encoding_length;
         // read the next brick information before updating the brick end (= overwrite the next brick's start)

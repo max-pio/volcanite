@@ -51,10 +51,12 @@ public:
 
     /// Splits the encoding for the brick at brick_encoding into the base encoding including its palette at
     /// base_encoding_out and the encoding of the finest level-of-detail at detail_encoding_out.
-    /// @param brick_encoding region in the same buffer into which base_encoding out points
+    /// @param brick_encoding input brick encoding that is not separated
+    /// @param base_encoding_out target to copy the base encoding level to. may overlap with brick_encoding.
+    /// @param detail_encoding_out target to copy the detail encoding level to. must not overlap with brick_encoding.
     /// @returns the new base encoding size in numbers of uint32
-    virtual uint32_t separateDetail(const uint32_t* brick_encoding, uint32_t brick_encoding_length,
-                                uint32_t* base_encoding_out, uint32_t* detail_encoding_out) const override {
+    uint32_t separateDetail(const std::span<uint32_t> brick_encoding,
+                std::span<uint32_t> base_encoding_out, std::span<uint32_t> detail_encoding_out) const override {
 
         assert(!m_separate_detail && "encoder already marks detail level as separated");
 
@@ -64,32 +66,44 @@ public:
         const uint32_t palette_size = brick_encoding[getPaletteSizeHeaderIndex()];
         // length (in uint32 elements) of the operation stream of base levels only
         const uint32_t base_op_stream_length = brick_encoding[lod_count - 1] / 8 - header_size;
-        const uint32_t detail_encoding_size = getDetailLengthBeforeSeparation(brick_encoding, brick_encoding_length);
+        const uint32_t detail_encoding_size = getDetailLengthBeforeSeparation(brick_encoding.data(), brick_encoding.size());
 
-        // copy the detail encoding to the detail buffer
-        memcpy(detail_encoding_out, brick_encoding + header_size + base_op_stream_length, detail_encoding_size * sizeof(uint32_t));
+        // copy the detail encoding to the detail buffer (non-overlapping)
+        if (detail_encoding_size > detail_encoding_out.size())
+            throw std::runtime_error("detail_encoding_size is too small: "
+                + std::to_string(detail_encoding_size) + " vs. " + std::to_string(detail_encoding_out.size()));
 
-        // copy the first part of the header (LOD starts from 0 to L-2 without the detail level), to the base encoding buffer.
-        // the header is missing one element (start pos. of the detail layer) now, so we have to adjust the lod start entries.
+        assert(header_size + base_op_stream_length + detail_encoding_size <= brick_encoding.size() && "detail encoding read overflow in separateDetail");
+        assert(detail_encoding_size <= detail_encoding_out.size() && "detail encoding write overflow in separateDetail");
+        std::copy_n(brick_encoding.begin() + header_size + base_op_stream_length, detail_encoding_size,
+                    detail_encoding_out.begin());
+        // memcpy(detail_encoding_out.data(),
+        //     brick_encoding.data() + header_size + base_op_stream_length,
+        //     detail_encoding_size * sizeof(uint32_t));
+
+        // the header is now missing one element (start pos. of the detail layer): adjust the lod start entries.
         for(int l = 0; l < (lod_count - 1u); l++)
             base_encoding_out[l] = brick_encoding[l] - 8u;
 
         // move the palette size entry in the encoding header one element to the front
         // (because the encoding_start entry for the detail buffer is now missing in between)
         assert(lod_count == getPaletteSizeHeaderIndex());
-        base_encoding_out[lod_count - 1] = brick_encoding[getPaletteSizeHeaderIndex()];
-        // move the base encoding
-        memmove(base_encoding_out + (header_size - 1u),
-                brick_encoding + header_size,
+        base_encoding_out[getPaletteSizeHeaderIndex() - 1] = brick_encoding[getPaletteSizeHeaderIndex()];
+        // move the base encoding (overlapping with brick_encoding)
+        assert(header_size + base_op_stream_length <= brick_encoding.size() && "base encoding read overflow in separateDetail");
+        memmove(base_encoding_out.data() + (header_size - 1u),
+                brick_encoding.data() + header_size,
                 base_op_stream_length * sizeof(uint32_t));
-        // move the palette
-        memmove(base_encoding_out + (header_size - 1u) + base_op_stream_length,
-                brick_encoding + header_size + base_op_stream_length + detail_encoding_size,
+        // move the palette (overlapping with brick_encoding)
+        assert(header_size + base_op_stream_length + detail_encoding_size + palette_size <= brick_encoding.size() && "palette read overflow in separateDetail");
+        assert(header_size - 1u + base_op_stream_length + palette_size <= base_encoding_out.size() && "palette read overflow in separateDetail");
+        memmove(base_encoding_out.data() + (header_size - 1u) + base_op_stream_length,
+                brick_encoding.data() + header_size + base_op_stream_length + detail_encoding_size,
                 palette_size * sizeof(uint32_t));
 
         // Return new base encoding size, used to update the brick start index:
         // In addition to the detail encoding, brick headers are missing one element (detail LoD start) each.
-        return brick_encoding_length - detail_encoding_size - 1u;
+        return brick_encoding.size() - detail_encoding_size - 1u;
     }
 
     /// @returns number of uint32_t elements that will be stored for this brick's detail level after detail separation.
