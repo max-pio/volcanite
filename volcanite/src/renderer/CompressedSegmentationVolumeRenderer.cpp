@@ -180,10 +180,11 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             uint32_t cache_usage = m_detail_requests[m_max_detail_requests_per_frame + 1u];
             // A fragmented cache can occur if free stacks store unusable levels-of-detail leaving no space for other LoDs.
             // Trigger cache flush on demand, but only if we have a different camHash since the last flush.
-            const uint32_t cache_elements_per_finest_lod = m_compressed_segmentation_volume->getBrickSize() / 2u;
-            if(m_frame % 4 == 0u && cache_usage >= m_cache_capacity - (cache_elements_per_finest_lod * cache_elements_per_finest_lod * cache_elements_per_finest_lod) && m_parameter_hash_at_last_reset != m_pcamera_hash) {
+            const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
+            const size_t current_parameter_hash = hashMemory(&m_prender_hash, sizeof(m_prender_hash), m_pcamera_hash);
+            if (cache_usage >= m_cache_capacity - cache_elements_per_finest_lod && m_parameter_hash_at_last_reset != current_parameter_hash) {
                 m_pcache_reset = true;
-                m_parameter_hash_at_last_reset = hashMemory(&m_prender_hash, sizeof(m_prender_hash), m_pcamera_hash);
+                m_parameter_hash_at_last_reset = current_parameter_hash;
             }
 
             // reset the (atomic) counters at this location
@@ -988,8 +989,9 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
                 projection_to_world_space_no_translation * pixel_to_ray_direction_projection_space));
         m_ucamera_info->setUniform<glm::vec3>("g_camera_position_world_space", camera->position_world_space);
         // the g_voxels_per_pixel_per_dist determines how many voxels an image pixel footprint overlaps for a camera distance
-        // TODO: account for anisotropic voxel sizes
-        float voxels_per_pixel_at_near = scalingFactor / float(m_resolution.height);
+        // TODO: account for anisotropic voxel sizes, currently using average 
+        float voxels_per_pixel_at_near = (physical_voldim.x + physical_voldim.y + physical_voldim.z) / 3.f
+                                          / glm::max(m_voxel_size.x, glm::max(m_voxel_size.y, m_voxel_size.z)) / float(m_resolution.height);
         m_ucamera_info->setUniform<float>("g_voxels_per_pixel_per_dist", glm::tan(this->getCamera()->vertical_fov) * voxels_per_pixel_at_near);
     }
 
