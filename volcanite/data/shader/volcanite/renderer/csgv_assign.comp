@@ -79,8 +79,9 @@ void main() {
 
 
     // track how many bricks are decoded of each LOD
-    if(g_debug_step_count && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]  > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < LOD_COUNT) {
-        atomicAdd(gpu_blocks_in_cache[g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] - 1u], 1u);
+    if(g_debug_gpu_stats && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > 0
+        && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < LOD_COUNT) {
+        atomicAdd(gpu_stats.blocks_in_cache_L1_to_7[g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] - 1u], 1u);
     }
 
     const uint slot = g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT];

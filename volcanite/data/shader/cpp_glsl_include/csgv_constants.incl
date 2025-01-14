@@ -36,6 +36,7 @@
 
 #ifdef GL_core_profile
     #define CSGV_UINT uint
+    #define CSGV_UINT64 uint64
     #define NIBBLE_ENC 0
     #define SINGLE_TABLE_RANS_ENC 1
     #define DOUBLE_TABLE_RANS_ENC 2
@@ -43,6 +44,7 @@
     #define HUFFMAN_WM_ENC 8
 #else
     #define CSGV_UINT uint32_t
+    #define CSGV_UINT64 uint64_t
 
 #define CSGV_SYNTH_PREFIX_STR "+synth"
 
@@ -179,4 +181,15 @@ struct GPUSegmentedVolumeMaterial {
 #define CACHE_VOXELS 1
 #define CACHE_BRICKS 2
 
+// GPU / CPU transfer information --------------------------------------------------------------------------------------
+
+struct GPUStats {
+    CSGV_UINT used_cache_base_elements;     ///< top pointer of the cache: number of occupied 2x2x2 base elements
+    // optional: only available if show_gpu_stats is true
+    CSGV_UINT bbox_hits;                    ///< total number of pixels that hit the volume bounding box
+    CSGV_UINT blocks_decoded_L1_to_7[6];    ///< number of base elements per LOD 1 .. 7 that were acquired in frame
+    CSGV_UINT blocks_in_cache_L1_to_7[6];   ///< number of base elements per LOD 1 .. 7 currently present in the cache
+};
+
+#undef CSGV_UINT
 #endif // CSGV_CONSTANTS_H

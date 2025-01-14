@@ -167,36 +167,53 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     if (m_enable_frame_time_tracking)
         m_last_frame_start_time = std::chrono::high_resolution_clock::now();
 
-    // if any previous detail construction is finished, download next brick indices for which the detail level is required
-    if (m_detail_stage == DetailReady && m_frame > 0u) {
-        if (m_compressed_segmentation_volume->isUsingSeparateDetail()) {
-            assert(m_detail_requests.size() >= m_max_detail_requests_per_frame + 2u && "Detail request buffer is too small.");
+    // download GPU statistics information, i.e. the cache occupancy to trigger cache hard resets when it is full
+    static constexpr uint32_t gpu_stats_download_interval = 4u;
+    if (m_frame > 0u && m_frame % gpu_stats_download_interval == 0u) {
+        m_gpu_stats_buffer->download(&m_last_gpu_stats, sizeof(GPUStats));
 
-            m_detail_requests_buffer->download(m_detail_requests);
-            // second to last element stores the number of brick indices for which the detail level is requested
-            uint32_t detail_request_count = std::min(m_detail_requests[m_max_detail_requests_per_frame], m_max_detail_requests_per_frame);
-
-            // last element stores the current cache usage as number of used 2x2x2 elements
-            uint32_t cache_usage = m_detail_requests[m_max_detail_requests_per_frame + 1u];
-            // A fragmented cache can occur if free stacks store unusable levels-of-detail leaving no space for other LoDs.
-            // Trigger cache flush on demand, but only if we have a different camHash since the last flush.
-            const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
-            const size_t current_parameter_hash = hashMemory(&m_prender_hash, sizeof(m_prender_hash), m_pcamera_hash);
-            if (cache_usage >= m_cache_capacity - cache_elements_per_finest_lod && m_parameter_hash_at_last_reset != current_parameter_hash) {
-                m_pcache_reset = true;
-                m_parameter_hash_at_last_reset = current_parameter_hash;
-            }
-
-            // reset the (atomic) counters at this location
-            static constexpr uint32_t zeroes[2] = {0u, 0u};
-            m_detail_requests_buffer->upload(m_max_detail_requests_per_frame * sizeof(uint32_t), &zeroes,
-                                             2 * sizeof(uint32_t));
-
-            if (detail_request_count > 0u)
-                m_detail_stage = DetailAwaitingCPUConstruction;
-        } else {
-            // TODO: download the cache_usage also if we don't use detail separation
+        // A fragmented cache can occur if free stacks store unusable levels-of-detail leaving no space for other LoDs.
+        // Trigger cache flush on demand, but only if the rendering config changed since the last flush.
+        const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
+        const size_t current_parameter_hash = hashMemory(&m_prender_hash, sizeof(m_prender_hash), m_pcamera_hash);
+        // used_cache_base_elements: cache usage as the number of occupied 2x2x2 base elements
+        if (m_last_gpu_stats.used_cache_base_elements >= m_cache_capacity - cache_elements_per_finest_lod
+                && m_parameter_hash_at_last_reset != current_parameter_hash) {
+            m_pcache_reset = true;
+            m_parameter_hash_at_last_reset = current_parameter_hash;
         }
+
+        // if requested, more GPU statistics are gathered during rendering and printed here
+        if (m_show_gpu_stats) {
+            size_t decoded_bytes_in_frame = 0;
+            size_t decoded_bytes_total = 0;
+            std::stringstream cache_state = {};
+            cache_state << " decoded: ";
+            for (int lod = 1; lod < m_compressed_segmentation_volume->getLodCountPerBrick(); lod++) {
+                decoded_bytes_in_frame += m_last_gpu_stats.blocks_decoded_L1_to_7[lod - 1] * (1u << (lod * 3)) * 4;
+                decoded_bytes_total += m_last_gpu_stats.blocks_decoded_L1_to_7[lod - 1] * (1u << (lod * 3)) * 4;
+                cache_state << "inv. LOD" << lod << ": " << m_last_gpu_stats.blocks_decoded_L1_to_7[lod - 1] << ", ";
+            }
+            cache_state << " in total: " << static_cast<double>(decoded_bytes_total) * BYTE_TO_MB << " MB";
+            if (decoded_bytes_in_frame > 0)
+                Logger(INFO) << cache_state.str();
+        }
+    }
+
+    // if any previous detail construction is finished, download next brick indices for which the detail level is required
+    if (m_compressed_segmentation_volume->isUsingSeparateDetail() && m_detail_stage == DetailReady && m_frame > 0u) {
+        assert(m_detail_requests.size() >= m_max_detail_requests_per_frame + 1u && "Detail request buffer is too small.");
+
+        m_detail_requests_buffer->download(m_detail_requests);
+        // second to last element stores the number of brick indices for which the detail level is requested
+        uint32_t detail_request_count = std::min(m_detail_requests[m_max_detail_requests_per_frame], m_max_detail_requests_per_frame);
+
+        // reset the (atomic) counter at location
+        static constexpr uint32_t zero{0u};
+        m_detail_requests_buffer->upload(m_max_detail_requests_per_frame * sizeof(uint32_t), &zero, sizeof(uint32_t));
+
+        if (detail_request_count > 0u)
+            m_detail_stage = DetailAwaitingCPUConstruction;
     }
 
     // set render update flags to denote which parameter sets changed, and which render stages have to be executed
@@ -226,24 +243,6 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         });
         detail_upload_thread.detach();
     }
-
-    // download GPU debug information and statistics
-    if(m_show_step_count) {
-        m_gpu_stats_buffer->download(&m_last_gpu_stats, sizeof(m_last_gpu_stats));
-        size_t decoded_bytes_in_frame = 0;
-        size_t decoded_bytes_total = 0;
-        std::stringstream cache_state = {};
-        for (int i = 0; i < m_compressed_segmentation_volume->getLodCountPerBrick() - 1u; i++) {
-            decoded_bytes_in_frame += m_last_gpu_stats.gpu_blocks_decoded[i] * (2u << i) * (2u << i) * (2u << i) * 4; // i = 0 means inv_lod 1 so 2^3 voxels
-            decoded_bytes_total += m_last_gpu_stats.gpu_blocks_in_cache[i] * (2u << i) * (2u << i) * (2u << i) * 4; // i = 0 means inv_lod 1 so 2^3 voxels
-            cache_state << "inv. LOD" << (i+1) << ": " << m_last_gpu_stats.gpu_blocks_in_cache[i] << ", ";
-        }
-        cache_state << static_cast<double>(decoded_bytes_total) / 1000. / 1000.f << " MB total";
-        Logger(INFO) << cache_state.str() << "   |   " << m_last_gpu_stats.gpu_raymarch_samples << " ray samples (" << static_cast<double>(m_last_gpu_stats.gpu_raymarch_samples) / static_cast<double>(m_last_gpu_stats.gpu_bbox_hits) << " per ray).";
-        if (decoded_bytes_in_frame > 0)
-            Logger(INFO) << "decoded " << std::fixed << std::setprecision(3) << static_cast<double>(decoded_bytes_in_frame) / 1000. / 1000. << " MB";
-    }
-
 
     m_pass->setStorageImage("inpaintedOutColor", *m_inpaintedOutColor);
     // feedback texture ping pong for the inpainting shader
@@ -489,8 +488,8 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
             detail_buffer_fits_whole_detail = true;
         }
 
-        m_detail_requests.resize(m_max_detail_requests_per_frame + 2u);
-        m_detail_requests_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_requests_buffer", .byteSize = (m_max_detail_requests_per_frame + 2u) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
+        m_detail_requests.resize(m_max_detail_requests_per_frame + 1u); // last element stores the atomic counter for the position to insert elements
+        m_detail_requests_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_requests_buffer", .byteSize = m_detail_requests.size() * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
         m_detail_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_starts_buffer", .byteSize = (bricks_in_volume + 1u)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
         m_detail_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_detail_buffer", .byteSize = m_detail_capacity * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eHostVisible});
         Buffer::deviceAddressUvec2(m_detail_buffer->getDeviceAddress(), &m_detail_buffer_address.x);
@@ -891,7 +890,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_blue_noise) HASHP(m_max_steps)
     // (debug) rendering parameters
     HASHP(m_show_model_space)  HASHP(m_show_normals) HASHP(m_show_lod) HASHP(m_show_brick_cache) HASHP(m_show_envmap)
-    HASHP(m_show_step_count)
+    HASHP(m_show_gpu_stats)
     if (new_hash != m_prender_hash) {
         m_render_update_flags |= UPDATE_PRENDER;
         m_prender_hash = new_hash;
@@ -1075,7 +1074,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<uint32_t>("g_debug_lod", m_show_lod ? 1 : 0);
         m_urender_info->setUniform<uint32_t>("g_debug_brick_cache", m_show_brick_cache ? 1 : 0);
         m_urender_info->setUniform<uint32_t>("g_debug_envmap", m_show_envmap ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_debug_step_count", m_show_step_count ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_debug_gpu_stats", m_show_gpu_stats ? 1 : 0);
     }
 
     // static segmentation volume and buffer metadata uniform
@@ -1295,7 +1294,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addBool(&m_show_model_space, "Show Model Space");
     g_dev->addBool(&m_show_brick_cache, "Show Brick Cache");
     g_dev->addBool(&m_show_lod, "Show LOD Levels");
-    g_dev->addBool(&m_show_step_count, "Show Ray Step Count");
+    g_dev->addBool(&m_show_gpu_stats, "Show GPU Stats (console)");
     g_dev->addBool(&m_show_envmap, "Show Environment Map");
     g_dev->addBool(&m_show_normals, "Show Normals");
     g_dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");

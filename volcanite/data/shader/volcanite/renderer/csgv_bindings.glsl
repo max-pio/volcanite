@@ -101,7 +101,10 @@ layout(std430, binding = 4) buffer restrict assign_info
 #define ASSIGN_NEW_BLOCK_START 0
 #define ASSIGN_NEW_BLOCK_COUNT 1
 #define ASSIGN_REQUESTED_BLOCKS 2
-#define ASSIGN_ELEMS_PER_LOD 3      // how many elements per LoD are in the assign_info_ssbo
+// how many elements per LoD are in the assign_info_ssbo
+#define ASSIGN_ELEMS_PER_LOD 3
+// lookup index in assign_info where the cache top pointer is stored
+#define ASSIGN_CACHE_TOP_IDX ((LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD)
 
 layout(std430, binding = 5) buffer restrict free_block_stacks
 {
@@ -136,7 +139,8 @@ layout(std430, binding = 8) buffer restrict readonly detail
 };
 layout(std430, binding = 9) buffer restrict detail_requests
 {
-    uint g_detail_requests[];  // contains 1D brick IDs for which the detail is requested from the CPU
+    uint g_detail_requests[];  // contains 1D brick IDs for which the detail is requested from the CPU,
+                               // last element (at location g_request_buffer_capacity) is the atomic insert idx counter
 };
 #endif
 
@@ -181,7 +185,7 @@ layout (std140, binding = 10) uniform render_info {
     bool g_debug_lod;
     bool g_debug_brick_cache;
     bool g_debug_envmap;
-    bool g_debug_step_count;
+    bool g_debug_gpu_stats;
 };
 
 layout (std140, binding = 11) uniform camera_info {
@@ -226,13 +230,9 @@ layout(binding = 23, rgba32f) uniform image2D denoisingBuffer[2];
 layout (binding = 15, rgba8) uniform restrict writeonly image2D inpaintedOutColor;
 
 
-layout(std430, binding = 16) buffer restrict writeonly gpu_stats
+layout(std430, binding = 16) buffer restrict writeonly csgv_gpu_stats
 {
-    uint gpu_blocks_decoded[6];
-    uint gpu_blocks_in_cache[6];
-    uint gpu_cache_size;
-    uint gpu_raymarch_samples;
-    uint gpu_bbox_hits;
+    GPUStats gpu_stats;
 };
 
 layout(std430, binding = 17) buffer restrict readonly attributes

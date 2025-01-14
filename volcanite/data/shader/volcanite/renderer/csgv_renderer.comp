@@ -767,7 +767,7 @@ void main() {
         }
     }
 
-    DEBUG_count_raymarch_steps(state.step, g_debug_step_count);
+    DEBUG_count_bbox_hits(state.step, g_debug_gpu_stats);
 
     // block all contributions if no light source was found
     if (state.step >= g_maxSteps || state.path_length > g_max_path_length) {

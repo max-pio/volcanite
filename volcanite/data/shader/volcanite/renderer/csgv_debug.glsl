@@ -157,12 +157,11 @@ void DEBUG_vis_brick_idx(inout RayMarchState state, bool enabled) {
 }
 
 /// Counts the total number of ray marching steps and the total number of view rays that hit the volume's bounding box.
-void DEBUG_count_raymarch_steps(int steps, bool enabled) {
+void DEBUG_count_bbox_hits(int steps, bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
     if (!enabled)
         return;
-    atomicAdd(gpu_raymarch_samples, steps);
-    atomicAdd(gpu_bbox_hits, 1u);
+    atomicAdd(gpu_stats.bbox_hits, 1u);
 #endif
 }
 

@@ -319,13 +319,13 @@ private:
     float m_denoise_fade_sigma = 1.f;
     // debugging and dev options
     float m_lod_bias = 0.f;
+    bool m_blue_noise = true;
     bool m_show_envmap = false;
     bool m_show_normals = false;
-    bool m_blue_noise = true;
     bool m_show_model_space = false;
     bool m_show_brick_cache = false;
     bool m_show_lod = false;
-    bool m_show_step_count = false;
+    bool m_show_gpu_stats = false;
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
     int m_target_accum_frames = 16;
@@ -395,7 +395,7 @@ private:
     std::shared_ptr<Buffer> m_materials_buffer = nullptr;              ///< stores the material information
 
     // detail management
-    static constexpr uint32_t m_max_detail_requests_per_frame = 1024u;  ///< how many brick_ids can be requested for detail upload per frame (affects the request buffer size)
+    static constexpr uint32_t m_max_detail_requests_per_frame = 1023u;  ///< how many brick_ids can be requested for detail upload per frame (affects the request buffer size)
     enum DetailConstructionStage { DetailReady = 0, DetailAwaitingCPUConstruction, DetailCPUConstruction, DetailAwaitingUpload, DetailUploading};
     DetailConstructionStage m_detail_stage = DetailReady;
     std::vector<uint32_t> m_detail_requests = {};
@@ -426,13 +426,7 @@ private:
 
     // debugging
     bool m_release_version = false;               ///< if this is used in a release where development parameters are hidden
-    struct GPUStats {
-        uint32_t gpu_blocks_decoded[6];
-        uint32_t gpu_blocks_in_cache[6];
-        uint32_t gpu_cache_size;
-        uint32_t gpu_raymarch_samples;
-        uint32_t gpu_bbox_hits;
-    } m_last_gpu_stats = {};
+    GPUStats m_last_gpu_stats = {};
     std::string m_additional_shader_defs = "";
 
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
