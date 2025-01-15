@@ -140,7 +140,7 @@ public:
 
     /// Obtains the rendering resolution from the windowing system but limits it to 4K (4096x2160).
     void updateRenderResolutionFromWSI() {
-        // TODO: remove hardcoded render resolution or expose it in the GUI
+        // TODO: remove hardcoded render resolution or expose it in the GUI as: [max | fix] res: [1920] [1080]
         const vk::Extent2D max_resolution = {4096u, 2160u};
 
         auto wsi = getCtx()->getWsi();
@@ -157,6 +157,11 @@ public:
             }
             m_resolution = screen;
         }
+    }
+
+    /// Updates the current mouse position in screen space coordinates [0,1]^2 for the shaders.
+    void setCursorPos(const glm::vec2 screen_space_pos) override {
+        m_mouse_pos = glm::clamp(screen_space_pos, glm::vec2(0.f), glm::vec2(1.f));
     }
 
     void initGui(vvv::GuiInterface * gui) override;
@@ -305,6 +310,7 @@ private:
     glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
     glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
     glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
+    glm::vec2 m_mouse_pos = glm::vec2(0.5f);    ///< screen space mouse position in [0,1]^2
     // denoising
     int m_atrous_iterations = 4;
     bool m_denoising_enabled = true;
@@ -312,7 +318,7 @@ private:
     float m_difference_depth_denoising = 1.0f;
     float m_spatial_sigma = 2.0f;
     float m_depth_sigma = 1.f;
-    // svgf
+    // svgf TODO: Not using SVGF anymore, remove this
     bool m_atrous_enabled = true;
     float m_illumination_sigma = 4.0f;
     bool m_denoise_fade_enabled = true;
@@ -320,12 +326,7 @@ private:
     // debugging and dev options
     float m_lod_bias = 0.f;
     bool m_blue_noise = true;
-    bool m_show_envmap = false;
-    bool m_show_normals = false;
-    bool m_show_model_space = false;
-    bool m_show_brick_cache = false;
-    bool m_show_lod = false;
-    bool m_show_gpu_stats = false;
+    uint32_t m_debug_vis_flags = 0u;
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
     int m_target_accum_frames = 16;

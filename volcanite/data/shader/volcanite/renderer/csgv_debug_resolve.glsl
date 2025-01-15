@@ -14,8 +14,28 @@
 
 #include "volcanite/bit_vector.glsl"
 
+/// Draws rectangles for each level-of-detail: if the volume fits into one of these rectangles it means that the
+/// corresponding LoD will be selected (depends on how many voxels of the finest LoD fit into one pixel).
+/// Returns true if this thread should terminate afterwards as the pixel color was drawn.
+bool DEBUG_img_lod_rectangles(ivec2 pixel, inout vec4 color, const bool enabled) {
+#ifdef ENALBE_CSGV_DEBUGGING
+    if (!enabled)
+        return false;
+
+    for (uint lod = 0; lod < LOD_COUNT; lod++) {
+        if (any(greaterThanEqual(abs(ivec2(pixel) - ivec2(imageSize(accumulationOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) - 2u)))) {
+            if (all(lessThanEqual(abs(ivec2(pixel) - ivec2(imageSize(accumulationOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) + 2u)))) {
+                color = vec4(colormap_viridis(float(LOD_COUNT - 1u - lod)/float(LOD_COUNT - 1u)), 1.f);
+                return true;
+            }
+        }
+    }
+#endif
+    return false;
+}
+
 // blend a cache visualization over the pixel's color
-void DEBUG_img_cache(ivec2 pixel, inout vec4 color, bool enabled) {
+void DEBUG_img_cache_array(ivec2 pixel, inout vec4 color, bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
     if (!enabled)
         return;
@@ -124,6 +144,19 @@ void DEBUG_img_empty_space_bv(ivec2 pixel, inout vec4 color, bool enabled) {
 #endif
 }
 
+void DEBUG_img_no_postprocess(ivec2 pixel, inout vec4 color, bool enabled) {
+#ifdef ENALBE_CSGV_DEBUGGING
+    if (!enabled)
+        return;
+
+    // debug input buffer (left) vs. upsampled and denoised (right) output
+    if (pixel.x < g_cursor_pixel_pos.x) {
+        uint sample_count_block = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
+        color = imageLoad(accumulationOut, pixel) / float(sample_count_block);
+    }
+#endif
+}
+
 void DEBUG_img_g_buffer(ivec2 pixel, inout vec4 color, bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
     if (!enabled)
@@ -136,9 +169,6 @@ void DEBUG_img_g_buffer(ivec2 pixel, inout vec4 color, bool enabled) {
     bool sampled = unpackGBufferRGB16(packed_g_buffer, label, normal, normalized_depth);
 
     const ivec2 viewport_size = imageSize(inpaintedOutColor);
-    const ivec2 split_point = viewport_size / 2;
-
-
 
     if (!sampled) {
         // not sampled
@@ -146,13 +176,13 @@ void DEBUG_img_g_buffer(ivec2 pixel, inout vec4 color, bool enabled) {
     } else if (!isSurfaceHitGBufferRGB16(packed_g_buffer)) {
         // no surface hit
         color = vec4(0.f, 0.f, 0.f, 1.f);
-    } else if (pixel.x < split_point.x && pixel.y < split_point.y) {
+    } else if (pixel.x < g_cursor_pixel_pos.x && pixel.y < g_cursor_pixel_pos.y) {
         // albedo
         color = vec4(getAlbedoOfLabel(label), 1.f);
-    } else if (pixel.x < split_point.x && pixel.y >= split_point.y) {
+    } else if (pixel.x < g_cursor_pixel_pos.x && pixel.y >= g_cursor_pixel_pos.y) {
         // normal
         color = vec4(-min(normal, vec3(0.f)) * 0.5f + max(normal, vec3(0.f)), 1.f);
-    } else if (pixel.x >= split_point.x && pixel.y < split_point.y) {
+    } else if (pixel.x >= g_cursor_pixel_pos.x && pixel.y < g_cursor_pixel_pos.y) {
         // depth
         color = vec4(vec3(normalized_depth), 1.f);
     } else {
@@ -167,5 +197,13 @@ void DEBUG_img_g_buffer(ivec2 pixel, inout vec4 color, bool enabled) {
 #endif
 }
 
+
+void DEBUG_img_envmap(vec2 fragCoord, vec3 rayDirection, inout vec4 bgColor, bool enabled) {
+#ifdef ENALBE_CSGV_DEBUGGING
+    if (!enabled)
+        return;
+    bgColor = vec4(g_light_intensity * dummy_envmap(rayDirection), 1.f);
+#endif
+}
 
 #endif // VOLCANITE_CSGV_DEBUG_RESOLVE_GLSL

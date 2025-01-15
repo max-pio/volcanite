@@ -187,7 +187,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         }
 
         // if requested, more GPU statistics are gathered during rendering and printed here
-        if (m_show_gpu_stats) {
+        if (m_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT) {
             size_t decoded_bytes_in_frame = 0;
             size_t decoded_bytes_total = 0;
             std::stringstream cache_state = {};
@@ -890,9 +890,10 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     // HASHP(m_subblock_start) HASHP(m_subblock_size) HASHP(m_subblock_enabled)
     // general rendering config
     HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_blue_noise) HASHP(m_max_steps)
-    // (debug) rendering parameters
-    HASHP(m_show_model_space)  HASHP(m_show_normals) HASHP(m_show_lod) HASHP(m_show_brick_cache) HASHP(m_show_envmap)
-    HASHP(m_show_gpu_stats)
+    // debug views and flags
+    uint32_t render_debug_bits = m_debug_vis_flags & (VDEB_MODEL_SPACE_BIT | VDEB_LOD_BIT | VDEB_EMPTY_SPACE_BIT | VDEB_CACHE_VOXEL_BIT
+            | VDEB_BRICK_IDX_BIT | VDEB_STATS_DOWNLOAD_BIT);
+    HASHP(render_debug_bits)
     if (new_hash != m_prender_hash) {
         m_render_update_flags |= UPDATE_PRENDER;
         m_prender_hash = new_hash;
@@ -911,7 +912,10 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_atrous_iterations)
     HASHP(m_denoising_enabled) HASHP(m_atrous_enabled) HASHP(m_difference_depth_denoising)
     HASHP(m_spatial_sigma) HASHP(m_depth_sigma) HASHP(m_illumination_sigma) HASHP(m_denoise_fade_sigma)
-    HASHP(m_denoise_filter_kernel_size) HASHP(m_denoise_fade_enabled)
+    HASHP(m_denoise_filter_kernel_size) HASHP(m_denoise_fade_enabled) HASHP(m_mouse_pos)
+    uint32_t resolve_debug_bits = m_debug_vis_flags & (VDEB_NO_POSTPROCESS_BIT | VDEB_CACHE_ARRAY_BIT
+                    | VDEB_EMPTY_SPACE_ARRAY_BIT | VDEB_G_BUFFER_BIT | VDEB_ENVMAP_BIT);
+    HASHP(resolve_debug_bits)
     if (new_hash != m_presolve_hash) {
         m_render_update_flags |= UPDATE_PRESOLVE;
         m_presolve_hash = new_hash;
@@ -1012,6 +1016,9 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
         m_uresolve_info->setUniform<int>("g_denoise_filter_kernel_size",m_denoise_filter_kernel_size);
         m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
+        m_uresolve_info->setUniform<glm::ivec2>("g_cursor_pixel_pos", glm::ivec2(m_mouse_pos * glm::vec2(m_resolution.width,
+                                                                                                         m_resolution.height)));
+        m_uresolve_info->setUniform<uint32_t>("g_debug_vis_flags", m_debug_vis_flags);
     }
 
     // render info uniform
@@ -1069,14 +1076,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<uint32_t>("g_max_inv_lod", glm::min(static_cast<uint32_t>(m_max_inv_lod), lod_count - 1u));
         m_urender_info->setUniform<int32_t>("g_maxSteps", m_max_steps);
         m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? 1 : 0);
-
-        // debug views
-        m_urender_info->setUniform<uint32_t>("g_debug_model_space", m_show_model_space ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_debug_normals", m_show_normals ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_debug_lod", m_show_lod ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_debug_brick_cache", m_show_brick_cache ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_debug_envmap", m_show_envmap ? 1 : 0);
-        m_urender_info->setUniform<uint32_t>("g_debug_gpu_stats", m_show_gpu_stats ? 1 : 0);
     }
 
     // static segmentation volume and buffer metadata uniform
@@ -1293,17 +1292,38 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addSeparator();
     g_dev->addLabel("Debug");
     g_dev->addInt(&m_max_inv_lod, "Max. Decoding LoD", 0, 6, 1);
-    g_dev->addBool(&m_show_model_space, "Show Model Space");
-    g_dev->addBool(&m_show_brick_cache, "Show Brick Cache");
-    g_dev->addBool(&m_show_lod, "Show LOD Levels");
-    g_dev->addBool(&m_show_gpu_stats, "Show GPU Stats (console)");
-    g_dev->addBool(&m_show_envmap, "Show Environment Map");
-    g_dev->addBool(&m_show_normals, "Show Normals");
+    static int gui_debug_vis_selection = 0;
+    g_dev->addCombo(&gui_debug_vis_selection, {"Render Outupt", ""}, [](int selection) {
+
+    }, "Debug Visualization");
+    const std::vector<std::string> option_labels = {"Model Space", "Level-of-Detail", "Empty Space", "Brick Index",
+                                                    "Label Cache", "Raw Render", "Cache Buffer", "Empty Space Buffer",
+                                                    "G-Buffer", "Environment Map", "Print Statistics"};
+    const std::vector<uint32_t> option_bits = {VDEB_MODEL_SPACE_BIT, VDEB_LOD_BIT, VDEB_EMPTY_SPACE_BIT, VDEB_BRICK_IDX_BIT,
+                                               VDEB_CACHE_VOXEL_BIT, VDEB_NO_POSTPROCESS_BIT, VDEB_CACHE_ARRAY_BIT,
+                                               VDEB_EMPTY_SPACE_ARRAY_BIT, VDEB_G_BUFFER_BIT, VDEB_ENVMAP_BIT,
+                                               VDEB_STATS_DOWNLOAD_BIT};
+    g_dev->addBitFlags(&m_debug_vis_flags, option_labels, option_bits, true, "Debug View");
+
     g_dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
+#ifdef IMGUI
+    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
     g_dev->addAction([this](){ getCamera()->position_look_at_world_space = {0, 0, 0}; }, "Center Camera");
-    g_dev->addAction([this]() { m_pcache_reset = true; }, "Hard Reset Brick Cache");
-    g_dev->addBool(&m_clear_cache_every_frame, "Clear Cache Every Frame");
-    g_dev->addBool(&m_clear_accum_every_frame, "Clear Accumulation Every Frame");
+    g_dev->addAction([this]() { m_pcache_reset = true; }, "Clear Label Cache");
+#ifdef IMGUI
+    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_dev->addBool(&m_clear_cache_every_frame, "Every Frame");
+    g_dev->addAction([this]() { m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
+            std::chrono::high_resolution_clock::now().time_since_epoch().count()); }, "Clear Frame Accumulation");
+#ifdef IMGUI
+    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_dev->addBool(&m_clear_accum_every_frame, "Every Frame");
+    g_dev->addAction([this]() { m_pcache_reset = true;
+        m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
+                std::chrono::high_resolution_clock::now().time_since_epoch().count());}, "Clear Cache and Accumulation");
     g_dev->addSeparator();
 
     // import initial config (if requested)

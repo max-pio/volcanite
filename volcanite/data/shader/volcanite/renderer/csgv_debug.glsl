@@ -7,37 +7,6 @@
 
 #define ENALBE_CSGV_DEBUGGING
 
-/// Draws rectangles for each level-of-detail: if the volume fits into one of these rectangles it means that the
-/// corresponding LoD will be selected (depends on how many voxels of the finest LoD fit into one pixel).
-/// Returns true if this thread should terminate afterwards as the pixel color was drawn.
-bool DEBUG_vis_lod_rectangles(ivec2 pixel, const bool enabled) {
-#ifdef ENALBE_CSGV_DEBUGGING
-    if (!enabled)
-        return false;
-
-    for (uint lod = 0; lod < LOD_COUNT; lod++) {
-        if (any(greaterThanEqual(abs(ivec2(pixel) - ivec2(imageSize(accumulationOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) - 2u)))) {
-            if (all(lessThanEqual(abs(ivec2(pixel) - ivec2(imageSize(accumulationOut).xy)/2), ivec2(g_vol_dim.x / (2u << lod) + 2u)))) {
-                writePixel(pixel, vec4(colormap_viridis(float(LOD_COUNT - 1u - lod)/float(LOD_COUNT - 1u)), 1.f), BACKGROUND_DEPTH, invalidGBufferRGB16());
-                return true;
-            }
-        }
-    }
-#endif
-    return false;
-}
-
-void DEBUG_vis_lod(RayMarchState state, inout vec4 surface_albedo_opacity, bool enabled) {
-#ifdef ENALBE_CSGV_DEBUGGING
-    if (!enabled)
-        return;
-    uint lod = get_inv_lod(state.voxel);
-    if (lod != INVALID) {
-        surface_albedo_opacity.rgb = (state.out_color.rgb + 3.f * colormap_viridis(float(lod)/float(LOD_COUNT - 1u))) / 4.f;
-    }
-#endif
-}
-
 /// Visualizes model space coordinates.
 /// Returns true if this thread should terminate afterwards as the pixel color was drawn.
 bool DEBUG_vis_model_space(Ray ray, float t_0, ivec2 pixel, const bool enabled) {
@@ -51,12 +20,23 @@ bool DEBUG_vis_model_space(Ray ray, float t_0, ivec2 pixel, const bool enabled) 
     vec3 color = vec3(voxel) / vec3(g_vol_dim);
     // hightlight borders of voxels that are close to the camera
     if (borders.x + borders.y + borders.z > 0.f)
-        color *= 1.f - 1.f / (t_0 / g_world_to_model_space_scaling * 64.f);
+    color *= 1.f - 1.f / (t_0 / g_world_to_model_space_scaling * 64.f);
 
     // prevent any post-processing blur by giving each voxel another label
     writePixel(pixel, vec4(color, 1.f), t_0, packGBufferRGB16(voxel.x ^ (voxel.y << 10u) ^ (voxel.z << 20u),
-                                                              vec3(0.f), depth));
+    vec3(0.f), depth));
     return true;
+#endif
+}
+
+void DEBUG_vis_lod(RayMarchState state, inout vec4 surface_albedo_opacity, bool enabled) {
+#ifdef ENALBE_CSGV_DEBUGGING
+    if (!enabled)
+        return;
+    uint lod = get_inv_lod(state.voxel);
+    if (lod != INVALID) {
+        surface_albedo_opacity.rgb = (state.out_color.rgb + 3.f * colormap_viridis(float(lod)/float(LOD_COUNT - 1u))) / 4.f;
+    }
 #endif
 }
 
@@ -84,34 +64,15 @@ void DEBUG_vis_empty_space_voxel(inout RayMarchState state, const bool enabled) 
 #endif
 }
 
-/// Checks some state variables and ray origin / direction for inf or nan values. returns false if any are found.
-void DEBUG_check_state_and_ray(inout RayMarchState state, const Ray ray, int line) {
+/// Updates the state's color to display the brick id at the current location.
+void DEBUG_vis_brick_idx(inout RayMarchState state, bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
-    if (any(isnan(state.voxel + state.pos_in_voxel)) || any(isinf(state.voxel + state.pos_in_voxel))
-    || (any(isnan(state.pos_in_voxel)) || any(isinf(state.pos_in_voxel)))
-    || (any(isnan(ray.origin)) || any(isinf(ray.origin)))
-    ||  (any(isnan(ray.direction)) || any(isinf(ray.direction)))) {
-        debugPrintfEXT("nan/inf in line %i, step %i   state.pos: %v3f | sub_voxel_pos: %v3f | state.t: %f | state.inv_ray_dir: %v3f | ray %v3f -> %v3f",
-        line, state.step, state.voxel + state.pos_in_voxel, state.pos_in_voxel,
-        length((state.voxel + state.pos_in_voxel) - ray.origin),
-        state.inv_ray_dir, ray.origin, ray.direction);
-
-        state.out_color = vec4(1.f, 0.f, 1.f, 1.f);
-        state.depth_valid = 0.f;
-        state.throughput = vec3(0.f);
-    }
-#endif
-}
-
-/// If the state's label is invalid, updates the state color.
-void DEBUG_vis_invalid_label(inout RayMarchState state) {
-#ifdef ENALBE_CSGV_DEBUGGING
-    if (state.label == INVALID){
-        state.out_color = vec4(1.f, 0.f, 1.f, 1.f);
-        state.throughput = vec3(0.f);
-        state.depth_valid = 0.f;
-        assert(!isCenterWorkItem(), "get_volume_label returned INVALID. Possible corrupt data in brick cache.");
-    }
+    if (!enabled)
+        return;
+    uvec3 brick = uvec3(state.voxel) / BRICK_SIZE;
+    uint brick_idx = brick_pos2idx(brick, g_brick_count);
+    state.out_color = vec4(integer2colorlabel(brick_idx, false), 1.f);
+    state.throughput = vec3(0.f);
 #endif
 }
 
@@ -140,7 +101,7 @@ void DEBUG_vis_brick_cache(inout RayMarchState state, ivec2 pixel, bool enabled)
 #endif
 }
 
-// Updates the state's color to display the shading normal at the current location.
+/// Updates the state's color to display the shading normal at the current location.
 void DEBUG_vis_normals(inout RayMarchState state, bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
     if (!enabled)
@@ -150,15 +111,38 @@ void DEBUG_vis_normals(inout RayMarchState state, bool enabled) {
 #endif
 }
 
-// Updates the state's color to display the brick id at the current location.
-void DEBUG_vis_brick_idx(inout RayMarchState state, bool enabled) {
+
+// INTERNAL ------------------------------------------------------------------------------------------------------------
+
+/// If the state's label is invalid, updates the state color.
+void DEBUG_vis_invalid_label(inout RayMarchState state) {
 #ifdef ENALBE_CSGV_DEBUGGING
-    if (!enabled)
-        return;
-    uvec3 brick = uvec3(state.voxel) / BRICK_SIZE;
-    uint brick_idx = brick_pos2idx(brick, g_brick_count);
-    state.out_color = vec4(integer2colorlabel(brick_idx, false), 1.f);
-    state.throughput = vec3(0.f);
+    if (state.label == INVALID){
+        state.out_color = vec4(1.f, 0.f, 1.f, 1.f);
+        state.throughput = vec3(0.f);
+        state.depth_valid = 0.f;
+        assert(!isCenterWorkItem(), "get_volume_label returned INVALID. Possible corrupt data in brick cache.");
+    }
+#endif
+}
+
+
+/// Checks some state variables and ray origin / direction for inf or nan values. returns false if any are found.
+void DEBUG_check_state_and_ray(inout RayMarchState state, const Ray ray, int line) {
+#ifdef ENALBE_CSGV_DEBUGGING
+    if (any(isnan(state.voxel + state.pos_in_voxel)) || any(isinf(state.voxel + state.pos_in_voxel))
+    || (any(isnan(state.pos_in_voxel)) || any(isinf(state.pos_in_voxel)))
+    || (any(isnan(ray.origin)) || any(isinf(ray.origin)))
+    ||  (any(isnan(ray.direction)) || any(isinf(ray.direction)))) {
+        debugPrintfEXT("nan/inf in line %i, step %i   state.pos: %v3f | sub_voxel_pos: %v3f | state.t: %f | state.inv_ray_dir: %v3f | ray %v3f -> %v3f",
+        line, state.step, state.voxel + state.pos_in_voxel, state.pos_in_voxel,
+        length((state.voxel + state.pos_in_voxel) - ray.origin),
+        state.inv_ray_dir, ray.origin, ray.direction);
+
+        state.out_color = vec4(1.f, 0.f, 1.f, 1.f);
+        state.depth_valid = 0.f;
+        state.throughput = vec3(0.f);
+    }
 #endif
 }
 

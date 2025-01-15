@@ -513,8 +513,6 @@ void main() {
     if (isHelperLane(pixel, viewport_size))
         return;
 
-    if (DEBUG_vis_lod_rectangles(pixel, g_debug_lod)) return;
-
     // Add a subpixel offset in [0, 1) to perform temporal anti-aliasing
     vec2 subpixel_offset = g_blue_noise_enable ? randomVec3(pixel, g_camera_still_frames).xy : vec2(0.5f);
     vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(viewport_size);
@@ -547,7 +545,7 @@ void main() {
         return;
     }
 
-    if (DEBUG_vis_model_space(ray, t_0, pixel, g_debug_model_space)) return;
+    if (DEBUG_vis_model_space(ray, t_0, pixel, bool(g_debug_vis_flags & VDEB_MODEL_SPACE_BIT))) return;
 
     // initialize ray marching state
     RayMarchState state;
@@ -606,10 +604,10 @@ void main() {
 
         // empty space check
         if (isEmptySpace(state.voxel)) {
-            DEBUG_vis_empty_space_brick(state, false);
+            DEBUG_vis_empty_space_brick(state, bool(g_debug_vis_flags & VDEB_EMPTY_SPACE_BIT));
             continue;
         } else {
-            DEBUG_vis_empty_space_voxel(state, false);
+            DEBUG_vis_empty_space_voxel(state, bool(g_debug_vis_flags & VDEB_EMPTY_SPACE_BIT));
         }
 
 
@@ -632,8 +630,7 @@ void main() {
             continue;
         }
 
-        DEBUG_vis_normals(state, g_debug_normals);
-        DEBUG_vis_brick_cache(state, pixel, !g_debug_normals && g_debug_brick_cache);
+        DEBUG_vis_brick_cache(state, pixel, bool(g_debug_vis_flags & VDEB_CACHE_VOXEL_BIT));
 
         // obtain surface albedo / volume emission and opacity
         vec4 surface_albedo_opacity = getColor(state.label, material);
@@ -670,8 +667,8 @@ void main() {
                 break;
             }
 
-            DEBUG_vis_brick_idx(state, false);
-            DEBUG_vis_lod(state, surface_albedo_opacity, g_debug_lod);
+            DEBUG_vis_brick_idx(state, bool(g_debug_vis_flags & VDEB_BRICK_IDX_BIT));
+            DEBUG_vis_lod(state, surface_albedo_opacity, bool(g_debug_vis_flags & VDEB_LOD_BIT));
 
             // The first surface hit is the only point for which we want to store our t value in the depth buffer
             // but if we previously stored an INVALID_DEPTH (< 0) at any point, it must not be overwritten.
@@ -767,7 +764,7 @@ void main() {
         }
     }
 
-    DEBUG_count_bbox_hits(state.step, g_debug_gpu_stats);
+    DEBUG_count_bbox_hits(state.step, bool(g_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT));
 
     // block all contributions if no light source was found
     if (state.step >= g_maxSteps || state.path_length > g_max_path_length) {

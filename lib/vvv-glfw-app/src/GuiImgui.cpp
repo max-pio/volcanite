@@ -318,7 +318,7 @@ void GuiImgui::renderGui() {
                             ImGui::EndCombo();
                         }
                     } else if (ImGui::BeginCombo(e->label.c_str(), e->options.at(*e->selection).c_str())) {
-                        for(int i = 0; i < e->options.size(); i++) {
+                        for (int i = 0; i < e->options.size(); i++) {
                             const bool is_selected = i == *e->selection;
                             if (ImGui::Selectable(e->options.at(i).c_str(), is_selected)) {
                                 *e->selection = i;
@@ -329,6 +329,20 @@ void GuiImgui::renderGui() {
                         }
                         ImGui::EndCombo();
                     }
+                    break;
+                }
+                case GuiBitFlags: {
+                    auto e = reinterpret_cast<GuiBitFlagsEntry*>(be);
+                    unsigned int bits_just_set = 0;
+                    if (ImGui::CollapsingHeader(e->label.c_str())) {
+                        for (int i = 0; i < e->options.size(); i++) {
+                            if (ImGui::CheckboxFlags(e->options.at(i).c_str(), e->bitfield, e->bitFlags.at(i)))
+                                bits_just_set = e->bitFlags.at(i);
+                        }
+                        ImGui::Separator();
+                    }
+                    if (e->singleFlagOnly && bits_just_set)
+                        *e->bitfield &= bits_just_set;
                     break;
                 }
                 case GuiAction: {

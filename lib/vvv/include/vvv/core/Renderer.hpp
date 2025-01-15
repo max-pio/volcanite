@@ -66,6 +66,9 @@ public:
     virtual std::shared_ptr<Camera> getCamera() { return m_camera; }
     virtual void setCamera(std::shared_ptr<Camera> camera) { m_camera = std::move(camera); }
 
+    /// Updates the current mouse position in screen space coordinates [0,1]^2 for the shaders.
+    virtual void setCursorPos(const glm::vec2 mouse_position) {};
+
     /// Writes all rendering and camera parameters in human readable form to the given stream. The Renderer superclass
     /// exports all GUI interface parameters as well as camera parameters.
     /// @return true on success, false otherwise

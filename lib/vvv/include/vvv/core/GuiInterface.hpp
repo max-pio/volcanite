@@ -81,7 +81,9 @@ namespace vvv {
 /// This can be used for quick prototyping, for example directly adding ImGUI-Code when using the ImGUI backend.
 class GuiInterface {
 protected:
-    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2, GuiFloatRange, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiAction, GuiLabel, GuiDynamicText, GuiProgress, GuiSeparator, GuiTF1D, GuiTFSegmentedVolume, GuiCustomCode };
+    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2,
+                   GuiFloatRange, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiBitFlags, GuiAction, GuiLabel,
+                   GuiDynamicText, GuiProgress, GuiSeparator, GuiTF1D, GuiTFSegmentedVolume, GuiCustomCode };
 
     // ------------------------------- GUI ENTRIES ------------------------------------ //
 public:
@@ -154,6 +156,13 @@ public:
         std::vector<std::string> options = {};
     };
 
+    struct GuiBitFlagsEntry : BaseGuiEntry {
+        unsigned int *bitfield = nullptr;
+        std::vector<std::string> options = {};
+        std::vector<unsigned int> bitFlags = {};
+        bool singleFlagOnly = false; ///< allows only a single bit to be set
+    };
+
     //  ------------------------------ GUI ELEMENT LIST ------------------------------- //
 public:
     class GuiElementList {
@@ -201,6 +210,7 @@ public:
 
         // special types and grouping
         virtual gui_id addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int)> onChanged = nullptr, const std::string& name = "");
+        virtual gui_id addBitFlags(unsigned int* bitfield, const std::vector<std::string>& options, const std::vector<unsigned int>& bitFlags, bool singleFlagOnly, const std::string& name = "");
         virtual gui_id addAction(void (*callback)(), const std::string& name);
         virtual gui_id addAction(std::function<void()> callback, const std::string& name);
         virtual gui_id addCustomCode(std::function<void()> callback, const std::string& name);

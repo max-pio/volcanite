@@ -191,5 +191,19 @@ struct GPUStats {
     CSGV_UINT blocks_in_cache_L1_to_7[6];   ///< number of base elements per LOD 1 .. 7 currently present in the cache
 };
 
+// Debug Visualiation --------------------------------------------------------------------------------------------------
+
+#define VDEB_MODEL_SPACE_BIT 1
+#define VDEB_LOD_BIT 2
+#define VDEB_EMPTY_SPACE_BIT 4
+#define VDEB_CACHE_VOXEL_BIT 8
+#define VDEB_NO_POSTPROCESS_BIT 16
+#define VDEB_CACHE_ARRAY_BIT 32
+#define VDEB_EMPTY_SPACE_ARRAY_BIT 64
+#define VDEB_G_BUFFER_BIT 128
+#define VDEB_BRICK_IDX_BIT 256
+#define VDEB_STATS_DOWNLOAD_BIT 512
+#define VDEB_ENVMAP_BIT 1024
+
 #undef CSGV_UINT
 #endif // CSGV_CONSTANTS_H

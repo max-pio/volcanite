@@ -42,6 +42,8 @@ vec3 getAlbedoOfLabel(uint label) {
     }
 }
 
+#include "volcanite/renderer/csgv_debug_resolve.glsl"
+
 vec3 color_rectify(vec3 color, ivec2 pixel) {
     uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
     if (sample_count == 0u)
@@ -59,20 +61,13 @@ vec4 blendWithBackground(ivec2 pixel, vec4 pixel_rgba) {
     vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(imageSize(inpaintedOutColor));
     vec3 viewRayDirection = normalize((g_pixel_to_ray_direction_world_space * vec3(pixel + subpixel_offset, 1.0f)).xyz);
     // blend with background
-    pixel_rgba = pixel_rgba.a * pixel_rgba + (1.f - pixel_rgba.a) * get_background_color(fragCoord, viewRayDirection);
-    return pixel_rgba;
+    vec4 bgColor = get_background_color(fragCoord, viewRayDirection);
+
+    DEBUG_img_envmap(fragCoord, viewRayDirection, bgColor, bool(g_debug_vis_flags & VDEB_ENVMAP_BIT));
+    return pixel_rgba.a * pixel_rgba + (1.f - pixel_rgba.a) * bgColor;
 }
 
-#include "volcanite/renderer/csgv_debug_resolve.glsl"
-
 void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {
-#if 0
-    // debug input buffer (left) vs. upsampled and denoised (right) output
-    if (pixel.x < viewport_size.x / 2) {
-        uint sample_count_block = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
-        accum_rgba = imageLoad(accumulationOut, pixel) / float(sample_count_block);
-    }
-#endif
 
     // perform tonemapping and color space conversion
     if(g_tonemap_enable) {
@@ -80,7 +75,8 @@ void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {
     }
     // accum_rgba.rgb = rgb2srgb(accum_rgba.rgb);
 
-    DEBUG_img_g_buffer(pixel, accum_rgba, false);
+    DEBUG_img_g_buffer(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_G_BUFFER_BIT));
+    DEBUG_img_no_postprocess(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_NO_POSTPROCESS_BIT));
 
     // blend with background and output to display image
     imageStore(inpaintedOutColor, pixel, blendWithBackground(pixel, accum_rgba));

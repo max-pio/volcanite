@@ -179,13 +179,6 @@ layout (std140, binding = 10) uniform render_info {
     uint g_max_inv_lod;             // maximum inverse LOD that will be decoded for any brick
     int g_maxSteps;                 // maximum number of ray marching steps for each pixel
     bool g_blue_noise_enable;       // if view rays and other shading properties are jittered with ablue noise pattern
-// debug views
-    bool g_debug_model_space;
-    bool g_debug_normals;
-    bool g_debug_lod;
-    bool g_debug_brick_cache;
-    bool g_debug_envmap;
-    bool g_debug_gpu_stats;
 };
 
 layout (std140, binding = 11) uniform camera_info {
@@ -205,6 +198,7 @@ layout (std140, binding = 12) uniform resolve_info {
     vec4 g_background_color_b;
     bool g_tonemap_enable;
 // denoising
+    // TODO: Remove unused denoising properties
     bool g_denoise;
     bool g_denoising_enabled;
     bool g_atrous_enabled;
@@ -215,6 +209,9 @@ layout (std140, binding = 12) uniform resolve_info {
     float g_denoise_fade_sigma;
     bool g_denoise_fade_enable;
     int g_denoise_filter_kernel_size;
+// interaction and debugging
+    ivec2 g_cursor_pixel_pos;    // screen space mouse position in frame buffer pixels
+    uint g_debug_vis_flags;     // bit mask to enable different debug visualizations (requires ENALBE_CSGV_DEBUGGING)
 };
 
 #define BACKGROUND_DEPTH 3.402823466e+38

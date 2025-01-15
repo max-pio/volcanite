@@ -116,10 +116,11 @@ vec3 tonemap_ACES(vec3 x)  {
 }
 
 vec3 integer2colorlabel(uint id, bool linear) {
-    if(linear)
-        return vec3(id%256, (id/256)%256, (id/65536)%256)/255.f;
-    id *= 17;
-    return hsv2rgb(vec3(float(id % 256) / 255.f, float((id/256)%128)/255.f + 0.5f, 0.375f + float((id/32768)%64)/255.f));
+    if(!linear) {
+        uvec4 hash_base = (uvec4(id, id << 8, id << 16, id << 24) * uvec4(137u, 97u, 31u, 7u)) >> 8u;
+        id = hash_base.x ^ hash_base.y ^ hash_base.z ^ hash_base.w + 117u;
+    }
+    return hsv2rgb(vec3(id%256, 128 + ((id/256)%256) /4, 128 + ((id/65536)%256) / 2) / 255.f);
 }
 
 bool isCenterWorkItem() {

@@ -74,6 +74,20 @@ namespace vvv {
         m_entries.push_back(entry);
         return entry->id;
     }
+    gui_id GuiInterface::GuiElementList::addBitFlags(unsigned int* bitfield, const std::vector<std::string>& options, const std::vector<unsigned int>& bitFlags, bool singleFlagOnly, const std::string& name) {
+        if (options.size() != bitFlags.size())
+            throw std::runtime_error("BitFlags option labels and bit flags vectors must have the same size");
+        auto entry = new GuiBitFlagsEntry();
+        entry->id = m_id_counter++;
+        entry->type = GuiBitFlags;
+        entry->bitfield = bitfield;
+        entry->options = options;
+        entry->bitFlags = bitFlags;
+        entry->singleFlagOnly = singleFlagOnly;
+        entry->label = name;
+        m_entries.push_back(entry);
+        return entry->id;
+    }
     gui_id GuiInterface::GuiElementList::addAction(void (*callback)(), const std::string& name) {
         auto entry = new GuiFuncEntry();
         entry->id = m_id_counter++;
@@ -200,7 +214,12 @@ namespace vvv {
                 }
                 case GuiCombo: {
                     auto e = reinterpret_cast<GuiComboEntry*>(be);
-                    vstr = e->selection ? sanitizeExportString(e->options.at(*e->selection)) : "*";
+                    vstr = e->selection ? sanitizeExportString(e->options.at(*e->selection)) : "0";
+                    break;
+                }
+                case GuiBitFlags: {
+                    auto e = reinterpret_cast<GuiBitFlagsEntry*>(be);
+                    vstr = e->bitfield ? std::to_string(*e->bitfield) : "*";
                     break;
                 }
                 case GuiDynamicText: {
@@ -375,6 +394,11 @@ namespace vvv {
                             return false;
                         }
                         *e->selection = option;
+                        break;
+                    }
+                    case GuiBitFlags: {
+                        auto e = reinterpret_cast<GuiBitFlagsEntry*>(be);
+                        tempLineStream >> *e->bitfield;
                         break;
                     }
                     case GuiDynamicText: {
