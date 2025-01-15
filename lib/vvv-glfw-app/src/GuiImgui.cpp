@@ -119,7 +119,7 @@ void GuiImgui::renderGui() {
                         }
                     } else if (loc == "l") {
                         if (dock_id_left == 0u) {
-                            dock_id_left = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.2f, nullptr, &dockspace_id);
+                            dock_id_left = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.25f, nullptr, &dockspace_id);
                             ImGui::DockBuilderDockWindow(window.c_str(), dock_id_left);
                             parents[window] = dock_id_left;
                         } else {
@@ -141,7 +141,7 @@ void GuiImgui::renderGui() {
                         }
                     } else if (loc == "r") {
                         if (dock_id_right == 0u) {
-                            dock_id_right = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Right, 0.2f, nullptr, &dockspace_id);
+                            dock_id_right = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Right, 0.25f, nullptr, &dockspace_id);
                             ImGui::DockBuilderDockWindow(window.c_str(), dock_id_right);
                             parents[window] = dock_id_right;
                         } else {
@@ -334,7 +334,7 @@ void GuiImgui::renderGui() {
                 case GuiBitFlags: {
                     auto e = reinterpret_cast<GuiBitFlagsEntry*>(be);
                     unsigned int bits_just_set = 0;
-                    if (ImGui::CollapsingHeader(e->label.c_str())) {
+                    if (ImGui::CollapsingHeader(e->label.c_str()), ImGuiTreeNodeFlags_DefaultOpen) {
                         for (int i = 0; i < e->options.size(); i++) {
                             if (ImGui::CheckboxFlags(e->options.at(i).c_str(), e->bitfield, e->bitFlags.at(i)))
                                 bits_just_set = e->bitFlags.at(i);

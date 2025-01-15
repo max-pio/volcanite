@@ -1272,10 +1272,13 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_render->addInt(&m_max_path_length, "Path Length", 1, 32, 1);
 
     // Development
+    g_dev->addLabel("Ray Traversal");
+    g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
     g_dev->addInt(&m_max_steps, "Max DDA Steps", 16, 1 << 16u, 16);
     g_dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
-    g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
     g_dev->addSeparator();
+
+    // TODO: remove some of these to a designated "Postprocessing" GUI tab (next to material, before g_dev)
     g_dev->addLabel("Denoising");
         g_dev->addBool(&m_atrous_enabled, "Enable À-Trous Post-Processing");
     g_dev->addInt(&m_atrous_iterations, "Post-Process Iterations", 1, 4, 1);
@@ -1292,10 +1295,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addSeparator();
     g_dev->addLabel("Debug");
     g_dev->addInt(&m_max_inv_lod, "Max. Decoding LoD", 0, 6, 1);
-    static int gui_debug_vis_selection = 0;
-    g_dev->addCombo(&gui_debug_vis_selection, {"Render Outupt", ""}, [](int selection) {
-
-    }, "Debug Visualization");
     const std::vector<std::string> option_labels = {"Model Space", "Level-of-Detail", "Empty Space", "Brick Index",
                                                     "Label Cache", "Raw Render", "Cache Buffer", "Empty Space Buffer",
                                                     "G-Buffer", "Environment Map", "Print Statistics"};
@@ -1304,21 +1303,22 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                                VDEB_EMPTY_SPACE_ARRAY_BIT, VDEB_G_BUFFER_BIT, VDEB_ENVMAP_BIT,
                                                VDEB_STATS_DOWNLOAD_BIT};
     g_dev->addBitFlags(&m_debug_vis_flags, option_labels, option_bits, true, "Debug View");
-
+    g_dev->addSeparator();
     g_dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
 #ifdef IMGUI
-    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+    g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
     g_dev->addAction([this](){ getCamera()->position_look_at_world_space = {0, 0, 0}; }, "Center Camera");
+    g_dev->addSeparator();
     g_dev->addAction([this]() { m_pcache_reset = true; }, "Clear Label Cache");
 #ifdef IMGUI
-    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+    g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
     g_dev->addBool(&m_clear_cache_every_frame, "Every Frame");
     g_dev->addAction([this]() { m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
-            std::chrono::high_resolution_clock::now().time_since_epoch().count()); }, "Clear Frame Accumulation");
+            std::chrono::high_resolution_clock::now().time_since_epoch().count()); }, "Clear Accumulation");
 #ifdef IMGUI
-    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+    g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
     g_dev->addBool(&m_clear_accum_every_frame, "Every Frame");
     g_dev->addAction([this]() { m_pcache_reset = true;
