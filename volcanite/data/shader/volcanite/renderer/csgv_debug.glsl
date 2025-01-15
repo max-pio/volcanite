@@ -44,12 +44,18 @@ bool DEBUG_vis_model_space(Ray ray, float t_0, ivec2 pixel, const bool enabled) 
 #ifdef ENALBE_CSGV_DEBUGGING
     if (!enabled)
         return false;
-    vec3 pos = ray.origin + t_0 * ray.direction;
-    vec3 color = floor(pos) / vec3(g_vol_dim);
-    vec3 borders = vec3(greaterThan(fract(pos), vec3(0.0f))) * vec3(lessThan(fract(pos - vec3(0.0001f)), vec3(0.2f)));
+    const vec3 pos = ray.origin + t_0 * ray.direction;
+    const float depth = length(pos - g_camera_position_world_space) - (length(g_camera_position_world_space) - 0.8660254037f);
+    const vec3 borders = vec3(greaterThan(fract(pos), vec3(0.0f))) * vec3(lessThan(fract(pos - vec3(0.0001f)), vec3(0.2f)));
+    const uvec3 voxel = uvec3(floor(pos));
+    vec3 color = vec3(voxel) / vec3(g_vol_dim);
+    // hightlight borders of voxels that are close to the camera
     if (borders.x + borders.y + borders.z > 0.f)
         color *= 1.f - 1.f / (t_0 / g_world_to_model_space_scaling * 64.f);
-    writePixel(pixel, vec4(color, 1.f), t_0, invalidGBufferRGB16());
+
+    // prevent any post-processing blur by giving each voxel another label
+    writePixel(pixel, vec4(color, 1.f), t_0, packGBufferRGB16(voxel.x ^ (voxel.y << 10u) ^ (voxel.z << 20u),
+                                                              vec3(0.f), depth));
     return true;
 #endif
 }
@@ -111,7 +117,7 @@ void DEBUG_vis_invalid_label(inout RayMarchState state) {
 
 /// Updates the state's color with a virids map showing the decoded LOD in the brick cache at the current position,
 /// or to red if the brick is not decoded.
-void DEBUG_vis_brick_cache(inout RayMarchState state, bool enabled) {
+void DEBUG_vis_brick_cache(inout RayMarchState state, ivec2 pixel, bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
     if (!enabled)
         return;
@@ -129,7 +135,7 @@ void DEBUG_vis_brick_cache(inout RayMarchState state, bool enabled) {
         if (lod == 0u)
             state.out_color.rgb = vec3(1.f, 0.f, 0.f);
         state.out_color.a = 1.f;
-        state.throughput = vec3(0.f);
+        state.throughput = vec3(0.25f);
     }
 #endif
 }

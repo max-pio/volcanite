@@ -66,6 +66,8 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
                               m_compressed_segmentation_volume->getLodCountPerBrick());
 
         // trigger accumulation buffer and cache resets
+        m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
+                                                std::chrono::high_resolution_clock::now().time_since_epoch().count());
         m_pcache_reset = true;
         m_data_changed = false;
     }
@@ -177,7 +179,8 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
         const size_t current_parameter_hash = hashMemory(&m_prender_hash, sizeof(m_prender_hash), m_pcamera_hash);
         // used_cache_base_elements: cache usage as the number of occupied 2x2x2 base elements
-        if (m_last_gpu_stats.used_cache_base_elements >= m_cache_capacity - cache_elements_per_finest_lod
+        if (m_accumulated_frames > 0
+                && m_last_gpu_stats.used_cache_base_elements >= m_cache_capacity - cache_elements_per_finest_lod
                 && m_parameter_hash_at_last_reset != current_parameter_hash) {
             m_pcache_reset = true;
             m_parameter_hash_at_last_reset = current_parameter_hash;
@@ -729,9 +732,8 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     m_usegmented_volume_info = m_pass->getUniformSet("segmented_volume_info");
 
     // reset parameter hashes to trigger re-render
-    m_pcamera_hash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
-    m_prender_hash = m_pcamera_hash;
-    m_presolve_hash = m_pcamera_hash;
+    m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
+                                                std::chrono::high_resolution_clock::now().time_since_epoch().count());
     m_pcache_reset = true;
     m_pmaterial_reset = true;
     m_accumulated_frames = 0;
@@ -927,7 +929,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
 
     // reset render frame accumulation if any parameters that influence rendering changed
     if (m_clear_accum_every_frame
-       || (m_render_update_flags & (UPDATE_PCAMERA | UPDATE_PRENDER | UPDATE_PMATERIAL | UPDATE_CLEAR_CACHE))) {
+       || (m_render_update_flags & (UPDATE_PCAMERA | UPDATE_PRENDER | UPDATE_PMATERIAL))) {
         // TODO: if m_target_accum_frames *increases*, UPDATE_PRENDER is set but accumulation should not reset
         m_render_update_flags |= UPDATE_CLEAR_ACCUM;
         m_accumulated_frames = 0u;
@@ -1317,6 +1319,15 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         ss << "GPU Memory: " << static_cast<float>(bu.second) / 1073741824.f << "/"
                              << static_cast<float>(bu.first) / 1073741824.f << "/"
                              << static_cast<float>(total) / 1073741824.f << " GB (used/avail/total)";
+        const size_t cache_total_bytes = (m_cache_capacity * 8 * sizeof(uint32_t));
+        if (m_last_gpu_stats.used_cache_base_elements > 0u) {
+            const size_t cache_occupied_bytes = (m_last_gpu_stats.used_cache_base_elements * 8 * sizeof(uint32_t));
+            ss << "\nCache Usage: " << cache_occupied_bytes * BYTE_TO_MB
+               << " / " << cache_total_bytes * BYTE_TO_MB << " MB ("
+               << 100.f * static_cast<float>(cache_occupied_bytes) / static_cast<float>(cache_total_bytes) << "%)";
+        } else {
+            ss << "\nCache Usage: ? / " << cache_total_bytes * BYTE_TO_MB << " MB";
+        }
         m_gui_device_mem_text = ss.str();
     }
 

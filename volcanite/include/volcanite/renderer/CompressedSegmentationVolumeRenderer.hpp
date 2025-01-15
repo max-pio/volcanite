@@ -426,7 +426,7 @@ private:
 
     // debugging
     bool m_release_version = false;               ///< if this is used in a release where development parameters are hidden
-    GPUStats m_last_gpu_stats = {};
+    GPUStats m_last_gpu_stats = {0u};
     std::string m_additional_shader_defs = "";
 
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;

@@ -633,7 +633,7 @@ void main() {
         }
 
         DEBUG_vis_normals(state, g_debug_normals);
-        DEBUG_vis_brick_cache(state, !g_debug_normals && g_debug_brick_cache && (pixel.x + pixel.y) % 2u != (g_frame % 2u));
+        DEBUG_vis_brick_cache(state, pixel, !g_debug_normals && g_debug_brick_cache);
 
         // obtain surface albedo / volume emission and opacity
         vec4 surface_albedo_opacity = getColor(state.label, material);
