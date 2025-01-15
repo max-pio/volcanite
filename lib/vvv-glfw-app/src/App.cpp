@@ -119,6 +119,16 @@ namespace vvv {
         }
         m_swapchain.imageInFlightFrame[currentImageIndex] = frameIndex;
 
+        // capture mouse position, normalize to screen extent and sent to renderer (if mouse not grabbed by ImGui)
+#ifdef IMGUI
+        if (!ImGui::GetIO().WantCaptureMouse)
+#endif
+        {
+            double mouse_pos[2];
+            glfwGetCursorPos(m_window, &mouse_pos[0], &mouse_pos[1]);
+            m_renderer->setCursorPos(glm::vec2(mouse_pos[0] / static_cast<float>(m_swapchain.extent.width),
+                                               mouse_pos[1] / static_cast<float>(m_swapchain.extent.height)));
+        }
 
         // ------------------------ RECORD WORK FOR THE GPU
         const auto commandBuffer = m_swapchain.commandBuffers[currentImageIndex];
@@ -127,10 +137,6 @@ namespace vvv {
         //std::vector<vk::PipelineStageFlags> childRendererWaitStages{vk::PipelineStageFlagBits::eAllCommands};
 
         //const auto ldrRendererOutput = m_renderer->renderNextFrame(childRendererWaitSemaphores, childRendererWaitStages);
-        double mouse_pos[2];
-        glfwGetCursorPos(m_window, &mouse_pos[0], &mouse_pos[1]);
-        m_renderer->setCursorPos(glm::vec2(mouse_pos[0] / static_cast<float>(m_swapchain.extent.width),
-                                           mouse_pos[1] / static_cast<float>(m_swapchain.extent.height)));
         const auto ldrRendererOutput = m_renderer->renderNextFrame({}, {});
 
         // Note: we do a one-time submit below, which automatically invalidates the command buffer. The reset to the initial

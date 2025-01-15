@@ -71,8 +71,10 @@ namespace vvv {
 
 
         float final_speed = m_camera->speed * 0.5f;
-        final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 2.0f : 1.0f;
-        final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) ? 0.1f : 1.0f;
+        if (captureKeyboard) {
+            final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 2.0f : 1.0f;
+            final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) ? 0.1f : 1.0f;
+        }
         float step = time_delta * final_speed;
 
         double mouse_position_double[2];
@@ -84,16 +86,21 @@ namespace vvv {
             m_camera->rotation_y_0 = m_camera->rotation_y - mouse_position[0] * mouse_radians_per_pixel;
         }
         // in orbital mode, shift and control can lock rotation axes
-        if (m_camera->orbital && m_camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-            m_camera->rotation_x_0 = m_camera->rotation_x - mouse_position[1] * mouse_radians_per_pixel;
-        }
-        if (m_camera->orbital && m_camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
-            m_camera->rotation_y_0 = m_camera->rotation_y - mouse_position[0] * mouse_radians_per_pixel;
+        if (captureKeyboard) {
+            if (m_camera->orbital && m_camera->rotate_camera &&
+                glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+                    m_camera->rotation_x_0 = m_camera->rotation_x - mouse_position[1] * mouse_radians_per_pixel;
+            }
+            if (m_camera->orbital && m_camera->rotate_camera &&
+                glfwGetKey(m_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+                    m_camera->rotation_y_0 = m_camera->rotation_y - mouse_position[0] * mouse_radians_per_pixel;
+            }
         }
 
         if ((left_mouse_state == GLFW_RELEASE && right_mouse_state != GLFW_PRESS) ||
             (right_mouse_state == GLFW_RELEASE && left_mouse_state != GLFW_PRESS))
             m_camera->rotate_camera = false;
+
         if (m_camera->rotate_camera) {
             m_camera->rotation_x = m_camera->rotation_x_0 + mouse_radians_per_pixel * mouse_position[1];
             m_camera->rotation_y = m_camera->rotation_y_0 + mouse_radians_per_pixel * mouse_position[0];
@@ -106,12 +113,14 @@ namespace vvv {
         if (m_camera->orbital) {
             // look at movement
             float forward = 0.0f, right = 0.0f, vertical = 0.0f;
-            forward += (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
-            forward -= (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
-            right += (glfwGetKey(m_window, GLFW_KEY_D) == GLFW_PRESS) ? step : 0.0f;
-            right -= (glfwGetKey(m_window, GLFW_KEY_A) == GLFW_PRESS) ? step : 0.0f;
-            vertical += (glfwGetKey(m_window, GLFW_KEY_E) == GLFW_PRESS) ? step : 0.0f;
-            vertical -= (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) ? step : 0.0f;
+            if (captureKeyboard) {
+                forward += (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
+                forward -= (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
+                right += (glfwGetKey(m_window, GLFW_KEY_D) == GLFW_PRESS) ? step : 0.0f;
+                right -= (glfwGetKey(m_window, GLFW_KEY_A) == GLFW_PRESS) ? step : 0.0f;
+                vertical += (glfwGetKey(m_window, GLFW_KEY_E) == GLFW_PRESS) ? step : 0.0f;
+                vertical -= (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) ? step : 0.0f;
+            }
 
             // transform the look at offset in world space: move with WASD in the xz plane, move the plane up and down with QE
             glm::vec4 look_at_offset =
