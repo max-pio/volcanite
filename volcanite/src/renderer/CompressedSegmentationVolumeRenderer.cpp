@@ -1166,8 +1166,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         }
 #endif
     }, "Screenshot");
-    //
-    g_gen->addAction([this]() { printGPUMemoryUsage(); }, "Print GPU Memory Usage");
 #ifndef HEADLESS
 #ifdef IMGUI
     g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
@@ -1294,6 +1292,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addBool(&m_tonemap_enabled, "Tone Mapping");
     g_dev->addSeparator();
     g_dev->addLabel("Debug");
+    g_dev->addAction([this]() { printGPUMemoryUsage(); }, "Print GPU Memory Usage");
     g_dev->addInt(&m_max_inv_lod, "Max. Decoding LoD", 0, 6, 1);
     const std::vector<std::string> option_labels = {"Model Space", "Level-of-Detail", "Empty Space", "Brick Index",
                                                     "Label Cache", "Raw Render", "Cache Buffer", "Empty Space Buffer",
