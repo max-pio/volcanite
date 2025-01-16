@@ -78,10 +78,9 @@ int volcanite_main(int argc, char *argv[]) {
         Logger(INFO) << "export brick statistics to " << stats_path + " done";
     }
 
-    // we only need the rendering part for screenshots/videos or the interactive app
-    std::string appName = "Volcanite " + VolcaniteArgs::getVolcaniteVersionString();
-    bool run_headless_pass = !args.screenshot_output_file.empty() || !args.video_output_fmt_file.empty();
-    if (!args.headless || run_headless_pass) {
+    if (bool run_headless_pass = !args.screenshot_output_file.empty() || !args.video_output_fmt_file.empty();
+        !args.headless || run_headless_pass) {
+
         Logger(INFO) << "--------------------------------------------------- ";
         Logger(INFO) << "initializing Volcanite renderer";
 
@@ -161,6 +160,9 @@ int volcanite_main(int argc, char *argv[]) {
             else if (!args.compress_export_file.empty())
                 renderer->saveConfigOnShutdown(stripFileExtension(args.compress_export_file) + ".vcfg");
 
+            // we only need the rendering part for screenshots/videos or the interactive app
+            const std::string appName = "Volcanite " + VolcaniteArgs::getVolcaniteVersionString()
+                                        + "  " + compressedSegmentationVolume->getLabel();
             bool vsync = true;  // TODO: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
             auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
             app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});

@@ -707,7 +707,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     }
 
     clear();
-    m_label = path;
+    setLabel(std::filesystem::path(path).stem());
 
     // check header and version
     char magic_header[9];
