@@ -1,8 +1,0 @@
-[INFO]  Evaluation volume /home/maxpio/data/ev/h01/chunks/x0y5z3.hdf5
-
-CSGV rANS      Compression rate: 2.545986325% in 8.824957848
-CSGV-R HuffWM  Compression rate: 8.626183681% in 22.803510666
-CSGV-R HuffWM  Compression rate: 3.659366257% in 9.136931419
-Neuroglancer   Compression rate: 7.765053749% in 6.286989589
--------------
-Original Volume: 2.147483648 GB containing {1024, 1024, 1024} voxels @ 2 bytes/voxel for 5680 labels. 
