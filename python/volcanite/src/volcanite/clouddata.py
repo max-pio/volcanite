@@ -12,7 +12,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-import argparse
+
 import os
 import time
 
@@ -53,10 +53,12 @@ class CloudDataDownload:
         else:
             raise ValueError("unknown cloud storage")
 
+        # TODO: implement webdav client, e.g. for https://l4dense2019.brain.mpg.de/
+
     def __init__(self, url: str, axis_transpose_to_xyz: tuple[int, int, int] | None = None):
         """Obtains a handle to the given bossdb or tensorstore cloud data set."""
 
-        self.__axis_transpose_to_xyz = axis_transpose_to_xyz if axis_transpose_to_xyz else (2,1,0)
+        self.__axis_transpose_to_xyz: tuple[int, int, int] = axis_transpose_to_xyz if axis_transpose_to_xyz else (2,1,0)
         self.__dataset = None
         self.__dataset_url = url
         self.__obtain_cloud_dataset()
@@ -76,7 +78,7 @@ class CloudDataDownload:
                                        start[2]:end[2]], dtype='uint32')
         return result.transpose(self.__axis_transpose_to_xyz).reshape(end - start, order='C')
 
-    def download(self, output_dir : Path, volume_size: tuple[int, int, int] | None = None, output_name: str = "x{}y{}z{}.{}",
+    def download(self, output_dir : str | os.PathLike, volume_size: tuple[int, int, int] | None = None, output_name: str = "x{}y{}z{}.{}",
                  origin : tuple[int, int, int] | None = None, chunk_size : tuple[int, int, int] | None = (1024, 1024, 1024),
                  output_format : str = "hdf5", continue_download: bool = False):
 
@@ -95,15 +97,16 @@ class CloudDataDownload:
         total_chunk_count = int(chunk_count[0] * chunk_count[1] * chunk_count[2])
 
         # create output directory
-        output_dir.mkdir(parents=True, exist_ok=True)
-        info_file_path = output_dir / Path(output_name.format(int(chunk_count[0]) - 1,
+        _output_dir = Path(output_dir)
+        _output_dir.mkdir(parents=True, exist_ok=True)
+        info_file_path = _output_dir / Path(output_name.format(int(chunk_count[0]) - 1,
                                                               int(chunk_count[1]) - 1,
                                                               int(chunk_count[2]) - 1, "txt"))
         if not info_file_path.exists():
             continue_download = False
-        if not continue_download and os.listdir(output_dir):
+        if not continue_download and os.listdir(_output_dir):
             if not continue_download:
-                raise IOError(f"output directory {output_dir} must be empty when starting new download")
+                raise IOError(f"output directory {_output_dir} must be empty when starting new download")
 
         if volume_size[0] <= 0 or volume_size[1] <= 0 or volume_size[2] <= 0:
             raise ValueError("volume_size dimensions must be positive")
@@ -115,7 +118,7 @@ class CloudDataDownload:
             print("WARNING: chunk size should be dividable by 64 in each dimension for Volcanite compatibility.")
 
         print(f"Downloading from {full_dim} volume {self.__dataset_url} to "
-              f"{(output_dir / Path(output_name.format('[X]', '[Y]', '[Z]', output_format)))}\n"
+              f"{(_output_dir / Path(output_name.format('[X]', '[Y]', '[Z]', output_format)))}\n"
               f"sub-volume: {origin}:{total_end}, chunk size {chunk_size}")
 
         total_gb = (total_end[0] - origin[0]) * (total_end[1] - origin[1]) * (total_end[2] - origin[2]) * 4 / 1024 / 1024 / 1024
@@ -135,13 +138,15 @@ class CloudDataDownload:
 
         # write an information file
         with open(info_file_path, 'w') as readme:
-            readme.write(f"{time.strftime("%Y.%m.%d %H:%M:%S")} downloaded from {data_set_url}\n")
+            readme.write(f"{time.strftime("%Y.%m.%d %H:%M:%S")} downloaded from {self.__dataset_url}\n")
             readme.write(f"original volume has size {full_dim}.\n\ndownloaded volume")
             readme.write(f"  subset size: {volume_size}\n")
             readme.write(f"  subset region: {origin} to {total_end}\n")
             readme.write(f"  chunk size: {chunk_size}\n")
             readme.write(f"  chunk count: {chunk_count}\n")
             readme.write(f"  format: {output_format}\n")
+            axis_transpose_str = ("{" + "}{".join([str(i) for i in self.__axis_transpose_to_xyz]) + "}").format("X","Y","Z")
+            readme.write(f"  axis transpose: {axis_transpose_str}\n")
             readme.close()
 
         chunk_id = 0
@@ -156,7 +161,7 @@ class CloudDataDownload:
                           f"x{idx_0 // chunk_size[0]}y{idx_1 // chunk_size[1]}z{idx_2 // chunk_size[2]} from "
                           f"{start} to {end} ({end - start})", end='')
 
-                    output_file = output_dir / Path(output_name.format(idx_0 // chunk_size[0],
+                    output_file = _output_dir / Path(output_name.format(idx_0 // chunk_size[0],
                                                                        idx_1 // chunk_size[1],
                                                                        idx_2 // chunk_size[2],
                                                                        output_format))
@@ -172,58 +177,3 @@ class CloudDataDownload:
 
         print("=============================")
         print(time.strftime("%H:%M:%S") + "  done")
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        prog='Segmentation Volume Downloader',
-        description='Downloads segmentation volumes from cloud storages and stores them locally.',
-        epilog='')
-
-    parser.add_argument("data_set", help="data set url or example name. 'list-examples' lists available names.")
-    parser.add_argument("-d", "--directory", help="empty/non-existing directory where data is stored.")
-    parser.add_argument("-s", "--size", type=int, nargs=3, help="size of downloaded volume in voxels (default: full volume).")
-    parser.add_argument("-f", "--filetype", default="hdf5", help="file type in which chunks are stored.")
-    parser.add_argument("-o", "--origin", type=int, nargs=3, help="origin of the sub-volume in the full data set.")
-    parser.add_argument("-t", "--transpose", type=int, nargs=3, help="axis transpose in chunks to achieve XYZ order: a permutation of 0 1 2", default=(2,1,0))
-    parser.add_argument("-c", "--chunk_size", type=int, nargs=3, default=(1024,1024,1024), help="volume is split into chunks of this size. should be dividable by 64.")
-    parser.add_argument("-a", "--append", action="store_true", default=False, help="ignore non-empty output directory and skip existing chunk files.")
-    parser.add_argument("-n", "--name", help="file name prefix for chunks that will be extended to [name]_x{}y{}z{}.[filetype]")
-    parser.add_argument("-v", "--verbose", action="store_true")
-
-    args = parser.parse_args()
-
-    example_data = {'h01': "gs://h01-release/data/20210601/c3/",
-                    "witvliet2020": "bossdb://witvliet2020/Dataset_8/segmentation",
-                    }
-    if args.data_set == "list-examples":
-        print("Available short keys for data_set argument:\n  " + "\n  ".join(example_data.keys()))
-        exit(0)
-    data_set_url = example_data[args.data_set] if args.data_set in example_data else args.data_set
-    if not args.name is None:
-        if not args.name:
-            output_name = ""
-        else:
-            output_name = args.name + "_"
-    elif args.data_set in example_data:
-        output_name = args.data_set + "_"
-    else:
-        output_name = ""
-    output_name = output_name + "x{}y{}z{}.{}"
-
-    # obtain dataset
-    data = CloudDataDownload(data_set_url, axis_transpose_to_xyz=args.transpose)
-
-    # to download and visualize one small chunk
-    # converter.debug_vis(data.read_chunk(data.get_shape() // 2 - (200, 100, 16), (400, 200, 32)))
-
-    # if no output directory is given, only print the shape of the volume if it is accessible
-    if args.directory is None:
-        print(f"Volume {data_set_url} is available with size {data.get_shape()}, assuming axis order"
-              f" {data.get_axis_transpose()}. Specify a download directory with -d /path/to/dir/")
-        exit(0)
-    else:
-        data.download(output_dir=Path(args.directory), output_name=output_name, output_format=args.filetype,
-                      volume_size=args.size, origin=args.origin,
-                      chunk_size=args.chunk_size, continue_download=args.append)
-        exit(0)

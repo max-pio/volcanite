@@ -493,19 +493,22 @@ class VolcaniteExec:
     """
 
     @staticmethod
-    def run_log(call_args: list[str], print_log=True, *args, **kwargs):
+    def __run_with_log(call_args: list[str], print_log=True, *args, **kwargs):
         if print_log:
             print("> " + " ".join(call_args))
         return subp.run(call_args, *args, **kwargs)
 
-    def __init__(self, evaluation: VolcaniteEvaluation, git_base_dir: PathLike | None = None,
-                 git_checkout : str | None = None, build_subdir: PathLike | str = "cmake-build-release"):
+    def __init__(self, evaluation: VolcaniteEvaluation, git_base_dir: str | PathLike | None = None,
+                 git_checkout : str | None = None, build_subdir: str | PathLike = "cmake-build-release",
+                 binary_dir: str | PathLike | None = None):
         """
-        Creates a Volcanite executor for the given evaluation.
+        Creates a Volcanite executor for the given evaluation. If no binary_dir is provided,
+
         :param evaluation: the VolcaniteEvaluation including the evaluation output directory, name and all log files
         :param git_base_dir: the base directory of the Volcanite git repository
         :param git_checkout: git commit, tag, or branch name that is checked out before building Volcanite
         :param build_subdir: directory in the git repository in which Volcanite is build (default: cmake-build-release)
+        :param binary_dir: directory in which the ./volcanite binary is located
         """
         # build directory must have a depth of one
         if len(Path(build_subdir).parents) != 1:
@@ -513,20 +516,36 @@ class VolcaniteExec:
 
         self.evaluation = evaluation
         self.git_checkout = git_checkout
-        if git_base_dir:
-            self.git_base_dir = Path(git_base_dir)
+        if binary_dir:
+            self.binary_dir = Path(binary_dir)
+            if git_base_dir:
+                raise ValueError("Can either provide git_base_dir or binary_dir but not both")
+            self.git_base_dir = None
+            self.build_dir = None
+            self.__is_build = True
+            if (not (self.binary_dir / Path("volcanite")).exists()
+                    or not (self.binary_dir / Path("volcanite")).is_file()):
+                raise ValueError("Volcanite binary_dir does not contain a ./volcanite executable")
         else:
-            self.git_base_dir = Path(subp.Popen(['git', 'rev-parse', '--show-toplevel'], stdout=subp.PIPE).communicate()[0].rstrip().decode('utf-8'))
-            print(f"obtained volcanite git base directory {self.git_base_dir} with 'git rev-parse --show-toplevel'")
-        if self.git_base_dir.name != "volcanite":
-            print(f"Warning: expected git base directory to be named volcanite but is {self.git_base_dir.name}")
-        self.build_subdir = Path(build_subdir)
-        self.__is_build = False
+            if git_base_dir:
+                self.git_base_dir = Path(git_base_dir)
+            else:
+                self.git_base_dir = Path(subp.Popen(['git', 'rev-parse', '--show-toplevel'], stdout=subp.PIPE).communicate()[0].rstrip().decode('utf-8'))
+                print(f"obtained volcanite git base directory {self.git_base_dir} with 'git rev-parse --show-toplevel'")
+            if self.git_base_dir.name != "volcanite":
+                print(f"Warning: expected git base directory to be named volcanite but is {self.git_base_dir.name}")
+                self.git_base_dir = None
+            self.build_dir = self.git_base_dir / Path(build_subdir)
+            self.binary_dir = self.build_dir / Path("volcanite")    # volcanite executable is in the volcanite subdir
+            self.__is_build = False
 
     def info_str(self):
-        return (f"{datetime.now().strftime("%Y.%m.%d-%H:%M:%S")} [{self.evaluation.name}]"
-                f" exe:{"off" if self.evaluation.dry_run else "on"} log:{"on" if self.evaluation.log_files else "off"}"
-                f" build {str(self.git_checkout) + "@" if self.git_checkout else ""}{self.__build_dir()}")
+        result: str = f"{datetime.now().strftime("%Y.%m.%d-%H:%M:%S")} [{self.evaluation.name}]"
+        result +=  f" exe:{"off" if self.evaluation.dry_run else "on"} log:{"on" if self.evaluation.log_files else "off"}"
+        if not self.git_base_dir:
+            result += f" build {str(self.git_checkout) + "@" if self.git_checkout else ""}{self.build_dir},"
+        result += f" executable {str(self.binary_dir)}/volcanite"
+        return result
 
     def logs_info_str(self):
         log_strs = []
@@ -534,31 +553,30 @@ class VolcaniteExec:
             log_strs.append(f"{l.get_log_file()} [{' '.join(l.get_fmt_and_header_lines()[0])}] fallback: '{l.fallback_log}'")
         return log_strs
 
-    def __build_dir(self) -> Path:
-        """Returns the absolute path to the directory in which Volcanite is build as string."""
-        return self.git_base_dir / self.build_subdir
-
     def checkout_and_build(self):
         """Checks out the git commit (if configured) and builds volcanite into the configured build sub-directory."""
 
         if self.evaluation.dry_run:
             print("Skipping Volcanite build in dry run")
             return
+        elif not self.git_base_dir:
+            print("Skipping Volcanite build as no volcanite git directory is given")
+            return
 
         if self.git_checkout:
-            self.run_log(["git", "checkout", self.git_checkout], cwd=self.git_base_dir)
-            res = self.run_log(["git", "pull"], cwd=self.git_base_dir)
+            self.__run_with_log(["git", "checkout", self.git_checkout], cwd=self.git_base_dir)
+            res = self.__run_with_log(["git", "pull"], cwd=self.git_base_dir)
             if res.returncode != 0:
                 raise RuntimeError(f"Error: git pull returned {res.returncode}")
 
-        if not self.__build_dir().exists():
-            self.__build_dir().mkdir(parents=True, exist_ok=True)
-            build_type = "-DCMAKE_BUILD_TYPE=Debug" if "deb" in self.build_subdir.lower() else "-DCMAKE_BUILD_TYPE=Release"
-            res = self.run_log(["cmake", build_type, ".."], cwd=self.__build_dir())
+        if not self.build_dir.exists():
+            self.build_dir.mkdir(parents=True, exist_ok=True)
+            build_type = "-DCMAKE_BUILD_TYPE=Debug" if "deb" in str(self.build_dir.stem).lower() else "-DCMAKE_BUILD_TYPE=Release"
+            res = self.__run_with_log(["cmake", build_type, ".."], cwd=self.build_dir)
             if res.returncode != 0:
                 raise RuntimeError(f"Error: cmake returned {res.returncode}")
 
-        res = self.run_log(["cmake", "--build", ".", "-j", "--target", "volcanite"], cwd=self.__build_dir())
+        res = self.__run_with_log(["cmake", "--build", ".", "-j", "--target", "volcanite"], cwd=self.build_dir)
         if res.returncode != 0:
             raise RuntimeError(f"Error: building target volcanite returned {res.returncode}")
         self.__is_build = True
@@ -595,7 +613,7 @@ class VolcaniteExec:
         print(" ".join(exec_call_args))
         print("-------------------------------")
         if not self.evaluation.dry_run:
-            res = self.run_log(exec_call_args, print_log=False, cwd=self.__build_dir() / Path("volcanite"))
+            res = self.__run_with_log(exec_call_args, print_log=False, cwd=self.binary_dir)
             if res.returncode != 0:
                 print("Error: volcanite returned " + str(res.returncode))
                 if self.evaluation.enable_log:
@@ -610,7 +628,7 @@ class VolcaniteExec:
 
     def run_volcanite(self, args : str):
         """Executes Volcanite with args as argument string and no special evaluation log file handling."""
-        return self.run_log(["./volcanite"] + args.split(' '), print_log=True, cwd=self.__build_dir() / Path("volcanite"))
+        return self.__run_with_log(["./volcanite"] + args.split(' '), print_log=True, cwd=self.binary_dir)
 
     @staticmethod
     def create_mp4(args : list[VolcaniteArg]):
@@ -634,5 +652,5 @@ class VolcaniteExec:
             files = prefix + "*" + _name[_name.rfind("}")+1:]
             cmd = ["ffmpeg -n -framerate 60 -pattern_type glob -i '" + files + "' -c:v libx264 -pix_fmt yuv420p " + prefix + ".mp4"]
             print("Creating video file in " + str(_dir.absolute()) + " with\n  " + cmd[0])
-            VolcaniteExec.run_log(cmd, cwd=str(_dir.absolute()), shell=True)
+            VolcaniteExec.__run_with_log(cmd, cwd=str(_dir.absolute()), shell=True)
 

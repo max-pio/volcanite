@@ -1,5 +1,3 @@
-from volcaniteeval import VolcaniteLogFile
-
 # Volcanite Python Execution and Evaluation
 
 Volcanite provides command line arguments for exporting results from compression or rendering passes to log files. 

@@ -33,30 +33,3 @@ pip install --upgrade pip
 cd volcanite
 python3 -m build 
 ```
-
-## About
-Volcanite © 2024 Max Piochowiak, Reiner Dolp
-
-Volcanite main contributors are [Max Piochowiak](https://cg.ivd.kit.edu/piochowiak/staff_index.php) and [Reiner Dolp](https://reinerdolp.com/).
-Additional contributions by Fabian Schiekel, Patrick Jaberg, and [Mirco Werner](https://github.com/MircoWerner).
-All contributors are affiliated with Karlsruhe Institute of Technology (KIT).
-Volcanite builds on the CSGV segmentation volume compression and renderer by Max Piochowiak.
-You can cite the following publication if you use the Volcanite CSGV compression in your projects:
-
-```bibtex
-@article{Piochowiak:2024:csgv,
-    author={Piochowiak, Max and Dachsbacher, Carsten},
-    journal={IEEE Transactions on Visualization and Computer Graphics}, 
-    title={Fast Compressed Segmentation Volumes for Scientific Visualization}, 
-    year={2024},
-    volume={30},
-    number={1},
-    pages={12-22},
-    doi={10.1109/TVCG.2023.3326573}
-}
-```
-
-### Funding
-This work has been supported by the Helmholtz Association (HGF) under the joint research school
-“HIDSS4Health – Helmholtz Information and Data Science School for Health” and through the Pilot Program
-Core Informatics.

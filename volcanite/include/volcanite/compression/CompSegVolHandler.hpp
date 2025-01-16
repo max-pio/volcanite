@@ -299,6 +299,8 @@ public:
                 if(create_operation_freq_file) {
                     if (std::filesystem::exists(freq_path))
                         Logger(WARN) << "Overwriting existing file " << freq_path;
+                    else if (!exists(std::filesystem::path(freq_path).parent_path()))
+                        create_directory(std::filesystem::path(freq_path).parent_path());
                     std::ofstream freq_file(freq_path, std::ios_base::out | std::ios::binary);
                     if (freq_file.is_open()) {
                         for (int i = 0; i < 16; i++)

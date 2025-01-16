@@ -3,11 +3,12 @@ import volcanite.volcaniteeval as ve
 
 if __name__ == "__main__":
     # set up the evaluation output directory and the log files
-    evaluation = ve.VolcaniteEvaluation("./my_test_eval", ve.ExistingPolicy.DELETE, "my_test_eval",
-                             [ve.VolcaniteLogFileCfg("results.txt",
+    evaluation = ve.VolcaniteEvaluation(eval_out_directory="./my_test_eval", existing_policy=ve.ExistingPolicy.DELETE,
+                                        eval_name="my_test_eval",
+                                        log_files=[ve.VolcaniteLogFileCfg("results.txt",
                                                               fmts=["{name},{comprate_pcnt:.3},{frame_avg_ms}"],
                                                               headers=["Name,Compression Rate [%],frame avg [ms]"])],
-                             enable_log=True, dry_run=False)
+                                        enable_log=True, dry_run=False)
 
     volcanite = ve.VolcaniteExec(evaluation, build_subdir="cmake-build-release")
     volcanite.checkout_and_build()

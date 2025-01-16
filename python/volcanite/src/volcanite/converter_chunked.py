@@ -13,22 +13,21 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# ----------- EXPERIMENTAL -----------
+import converter as vc
 
-from converter import *
-
+import numpy as np
 import time
 import threading
 
-def read_tmp_chunk_zy(chunk_information, volume_information):
+def __read_tmp_chunk_zy(chunk_information, volume_information):
     tmp_chunk = np.zeros(shape=volume_information['chunk_size_in'], dtype=volume_information['dtype_out'])
 
-    tmp_chunk[:, :] = read_volume(volume_information['path_in_format'].format(chunk_information['chunk_index'][2] - 1, chunk_information['chunk_index'][1] - 1, chunk_information['chunk_index'][0] - 1))
+    tmp_chunk[:, :] = vc.read_volume(volume_information['path_in_format'].format(chunk_information['chunk_index'][2] - 1, chunk_information['chunk_index'][1] - 1, chunk_information['chunk_index'][0] - 1))
 
     return tmp_chunk
 
 
-def get_indices(chunk_information, volume_information, dim : int):
+def __get_indices(chunk_information, volume_information, dim : int):
     element_read = 0
 
     chunk_information['start_element'][dim] = chunk_information['end_element'][dim]
@@ -51,17 +50,17 @@ def get_indices(chunk_information, volume_information, dim : int):
             # mark array, s.t. there are two chunks in dimension dim, which must be read
             chunk_information['stitch'][dim] = True
 
-def load_current_chunk(chunk_information, volume_information, dim):
-    tmp_chunk = read_tmp_chunk_zy(chunk_information, volume_information)
+def __load_current_chunk(chunk_information, volume_information, dim):
+    tmp_chunk = __read_tmp_chunk_zy(chunk_information, volume_information)
 
     return tmp_chunk
 
 
-def load_next_chunk(chunk_information, volume_information, dim):
+def __load_next_chunk(chunk_information, volume_information, dim):
     if chunk_information['stitch'][dim]:
         tmp_chunk_index = chunk_information['chunk_index'].copy()
         chunk_information['chunk_index'][dim] += 1
-        tmp_chunk = read_tmp_chunk_zy(chunk_information, volume_information)
+        tmp_chunk = __read_tmp_chunk_zy(chunk_information, volume_information)
         chunk_information['chunk_index'] = tmp_chunk_index
     else:
         raise Exception("only call load_next_chunk() in need of the next chunk -> stitch[dim] has to be true ")
@@ -69,24 +68,24 @@ def load_next_chunk(chunk_information, volume_information, dim):
     return tmp_chunk
 
 
-def load_chunks(chunk_information, volume_information, data):
+def __load_chunks(chunk_information, volume_information, data):
     # TODO reload only if needed
-    data[0] = load_current_chunk(chunk_information, volume_information, 0)
+    data[0] = __load_current_chunk(chunk_information, volume_information, 0)
 
     if chunk_information['chunks_needed'][1]:
-        data[1] = load_next_chunk(chunk_information, volume_information, 1)
+        data[1] = __load_next_chunk(chunk_information, volume_information, 1)
     if chunk_information['chunks_needed'][2]:
-        data[2] = load_next_chunk(chunk_information, volume_information, 0)
+        data[2] = __load_next_chunk(chunk_information, volume_information, 0)
     if chunk_information['chunks_needed'][3]:
         # increase chunk_index temporarily
         tmp_chunk_index = chunk_information['chunk_index'].copy()
         chunk_information['chunk_index'][0] += 1
         chunk_information['chunk_index'][1] += 1
-        data[3] = load_current_chunk(chunk_information, volume_information, 0)
+        data[3] = __load_current_chunk(chunk_information, volume_information, 0)
         chunk_information['chunk_index'] = tmp_chunk_index
 
 
-def get_slice_zy(chunk_information, volume_information, data, current_slice_idx):
+def __get_slice_zy(chunk_information, volume_information, data, current_slice_idx):
     chunk_size_out, chunk_size_in = volume_information['chunk_size_out'], volume_information['chunk_size_in']
     stitch, start_element, end_element = chunk_information['stitch'], chunk_information['start_element'], chunk_information['end_element']
 
@@ -113,26 +112,26 @@ def get_slice_zy(chunk_information, volume_information, data, current_slice_idx)
     return tmp_chunk
 
 
-def stitch_zy_chunks_together(chunk_information, volume_information, start : int, end : int, slice_count_offset : int, stitched_chunk, data, thread_id):
+def __stitch_zy_chunks_together(chunk_information, volume_information, start : int, end : int, slice_count_offset : int, stitched_chunk, data, thread_id):
     tmp_stitched_chunk = np.empty(shape=(volume_information["chunk_size_out"][0], volume_information["chunk_size_out"][1], end-start))
     for slice_count in range(0, end-start):
         current_slice_idx = slice_count + start
-        tmp = get_slice_zy(chunk_information, volume_information, data, current_slice_idx)
+        tmp = __get_slice_zy(chunk_information, volume_information, data, current_slice_idx)
 
         tmp_stitched_chunk[:, :, slice_count] = tmp
     stitched_chunk[:, :, start + slice_count_offset:end + slice_count_offset] = tmp_stitched_chunk
 
 
-def launch_threads(chunk_information, volume_information, slice_count_offset, global_start, global_end : int,
-                   slices_per_thread : int, thread_count : int, stitched_chunk, data):
+def __launch_threads(chunk_information, volume_information, slice_count_offset, global_start, global_end : int,
+                     slices_per_thread : int, thread_count : int, stitched_chunk, data):
     threads = []
     start = global_start
     end = slices_per_thread + start
     remainder = global_end - thread_count * slices_per_thread
 
     for thread_idx in range(0, thread_count):
-        thread = threading.Thread(target=stitch_zy_chunks_together, args=(chunk_information, volume_information, start,
-                                                                          end, slice_count_offset, stitched_chunk, data, thread_idx))
+        thread = threading.Thread(target=__stitch_zy_chunks_together, args=(chunk_information, volume_information, start,
+                                                                            end, slice_count_offset, stitched_chunk, data, thread_idx))
 
         start += slices_per_thread + (1 if thread_idx > 0 and thread_idx-1 < remainder else 0)
         end += slices_per_thread + (1 if thread_idx < remainder else 0)
@@ -156,8 +155,12 @@ def is_volume_conversion_valid(chunk_size_in, chunk_size_out, volume_dim):
     return True
 
 
-def convert_chunked_volume(path_in_format : str, chunk_size_in : (int, int, int), volume_dim : (int, int, int),
-                           path_out_format : str, chunk_size_out : (int, int, int), thread_count=16, dtype_out=None):
+def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, int], volume_dim: tuple[int, int, int],
+                           path_out_format: str, chunk_size_out: tuple[int, int, int], thread_count: int = 16,
+                           dtype_out=None):
+    # TODO: instead of volume_dim, take last_chunk_in as argument. x0y0z0.h5 .. x2y1z3.h5 would have last_chunk_in=2,1,3
+    #  Then compute initially: volume_dim = chunk_size * (last_chunk_in) + load_chunk(last_chunk_in).shape
+
     # construct each output chunk from up to 8 input chunks
 
     # first and last dimension is swapped
@@ -166,8 +169,10 @@ def convert_chunked_volume(path_in_format : str, chunk_size_in : (int, int, int)
     chunk_size_in = np.array((chunk_size_in[2], chunk_size_in[1], chunk_size_in[0]))
     volume_dim = np.array((volume_dim[2], volume_dim[1], volume_dim[0]))
 
+    # TODO: conversion should be valid even if volume_dim is not dividable by chunk_size_*. Only case in which an error
+    #  should be thrown: if chunk_size_out is more than twice chunk_size_in in any dimension
     if not is_volume_conversion_valid(chunk_size_in, chunk_size_out, volume_dim):
-        raise "Conversion is not valid, check if the input/output dimension is a multiple of the volume dimension"
+        raise ValueError("Conversion is not valid, check if the input/output dimension is a multiple of the volume dimension")
     # z
     # ^
     # |
@@ -197,40 +202,40 @@ def convert_chunked_volume(path_in_format : str, chunk_size_in : (int, int, int)
     for z in range(0, volume_dim[0], chunk_size_out[0]):
         chunk_information['chunk_index'][1] = 1
         chunk_information['end_element'][1] = 0
-        get_indices(chunk_information, volume_information, 0)
+        __get_indices(chunk_information, volume_information, 0)
 
         if chunk_information['stitch'][0]:
             chunk_information['chunks_needed'][2] = True
         for y in range(0, volume_dim[1], chunk_size_out[1]):
             chunk_information['chunk_index'][2] = 1
             chunk_information['end_element'][2] = 0
-            get_indices(chunk_information, volume_information, 1)
+            __get_indices(chunk_information, volume_information, 1)
             for x in range(0, volume_dim[2], chunk_size_out[2]):
-                get_indices(chunk_information, volume_information, 2)
+                __get_indices(chunk_information, volume_information, 2)
                 if chunk_information['stitch'][1]:
                     chunk_information['chunks_needed'][1] = True
 
                 if chunk_information['stitch'][0] and chunk_information['stitch'][1]:
                     chunk_information['chunks_needed'][3] = True
-                load_chunks(chunk_information, volume_information, data)
+                __load_chunks(chunk_information, volume_information, data)
 
 
                 elements_in_first_chunk = min(chunk_size_in[2] - chunk_information['start_element'][2], chunk_size_out[2])
                 slices_per_thread = elements_in_first_chunk // thread_count
-                launch_threads(chunk_information, volume_information, -chunk_information['start_element'][2], chunk_information['start_element'][2], elements_in_first_chunk, slices_per_thread, thread_count, stitched_chunk, data)
+                __launch_threads(chunk_information, volume_information, -chunk_information['start_element'][2], chunk_information['start_element'][2], elements_in_first_chunk, slices_per_thread, thread_count, stitched_chunk, data)
 
                 if elements_in_first_chunk < chunk_size_out[2]:
                     # need another chunk in x dim, also increase chunk_index in x dim
                     chunk_information['chunk_index'][2] += 1
-                    load_chunks(chunk_information, volume_information, data)
+                    __load_chunks(chunk_information, volume_information, data)
 
                     elements_in_second_chunk = chunk_size_out[2] - elements_in_first_chunk
                     slices_per_thread = elements_in_second_chunk // thread_count
-                    launch_threads(chunk_information, volume_information, elements_in_first_chunk, 0, elements_in_second_chunk, slices_per_thread, thread_count, stitched_chunk, data)
+                    __launch_threads(chunk_information, volume_information, elements_in_first_chunk, 0, elements_in_second_chunk, slices_per_thread, thread_count, stitched_chunk, data)
 
                 print(f"write volume x{x// chunk_size_out[2]}y{y// chunk_size_out[1]}z{z// chunk_size_out[0]}")
                 stitched_chunk = np.swapaxes(stitched_chunk, 0, 2)
-                write_volume(stitched_chunk, path_out_format.format(x // chunk_size_out[2], y // chunk_size_out[1], z // chunk_size_out[0]))
+                vc.write_volume(stitched_chunk, path_out_format.format(x // chunk_size_out[2], y // chunk_size_out[1], z // chunk_size_out[0]))
                 stitched_chunk = np.empty(shape=chunk_size_out, dtype=dtype_out)
 
             # increase chunk index if needed and resets chunk parameter
@@ -249,6 +254,28 @@ def convert_chunked_volume(path_in_format : str, chunk_size_in : (int, int, int)
 
     return stitched_chunk
 
+def write_chunked_volume(volume: np.ndarray, path_out_format: str, chunk_size: tuple[int, int, int]) -> None:
+    """Exports the volume to a set of files where each file is a volume chunk with dimensions chunk_size^3. The file
+    output format is selected based on the file extension of path_out_format. path_out_format must contain exactly
+     three python string format keys that will be replaced with x y z chunk indices. e.g. 'my_volume_x{}y{}z{}.raw'."""
+
+    if vc.__get_format_key_count(path_out_format) != 1:
+        raise Exception("File path must contain exactly 1 python string format key")
+
+    for z in range(0, volume.shape[0], chunk_size[0]):
+        for y in range(0, volume.shape[1], chunk_size[1]):
+            for x in range(0, volume.shape[2], chunk_size[2]):
+                print("Writing " + path_out_format.format(x // chunk_size[2], y // chunk_size[1], z // chunk_size[0]))
+                vc.write_volume(volume[z:(min(volume.shape[0], z + chunk_size[0])),
+                             y:(min(volume.shape[1], y + chunk_size[1])),
+                             x:(min(volume.shape[2], x + chunk_size[2]))],
+                             path_out_format.format(x // chunk_size[2], y // chunk_size[1], z // chunk_size[0]))
+
+
+def read_chunked_volume(path_out_format: str, chunk_count) -> np.ndarray:
+    raise NotImplementedError("reading chunked volumes is not yet implemented")
+
+
 if __name__ == '__main__':
     # example code
     # split chunks s.t three input chunks results in four output chunks, split in the first dimension
@@ -256,12 +283,12 @@ if __name__ == '__main__':
     vol_dim = (3*1024, 1024, 1024)
     new_shape = (768, 1024, 1024)
     print("convert volume now")
-    start = time.time()
+    start_time = time.time()
     convert_chunked_volume("input/x{}y{}z{}.hdf5", shape, vol_dim, "output/out_x{}y{}z{}.hdf5", new_shape, dtype_out=np.float32)
-    end = time.time()
+    end_time = time.time()
 
-    elapsed_time_minutes = int((end - start) // 60)
-    elapsed_time_seconds = (end - start) % 60
+    elapsed_time_minutes = int((end_time - start_time) // 60)
+    elapsed_time_seconds = (end_time - start_time) % 60
     print(f"diff: {elapsed_time_minutes} min {elapsed_time_seconds: .2f} sec")
 
     exit(0)
