@@ -33,3 +33,11 @@ pip install --upgrade pip
 cd volcanite
 python3 -m build 
 ```
+
+## Scripts
+
+Use `python3 convert.py -h` to convert segmentation volume between different file types.
+
+```bash
+python3 convert.py ./my_volume.nii ./my_volume.hdf5
+```
