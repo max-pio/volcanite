@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('-z', '--gzip', action='store_true', help="apply additional gzip compression on output file")
     parser.add_argument('--vis', action='store_true', help="show a 2D plot of volume slices after import")
     parser.add_argument('-v', '--verbose', action='store_true', help="enable verbose output")
-    parser.add_argument('--guarantee-corder',  default=True, action=argparse.BooleanOptionalAction, help="enable guard functions to guarantee a C indexing output order")
+    parser.add_argument('--is-xyz', action='store_true', help="If not set, input volumes are assumed to be ZYX and  ")
     parser.add_argument('--chunked_in', type=int, nargs=3, help="maximum existing XYZ chunk indices for the input chunks")
     parser.add_argument('--chunked_out', type=int, nargs=3, help="maximum existing XYZ chunk indices for the output chunks")
 
@@ -47,5 +47,5 @@ if __name__ == '__main__':
     if args.vis:
         vc.debug_vis(volume)
 
-    vc.write_volume(volume, args.output_file, 'uint32', args.guarantee_corder, args.gzip)
+    vc.write_volume(volume, args.output_file, 'uint32', not args.is_xyz, args.gzip)
     exit(0)

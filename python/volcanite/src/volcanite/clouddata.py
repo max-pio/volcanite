@@ -24,7 +24,7 @@ from intern import array
 import numpy as np
 from pathlib import Path
 
-import converter
+from volcanite import converter
 
 class CloudDataDownload:
     def __obtain_cloud_dataset(self):

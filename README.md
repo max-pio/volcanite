@@ -17,19 +17,19 @@ sets at compression rates that generally outperforming other methods.
 ## Quick Start
 See the setup guides for [Ubuntu / Debian](doc/Setup.md#ubuntu--debian) or [Windows](doc/Setup.md#windows) respectively for a more detailed description on how to install all dependencies and how to build Volcanite.
 To install all required dependencies under Ubuntu, first install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home), the minimal build packages with
-```
+```bash
 sudo apt install -y build-essential cmake xorg-dev
 ```
 and optionally the `libhdf5-dev libvtk9-dev libtiff-dev libpugixml-dev` packages for compatibility with
 a wider range of file formats*.
 Build the `volcanite` executable with
-```
+```bash
 mkdir cmake-build-release && cd cmake-build-release
 cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . -j --target volcanite
 ```
 
 Start Volcanite, either providing a path to a segmentation volume as a commandline argument with
-```
+```bash
 ./volcanite/volcanite /path/to/your/segmentation/volume
 ```
 or by using the file dialog to select a volume file.
@@ -48,9 +48,20 @@ You can find a collection of example data sets listed in [ExampleData.md](doc/Ex
 The `doc` directory of this repository contains further information on how to use Volcanite:
 * [Setup.md](doc/Setup.md) provides the setup guides for Linux and Windows systems and headless builds.
 * [Usage.md](doc/Usage.md) contains the guide for using the Volcanite GUI application or command line interface.
-* [ExampleData.md](doc/ExampleData.md) lists segmentation volumes that are publicly available and how to access them.
-* [Python.md](doc/Python.md) contains information on how to export data sets from python to be processed with Volcanite. 
+* [ExampleData.md](doc/ExampleData.md) lists segmentation volumes that are publicly available and how to access them. 
 * [Development.md](doc/Development.md) explains some rendering and compression algorithms and contains development guides.
+
+## Python Module
+
+The project contains a rudimentary python package to run volcanite confgiratuions through system calls, to download
+large data sets from cloud storages, or to convert segmentation volumes between different file formats.
+To install the package in a virtual environment, run
+```bash
+cd python
+python3 -m venv .venv
+source .venv/bin/activate
+pip install ./volcanite[all]
+```
 
 ## License
 If not stated otherwise, the code in this repository uses a GPLv3 license.
