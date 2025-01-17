@@ -13,7 +13,6 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import argparse
 import os
 import string
 import typing
@@ -215,10 +214,15 @@ def __get_format_key_count(formatted_string: str) -> int:
     """:return: the number of python string format keys in formatted_string."""
     return len([f for f in string.Formatter().parse(formatted_string) if f[2] is not None])
 
-def __guarantee_c_order(_volume: np.ndarray) -> np.ndarray:
-    return np.ascontiguousarray(_volume)
+def transpose_to_xyz(_volume: np.ndarray, current_order: str = 'zyx') -> np.ndarray:
+    old_shape = _volume.shape
+    current_order = current_order.lower()
+    if len(current_order) != 3 or not ('x' in current_order and 'y' in current_order and 'z' in current_order):
+        raise ValueError("current_order must be a permutation of 'xyz'")
+    old_axes = (current_order.find('x'), current_order.find('y'), current_order.find('z'))
+    return _volume.transpose(old_axes).reshape(old_shape, order='C')
 
-def copy_to_gzip(path_in: typing.Union[str, bytes, os.PathLike]) -> Path:
+def copy_to_gzip(path_in: str | os.PathLike) -> Path:
     """For an input file volume.abc, creates a second file volume.abc.gz compressed with gzip DEFLATE.
     :returns: the path to the written compressed file"""
 
@@ -243,15 +247,15 @@ def copy_from_gzip(path_in: typing.Union[str, bytes, os.PathLike]) -> Path:
 
 
 def write_volume(volume: np.ndarray, path_out: str | os.PathLike, dtype=None,
-                 guaranteee_c_order:bool=True, apply_gzip:bool=False) -> None:
+                 current_order: str = 'xyz', apply_gzip:bool=False) -> None:
     """Automatically selects the writer for the respective format based on the path_out file type."""
 
     extensions = [e.lower() for e in Path(path_out).suffixes]
     if len(extensions) == 0:
         raise ValueError("Output file path for writing volume must have a file type.")
 
-    if guaranteee_c_order:
-        volume = __guarantee_c_order(volume)
+    if current_order.lower() != 'xyz':
+        volume = transpose_to_xyz(volume, current_order)
 
     if extensions == [".vraw"] or extensions == [".raw"]:
         write_vraw(volume, path_out, dtype)
@@ -347,8 +351,8 @@ def __guard_volume_dtype(volume: np.ndarray, dtype) -> np.ndarray:
     return volume.astype(dtype)
 
 
-def convert_volume(path_in: str | os.PathLike, path_out: str | os.PathLike, dtype=None) -> None:
-    write_volume(read_volume(path_in), path_out, dtype)
+def convert_volume(path_in: str | os.PathLike, path_out: str | os.PathLike, current_order: str = 'xyz', dtype=None) -> None:
+    write_volume(read_volume(path_in), path_out, current_order, dtype)
 
 def debug_print(volume: np.ndarray) -> None:
     print("volume with shape " + str(volume.shape) + " type " + str(volume.dtype)
