@@ -333,7 +333,7 @@ private:
     int m_max_inv_lod = 6;
     // utility
     std::string m_gui_resolution_text;
-    std::string m_gui_device_mem_text;
+    std::string m_gui_device_mem_text, m_gui_cache_mem_text;
     std::optional<std::string> m_download_frame_to_image_file = {};
     std::string m_save_config_on_shutdown_path = {};
     std::vector<std::pair<std::string, std::filesystem::path>> m_data_vcfg_presets = {};  /// names and paths of preset vcfg files in data subfolder

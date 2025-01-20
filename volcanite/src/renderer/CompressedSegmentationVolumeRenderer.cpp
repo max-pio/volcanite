@@ -1210,6 +1210,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_gen->addSeparator();
 #endif    // not HEADLESS
     g_gen->addDynamicText(&m_gui_device_mem_text);
+    g_gen->addDynamicText(&m_gui_cache_mem_text);
 
     // Display properties and render resolution
     g_dis->addColor(&m_background_color_a, "Background Color A");
@@ -1338,16 +1339,18 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         ss << "GPU Memory: " << static_cast<float>(bu.second) / 1073741824.f << "/"
                              << static_cast<float>(bu.first) / 1073741824.f << "/"
                              << static_cast<float>(total) / 1073741824.f << " GB (used/avail/total)";
+        m_gui_device_mem_text = ss.str();
+        ss = {};
         const size_t cache_total_bytes = (m_cache_capacity * 8 * sizeof(uint32_t));
         if (m_last_gpu_stats.used_cache_base_elements > 0u) {
             const size_t cache_occupied_bytes = (m_last_gpu_stats.used_cache_base_elements * 8 * sizeof(uint32_t));
-            ss << "\nCache Usage: " << cache_occupied_bytes * BYTE_TO_MB
+            ss << "Cache Usage: " << cache_occupied_bytes * BYTE_TO_MB
                << " / " << cache_total_bytes * BYTE_TO_MB << " MB ("
                << 100.f * static_cast<float>(cache_occupied_bytes) / static_cast<float>(cache_total_bytes) << "%)";
         } else {
-            ss << "\nCache Usage: ? / " << cache_total_bytes * BYTE_TO_MB << " MB";
+            ss << "Cache Usage: ? / " << cache_total_bytes * BYTE_TO_MB << " MB";
         }
-        m_gui_device_mem_text = ss.str();
+        m_gui_cache_mem_text = ss.str();
     }
 
     void CompressedSegmentationVolumeRenderer::updateSegmentedVolumeMaterial(int m) {
