@@ -161,10 +161,13 @@ def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, i
     # TODO: instead of volume_dim, take last_chunk_in as argument. x0y0z0.h5 .. x2y1z3.h5 would have last_chunk_in=2,1,3
     #  Then compute initially: volume_dim = chunk_size * (last_chunk_in) + load_chunk(last_chunk_in).shape
 
+    # TODO: regarding axis orders: numpy volumes returned by read_volume are in ZYX shape (by np convention). This means
+    #  that read_volume().shape = (DIM_Z, DIM_Y, DIM_X). write_volume() expects the same ZYX shape of the np array, but
+    #  chunk file indices x{}y{}z{} are in XYZ order
+
     # construct each output chunk from up to 8 input chunks
 
-    # first and last dimension is swapped
-    #TODO change code, s.t no swapping is needed
+    # first and last dimension is swapped: numpy arrays are in ZYX, but files are written / chunk sizes are given in XYZ
     chunk_size_out = np.array((chunk_size_out[2], chunk_size_out[1], chunk_size_out[0]))
     chunk_size_in = np.array((chunk_size_in[2], chunk_size_in[1], chunk_size_in[0]))
     volume_dim = np.array((volume_dim[2], volume_dim[1], volume_dim[0]))

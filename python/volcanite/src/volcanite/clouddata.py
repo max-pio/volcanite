@@ -106,7 +106,7 @@ class CloudDataDownload:
 
     def download(self, output_dir : str | os.PathLike, volume_size: tuple[int, int, int] | None = None, output_name: str = "x{}y{}z{}.{}",
                  origin : tuple[int, int, int] | None = None, chunk_size : tuple[int, int, int] | None = (1024, 1024, 1024),
-                 output_format : str = "hdf5", continue_download: bool = False):
+                 output_format : str = "hdf5", continue_download: bool = False) -> tuple[int, int, int]:
 
         if not output_format in converter.supported_formats():
             raise ValueError(f"unknown output format {output_format} is not in " + ",".join(converter.supported_formats()))
@@ -224,3 +224,6 @@ class CloudDataDownload:
 
         print("=============================")
         print(time.strftime("%H:%M:%S") + "  done")
+
+        return out_chunk_count[0] - 1, out_chunk_count[1] - 1, out_chunk_count[2] - 1
+
