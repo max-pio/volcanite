@@ -144,8 +144,8 @@ public:
         }
 
     public:
-        void initialize();
-        void initializeSingleColormap(int matId);
+        void initialize(bool resetColors = false);
+        void initializeSingleColormap(int matId, bool resetColors = false);
         void updateVectorColormap(int material);
         static const std::vector<std::string>& getAvailableColormaps();
     };

@@ -97,19 +97,18 @@ namespace vvv {
         }
     }
 
-    void GuiInterface::GuiTFSegmentedVolumeEntry::initialize() {
+    void GuiInterface::GuiTFSegmentedVolumeEntry::initialize(bool resetColors) {
         for(int m = 0; m < materials->size(); m++) {
-            initializeSingleColormap(m);
+            initializeSingleColormap(m, resetColors);
         }
     }
 
-    void GuiInterface::GuiTFSegmentedVolumeEntry::initializeSingleColormap(const int matId) {
+    void GuiInterface::GuiTFSegmentedVolumeEntry::initializeSingleColormap(const int matId, bool resetColors) {
         // initialize all colormaps with a good default map if they are not initialized yet
         if (colormapConfig[matId].precomputedIdx < 0)
             colormapConfig[matId].precomputedIdx = getDefaultColorMapIdx();
-        colormapConfig[matId].color.clear();
-        if (colormapConfig[matId].color.size() <= 0) {
-            // validElementCount should only be >0 when loading a config file
+        if (resetColors) {
+            colormapConfig[matId].color.clear();
             switch (colormapConfig[matId].type) {
                 case SVTFSolidColor:
                     colormapConfig[matId].color.resize(1);

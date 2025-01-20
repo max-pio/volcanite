@@ -112,7 +112,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                             auto old_type = colormap_config.type;
                             colormap_config.type = static_cast< GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapType>(i);
                             if (colormap_config.type != old_type) {
-                                e->initializeSingleColormap(m);
+                                e->initializeSingleColormap(m, true);
                                 colormapChanged = true;
                             }
                         }

@@ -459,7 +459,7 @@ namespace vvv {
 
                             cm.type = static_cast<GuiTFSegmentedVolumeEntry::ColorMapType>(type);
 
-                            e->initialize();
+                            e->initialize(false);
                         }
                         break;
                     }
