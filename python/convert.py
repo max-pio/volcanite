@@ -29,7 +29,6 @@ if __name__ == '__main__':
     parser.add_argument('-z', '--gzip', action='store_true', help="apply additional gzip compression on output file")
     parser.add_argument('--vis', action='store_true', help="show a 2D plot of volume slices after import")
     parser.add_argument('-v', '--verbose', action='store_true', help="enable verbose output")
-    parser.add_argument('-a', '--axes', default='xyz', help="Axis memory order if it differs from XYZ. Written volumes will always be in XYZ order.")
     parser.add_argument('--chunked_in', type=int, nargs=3, help="maximum existing XYZ chunk indices for the input chunks")
     parser.add_argument('--chunked_out', type=int, nargs=3, help="maximum existing XYZ chunk indices for the output chunks")
 
@@ -41,15 +40,13 @@ if __name__ == '__main__':
     elif args.chunked_out:
         raise ArgumentError(args.chunked_out, message="Chunked volume conversion not yet implemented.")
 
-    if len(args.axes) != 3 or not ('x' in args.axes and 'y' in args.axes and 'z' in args.axes):
-        raise ArgumentError(args.axes, "axes must be a permutation of 'xyz'")
-
     volume = vc.read_volume(args.input_file)
+
     if args.verbose:
         vc.debug_print(volume)
     if args.vis:
         vc.debug_vis(volume)
 
     if args.output_file:
-        vc.write_volume(volume, args.output_file, dtype='uint32', current_order=args.axes, apply_gzip=args.gzip)
+        vc.write_volume(volume, args.output_file, dtype='uint32', apply_gzip=args.gzip)
     exit(0)

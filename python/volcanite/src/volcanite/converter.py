@@ -31,6 +31,21 @@ import matplotlib.pyplot as plt
 
 from pathlib import Path
 
+# Some notes regarding axis ordering:
+# - Numpy assumes a ZYX indexing - at all times! a volume has a shape of volume.shape = [DIM_Z, DIM_Y, DIM_Z]
+#
+# A 2D example of an array with shape (2,3):
+#     x -->
+# y      0   1   2
+# |  0 [[1., 0., 0.],
+# V  1  [0., 1., 2.]]
+#
+# - All the read_* functions must return a numpy.ndarray that follows this dimensional ordering
+# - All write_* functions receive a numpy.ndarray and must assume the same ordering,
+#   but the writers may write out data in another axis order depending on their output file type.
+# - Any python function operating on chunked data (internally) must as well assume this ordering for the chunk indexing:
+#
+
 ########################################################################################################################
 #                                            READER / WRITER PER FORMAT                                                #
 ########################################################################################################################
@@ -43,7 +58,7 @@ def read_vraw(path_in: str | os.PathLike) -> np.ndarray:
         filetype = file.readline()[:-1].decode('utf8')
         # read binary payload
         vraw_volume = np.fromfile(file, dtype=filetype)
-        vraw_volume = vraw_volume.reshape([int(shape_str[0]), int(shape_str[1]), int(shape_str[2])])
+        vraw_volume = vraw_volume.reshape([int(shape_str[2]), int(shape_str[1]), int(shape_str[0])])
     return vraw_volume
 
 
@@ -53,9 +68,8 @@ def write_vraw(volume: np.ndarray, path_out: str | os.PathLike, dtype = None) ->
         # write two line header:
         # [DimX] [DimY] [DimZ]
         # [data type]
-        file.write(
-            (str(volume.shape[0]) + " " + str(volume.shape[1]) + " " + str(volume.shape[2]) + "\n").encode('utf8'))
-        file.write((str(volume.dtype) + "\n").encode('utf8'))
+        file.write(f"{volume.shape[2]} {volume.shape[1]} {volume.shape[0]}\n".encode('utf8'))
+        file.write(f"{volume.dtype}\n".encode('utf8'))
         # write binary (tofile() always writes in C order)
         # for z in range(volume.shape[0]):
         #     for y in range(volume.shape[1]):
@@ -79,7 +93,7 @@ def write_nrrd(volume: np.ndarray, path_out: str | os.PathLike, dtype = None) ->
         file.write("space: left-posterior-superior\n".encode('utf8'))
         file.write("kinds: domain domain domain\n".encode('utf8'))
         file.write(
-            ("sizes: " + str(volume.shape[0]) + " " + str(volume.shape[1]) + " " + str(volume.shape[2]) + "\n").encode(
+            ("sizes: " + str(volume.shape[2]) + " " + str(volume.shape[1]) + " " + str(volume.shape[0]) + "\n").encode(
                 'utf8'))
         file.write("endian: little\n".encode('utf8'))
         file.write("encoding: raw\n".encode('utf8'))
@@ -91,14 +105,18 @@ def write_nrrd(volume: np.ndarray, path_out: str | os.PathLike, dtype = None) ->
 # HDF5
 def read_hdf5(path_in: str | os.PathLike) -> np.ndarray:
     f = h5py.File(path_in, 'r')
+    # obtain the volume in xyz shape
     key = list(f.keys())[0]
-    return f[key][()]
+    volume = f[key][()]
+    # return it in zyx shape (numpy convention)
+    return volume.reshape((volume.shape[2], volume.shape[1], volume.shape[0]))
 
 
 def write_hdf5(volume: np.ndarray, path_out: str | os.PathLike, dtype = None) -> None:
     volume = __guard_volume_dtype(volume, dtype)
+    shape = volume.shape
     with h5py.File(path_out, "w") as f:
-        f.create_dataset("data", data=volume, compression="gzip")
+        f.create_dataset("data", data=volume, shape=(shape[2], shape[1], shape[0]), compression="gzip")
 
 
 # Sliced TIFF
@@ -141,7 +159,6 @@ def write_sliced_png(volume: np.ndarray, path_out_format : str) -> None:
     if __get_format_key_count(path_out_format) != 1:
         raise Exception("File path must contain exactly 1 python string format key")
 
-    #    for z in tqdm(range(labels.shape[0])):
     for z in range(volume.shape[0]):
         png_slice = np.stack([volume[z] % 256, (volume[z] / 256) % 256, (volume[z] / (256 * 256)) % 256,
                               (volume[z] / (256 * 256 * 256) % 256)], axis=-1)
@@ -151,16 +168,16 @@ def write_sliced_png(volume: np.ndarray, path_out_format : str) -> None:
 # numpy
 def read_numpy(path_in: str | os.PathLike) -> np.ndarray:
     """Reads a volume from npy or npz numpy files. For npz files, returns the first numpy array of the archive."""
-    if path_in.endswith(".npz"):
+    if str(path_in).endswith(".npz"):
         volume_archive = np.load(path_in)
-        return next(iter(volume_archive))
+        return volume_archive[next(iter(volume_archive))]
     else:
         return np.load(path_in)
 
 def write_numpy(volume: np.ndarray, path_out: str | os.PathLike, dtype = None, compressed: bool = True) -> None:
     volume = __guard_volume_dtype(volume, dtype)
     if compressed:
-        np.savez(path_out, volume)
+        np.savez_compressed(path_out, volume)
     else:
         np.save(path_out, volume)
 
@@ -214,13 +231,26 @@ def __get_format_key_count(formatted_string: str) -> int:
     """:return: the number of python string format keys in formatted_string."""
     return len([f for f in string.Formatter().parse(formatted_string) if f[2] is not None])
 
-def transpose_to_xyz(_volume: np.ndarray, current_order: str = 'zyx') -> np.ndarray:
-    old_shape = _volume.shape
-    current_order = current_order.lower()
-    if len(current_order) != 3 or not ('x' in current_order and 'y' in current_order and 'z' in current_order):
-        raise ValueError("current_order must be a permutation of 'xyz'")
-    old_axes = (current_order.find('x'), current_order.find('y'), current_order.find('z'))
-    return _volume.transpose(old_axes).reshape(old_shape, order='C')
+def check_if_valid_axis_permutation(axis_order: str) -> str:
+    axis_order = axis_order.lower()
+    """raises a ValueError if axis_order is not a permutation of 'xyz'
+    :returns: the axis order in lower case"""
+    if len(axis_order) != 3 or not ('x' in axis_order and 'y' in axis_order and 'z' in axis_order):
+        raise ValueError(f"axis order must be a permutation of 'xyz' but is {axis_order}")
+    return axis_order
+
+def reshape_memory_order(_volume: np.ndarray, from_order: str = 'zyx', to_order: str = 'zyx') -> np.ndarray:
+    from_order = check_if_valid_axis_permutation(from_order)
+    to_order = check_if_valid_axis_permutation(to_order)
+
+    if from_order == to_order:
+        return _volume
+
+    transpose_tuple = (from_order.find(to_order[0]), from_order.find(to_order[1]), from_order.find(to_order[2]))
+    print(f"Reshaping volume from {from_order} to {to_order}, reshape tuple {transpose_tuple}")
+    return _volume.reshape((_volume.shape[transpose_tuple[0]],
+                            _volume.shape[transpose_tuple[1]],
+                            _volume.shape[transpose_tuple[2]]))
 
 def copy_to_gzip(path_in: str | os.PathLike) -> Path:
     """For an input file volume.abc, creates a second file volume.abc.gz compressed with gzip DEFLATE.
@@ -246,16 +276,16 @@ def copy_from_gzip(path_in: typing.Union[str, bytes, os.PathLike]) -> Path:
     return path_out
 
 
-def write_volume(volume: np.ndarray, path_out: str | os.PathLike, dtype=None,
-                 current_order: str = 'xyz', apply_gzip:bool=False) -> None:
-    """Automatically selects the writer for the respective format based on the path_out file type."""
+def write_volume(volume: np.ndarray, path_out: str | os.PathLike, dtype = None,
+                 input_axis_order: str = 'zyx', apply_gzip: bool = False) -> None:
+    """Automatically selects the writer for the respective format based on the path_out file type.
+    Volumes are always written in XYZ memory axis order for Volcanite compatibility."""
 
     extensions = [e.lower() for e in Path(path_out).suffixes]
     if len(extensions) == 0:
         raise ValueError("Output file path for writing volume must have a file type.")
 
-    if current_order.lower() != 'xyz':
-        volume = transpose_to_xyz(volume, current_order)
+    volume = reshape_memory_order(volume, input_axis_order, 'zyx')
 
     if extensions == [".vraw"] or extensions == [".raw"]:
         write_vraw(volume, path_out, dtype)
@@ -267,7 +297,7 @@ def write_volume(volume: np.ndarray, path_out: str | os.PathLike, dtype=None,
         write_sliced_tiff(volume, path_out)
     elif extensions == [".png"]:
         write_sliced_png(volume, path_out)
-    elif extensions == [".np"]:
+    elif extensions == [".npy"]:
         write_numpy(volume, path_out, dtype, False)
     elif extensions == [".npz"]:
         write_numpy(volume, path_out, dtype, True)
@@ -284,8 +314,9 @@ def write_volume(volume: np.ndarray, path_out: str | os.PathLike, dtype=None,
         Path(path_out).unlink()
 
 
-def read_volume(path_in: str | os.PathLike) -> np.array:
-    """Automatically selects the reader for the respective format based on the path_in file type."""
+def read_volume(path_in: str | os.PathLike, input_axis_order: str = 'zyx') -> np.array:
+    """Automatically selects the reader for the respective format based on the path_in file type.
+    Returns a numpy array reshaped to axis order ZYX."""
 
     extensions = [e.lower() for e in Path(path_in).suffixes]
     if len(extensions) == 0:
@@ -306,7 +337,7 @@ def read_volume(path_in: str | os.PathLike) -> np.array:
         _volume_in = read_sliced_tiff(path_in)
     elif extensions == [".png"]:
         _volume_in = read_sliced_png(path_in)
-    elif extensions == [".np"] or extensions == [".npz"]:
+    elif extensions == [".npy"] or extensions == [".npz"]:
         _volume_in = read_numpy(path_in)
     elif extensions == [".nii"] or extensions == [".nii", ".gz"]:
         _volume_in = read_nifti(path_in)
@@ -318,6 +349,8 @@ def read_volume(path_in: str | os.PathLike) -> np.array:
     if apply_gzip:
         # remove temporary uncompressed file
         path_in.unlink()
+
+    _volume_in = reshape_memory_order(_volume_in, input_axis_order, 'zyx')
 
     return _volume_in
 
@@ -336,29 +369,32 @@ def __guard_volume_dtype(volume: np.ndarray, dtype) -> np.ndarray:
     vol_max = np.max(volume).astype('uint64')
 
     if (supported_max - supported_min) < (vol_max - vol_min):
-        print("1 Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
+        print("G1 Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
               + " by normalization to range [" + str(supported_min) + "," + str(supported_max) + "].")
         volume = (volume - vol_min) / (vol_max - vol_min) * (supported_max - supported_min) + supported_min
     elif vol_min < supported_min:
-        print("2 Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
+        print("G2 Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
               + " by offsetting values to [" + str(supported_min) + "," + str(vol_max - vol_min + supported_min) + "].")
         volume = volume - vol_min + supported_min
     elif vol_max > supported_max:
-        print("3 Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
+        print("G3 Converting volume with range [" + str(vol_min) + "," + str(vol_max) + "] to type " + str(dtype)
               + " by offsetting values to [" + str(vol_min - vol_max + supported_max) + "," + str(supported_max) + "].")
         volume = volume - vol_max + supported_max
 
     return volume.astype(dtype)
 
 
-def convert_volume(path_in: str | os.PathLike, path_out: str | os.PathLike, current_order: str = 'xyz', dtype=None) -> None:
-    write_volume(read_volume(path_in), path_out, current_order, dtype)
+def convert_volume(path_in: str | os.PathLike, path_out: str | os.PathLike, input_axis_order: str = 'xyz', dtype=None) -> None:
+    """Automatically selects the writer for the respective format based on the path_out file type.
+    Volumes are always written in XYZ memory axis order for Volcanite compatibility."""
+
+    write_volume(read_volume(path_in, input_axis_order=input_axis_order), path_out=path_out, dtype=dtype, input_axis_order='zyx')
 
 def debug_print(volume: np.ndarray) -> None:
     print("volume with shape " + str(volume.shape) + " type " + str(volume.dtype)
           + " min. " + str(np.min(volume)) + " max. " + str(np.max(volume)))
 
-def debug_vis(volume: np.ndarray, row_count: int = 2, col_count: int = 3, colormap:str = 'turbo',
+def debug_vis(volume: np.ndarray, row_count: int = 2, col_count: int = 3, colormap: str = 'turbo',
               print_info: bool = True) -> None:
     """Plot (row_count * col_count) 2D slices of the segmentation volume."""
 
@@ -370,7 +406,7 @@ def debug_vis(volume: np.ndarray, row_count: int = 2, col_count: int = 3, colorm
     slice_loc = (volume.shape[0] // len(axs)) // 2
     for ax in axs.reshape(-1):
         ax.set_ylabel("Slice " + str("[" + str(slice_loc) + ":,:]"))
-        ax.imshow(volume[slice_loc, :, :], cmap=colormap)
+        ax.imshow(volume[slice_loc, :, :], cmap=colormap, interpolation='nearest')
         slice_loc += (volume.shape[0] // len(axs))
 
 
@@ -384,4 +420,4 @@ def debug_vis(volume: np.ndarray, row_count: int = 2, col_count: int = 3, colorm
 
 def supported_formats() -> list[str]:
     """Returns a list of supported segmentation volume file formats."""
-    return ["vraw", "raw", "nrrd", "hdf5", "h5", "tiff", "png", "np", "npz", "nii", "nii.gz", "vti"]
+    return ["vraw", "raw", "nrrd", "hdf5", "h5", "tiff", "png", "npy", "npz", "nii", "nii.gz", "vti"]

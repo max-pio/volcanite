@@ -14,7 +14,16 @@ keywords = ["segmentation", "volume", "rendering", "connectomics"]
 
 requires-python = ">=3.12"
 classifiers = [
+    "Programming Language :: Python",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Operating System :: OS Independent",
 ]
@@ -34,7 +43,13 @@ cloud = [
     "intern>=1.4",
     "volcanite[convert]"
 ]
-all = ["volcanite[cloud]"]
+test = ["pytest>=8.0.0"]
+all = ["volcanite[cloud,test]"]
 
 [project.urls]
 Homepage = "https://cg.ivd.kit.edu/staff/research/piochowiak/mitarbeiter_piochowiak.php"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
