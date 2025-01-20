@@ -35,7 +35,7 @@ class CloudDataDownload:
         # https://bossdb.org/get-started
         if self.__dataset_url[:6] == "bossdb":
             # obtain data set from bossdb
-            self.__dataset = array(self.__dataset_url, axis_order="XYZ")
+            self.__dataset = array(self.__dataset_url, axis_order=self.__data_set_cfg["axis_order"].upper())
         elif self.__dataset_url[:2] == "gs":
             # TODO use intern[cloudvolume] to download from google cloud as well
             # obtain data set form google storage
@@ -48,6 +48,8 @@ class CloudDataDownload:
                                       'path': _gs_path,
                                       },
                                       read=True, context=context).result()[ts.d['channel'][0]]
+        # elif self.__dataset_url[:2] == "s3":
+        #     self.__dataset = CloudVolume(self.__dataset_url, mip=0, use_https=True)
         else:
             raise ValueError("unknown cloud storage")
 
@@ -77,7 +79,7 @@ class CloudDataDownload:
 
     def get_shape(self):
         """:returns: shape of the data set in the data set axis order."""
-        return self.__dataset.shape
+        return self.__dataset.shape[:3]
 
     def get_download_axis_order(self):
         return self.__data_set_cfg["axis_order"]
@@ -91,6 +93,9 @@ class CloudDataDownload:
         result = np.array(self.__dataset[start[0]:end[0],
                                        start[1]:end[1],
                                        start[2]:end[2]], dtype='uint32')
+        # drop last dimension(s) if necessary
+        while len(result.shape) >= 4:
+            result = result[:, :, :, 0]
 
         transpose_tuple = (self.__data_set_cfg["axis_order"].find('z'),
                            self.__data_set_cfg["axis_order"].find('y'),
@@ -106,20 +111,23 @@ class CloudDataDownload:
         if not output_format in converter.supported_formats():
             raise ValueError(f"unknown output format {output_format} is not in " + ",".join(converter.supported_formats()))
 
+        if any(d > 1 for d in self.__dataset.shape[3:]):
+            raise ValueError(f"Data set shape must have no more than 3 (real) dimensions but is {self.__dataset.shape}")
+
         # determine and clip (default) arguments, start / end volume sizes
         # and make our life easier: just convert everything to numpy arrays
         # NOTE: any shape prefixed with in_* is specified in the axis_order of the data_set_cfg.
-        in_full_dim = np.array(self.__dataset.shape)
+        in_full_dim = np.array(self.get_shape())
         in_volume_size = np.clip(volume_size, (0,0,0), in_full_dim) if volume_size else in_full_dim
         in_total_start = np.clip(origin, (0,0,0), in_full_dim) if origin else np.clip(in_full_dim // 2 - in_volume_size // 2, (0,0,0), in_full_dim)
         in_total_end = np.clip(in_full_dim, in_total_start, in_total_start + in_volume_size)
 
         # NOTE: any shape prefixed with out_* is specified in XYZ axis order
-        out_chunk_size =  np.clip(chunk_size, (0,0,0), in_volume_size) if chunk_size else np.clip((1024, 1024, 1024), (0, 0, 0), in_volume_size)
-        in_chunk_size = out_chunk_size[self.__axis_xyz_to_in]
         out_volume_size = np.array([in_total_end[0] - in_total_start[0],
                                     in_total_end[1] - in_total_start[1],
                                     in_total_end[2] - in_total_start[2]])[self.__axis_in_to_xyz]
+        out_chunk_size =  np.clip(chunk_size, (0,0,0), out_volume_size) if chunk_size else np.clip((1024, 1024, 1024), (0, 0, 0), out_volume_size)
+        in_chunk_size = out_chunk_size[self.__axis_xyz_to_in]
         out_chunk_count = np.ceil(out_volume_size / np.array(out_chunk_size)).astype("uint32")
         total_chunk_count = int(out_chunk_count[0] * out_chunk_count[1] * out_chunk_count[2])
 
@@ -146,7 +154,10 @@ class CloudDataDownload:
 
         print(f"Downloading from cloud volume {self.__dataset_url}:"
               f"\n  sub-volume: {in_total_start}:{in_total_end} of total size {in_full_dim} [{self.__data_set_cfg["axis_order"]}]"
-              f"\nWriting to chunked files {(_output_dir / Path(output_name.format('[X]', '[Y]', '[Z]', output_format)))}:"
+              f"\nWriting to chunked files {(_output_dir / Path(output_name.format(f"[0..{out_chunk_count[0] - 1}]",
+                                                                                   f"[0..{out_chunk_count[1] - 1}]",
+                                                                                   f"[0..{out_chunk_count[2] - 1}]",
+                                                                                   output_format)))}:"
               f"\n volume {(in_total_end - in_total_start)[self.__axis_in_to_xyz]} with chunk size {out_chunk_size} [xyz]")
 
         total_gb = out_volume_size[0] * out_volume_size[1] * out_volume_size[2] * 4 / 1024 / 1024 / 1024
@@ -193,7 +204,7 @@ class CloudDataDownload:
 
                     print(f"{time.strftime("%H:%M:%S")} {(int(chunk_id / total_chunk_count * 100.)):02} % processing chunk "
                           f"x{out_chunk_idx[0]}y{out_chunk_idx[1]}z{out_chunk_idx[2]} [xyz] from "
-                          f"{in_start} to {in_end} ({in_end - in_start}) [{self.__data_set_cfg["axis_order"]}]", end='')
+                          f"{in_start} to {in_end} size {in_end - in_start} [{self.__data_set_cfg["axis_order"]}]", end='')
 
                     output_file = _output_dir / Path(output_name.format(out_chunk_idx[0],
                                                                        out_chunk_idx[1],

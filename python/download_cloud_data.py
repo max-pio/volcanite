@@ -36,7 +36,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     example_data = {"h01": ("gs://h01-release/data/20210601/c3/", {"axis_order": "xyz"}),
-                    "witvliet2020": ("bossdb://witvliet2020/Dataset_8/segmentation", {"axis_order": "xyz"}),
+                    "witvliet2020": ("bossdb://witvliet2020/Dataset_8/segmentation", {"axis_order": "zyx"}),
+                    "ara2016": ("bossdb://ara_2016/sagittal_10um/annotation_10um_2017", {"axis_order": "zyx"}),
                     }
     if args.dataset == "list-examples":
         print("Available short keys for dataset argument:\n  " + "\n  ".join(example_data.keys()))
