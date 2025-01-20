@@ -22,39 +22,40 @@ if __name__ == '__main__':
         description='Downloads segmentation volumes from cloud storages and stores them locally.',
         epilog='')
 
-    parser.add_argument("data_set", help="data set url or example name. 'list-examples' lists available names.")
+    parser.add_argument("dataset", help="data set url or example name. 'list-examples' lists available names.")
     parser.add_argument("-d", "--directory", help="empty/non-existing directory where data is stored.")
     parser.add_argument("-s", "--size", type=int, nargs=3, help="size of downloaded volume in voxels (default: full volume).")
     parser.add_argument("-f", "--filetype", default="hdf5", help="file type in which chunks are stored.")
     parser.add_argument("-o", "--origin", type=int, nargs=3, help="origin of the sub-volume in the full data set.")
-    parser.add_argument("-t", "--transpose", type=int, nargs=3, help="axis transpose in chunks to achieve XYZ order: a permutation of 0 1 2", default=(2,1,0))
-    parser.add_argument("-c", "--chunk_size", type=int, nargs=3, default=(1024,1024,1024), help="volume is split into chunks of this size. should be dividable by 64.")
+    parser.add_argument("--axis-order", default="xyz", help="axis order of the volume: a permutation of XYZ (default XYZ). exported chunks always have XYZ order.")
+    parser.add_argument("-c", "--chunk_size", type=int, nargs=3, default=(1024,1024,1024), help="volume is split into XYZ chunks of this size. should be dividable by 64.")
     parser.add_argument("-a", "--append", action="store_true", default=False, help="ignore non-empty output directory and skip existing chunk files.")
     parser.add_argument("-n", "--name", help="file name prefix for chunks that will be extended to [name]_x{}y{}z{}.[filetype]")
     parser.add_argument("-v", "--verbose", action="store_true")
 
     args = parser.parse_args()
 
-    example_data = {'h01': "gs://h01-release/data/20210601/c3/",
-                    "witvliet2020": "bossdb://witvliet2020/Dataset_8/segmentation",
+    example_data = {"h01": ("gs://h01-release/data/20210601/c3/", {"axis_order": "xyz"}),
+                    "witvliet2020": ("bossdb://witvliet2020/Dataset_8/segmentation", {"axis_order": "xyz"}),
                     }
-    if args.data_set == "list-examples":
-        print("Available short keys for data_set argument:\n  " + "\n  ".join(example_data.keys()))
+    if args.dataset == "list-examples":
+        print("Available short keys for dataset argument:\n  " + "\n  ".join(example_data.keys()))
         exit(0)
-    data_set_url = example_data[args.data_set] if args.data_set in example_data else args.data_set
+    data_set_url, data_set_cfg = example_data[args.dataset] if args.dataset in example_data else (args.dataset, {"axis_order": args.axis_order})
+
     if not args.name is None:
         if not args.name:
             output_name = ""
         else:
             output_name = args.name + "_"
-    elif args.data_set in example_data:
-        output_name = args.data_set + "_"
+    elif args.dataset in example_data:
+        output_name = args.dataset + "_"
     else:
         output_name = ""
     output_name = output_name + "x{}y{}z{}.{}"
 
-    # obtain dataset
-    data = vcd.CloudDataDownload(data_set_url, axis_transpose_to_xyz=args.transpose)
+    # obtain data set
+    data = vcd.CloudDataDownload(data_set_url, data_set_cfg=data_set_cfg)
 
     # to download and visualize one small chunk
     # converter.debug_vis(data.read_chunk(data.get_shape() // 2 - (200, 100, 16), (400, 200, 32)))
@@ -62,7 +63,7 @@ if __name__ == '__main__':
     # if no output directory is given, only print the shape of the volume if it is accessible
     if args.directory is None:
         print(f"Volume {data_set_url} is available with size {data.get_shape()}, assuming axis order"
-              f" {data.get_axis_transpose()}. Specify a download directory with -d /path/to/dir/")
+              f" {data.get_download_axis_order()}. Specify a download directory with -d /path/to/dir/")
         exit(0)
     else:
         data.download(output_dir=args.directory, output_name=output_name, output_format=args.filetype,

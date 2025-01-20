@@ -3,6 +3,7 @@ from volcanite import converter as vc, volcaniteeval as ve
 import numpy as np
 from pathlib import Path
 import PIL.Image as Image
+import subprocess as subp
 
 # global config
 output_dir = Path("./out")
@@ -41,8 +42,19 @@ def test_render_volcanite() -> None:
     file_types = ["vraw", "hdf5"]
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    volcanite_src_dir = Path(__file__).parent.parent.parent.parent
-    print(f"obtained volcanite source directory from script location as {volcanite_src_dir}")
+
+    volcanite_src_dir = Path(subp.Popen(["git", "rev-parse", "--show-toplevel"], stdout=subp.PIPE).communicate()[0].rstrip().decode('utf-8'))
+    if volcanite_src_dir.exists() and volcanite_src_dir.is_dir():
+        print(f"obtained volcanite git base directory {volcanite_src_dir} with 'git rev-parse --show-toplevel'")
+    else:
+        print(f"could not obtain volcanite git base directory with 'git rev-parse --show-toplevel' ( {volcanite_src_dir})")
+        volcanite_src_dir = Path(__file__).parent.parent.parent.parent
+        print(f"obtained volcanite source directory from script location as {volcanite_src_dir}")
+
+    if not (volcanite_src_dir.exists() and volcanite_src_dir.is_dir()):
+        print("WARNING: could not obtain Volcanite source directory. Skipping rendering tests.")
+        return
+
     volcanite_bin_dir = ve.VolcaniteExec.build_volcanite(volcanite_src_dir / "cmake-build-release")
 
     dummy = create_dummy_volume()

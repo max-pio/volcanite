@@ -239,18 +239,19 @@ def check_if_valid_axis_permutation(axis_order: str) -> str:
         raise ValueError(f"axis order must be a permutation of 'xyz' but is {axis_order}")
     return axis_order
 
-def reshape_memory_order(_volume: np.ndarray, from_order: str = 'zyx', to_order: str = 'zyx') -> np.ndarray:
+def reshape_memory_order(_volume: np.ndarray, from_order: str = 'zyx', to_order: str = 'zyx', verbose: bool = False) -> np.ndarray:
     from_order = check_if_valid_axis_permutation(from_order)
     to_order = check_if_valid_axis_permutation(to_order)
 
     if from_order == to_order:
         return _volume
 
-    transpose_tuple = (from_order.find(to_order[0]), from_order.find(to_order[1]), from_order.find(to_order[2]))
-    print(f"Reshaping volume from {from_order} to {to_order}, reshape tuple {transpose_tuple}")
-    return _volume.reshape((_volume.shape[transpose_tuple[0]],
-                            _volume.shape[transpose_tuple[1]],
-                            _volume.shape[transpose_tuple[2]]))
+    reshape_tuple = (from_order.find(to_order[0]), from_order.find(to_order[1]), from_order.find(to_order[2]))
+    if verbose:
+        print(f"Reshaping volume from {from_order} to {to_order}, reshape tuple {reshape_tuple}")
+    return _volume.reshape((_volume.shape[reshape_tuple[0]],
+                            _volume.shape[reshape_tuple[1]],
+                            _volume.shape[reshape_tuple[2]]))
 
 def copy_to_gzip(path_in: str | os.PathLike) -> Path:
     """For an input file volume.abc, creates a second file volume.abc.gz compressed with gzip DEFLATE.
