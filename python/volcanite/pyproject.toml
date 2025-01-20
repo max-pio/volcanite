@@ -40,7 +40,7 @@ convert = [
 ]
 cloud = [
     "tensorstore>=0.1",
-    "intern>=1.4",
+    "intern[cloud-volume]>=1.4",
     "volcanite[convert]"
 ]
 test = ["pytest>=8.0.0"]
