@@ -23,6 +23,7 @@
 #include <memory>
 
 #include "glm/gtc/matrix_transform.hpp"
+#include "vvvwindow/App.hpp"
 
 #ifndef HEADLESS
     #include "portable-file-dialogs.h"
@@ -941,11 +942,8 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
 
     // check if a new frame has to be accumulated, target frame count of 0 means: render as long as possible
     if (m_accumulated_frames < m_target_accum_frames || m_target_accum_frames == 0u) {
-        // TODO: half float precision for the accumulation buffer only allows for 2048 single samples per pixel
-        if (m_accumulated_frames < 2048 * (1 << 2 * m_subsampling)) {
-            m_render_update_flags |= UPDATE_RENDER_FRAME;
-            m_render_update_flags |= UPDATE_PRESOLVE;
-        }
+        m_render_update_flags |= UPDATE_RENDER_FRAME;
+        m_render_update_flags |= UPDATE_PRESOLVE;
     }
 
     m_pass->setRenderUpdateFlagsForNextCall(m_render_update_flags);
@@ -1026,6 +1024,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         // frame indices and seeds
         m_urender_info->setUniform<uint32_t>("g_frame", m_frame);
         m_urender_info->setUniform<uint32_t>("g_camera_still_frames", m_accumulated_frames);
+        m_urender_info->setUniform<uint32_t>("g_target_accum_frames", m_target_accum_frames);
         m_urender_info->setUniform<uint32_t>("g_swapchain_index", m_pass->getActiveIndex());
         m_urender_info->setUniform<int32_t>("g_subsampling", (1 << m_subsampling));
         m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::bitReverseMortonNxNVec(m_subsampling)[m_accumulated_frames % ((1 << m_subsampling) * (1 << m_subsampling))]);
@@ -1297,11 +1296,11 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addInt(&m_max_inv_lod, "Max. Decoding LoD", 0, 6, 1);
     const std::vector<std::string> option_labels = {"Model Space", "Level-of-Detail", "Empty Space", "Brick Index",
                                                     "Label Cache", "Raw Render", "Cache Buffer", "Empty Space Buffer",
-                                                    "G-Buffer", "Environment Map", "Print Statistics"};
+                                                    "G-Buffer", "Samples/Pixel", "Environment Map", "Print Statistics"};
     const std::vector<uint32_t> option_bits = {VDEB_MODEL_SPACE_BIT, VDEB_LOD_BIT, VDEB_EMPTY_SPACE_BIT, VDEB_BRICK_IDX_BIT,
                                                VDEB_CACHE_VOXEL_BIT, VDEB_NO_POSTPROCESS_BIT, VDEB_CACHE_ARRAY_BIT,
-                                               VDEB_EMPTY_SPACE_ARRAY_BIT, VDEB_G_BUFFER_BIT, VDEB_ENVMAP_BIT,
-                                               VDEB_STATS_DOWNLOAD_BIT};
+                                               VDEB_EMPTY_SPACE_ARRAY_BIT, VDEB_G_BUFFER_BIT, VDEB_SPP_BIT,
+                                               VDEB_ENVMAP_BIT, VDEB_STATS_DOWNLOAD_BIT};
     g_dev->addBitFlags(&m_debug_vis_flags, option_labels, option_bits, true, "Debug View");
     g_dev->addSeparator();
     g_dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");

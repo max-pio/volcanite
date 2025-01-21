@@ -22,7 +22,11 @@
 
 // Work Item to Pixel Mapping / Subsampling ----------------------------------------------------------------------------
 
-ivec2 pixelBlueNoiseOffset() {
+vec2 subpixelOffset(ivec2 pixel) {
+    return vec2(0.5f) + (g_blue_noise_enable ? randomVec3(pixel, g_camera_still_frames ).xy : vec2(0.f));
+}
+
+ivec2 pixelOffsetInBlock() {
     int blueNoiseIdx = g_blue_noise_enable ? int(blueNoise32x32(ivec2(gl_GlobalInvocationID.xy)) * float(g_subsampling * g_subsampling)) : 0;
     return ivec2(morton2Di2p(blueNoiseIdx));
 }
@@ -35,7 +39,7 @@ ivec2 pixelFromInvocationID() {
         // offset the subsampling pixel with some blue noise
         // g_subsampling_pixel is actually just morton_idx2pos(bitfieldReverse(idx % g_subsampling * g_subsampling))
         return ivec2(gl_GlobalInvocationID.xy * g_subsampling)
-             + ivec2(mod(vec2(g_subsampling_pixel + pixelBlueNoiseOffset()), vec2(g_subsampling)));
+             + ivec2(mod(vec2(g_subsampling_pixel + pixelOffsetInBlock()), vec2(g_subsampling)));
 //        return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + g_subsampling_pixel;
     }
 }
@@ -187,13 +191,14 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
 //                    imageStore(accuSampleCountOut, opix, uvec4(prev_valid_samples));
                     // G-buffer remains unchanged
                 }
-                // writing our pixel, but invalid new sample (from not yet decoded brick)
+                // writing our pixel, but invalid new sample (a ray hit a brick that was not yet decoded)
                 else if (!isDepthValid(depth_valid)) {
                     if (prev_sample_count > 0u) {
                         // the accumulation buffer already contains a valid accumulation: skip this invalid sample
                         accumulated_rgba_out = prev_rgba;
                         // G-buffer remains unchanged
                     } else {
+                        // TODO: use flicker by taking the previous inv. instead of the new inv. sample here again?
                         // the accumulation buffer is not set
                         accumulated_rgba_out = new_rgba;
                         imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u));
@@ -203,7 +208,9 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
                 }
                 // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
                 else {
-                    accumulated_rgba_out = new_rgba + (prev_sample_count > 0u ? prev_rgba : vec4(0.f));
+                    // iterative re-weighting
+                    float new_weight = 1.f / float(prev_sample_count + 1);
+                    accumulated_rgba_out = new_rgba * new_weight + prev_rgba * (1.f - new_weight);
                     sample_count_out = prev_sample_count + 1u;
 //                    imageStore(accuSampleCountOut, opix, uvec4(1u + prev_valid_samples));
                     imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u));
@@ -216,7 +223,7 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
             // note: in theory, the denoisingBuffer could already contain the .a=-1 marker for pixels that did not
             // receive a single rendered sample. but this would require to read the (possibly unchanged) G-buffer
             // which is only writte to in this shader.
-            imageStore(denoisingBuffer[0], opix, accumulated_rgba_out / float(max(sample_count_out, 1u)));
+            imageStore(denoisingBuffer[0], opix, accumulated_rgba_out);
         }
     }
 }

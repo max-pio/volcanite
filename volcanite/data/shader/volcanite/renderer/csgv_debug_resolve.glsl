@@ -144,6 +144,17 @@ void DEBUG_img_empty_space_bv(ivec2 pixel, inout vec4 color, bool enabled) {
 #endif
 }
 
+void DEBUG_img_spp(ivec2 pixel, inout vec4 color, bool enabled) {
+#ifdef ENALBE_CSGV_DEBUGGING
+    if (!enabled)
+        return;
+
+    uint sample_count_block = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
+    color = vec4(vec3(sample_count_block) / (g_target_accum_frames == 0u ? g_camera_still_frames : g_target_accum_frames), 1.f);
+#endif
+}
+
+
 void DEBUG_img_no_postprocess(ivec2 pixel, inout vec4 color, bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
     if (!enabled)
@@ -151,8 +162,7 @@ void DEBUG_img_no_postprocess(ivec2 pixel, inout vec4 color, bool enabled) {
 
     // debug input buffer (left) vs. upsampled and denoised (right) output
     if (pixel.x < g_cursor_pixel_pos.x) {
-        uint sample_count_block = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
-        color = imageLoad(accumulationOut, pixel) / float(sample_count_block);
+        color = imageLoad(accumulationOut, pixel);
     }
 #endif
 }

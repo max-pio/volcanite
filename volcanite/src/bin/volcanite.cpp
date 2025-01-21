@@ -166,7 +166,7 @@ int volcanite_main(int argc, char *argv[]) {
             bool vsync = true;  // TODO: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
             auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
             app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
-            app->setVSync(vsync);
+            app->setVSync(args.enable_vsync);
             app->acquireResources();
             tryImportRenderConfig(args, renderer);
             return app->exec();

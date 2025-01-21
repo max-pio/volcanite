@@ -204,6 +204,7 @@ struct GPUStats {
 #define VDEB_BRICK_IDX_BIT 256
 #define VDEB_STATS_DOWNLOAD_BIT 512
 #define VDEB_ENVMAP_BIT 1024
+#define VDEB_SPP_BIT 2048
 
 #undef CSGV_UINT
 #endif // CSGV_CONSTANTS_H
