@@ -104,7 +104,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                 ImGui::NewLine();
 
                 ImGui::PushID(id++);
-                std::string types[] = {"Solid Color", "Divergent", "Precomputed", "PNG Import"};
+                std::string types[] = {"Solid Color", "Divergent", "Precomputed", "Image Import"};
                 if (ImGui::BeginCombo("Type", types[colormap_config.type].c_str())) {
                     for (int i = 0; i < 4; i++) {
                         const bool is_selected = i == colormap_config.type;

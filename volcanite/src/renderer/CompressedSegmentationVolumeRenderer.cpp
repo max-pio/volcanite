@@ -782,8 +782,10 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
 
     // recreate all swapchain image sized textures
     vvv::AwaitableList reinitDone;
-    m_accumulation_rgba_tex[0] = m_pass->reflectTexture("accumulationIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
-    m_accumulation_rgba_tex[1] = m_pass->reflectTexture("accumulationOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+//    m_accumulation_rgba_tex[0] = m_pass->reflectTexture("accumulationIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+//    m_accumulation_rgba_tex[1] = m_pass->reflectTexture("accumulationOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_accumulation_rgba_tex[0] = m_pass->reflectTexture("accumulationIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_accumulation_rgba_tex[1] = m_pass->reflectTexture("accumulationOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     for (auto & texture : m_accumulation_rgba_tex) {
         texture->ensureResources();
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
@@ -1250,13 +1252,15 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                 readParameterFile(m_data_vcfg_presets[i].second);
 
                             // compute min. required number of total accumulation samples per pixel
-                            const int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
-                            if (m_global_illumination_enabled && m_shadow_pathtracing_ratio > 0.) {
-                                // ambient occlusion / path tracing need some frames to converge (1024 SPP)
-                                m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 1024);
-                            } else {
-                                // everything deterministic, nees only AA
-                                m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 16);
+                            if (m_target_accum_frames > 0) {
+                                const int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
+                                if (m_global_illumination_enabled && m_shadow_pathtracing_ratio > 0.) {
+                                    // ambient occlusion / path tracing need some frames to converge (1024 SPP)
+                                    m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 1024);
+                                } else {
+                                    // everything deterministic, nees only AA
+                                    m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 16);
+                                }
                             }
                        }, "Rendering Preset");
     g_render->addFloat(&m_factor_ambient, "Constant Color", 0.0f, 1.f, 0.05f, 2);
