@@ -55,6 +55,7 @@ public:
     bool decode_from_shared_memory = false;
     uint32_t empty_space_resolution = 2u;    // in cache mode CACHE_VOXELS, groups n³ voxels into one empty space entry
     bool show_development_gui = false;
+    bool enable_vsync = true;
 
     // attribute args
     std::string attribute_database;     // SQlite3 file with attributes for volume labels
@@ -154,6 +155,7 @@ public:
             ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{label co'lumn name referenced by volume}]]\".", false, "", "database[,table[,label]]", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal all development render parameters in GUI.", cmd);
+            SwitchArg noVsyncArg("", "no-vsync", "Disable VSync in renderer.", cmd);
             ValueArg<uint32_t> cacheSizeMBArg("", "cache-size", "Size in MB of the renderer's brick cache. 0 to allocate all available.", false, va.cache_size_MB, "size", cmd);
             SwitchArg cachePalettizedArg("", "cache-palette", "Store palette indices in brick cache instead of labels.", cmd);
             std::vector<char> _allowedCacheUnits = {'n', 'v', 'b'};
@@ -273,6 +275,7 @@ public:
             if(va.decode_from_shared_memory && !va.random_access)
                 throw ArgException(decodedSharedMemoryArg.longID() + " must be used in combination with " + randomAccessArg.longID(), decodedSharedMemoryArg.longID());
             va.show_development_gui = devArg.getValue();
+            va.enable_vsync = !noVsyncArg.getValue();
             va.empty_space_resolution = emptySpaceResolutionArg.getValue();
             // if no input file was specified, try to open a file dialog
             std::string input_file = inputpathArg.getValue();

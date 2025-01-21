@@ -148,6 +148,7 @@ layout (std140, binding = 10) uniform render_info {
 // frame indices and seeds
     uint g_frame;                   // current frame index since the renderer was initialized
     uint g_camera_still_frames;     // current frame index within the current render accumulation loop
+    uint g_target_accum_frames;     // how many frames will be rendered in this render loop
     uint g_swapchain_index;         // index of this frame in the multiframe swapchain buffer lists
     int g_subsampling;              // border length of the subsampling pixel block in which one sample is rendered
     ivec2 g_subsampling_pixel;      // local coordinate of the currently rendered pixel in the subsampling pixel block

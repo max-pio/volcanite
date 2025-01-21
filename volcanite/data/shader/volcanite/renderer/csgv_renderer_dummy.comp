@@ -37,6 +37,7 @@ void main() {
         return;
 
     // everything this shader does is copying the framebuffers of the last frame to the current frame
+    // this is necessary because some of the buffers are ping-pong buffers that alter between frames
 
     if (g_frame == 0u) {
         // first frame: reset, should usually not happen
@@ -52,6 +53,6 @@ void main() {
 
         imageStore(accumulationOut, pixel, prev_rgba);
         imageStore(accuSampleCountOut, pixel, prev_valid_samples);
-        imageStore(denoisingBuffer[0], pixel, prev_rgba / float(max(prev_valid_samples, 1u)));
+        imageStore(denoisingBuffer[0], pixel, prev_rgba);
     }
 }

@@ -48,7 +48,7 @@ vec3 color_rectify(vec3 color, ivec2 pixel) {
     uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
     if (sample_count == 0u)
             return color;
-    vec4 prev_accum_rgba = imageLoad(accumulationOut, pixel) / float(sample_count);
+    vec4 prev_accum_rgba = imageLoad(accumulationOut, pixel);
     vec3 hsv = rgb2hsv(prev_accum_rgba.rgb);
     const vec3 d = vec3(0.f);
     return hsv2rgb(clamp(rgb2hsv(color), hsv - d, hsv + d));
@@ -56,8 +56,7 @@ vec3 color_rectify(vec3 color, ivec2 pixel) {
 
 // inplace alpha blending of pixel_rgba with the background color that is visible for the primary ray through block_pixel
 vec4 blendWithBackground(ivec2 pixel, vec4 pixel_rgba) {
-    // deterministic computation of the view ray (TODO: duplicated code, move to central location)
-    vec2 subpixel_offset = randomVec3(pixel, g_camera_still_frames).xy;
+    vec2 subpixel_offset = subpixelOffset(pixel);
     vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(imageSize(inpaintedOutColor));
     vec3 viewRayDirection = normalize((g_pixel_to_ray_direction_world_space * vec3(pixel + subpixel_offset, 1.0f)).xyz);
     // blend with background
@@ -77,6 +76,7 @@ void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {
 
     DEBUG_img_g_buffer(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_G_BUFFER_BIT));
     DEBUG_img_no_postprocess(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_NO_POSTPROCESS_BIT));
+    DEBUG_img_spp(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_SPP_BIT));
 
     // blend with background and output to display image
     imageStore(inpaintedOutColor, pixel, blendWithBackground(pixel, accum_rgba));
@@ -92,6 +92,7 @@ void main() {
         return;
 
     // upsampling / denoising may be disabled or faded out
+    // for n^2 samples, variance is halfed
     const float fade = g_denoise_fade_enable ? min(1.f, g_denoise_fade_sigma / sqrt(float(g_camera_still_frames / (g_subsampling * g_subsampling)))) : 1.f;
     if (!g_atrous_enabled || fade < 0.05f) {
         if (pc.denoising_iteration == pc.last_denoising_iteration)
