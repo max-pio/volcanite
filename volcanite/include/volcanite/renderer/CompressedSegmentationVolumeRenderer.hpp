@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <glm/glm.hpp>
@@ -398,7 +399,7 @@ private:
     // detail management
     static constexpr uint32_t m_max_detail_requests_per_frame = 1023u;  ///< how many brick_ids can be requested for detail upload per frame (affects the request buffer size)
     enum DetailConstructionStage { DetailReady = 0, DetailAwaitingCPUConstruction, DetailCPUConstruction, DetailAwaitingUpload, DetailUploading};
-    DetailConstructionStage m_detail_stage = DetailReady;
+    std::atomic<DetailConstructionStage> m_detail_stage = DetailReady;
     std::vector<uint32_t> m_detail_requests = {};
     std::shared_ptr<Buffer> m_detail_requests_buffer = nullptr;
     std::vector<uint32_t> m_constructed_detail_starts = {};
