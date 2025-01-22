@@ -5,8 +5,6 @@
 // functions in this header. As these functions use other definitions from csgv_*_resolve.comp it should be included
 // right above its main() function.
 
-#define ENALBE_CSGV_DEBUGGING
-
 #include "volcanite/renderer/csgv_materials.glsl"
 #include "debug_colormaps.glsl"
 #include "volcanite/renderer/framebuffer.glsl"

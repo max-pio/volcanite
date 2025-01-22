@@ -5,7 +5,6 @@
 // functions in this header. As these functions use other definitions from csgv_renderer.comp it should be included
 // right above its main() function.
 
-#define ENALBE_CSGV_DEBUGGING
 
 /// Visualizes model space coordinates.
 /// Returns true if this thread should terminate afterwards as the pixel color was drawn.

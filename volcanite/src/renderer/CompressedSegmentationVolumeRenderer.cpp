@@ -702,23 +702,25 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
 
     // the shader code is dependent on data set properties like operation frequency tables
     std::vector<std::string> shader_defines = m_compressed_segmentation_volume->getGLSLDefines();
-    shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
+    if (!m_release_version)
+        shader_defines.emplace_back("ENALBE_CSGV_DEBUGGING");
+    shader_defines.emplace_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
     if (m_use_palette_cache)
         shader_defines.emplace_back("PALETTE_CACHE");
     if (m_decode_from_shared_memory)
         shader_defines.emplace_back("DECODE_FROM_SHARED_MEMORY");
     shader_defines.emplace_back("CACHE_MODE=" + std::to_string(m_cache_mode));
     if (m_cache_mode == CACHE_VOXELS) {
-        shader_defines.push_back(
+        shader_defines.emplace_back(
                 "CACHE_UVEC2_SIZE=" + std::to_string(m_target_cache_size_MB * 1024 * 1024 / sizeof(glm::uvec2)));
     }
     if (m_empty_space_buffer_size > 0) {
-        shader_defines.push_back(
+        shader_defines.emplace_back(
                 "EMPTY_SPACE_UINT_SIZE=" + std::to_string(m_empty_space_buffer_size / sizeof(uint32_t)));
     }
-    shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
+    shader_defines.emplace_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
     if (!m_additional_shader_defs.empty())
-        shader_defines.push_back(m_additional_shader_defs);
+        shader_defines.emplace_back(m_additional_shader_defs);
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if (getCtx()->getWsi())
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), m_queue_family_index, shader_defines,

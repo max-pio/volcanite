@@ -154,7 +154,7 @@ public:
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
             ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{label co'lumn name referenced by volume}]]\".", false, "", "database[,table[,label]]", cmd);
             // rendering arguments
-            SwitchArg devArg("", "dev", "Reveal all development render parameters in GUI.", cmd);
+            SwitchArg devArg("", "dev", "Reveal development GUI and enable shader debug outputs.", cmd);
             SwitchArg noVsyncArg("", "no-vsync", "Disable VSync in renderer.", cmd);
             ValueArg<uint32_t> cacheSizeMBArg("", "cache-size", "Size in MB of the renderer's brick cache. 0 to allocate all available.", false, va.cache_size_MB, "size", cmd);
             SwitchArg cachePalettizedArg("", "cache-palette", "Store palette indices in brick cache instead of labels.", cmd);
