@@ -943,7 +943,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     }
 
     // check if a new frame has to be accumulated, target frame count of 0 means: render as long as possible
-    if ((m_accumulated_frames < m_target_accum_frames || m_target_accum_frames == 0u)
+    if ((m_accumulated_frames < m_target_accum_frames || m_target_accum_frames <= 0u)
         && m_accumulated_frames < 65535u) {
 
         if (!m_accum_step_mode || m_accum_do_step) {
@@ -1031,7 +1031,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         // frame indices and seeds
         m_urender_info->setUniform<uint32_t>("g_frame", m_frame);
         m_urender_info->setUniform<uint32_t>("g_camera_still_frames", m_accumulated_frames);
-        m_urender_info->setUniform<uint32_t>("g_target_accum_frames", m_target_accum_frames);
+        m_urender_info->setUniform<uint32_t>("g_target_accum_frames", glm::max(0, m_target_accum_frames));
         m_urender_info->setUniform<uint32_t>("g_swapchain_index", m_pass->getActiveIndex());
         m_urender_info->setUniform<int32_t>("g_subsampling", (1 << m_subsampling));
         m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::bitReverseMortonNxNVec(m_subsampling)[m_accumulated_frames % ((1 << m_subsampling) * (1 << m_subsampling))]);
@@ -1222,11 +1222,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dis->addColor(&m_background_color_a, "Background Color A");
     g_dis->addColor(&m_background_color_b, "Background Color B");
     g_dis->addInt(&m_target_accum_frames, "Accumulation Frames");
-    g_dis->addBool(&m_accum_step_mode, "Step Accumulation");
-#ifdef IMGUI
-        g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
-#endif
-    g_dis->addAction([this]() { m_accum_do_step = m_accum_step_mode; }, "Next Step");
     g_dis->addProgress([this]() { return m_target_accum_frames > 0u ? static_cast<float>(m_accumulated_frames) / static_cast<float>(m_target_accum_frames)
                                                                                    : -static_cast<float>(m_accumulated_frames); }, "Progress");
     g_dis->addInt(&m_subsampling, "Subsampling Resolution", 0, 3, 1);
@@ -1339,7 +1334,11 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
                 std::chrono::high_resolution_clock::now().time_since_epoch().count());}, "Clear Cache and Accumulation");
     g_dev->addSeparator();
-
+    g_dev->addBool(&m_accum_step_mode, "Step Accumulation");
+#ifdef IMGUI
+    g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_dev->addAction([this]() { m_accum_do_step = m_accum_step_mode; }, "Next Step");
     // import initial config (if requested)
     if (m_init_vcfg_file.has_value())
         CompressedSegmentationVolumeRenderer::readParameterFile(m_init_vcfg_file.value());

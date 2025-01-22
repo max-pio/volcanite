@@ -75,7 +75,7 @@ void GuiImgui::renderGui() {
 
     // WINDOW DOCKING
     {
-        ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+        ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
         if (m_firstCall) {
             ImGui::DockBuilderRemoveNode(dockspace_id);
@@ -373,8 +373,9 @@ void GuiImgui::renderGui() {
                     } else {
                         progress *= -1.f;
                         std::string pstr =  fmt::vformat("{:.4g}", fmt::make_format_args(progress));
-                        // TODO: new imgui version has a spinner for negative values, set fraction as (-1.f * ImGuiGetTime())
-                        ImGui::ProgressBar(-progress, be->label.empty() ? ImVec2(-FLT_MIN, 0) : ImVec2(0.0f, 0.0f), pstr.c_str());
+                        ImGui::ProgressBar(-progress / 100.f, // TODO:
+                                            be->label.empty() ? ImVec2(-FLT_MIN, 0) : ImVec2(0.0f, 0.0f),
+                                            pstr.c_str());
                     }
                     ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
                     ImGui::TextUnformatted(be->label.c_str());

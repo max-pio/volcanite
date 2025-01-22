@@ -1052,7 +1052,7 @@ namespace vvv {
         init_info.MinImageCount = 2; // m_imgui.minImageCount; for whatever reason minImageCount is 3 and maxInFlightFrames is 2 here.. so we wait for the swapchain recreation to fix it
         init_info.ImageCount = maximalInFlightFrameCount();
         init_info.CheckVkResultFn = check_vk_result;
-        ImGui_ImplVulkan_Init(&init_info, m_renderpass.renderpass);
+        ImGui_ImplVulkan_Init(&init_info);
 
         m_imgui.initialized = true;
     }
