@@ -1126,19 +1126,24 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
 
 void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     Renderer::initGui(gui);
-//    GuiInterface::GuiElementList* g = gui->get("Compressed Segmentation Volume Renderer");
+    // Note: the windows are created in this order in ImGui. the later windows are selected before the earlier ones.
     GuiInterface::GuiElementList* g_gen = gui->get("General");
     GuiInterface::GuiElementList* g_dis = gui->get("Display");
+    GuiInterface::GuiElementList* g_post = gui->get("Post-Processing");
     GuiInterface::GuiElementList* g_render = gui->get("Rendering");
     GuiInterface::GuiElementList* g_dev = gui->get("Development");
+    GuiInterface::GuiElementList* g_mat = gui->get("Materials");
+
     // we create an invisible GUI window to export all parameters but keep them hidden from the user
     gui->getWindow("Development")->setVisible(!m_release_version);
     // specify a docking layout for the windows
     gui->setDockingLayout({{"General", "d"},
-                           {"Rendering", "d"},
-                           {"Display", "d"},
-                           {"Materials", "r"},
-                           {"Development", "Materials"}});
+                             {"Rendering", "d"},
+                             {"Post-Processing", "Rendering"},
+                          {"Display", "d"},
+                          {"Materials", "r"},
+                          {"Development", "Materials"},
+                          });
 
     // General options
     g_gen->addSeparator();
@@ -1219,8 +1224,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_gen->addDynamicText(&m_gui_cache_mem_text);
 
     // Display properties and render resolution
-    g_dis->addColor(&m_background_color_a, "Background Color A");
-    g_dis->addColor(&m_background_color_b, "Background Color B");
     g_dis->addInt(&m_target_accum_frames, "Accumulation Frames");
     g_dis->addProgress([this]() { return m_target_accum_frames > 0u ? static_cast<float>(m_accumulated_frames) / static_cast<float>(m_target_accum_frames)
                                                                                    : -static_cast<float>(m_accumulated_frames); }, "Progress");
@@ -1242,9 +1245,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     //g_dis->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
 
     // Materials
-    if(m_csgv_db) {
-        gui->get("Materials")->addTFSegmentedVolume(&m_materials, m_csgv_db->getAttributeNames(), m_csgv_db->getAttributeMinMax(), [this](int m) { updateSegmentedVolumeMaterial(m); }, "Materials");
-    }
+    g_mat->addTFSegmentedVolume(&m_materials, m_csgv_db->getAttributeNames(), m_csgv_db->getAttributeMinMax(), [this](int m) { updateSegmentedVolumeMaterial(m); }, "Materials");
 
     // Path Tracing / Rendering
     static int gui_preset_selection = 0;
@@ -1279,6 +1280,24 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_render->addBool(&m_envmap_enabled, "Environment Map");
     g_render->addInt(&m_max_path_length, "Path Length", 1, 32, 1);
 
+    // Post-Processing
+    g_post->addColor(&m_background_color_a, "Background Color A");
+    g_post->addColor(&m_background_color_b, "Background Color B");
+    g_post->addBool(&m_tonemap_enabled, "Tone Mapping");
+    g_post->addSeparator();
+    g_post->addLabel("Post-Processing");
+    g_post->addBool(&m_atrous_enabled, "Enable À-Trous Post-Processing");
+    g_post->addInt(&m_atrous_iterations, "Post-Process Iterations", 1, 4, 1);
+    g_post->addInt(&m_denoise_filter_kernel_size, "Post-Process Kernel Size", 0, 3, 1);
+    g_post->addLabel("Denoising");
+    g_post->addBool(&m_denoising_enabled, "Enable Denoising");
+    //    g_dev->addFloat(&m_difference_depth_denoising, "difference depth denoising", 0.001f, 1.f, 0.004, 3);
+    //    g_dev->addFloat(&m_spatial_sigma, "Spatial Sigma", 0.001f, 5.f, 0.01, 2);
+    g_post->addFloat(&m_depth_sigma, "Depth Sigma", 0.001f, 100.f, 0.01, 3);
+    //    g_dev->addFloat(&m_illumination_sigma, "Illumination Sigma", 0.01f, 10.f, 0.01, 2); // unnused for now
+    g_post->addBool(&m_denoise_fade_enabled, "Fade Denoiser Out");
+    g_post->addFloat(&m_denoise_fade_sigma, "Denoise Fade Sigma", 0.00f, 10.f, 0.01, 2);
+
     // Development
     g_dev->addLabel("Ray Traversal");
     g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
@@ -1286,21 +1305,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
     g_dev->addSeparator();
 
-    // TODO: remove some of these to a designated "Postprocessing" GUI tab (next to material, before g_dev)
-    g_dev->addLabel("Denoising");
-        g_dev->addBool(&m_atrous_enabled, "Enable À-Trous Post-Processing");
-    g_dev->addInt(&m_atrous_iterations, "Post-Process Iterations", 1, 4, 1);
-    g_dev->addInt(&m_denoise_filter_kernel_size, "Post-Process Kernel Size", 0, 3, 1);
-    g_dev->addBool(&m_denoising_enabled, "Enable Denoising");
-//    g_dev->addFloat(&m_difference_depth_denoising, "difference depth denoising", 0.001f, 1.f, 0.004, 3);
-//    g_dev->addFloat(&m_spatial_sigma, "Spatial Sigma", 0.001f, 5.f, 0.01, 2);
-    g_dev->addFloat(&m_depth_sigma, "Depth Sigma", 0.001f, 100.f, 0.01, 3);
-//    g_dev->addFloat(&m_illumination_sigma, "Illumination Sigma", 0.01f, 10.f, 0.01, 2); // unnused for now
-    g_dev->addBool(&m_denoise_fade_enabled, "Fade Denoiser Out");
-    g_dev->addFloat(&m_denoise_fade_sigma, "Denoise Fade Sigma", 0.00f, 10.f, 0.01, 2);
-    g_dev->addSeparator();
-    g_dev->addBool(&m_tonemap_enabled, "Tone Mapping");
-    g_dev->addSeparator();
     g_dev->addLabel("Debug");
     g_dev->addAction([this]() { printGPUMemoryUsage(); }, "Print GPU Memory Usage");
     g_dev->addInt(&m_max_inv_lod, "Max. Decoding LoD", 0, 6, 1);
