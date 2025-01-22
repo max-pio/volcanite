@@ -15,9 +15,12 @@
 
 #include "vvv/core/HeadlessRendering.hpp"
 
-#include <vvv/vk/destroy.hpp>
 #include <vvv/util/Logger.hpp>
 #include <vvv/util/util.hpp>
+
+#define FMT_HEADER_ONLY
+#include "fmt/include/fmt/format.h"
+#include "fmt/include/fmt/args.h"
 
 namespace vvv {
 
@@ -97,8 +100,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames
 
         rendererOutput = renderFrame({rendererOutput.renderingComplete});
         if (!video_fmt_file_out.empty()) {
-            m_renderer->exportCurrentFrameToImage(std::vformat(video_fmt_file_out,
-                                                               std::make_format_args(frame_idx)));
+            m_renderer->exportCurrentFrameToImage(fmt::vformat(video_fmt_file_out, fmt::make_format_args(frame_idx)));
         }
 
         if(frameFinishedCallback) {

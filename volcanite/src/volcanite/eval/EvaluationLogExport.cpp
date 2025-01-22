@@ -22,10 +22,9 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
-
-#define FMT_HEADER_ONLY
 #include <complex>
 
+#define FMT_HEADER_ONLY
 #include "fmt/include/fmt/format.h"
 #include "fmt/include/fmt/args.h"
 

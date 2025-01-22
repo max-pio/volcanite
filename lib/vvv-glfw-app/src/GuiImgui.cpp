@@ -31,6 +31,10 @@
 
 #include "vvv/util/Logger.hpp"
 
+#define FMT_HEADER_ONLY
+#include "fmt/include/fmt/format.h"
+#include "fmt/include/fmt/args.h"
+
 void GuiImgui::updateGui() {
     // We don't store internal states so far.
     // (ImGui accesses everything directly through pointers)
@@ -362,14 +366,18 @@ void GuiImgui::renderGui() {
                 }
                 case GuiProgress: {
                     auto e = GUI_CAST(be, float);
-                    if(be->label.empty()) {
-                        ImGui::ProgressBar(e->getter());
-                    }  else {
-                        // ImVec2(0.0f,0.0f) uses ItemWidth.
-                        ImGui::ProgressBar(e->getter(), ImVec2(0.0f, 0.0f));
-                        ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-                        ImGui::TextUnformatted(be->label.c_str());
+                    float progress = e->getter ? e->getter() : 0.f;
+                    // ImVec2(0.0f,0.0f) uses ItemWidth.
+                    if (progress >= 0.f) {
+                        ImGui::ProgressBar(progress, be->label.empty() ? ImVec2(-FLT_MIN, 0) : ImVec2(0.0f, 0.0f));
+                    } else {
+                        progress *= -1.f;
+                        std::string pstr =  fmt::vformat("{:.4g}", fmt::make_format_args(progress));
+                        // TODO: new imgui version has a spinner for negative values, set fraction as (-1.f * ImGuiGetTime())
+                        ImGui::ProgressBar(-progress, be->label.empty() ? ImVec2(-FLT_MIN, 0) : ImVec2(0.0f, 0.0f), pstr.c_str());
                     }
+                    ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+                    ImGui::TextUnformatted(be->label.c_str());
                     break;
                 }
                 case GuiSeparator: {

@@ -331,6 +331,8 @@ private:
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
     int m_target_accum_frames = 16;
+    bool m_accum_step_mode = false;
+    bool m_accum_do_step = false;
     int m_max_inv_lod = 6;
     // utility
     std::string m_gui_resolution_text;

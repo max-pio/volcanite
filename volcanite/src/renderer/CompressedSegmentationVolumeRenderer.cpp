@@ -48,9 +48,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
     if(m_data_changed) {
         // wait until all previous frames are processed
-        getCtx()->getDevice().waitIdle();
+        getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution);
 
-        // create and populate all encoding buffer
+        // create and populate all encoding buffer (blocking)
         initDataSetGPUBuffers();
 
         const size_t brick_size = m_compressed_segmentation_volume->getBrickSize();
@@ -943,9 +943,14 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     }
 
     // check if a new frame has to be accumulated, target frame count of 0 means: render as long as possible
-    if (m_accumulated_frames < m_target_accum_frames || m_target_accum_frames == 0u) {
-        m_render_update_flags |= UPDATE_RENDER_FRAME;
-        m_render_update_flags |= UPDATE_PRESOLVE;
+    if ((m_accumulated_frames < m_target_accum_frames || m_target_accum_frames == 0u)
+        && m_accumulated_frames < 65535u) {
+
+        if (!m_accum_step_mode || m_accum_do_step) {
+            m_render_update_flags |= UPDATE_RENDER_FRAME;
+            m_render_update_flags |= UPDATE_PRESOLVE;
+            m_accum_do_step = false;
+        }
     }
 
     m_pass->setRenderUpdateFlagsForNextCall(m_render_update_flags);
@@ -1217,7 +1222,13 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dis->addColor(&m_background_color_a, "Background Color A");
     g_dis->addColor(&m_background_color_b, "Background Color B");
     g_dis->addInt(&m_target_accum_frames, "Accumulation Frames");
-    g_dis->addProgress([this]() { return static_cast<float>(m_accumulated_frames) / static_cast<float>(m_target_accum_frames); }, "Progress");
+    g_dis->addBool(&m_accum_step_mode, "Step Accumulation");
+#ifdef IMGUI
+        g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_dis->addAction([this]() { m_accum_do_step = m_accum_step_mode; }, "Next Step");
+    g_dis->addProgress([this]() { return m_target_accum_frames > 0u ? static_cast<float>(m_accumulated_frames) / static_cast<float>(m_target_accum_frames)
+                                                                                   : -static_cast<float>(m_accumulated_frames); }, "Progress");
     g_dis->addInt(&m_subsampling, "Subsampling Resolution", 0, 3, 1);
     //
     g_dis->addSeparator();
