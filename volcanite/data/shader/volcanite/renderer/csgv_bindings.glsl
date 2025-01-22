@@ -172,8 +172,8 @@ layout (std140, binding = 10) uniform render_info {
     mat3 g_model_to_world_space_dir;
     mat3 g_world_to_model_space_dir;
     float g_world_to_model_space_scaling;
-    vec4 g_bboxMin;
-    vec4 g_bboxMax;
+    ivec4 g_bboxMin;
+    ivec4 g_bboxMax;
 // general render config
     uint g_detail_buffer_dirty;     // 0 if we can read from the detail buffer, 1 if the detail buffer is dirty
     float g_lod_bias;               // bias for the LOD into which bricks are decoded

@@ -439,6 +439,10 @@ void CompressedSegmentationVolumeRenderer::setCompressedSegmentationVolume(
     } else {
         m_empty_space_buffer_size = 0u;
     }
+
+    // update GUI parameters
+    m_bboxMin = glm::ivec3(0);
+    m_bboxMax = glm::ivec3(m_compressed_segmentation_volume->getVolumeDim());
 }
 
 void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
@@ -1074,8 +1078,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<glm::mat3x3>("g_world_to_model_space_dir", glm::mat3(world_to_model_space));
         m_urender_info->setUniform<float>("g_world_to_model_space_scaling", scalingFactor);
         // bbox is the volume dimension in voxels centered around the origin (if no bbox reduction is applied)
-        m_urender_info->setUniform<glm::vec4>("g_bboxMin", glm::vec4(m_bboxMin, 1.f));
-        m_urender_info->setUniform<glm::vec4>("g_bboxMax", glm::vec4(m_bboxMax, 1.f));
+        m_urender_info->setUniform<glm::ivec4>("g_bboxMin", glm::uvec4(glm::clamp(m_bboxMin, glm::ivec3(0), glm::ivec3(voldim)), 1));
+        m_urender_info->setUniform<glm::ivec4>("g_bboxMax", glm::uvec4(glm::clamp(m_bboxMax, glm::ivec3(0), glm::ivec3(voldim)), 1));
 
         // general render config
         m_urender_info->setUniform<uint32_t>("g_detail_buffer_dirty", m_detail_stage == DetailUploading ? 1u : 0u);
@@ -1127,6 +1131,11 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
 }
 
 void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
+    if(!m_compressed_segmentation_volume)
+        throw std::runtime_error("CompressedSegmentationVolume must be set before calling initGui");
+    if(!m_csgv_db)
+        throw std::runtime_error("CompressedSegmentationVolume database must be set before calling initGui");
+
     Renderer::initGui(gui);
     // Note: the windows are created in this order in ImGui. the later windows are selected before the earlier ones.
     GuiInterface::GuiElementList* g_gen = gui->get("General");
@@ -1149,17 +1158,18 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
     // General options
     g_gen->addSeparator();
+    glm::uvec3 vol_dim = m_compressed_segmentation_volume->getVolumeDim();
     g_gen->addVec3([this](glm::vec3 v) { if (glm::all(glm::greaterThan(v, glm::vec3(0.f)))) m_voxel_size = v; },
                    [this]() { return m_voxel_size; }, "Voxel Size", 3);
-    g_gen->addFloatRange([this](glm::vec2 v) {m_bboxMin.x = v.x; m_bboxMax.x = v.y;},
-                         [this](){return glm::vec2(m_bboxMin.x, m_bboxMax.x);},
-                         "Splitting Plane X", glm::vec2(0.f), glm::vec2(1.f), glm::vec2(0.01f), 2);
-    g_gen->addFloatRange([this](glm::vec2 v) {m_bboxMin.y = v.x; m_bboxMax.y = v.y;},
-                         [this](){return glm::vec2(m_bboxMin.y, m_bboxMax.y);},
-                         "Splitting Plane Y", glm::vec2(0.f), glm::vec2(1.f), glm::vec2(0.01f), 2);
-    g_gen->addFloatRange([this](glm::vec2 v) {m_bboxMin.z = v.x; m_bboxMax.z = v.y;},
-                         [this](){return glm::vec2(m_bboxMin.z, m_bboxMax.z);},
-                         "Splitting Plane Z", glm::vec2(0.f), glm::vec2(1.f), glm::vec2(0.01f), 2);
+    g_gen->addIntRange([this](glm::ivec2 v) {m_bboxMin.x = v.x; m_bboxMax.x = v.y;},
+                         [this](){return glm::ivec2(m_bboxMin.x, m_bboxMax.x);},
+                         "Splitting Plane X",  glm::ivec2(0), glm::ivec2(vol_dim.x), glm::ivec2(1));
+    g_gen->addIntRange([this](glm::ivec2 v) {m_bboxMin.y = v.x; m_bboxMax.y = v.y;},
+                         [this](){return glm::ivec2(m_bboxMin.y, m_bboxMax.y);},
+                         "Splitting Plane Y", glm::ivec2(0), glm::ivec2(vol_dim.y), glm::ivec2(1));
+    g_gen->addIntRange([this](glm::ivec2 v) {m_bboxMin.z = v.x; m_bboxMax.z = v.y;},
+                         [this](){return glm::ivec2(m_bboxMin.z, m_bboxMax.z);},
+                         "Splitting Plane Z", glm::ivec2(0), glm::ivec2(vol_dim.z), glm::ivec2(1));
     g_gen->addSeparator();
     g_gen->addAction([this]() {
 #ifdef HEADLESS

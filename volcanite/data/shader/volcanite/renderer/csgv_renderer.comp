@@ -534,8 +534,8 @@ void main() {
     // In world space, we hit a small cuboid (largest dimension is 1) centered around the origin.
     // We transform this AABB to model space, where each voxel has unit size:
     float t_0, t_1;
-    AABB bounding_box = AABB((g_world_to_model_space * vec4((g_bboxMin.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz,
-                             (g_world_to_model_space * vec4((g_bboxMax.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz);
+    AABB bounding_box = AABB((g_world_to_model_space * vec4((vec3(g_bboxMin.xyz) / g_vol_dim.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz,
+                             (g_world_to_model_space * vec4((vec3(g_bboxMax.xyz) / g_vol_dim.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz);
     ray_box_intersection(ray, bounding_box, t_0, t_1);
 
     // if the ray does not hit the data set, directly output the background
@@ -576,8 +576,8 @@ void main() {
             // edge cases not handled in multi-level DDA:
             //  - internal integer division does not handle negative voxel coordinates
             //  - upper volume borders may lie in the middle of a coarse voxel
-            if (any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
-                || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz))))
+            if (any(lessThan(state.voxel, g_bboxMin.xyz))
+                || any(greaterThanEqual(state.voxel,g_bboxMax.xyz)))
                 dda_voxel_size = 1u;
             // empty space skipping: directly step into the next brick
             else if (isEmptySpace(state.voxel))
@@ -594,8 +594,8 @@ void main() {
 #endif
 
         // out of bounds check
-        if (any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
-            || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
+        if (any(lessThan(state.voxel, g_bboxMin.xyz))
+            || any(greaterThanEqual(state.voxel, g_bboxMax.xyz))) {
             if (state.path_length == 0 && state.step < 16)
                 continue;
             else

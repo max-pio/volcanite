@@ -309,8 +309,8 @@ private:
     int m_max_path_length = 32;
     int m_max_steps = 16384;
     glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
-    glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
-    glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
+    glm::ivec3 m_bboxMin = glm::uvec3(0, 0, 0);
+    glm::ivec3 m_bboxMax = glm::uvec3(INT_MAX, INT_MAX, INT_MAX);
     glm::vec2 m_mouse_pos = glm::vec2(0.5f);    ///< screen space mouse position in [0,1]^2
     // denoising
     int m_atrous_iterations = 4;
