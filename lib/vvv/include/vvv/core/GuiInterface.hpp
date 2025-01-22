@@ -81,7 +81,7 @@ namespace vvv {
 /// This can be used for quick prototyping, for example directly adding ImGUI-Code when using the ImGUI backend.
 class GuiInterface {
 protected:
-    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2,
+    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIntRange, GuiIVec3, GuiIVec4, GuiVec2,
                    GuiFloatRange, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiBitFlags, GuiAction, GuiLabel,
                    GuiDynamicText, GuiProgress, GuiSeparator, GuiTF1D, GuiTFSegmentedVolume, GuiCustomCode };
 
@@ -195,9 +195,16 @@ public:
 
         // glm types
         PROPERTY_REF(addIVec2, glm::ivec2, GuiIVec2)
+        PROPERTY_REF_MINMAX(addIVec2, glm::ivec2, GuiIVec2)
+        // TODO: GUI range properties receive min/max args in 2D, but use them only in 1D (red channel)
+        PROPERTY_REF(addIntRange, glm::ivec2, GuiIntRange)
+        PROPERTY_REF_MINMAX(addIntRange, glm::ivec2, GuiIntRange)
         PROPERTY_REF(addIVec3, glm::ivec3, GuiIVec3)
+        PROPERTY_REF_MINMAX(addIVec3, glm::ivec3, GuiIVec3)
         PROPERTY_REF(addIVec4, glm::ivec4, GuiIVec4)
+        PROPERTY_REF_MINMAX(addIVec4, glm::ivec4, GuiIVec4)
         FLOAT_PROPERTY_REF(addVec2, glm::vec2, GuiVec2)
+        // TODO: GUI range properties receive min/max args in 2D, but use them only in 1D (red channel)
         FLOAT_PROPERTY_REF(addFloatRange, glm::vec2, GuiFloatRange)
         FLOAT_PROPERTY_REF(addVec3, glm::vec3, GuiVec3)
         PROPERTY_REF(addDirection, glm::vec3, GuiDirection)

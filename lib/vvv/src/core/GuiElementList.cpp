@@ -183,6 +183,25 @@ namespace vvv {
                     vstr = std::to_string(gui_get(GUI_CAST(be, int)));
                     break;
                 }
+                case GuiIVec2:
+                case GuiIntRange: {
+                    auto value = gui_get(GUI_CAST(be, glm::ivec2));
+                    for(int i = 0; i < 2; i++)
+                        vstr += std::to_string(value[i]) + (i < 1 ? " " : "");
+                    break;
+                }
+                case GuiIVec3: {
+                    auto value = gui_get(GUI_CAST(be, glm::ivec3));
+                    for(int i = 0; i < 3; i++)
+                        vstr += std::to_string(value[i]) + (i < 1 ? " " : "");
+                    break;
+                }
+                case GuiIVec4: {
+                    auto value = gui_get(GUI_CAST(be, glm::ivec4));
+                    for(int i = 0; i < 4; i++)
+                        vstr += std::to_string(value[i]) + (i < 1 ? " " : "");
+                    break;
+                }
                 case GuiFloat: {
                     vstr = std::to_string(gui_get(GUI_CAST(be, float)));
                     break;
@@ -339,6 +358,28 @@ namespace vvv {
                         int v;
                         tempLineStream >> v;
                         gui_set(GUI_CAST(be, int), true, v);
+                        break;
+                    }
+                    case GuiIVec2:
+                    case GuiIntRange: {
+                        glm::ivec2 v;
+                        for(int i = 0; i < 2; i++)
+                            tempLineStream >> v[i];
+                        gui_set(GUI_CAST(be, glm::ivec2), true, v);
+                        break;
+                    }
+                    case GuiIVec3: {
+                        glm::ivec3 v;
+                        for(int i = 0; i < 3; i++)
+                            tempLineStream >> v[i];
+                        gui_set(GUI_CAST(be, glm::ivec3), true, v);
+                        break;
+                    }
+                    case GuiIVec4: {
+                        glm::ivec4 v;
+                        for(int i = 0; i < 4; i++)
+                            tempLineStream >> v[i];
+                        gui_set(GUI_CAST(be, glm::ivec4), true, v);
                         break;
                     }
                     case GuiFloat: {

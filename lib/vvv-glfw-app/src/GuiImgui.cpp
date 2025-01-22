@@ -209,6 +209,13 @@ void GuiImgui::renderGui() {
                     renderGuiTFSegmentedVolume(*e, getCtx());
                     break;
                 }
+                case GuiString: {
+                    auto e = GUI_CAST(be, std::string);
+                    auto value = gui_get(e);
+                    bool changed = ImGui::InputText(e->label.c_str(), &value);
+                    gui_set(e, changed, value);
+                    break;
+                }
                 case GuiBool: {
                     auto e = GUI_CAST(be, bool);
                     auto value = gui_get(e);
@@ -227,6 +234,50 @@ void GuiImgui::renderGui() {
                     gui_set(e, changed, value);
                     break;
                 }
+                case GuiIVec2: {
+                    auto e = GUI_CAST(be, glm::ivec2);
+                    auto value = gui_get(e);
+                    bool changed;
+                    if (e->min.has_value() && e->max.has_value())
+                        changed = ImGui::SliderInt2(e->label.c_str(), &value.r, e->min.value().r, e->max.value().r);
+                    else
+                        changed = ImGui::InputInt2(e->label.c_str(), &value.r);
+                    gui_set(e, changed, value);
+                    break;
+                }
+                case GuiIntRange: {
+                    auto e = GUI_CAST(be, glm::ivec2);
+                    auto value = gui_get(e);
+                    bool changed;
+                    if (e->min.has_value() && e->max.has_value())
+                        changed = ImGui::DragIntRange2(e->label.c_str(), &value.x, &value.y, glm::pow(10, -e->floatDecimals), e->min.value().r, e->max.value().r);
+                    else
+                        changed = ImGui::DragIntRange2(e->label.c_str(), &value.x, &value.y, glm::pow(10, -e->floatDecimals), 0.f, 0.f);
+                    gui_set(e, changed, value);
+                    break;
+                }
+                case GuiIVec3: {
+                    auto e = GUI_CAST(be, glm::ivec3);
+                    auto value = gui_get(e);
+                    bool changed;
+                    if (e->min.has_value() && e->max.has_value())
+                        changed = ImGui::SliderInt3(e->label.c_str(), &value.r, e->min.value().r, e->max.value().r);
+                    else
+                        changed = ImGui::InputInt3(e->label.c_str(), &value.r);
+                    gui_set(e, changed, value);
+                    break;
+                }
+                case GuiIVec4: {
+                    auto e = GUI_CAST(be, glm::ivec4);
+                    auto value = gui_get(e);
+                    bool changed;
+                    if (e->min.has_value() && e->max.has_value())
+                        changed = ImGui::SliderInt4(e->label.c_str(), &value.r, e->min.value().r, e->max.value().r);
+                    else
+                        changed = ImGui::InputInt4(e->label.c_str(), &value.r);
+                    gui_set(e, changed, value);
+                    break;
+                }
                 case GuiFloat: {
                     auto e = GUI_CAST(be, float);
                     auto value = gui_get(e);
@@ -239,13 +290,7 @@ void GuiImgui::renderGui() {
                     gui_set(e, changed, value);
                     break;
                 }
-                case GuiString: {
-                    auto e = GUI_CAST(be, std::string);
-                    auto value = gui_get(e);
-                    bool changed = ImGui::InputText(e->label.c_str(), &value);
-                    gui_set(e, changed, value);
-                    break;
-                }
+
                 case GuiVec2: {
                     auto e = GUI_CAST(be, glm::vec2);
                     auto value = gui_get(e);
