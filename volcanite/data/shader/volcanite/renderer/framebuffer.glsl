@@ -198,7 +198,6 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
                         accumulated_rgba_out = prev_rgba;
                         // G-buffer remains unchanged
                     } else {
-                        // TODO: use flicker by taking the previous inv. instead of the new inv. sample here again?
                         // the accumulation buffer is not set
                         accumulated_rgba_out = new_rgba;
                         imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u));

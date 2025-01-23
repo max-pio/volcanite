@@ -25,6 +25,8 @@ bool DEBUG_vis_model_space(Ray ray, float t_0, ivec2 pixel, const bool enabled) 
     writePixel(pixel, vec4(color, 1.f), t_0, packGBufferRGB16(voxel.x ^ (voxel.y << 10u) ^ (voxel.z << 20u),
     vec3(0.f), depth));
     return true;
+#else
+    return false;
 #endif
 }
 

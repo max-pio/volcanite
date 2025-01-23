@@ -422,6 +422,7 @@ private:
     bool m_pmaterial_reset = true;                ///< if the material parameters where changed since the last frame
     size_t m_presolve_hash = ~0u;                 ///< hash of the last resolve shader parameters
     bool m_pcache_reset = true;                   ///< if the cache must reset this frame
+    bool m_auto_cache_reset = true;               ///< automatically clear the cache if a new camera position is reached and it is full
     uint32_t m_accumulated_frames = 0u;
     vk::Extent2D m_resolution;
 

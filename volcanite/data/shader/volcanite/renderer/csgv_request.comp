@@ -50,7 +50,7 @@ bool pushFreeBlockStack(uint inv_lod, uint value) {
     }
 }
 
-
+// called for each brick
 void main() {
     // at the beginning of this shader:
     // cache element ownership
@@ -126,14 +126,6 @@ void main() {
     return;
 #endif
 
-    // we can set a maximum LoD to decode to in the gui
-    if(g_max_inv_lod == 0u) {
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT;
-    }
-    else if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < LOD_COUNT) {
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = min(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], g_max_inv_lod);
-    }
-
 #ifndef NDEBUG
     // the coarsest LoD 0 must not be requested! we can just read it from the first palette entry during rendering so
     // we don't do anything here.
@@ -153,8 +145,9 @@ void main() {
 
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT - 2u;
         if(g_detail_requests[g_request_buffer_capacity] < g_request_buffer_capacity) {
-            uint pos = atomicAdd(g_detail_requests[g_request_buffer_capacity], 1u);
-            g_detail_requests[pos % g_request_buffer_capacity] = brick_idx;
+            const uint pos = atomicAdd(g_detail_requests[g_request_buffer_capacity], 1u);
+            if (pos < g_request_buffer_capacity)
+                g_detail_requests[pos] = brick_idx;
         }
     }
 #endif
@@ -171,13 +164,21 @@ void main() {
     // bricks visibility status is unknown, we don't decode it yet since it isn't visible in the renderer currently
     else if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT) {
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT;      // = lod_count is potentially visible
-
     }
     // brick is already flagged as visible (REQ_INV_LOD < LOD_COUNT) but not decoded to the requested LoD
     else if(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]){
         allocate = true;
     }
-    // brick is visible and already decoded to its requested level. it should remain in cache.
+//    // TODO: CONTINUE HERE, RANOMDLY EJECT ELEMENTS WHEN CACHE IS FULL. may yield: "G-buffer must not contain labels that are invisible"
+//    // brick is visible and already decoded to its requested level: but the cache is full, randomly eject elements
+//    else if (// (gpu_stats.used_cache_base_elements >= g_cache_capacity - ((BRICK_SIZE / 2u) << 3u)) && // TODO: check cache fill ratio here (pass by uniform?)
+//        (hash_pcg2d(uvec2(~brick_idx + 18823571u, (g_frame << 10u) ^ g_frame)).x & 1u) == 0u) { // TODO: change
+//        assert(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT, "visible brick is not decoded");
+//        assert(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < g_cache_capacity, "visible brick has no cache index");
+//        // this is the same as if the renderer would not "see" this brick
+//        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT;
+//    }
+    // brick is visilbe and already decoded to its requeste level: it should remain in cache.
     else {
         assert(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT, "visible brick is not decoded");
         assert(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < g_cache_capacity, "visible brick has no cache index");
@@ -201,11 +202,13 @@ void main() {
             g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] = INVALID;
             g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = INVALID;
         } else {
-            // do not allocate a new slot if the current slot cannot be released
+            // never allocate a new slot if the current slot cannot be released
+            // this would lead to a brick being decoded in two different LODs and the brick_info would be corrupted
             allocate = false;
         }
     }
 
+    // every brick that needs to allocate a new element gets one uniqe index in [0, 1, ..] in its requested LOD
     assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] == INVALID, "brick req. slot was not set to invalid before new frame");
     if (allocate) {
         // get us a unique slot index within our requested LoD

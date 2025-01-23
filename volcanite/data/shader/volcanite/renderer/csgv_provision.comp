@@ -29,6 +29,7 @@ layout (local_size_x = 16) in;
 #include "util.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
 
+// called for each level-of-detail
 void main() {
     // at the beginning of this shader:
     // cache element ownership
@@ -64,7 +65,7 @@ void main() {
         g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_START] = INVALID;
         g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_COUNT] = 0u;
 
-        // send cache usage to CPU to cache clears
+        // send cache usage to CPU to trigger cache clears
         atomicMax(gpu_stats.used_cache_base_elements, g_assign_info[ASSIGN_CACHE_TOP_IDX]);
         gpu_stats.blocks_decoded_L1_to_7[inv_lod - 1u] = 0u;
         return;

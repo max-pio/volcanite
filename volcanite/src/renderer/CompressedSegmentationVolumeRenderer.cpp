@@ -180,7 +180,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
         const size_t current_parameter_hash = hashMemory(&m_prender_hash, sizeof(m_prender_hash), m_pcamera_hash);
         // used_cache_base_elements: cache usage as the number of occupied 2x2x2 base elements
-        if (m_accumulated_frames > 0
+        if (m_accumulated_frames > 0 && m_auto_cache_reset
                 && m_last_gpu_stats.used_cache_base_elements >= m_cache_capacity - cache_elements_per_finest_lod
                 && m_parameter_hash_at_last_reset != current_parameter_hash) {
             m_pcache_reset = true;
@@ -766,7 +766,6 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     }
     m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(),
                           m_compressed_segmentation_volume->getLodCountPerBrick());
-//    m_pass->resetCacheOnNextCall();
 }
 
 void CompressedSegmentationVolumeRenderer::releaseShaderResources() {
@@ -1335,6 +1334,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 #endif
     g_dev->addAction([this](){ getCamera()->position_look_at_world_space = {0, 0, 0}; }, "Center Camera");
     g_dev->addSeparator();
+    g_dev->addBool(&m_auto_cache_reset, "Auto Cache Defragmentation");
     g_dev->addAction([this]() { m_pcache_reset = true; }, "Clear Label Cache");
 #ifdef IMGUI
     g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");

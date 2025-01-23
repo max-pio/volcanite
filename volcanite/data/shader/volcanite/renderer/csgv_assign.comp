@@ -87,7 +87,7 @@ void main() {
 #endif
 
     const uint slot = g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT];
-    // not assigned to a request slot means we can ignore this element
+    // not assigned to a request slot means that the brick will not allocate anything => ignore this brick
     if(slot == INVALID) {
         return;
     }
