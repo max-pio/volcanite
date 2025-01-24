@@ -148,7 +148,7 @@ void DEBUG_check_state_and_ray(inout RayMarchState state, const Ray ray, int lin
 }
 
 /// Counts the total number of ray marching steps and the total number of view rays that hit the volume's bounding box.
-void DEBUG_count_bbox_hits(int steps, bool enabled) {
+void DEBUG_count_bbox_hits(bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
     if (!enabled)
         return;

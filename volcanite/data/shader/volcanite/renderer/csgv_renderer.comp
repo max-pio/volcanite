@@ -273,7 +273,7 @@ uint get_inv_lod(ivec3 voxel) {
     }
 #elif CACHE_MODE == CACHE_BRICKS
     /// returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
-    uint get_volume_label(ivec3 voxel, inout float depth_valid) {
+    uint get_volume_label(const ivec3 voxel, inout float depth_valid, bool do_not_request) {
         assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
 
         const uvec3 brick = uvec3(voxel) / BRICK_SIZE;
@@ -281,9 +281,10 @@ uint get_inv_lod(ivec3 voxel) {
         const uint brick_idx = brick_pos2idx(brick, g_brick_count);
         const uint brick_info_pos = brick_idx * 4u;
 
+        // TODO: a lot of these computations would only be required when entering a *new* brick. store lod + last_brick_idx in the state?
         // compute optimal LOD for the center of this brick
         // all threads that access this brick are guaranteed to compute the same LOD for this brick
-        const uint req_inv_lod = get_inv_lod(voxel);
+        uint req_inv_lod = get_inv_lod(voxel);
 
         // the coarsest LOD will never be computed
         if (req_inv_lod == 0u) {
@@ -292,12 +293,11 @@ uint get_inv_lod(ivec3 voxel) {
             return getBrickEncodingRef(brick_idx).buf[getBrickEncodingLength(brick_idx) - 1u];
         }
 
-        // tell the other shaders that we can see this brick if it's visibility state is "unknown"
-        // but only if this is a valid pixel sample. An invalid sample could be accessing bricks that are actually not visible.
         const uint old_req_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
         assert(old_req_inv_lod <= LOD_COUNT, "we try to access a brick that's flagged as invisible");
         if (isDepthValid(depth_valid)   // this is a valid ray
-            && old_req_inv_lod == LOD_COUNT) { // brick is not yet requested
+            && old_req_inv_lod != req_inv_lod //LOD_COUNT // brick is not yet requested
+            && !do_not_request) { // this path may still request new brick
 
             atomicCompSwap(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], old_req_inv_lod, req_inv_lod);
 
@@ -550,6 +550,18 @@ void main() {
 
     if (DEBUG_vis_model_space(ray, t_0, pixel, bool(g_debug_vis_flags & VDEB_MODEL_SPACE_BIT))) return;
 
+    // update min / max samples per pixel from previous frame in stats buffer
+    {
+        // TODO: reading from a buffer (gpu_stats) that should be writeonly here
+        uint prev_sample_count = imageLoad(accuSampleCountIn, pixel).r;
+        if (prev_sample_count < gpu_stats.min_spp)
+            atomicMin(gpu_stats.min_spp, prev_sample_count);
+        if (prev_sample_count > gpu_stats.max_spp)
+            atomicMax(gpu_stats.max_spp, prev_sample_count);
+
+        DEBUG_count_bbox_hits(bool(g_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT));
+    }
+
     // initialize ray marching state
     RayMarchState state;
     state.rng = hash_pcg2d(uvec2(uint(blueNoise32x32_uint8(gl_GlobalInvocationID.xy)), (g_camera_still_frames << 10) | g_camera_still_frames)).x;
@@ -614,11 +626,24 @@ void main() {
         }
 
 
+        // tell the other shaders that we can see this brick if it's visibility state is "unknown"
+        // but only if this is a valid pixel sample. An invalid sample could be accessing bricks that are actually not visible.
+        SEE MATTERMOST NOTES: at some point must limit requests to a subset of pixels (if too many requests per frame)
+        bool do_not_request = imageLoad(accuSampleCountIn, pixelFromInvocationID()).r > g_min_max_spp.x + 4u;// (g_min_max_spp.y - g_min_max_spp.x) / 2;
+        if (do_not_request)
+            state.out_color.r = 1.f;
+//        if (g_cache_fill_rate >= 0.f) {
+//            // TODO: move this outside of get_volume_label where the pixel is available. compute "importance" parameter
+//            const uint prev_sample_count = imageLoad(accuSampleCountIn, pixelFromInvocationID()).r;
+//            // if the cache is full and this pixel accumulated more samples than the others: do NOT request decompression
+//            do_not_request = float(prev_sample_count - gpu_stats.min_spp) / float(1u + gpu_stats.max_spp - gpu_stats.min_spp) > 0.5f;
+//        }
+
         // sampling (read value at pos from previously decoded volume segments in brick cache) or return a
         // placeholder label if not yet decoded, in which case the depth_valid will be set to INVALID_DEPTH.
         // An sample marked as invalid this way may not alter the framebuffer and skip certain cmoputation steps.
         state.last_label = state.label;
-        state.label = get_volume_label(state.voxel, state.depth_valid);
+        state.label = get_volume_label(state.voxel, state.depth_valid, do_not_request);
 
 #ifndef NDEBUG
         DEBUG_vis_invalid_label(state);
@@ -766,8 +791,6 @@ void main() {
             dda_init(state, ray, 0.f);
         }
     }
-
-    DEBUG_count_bbox_hits(state.step, bool(g_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT));
 
     // block all contributions if no light source was found
     if (state.step >= g_maxSteps || state.path_length > g_max_path_length) {

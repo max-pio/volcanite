@@ -15,7 +15,7 @@ layout (local_size_x = 4, local_size_y = 4, local_size_z = 2) in;
 #define CSGV_DECODING_ARRAY g_cache
 #include "volcanite/compression/compressed_segmentation_volume.glsl"
 
-
+// executed for each brick
 void main() {
     uvec3 brick = gl_GlobalInvocationID.xyz;
 

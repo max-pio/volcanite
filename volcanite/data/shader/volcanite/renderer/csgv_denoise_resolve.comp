@@ -35,7 +35,7 @@ vec3 getAlbedoOfLabel(uint label) {
 
     const int material = getMaterial(label);
     if (material < 0) {
-        assert(false, "G-buffer must not contain labels that are invisible");
+        assert(g_debug_vis_flags != 0u, "G-buffer must not contain labels that are invisible"); // debug modes may write strange label
         return vec3(1.f);
     } else {
         return getColor(label, material).rgb;
@@ -77,6 +77,7 @@ void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {
     DEBUG_img_g_buffer(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_G_BUFFER_BIT));
     DEBUG_img_no_postprocess(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_NO_POSTPROCESS_BIT));
     DEBUG_img_spp(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_SPP_BIT));
+    DEBUG_img_cache_array(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_CACHE_ARRAY_BIT));
 
     // blend with background and output to display image
     imageStore(inpaintedOutColor, pixel, blendWithBackground(pixel, accum_rgba));
@@ -235,7 +236,7 @@ void main() {
             // accum_rgba stores the offset to the neighbor (.rg) from which the color is copied for upsampling
             ivec2 offset = ivec2(accum_rgba.rg);
             accum_rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel + offset);
-            assert(accum_rgba.a >= 0.f, "copying non-rendered pixel for upsampling");
+            assert(g_debug_vis_flags != 0u || accum_rgba.a >= 0.f, "copying non-rendered pixel for upsampling");
         }
         writeFinalFramebuffer(pixel, accum_rgba);
     }

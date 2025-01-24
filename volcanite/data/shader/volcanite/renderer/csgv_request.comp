@@ -169,10 +169,10 @@ void main() {
     else if(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]){
         allocate = true;
     }
-//    // TODO: CONTINUE HERE, RANOMDLY EJECT ELEMENTS WHEN CACHE IS FULL. may yield: "G-buffer must not contain labels that are invisible"
+    // TODO: CONTINUE HERE, RANOMDLY EJECT ELEMENTS WHEN CACHE IS FULL. may yield: "G-buffer must not contain labels that are invisible"
 //    // brick is visible and already decoded to its requested level: but the cache is full, randomly eject elements
 //    else if (// (gpu_stats.used_cache_base_elements >= g_cache_capacity - ((BRICK_SIZE / 2u) << 3u)) && // TODO: check cache fill ratio here (pass by uniform?)
-//        (hash_pcg2d(uvec2(~brick_idx + 18823571u, (g_frame << 10u) ^ g_frame)).x & 1u) == 0u) { // TODO: change
+//        //(hash_pcg2d(uvec2(~brick_idx + 18823571u, (g_frame << 10u) ^ g_frame)).x & 1u) == 0u) { // TODO: change random ejection hash{
 //        assert(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT, "visible brick is not decoded");
 //        assert(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < g_cache_capacity, "visible brick has no cache index");
 //        // this is the same as if the renderer would not "see" this brick
@@ -186,12 +186,12 @@ void main() {
     }
 
     // we can refuse to deallocate elements if the cache is filled below 75%, but only if it does not have to switch LOD
-#ifdef BRICK_CACHE_LAZY_EJECT
-    const uint cache_top = (LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD;
-    if (!allocate && g_assign_info[cache_top] < g_cache_capacity / 4u * 3u) {
-        deallocate = false;
-    }
-#endif
+//#ifdef BRICK_CACHE_LAZY_EJECT
+//    const uint cache_top = (LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD;
+//    if (!allocate && g_assign_info[cache_top] < g_cache_capacity / 4u * 3u) {
+//        deallocate = false;
+//    }
+//#endif
 
     // if we switch the LoD, both allocate and deallocate have to be carried out
     if (deallocate) {
@@ -202,6 +202,7 @@ void main() {
             g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] = INVALID;
             g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = INVALID;
         } else {
+            debugPrintfEXT("push not successful for brick %u lod %u", brick_idx, g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD]);
             // never allocate a new slot if the current slot cannot be released
             // this would lead to a brick being decoded in two different LODs and the brick_info would be corrupted
             allocate = false;

@@ -70,15 +70,15 @@ layout(std430, binding = 2) buffer restrict readonly encoding_buffer_addresses
 layout(std430, binding = 3) buffer restrict brick_cache_infos
 {
 // for each block 4 entries:
-// req_inv_lod: <  lod_count is "req. inv. LoD and is visible"
-//              == lod_count is "potentially visible"
-//              >  lod_count is "guaranteed to be invisible" after transfer function check
-// cur_inv_lod: INVALID brick is not decoded
-//              otherwise currently decoded LoD
-// cache_index: INVALID brick is not decoded
-//              otherwise the cache index where each cache element is (base_element_size) uints large to fit 2x2x2=8 output voxels
-// req_slot:    INVALID nothing to do
-//              otherwise the unique request index in [0, total_number_of_requests_in_this_frame_for_this_lod)
+// req_inv_lod: <  lod_count: "brick is requested in this inv. LoD and visible"
+//              == lod_count: "brick is potentially visible"
+//              >  lod_count: "brick is guaranteed to be invisible" after transfer function check
+// cur_inv_lod: INVALID: brick is not decoded
+//              otherwise: currently decoded LoD
+// cache_index: INVALID: brick is not decoded
+//              otherwise: the cache index where each cache element is (base_element_size) uints large to fit 2x2x2=8 output voxels
+// req_slot:    INVALID: nothing to do
+//              otherwise: the unique request index in [0, total_number_of_requests_in_this_frame_for_this_lod)
 // TODO: change g_brick_info to array of structs
     uint g_brick_info[];
 };
@@ -149,6 +149,8 @@ layout (std140, binding = 10) uniform render_info {
     uint g_frame;                   // current frame index since the renderer was initialized
     uint g_camera_still_frames;     // current frame index within the current render accumulation loop
     uint g_target_accum_frames;     // how many frames will be rendered in this render loop
+    float g_cache_fill_rate;        // value in [0, 1] indicating how many base elements of the cache are occupied
+    uvec2 g_min_max_spp;            // minimum and maximum (valid) samples per pixel accumualted before this frame
     uint g_swapchain_index;         // index of this frame in the multiframe swapchain buffer lists
     int g_subsampling;              // border length of the subsampling pixel block in which one sample is rendered
     ivec2 g_subsampling_pixel;      // local coordinate of the currently rendered pixel in the subsampling pixel block
@@ -211,7 +213,7 @@ layout (std140, binding = 12) uniform resolve_info {
     bool g_denoise_fade_enable;
     int g_denoise_filter_kernel_size;
 // interaction and debugging
-    ivec2 g_cursor_pixel_pos;    // screen space mouse position in frame buffer pixels
+    ivec2 g_cursor_pixel_pos;   // screen space mouse position in frame buffer pixels
     uint g_debug_vis_flags;     // bit mask to enable different debug visualizations (requires ENALBE_CSGV_DEBUGGING)
 };
 
@@ -228,7 +230,7 @@ layout(binding = 23, rgba32f) uniform image2D denoisingBuffer[2];
 layout (binding = 15, rgba8) uniform restrict writeonly image2D inpaintedOutColor;
 
 
-layout(std430, binding = 16) buffer restrict writeonly csgv_gpu_stats
+layout(std430, binding = 16) buffer restrict csgv_gpu_stats // writeonly
 {
     GPUStats gpu_stats;
 };
@@ -248,6 +250,6 @@ layout(binding = 19) uniform sampler1D s_transferFunctions[SEGMENTED_VOLUME_MATE
 
 layout(push_constant) uniform PushConstants
 {
-    uint denoising_iteration;   // denoising iteration variable for ping pong svgf-buffer
+    uint denoising_iteration;   // denoising iteration variable for indexing the ping pong buffers
     uint last_denoising_iteration;
 } pc;

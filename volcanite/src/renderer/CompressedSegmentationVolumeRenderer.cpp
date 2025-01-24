@@ -166,6 +166,12 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         m_download_frame_to_image_file = {};
     }
 
+    // do not render anything in step mode if no new step is requested
+    if (m_accum_step_mode && !m_accum_do_step && m_accumulated_frames > 0u) {    // except at later frames: no step
+        return m_mostRecentFrame.value();
+    }
+    m_accum_do_step = false;
+
     // time tracking start (on host side to consider semaphores, CPU work as well, not just the GPU render times)
     if (m_enable_frame_time_tracking)
         m_last_frame_start_time = std::chrono::high_resolution_clock::now();
@@ -173,11 +179,24 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     // download GPU statistics information, i.e. the cache occupancy to trigger cache hard resets when it is full
     static constexpr uint32_t gpu_stats_download_interval = 4u;
     if (m_frame > 0u && m_frame % gpu_stats_download_interval == 0u) {
+        // download and reset the buffer
         m_gpu_stats_buffer->download(&m_last_gpu_stats, sizeof(GPUStats));
+        const static GPUStats reset_gpu_stats = {.used_cache_base_elements = 0u,
+                .bbox_hits = 0u,
+                .blocks_decoded_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
+                .blocks_in_cache_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
+                .min_spp = ~0u,
+                .max_spp = 0u,
+        };
+        m_gpu_stats_buffer->upload(&reset_gpu_stats, sizeof(GPUStats));
+
+        if (m_frame % 32u == 0u)
+            Logger(WARN) << "uploaded gpu stats: old min " << m_last_gpu_stats.min_spp << " max " << m_last_gpu_stats.max_spp;
+        // compute cache fill rate to feed it back to the renderer as uniform value
+        const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
 
         // A fragmented cache can occur if free stacks store unusable levels-of-detail leaving no space for other LoDs.
         // Trigger cache flush on demand, but only if the rendering config changed since the last flush.
-        const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
         const size_t current_parameter_hash = hashMemory(&m_prender_hash, sizeof(m_prender_hash), m_pcamera_hash);
         // used_cache_base_elements: cache usage as the number of occupied 2x2x2 base elements
         if (m_accumulated_frames > 0 && m_auto_cache_reset
@@ -837,7 +856,8 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
     getCtx()->sync->hostWaitOnDevice(reinitDone);
 
     // trigger a temporal accumulation flush and force parameter updates
-    m_pcamera_hash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
+            std::chrono::high_resolution_clock::now().time_since_epoch().count());
     m_accumulated_frames = 0;
     m_frame = 0u;
 }
@@ -922,7 +942,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_spatial_sigma) HASHP(m_depth_sigma) HASHP(m_illumination_sigma) HASHP(m_denoise_fade_sigma)
     HASHP(m_denoise_filter_kernel_size) HASHP(m_denoise_fade_enabled) HASHP(m_mouse_pos)
     uint32_t resolve_debug_bits = m_debug_vis_flags & (VDEB_NO_POSTPROCESS_BIT | VDEB_CACHE_ARRAY_BIT
-                    | VDEB_EMPTY_SPACE_ARRAY_BIT | VDEB_G_BUFFER_BIT | VDEB_ENVMAP_BIT);
+                    | VDEB_EMPTY_SPACE_ARRAY_BIT | VDEB_SPP_BIT | VDEB_G_BUFFER_BIT | VDEB_ENVMAP_BIT);
     HASHP(resolve_debug_bits)
     if (new_hash != m_presolve_hash) {
         m_render_update_flags |= UPDATE_PRESOLVE;
@@ -948,14 +968,10 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     }
 
     // check if a new frame has to be accumulated, target frame count of 0 means: render as long as possible
-    if ((m_accumulated_frames < m_target_accum_frames || m_target_accum_frames <= 0u)
-        && m_accumulated_frames < 65535u) {
-
-        if (!m_accum_step_mode || m_accum_do_step) {
+    if ((m_accumulated_frames < m_target_accum_frames || m_target_accum_frames <= 0u) // if the frame target not reached
+        && m_accumulated_frames < 65535u) {                                              // we do not overflow SPP textures
             m_render_update_flags |= UPDATE_RENDER_FRAME;
             m_render_update_flags |= UPDATE_PRESOLVE;
-            m_accum_do_step = false;
-        }
     }
 
     m_pass->setRenderUpdateFlagsForNextCall(m_render_update_flags);
@@ -1037,6 +1053,12 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<uint32_t>("g_frame", m_frame);
         m_urender_info->setUniform<uint32_t>("g_camera_still_frames", m_accumulated_frames);
         m_urender_info->setUniform<uint32_t>("g_target_accum_frames", glm::max(0, m_target_accum_frames));
+        const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
+        const float cache_fill_rate = glm::clamp(static_cast<float>(m_last_gpu_stats.used_cache_base_elements)
+                                      / static_cast<float>(m_cache_capacity - cache_elements_per_finest_lod), 0.f, 1.f);
+        m_urender_info->setUniform<float>("g_cache_fill_rate", cache_fill_rate);
+        m_urender_info->setUniform<glm::uvec2>("g_min_max_spp", glm::uvec2(m_last_gpu_stats.min_spp,
+                                                                           m_last_gpu_stats.max_spp));
         m_urender_info->setUniform<uint32_t>("g_swapchain_index", m_pass->getActiveIndex());
         m_urender_info->setUniform<int32_t>("g_subsampling", (1 << m_subsampling));
         m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::bitReverseMortonNxNVec(m_subsampling)[m_accumulated_frames % ((1 << m_subsampling) * (1 << m_subsampling))]);
@@ -1320,8 +1342,9 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addAction([this]() { printGPUMemoryUsage(); }, "Print GPU Memory Usage");
     g_dev->addInt(&m_max_inv_lod, "Max. Decoding LoD", 0, 6, 1);
     const std::vector<std::string> option_labels = {"Model Space", "Level-of-Detail", "Empty Space", "Brick Index",
-                                                    "Label Cache", "Raw Render", "Cache Buffer", "Empty Space Buffer",
-                                                    "G-Buffer", "Samples/Pixel", "Environment Map", "Print Statistics"};
+                                                    "Label Cache", "Raw Render", "Cache Buffer",
+                                                    "Empty Space Buffer", "G-Buffer", "Samples/Pixel",
+                                                    "Environment Map", "Print Statistics"};
     const std::vector<uint32_t> option_bits = {VDEB_MODEL_SPACE_BIT, VDEB_LOD_BIT, VDEB_EMPTY_SPACE_BIT, VDEB_BRICK_IDX_BIT,
                                                VDEB_CACHE_VOXEL_BIT, VDEB_NO_POSTPROCESS_BIT, VDEB_CACHE_ARRAY_BIT,
                                                VDEB_EMPTY_SPACE_ARRAY_BIT, VDEB_G_BUFFER_BIT, VDEB_SPP_BIT,

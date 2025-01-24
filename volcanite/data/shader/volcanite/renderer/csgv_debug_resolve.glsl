@@ -40,7 +40,42 @@ void DEBUG_img_cache_array(ivec2 pixel, inout vec4 color, bool enabled) {
 
     const ivec2 viewport_size = imageSize(inpaintedOutColor);
 
-    #if CACHE_MODE == CACHE_VOXELS
+    #if CACHE_MODE == CACHE_BRICKS
+        const int size = 8;
+        const uint elems_per_pixel = max(g_brick_idx_count / (viewport_size.x * viewport_size.y / size), 1u);
+        const uint brick_idx = elems_per_pixel * uint((pixel.x / size) + (pixel.y / size) * viewport_size.x);
+
+        if (brick_idx >= g_brick_idx_count)
+            return;
+
+        const uint brick_info_pos = brick_idx * 4u;
+        const uint req_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
+        const uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
+
+        // display the rendering in grayscale in the background
+        color = vec4(vec3(dot(color.rgb, vec3(1.f / 3.f))), color.a);
+
+        vec3 display = vec3(0.f);
+        // marked invisible
+        if (req_inv_lod > LOD_COUNT)
+            display = vec3(1.f);
+        // not requested and not in cache
+        else if (cur_inv_lod == INVALID && req_inv_lod == LOD_COUNT)
+            display = vec3(0.f, 0.f, 0.4f);
+        // requested but not in cache
+        else if (cur_inv_lod == INVALID && req_inv_lod < LOD_COUNT)
+            display = vec3(0.8f, 0.f, 0.f);
+        // still in cache but no longer requested
+        else if (cur_inv_lod != INVALID && req_inv_lod >= LOD_COUNT)
+            display = vec3(0.f, 0.4f, 0.1f);
+        // in cache and requested
+        else if (cur_inv_lod != INVALID && req_inv_lod < LOD_COUNT)
+            display = vec3(0.f, 1.f, 0.f);
+
+        // blend colored cache vis with background
+        const float alpha = 0.8f;
+        color = vec4((1.f - alpha) * color.rgb + alpha * display, 1.f);
+    #elif CACHE_MODE == CACHE_VOXELS
         // map the pixel to a cache cell [region]
         const int size = 4;
         const uint elems_per_pixel = max(CACHE_UVEC2_SIZE / (viewport_size.x * viewport_size.y / size), 1u);
@@ -147,8 +182,14 @@ void DEBUG_img_spp(ivec2 pixel, inout vec4 color, bool enabled) {
     if (!enabled)
         return;
 
-    uint sample_count_block = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
-    color = vec4(vec3(sample_count_block) / (g_target_accum_frames == 0u ? g_camera_still_frames : g_target_accum_frames), 1.f);
+    const uint sample_count_block = imageLoad(accuSampleCountOut, pixel).r;
+    if (sample_count_block == 0u)
+        color = vec4(0.f, 0.f, 0.f, 1.f);
+    else {
+        const uint maximum_possible_spp = (g_target_accum_frames == 0u ? g_camera_still_frames : g_target_accum_frames)
+                                            / (g_subsampling * g_subsampling);
+        color = vec4(colormap_viridis(float(sample_count_block) / float(maximum_possible_spp)), 1.f);
+    }
 #endif
 }
 

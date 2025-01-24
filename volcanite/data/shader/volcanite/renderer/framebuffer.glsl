@@ -23,7 +23,7 @@
 // Work Item to Pixel Mapping / Subsampling ----------------------------------------------------------------------------
 
 vec2 subpixelOffset(ivec2 pixel) {
-    return vec2(0.5f) + (g_blue_noise_enable ? randomVec3(pixel, g_camera_still_frames ).xy : vec2(0.f));
+    return vec2(0.5f) + (g_blue_noise_enable ? (randomVec3(pixel, g_camera_still_frames).xy - vec2(0.5f)) : vec2(0.f));
 }
 
 ivec2 pixelOffsetInBlock() {
@@ -154,7 +154,7 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
 
     // if subsamplign is enabled, we only render one pixel per [g_subsampling]^2 block
     ivec2 subpixel;
-    ivec2 pixel_block_start = (pixel/g_subsampling)*g_subsampling;
+    const ivec2 pixel_block_start = (pixel/g_subsampling)*g_subsampling;
     for (subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
         for (subpixel.x = 0; subpixel.x < g_subsampling; subpixel.x++) {
             ivec2 opix = pixel_block_start + subpixel;
@@ -168,27 +168,24 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
                 if (any(notEqual(opix, pixel))) {
                     accumulated_rgba_out = vec4(0.f);
                     sample_count_out = 0u;
-//                    imageStore(accuSampleCountOut, opix, uvec4(0u));
                     imageStore(gBuffer, opix, uvec4(invalidGBufferRGB16(), 0u));
                 }
                 // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame
                 else {
                     accumulated_rgba_out = new_rgba;
                     sample_count_out = isDepthValid(depth_valid) ? 1u : 0u;
-//                    imageStore(accuSampleCountOut, opix, uvec4(isDepthValid(depth_valid) ? 1u : 0u));
                     imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u));
                 }
             }
             // later frames: accumulation
             else {
-                vec4 prev_rgba = imageLoad(accumulationIn, opix);
-                uint prev_sample_count = imageLoad(accuSampleCountIn, opix).r;
+                const vec4 prev_rgba = imageLoad(accumulationIn, opix);
+                const uint prev_sample_count = imageLoad(accuSampleCountIn, opix).r;
 
                 // writing other pixel: just copy from previous to current frame
                 if (any(notEqual(opix, pixel))) {
                     accumulated_rgba_out = prev_rgba;
                     sample_count_out = prev_sample_count;
-//                    imageStore(accuSampleCountOut, opix, uvec4(prev_valid_samples));
                     // G-buffer remains unchanged
                 }
                 // writing our pixel, but invalid new sample (a ray hit a brick that was not yet decoded)
@@ -203,7 +200,6 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
                         imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u));
                     }
                     sample_count_out = prev_sample_count;
-//                    imageStore(accuSampleCountOut, opix, uvec4(prev_valid_samples));
                 }
                 // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
                 else {
@@ -211,7 +207,6 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
                     float new_weight = 1.f / float(prev_sample_count + 1);
                     accumulated_rgba_out = new_rgba * new_weight + prev_rgba * (1.f - new_weight);
                     sample_count_out = prev_sample_count + 1u;
-//                    imageStore(accuSampleCountOut, opix, uvec4(1u + prev_valid_samples));
                     imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u));
                 }
             }
