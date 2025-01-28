@@ -150,6 +150,9 @@ layout (std140, binding = 10) uniform render_info {
     uint g_camera_still_frames;     // current frame index within the current render accumulation loop
     uint g_target_accum_frames;     // how many frames will be rendered in this render loop
     float g_cache_fill_rate;        // value in [0, 1] indicating how many base elements of the cache are occupied
+    int g_req_limit_area_size;      // value <= 0: no request limitation. otherwise: pixel area that can request bricks
+    ivec2 g_req_limit_area_pos;     // start position of the area of pixels that can request bricks
+    uint g_req_limit_spp_delta;     // pixels with at most (min_spp + spp_delta) valid samples can request bricks
     uvec2 g_min_max_spp;            // minimum and maximum (valid) samples per pixel accumualted before this frame
     uint g_swapchain_index;         // index of this frame in the multiframe swapchain buffer lists
     int g_subsampling;              // border length of the subsampling pixel block in which one sample is rendered

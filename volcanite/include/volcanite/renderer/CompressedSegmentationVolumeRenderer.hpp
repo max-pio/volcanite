@@ -297,7 +297,7 @@ private:
     // shading and post processing
     glm::vec4 m_background_color_a = glm::vec4(1.f, 1.f, 1.f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
-    int m_subsampling = 0;
+    int m_subsampling = 0;              ///< only one pixel per [2^subsampl, 2^subsampl] pixel block is rendered per frame
     bool m_tonemap_enabled = false;
     bool m_global_illumination_enabled = false;
     bool m_envmap_enabled = false;
@@ -413,10 +413,10 @@ private:
     std::shared_ptr<Buffer> m_detail_buffer = nullptr;
     glm::uvec2 m_detail_buffer_address = {};
     std::pair<std::shared_ptr<vvv::Awaitable>, std::shared_ptr<Buffer>> m_detail_staging = {nullptr, nullptr};
+
+    // parameter, render flags, amd update tracking
     size_t m_parameter_hash_at_last_reset = 0u;
-
     uint32_t m_render_update_flags = 0u;          ///< each bit marks if a set of rendering parameters changed in this frame
-
     size_t m_pcamera_hash = ~0u;                  ///< hash of the last camera parameters
     size_t m_prender_hash = ~0u;                  ///< hash of the last rendering parameters
     bool m_pmaterial_reset = true;                ///< if the material parameters where changed since the last frame
@@ -425,14 +425,24 @@ private:
     bool m_auto_cache_reset = true;               ///< automatically clear the cache if a new camera position is reached and it is full
     uint32_t m_accumulated_frames = 0u;
     vk::Extent2D m_resolution;
-
     uint32_t m_frame;
     std::optional<RendererOutput> m_mostRecentFrame = {};
 
     // debugging
     bool m_release_version = false;               ///< if this is used in a release where development parameters are hidden
     GPUStats m_last_gpu_stats = {0u};
-    std::string m_additional_shader_defs = "";
+    std::string m_additional_shader_defs = {};
+
+    struct BrickRequestLimitation {
+        uint32_t spp_delta = 8u;          /// if the min. rendered spp are delta many frames behind the max. spp, limit brick requests
+        uint32_t area_duration_init = 8u;///< initially, an area tries to render this many samples per pixel before moving
+        uint32_t area_duration = 16u;     /// how many times a pixel is rendered before the request area moves to another position
+        int area_size = 0;                ///< if <= 0: no request limitation. otherwise: pixel area that can request bricks
+        int area_size_min = 32u;          ///< the request area will never be smaller than size^2
+        glm::ivec2 area_pos = {0, 0};     ///< start position of the area of pixels that can request bricks
+        uint32_t area_start_frame = 0u;   ///< accumulation frame index at which the current request area position was set
+        uint32_t last_min_spp = 0u;       ///< the minimum samples any pixel received before the last req. area. iteration
+    } m_req_limit;
 
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
 

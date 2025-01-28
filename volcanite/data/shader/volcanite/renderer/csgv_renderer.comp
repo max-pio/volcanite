@@ -577,6 +577,14 @@ void main() {
     // initialize DDA traversal with t_0  offset to prevent aliasing
     dda_init(state, ray, t_0 - 0.01f);
 
+    // if the cache is not large enough to fit all visible bricks, brick requestes are limited to some pixels:
+    //  (1) only if request limitation is enabled,
+    //  (2) limit to pixels that did not receive enough samples yet, and
+    //  (3) limit to pixels that are within a certain area of the screen.
+    bool do_not_request = g_req_limit_area_size > 0
+                          && imageLoad(accuSampleCountIn, pixelFromInvocationID()).r > g_min_max_spp.x + g_req_limit_spp_delta
+                          && (any(lessThan(pixel, g_req_limit_area_pos)) || any(greaterThanEqual(pixel, g_req_limit_area_pos + ivec2(g_req_limit_area_size))));
+
     // ray marching loop
     for(state.step = 0; state.step < g_maxSteps; state.step++) {
 
@@ -628,8 +636,6 @@ void main() {
 
         // tell the other shaders that we can see this brick if it's visibility state is "unknown"
         // but only if this is a valid pixel sample. An invalid sample could be accessing bricks that are actually not visible.
-        SEE MATTERMOST NOTES: at some point must limit requests to a subset of pixels (if too many requests per frame)
-        bool do_not_request = imageLoad(accuSampleCountIn, pixelFromInvocationID()).r > g_min_max_spp.x + 4u;// (g_min_max_spp.y - g_min_max_spp.x) / 2;
         if (do_not_request)
             state.out_color.r = 1.f;
 //        if (g_cache_fill_rate >= 0.f) {

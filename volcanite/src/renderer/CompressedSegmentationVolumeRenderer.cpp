@@ -190,8 +190,6 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         };
         m_gpu_stats_buffer->upload(&reset_gpu_stats, sizeof(GPUStats));
 
-        if (m_frame % 32u == 0u)
-            Logger(WARN) << "uploaded gpu stats: old min " << m_last_gpu_stats.min_spp << " max " << m_last_gpu_stats.max_spp;
         // compute cache fill rate to feed it back to the renderer as uniform value
         const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
 
@@ -199,14 +197,53 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         // Trigger cache flush on demand, but only if the rendering config changed since the last flush.
         const size_t current_parameter_hash = hashMemory(&m_prender_hash, sizeof(m_prender_hash), m_pcamera_hash);
         // used_cache_base_elements: cache usage as the number of occupied 2x2x2 base elements
-        if (m_accumulated_frames > 0 && m_auto_cache_reset
+        if (m_accumulated_frames > 0u && m_auto_cache_reset
                 && m_last_gpu_stats.used_cache_base_elements >= m_cache_capacity - cache_elements_per_finest_lod
                 && m_parameter_hash_at_last_reset != current_parameter_hash) {
             m_pcache_reset = true;
             m_parameter_hash_at_last_reset = current_parameter_hash;
         }
+        // request limitation limits requesting bricks for the cache to rays from pixels that
+        //   1. have not more than the (minimum accumulated + 4) valid samples accumulated so far
+        //   2. are located in a square sub-area of pixels starting at m_req_limit_area_pos with size m_req_limit_area
+        else if (static constexpr uint32_t req_limit_preheat_frames = 8u;
+                 m_accumulated_frames > req_limit_preheat_frames                                // some frames were rendered already
+                 && (m_last_gpu_stats.min_spp + m_req_limit.spp_delta < m_last_gpu_stats.max_spp)   // some pixels do not receive samples
+                 && m_req_limit.area_size == 0) {
+            m_req_limit.area_size = 2 << glm::findMSB(glm::max(m_resolution.width, m_resolution.height));
+            m_req_limit.area_pos = {0, 0};
+            m_req_limit.area_start_frame = m_accumulated_frames;
+            m_req_limit.last_min_spp = m_last_gpu_stats.min_spp;
+            m_req_limit.area_duration = m_req_limit.area_duration_init;
+        }
+        // if a brick request limitation is already set: move the area around
+        // if all areas where covered once and the min spp do not increase: decrease area by half
+        else if (const uint32_t subsampling_pixels = (1u << m_subsampling) * (1u << m_subsampling);
+                 m_req_limit.area_size > 0
+                 && m_accumulated_frames >= m_req_limit.area_start_frame + subsampling_pixels * m_req_limit.area_duration) {
+            m_req_limit.area_pos.x += m_req_limit.area_size;
+            // TODO: iterate req limit area position in Morton order
+            if (m_req_limit.area_pos.x >= m_resolution.width) {
+                m_req_limit.area_pos.x = 0;
+                m_req_limit.area_pos.y += m_req_limit.area_size;
+                if (m_req_limit.area_pos.y >= m_resolution.height) {
+                    // all areas where covered once. if the minimum spp did not increase, decrease the request area
+                    if (m_last_gpu_stats.min_spp <= m_req_limit.last_min_spp) {
+                        m_req_limit.area_size /= 2;
+                        if (m_req_limit.area_size < m_req_limit.area_size_min) {
+                            m_req_limit.area_size = m_req_limit.area_size_min;
+                            m_req_limit.area_duration *= 2u;
+                        }
+                    }
+                    m_req_limit.last_min_spp = m_last_gpu_stats.min_spp;
+                }
+            }
+            Logger(INFO) << "REQ Limit: " << m_req_limit.last_min_spp << " min spp | " << m_req_limit.area_size
+                         << " area | " << str(m_req_limit.area_pos) << " pos | " << m_req_limit.area_duration << " duration";
+            m_req_limit.area_start_frame = m_accumulated_frames;
+        }
 
-        // if requested, more GPU statistics are gathered during rendering and printed here
+        // if requested, more GPU statistics were gathered during rendering and printed here
         if (m_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT) {
             size_t decoded_bytes_in_frame = 0;
             size_t decoded_bytes_total = 0;
@@ -957,6 +994,9 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
             // trigger empty space bit vector update as well
             m_render_update_flags |= UPDATE_PMATERIAL;
         }
+        // reset brick request limitation to off
+        m_req_limit.area_size = {0};
+        m_req_limit.area_pos = {0, 0};
     }
 
     // reset render frame accumulation if any parameters that influence rendering changed
@@ -965,11 +1005,13 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
         // TODO: if m_target_accum_frames *increases*, UPDATE_PRENDER is set but accumulation should not reset
         m_render_update_flags |= UPDATE_CLEAR_ACCUM;
         m_accumulated_frames = 0u;
+        // reset brick request limitation to off
+        m_req_limit.area_size = {0};
+        m_req_limit.area_pos = {0, 0};
     }
 
     // check if a new frame has to be accumulated, target frame count of 0 means: render as long as possible
-    if ((m_accumulated_frames < m_target_accum_frames || m_target_accum_frames <= 0u) // if the frame target not reached
-        && m_accumulated_frames < 65535u) {                                              // we do not overflow SPP textures
+    if (m_accumulated_frames < m_target_accum_frames || m_target_accum_frames <= 0u) {
             m_render_update_flags |= UPDATE_RENDER_FRAME;
             m_render_update_flags |= UPDATE_PRESOLVE;
     }
@@ -1059,6 +1101,9 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<float>("g_cache_fill_rate", cache_fill_rate);
         m_urender_info->setUniform<glm::uvec2>("g_min_max_spp", glm::uvec2(m_last_gpu_stats.min_spp,
                                                                            m_last_gpu_stats.max_spp));
+        m_urender_info->setUniform<int32_t>("g_req_limit_area_size", m_req_limit.area_size);
+        m_urender_info->setUniform<glm::ivec2>("g_req_limit_area_pos", m_req_limit.area_pos);
+        m_urender_info->setUniform<uint32_t>("g_req_limit_spp_delta", m_req_limit.spp_delta);
         m_urender_info->setUniform<uint32_t>("g_swapchain_index", m_pass->getActiveIndex());
         m_urender_info->setUniform<int32_t>("g_subsampling", (1 << m_subsampling));
         m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::bitReverseMortonNxNVec(m_subsampling)[m_accumulated_frames % ((1 << m_subsampling) * (1 << m_subsampling))]);
