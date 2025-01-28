@@ -236,6 +236,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
                         }
                     }
                     m_req_limit.last_min_spp = m_last_gpu_stats.min_spp;
+                    m_req_limit.area_pos.y = 0;
                 }
             }
             Logger(INFO) << "REQ Limit: " << m_req_limit.last_min_spp << " min spp | " << m_req_limit.area_size
