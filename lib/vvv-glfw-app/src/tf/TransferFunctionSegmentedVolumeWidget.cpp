@@ -83,7 +83,9 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                     glm::vec2 attrRange =
                             mat.discrAttribute >= 0 ? e->attributeMinMax.at(mat.discrAttribute) : glm::vec2(0.f, 0.f);
                     ImGui::BeginDisabled();
+                    ImGui::PushID(id++);
                     ImGui::DragFloatRange2("Min / Max", &attrRange.x, &attrRange.y);
+                    ImGui::PopID();
                     ImGui::EndDisabled();
                     ImGui::PushID(id++);
                     materialChanged |= ImGui::DragFloatRange2("Bounds",
@@ -272,7 +274,9 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                 {
                     glm::vec2 attrRange = e->attributeMinMax.at(mat.tfAttribute);
                     ImGui::BeginDisabled();
+                    ImGui::PushID(id++);
                     ImGui::DragFloatRange2("Min / Max", &attrRange.x, &attrRange.y);
+                    ImGui::PopID();
                     ImGui::EndDisabled();
                     ImGui::PushID(id++);
                     materialChanged |= ImGui::DragFloatRange2("Range",

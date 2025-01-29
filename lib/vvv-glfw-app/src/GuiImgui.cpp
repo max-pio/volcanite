@@ -383,7 +383,7 @@ void GuiImgui::renderGui() {
                 case GuiBitFlags: {
                     auto e = reinterpret_cast<GuiBitFlagsEntry*>(be);
                     unsigned int bits_just_set = 0;
-                    if (ImGui::CollapsingHeader(e->label.c_str()), ImGuiTreeNodeFlags_DefaultOpen) {
+                    if (ImGui::CollapsingHeader(e->label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
                         for (int i = 0; i < e->options.size(); i++) {
                             if (ImGui::CheckboxFlags(e->options.at(i).c_str(), e->bitfield, e->bitFlags.at(i)))
                                 bits_just_set = e->bitFlags.at(i);
