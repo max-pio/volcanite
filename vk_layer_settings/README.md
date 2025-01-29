@@ -4,7 +4,7 @@ This directory contains some useful debug layer configurations. You can change t
 by setting the environment variable `VK_LAYER_SETTINGS_PATH` to one of the `.txt` files in this directory.
 
 LunarG
-hosts [documentation regarding layer configuration](https://vulkan.lunarg.com/doc/view/1.2.131.1/windows/layer_configuration.html)
+hosts [documentation regarding layer configuration](https://vulkan.lunarg.com/doc/view/latest/windows/layer_configuration.html)
 without recompilation of the host application.
 
 To verify your configuration has been loaded, you can enable info-level debug messages and look for the startup message

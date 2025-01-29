@@ -15,8 +15,11 @@
 
 # TODO: we could replace shipped libraries with CMake FetchContent calls, but this would add git, ssh as dependencies
 
+list(APPEND EXT_TARGETS "")
+
 # extern GLM
 add_subdirectory(extern/glm)
+list(APPEND EXT_TARGETS glm)
 
 # required packages
 find_package(Vulkan REQUIRED)
@@ -25,12 +28,24 @@ find_package(Vulkan REQUIRED)
 set(SHADERC_SKIP_TESTS ON CACHE INTERNAL "")
 set(SHADERC_SKIP_EXAMPLES ON CACHE INTERNAL "")
 add_subdirectory(extern/shaderc)
+list(APPEND EXT_TARGETS GenericCodeGen MachineIndependent OSDependent SPIRV-Tools-diff SPIRV-Tools-link
+        SPIRV-Tools-lint SPIRV-Tools-opt SPIRV-Tools-reduce SPIRV-Tools-shared SPIRV-Tools-static SPIRV SPVRemapper
+        add-copyright build-version check-copyright core_tables enum_string_mapping extinst_tables
+        glslang-default-resource-limits glslang-standalone glslang glslc glslc_exe shaderc shaderc_combined-pkg-config
+        shaderc_combined shaderc_shared shaderc_static-pkg-config shaderc_util spirv-as spirv-cfg spirv-diff spirv-dis
+        spirv-link spirv-lint spirv-objdump spirv-opt spirv-reduce spirv-remap spirv-tools-build-version
+        spirv-tools-cpp-example spirv-tools-header-DebugInfo spirv-tools-header-NonSemanticShaderDebugInfo100
+        spirv-tools-header-OpenCLDebugInfo100 spirv-tools-pkg-config spirv-tools-vimsyntax spirv-val spv-tools-cldi100
+        spv-tools-clspvreflection spv-tools-debuginfo spv-tools-shdi100 spv-tools-spv-amd-gs spv-tools-spv-amd-sb
+        spv-tools-spv-amd-sevp spv-tools-spv-amd-stm spv-tools-vkspreflection update_mappings testdata)
 
 # extern rANS encoding library
 add_subdirectory(extern/ryg_rans)
+list(APPEND EXT_TARGETS libryg-rans)
 
 # extern fmt formatting library
 add_subdirectory(extern/fmt)
+
 
 # extern TCLAP for command line argument parsing
 add_subdirectory(extern/tclap)
@@ -101,6 +116,7 @@ endif()
 # extern SQLiteCpp
 set(SQLITECPP_RUN_CPPLINT OFF CACHE INTERNAL "")
 add_subdirectory(extern/SQLiteCpp)
+list(APPEND EXT_TARGETS SQLiteCpp sqlite3)
 
 
 # Vulkan framework vvv for basic Vulkan integration
@@ -116,12 +132,14 @@ if(NOT HEADLESS)
     set(GLFW_INSTALL OFF CACHE INTERNAL "")
     set(GLFW_BUILD_WAYLAND OFF)
     add_subdirectory(extern/glfw)
+    list(APPEND EXT_TARGETS glfw)
 
     # platform independent file dialogs
     add_subdirectory(extern/portable-file-dialogs)
 
     # extern IMGUI
     add_subdirectory(extern/imgui)
+    list(APPEND EXT_TARGETS imgui)
 
     # GLFW application
     add_subdirectory(lib/vvv-glfw-app)
@@ -143,3 +161,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
         message(WARNING "Unable to automatically parse compiler runtime DLL location. You may have to copy shared libraries (*.a, *.dll) to the binary folder.")
     endif()
 endif()
+
+# move all external targets to another folder for higher clarity
+set_target_properties(${EXT_TARGETS} PROPERTIES FOLDER extern)

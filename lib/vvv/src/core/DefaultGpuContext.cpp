@@ -188,9 +188,11 @@ void vvv::DefaultGpuContext::createInstance() {
         instanceCreateInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debugCreateInfo;
     }
 
-    // enable GLSL debugPrintfEXT() output
+    // enable GLSL debugPrintfEXT() output and synchronization validation by default
+    // TODO: enabling DebugPrintf by default makes it impossible to enable GPU assisted validation (can only use one)
     vk::ValidationFeaturesEXT valFeatures;
-    auto features = {vk::ValidationFeatureEnableEXT::eDebugPrintf, vk::ValidationFeatureEnableEXT::eSynchronizationValidation};
+    auto features = {vk::ValidationFeatureEnableEXT::eDebugPrintf,
+                                                      vk::ValidationFeatureEnableEXT::eSynchronizationValidation};
     valFeatures.setEnabledValidationFeatures(features);
     valFeatures.pNext = instanceCreateInfo.pNext;
     instanceCreateInfo.pNext = &valFeatures;
