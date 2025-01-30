@@ -79,11 +79,11 @@ SPIRV-Reflect's core C API should be familiar to Vulkan developers:
 ```c++
 #include "spirv_reflect.h"
 
-int SpirvReflectExample(const void* spirv_binary, size_t spirv_nbytes)
+int SpirvReflectExample(const void* spirv_code, size_t spirv_nbytes)
 {
   // Generate reflection data for a shader
   SpvReflectShaderModule module;
-  SpvReflectResult result = spvReflectCreateShaderModule(spirv_nbytes, spirv_binary, &module);
+  SpvReflectResult result = spvReflectCreateShaderModule(spirv_nbytes, spirv_code, &module);
   assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
   // Enumerate and extract shader's input variables
