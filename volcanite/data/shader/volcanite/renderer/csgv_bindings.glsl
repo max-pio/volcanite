@@ -152,8 +152,10 @@ layout (std140, binding = 10) uniform render_info {
     float g_cache_fill_rate;        // value in [0, 1] indicating how many base elements of the cache are occupied
     int g_req_limit_area_size;      // value <= 0: no request limitation. otherwise: pixel area that can request bricks
     ivec2 g_req_limit_area_pos;     // start position of the area of pixels that can request bricks
+    ivec2 g_req_limit_area_pixel;   // pixel with the (previously) min. spp within the area. used to track progress in
     uint g_req_limit_spp_delta;     // pixels with at most (min_spp + spp_delta) valid samples can request bricks
     uvec2 g_min_max_spp;            // minimum and maximum (valid) samples per pixel accumualted before this frame
+    ivec2 g_min_spp_pixel;          // coordinate of one of the pixels that received the minimum number of samples so far
     uint g_swapchain_index;         // index of this frame in the multiframe swapchain buffer lists
     int g_subsampling;              // border length of the subsampling pixel block in which one sample is rendered
     ivec2 g_subsampling_pixel;      // local coordinate of the currently rendered pixel in the subsampling pixel block

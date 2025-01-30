@@ -95,6 +95,7 @@ bool isSurfaceHitGBufferRGB16(uvec3 g_buffer_packed) {
     return g_buffer_packed.x != 65531u;
 }
 
+#ifndef VOLCANITE_FRAMEBUFFER_READONLY
 /// pack the given attributes in a value that can be stored in an RG8 format
 uvec3 packGBufferRGB16(uint label, vec3 normal, float normalized_depth) {
 
@@ -118,6 +119,7 @@ uvec3 packGBufferRGB16(uint label, vec3 normal, float normalized_depth) {
     // TODO: could return packed RGB16 g-buffer as u16vec3 to save registers
     return packed;
 }
+#endif
 
 
 /// unpack the given RGB16 G-Buffer value into attributes. Returns false if the G-Buffer did not receive a sample yet.
@@ -144,6 +146,7 @@ bool unpackGBufferRGB16(uvec3 g_buffer_packed, inout uint label, inout vec3 norm
 
 bool isDepthValid(float depth) { return depth >= 0.f; }
 
+#ifndef VOLCANITE_FRAMEBUFFER_READONLY
 void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_packed) {
 
     // invalidate any nan samples
@@ -160,7 +163,7 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
             ivec2 opix = pixel_block_start + subpixel;
 
             vec4 accumulated_rgba_out;
-            uint sample_count_out;
+            uint sample_count_out = 0u;
 
             // first frame: reset
             if (g_camera_still_frames == 0u) {
@@ -204,7 +207,7 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
                 // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
                 else {
                     // iterative re-weighting
-                    float new_weight = 1.f / float(prev_sample_count + 1);
+                    const float new_weight = 1.f / float(prev_sample_count + 1);
                     accumulated_rgba_out = new_rgba * new_weight + prev_rgba * (1.f - new_weight);
                     sample_count_out = prev_sample_count + 1u;
                     imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u));
@@ -221,5 +224,6 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
         }
     }
 }
+#endif // VOLCANITE_FRAMEBUFFER_READONLY
 
 #endif // VOLCANITE_FRAMEBUFFER_GLSL

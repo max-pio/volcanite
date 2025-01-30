@@ -22,6 +22,7 @@ layout (local_size_x = 8, local_size_y = 8) in;
 
 #include "util.glsl"
 #include "volcanite/renderer/csgv_bindings.glsl"
+#define VOLCANITE_FRAMEBUFFER_READONLY
 #include "volcanite/renderer/framebuffer.glsl"
 #include "volcanite/renderer/csgv_materials.glsl"
 #include "volcanite/renderer/dummy_envmap.glsl"

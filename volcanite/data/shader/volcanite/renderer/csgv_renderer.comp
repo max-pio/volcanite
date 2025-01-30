@@ -19,6 +19,7 @@
 #extension GL_EXT_buffer_reference_uvec2 : require
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_shader_atomic_int64 : enable
 
 layout (local_size_x = 8, local_size_y = 8) in;
 
@@ -550,18 +551,6 @@ void main() {
 
     if (DEBUG_vis_model_space(ray, t_0, pixel, bool(g_debug_vis_flags & VDEB_MODEL_SPACE_BIT))) return;
 
-    // update min / max samples per pixel from previous frame in stats buffer
-    {
-        // TODO: reading from a buffer (gpu_stats) that should be writeonly here
-        uint prev_sample_count = imageLoad(accuSampleCountIn, pixel).r;
-        if (prev_sample_count < gpu_stats.min_spp)
-            atomicMin(gpu_stats.min_spp, prev_sample_count);
-        if (prev_sample_count > gpu_stats.max_spp)
-            atomicMax(gpu_stats.max_spp, prev_sample_count);
-
-        DEBUG_count_bbox_hits(bool(g_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT));
-    }
-
     // initialize ray marching state
     RayMarchState state;
     state.rng = hash_pcg2d(uvec2(uint(blueNoise32x32_uint8(gl_GlobalInvocationID.xy)), (g_camera_still_frames << 10) | g_camera_still_frames)).x;
@@ -581,9 +570,16 @@ void main() {
     //  (1) only if request limitation is enabled,
     //  (2) limit to pixels that did not receive enough samples yet, and
     //  (3) limit to pixels that are within a certain area of the screen.
+    const uint prev_sample_count = imageLoad(accuSampleCountIn, pixelFromInvocationID()).r;
     bool do_not_request = g_req_limit_area_size > 0
-                          && imageLoad(accuSampleCountIn, pixelFromInvocationID()).r > g_min_max_spp.x + g_req_limit_spp_delta
-                          && (any(lessThan(pixel, g_req_limit_area_pos)) || any(greaterThanEqual(pixel, g_req_limit_area_pos + ivec2(g_req_limit_area_size))));
+                          && (prev_sample_count > g_min_max_spp.x + g_req_limit_spp_delta
+                          || (any(lessThan(pixel, g_req_limit_area_pos)) || any(greaterThanEqual(pixel, g_req_limit_area_pos + ivec2(g_req_limit_area_size)))));
+    if (prev_sample_count >= 0xFFFF) {
+        // Force direct ray termination if this pixel already accumulated the maximum number of samples.
+        // (The sample count frame buffer is in 16 bit and can thus only accumulate 2^16-1 valid samples.)
+        state.depth_valid = INVALID_DEPTH;
+        state.throughput = vec3(0.f);
+    }
 
     // ray marching loop
     for(state.step = 0; state.step < g_maxSteps; state.step++) {
@@ -634,20 +630,10 @@ void main() {
         }
 
 
-        // tell the other shaders that we can see this brick if it's visibility state is "unknown"
-        // but only if this is a valid pixel sample. An invalid sample could be accessing bricks that are actually not visible.
-        if (do_not_request)
-            state.out_color.r = 1.f;
-//        if (g_cache_fill_rate >= 0.f) {
-//            // TODO: move this outside of get_volume_label where the pixel is available. compute "importance" parameter
-//            const uint prev_sample_count = imageLoad(accuSampleCountIn, pixelFromInvocationID()).r;
-//            // if the cache is full and this pixel accumulated more samples than the others: do NOT request decompression
-//            do_not_request = float(prev_sample_count - gpu_stats.min_spp) / float(1u + gpu_stats.max_spp - gpu_stats.min_spp) > 0.5f;
-//        }
-
-        // sampling (read value at pos from previously decoded volume segments in brick cache) or return a
+        // Rread the label at the voxel from previously decoded volume segments in the brick cache or return a
         // placeholder label if not yet decoded, in which case the depth_valid will be set to INVALID_DEPTH.
         // An sample marked as invalid this way may not alter the framebuffer and skip certain cmoputation steps.
+        // If do_not_request is not set, this will request new bricks for decoding if necessary.
         state.last_label = state.label;
         state.label = get_volume_label(state.voxel, state.depth_valid, do_not_request);
 
@@ -812,6 +798,33 @@ void main() {
     else {
         state.out_color.rgb += state.throughput * vec3(g_light_intensity);
     }
+
+
+    // only if this pixel had a chance to render:
+        // update min / max samples per pixel in stats buffer
+        const uint sample_count_out = imageLoad(accuSampleCountIn, pixelFromInvocationID()).r + (isDepthValid(state.depth_valid) ? 1u : 0u);
+    #ifdef GL_EXT_shader_atomic_int64
+        // TODO: reading here from a buffer (gpu_stats) that should be writeonly
+        assertf(sample_count_out < (1u << 16u), "Pixel sample count exceeds 16 bit domain (%u)", sample_count_out);
+        assertf(pixel.x < (1u << 16u) && pixel.y < (1u << 16u), "Pixel coordinate exceeds 16 bit domain (%v2i)", pixel);
+        // MSB ...                                                                            ... LSB
+        // 16 bit sample count | (16 bit unused) | 16 bit y coordinate | 16 bit x coordinate of pixel
+        const uint64_t samples_pixel_yx = (uint64_t(sample_count_out) << 48) | (uint64_t(pixel.y) << 16) | (uint64_t(pixel.x));
+        if (samples_pixel_yx < gpu_stats.min_spp_and_pixel) {
+            // the min_spp contains the min. number of valid samples any pixel received and coordinate of such a pixel
+            atomicMin(gpu_stats.min_spp_and_pixel, samples_pixel_yx);
+        }
+        if (samples_pixel_yx > gpu_stats.max_spp_and_pixel) {
+            // the max_spp contains the max. number of valid samples any pixel received and coordinate of such a pixel
+            atomicMax(gpu_stats.max_spp_and_pixel, samples_pixel_yx);
+        }
+    #endif
+        if (all(equal(pixel, g_req_limit_area_pixel))) {
+           // track the progress of the pixel that previously had the minimum number of samples in the request area
+            gpu_stats.limit_area_pixel_spp = sample_count_out;
+        }
+
+        DEBUG_count_bbox_hits(bool(g_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT));
 
     writePixel(pixel, state.out_color, state.depth_valid, state.packedGBuffer);
 }

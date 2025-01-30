@@ -142,15 +142,15 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     }
 
     // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts
-    // finished). Times out after 30 seconds and throws an exception.
+    // finished). Times out after a certain number of seconds and throws an exception.
     // Buffer upload synchronization is handled in PassCompSegVolRender
-    getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 30 * 1000000000ull);
+    getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 60 * 1000000000ull);
 
     // track timing of the last frame
     // TODO: renderFrame and thus the final timing finish will not be called after the last frame in HeadlessRendering
     if (m_enable_frame_time_tracking && m_last_frame_start_time.has_value()) {
-        m_last_frame_times.emplace_back(std::chrono::duration_cast<std::chrono::nanoseconds >(
-                std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value()).count() / 1000000.);
+        m_last_frame_times.emplace_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value()).count()) / 1000000.);
         m_last_frame_start_time.reset();
     }
 
@@ -181,67 +181,124 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     if (m_frame > 0u && m_frame % gpu_stats_download_interval == 0u) {
         // download and reset the buffer
         m_gpu_stats_buffer->download(&m_last_gpu_stats, sizeof(GPUStats));
-        const static GPUStats reset_gpu_stats = {.used_cache_base_elements = 0u,
+        const static GPUStats reset_gpu_stats = {
+                .min_spp_and_pixel = 0xFFFF0000FFFFFFFF, // 16 MSB: sample count, 32 LSB: pixel coordinate
+                .max_spp_and_pixel = 0x00000000FFFFFFFF,
+                .used_cache_base_elements = 0u,
                 .bbox_hits = 0u,
                 .blocks_decoded_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
                 .blocks_in_cache_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
-                .min_spp = ~0u,
-                .max_spp = 0u,
         };
         m_gpu_stats_buffer->upload(&reset_gpu_stats, sizeof(GPUStats));
 
         // compute cache fill rate to feed it back to the renderer as uniform value
         const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
+        const uint32_t min_spp = static_cast<uint32_t>(m_last_gpu_stats.min_spp_and_pixel >> 48u);
+        m_req_limit.min_pixel_global = glm::ivec2(m_last_gpu_stats.min_spp_and_pixel & 0xFFFF,
+                                                  (m_last_gpu_stats.min_spp_and_pixel >> 16u) & 0xFFFF);
+        const uint32_t max_spp = static_cast<uint32_t>(m_last_gpu_stats.max_spp_and_pixel >> 48u);
+        // const glm::ivec2 max_spp_pixel = glm::ivec2(m_last_gpu_stats.max_spp_and_pixel & 0xFFFF,
+        //                                             (m_last_gpu_stats.max_spp_and_pixel >> 16u) & 0xFFFF);
 
+        // TODO: check for cache fragmentation in the cache shaders by comparing the free stacks instead of checking the cache capacity here
         // A fragmented cache can occur if free stacks store unusable levels-of-detail leaving no space for other LoDs.
         // Trigger cache flush on demand, but only if the rendering config changed since the last flush.
         const size_t current_parameter_hash = hashMemory(&m_prender_hash, sizeof(m_prender_hash), m_pcamera_hash);
+        const uint32_t subsampling_pixels = (1u << m_subsampling) * (1u << m_subsampling);
         // used_cache_base_elements: cache usage as the number of occupied 2x2x2 base elements
         if (m_accumulated_frames > 0u && m_auto_cache_reset
-                && m_last_gpu_stats.used_cache_base_elements >= m_cache_capacity - cache_elements_per_finest_lod
-                && m_parameter_hash_at_last_reset != current_parameter_hash) {
+            && m_last_gpu_stats.used_cache_base_elements >= m_cache_capacity - cache_elements_per_finest_lod
+            && m_parameter_hash_at_last_reset != current_parameter_hash) {
             m_pcache_reset = true;
             m_parameter_hash_at_last_reset = current_parameter_hash;
         }
         // request limitation limits requesting bricks for the cache to rays from pixels that
+        else if (!m_req_limit.enable) {
+            m_req_limit.area_size = 0;
+            m_req_limit.area_pos = {0, 0};
+            m_req_limit.area_duration = m_req_limit.area_duration_init;
+            m_req_limit.area_start_frame = m_accumulated_frames;
+        }
         //   1. have not more than the (minimum accumulated + 4) valid samples accumulated so far
         //   2. are located in a square sub-area of pixels starting at m_req_limit_area_pos with size m_req_limit_area
-        else if (static constexpr uint32_t req_limit_preheat_frames = 8u;
-                 m_accumulated_frames > req_limit_preheat_frames                                // some frames were rendered already
-                 && (m_last_gpu_stats.min_spp + m_req_limit.spp_delta < m_last_gpu_stats.max_spp)   // some pixels do not receive samples
-                 && m_req_limit.area_size == 0) {
+        else if (m_req_limit.area_size == 0
+                 && m_accumulated_frames >= m_req_limit.area_start_frame + subsampling_pixels * m_req_limit.area_duration // some frames were rendered already
+                 && (min_spp + m_req_limit.spp_delta < m_last_gpu_stats.max_spp_and_pixel))   // some pixels do not receive samples
+                {
             m_req_limit.area_size = 2 << glm::findMSB(glm::max(m_resolution.width, m_resolution.height));
             m_req_limit.area_pos = {0, 0};
             m_req_limit.area_start_frame = m_accumulated_frames;
-            m_req_limit.last_min_spp = m_last_gpu_stats.min_spp;
+            m_req_limit.last_area_min_pixel_spp = min_spp;
+            m_req_limit.area_min_pixel = m_req_limit.min_pixel_global;
             m_req_limit.area_duration = m_req_limit.area_duration_init;
         }
         // if a brick request limitation is already set: move the area around
         // if all areas where covered once and the min spp do not increase: decrease area by half
-        else if (const uint32_t subsampling_pixels = (1u << m_subsampling) * (1u << m_subsampling);
-                 m_req_limit.area_size > 0
+        else if (m_req_limit.area_size > 0
                  && m_accumulated_frames >= m_req_limit.area_start_frame + subsampling_pixels * m_req_limit.area_duration) {
-            m_req_limit.area_pos.x += m_req_limit.area_size;
-            // TODO: iterate req limit area position in Morton order
-            if (m_req_limit.area_pos.x >= m_resolution.width) {
-                m_req_limit.area_pos.x = 0;
-                m_req_limit.area_pos.y += m_req_limit.area_size;
-                if (m_req_limit.area_pos.y >= m_resolution.height) {
-                    // all areas where covered once. if the minimum spp did not increase, decrease the request area
-                    if (m_last_gpu_stats.min_spp <= m_req_limit.last_min_spp) {
-                        m_req_limit.area_size /= 2;
-                        if (m_req_limit.area_size < m_req_limit.area_size_min) {
-                            m_req_limit.area_size = m_req_limit.area_size_min;
-                            m_req_limit.area_duration *= 2u;
-                        }
-                    }
-                    m_req_limit.last_min_spp = m_last_gpu_stats.min_spp;
-                    m_req_limit.area_pos.y = 0;
-                }
-            }
-            Logger(INFO) << "REQ Limit: " << m_req_limit.last_min_spp << " min spp | " << m_req_limit.area_size
-                         << " area | " << str(m_req_limit.area_pos) << " pos | " << m_req_limit.area_duration << " duration";
+
+            Logger(INFO) << "REQ Limit: " << m_req_limit.last_area_min_pixel_spp << " > " << m_last_gpu_stats.limit_area_pixel_spp << " area pixel spp @" << str(m_req_limit.area_min_pixel) << " | "
+                         << m_req_limit.area_size << " area @" << str(m_req_limit.area_pos) << " | " << m_req_limit.area_duration << " duration";
+
             m_req_limit.area_start_frame = m_accumulated_frames;
+
+            // after area_duration frames, this area should have received new samples
+            // if not: the area size may be too large, reduce it. If the minimum size is reached: increase the duration
+            const int new_samples_rendered = static_cast<int>(m_last_gpu_stats.limit_area_pixel_spp)
+                                                - static_cast<int>(m_req_limit.last_area_min_pixel_spp);
+            if (new_samples_rendered <= 0) {
+                m_req_limit.area_size = m_compressed_segmentation_volume->isUsingSeparateDetail() ? (m_req_limit.area_size * 3) / 4
+                                                                                                  : m_req_limit.area_size / 2;
+                if (m_req_limit.area_size < m_req_limit.area_size_min)
+                    m_req_limit.area_duration *= 2u;
+                else
+                    m_req_limit.area_duration += m_compressed_segmentation_volume->isUsingSeparateDetail() ? 32u : 8u;
+
+                if (m_req_limit.area_size < m_req_limit.area_size_min) {
+                    m_req_limit.area_size = m_req_limit.area_size_min;
+                }
+                if (m_req_limit.area_duration > 512) {
+                    Logger(WARN) << "Cache insufficient: Disabling request limitation. Increase cache size with --cache-size [MB]";
+                    m_req_limit.area_size = 0;
+                    m_req_limit.area_start_frame = 0xFFFFFFFF;
+                    m_req_limit.area_duration = 0u;
+                }
+            } else {
+                // in area_duration many frames, the renderer could accumulate new_samples_rendered many samples
+                // this means that it took (new_samples_rendered - area_duration) many frames to fill the cache:
+                // reduce the area_duration
+                m_req_limit.area_duration = glm::max((m_req_limit.area_duration + (1 + new_samples_rendered - m_req_limit.area_duration)) / 2, 4);
+                // (slowly) increase the area size
+                m_req_limit.area_size = (m_req_limit.area_size * 5) / 4;
+                if (m_req_limit.area_size > glm::max(m_resolution.width, m_resolution.height))
+                    m_req_limit.area_size = 0; // if the area would cover the whole screen, disable request limiation
+            }
+
+            // the new area of pixels that can request bricks must cover the smallest
+            if (m_req_limit.area_size > 0) {
+                m_req_limit.area_pos = (m_req_limit.min_pixel_global / glm::ivec2(m_req_limit.area_size))
+                                            * glm::ivec2(m_req_limit.area_size);
+                m_req_limit.area_min_pixel = m_req_limit.min_pixel_global;
+            }
+
+//            m_req_limit.area_pos.x += m_req_limit.area_size;
+//            // TODO: iterate req limit area position in Morton order
+//            if (m_req_limit.area_pos.x >= m_resolution.width) {
+//                m_req_limit.area_pos.x = 0;
+//                m_req_limit.area_pos.y += m_req_limit.area_size;
+//                if (m_req_limit.area_pos.y >= m_resolution.height) {
+//                    // all areas where covered once. if the minimum spp did not increase, decrease the request area
+//                    if (min_spp <= m_req_limit.last_min_spp) {
+//                        m_req_limit.area_size /= 2;
+//                        if (m_req_limit.area_size < m_req_limit.area_size_min) {
+//                            m_req_limit.area_size = m_req_limit.area_size_min;
+//                            m_req_limit.area_duration *= 2u;
+//                        }
+//                    }
+//                    m_req_limit.last_min_spp = min_spp;
+//                    m_req_limit.area_pos.y = 0;
+//                }
+//            }
         }
 
         // if requested, more GPU statistics were gathered during rendering and printed here
@@ -995,9 +1052,6 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
             // trigger empty space bit vector update as well
             m_render_update_flags |= UPDATE_PMATERIAL;
         }
-        // reset brick request limitation to off
-        m_req_limit.area_size = {0};
-        m_req_limit.area_pos = {0, 0};
     }
 
     // reset render frame accumulation if any parameters that influence rendering changed
@@ -1007,8 +1061,10 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
         m_render_update_flags |= UPDATE_CLEAR_ACCUM;
         m_accumulated_frames = 0u;
         // reset brick request limitation to off
-        m_req_limit.area_size = {0};
+        m_req_limit.area_size = 0;
         m_req_limit.area_pos = {0, 0};
+        m_req_limit.area_duration = m_req_limit.area_duration_init;
+        m_req_limit.area_start_frame = m_accumulated_frames;
     }
 
     // check if a new frame has to be accumulated, target frame count of 0 means: render as long as possible
@@ -1100,10 +1156,14 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         const float cache_fill_rate = glm::clamp(static_cast<float>(m_last_gpu_stats.used_cache_base_elements)
                                       / static_cast<float>(m_cache_capacity - cache_elements_per_finest_lod), 0.f, 1.f);
         m_urender_info->setUniform<float>("g_cache_fill_rate", cache_fill_rate);
-        m_urender_info->setUniform<glm::uvec2>("g_min_max_spp", glm::uvec2(m_last_gpu_stats.min_spp,
-                                                                           m_last_gpu_stats.max_spp));
+        // the sample counts of the min. and max. spp values are in the 16 MSB of the gpu_stats values
+        m_urender_info->setUniform<glm::uvec2>("g_min_max_spp", glm::uvec2(m_last_gpu_stats.min_spp_and_pixel >> 48,
+                                                                           m_last_gpu_stats.max_spp_and_pixel >> 48));
+        m_urender_info->setUniform<glm::ivec2>("g_min_spp_pixel", glm::ivec2(m_last_gpu_stats.min_spp_and_pixel & 0xFFFF,
+                                                                             (m_last_gpu_stats.min_spp_and_pixel >> 16) & 0xFFFF));
         m_urender_info->setUniform<int32_t>("g_req_limit_area_size", m_req_limit.area_size);
         m_urender_info->setUniform<glm::ivec2>("g_req_limit_area_pos", m_req_limit.area_pos);
+        m_urender_info->setUniform<glm::ivec2>("g_req_limit_area_pixel", m_req_limit.area_min_pixel);
         m_urender_info->setUniform<uint32_t>("g_req_limit_spp_delta", m_req_limit.spp_delta);
         m_urender_info->setUniform<uint32_t>("g_swapchain_index", m_pass->getActiveIndex());
         m_urender_info->setUniform<int32_t>("g_subsampling", (1 << m_subsampling));
@@ -1403,12 +1463,19 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 #endif
     g_dev->addAction([this](){ getCamera()->position_look_at_world_space = {0, 0, 0}; }, "Center Camera");
     g_dev->addSeparator();
+    g_dev->addLabel("Label Cache Management");
+    g_dev->addBool(&m_req_limit.enable, "Auto Cache Request Limitation");
+    g_dev->addInt(&m_req_limit.spp_delta, "Allowed SPP Difference");
+    g_dev->addInt(&m_req_limit.area_size_min, "Area Min. Size");
+    g_dev->addInt(&m_req_limit.area_duration_init, "Area Min. Duration");
     g_dev->addBool(&m_auto_cache_reset, "Auto Cache Defragmentation");
     g_dev->addAction([this]() { m_pcache_reset = true; }, "Clear Label Cache");
 #ifdef IMGUI
     g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
     g_dev->addBool(&m_clear_cache_every_frame, "Every Frame");
+    g_dev->addSeparator();
+    g_dev->addLabel("Framebuffer Accumulation");
     g_dev->addAction([this]() { m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
             std::chrono::high_resolution_clock::now().time_since_epoch().count()); }, "Clear Accumulation");
 #ifdef IMGUI

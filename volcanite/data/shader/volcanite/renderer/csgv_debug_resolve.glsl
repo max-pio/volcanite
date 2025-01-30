@@ -32,6 +32,14 @@ bool DEBUG_img_lod_rectangles(ivec2 pixel, inout vec4 color, const bool enabled)
     return false;
 }
 
+bool isPixelInAABB(const ivec2 pixel, const ivec2 origin, const ivec2 size, const ivec2 border_size) {
+    // returns true if the pixel is inside the area [origin, origin + size). If border_size > 0, the method only
+    // returns true if the pixel is on the (inner) border of the given size
+    return all(greaterThanEqual(pixel, origin)) && all(lessThan(pixel, origin + size))
+        && (min(border_size.x, border_size.y) <= 0u || (any(lessThan(pixel, origin + border_size))
+            || any(greaterThanEqual(pixel, origin + size - border_size))));
+}
+
 // blend a cache visualization over the pixel's color
 void DEBUG_img_cache_array(ivec2 pixel, inout vec4 color, bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
@@ -41,6 +49,24 @@ void DEBUG_img_cache_array(ivec2 pixel, inout vec4 color, bool enabled) {
     const ivec2 viewport_size = imageSize(inpaintedOutColor);
 
     #if CACHE_MODE == CACHE_BRICKS
+        // marker the area of pixels that can request bricks, and the pixel with the minimum sample count:
+        // TODO: brick request limitation could become its own debug visualization
+        const uint border_size = clamp(g_req_limit_area_size / 8u, 1u, 6u);
+        // mark a border around the active brick request area if brick request limitation is active
+        if(g_req_limit_area_size > 0u
+            && (isPixelInAABB(pixel, g_min_spp_pixel - ivec2(8), ivec2(17), ivec2(3)) || all(equal(pixel, g_min_spp_pixel)))) {
+            color = vec4(0.8f, 0.1f, 0.f, 1.f);
+            //if (all(equal(pixel, g_req_limit_area_pixel))) TODO REMOVE g_req_limit_area_pixel spp print
+            //    debugPrintfEXT("min pixel is %v2i with %u samples", pixel, imageLoad(accuSampleCountOut, pixel).r);
+        } else if (g_req_limit_area_size > 0u
+                && isPixelInAABB(pixel, g_req_limit_area_pos, ivec2(g_req_limit_area_size), ivec2(border_size))) {
+                color = vec4(0.f, 0.8f, 0.1f, 1.f);
+        } else {
+            // display the rendering in grayscale in the background
+            color = vec4(vec3(dot(color.rgb, vec3(1.f / 3.f))), color.a);
+        }
+
+        // visualize the cache array
         const int size = 8;
         const uint elems_per_pixel = max(g_brick_idx_count / (viewport_size.x * viewport_size.y / size), 1u);
         const uint brick_idx = elems_per_pixel * uint((pixel.x / size) + (pixel.y / size) * viewport_size.x);
@@ -51,9 +77,6 @@ void DEBUG_img_cache_array(ivec2 pixel, inout vec4 color, bool enabled) {
         const uint brick_info_pos = brick_idx * 4u;
         const uint req_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
         const uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
-
-        // display the rendering in grayscale in the background
-        color = vec4(vec3(dot(color.rgb, vec3(1.f / 3.f))), color.a);
 
         vec3 display = vec3(0.f);
         // marked invisible

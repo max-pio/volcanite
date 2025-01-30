@@ -35,8 +35,10 @@
 #define HUFFMAN_WT_BIT 8u
 
 #ifdef GL_core_profile
+    // require 64 bit types
+    #extension GL_ARB_gpu_shader_int64 : require
+
     #define CSGV_UINT uint
-    #define CSGV_UINT64 uint64
     #define NIBBLE_ENC 0
     #define SINGLE_TABLE_RANS_ENC 1
     #define DOUBLE_TABLE_RANS_ENC 2
@@ -44,78 +46,77 @@
     #define HUFFMAN_WM_ENC 8
 #else
     #define CSGV_UINT uint32_t
-    #define CSGV_UINT64 uint64_t
 
-#define CSGV_SYNTH_PREFIX_STR "+synth"
+    #define CSGV_SYNTH_PREFIX_STR "+synth"
 
-#include <stdexcept>
+    #include <stdexcept>
 
-namespace volcanite {
-    enum EncodingMode {NIBBLE_ENC=0,
-                       SINGLE_TABLE_RANS_ENC=1, DOUBLE_TABLE_RANS_ENC=2,
-                       WAVELET_MATRIX_ENC=4, HUFFMAN_WM_ENC=8, DOUBLE_TABLE_HUFFMAN_WM_ENC=9};
+    namespace volcanite {
+        enum EncodingMode {NIBBLE_ENC=0,
+                           SINGLE_TABLE_RANS_ENC=1, DOUBLE_TABLE_RANS_ENC=2,
+                           WAVELET_MATRIX_ENC=4, HUFFMAN_WM_ENC=8, DOUBLE_TABLE_HUFFMAN_WM_ENC=9};
 
-    // Bit Flags
-    //
-    // config:
-    // double encoder (start new encoder for the finest LOD): bit 0 (1)
-    //
-    // mutually exclusive:
-    // rANS: bit 1 (2)
-    // wavelet tree: bit 2 (4)
-    // Huffman wavelet tree: bit 3 (8)
+        // Bit Flags
+        //
+        // config:
+        // double encoder (start new encoder for the finest LOD): bit 0 (1)
+        //
+        // mutually exclusive:
+        // rANS: bit 1 (2)
+        // wavelet tree: bit 2 (4)
+        // Huffman wavelet tree: bit 3 (8)
 
-    static constexpr const char* EncodingMode_STR(EncodingMode e) {
-        switch (e) {
-            case NIBBLE_ENC:
-                return "Nibble";
-            case SINGLE_TABLE_RANS_ENC:
-                return "rANS";
-            case DOUBLE_TABLE_RANS_ENC:
-                return "rANS-DT";
-            case WAVELET_MATRIX_ENC:
-                return "WaveletMatrix";
-            case HUFFMAN_WM_ENC:
-                return "HuffmanWaveletMatrix";
-            default:
-                throw std::runtime_error("Unknown encoding mode");
+        static constexpr const char* EncodingMode_STR(EncodingMode e) {
+            switch (e) {
+                case NIBBLE_ENC:
+                    return "Nibble";
+                case SINGLE_TABLE_RANS_ENC:
+                    return "rANS";
+                case DOUBLE_TABLE_RANS_ENC:
+                    return "rANS-DT";
+                case WAVELET_MATRIX_ENC:
+                    return "WaveletMatrix";
+                case HUFFMAN_WM_ENC:
+                    return "HuffmanWaveletMatrix";
+                default:
+                    throw std::runtime_error("Unknown encoding mode");
+            }
+        }
+
+        static constexpr const char* EncodingMode_DefineSTR(EncodingMode e) {
+            switch (e) {
+                case NIBBLE_ENC:
+                    return "NIBBLE_ENC";
+                case SINGLE_TABLE_RANS_ENC:
+                    return "SINGLE_TABLE_RANS_ENC";
+                case DOUBLE_TABLE_RANS_ENC:
+                    return "DOUBLE_TABLE_RANS_ENC";
+                case WAVELET_MATRIX_ENC:
+                    return "WAVELET_MATRIX_ENC";
+                case HUFFMAN_WM_ENC:
+                    return "HUFFMAN_WM_ENC";
+                default:
+                    throw std::runtime_error("Unknown encoding mode");
+            }
+        }
+
+        static constexpr const char* EncodingMode_ShortSTR(EncodingMode e) {
+            switch (e) {
+                case NIBBLE_ENC:
+                    return "nb";
+                case SINGLE_TABLE_RANS_ENC:
+                    return "r1";
+                case DOUBLE_TABLE_RANS_ENC:
+                    return "r2";
+                case WAVELET_MATRIX_ENC:
+                    return "wm";
+                case HUFFMAN_WM_ENC:
+                    return "w1";
+                default:
+                    throw std::runtime_error("Unknown encoding mode");
+            }
         }
     }
-
-    static constexpr const char* EncodingMode_DefineSTR(EncodingMode e) {
-        switch (e) {
-            case NIBBLE_ENC:
-                return "NIBBLE_ENC";
-            case SINGLE_TABLE_RANS_ENC:
-                return "SINGLE_TABLE_RANS_ENC";
-            case DOUBLE_TABLE_RANS_ENC:
-                return "DOUBLE_TABLE_RANS_ENC";
-            case WAVELET_MATRIX_ENC:
-                return "WAVELET_MATRIX_ENC";
-            case HUFFMAN_WM_ENC:
-                return "HUFFMAN_WM_ENC";
-            default:
-                throw std::runtime_error("Unknown encoding mode");
-        }
-    }
-
-    static constexpr const char* EncodingMode_ShortSTR(EncodingMode e) {
-        switch (e) {
-            case NIBBLE_ENC:
-                return "nb";
-            case SINGLE_TABLE_RANS_ENC:
-                return "r1";
-            case DOUBLE_TABLE_RANS_ENC:
-                return "r2";
-            case WAVELET_MATRIX_ENC:
-                return "wm";
-            case HUFFMAN_WM_ENC:
-                return "w1";
-            default:
-                throw std::runtime_error("Unknown encoding mode");
-        }
-    }
-}
 #endif
 
 // 1000 most significant bit stores stop bit:
@@ -184,13 +185,14 @@ struct GPUSegmentedVolumeMaterial {
 // GPU / CPU transfer information --------------------------------------------------------------------------------------
 
 struct GPUStats {
+    uint64_t min_spp_and_pixel;             ///< 16 MSB: min. #valid samples any pixel received, pixel x coordinate in 16 LSB, y in between
+    uint64_t max_spp_and_pixel;             ///< 16 MSB: max. #valid samples any pixel received, pixel x coordinate in 16 LSB, y in between
+    CSGV_UINT limit_area_pixel_spp;         ///< number of valid samples that the g_req_limit_area_pixel received (used to check sampling progress)
     CSGV_UINT used_cache_base_elements;     ///< top pointer of the cache: number of occupied 2x2x2 base elements
     // optional: only available if show_gpu_stats is true
     CSGV_UINT bbox_hits;                    ///< total number of pixels that hit the volume bounding box
     CSGV_UINT blocks_decoded_L1_to_7[6];    ///< number of base elements per LOD 1 .. 7 that were acquired in frame
     CSGV_UINT blocks_in_cache_L1_to_7[6];   ///< number of base elements per LOD 1 .. 7 currently present in the cache
-    CSGV_UINT min_spp;                      ///< minimum number of valid samples that any pixel received so far
-    CSGV_UINT max_spp;                      ///< maximum number of valid samples that any pixel received so far
 };
 
 // Debug Visualiation --------------------------------------------------------------------------------------------------
