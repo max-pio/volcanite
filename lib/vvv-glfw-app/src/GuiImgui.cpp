@@ -417,8 +417,13 @@ void GuiImgui::renderGui() {
                         ImGui::ProgressBar(progress, be->label.empty() ? ImVec2(-FLT_MIN, 0) : ImVec2(0.0f, 0.0f));
                     } else {
                         progress *= -1.f;
-                        std::string pstr =  fmt::vformat("{:.4g}", fmt::make_format_args(progress));
-                        ImGui::ProgressBar(-progress / 100.f, // TODO:
+                        std::string pstr;
+                        int int_progress = static_cast<int>(progress);
+                        if (glm::abs(progress - static_cast<float>(int_progress)) < 0.0001f)
+                            pstr = fmt::vformat("{}", fmt::make_format_args(int_progress));
+                        else
+                            pstr = fmt::vformat("{:.4f}", fmt::make_format_args(progress));
+                        ImGui::ProgressBar(-progress / 100.f,
                                             be->label.empty() ? ImVec2(-FLT_MIN, 0) : ImVec2(0.0f, 0.0f),
                                             pstr.c_str());
                     }
