@@ -329,7 +329,7 @@ uint get_inv_lod(ivec3 voxel) {
             const uint palette_size = getBrickPaletteLength(brick_idx);
 
             // read a "random" palette entry
-            const uint random_palette_index = hash_pcg3d(uvec3(gl_GlobalInvocationID.xy, g_frame)).r % palette_size;
+            const uint random_palette_index = 0u; //hash_pcg3d(uvec3(gl_GlobalInvocationID.xy, g_random_seed)).r % palette_size;
             return  encoding_address.buf[encoding_size - 1u - random_palette_index];
         }
         // read the voxel from the brick in the cache (with the currently decoded LOD)
@@ -553,7 +553,7 @@ void main() {
 
     // initialize ray marching state
     RayMarchState state;
-    state.rng = hash_pcg2d(uvec2(uint(blueNoise32x32_uint8(gl_GlobalInvocationID.xy)), (g_camera_still_frames << 10) | g_camera_still_frames)).x;
+    state.rng = hash_pcg2d(uvec2(uint(blueNoise32x32_uint8(gl_GlobalInvocationID.xy)), g_random_seed)).x;
     state.label = INVALID;
     state.last_label = INVALID;
     state.path_length = 0;
@@ -572,8 +572,8 @@ void main() {
     //  (3) limit to pixels that are within a certain area of the screen.
     const uint prev_sample_count = imageLoad(accuSampleCountIn, pixelFromInvocationID()).r;
     bool do_not_request = g_req_limit_area_size > 0
-                          && (prev_sample_count > g_min_max_spp.x + g_req_limit_spp_delta
-                          || (any(lessThan(pixel, g_req_limit_area_pos)) || any(greaterThanEqual(pixel, g_req_limit_area_pos + ivec2(g_req_limit_area_size)))));
+                          && // (prev_sample_count > g_min_max_spp.x + g_req_limit_spp_delta ||
+                          (any(lessThan(pixel, g_req_limit_area_pos)) || any(greaterThanEqual(pixel, g_req_limit_area_pos + ivec2(g_req_limit_area_size))));
     if (prev_sample_count >= 0xFFFF) {
         // Force direct ray termination if this pixel already accumulated the maximum number of samples.
         // (The sample count frame buffer is in 16 bit and can thus only accumulate 2^16-1 valid samples.)

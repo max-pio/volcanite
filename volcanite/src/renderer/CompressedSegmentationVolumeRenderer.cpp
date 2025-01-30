@@ -193,12 +193,16 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
         // compute cache fill rate to feed it back to the renderer as uniform value
         const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
-        const uint32_t min_spp = static_cast<uint32_t>(m_last_gpu_stats.min_spp_and_pixel >> 48u);
-        m_req_limit.min_pixel_global = glm::ivec2(m_last_gpu_stats.min_spp_and_pixel & 0xFFFF,
+        const uint32_t global_min_spp = static_cast<uint32_t>(m_last_gpu_stats.min_spp_and_pixel >> 48u);
+        m_req_limit.global_min_pixel = glm::ivec2(m_last_gpu_stats.min_spp_and_pixel & 0xFFFF,
                                                   (m_last_gpu_stats.min_spp_and_pixel >> 16u) & 0xFFFF);
         const uint32_t max_spp = static_cast<uint32_t>(m_last_gpu_stats.max_spp_and_pixel >> 48u);
         // const glm::ivec2 max_spp_pixel = glm::ivec2(m_last_gpu_stats.max_spp_and_pixel & 0xFFFF,
         //                                             (m_last_gpu_stats.max_spp_and_pixel >> 16u) & 0xFFFF);
+
+        // if the area pixel was selected randomly, its sample count was not known yet (marked by INVALID). set it here.
+        if (m_req_limit.area_min_pixel_last_spp == INVALID)
+            m_req_limit.area_min_pixel_last_spp = m_last_gpu_stats.limit_area_pixel_spp;
 
         // TODO: check for cache fragmentation in the cache shaders by comparing the free stacks instead of checking the cache capacity here
         // A fragmented cache can occur if free stacks store unusable levels-of-detail leaving no space for other LoDs.
@@ -212,32 +216,37 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             m_pcache_reset = true;
             m_parameter_hash_at_last_reset = current_parameter_hash;
         }
-        // request limitation limits requesting bricks for the cache to rays from pixels that
-        else if (!m_req_limit.enable) {
+        // request limitation limits requesting bricks for the cache to rays from pixels in a certain AABB on screen
+        else if (!m_req_limit.g_enable
+                 || global_min_spp + m_req_limit.spp_delta >= m_last_gpu_stats.max_spp_and_pixel) {
+            // turn request limitation off
             m_req_limit.area_size = 0;
             m_req_limit.area_pos = {0, 0};
-            m_req_limit.area_duration = m_req_limit.area_duration_init;
+            m_req_limit.area_duration = m_req_limit.g_area_duration_init;
             m_req_limit.area_start_frame = m_accumulated_frames;
         }
         //   1. have not more than the (minimum accumulated + 4) valid samples accumulated so far
         //   2. are located in a square sub-area of pixels starting at m_req_limit_area_pos with size m_req_limit_area
         else if (m_req_limit.area_size == 0
                  && m_accumulated_frames >= m_req_limit.area_start_frame + subsampling_pixels * m_req_limit.area_duration // some frames were rendered already
-                 && (min_spp + m_req_limit.spp_delta < m_last_gpu_stats.max_spp_and_pixel))   // some pixels do not receive samples
+                 && (global_min_spp + m_req_limit.spp_delta < m_last_gpu_stats.max_spp_and_pixel))   // some pixels do not receive samples
                 {
-            m_req_limit.area_size = 2 << glm::findMSB(glm::max(m_resolution.width, m_resolution.height));
+            m_req_limit.random_area_pixel = false,
+            m_req_limit.area_size = 1 << glm::findMSB(glm::max(m_resolution.width, m_resolution.height));
             m_req_limit.area_pos = {0, 0};
             m_req_limit.area_start_frame = m_accumulated_frames;
-            m_req_limit.last_area_min_pixel_spp = min_spp;
-            m_req_limit.area_min_pixel = m_req_limit.min_pixel_global;
-            m_req_limit.area_duration = m_req_limit.area_duration_init;
+            m_req_limit.area_min_pixel_last_spp = global_min_spp;
+            m_req_limit.area_min_pixel = m_req_limit.global_min_pixel;
+            m_req_limit.area_duration = m_req_limit.g_area_duration_init;
         }
         // if a brick request limitation is already set: move the area around
         // if all areas where covered once and the min spp do not increase: decrease area by half
         else if (m_req_limit.area_size > 0
                  && m_accumulated_frames >= m_req_limit.area_start_frame + subsampling_pixels * m_req_limit.area_duration) {
 
-            Logger(INFO) << "REQ Limit: " << m_req_limit.last_area_min_pixel_spp << " > " << m_last_gpu_stats.limit_area_pixel_spp << " area pixel spp @" << str(m_req_limit.area_min_pixel) << " | "
+            Logger(INFO) << "REQ Limit: " << m_req_limit.area_min_pixel_last_spp
+                         << (m_req_limit.area_min_pixel_last_spp  == m_last_gpu_stats.limit_area_pixel_spp ? " == " : " -> ")
+                         << m_last_gpu_stats.limit_area_pixel_spp << " area pixel spp @" << str(m_req_limit.area_min_pixel) << " | "
                          << m_req_limit.area_size << " area @" << str(m_req_limit.area_pos) << " | " << m_req_limit.area_duration << " duration";
 
             m_req_limit.area_start_frame = m_accumulated_frames;
@@ -245,23 +254,28 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             // after area_duration frames, this area should have received new samples
             // if not: the area size may be too large, reduce it. If the minimum size is reached: increase the duration
             const int new_samples_rendered = static_cast<int>(m_last_gpu_stats.limit_area_pixel_spp)
-                                                - static_cast<int>(m_req_limit.last_area_min_pixel_spp);
+                                                - static_cast<int>(m_req_limit.area_min_pixel_last_spp);
             if (new_samples_rendered <= 0) {
-                m_req_limit.area_size = m_compressed_segmentation_volume->isUsingSeparateDetail() ? (m_req_limit.area_size * 3) / 4
-                                                                                                  : m_req_limit.area_size / 2;
-                if (m_req_limit.area_size < m_req_limit.area_size_min)
+                m_req_limit.area_size = m_req_limit.area_size / 4;
+                if (m_req_limit.area_size < m_req_limit.g_area_size_min) {
+                    m_req_limit.area_size = m_req_limit.g_area_size_min;
+                }
+
+                if (m_req_limit.area_size <= m_req_limit.g_area_size_min)
                     m_req_limit.area_duration *= 2u;
                 else
-                    m_req_limit.area_duration += m_compressed_segmentation_volume->isUsingSeparateDetail() ? 32u : 8u;
-
-                if (m_req_limit.area_size < m_req_limit.area_size_min) {
-                    m_req_limit.area_size = m_req_limit.area_size_min;
-                }
-                if (m_req_limit.area_duration > 512) {
-                    Logger(WARN) << "Cache insufficient: Disabling request limitation. Increase cache size with --cache-size [MB]";
-                    m_req_limit.area_size = 0;
-                    m_req_limit.area_start_frame = 0xFFFFFFFF;
-                    m_req_limit.area_duration = 0u;
+                    m_req_limit.area_duration += 8u;
+                if (m_req_limit.area_duration > 256) {
+                    m_req_limit.area_duration = 256;
+                    if (m_req_limit.area_size <= m_req_limit.g_area_size_min) {
+                        // cannot reduce the parameters further: just sample random patches
+                        if (!m_req_limit.random_area_pixel)
+                            Logger(WARN) << "Cache insufficient: not able to render all pixels. Increase cache size with --cache-size [MB]";
+                        m_req_limit.random_area_pixel = true;
+                        m_req_limit.area_duration = m_req_limit.g_area_duration_init;
+                    } else {
+                        m_req_limit.area_size = m_req_limit.g_area_size_min;
+                    }
                 }
             } else {
                 // in area_duration many frames, the renderer could accumulate new_samples_rendered many samples
@@ -269,16 +283,24 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
                 // reduce the area_duration
                 m_req_limit.area_duration = glm::max((m_req_limit.area_duration + (1 + new_samples_rendered - m_req_limit.area_duration)) / 2, 4);
                 // (slowly) increase the area size
-                m_req_limit.area_size = (m_req_limit.area_size * 5) / 4;
+                m_req_limit.area_size = ((m_req_limit.area_size * 3 + 7) / 8) * 8; // *3 rounded up to multiple of 8
                 if (m_req_limit.area_size > glm::max(m_resolution.width, m_resolution.height))
-                    m_req_limit.area_size = 0; // if the area would cover the whole screen, disable request limiation
+                    m_req_limit.area_size = 0; // if the area would cover the whole screen, disable request limitation
             }
 
-            // the new area of pixels that can request bricks must cover the smallest
+            // the new area of pixels that can request bricks must cover the pixel with the lowest number of samples yet
+            // if it is not possible to render any sample for this pixel (even after a long accumulation),
+            // random_area_pixel is set to true and the next pixel is always chosen randomly from now on
             if (m_req_limit.area_size > 0) {
-                m_req_limit.area_pos = (m_req_limit.min_pixel_global / glm::ivec2(m_req_limit.area_size))
-                                            * glm::ivec2(m_req_limit.area_size);
-                m_req_limit.area_min_pixel = m_req_limit.min_pixel_global;
+                if (m_req_limit.random_area_pixel) {
+                    m_req_limit.area_min_pixel = glm::ivec2(rand() % m_resolution.width, rand() % m_resolution.height);
+                    m_req_limit.area_min_pixel_last_spp = INVALID;
+                } else {
+                    m_req_limit.area_min_pixel = m_req_limit.global_min_pixel;
+                    m_req_limit.area_min_pixel_last_spp = global_min_spp;
+                }
+                m_req_limit.area_pos = (m_req_limit.area_min_pixel / glm::ivec2(m_req_limit.area_size))
+                                       * glm::ivec2(m_req_limit.area_size);
             }
 
 //            m_req_limit.area_pos.x += m_req_limit.area_size;
@@ -1013,6 +1035,13 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     // HASHP(m_subblock_start) HASHP(m_subblock_size) HASHP(m_subblock_enabled)
     // general rendering config
     HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_blue_noise) HASHP(m_max_steps)
+    HASHP(m_last_gpu_stats.used_cache_base_elements)
+    // request limitation
+    // TODO: should not reset frame accumulation. Right now the uniforms are always uploaded always at UPDATE_RENDER_FRAME
+    //    HASHP(m_req_limit.area_size)
+    //    if (m_req_limit.area_size > 0) {
+    //        HASHP(m_req_limit.area_pos) HASHP(m_req_limit.area_min_pixel) HASHP(m_req_limit.spp_delta)
+    //    }
     // debug views and flags
     uint32_t render_debug_bits = m_debug_vis_flags & (VDEB_MODEL_SPACE_BIT | VDEB_LOD_BIT | VDEB_EMPTY_SPACE_BIT | VDEB_CACHE_VOXEL_BIT
             | VDEB_BRICK_IDX_BIT | VDEB_STATS_DOWNLOAD_BIT);
@@ -1061,9 +1090,10 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
         m_render_update_flags |= UPDATE_CLEAR_ACCUM;
         m_accumulated_frames = 0u;
         // reset brick request limitation to off
+        m_req_limit.random_area_pixel = false;
         m_req_limit.area_size = 0;
         m_req_limit.area_pos = {0, 0};
-        m_req_limit.area_duration = m_req_limit.area_duration_init;
+        m_req_limit.area_duration = m_req_limit.g_area_duration_init;
         m_req_limit.area_start_frame = m_accumulated_frames;
     }
 
@@ -1168,7 +1198,11 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<uint32_t>("g_swapchain_index", m_pass->getActiveIndex());
         m_urender_info->setUniform<int32_t>("g_subsampling", (1 << m_subsampling));
         m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::bitReverseMortonNxNVec(m_subsampling)[m_accumulated_frames % ((1 << m_subsampling) * (1 << m_subsampling))]);
-        m_urender_info->setUniform<float>("g_random_seed", static_cast<float>(m_frame) / 10000.f);
+        // the random seed should only change every other frame to allow requested bricks to be decoded for path tracing
+        const uint32_t pixels_in_subsampling_block = (1 << m_subsampling);
+        const uint32_t random_seed = (m_accumulated_frames / 2 / pixels_in_subsampling_block) << 16u
+                                   ^ (m_accumulated_frames / 2 / pixels_in_subsampling_block);
+        m_urender_info->setUniform<uint32_t>("g_random_seed", random_seed);
         // shading
         m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
         m_urender_info->setUniform<float>("g_light_intensity", m_light_intensity);
@@ -1464,10 +1498,12 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addAction([this](){ getCamera()->position_look_at_world_space = {0, 0, 0}; }, "Center Camera");
     g_dev->addSeparator();
     g_dev->addLabel("Label Cache Management");
-    g_dev->addBool(&m_req_limit.enable, "Auto Cache Request Limitation");
-    g_dev->addInt(&m_req_limit.spp_delta, "Allowed SPP Difference");
-    g_dev->addInt(&m_req_limit.area_size_min, "Area Min. Size");
-    g_dev->addInt(&m_req_limit.area_duration_init, "Area Min. Duration");
+    g_dev->addBool(&m_req_limit.g_enable, "Auto Cache Request Limitation");
+    g_dev->addInt(&m_req_limit.spp_delta, "Allowed SPP Difference", 2, 512, 1);
+    g_dev->addInt(&m_req_limit.g_area_size_min, "Area Min. Size", 1, 4096, 1);
+    g_dev->addInt(&m_req_limit.g_area_duration_init, "Area Min. Duration", 2, 200, 1);
+    g_dev->addAction([this]() {m_req_limit.random_area_pixel = true;
+                                      m_req_limit.area_duration = m_req_limit.g_area_duration_init; }, "Trigger Random Requests");
     g_dev->addBool(&m_auto_cache_reset, "Auto Cache Defragmentation");
     g_dev->addAction([this]() { m_pcache_reset = true; }, "Clear Label Cache");
 #ifdef IMGUI
@@ -1609,16 +1645,19 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
     void CompressedSegmentationVolumeRenderer::printGPUMemoryUsage() {
         CSGVRenderEvaluationResults res = getLastEvaluationResults();
+        double available_vram_bytes = static_cast<double>(getMemoryHeapBudgetAndUsage(*getCtx()).first);
         Logger(INFO)  << "[GPU Memory] " << std::fixed << std::setprecision(3)
-                      << "Framebuffers: " << res.mem_framebuffers_bytes * BYTE_TO_GB << " GB | "
-                      << "Uniform Buffers: " << res.mem_ubos_bytes * BYTE_TO_GB << " GB | "
-                      << "Materials: " << res.mem_materials_bytes * BYTE_TO_GB << " GB | "
-                      << "Encoding: " << res.mem_encoding_bytes * BYTE_TO_GB << " GB | "
-                      << "Cache: " << res.mem_cache_bytes * BYTE_TO_GB << " GB | "
-                      << "Empty Space: " << res.mem_empty_space_bytes * BYTE_TO_GB << " GB | "
-                      << "  = " << res.mem_framebuffers_bytes + res.mem_ubos_bytes
-                      + res.mem_materials_bytes + res.mem_encoding_bytes + res.mem_cache_bytes + res.mem_empty_space_bytes * BYTE_TO_GB << " GB"
-                      << " / " << res.mem_total_bytes * BYTE_TO_GB << " GB";
+                << "Framebuffers: " << res.mem_framebuffers_bytes * BYTE_TO_GB << " GB | "
+                << "Uniform Buffers: " << res.mem_ubos_bytes * BYTE_TO_GB << " GB | "
+                << "Materials: " << res.mem_materials_bytes * BYTE_TO_GB << " GB | "
+                << "Encoding: " << res.mem_encoding_bytes * BYTE_TO_GB << " GB | "
+                << "Cache: " << res.mem_cache_bytes * BYTE_TO_GB << " GB | "
+                << "Empty Space: " << res.mem_empty_space_bytes * BYTE_TO_GB << " GB | "
+                << "Rest: " << (res.mem_framebuffers_bytes + res.mem_ubos_bytes + res.mem_materials_bytes
+                                      + res.mem_encoding_bytes + res.mem_cache_bytes + res.mem_empty_space_bytes
+                                      - res.mem_total_bytes) * BYTE_TO_GB << " GB"
+                << " = " << res.mem_total_bytes * BYTE_TO_GB << " total GB / "
+                << available_vram_bytes * BYTE_TO_GB << " GB";
     }
 
     CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluationResults() {

@@ -434,17 +434,19 @@ private:
     std::string m_additional_shader_defs = {};
 
     struct BrickRequestLimitation {
-        bool enable = true;               ///< if true, automatic request limitation is performed
-        glm::ivec2 min_pixel_global;      ///< pixel that globally has the minimum number of accumulated samples so far
-        glm::ivec2 area_min_pixel;        ///< pixel that is the representative in the area (the old global min. pixel)
+        bool g_enable = true;               ///< if true, automatic request limitation is performed
+        int g_area_size_min = 8u;           ///< the request area will never be smaller than size^2
+        int g_area_duration_init = 8;       ///< initially, an area tries to render this many samples per pixel before moving
+        //
+        bool random_area_pixel = false;   ///< if true, the next pixel for the area is selected randomly instead by min. spp
         int spp_delta = 8u;               ///< if the min. rendered spp are delta many frames behind the max. spp, limit brick requests
-        int area_duration_init = 8;       ///< initially, an area tries to render this many samples per pixel before moving
+        uint32_t area_start_frame = 0u;   ///< accumulation frame index at which the current request area position was set
+        glm::ivec2 area_min_pixel;        ///< pixel that is the representative in the area (the old global min. pixel)
+        uint32_t area_min_pixel_last_spp = 0u;    ///< minimum samples the area pixel received at start of this area duration (INVALID if unknown)
         int area_duration = 16;           ///< how many times a pixel is rendered before the request area moves to another position
         int area_size = 0;                ///< if <= 0: no request limitation. otherwise: pixel area that can request bricks
-        int area_size_min = 8u;           ///< the request area will never be smaller than size^2
         glm::ivec2 area_pos = {0, 0};     ///< start position of the area of pixels that can request bricks
-        uint32_t area_start_frame = 0u;   ///< accumulation frame index at which the current request area position was set
-        uint32_t last_area_min_pixel_spp = 0u;       ///< the minimum samples any pixel received before the last req. area. iteration
+        glm::ivec2 global_min_pixel;      ///< pixel that globally has the minimum number of accumulated samples so far
     } m_req_limit;
 
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;

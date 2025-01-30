@@ -23,7 +23,7 @@
 // Work Item to Pixel Mapping / Subsampling ----------------------------------------------------------------------------
 
 vec2 subpixelOffset(ivec2 pixel) {
-    return vec2(0.5f) + (g_blue_noise_enable ? (randomVec3(pixel, g_camera_still_frames).xy - vec2(0.5f)) : vec2(0.f));
+    return vec2(0.5f) + (g_blue_noise_enable ? (randomVec3(pixel, g_random_seed).xy - vec2(0.5f)) : vec2(0.f));
 }
 
 ivec2 pixelOffsetInBlock() {
