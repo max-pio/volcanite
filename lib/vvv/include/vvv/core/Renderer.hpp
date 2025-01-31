@@ -190,8 +190,8 @@ public:
         throw std::logic_error("Renderer does not implement frame time tracking.");
     }
 
-    /// Called after renderNextFrame to download and export the currently rendered image on the next call of
-    /// renderNextFrame.
+    /// Called after renderNextFrame to download and export the currently rendered image on the next (!) call of
+    /// renderNextFrame. If renderNextFrame is not called after exportCurrentFrameToImage, the frame is not exported.
     /// @param image_path a path to a non-existing png, jpg, or jpeg file
     virtual void exportCurrentFrameToImage(std::string image_path) {
         throw std::logic_error("Renderer does not implement image export");

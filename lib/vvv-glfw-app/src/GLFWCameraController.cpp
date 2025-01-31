@@ -158,7 +158,7 @@ namespace vvv {
                     m_camera->orbital_radius * sin(m_camera->rotation_y) * cos(m_camera->rotation_x));
 
             if (forward != 0.f || right != 0.f || vertical != 0.f || scrollWheelDelta != 0.f ||
-                m_camera->rotate_camera) {
+                m_camera->rotate_camera || glfwGetKey(m_window, GLFW_KEY_R)) {
                 m_camera->onCameraUpdate();
             }
         } else {

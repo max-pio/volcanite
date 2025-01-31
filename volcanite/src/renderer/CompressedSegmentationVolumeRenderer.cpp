@@ -1331,7 +1331,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                 const int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
                                 if (m_global_illumination_enabled && m_shadow_pathtracing_ratio > 0.) {
                                     // ambient occlusion / path tracing need some frames to converge (1024 SPP)
-                                    m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 1024);
+                                    m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 512);
                                 } else {
                                     // everything deterministic, nees only AA
                                     m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 16);

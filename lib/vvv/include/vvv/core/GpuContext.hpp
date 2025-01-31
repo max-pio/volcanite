@@ -62,6 +62,8 @@ struct QueueFamilyIndices {
 // https://github.com/KhronosGroup/Vulkan-Samples/blob/30e0ef953f9492726945d2042400a3808c8408f5/framework/resource_cache.h
 class GpuPipelineCache {
 public:
+    virtual ~GpuPipelineCache() = default;
+
     virtual vk::PipelineCache getPipelineCache() const { return m_pipelineCache; }
 
     virtual void destroyPipelineCache(vk::Device device) { VK_DEVICE_DESTROY(device, m_pipelineCache); }

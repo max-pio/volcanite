@@ -21,6 +21,7 @@
 #define FMT_HEADER_ONLY
 #include "fmt/include/fmt/format.h"
 #include "fmt/include/fmt/args.h"
+#include "glm/ext/scalar_constants.hpp"
 
 namespace vvv {
 
@@ -59,64 +60,77 @@ RendererOutput HeadlessRendering::renderFrame(AwaitableList awaitBeforeExecution
 //
 //void HeadlessRendering::execAsync() { execAsyncAttached().detach(); }
 
-std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames,
-                                                         std::string record_file_in,
-                                                         std::string video_fmt_file_out,
-                                                         void (*frameFinishedCallback)(RendererOutput *)) {
-    if(!isGpuContextCreated()) {
-        Logger(ERROR) << "GPU context not available. You must call acquireResources() before rendering.";
-        return nullptr;
-    }
+std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRenderingConfig &cfg) {
+    if(!isGpuContextCreated())
+        throw std::runtime_error("GPU context not available. You must call acquireResources() before rendering.");
+    if (cfg.accumulation_samples == 0)
+        throw std::runtime_error("Accumulation frames must be greater then zero.");
+    // if (cfg.camera_auto_rotate_frames > 0 && !cfg.record_file_in.empty())
+    //     throw std::runtime_error("Cannot specify both camera_auto_rotate_frames and record_file_in.");
 
     // TODO: decouple HeadlessRendering::exec in an initialization method and multiple render calls, respect m_pendingRecreation
     // e.g.: hr.init(); hr.setRenderResolution(400, 400); hr.renderToFile(120); hr.setRenderParametersFromFile(path); auto output = hr.render(60);
 
+    size_t camera_auto_rotate_frames;
     // pre-recorded camera path playback
     std::optional<std::ifstream> m_record_in = {};
-    if (!record_file_in.empty()) {
-        m_record_in = std::ifstream(record_file_in, std::ios::in | std::ios::binary);
+    if (!cfg.record_file_in.empty()) {
+        m_record_in = std::ifstream(cfg.record_file_in, std::ios::in | std::ios::binary);
         if (!m_record_in->is_open()) {
-            throw std::runtime_error("could not open recording input file " + record_file_in);
+            throw std::runtime_error("could not open recording input file " + cfg.record_file_in);
         }
+        camera_auto_rotate_frames = 0u; // exit when the camera file reached its end
+    }
+    // rendering video images but no camera playback is specified: rotate camera around
+    else if (!cfg.video_fmt_file_out.empty()) {
+        camera_auto_rotate_frames = 256u;
+    } else {
+        camera_auto_rotate_frames = 1u;
     }
 
     RendererOutput rendererOutput = {nullptr, {}};
-    size_t frame_idx;
+    size_t frame_idx = 0u;
     MiniTimer timer;
-    for (frame_idx = 0u; frame_idx < number_of_frames || (number_of_frames == 0 && m_record_in.has_value()); frame_idx++) {
-
+    // either render all camera poses from the record_in file or render camera_auto_rotate_frames images with
+    // accumulation_samples each. he camera is rotated around the Y axis after each camera_auto_rotate_frame
+    for (frame_idx = 0u; (m_record_in.has_value() && !m_record_in->eof()) || frame_idx < camera_auto_rotate_frames; frame_idx++) {
         if (m_record_in.has_value()) {
             getCamera()->readFrom(m_record_in.value());
             if (m_record_in->eof()) {
                 m_record_in->close();
                 m_record_in = {};
-                // stop the rendering if not target frame count was given once the recording file finished
-                if (number_of_frames == 0u)
-                    break;
+                break;
             }
         }
 
         // render one frame after the other = wait for the last renderingComplete to finish
-
-        rendererOutput = renderFrame({rendererOutput.renderingComplete});
-        if (!video_fmt_file_out.empty()) {
-            m_renderer->exportCurrentFrameToImage(fmt::vformat(video_fmt_file_out, fmt::make_format_args(frame_idx)));
+        for (size_t accumulation_idx = 0; accumulation_idx < cfg.accumulation_samples; accumulation_idx++) {
+            rendererOutput = renderFrame({rendererOutput.renderingComplete});
         }
 
-        if(frameFinishedCallback) {
-            frameFinishedCallback(&rendererOutput);
+        if (!cfg.video_fmt_file_out.empty()) {
+            m_renderer->exportCurrentFrameToImage(fmt::vformat(cfg.video_fmt_file_out, fmt::make_format_args(frame_idx)));
+        }
+
+        if(cfg.frameFinishedCallback) {
+            cfg.frameFinishedCallback(&rendererOutput);
+        }
+
+        if (camera_auto_rotate_frames > 0) {
+            auto camera = getCamera();
+            camera->rotation_y += glm::pi<float>() / 256.f;
+            camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
+                    camera->orbital_radius * cos(camera->rotation_y) * cos(camera->rotation_x),
+                    camera->orbital_radius * sin(camera->rotation_x),
+                    camera->orbital_radius * sin(camera->rotation_y) * cos(camera->rotation_x));
+
+            camera->onCameraUpdate();
         }
     }
-//    sync->hostWaitOnDevice(rendererOutput.renderingComplete);
+
     m_renderer->stopFrameTimeTracking(rendererOutput.renderingComplete);
-    double endTime = timer.elapsed();
-
-    double frame_time = endTime / static_cast<double>(frame_idx);
-    Logger(INFO) << "rendering of " << frame_idx << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
-
-    if (getDevice()) {
-        getDevice().waitIdle();
-    }
+    const double endTime = timer.elapsed();
+    const double frame_time = endTime / static_cast<double>((frame_idx * cfg.accumulation_samples));
 
     // copy the last output texture to a new texture that we can return.
     // this way the original rendering texture could be overwritten or destroyed without affecting the return texture.
@@ -125,7 +139,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames
     ret_tex->ensureResources();
     const auto layoutTransformDone = ret_tex->setImageLayout(vk::ImageLayout::eTransferDstOptimal, vk::PipelineStageFlagBits::eAllCommands, {.queueFamily=rendererOutput.queueFamilyIndex});
     rendererOutput.renderingComplete.push_back(layoutTransformDone);
-    sync->hostWaitOnDevice({this->executeCommands([rendererOutput, ret_tex](vk::CommandBuffer cmd){
+    sync->hostWaitOnDevice({this->executeCommands([rendererOutput, ret_tex](const vk::CommandBuffer cmd){
         auto width = rendererOutput.texture->width;
         auto height = rendererOutput.texture->height;
         const auto originalLayout = rendererOutput.texture->descriptor.imageLayout;
@@ -134,14 +148,19 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(size_t number_of_frames
                                  vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(width, height, 1));
         cmd.copyImage(rendererOutput.texture->image, vk::ImageLayout::eTransferSrcOptimal, ret_tex->image, vk::ImageLayout::eTransferDstOptimal, {copyRegion});
         rendererOutput.texture->setImageLayout(cmd, originalLayout);
-    }, {.queueFamily=rendererOutput.queueFamilyIndex})});
+    }, {.queueFamily=rendererOutput.queueFamilyIndex, .await=rendererOutput.renderingComplete})});
 
     // export the final frame to the video path
-    if (!video_fmt_file_out.empty()) {
+    if (!cfg.video_fmt_file_out.empty()) {
         frame_idx--; // frame_idx is now the number of frames, but the last index is one before
-        ret_tex->writeFile(std::vformat(video_fmt_file_out,
-                                        std::make_format_args(frame_idx)));
+        std::string last_output_image_path = std::vformat(cfg.video_fmt_file_out,
+                                        std::make_format_args(frame_idx));
+        Logger(INFO) << "exporting screenshot to " << last_output_image_path;
+        ret_tex->writeFile(last_output_image_path);
     }
+
+    Logger(INFO) << "rendering of " << (frame_idx * cfg.accumulation_samples)
+                      << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
     return ret_tex;
 }
 

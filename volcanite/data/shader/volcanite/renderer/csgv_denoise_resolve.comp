@@ -64,7 +64,7 @@ vec4 blendWithBackground(ivec2 pixel, vec4 pixel_rgba) {
     vec4 bgColor = get_background_color(fragCoord, viewRayDirection);
 
     DEBUG_img_envmap(fragCoord, viewRayDirection, bgColor, bool(g_debug_vis_flags & VDEB_ENVMAP_BIT));
-    return pixel_rgba.a * pixel_rgba + (1.f - pixel_rgba.a) * bgColor;
+    return vec4((pixel_rgba.a * pixel_rgba + (1.f - pixel_rgba.a) * bgColor).rgb, 1.f);
 }
 
 void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {

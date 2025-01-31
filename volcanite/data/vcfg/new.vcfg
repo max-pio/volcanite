@@ -1,0 +1,62 @@
+Version 0.5.0
+
+[Camera]
+orbital: 1
+position: -1.07664 0.759882 -0.880686
+lookat: 0 0 0
+rotation: 0.5 3.82721 1.58498
+
+[Materials]
+Materials: 8 # 0 1.000000 4247717632.000000 0 0.000000 4247717632.000000 1.000000 0.000000 1 0 5 2 # -2 1.000000 340282346638528859811704183484516925440.000000 0 0.000000 4247717632.000000 1.000000 0.000000 0 0 5 2 # -2 1.000000 340282346638528859811704183484516925440.000000 0 0.000000 4247717632.000000 1.000000 0.000000 0 0 5 2 # -2 1.000000 340282346638528859811704183484516925440.000000 0 0.000000 4247717632.000000 1.000000 0.000000 0 0 5 2 # -2 1.000000 340282346638528859811704183484516925440.000000 0 0.000000 4247717632.000000 1.000000 0.000000 0 0 5 2 # -2 1.000000 340282346638528859811704183484516925440.000000 0 0.000000 4247717632.000000 1.000000 0.000000 0 0 5 2 # -2 1.000000 340282346638528859811704183484516925440.000000 0 0.000000 4247717632.000000 1.000000 0.000000 0 0 5 2 # -2 1.000000 340282346638528859811704183484516925440.000000 0 0.000000 4247717632.000000 1.000000 0.000000 0 0 5 2
+
+[Development]
+Blue_Noise_Shift: 1
+Max_DDA_Steps: 16384
+LOD_bias: 0.000000
+Max._Decoding_LoD: 6
+Debug_View: 0
+Auto_Cache_Request_Limitation: 1
+Allowed_SPP_Difference: 8
+Area_Min._Size: 8
+Area_Min._Duration: 8 256
+Auto_Cache_Defragmentation: 1
+Every_Frame: 0
+Every_Frame: 0
+Step_Accumulation: 0
+
+[Rendering]
+Rendering_Preset: Path~Tracing
+Constant_Color: 0.000000
+Light_Intensity: 1.000000
+Light_Direction: -0.309426 0.721995 -0.618853
+Ambient_Global_Illumination: 0
+Directional_<>_Ambient: 1.000000
+Environment_Map: 1
+Path_Length: 32
+
+[Post-Processing]
+Background_Color_A: 1.000000 1.000000 1.000000 1.000000
+Background_Color_B: 1.000000 1.000000 1.000000 1.000000
+Tone_Mapping: 0
+Enable_À-Trous_Post-Processing: 1
+Post-Process_Iterations: 4
+Post-Process_Kernel_Size: 1
+Enable_Denoising: 1
+Depth_Sigma: 1.000000
+Fade_Denoiser_Out: 1
+Denoise_Fade_Sigma: 1.000000
+
+[Display]
+Accumulation_Frames: 16
+Subsampling_Resolution: 0
+GUI_5: Render~resolution:~1920x1080
+Resizable_Window: 1
+
+[General]
+Voxel_Size: 1.000000 1.000000 1.000000
+Splitting_Plane_X: 0 100
+Splitting_Plane_Y: 0 100
+Splitting_Plane_Z: 0 100
+GUI_13: GPU~Memory:~0.2476/11.36/12.24~GB~(used/avail/total)
+GUI_14: Cache~Usage:~...~|~SPP~min/max:~0~/~0
+

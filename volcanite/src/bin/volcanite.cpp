@@ -111,19 +111,16 @@ int volcanite_main(int argc, char *argv[]) {
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
             renderEngine->acquireResources();
             tryImportRenderConfig(args, renderer);
-            // if frame count is specified in the rendering config, use that number.
-            int accumulation_frames = renderer->getTargetAccumulationFrames();
-            // if a recording file is given, play the full recording file instead (flagged as frame count 0)
-            if (!args.record_in_file.empty())
-                accumulation_frames = 0;
-            else if (accumulation_frames == 0)
+
+            size_t accumulation_frames = renderer->getTargetAccumulationFrames();
+            if (accumulation_frames == 0)
                 accumulation_frames = 60;
 
             if (!args.eval_logfiles.empty())
                 renderer->startFrameTimeTracking();
-            auto texture = renderEngine->renderFrames(accumulation_frames,
-                                                      args.record_in_file,
-                                                      args.video_output_fmt_file);
+            auto texture = renderEngine->renderFrames({.record_file_in=args.record_in_file,
+                                                                              .video_fmt_file_out=args.video_output_fmt_file,
+                                                                              .accumulation_samples=accumulation_frames});
             if (!args.eval_logfiles.empty()) {
                 renderer->stopFrameTimeTracking({}); // stopFrameTimeTracking is already called by renderEngine
                 renderer->writeParameterFile(stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg");

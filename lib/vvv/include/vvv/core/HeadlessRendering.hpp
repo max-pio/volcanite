@@ -33,6 +33,13 @@ public:
     void updateGui() override {}
 };
 
+struct HeadlessRenderingConfig {
+    const std::string &record_file_in = "";        ///< if set, replays pre-recorded camera positions from this file
+    const std::string &video_fmt_file_out = "";    ///< if set, outputs video frames to file path with an integer fmt placeholder , e.g.
+    size_t accumulation_samples = 1;                  ///< number of frames after which a new camera position is read and a video frame is exported
+    void (*frameFinishedCallback)(RendererOutput*) = nullptr;   ///< will be called each time a frame finished rendering after accumulation_samples
+};
+
 class HeadlessRendering : public vvv::DefaultGpuContext, public std::enable_shared_from_this<HeadlessRendering> {
 private:
     HeadlessRendering(std::string appName, std::shared_ptr<vvv::Renderer> renderer, std::shared_ptr<vvv::DebugUtilities> debugUtilities)
@@ -63,9 +70,7 @@ public:
     /// Example: "./out{:3}.png"
     /// @param frameFinishedCallback is called everytime a frame finished with the current texture output.
     /// @return the final Texture of the render loop.
-    std::shared_ptr<Texture> renderFrames(size_t number_of_frames, std::string record_file_in = "",
-                                          std::string video_fmt_file_out = "",
-                                          void (*frameFinishedCallback)(RendererOutput*) = nullptr);
+    std::shared_ptr<Texture> renderFrames(const HeadlessRenderingConfig &cfg);
 
 //    /// Run the renderloop without taking ownership of the current thread.
 //    /// You MUST NOT call `execAsync` or `exec` to invoke a second instance of the renderloop until the forked renderloop terminates.
@@ -74,7 +79,7 @@ public:
 
     vvv::Camera *getCamera() const { return m_renderer->getCamera().get(); }
 
-    ~HeadlessRendering() { releaseResources(); m_gui = nullptr; }
+    virtual ~HeadlessRendering() { releaseResources(); m_gui = nullptr; }
 
     /// @return an GuiInterface to which GUI controlled properties can be added in a sequential manner.
     vvv::GuiInterface *getGui() const { return m_gui.get(); }
