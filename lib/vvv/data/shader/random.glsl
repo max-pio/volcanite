@@ -42,20 +42,27 @@ vec3 nextRNG(const in ivec2 xy, inout uint seed) {
 
 
 // SAMPLING ------------------------------------------------------------------------------------------------------------
-vec2 sampleUniformDisc(const in ivec2 pixel, const in vec2 u) {
+vec2 sampleUniformDisc(const in vec2 u) {
     float r = sqrt(u.x);
     float theta = TWO_PI * u.y;
     return vec2(r * cos(theta), r * sin(theta));
 }
 
+vec2 sampleBlackmanHarris(const vec2 u) {
+    const vec2 res = vec2(cos(u.y * PI * 2.f), sin(u.y * PI * 2.f));
+    // surprisingly good fit to inverse cdf
+    const float r = 0.943404f * asin(0.636617f * asin(sqrt(u.x)));
+    return res * r;
+}
+
 vec3 sampleUniformSphere(const in vec2 u) {
-    float h = 1.0 - 2.0 * u.x;
-    float r = sqrt(1.0 - h * h);
-    return vec3(r * cos(2.0 * PI * u.y), h, r * sin(2.0 * PI * u.y));
+    const float h = 1.f - 2.f * u.x;
+    const float r = sqrt(1.f - h * h);
+    return vec3(r * cos(2.f * PI * u.y), h, r * sin(2.f * PI * u.y));
 }
 
 vec3 sampleUniformHemisphereVoxel(const in vec2 u, const in vec3 normal) {
-    vec3 dir = sampleUniformSphere(u);
+    const vec3 dir = sampleUniformSphere(u);
     // Assuming that the normal is axis-oriented, we only have to alter the sign of dir's components to project it into
     // the positive hemisphere. This is the case for surface normals of voxels.
     // note: sign(dot(n,d)) does not work for the singularities when one component is zero (sign returns 0 instead of 1)
@@ -72,8 +79,8 @@ vec3 sampleCosineWeightedHemisphereVoxel(const in vec2 u, in vec3 normal) {
     float theta = 2.0 * PI * u.y;
 
     // Assuming that the normal is axis-oriented, the vector (1, 0, 1) is always valid
-    vec3  bitangent = normalize(cross(normal, vec3(1.f, 0.f, 1.f)));
-    vec3  tangent = cross(bitangent, normal);
+    const vec3  bitangent = normalize(cross(normal, vec3(1.f, 0.f, 1.f)));
+    const vec3  tangent = cross(bitangent, normal);
 
     return normalize(r * sin(theta) * bitangent + sqrt(1.0 - u.x) * normal + r * cos(theta) * tangent);;
 }

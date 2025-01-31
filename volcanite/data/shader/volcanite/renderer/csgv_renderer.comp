@@ -551,9 +551,18 @@ void main() {
 
     if (DEBUG_vis_model_space(ray, t_0, pixel, bool(g_debug_vis_flags & VDEB_MODEL_SPACE_BIT))) return;
 
-    // initialize ray marching state
+    // the number of (valid) samples that were accumulated for this pixel up to this frame
+    const uint prev_sample_count = imageLoad(accuSampleCountIn, pixelFromInvocationID()).r;
+
+    // the RayMarchState will contain all information necessary for the ray marching loop
     RayMarchState state;
-    state.rng = hash_pcg2d(uvec2(uint(blueNoise32x32_uint8(gl_GlobalInvocationID.xy)), g_random_seed)).x;
+    #ifndef UNBIASED_RNG
+        // the RNG state is initialized from the number of samples accumulated so far but always changes after 256 frames
+        state.rng = hash_pcg2d(uvec2(uint(blueNoise32x32_uint8(pixel)),
+                               ((g_camera_still_frames / 256u) << 8u) ^ (prev_sample_count << 31u) ^ prev_sample_count)).x;
+    #else
+        state.rng = hash_pcg3d(uvec3(pixel, g_frame)).x;
+    #endif
     state.label = INVALID;
     state.last_label = INVALID;
     state.path_length = 0;
@@ -570,7 +579,6 @@ void main() {
     //  (1) only if request limitation is enabled,
     //  (2) limit to pixels that did not receive enough samples yet, and
     //  (3) limit to pixels that are within a certain area of the screen.
-    const uint prev_sample_count = imageLoad(accuSampleCountIn, pixelFromInvocationID()).r;
     bool do_not_request = g_req_limit_area_size > 0
                           && // (prev_sample_count > g_min_max_spp.x + g_req_limit_spp_delta ||
                           (any(lessThan(pixel, g_req_limit_area_pos)) || any(greaterThanEqual(pixel, g_req_limit_area_pos + ivec2(g_req_limit_area_size))));

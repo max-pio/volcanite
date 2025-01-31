@@ -22,8 +22,13 @@
 
 // Work Item to Pixel Mapping / Subsampling ----------------------------------------------------------------------------
 
-vec2 subpixelOffset(ivec2 pixel) {
-    return vec2(0.5f) + (g_blue_noise_enable ? (randomVec3(pixel, g_random_seed).xy - vec2(0.5f)) : vec2(0.f));
+vec2 subpixelOffset(const ivec2 pixel) {
+    // TODO: code duplication with initialization of the random state. the
+    const uint prev_sample_count = imageLoad(accuSampleCountIn, pixel).r;
+    const vec2 u = randomVec3(pixel,((g_camera_still_frames / 256u) << 8u) ^ (prev_sample_count << 31u) ^ prev_sample_count).xy;
+
+    // blackman harris filter with a width of 1.5 pixels
+    return vec2(0.5f) + (g_blue_noise_enable ? sampleBlackmanHarris(u) : vec2(0.f));
 }
 
 ivec2 pixelOffsetInBlock() {

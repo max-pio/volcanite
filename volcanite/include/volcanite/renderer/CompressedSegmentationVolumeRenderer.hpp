@@ -345,8 +345,16 @@ private:
     void updateDeviceMemoryUsage();
     void updateSegmentedVolumeMaterial(int m);
     vvv::AwaitableList updateAttributeBuffers();
+    void updateRequestLimiation(uint32_t global_min_spp);
+    void disableRequestLimiation();
     void updateRenderUpdateFlags();
     void updateUniformDescriptorset();
+
+    float getCacheFillRate() const {
+        const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
+        return glm::clamp(static_cast<float>(m_last_gpu_stats.used_cache_base_elements)
+            / static_cast<float>(m_cache_capacity - cache_elements_per_finest_lod), 0.f, 1.f);
+    }
 
     uint32_t m_queue_family_index = 0u;
     std::unique_ptr<PassCompSegVolRender> m_pass = nullptr;
@@ -435,8 +443,8 @@ private:
 
     struct BrickRequestLimitation {
         bool g_enable = true;               ///< if true, automatic request limitation is performed
-        int g_area_size_min = 8u;           ///< the request area will never be smaller than size^2
-        int g_area_duration_init = 8;       ///< initially, an area tries to render this many samples per pixel before moving
+        int g_area_size_min = 8u;           ///< the request area will never be smaller than this size^2
+        glm::ivec2 g_area_duration_bounds = {8, 256}; ///< min. / max. number of frames per render pixel for one area configuration
         //
         bool random_area_pixel = false;   ///< if true, the next pixel for the area is selected randomly instead by min. spp
         int spp_delta = 8u;               ///< if the min. rendered spp are delta many frames behind the max. spp, limit brick requests
