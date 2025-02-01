@@ -118,7 +118,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
 
         if (camera_auto_rotate_frames > 0) {
             auto camera = getCamera();
-            camera->rotation_y += glm::pi<float>() / 256.f;
+            camera->rotation_y += 2.f * glm::pi<float>() / 256.f;
             camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
                     camera->orbital_radius * cos(camera->rotation_y) * cos(camera->rotation_x),
                     camera->orbital_radius * sin(camera->rotation_x),
