@@ -14,6 +14,7 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import converter as vc
+import re
 
 import numpy as np
 import time
@@ -145,6 +146,11 @@ def __launch_threads(chunk_information, volume_information, slice_count_offset, 
         thread.join()
 
 
+def __calculate_volume_dim(chunk_size_in: tuple[int, int, int], last_chunk: str):
+    volume_size = re.findall(r"\d+", last_chunk.split(".")[0])
+    return np.array(chunk_size_in, dtype=int) * np.array(volume_size, dtype=int) + vc.read_volume(last_chunk).shape
+
+
 def is_volume_conversion_valid(chunk_size_in, chunk_size_out, volume_dim):
     if volume_dim[0] % chunk_size_in[0] != 0 or volume_dim[1] % chunk_size_in[1] != 0 or volume_dim[2] % chunk_size_in[2] != 0:
         return False
@@ -154,12 +160,10 @@ def is_volume_conversion_valid(chunk_size_in, chunk_size_out, volume_dim):
 
     return True
 
-
-def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, int], volume_dim: tuple[int, int, int],
+def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, int], last_chunk: str,
                            path_out_format: str, chunk_size_out: tuple[int, int, int], thread_count: int = 16,
                            dtype_out=None):
-    # TODO: instead of volume_dim, take last_chunk_in as argument. x0y0z0.h5 .. x2y1z3.h5 would have last_chunk_in=2,1,3
-    #  Then compute initially: volume_dim = chunk_size * (last_chunk_in) + load_chunk(last_chunk_in).shape
+    volume_dim = __calculate_volume_dim(chunk_size_in, last_chunk)
 
     # TODO: regarding axis orders: numpy volumes returned by read_volume are in ZYX shape (by np convention). This means
     #  that read_volume().shape = (DIM_Z, DIM_Y, DIM_X). write_volume() expects the same ZYX shape of the np array, but
@@ -283,11 +287,10 @@ if __name__ == '__main__':
     # example code
     # split chunks s.t three input chunks results in four output chunks, split in the first dimension
     shape = (1024, 1024, 1024)
-    vol_dim = (3*1024, 1024, 1024)
     new_shape = (768, 1024, 1024)
     print("convert volume now")
     start_time = time.time()
-    convert_chunked_volume("input/x{}y{}z{}.hdf5", shape, vol_dim, "output/out_x{}y{}z{}.hdf5", new_shape, dtype_out=np.float32)
+    convert_chunked_volume("input/x{}y{}z{}.hdf5", shape, "input/x3y0z2.hdf5", "output/out_x{}y{}z{}.hdf5", new_shape, dtype_out=np.float32)
     end_time = time.time()
 
     elapsed_time_minutes = int((end_time - start_time) // 60)
