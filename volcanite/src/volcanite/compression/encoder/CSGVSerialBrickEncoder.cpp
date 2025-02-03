@@ -255,13 +255,22 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
             else if ((m_op_mask & OP_PALETTE_LAST_BIT) && palette.back() == value)
                 operation |= PALETTE_LAST;
             else {
-                // reuse the n-X palette value where 0 < X < 17
+                // reuse the n-DELTA palette value where 0 < DELTA
                 uint32_t palette_delta = static_cast<uint32_t>(std::find(palette.rbegin(), palette.rend(), value) - palette.rbegin());
-                if((m_op_mask & OP_PALETTE_D_BIT) && palette_delta < 17u && palette_delta < palette.size()) {
+                if((m_op_mask & OP_PALETTE_D_BIT) && palette_delta < palette.size() && palette_delta <= MAX_PALETTE_DELTA_DISTANCE) {
                     assert(palette.at(palette.size() - palette_delta - 1u) == value && "Palette value does not fit!");
                     assert(palette_delta > 0u && "the palette delta 0 should've been caught by the palette_last value!");
-                    write4Bit(out, 0u, out_i++, operation | PALETTE_D);
-                    operation = palette_delta - 1u; // the "0" case is already handled by PALETTE_LAST, so we only consider case 1 - 16 in our 4 bits
+                    palette_delta--; // the "0" case is already handled by PALETTE_LAST. Only consider cases 1 ... MAX_PALETTE_DELTA_DISTANCE
+                    int palette_delta_shift = (glm::findMSB(palette_delta) / 3 + 1) * 3; // start one after the MSB 3 bit package
+                    // the operation stream will consist of 
+                    // [PALETTE_D | STOP_BIT] [CONTINUE_DELTA_BIT][DELTA 1st 3 MSB] [CONTINUE_DELTA_BIT][DELTA 2nd 3 MSB] ...
+                    operation = operation | PALETTE_D;
+                    do {
+                        write4Bit(out, 0u, out_i++, operation);
+                        palette_delta_shift -= 3;                                // move over to next three bits
+                        operation = (palette_delta >> palette_delta_shift) & 7u; // write the next 3 most-significant bits of delta
+                        operation |= (palette_delta_shift > 0u ? 8u : 0u);       // set the 4th MSB of this entry if delta has bits remaining
+                    } while(palette_delta_shift > 0u);
                 } else
                 {  // if nothing helps, we add a completely new palette entry
                     palette.push_back(value);
@@ -400,8 +409,15 @@ void CSGVSerialBrickEncoder::decodeBrick(const uint32_t* brick_encoding, const u
                 output_brick[i] = brick_palette[paletteE + 1];
             }
             else if (operation_lsb == PALETTE_D) {
-                uint32_t palette_delta = readNextLodOperationFromEncoding(brick_encoding, readState) + 2u;
-                output_brick[i] = brick_palette[paletteE + palette_delta];
+                uint32_t palette_delta = 0u;
+                while (true) {
+                    uint32_t next_delta_bits = readNextLodOperationFromEncoding(brick_encoding, readState);
+                    // 3 LSB are the next three bits of the 
+                    palette_delta = (palette_delta << 3u) | (next_delta_bits & 7u);
+                    if ((next_delta_bits & 8u) == 0u)
+                        break;
+                }
+                output_brick[i] = brick_palette[paletteE + palette_delta + 2u];
             }
             else
                 assert(false && "unrecognized compression operation");
@@ -529,8 +545,15 @@ void CSGVSerialBrickEncoder::decodeBrickWithDebugEncoding(const uint32_t* brick_
                 output_brick[i] = brick_palette[paletteE + 1];
             }
             else if (operation_lsb == PALETTE_D) {
-                uint32_t palette_delta = readNextLodOperationFromEncoding(brick_encoding, readState) + 2u;
-                output_brick[i] = brick_palette[paletteE + palette_delta];
+                uint32_t palette_delta = 0u;
+                while (true) {
+                    uint32_t next_delta_bits = readNextLodOperationFromEncoding(brick_encoding, readState);
+                    // 3 LSB are the next three bits of the 
+                    palette_delta = (palette_delta << 3u) | (next_delta_bits & 7u);
+                    if ((next_delta_bits & 8u) == 0u)
+                        break;
+                }
+                output_brick[i] = brick_palette[paletteE + palette_delta + 2u];
             }
             else
                 assert(false && "unrecognized compression operation");
@@ -648,16 +671,24 @@ void CSGVSerialBrickEncoder::freqEncodeBrick(const std::vector<uint32_t>& volume
             else if ((m_op_mask & OP_PALETTE_LAST_BIT) && palette.back() == value)
                 operation |= PALETTE_LAST;
             else {
-                // reuse the n-X palette value where 0 < X < 17
                 uint32_t palette_delta = static_cast<uint32_t>(std::find(palette.rbegin(), palette.rend(), value) - palette.rbegin());
-                if((m_op_mask & OP_PALETTE_D_BIT) && palette_delta < 17u && palette_delta < palette.size()) {
+                if((m_op_mask & OP_PALETTE_D_BIT) && palette_delta < palette.size() && palette_delta <= MAX_PALETTE_DELTA_DISTANCE) {
                     assert(palette.at(palette.size() - palette_delta - 1u) == value && "Palette value does not fit!");
                     assert(palette_delta > 0u && "the palette delta 0 should've been caught by the palette_last value!");
-                    if(detail_freq && (current_inv_lod == lod_count - 1u))
-                        brick_freq[16 + (operation | PALETTE_D)]++;
-                    else
-                        brick_freq[operation | PALETTE_D]++;
-                    operation = palette_delta - 1u; // the "0" case is already handled by PALETTE_LAST, so we only consider case 1 - 16 in our 4 bits
+                    palette_delta--; // the "0" case is already handled by PALETTE_LAST. Only consider cases 1 ... MAX_PALETTE_DELTA_DISTANCE
+                    int palette_delta_shift = (glm::findMSB(palette_delta) / 3 + 1) * 3; // start one after the MSB 3 bit package
+                    // the operation stream will consist of 
+                    // [PALETTE_D | STOP_BIT] [CONTINUE_DELTA_BIT][DELTA 1st 3 MSB] [CONTINUE_DELTA_BIT][DELTA 2nd 3 MSB] ...
+                    operation = operation | PALETTE_D;
+                    do {
+                        if(detail_freq && (current_inv_lod == lod_count - 1u))
+                            brick_freq[16 + operation]++;
+                        else
+                            brick_freq[operation]++;
+                        palette_delta_shift -= 3;                                // move over to next three bits
+                        operation = (palette_delta >> palette_delta_shift) & 7u; // write the next 3 most-significant bits of delta
+                        operation |= (palette_delta_shift > 0u ? 8u : 0u);       // set the 4th MSB of this entry if delta has bits remaining
+                    } while(palette_delta_shift > 0u);
                 } else
                 {  // if nothing helps, we add a completely new palette entry
                     current_lod_palette++;

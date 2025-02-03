@@ -71,7 +71,7 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
     renderEngine->acquireResources();
     // let the rendering converge for some frames (if specified in the rendering config, we use that number)
     int accumulation_frames = renderer->getTargetAccumulationFrames();
-    auto texture = renderEngine->renderFrames(accumulation_frames > 0 ? accumulation_frames : 300);
+    auto texture = renderEngine->renderFrames({.accumulation_samples=static_cast<size_t>(accumulation_frames > 0 ? accumulation_frames : 300)});
     if(texture == nullptr) {
         Logger(ERROR) << "internal rendering error";
         return RET_RENDER_ERROR;
@@ -155,7 +155,7 @@ double computeImageRMSE(const std::string& path1, const std::string& path2, floa
         diff_image_out.erase(diff_image_out.rfind('.'), 4);
         diff_image_out.append("_DIFF_");
         diff_image_out.append(path2.substr(path2.rfind('/')+1));
-        Logger(DEBUG) << "writing difference image " << canonical(std::filesystem::path(diff_image_out));
+        Logger(DEBUG) << "writing difference image " << absolute(std::filesystem::path(diff_image_out));
         stbi_write_png(diff_image_out.c_str(), w1, h1, c1,
                        reinterpret_cast<const void*>(image1), w1 * c1);
     }
