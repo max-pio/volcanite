@@ -295,10 +295,18 @@ uint get_inv_lod(ivec3 voxel) {
         }
 
         const uint old_req_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
-        assert(old_req_inv_lod <= LOD_COUNT, "we try to access a brick that's flagged as invisible");
-        if (isDepthValid(depth_valid)   // this is a valid ray
-            && old_req_inv_lod != req_inv_lod //LOD_COUNT // brick is not yet requested
-            && !do_not_request) { // this path may still request new brick
+        assert(old_req_inv_lod <= LOD_COUNT, "trying to access a brick that's flagged as invisible");
+        if (old_req_inv_lod != req_inv_lod  //LOD_COUNT // brick is not yet requested
+            #ifdef VALID_RAY_REQUEST_ONLY
+                    // without checking for validity, may (rarely) request bricks that are actually obscured by bricks
+                    // in front of them. limiting requests to valid rays, however, creates popping artifacts at
+                    // interfaces between LODs when the camera moves: bricks behind other bricks are not flagged as
+                    // visible (because the brick in front is an out-of-date LOD)
+                && isDepthValid(depth_valid)
+            #else
+                && (isDepthValid(depth_valid) || g_req_limit_area_size == 0u)
+            #endif
+                && !do_not_request) { // this path may still request new brick
 
             atomicCompSwap(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], old_req_inv_lod, req_inv_lod);
 
@@ -322,13 +330,13 @@ uint get_inv_lod(ivec3 voxel) {
         if (cur_inv_lod != req_inv_lod)
             depth_valid = INVALID_DEPTH;
 
-        // if the brick is not yet decoded: return a random palette label
+        // if the brick is not yet decoded: return a palette label
         if (cur_inv_lod >= LOD_COUNT) {
             EncodingRef encoding_address = getBrickEncodingRef(brick_idx);
             const uint encoding_size = getBrickEncodingLength(brick_idx);
             const uint palette_size = getBrickPaletteLength(brick_idx);
 
-            // read a "random" palette entry
+            // read a "random" palette entry or return the first label (coarsest LOD)
             const uint random_palette_index = 0u; //hash_pcg3d(uvec3(gl_GlobalInvocationID.xy, g_random_seed)).r % palette_size;
             return  encoding_address.buf[encoding_size - 1u - random_palette_index];
         }
