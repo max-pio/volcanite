@@ -125,7 +125,8 @@ int volcanite_main(int argc, char *argv[]) {
                                          .palettized_cache=args.cache_palettized,
                                          .decode_from_shared_memory=args.decode_from_shared_memory,
                                          .cache_mode=args.cache_mode,
-                                         .empty_space_resolution=args.empty_space_resolution});
+                                         .empty_space_resolution=args.empty_space_resolution,
+                                         .shader_defines=args.shader_defines});
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
         renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
 

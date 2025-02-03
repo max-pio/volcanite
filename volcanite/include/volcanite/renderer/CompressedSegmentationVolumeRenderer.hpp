@@ -241,7 +241,6 @@ public:
     /// @param decode_from_shared_memory if true, the encoding will be copied to shared memory before decoding.
     /// only works in combination with a random access encoding.
     void setDecodingParameters(CSGVRenderingConfig config) {
-        // TODO: instead of copying all CSGVRenderingConfig parameters, simply store such a struct as member
         m_target_cache_size_MB = config.cache_size_MB;
         if(m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
             Logger(WARN) << "Cache size is currently limited to 4 GB maximum.";

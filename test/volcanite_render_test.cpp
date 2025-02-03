@@ -60,7 +60,8 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
                                      .palettized_cache=args.cache_palettized,
                                      .decode_from_shared_memory=false,
                                      .cache_mode=args.cache_mode,
-                                     .empty_space_resolution=args.empty_space_resolution});
+                                     .empty_space_resolution=args.empty_space_resolution,
+                                     .shader_defines=args.shader_defines});
     renderer->setCompressedSegmentationVolume(csgv, csgvDatabase);
     // not setting render config: use default values
     renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
