@@ -138,14 +138,6 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
                 operation = PALETTE_LAST;
             else {
                 // Random access encoding does not use the palette delta operation
-                // reuse the n-X palette value where 0 < X < 17
-//                uint32_t palette_delta = static_cast<uint32_t>(std::find(palette.rbegin(), palette.rend(), value) - palette.rbegin());
-//                if(m_use_palette_delta && palette_delta < 17u && palette_delta < palette.size()) {
-//                    assert(palette.at(palette.size() - palette_delta - 1u) == value && "Palette value does not fit!");
-//                    assert(palette_delta > 0u && "the palette delta 0 should've been caught by the palette_last value!");
-//                    write4Bit(out, 0u, out_i++, operation | PALETTE_D);
-//                    operation = palette_delta - 1u; // the "0" case is already handled by PALETTE_LAST, so we only consider case 1 - 16 in our 4 bits
-//                } else
                 {  // if nothing helps, we add a completely new palette entry
                     palette.push_back(value);
                     operation = PALETTE_ADV;

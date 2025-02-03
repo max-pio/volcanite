@@ -222,6 +222,8 @@ protected:
     bool m_separate_detail;
     uint32_t m_cpu_threads;
 
+    static constexpr uint32_t MAX_PALETTE_DELTA_DISTANCE = 1u << 24u; // (practically unlimited) longer distances would require more bits than a palette entry
+
 protected:
     /// list of neighbor vectors per index (8 indices in total) where each index has 3 ivec3 vectors of type {-1, 1}^3
     static constexpr const glm::ivec3 neighbor[8][3] = {{glm::ivec3({-1, 0, 0}), glm::ivec3({0, -1, 0}), glm::ivec3({0, 0, -1})},

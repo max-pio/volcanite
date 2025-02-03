@@ -180,8 +180,15 @@ void decompressCSGVBrick(const uint brick_idx,
                 writeEntryToCache(decoded_brick_start_uint, i, paletteE - 1);
             }
             else if (operation_lsb == PALETTE_D) {
-                uint palette_delta = _readNextLodOperationFromEncoding(brick_encoding, readState) + 2u;
-                writeEntryToCache(decoded_brick_start_uint, i, paletteE - palette_delta);
+                uint palette_delta = 0u;
+                while (true) {
+                    uint next_delta_bits = _readNextLodOperationFromEncoding(brick_encoding, readState);
+                    // 3 LSB are the next three bits of delta 
+                    palette_delta = (palette_delta << 3u) | (next_delta_bits & 7u);
+                    if ((next_delta_bits & 8u) == 0u)
+                        break;
+                }
+                writeEntryToCache(decoded_brick_start_uint, i, paletteE - palette_delta - 2u);
             }
 #else
             // When the cache is not palettized, 32 bit labels are directly stored in the cache.
@@ -192,8 +199,15 @@ void decompressCSGVBrick(const uint brick_idx,
                 writeEntryToCache(decoded_brick_start_uint, i, brick_palette.buf[paletteE+1]);
             }
             else if (operation_lsb == PALETTE_D) {
-                uint palette_delta = _readNextLodOperationFromEncoding(brick_encoding, readState) + 2u;
-                writeEntryToCache(decoded_brick_start_uint, i, brick_palette.buf[paletteE + palette_delta]);
+                uint palette_delta = 0u;
+                while (true) {
+                    uint next_delta_bits = _readNextLodOperationFromEncoding(brick_encoding, readState);
+                    // 3 LSB are the next three bits of delta 
+                    palette_delta = (palette_delta << 3u) | (next_delta_bits & 7u);
+                    if ((next_delta_bits & 8u) == 0u)
+                        break;
+                }
+                writeEntryToCache(decoded_brick_start_uint, i, brick_palette.buf[paletteE + palette_delta + 2u]);
             }
 #endif
 
