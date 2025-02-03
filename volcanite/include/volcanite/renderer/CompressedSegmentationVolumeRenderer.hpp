@@ -192,7 +192,9 @@ public:
     /// Will save the renderer state to the path when the renderer is shut down
     void saveConfigOnShutdown(const std::string& path) { m_save_config_on_shutdown_path = expandPath(path); }
 
-    bool readParameterFile(const std::string& path, const std::string& version_string="") override {
+    /// Returns a pair of the tag and file path of a parameter preset if it matches the given path string.
+    /// If not rendering preset exists for the path string, returns a nullptr.
+    [[nodiscard]] const std::pair<std::string, std::filesystem::path>* getParameterPreset(const std::string& path) const {
         auto to_tag = [](std::string str) -> std::string {
             std::ranges::transform(str, str.begin(),[](const unsigned char c) {
                                                                         return std::tolower(c); });
@@ -201,15 +203,22 @@ public:
             str.erase(it.begin(), it.end());
             return str;
         };
-        // first check if the given path matches the name of one of the preset files
+        // if the given path does not contain any file system control characters, check if it matches a preset
         if (path.find('.') == std::string::npos && path.find('~') == std::string::npos
             && path.find('/') == std::string::npos && path.find('\\') == std::string::npos) {
-            for (const auto&[vcfg_name, vcfg_path]: m_data_vcfg_presets) {
-                if (to_tag(path) == to_tag(vcfg_name))
-                    return Renderer::readParameterFile(Paths::findDataPath("vcfg") / vcfg_path, version_string);
+            for (int i = 0; i < m_data_vcfg_presets.size(); i++) {
+                if (to_tag(m_data_vcfg_presets[i].first) == to_tag(path))
+                    return &m_data_vcfg_presets[i];
             }
         }
-        return Renderer::readParameterFile(expandPath(path), version_string);
+        return nullptr;
+    }
+
+    bool readParameterFile(const std::string& path, const std::string& version_string="", bool backup_parameters=true) override {
+        if (const auto preset = getParameterPreset(path))
+            return Renderer::readParameterFile(Paths::findDataPath("vcfg") / preset->second, version_string, backup_parameters);
+        else
+            return Renderer::readParameterFile(expandPath(path), version_string, backup_parameters);
     }
 
     struct CSGVRenderingConfig {

@@ -40,49 +40,49 @@ public:
     // general args
     bool verbose = false;
     bool headless = false;
-    std::string input_file;                  // must be .csgv if compress is false, otherwise vti / raw / hdf5
-    bool chunked = false;                    // if the first 3 {} in the input string should be chunk ids formatted
-    uint32_t chunk_files[3] = {0u, 0u, 0u};  // max. xyz index of chunk files. e.g. (1,3,0) would load 8 chunk files
-    uint32_t threads = 0;                    // number of CPU threads (0 = system supported concurrent threads)
+    std::string input_file;                  ///< must be .csgv if compress is false, otherwise vti / raw / hdf5
+    bool chunked = false;                    ///< if the first 3 {} in the input string should be chunk ids formatted
+    uint32_t chunk_files[3] = {0u, 0u, 0u};  ///< max. xyz index of chunk files. e.g. (1,3,0) would load 8 chunk files
+    uint32_t threads = 0;                    ///< number of CPU threads (0 = system supported concurrent threads)
 
     // rendering args
-    std::string rendering_config_file;
+    std::vector<std::string> rendering_configs;  ///< one or more .vcfg files (ends with .vcfg) or config strings
     uint32_t render_resolution[2] = {1920, 1080};
     bool stream_lod = false;
     size_t cache_size_MB = 1024ul;
     uint32_t cache_mode = CACHE_BRICKS;
     bool cache_palettized = false;
     bool decode_from_shared_memory = false;
-    uint32_t empty_space_resolution = 2u;    // in cache mode CACHE_VOXELS, groups n³ voxels into one empty space entry
+    uint32_t empty_space_resolution = 2u;    ///< in cache mode CACHE_VOXELS, groups n³ voxels into one empty space entry
     bool show_development_gui = false;
     bool enable_vsync = true;
 
     // attribute args
-    std::string attribute_database;     // SQlite3 file with attributes for volume labels
-    std::string attribute_table;        // table or view containing the attributes for the volume labels
-    std::string attribute_label;        // name of the label attribute
-    bool label_remapping = false;       // if label ids in the volume should be remapped to a consecutive interval
+    std::string attribute_database;     ///< SQlite3 file with attributes for volume labels
+    std::string attribute_table;        ///< table or view containing the attributes for the volume labels
+    std::string attribute_label;        ///< name of the label attribute
+    bool label_remapping = false;       ///< if label ids in the volume should be remapped to a consecutive interval
 
     // compression args
-    std::string compress_export_file;   // !empty = perform compression to file         Only one of
-    std::string decompress_export_file; // !empty = perform decompression to file       both can be set!
+    std::string compress_export_file;   ///< !empty = perform compression to file         Only one of
+    std::string decompress_export_file; ///< !empty = perform decompression to file       both can be set!
     std::string segmented_volume_file;
     uint32_t brick_size = 32;
     EncodingMode encoding_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC;
-    uint32_t freq_subsampling = 8;      // n^3 factor for subsampling bricks for frequency table computation with rANS
+    uint32_t freq_subsampling = 8;      ///< n^3 factor for subsampling bricks for frequency table computation with rANS
     uint32_t operation_mask = OP_ALL_WITHOUT_DELTA;   // enables certain CSGV operations and stop bits through OP_*_BIT
-    bool random_access = false;         // encode bricks so that they support random access within a brick
+    bool random_access = false;         ///< encode bricks so that they support random access within a brick
 
     // evaluation and statistics
-    std::string screenshot_output_file; // png or jpg output file path to export the last frame from headless rendering
-    std::string video_output_fmt_file;  // output image file path string accepted by std::format for immediate frames
+    std::string screenshot_output_file; ///< png or jpg output file path to export the last frame from headless rendering
+    std::string video_output_fmt_file;  ///< output image file path string accepted by std::format for immediate frames
     bool run_tests = false;
     bool export_stats = false;
-    std::string record_in_file = "";    // file that stores a previously exported camera path for replay in headless
+    std::string record_in_file = "";    ///< file that stores a previously exported camera path for replay in headless
     std::vector<std::string> eval_logfiles = {}; // files into which evaluation results are exported (with 'append')
-    std::string eval_name = {};         // name of the evaluation run that can be accessed in the log file as "%name"
-    bool print_eval_keys = false;       // if true, prints all available evaluation log keys to the console on startup
-    std::string shader_defines = "";    // string of shader defines that will be passed on to the shader compiler
+    std::string eval_name = {};         ///< name of the evaluation run that can be accessed in the log file as "%name"
+    bool print_eval_keys = false;       ///< if true, prints all available evaluation log keys to the console on startup
+    std::string shader_defines = "";    ///< string of shader defines that will be passed on to the shader compiler
 
 
     static std::string getHelpString() {
@@ -96,7 +96,7 @@ public:
         "\tDecompresses volume.csgv to out.vti." << std::endl;
         ss << "./volcanite volume" << std::endl <<
         "\tStarts the Volcanite renderer for the given volume." << std::endl;
-        ss << "./volcanite --config low.cfg --cache-size 512 -b 32 -s 2 --freq-sampling 8 --stream-lod volume.vti" << std::endl <<
+        ss << "./volcanite --config local-shading --cache-size 512 -b 32 -s 2 --freq-sampling 8 --stream-lod volume.vti" << std::endl <<
         "\tStarts Volcanite for limited GPU capabilities." << std::endl;
         ss << "./volcanite --headless -c out.csgv --chunked 1,3,0 vol_x{}_y{]_z{}.vti" << std::endl <<
        "\tCompresses chunked volume vol_x0_y0_z0.vti to vol_x1_y3_z0.vti." << std::endl;
@@ -171,7 +171,7 @@ public:
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
             ValueArg<std::string> videoArg("v", "video", "Formatted file path with single {} placeholder to export intermediate images when rendering -i. Example: ./out{:04}.jpg", false, va.video_output_fmt_file, "formatted file", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
-            ValueArg<std::string> renderconfigArg("", "config", "Import render parameters from config file.", false, va.rendering_config_file, "file", cmd);
+            ValueArg<std::string> renderconfigArg("", "config", "List of .vcfg files or config strings, separated by ;", false, "", "config files or strings", cmd);
             // general arguments
             SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
             SwitchArg verboseArg("", "verbose", "Verbose debug output.", cmd);
@@ -233,15 +233,32 @@ public:
             }
             va.random_access = randomAccessArg.getValue();
             // rendering arguments
-            // TODO: cleanup: not expanding config_file path here, may be a preset in the CompressedSegmentationVolumeRenderer
-            va.rendering_config_file = renderconfigArg.getValue();
+            {
+                auto split_configs = renderconfigArg.getValue() | std::views::split(';')
+                                                                | std::views::transform([](auto r) {
+                                                                    // remove leading and trailing spaces
+                                                                    std::string_view v(r.data(), r.size());
+                                                                    v.remove_prefix(std::min(v.find_first_not_of(' '), v.size()));
+                                                                    v.remove_suffix(r.size() - 1u - std::min(v.find_last_not_of(' '), v.size()));
+                                                                    return v;
+                                                                })
+                                                                | std::views::transform([](auto r) {
+                                                                    // expand file path (if it is a vcfg file)
+                                                                    // and convert to strin
+                                                                    auto cfg = std::string(r.data(), r.size());
+                                                                    if (cfg.ends_with(".vcfg"))
+                                                                        return expandPath(cfg);
+                                                                    return cfg;
+                                                                });
+                va.rendering_configs = {split_configs.begin(), split_configs.end()};
+            }
             va.screenshot_output_file = expandPath(imageArg.getValue());
             va.video_output_fmt_file = expandPath(videoArg.getValue());
             if (!va.video_output_fmt_file.empty()) {
                 try {
-                    size_t test_frame_idx = 123;
+                    size_t test_frame_idx = 1;
                     auto f = std::vformat(va.video_output_fmt_file, std::make_format_args(test_frame_idx));
-                } catch(std::format_error err) {
+                } catch(const std::format_error& err) {
                     throw ArgException(videoArg.longID() + " must be a formatted image file path string containing a single {} replacement field. Example: ./out{:04}.jpg", videoArg.longID());
                 }
             }
@@ -269,6 +286,8 @@ public:
                     break;
                 case 'b':
                     va.cache_mode = CACHE_BRICKS;
+                    break;
+                default:
                     break;
             }
             va.decode_from_shared_memory = decodedSharedMemoryArg.getValue();

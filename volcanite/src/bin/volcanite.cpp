@@ -32,6 +32,8 @@
 
 #include <string>
 
+#include "fmt/base.h"
+
 using namespace volcanite;
 
 int export_texture(Texture* tex, const std::string& export_file_path) {
@@ -46,13 +48,36 @@ int export_texture(Texture* tex, const std::string& export_file_path) {
     return 0;
 }
 
-int tryImportRenderConfig(VolcaniteArgs& args, std::shared_ptr<CompressedSegmentationVolumeRenderer> renderer) {
+int tryImportRenderConfigs(VolcaniteArgs& args, std::shared_ptr<CompressedSegmentationVolumeRenderer> renderer) {
     // set the startup resolution
     //renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
-    // read optional config file
-    if(!args.rendering_config_file.empty()) {
-        if (!renderer->readParameterFile(args.rendering_config_file, VOLCANITE_VERSION))
-            return RET_INVALID_ARG;
+    // the config arg is a list of vcfg files
+
+    for (const auto& config: args.rendering_configs) {
+        if (config.ends_with(".vcfg") || renderer->getParameterPreset(config) != nullptr) {
+            if (!renderer->readParameterFile(config, VOLCANITE_VERSION))
+                return RET_INVALID_ARG;
+        } else {
+            // construct a string stream from the config string which must be of the form:
+            // [window_name] {parameter_label_1}: {parameter_values_1}
+            long window_name_end = static_cast<long>(config.find(']'));
+            long label_name_end = static_cast<long>(config.find(':'));
+            if (!config.starts_with('[') || window_name_end == std::string::npos
+                || label_name_end == std::string::npos || label_name_end <= window_name_end) {
+                Logger(WARN) << "Invalid config '" << config << "'. Configs must be in the form [{window}] {label}: {values}";
+                continue;
+            }
+            std::stringstream vcfg_stream;
+            // first line is the window name: [{window}]\n
+            vcfg_stream << config.substr(0, window_name_end + 1) << '\n';
+            // folllowed by another line for the parameter: {label}: {values}
+            std::string_view label_view(config.begin() + window_name_end + 1, config.begin() + label_name_end + 1); // end of config string
+            label_view.remove_prefix(std::min(label_view.find_first_not_of(' '), label_view.size())); // remove leading spaces
+            auto sanitized_string = std::string(label_view); // replace spaces in name with _ (as is done in vcfg files)
+            std::ranges::replace(sanitized_string, ' ', '_');
+            vcfg_stream << sanitized_string << config.substr(label_name_end + 1) << '\n';
+            renderer->readParameters(vcfg_stream, VOLCANITE_VERSION, true);
+        }
     }
     return 0;
 }
@@ -110,7 +135,7 @@ int volcanite_main(int argc, char *argv[]) {
             // obtain a headless rendering engine
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
             renderEngine->acquireResources();
-            tryImportRenderConfig(args, renderer);
+            tryImportRenderConfigs(args, renderer);
 
             size_t accumulation_frames = renderer->getTargetAccumulationFrames();
             if (accumulation_frames == 0)
@@ -165,7 +190,7 @@ int volcanite_main(int argc, char *argv[]) {
             app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
             app->setVSync(args.enable_vsync);
             app->acquireResources();
-            tryImportRenderConfig(args, renderer);
+            tryImportRenderConfigs(args, renderer);
             return app->exec();
         }
 #endif
