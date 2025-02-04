@@ -51,23 +51,7 @@ void DEBUG_img_cache_array(ivec2 pixel, inout vec4 color, bool enabled) {
     #if CACHE_MODE == CACHE_BRICKS
         // display the rendering in grayscale in the background
         color = vec4(vec3(dot(color.rgb, vec3(1.f / 3.f))), color.a);
-
-        // marker the area of pixels that can request bricks, and the pixel with the minimum sample count:
-        // TODO: brick request limitation could become its own debug visualization
-        // mark a border around the active brick request area if brick request limitation is active
-        if (g_req_limit_area_size > 0u
-            && isPixelInAABB(pixel, g_req_limit_area_pos, ivec2(g_req_limit_area_size), ivec2(0))) {
-            color.r = 0.f;
-            color.b = 0.f;
-        }
-        if (any(equal(g_req_limit_area_pixel, pixel))) {
-            color.rgb = vec3(0.f);
-        }
-        if(g_req_limit_area_size > 0u
-            && (isPixelInAABB(pixel, g_min_spp_pixel - ivec2(8), ivec2(17), ivec2(3)) || all(equal(pixel, g_min_spp_pixel)))) {
-            color = vec4(0.8f, 0.f, 0.1f, 1.f);
-        }
-
+    
         // visualize the cache array
         const int size = 8;
         const uint elems_per_pixel = max(g_brick_idx_count / (viewport_size.x * viewport_size.y / size), 1u);
@@ -154,6 +138,39 @@ void DEBUG_img_cache_array(ivec2 pixel, inout vec4 color, bool enabled) {
         // blend colored cache vis with background
         const float alpha = 0.8f;
         color = vec4((1.f - alpha) * color.rgb + alpha * display, 1.f);
+    #endif
+
+#endif
+}
+
+
+// visualize the pixel with the minimum number of valid samples so far, and the area of pixles that may request new
+// bricks along with its representative pixel
+void DEBUG_img_request_limit(ivec2 pixel, inout vec4 color, bool enabled) {
+#ifdef ENALBE_CSGV_DEBUGGING
+    if (!enabled)
+        return;
+
+    const ivec2 viewport_size = imageSize(inpaintedOutColor);
+
+    #if CACHE_MODE == CACHE_BRICKS
+        // display the rendering in grayscale in the background
+        color = vec4(vec3(dot(color.rgb, vec3(1.f / 3.f))), color.a);
+
+        // marker the area of pixels that can request bricks, and the pixel with the minimum sample count:
+        // TODO: brick request limitation could become its own debug visualization
+        // mark a border around the active brick request area if brick request limitation is active
+        if (g_req_limit_area_size > 0u
+            && isPixelInAABB(pixel, g_req_limit_area_pos, ivec2(g_req_limit_area_size), ivec2(0))) {
+            color.r = 0.f;
+            color.b = 0.f;
+        }
+        if (g_req_limit_area_size > 0u && any(equal(g_req_limit_area_pixel, pixel))) {
+            color.rgb = vec3(0.f);
+        }
+        if((isPixelInAABB(pixel, g_min_spp_pixel - ivec2(8), ivec2(17), ivec2(3)) || all(equal(pixel, g_min_spp_pixel)))) {
+            color = vec4(0.8f, 0.f, 0.1f, 1.f);
+        }
     #endif
 
 #endif
