@@ -29,27 +29,31 @@ def __read_tmp_chunk_zy(chunk_information, volume_information):
 
 
 def __get_indices(chunk_information, volume_information, dim : int):
-    element_read = 0
+    current_element_read = 0
 
     chunk_information['start_element'][dim] = chunk_information['end_element'][dim]
-    if element_read < volume_information['chunk_size_out'][dim]:
+    if current_element_read < volume_information['chunk_size_out'][dim]:
         # more elements must be read
-        chunk_information['end_element'][dim] = min(volume_information['chunk_size_in'][dim] - chunk_information['end_element'][dim], volume_information['chunk_size_out'][dim] - element_read) + chunk_information['start_element'][dim]
+        chunk_information['end_element'][dim] = min(volume_information['chunk_size_in'][dim] - chunk_information['end_element'][dim], volume_information['chunk_size_out'][dim] - current_element_read) + chunk_information['start_element'][dim]
 
         if chunk_information['end_element'][dim] == chunk_information['start_element'][dim]:
-            element_read += volume_information['chunk_size_in'][dim]
+            current_element_read += volume_information['chunk_size_in'][dim]
             chunk_information['start_element'][dim] = 0
             chunk_information['chunk_index'][dim] += 1
         else :
-            element_read += chunk_information['end_element'][dim] - chunk_information['start_element'][dim]
+            current_element_read += chunk_information['end_element'][dim] - chunk_information['start_element'][dim]
 
-        if element_read < volume_information['chunk_size_out'][dim]:
+        if current_element_read < volume_information['chunk_size_out'][dim]:
             # need another chunk
             # reset and recalculate end
             # chunk_information['start_element'] remains untouched -> start element remains as start in the first chunk to stitch together later on
-            chunk_information['end_element'][dim] = volume_information['chunk_size_out'][dim] - element_read
+            chunk_information['end_element'][dim] = volume_information['chunk_size_out'][dim] - current_element_read
             # mark array, s.t. there are two chunks in dimension dim, which must be read
             chunk_information['stitch'][dim] = True
+
+    # subtract current element read count from global to read count
+    volume_information['elements_to_read'][dim] -= current_element_read
+
 
 def __load_current_chunk(chunk_information, volume_information, dim):
     tmp_chunk = __read_tmp_chunk_zy(chunk_information, volume_information)
@@ -151,13 +155,30 @@ def __calculate_volume_dim(chunk_size_in: tuple[int, int, int], last_chunk: str)
     return np.array(chunk_size_in, dtype=int) * np.array(volume_size, dtype=int) + vc.read_volume(last_chunk).shape
 
 
+def __update_and_reset_params(volume_information, chunk_information, dim, chunk_size_out, volume_dim):
+    if chunk_information['stitch'][dim]:
+        chunk_information['chunk_index'][dim] += 1
+    chunk_information['stitch'][dim] = False
+    volume_information['chunk_size_out'][dim] = chunk_size_out[dim].copy()
+    if chunk_size_out[dim] > volume_information['elements_to_read'][dim] > 0:
+        volume_information['chunk_size_out'][dim] = volume_information['elements_to_read'][dim]
+
+    if dim == 1:
+        chunk_information['chunks_needed'][1] = False
+        chunk_information['chunks_needed'][3] = False
+        volume_information['elements_to_read'][2] = volume_dim[2].copy()
+    if dim == 0:
+        chunk_information['chunks_needed'][1] = False
+        chunk_information['chunks_needed'][2] = False
+        chunk_information['chunks_needed'][3] = False
+        volume_information['elements_to_read'][1] = volume_dim[1].copy()
+
+
 def is_volume_conversion_valid(chunk_size_in, chunk_size_out, volume_dim):
-    if volume_dim[0] % chunk_size_in[0] != 0 or volume_dim[1] % chunk_size_in[1] != 0 or volume_dim[2] % chunk_size_in[2] != 0:
+    if any(chunk_size_in * 2 < chunk_size_out):
         return False
-
-    if volume_dim[0] % chunk_size_out[0] != 0 or volume_dim[1] % chunk_size_out[1] != 0 or volume_dim[2] % chunk_size_out[2] != 0:
+    if any(volume_dim < chunk_size_out):
         return False
-
     return True
 
 def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, int], last_chunk: str,
@@ -176,10 +197,8 @@ def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, i
     chunk_size_in = np.array((chunk_size_in[2], chunk_size_in[1], chunk_size_in[0]))
     volume_dim = np.array((volume_dim[2], volume_dim[1], volume_dim[0]))
 
-    # TODO: conversion should be valid even if volume_dim is not dividable by chunk_size_*. Only case in which an error
-    #  should be thrown: if chunk_size_out is more than twice chunk_size_in in any dimension
     if not is_volume_conversion_valid(chunk_size_in, chunk_size_out, volume_dim):
-        raise ValueError("Conversion is not valid, check if the input/output dimension is a multiple of the volume dimension")
+        raise ValueError("Conversion is not valid, chunk_size_in should be less than twice as large as chunk_size_out and volume_dim should be larger than chunk_size_out")
     # z
     # ^
     # |
@@ -195,7 +214,8 @@ def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, i
                           'chunk_size_in' : chunk_size_in,
                           'volume_dim' : volume_dim,
                           'path_out_format' : path_out_format,
-                          'chunk_size_out': chunk_size_out,
+                          'chunk_size_out': chunk_size_out.copy(),
+                          'elements_to_read': volume_dim.copy(),
                           'dtype_out' : dtype_out
                           }
     chunk_information = {'chunk_index' : np.array((1, 1, 1)), # which chunk
@@ -205,7 +225,6 @@ def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, i
                          'chunks_needed' : np.full(shape=4, fill_value=False, dtype=bool),
                          }
     data = [np.array([], dtype=dtype_out) for _ in range(4)]
-    stitched_chunk = np.empty(shape=chunk_size_out, dtype=dtype_out)
     for z in range(0, volume_dim[0], chunk_size_out[0]):
         chunk_information['chunk_index'][1] = 1
         chunk_information['end_element'][1] = 0
@@ -217,21 +236,22 @@ def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, i
             chunk_information['chunk_index'][2] = 1
             chunk_information['end_element'][2] = 0
             __get_indices(chunk_information, volume_information, 1)
+
+            if chunk_information['stitch'][1]:
+                chunk_information['chunks_needed'][1] = True
             for x in range(0, volume_dim[2], chunk_size_out[2]):
                 __get_indices(chunk_information, volume_information, 2)
-                if chunk_information['stitch'][1]:
-                    chunk_information['chunks_needed'][1] = True
-
                 if chunk_information['stitch'][0] and chunk_information['stitch'][1]:
                     chunk_information['chunks_needed'][3] = True
-                __load_chunks(chunk_information, volume_information, data)
 
+                __load_chunks(chunk_information, volume_information, data)
+                stitched_chunk = np.empty(shape=volume_information['chunk_size_out'], dtype=dtype_out)
 
                 elements_in_first_chunk = min(chunk_size_in[2] - chunk_information['start_element'][2], chunk_size_out[2])
                 slices_per_thread = elements_in_first_chunk // thread_count
                 __launch_threads(chunk_information, volume_information, -chunk_information['start_element'][2], chunk_information['start_element'][2], elements_in_first_chunk, slices_per_thread, thread_count, stitched_chunk, data)
 
-                if elements_in_first_chunk < chunk_size_out[2]:
+                if elements_in_first_chunk < volume_information['chunk_size_out'][2]:
                     # need another chunk in x dim, also increase chunk_index in x dim
                     chunk_information['chunk_index'][2] += 1
                     __load_chunks(chunk_information, volume_information, data)
@@ -243,23 +263,13 @@ def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, i
                 print(f"write volume x{x// chunk_size_out[2]}y{y// chunk_size_out[1]}z{z// chunk_size_out[0]}")
                 stitched_chunk = np.swapaxes(stitched_chunk, 0, 2)
                 vc.write_volume(stitched_chunk, path_out_format.format(x // chunk_size_out[2], y // chunk_size_out[1], z // chunk_size_out[0]))
-                stitched_chunk = np.empty(shape=chunk_size_out, dtype=dtype_out)
 
-            # increase chunk index if needed and resets chunk parameter
-            if chunk_information['stitch'][1]:
-                chunk_information['chunk_index'][1] += 1
-            chunk_information['stitch'][1] = False
-            chunk_information['chunks_needed'][1] = False
-            chunk_information['chunks_needed'][3] = False
-        # increase chunk index if needed and resets chunk parameter
-        if chunk_information['stitch'][0]:
-            chunk_information['chunk_index'][0] += 1
-        chunk_information['stitch'][0] = False
-        chunk_information['chunks_needed'][1] = False
-        chunk_information['chunks_needed'][2] = False
-        chunk_information['chunks_needed'][3] = False
+                volume_information['chunk_size_out'][2] = chunk_size_out[2].copy()
+                if volume_information['elements_to_read'][2] < chunk_size_out[2] and volume_information['elements_to_read'][2] > 0:
+                    volume_information['chunk_size_out'][2] = volume_information['elements_to_read'][2]
+            __update_and_reset_params(volume_information, chunk_information, 1, chunk_size_out, volume_dim)
+        __update_and_reset_params(volume_information, chunk_information, 0, chunk_size_out, volume_dim)
 
-    return stitched_chunk
 
 def write_chunked_volume(volume: np.ndarray, path_out_format: str, chunk_size: tuple[int, int, int]) -> None:
     """Exports the volume to a set of files where each file is a volume chunk with dimensions chunk_size^3. The file
