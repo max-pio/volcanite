@@ -73,7 +73,7 @@ public:
                     m_data_vcfg_presets.clear();
                     for (const auto & entry : std::filesystem::directory_iterator(vcfg_data_dir)) {
                         if (entry.path().has_extension() && entry.path().extension() == ".vcfg") {
-                            m_data_vcfg_presets.emplace_back(entry.path().stem(), entry.path());
+                            m_data_vcfg_presets.emplace_back(entry.path().stem().string(), entry.path());
                         }
                     }
                 }
@@ -205,7 +205,7 @@ public:
             && path.find('/') == std::string::npos && path.find('\\') == std::string::npos) {
             for (const auto&[vcfg_name, vcfg_path]: m_data_vcfg_presets) {
                 if (to_tag(path) == to_tag(vcfg_name))
-                    return Renderer::readParameterFile(Paths::findDataPath("vcfg") / vcfg_path, version_string);
+                    return Renderer::readParameterFile((Paths::findDataPath("vcfg") / vcfg_path).string(), version_string);
             }
         }
         return Renderer::readParameterFile(expandPath(path), version_string);
