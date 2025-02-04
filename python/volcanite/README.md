@@ -10,10 +10,21 @@ sizes, and to download example data sets from online cloud storages.
 
 It is advised to install the package within a [python virtual environment (venv)](https://docs.python.org/3/library/venv.html):
 
+### Ubuntu
 ```bash
 python -m venv ./.venv
 source .venv/bin/activate
 ```
+
+### Windows 
+On windows the bin folder is named `Scripts`.
+```bash
+python -m venv ./.venv
+source .venv/Scripts/activate
+```
+
+<br />
+From then on, the installation is the same for Ubuntu and Windows.
 
 Install the volcanite package. If you prefer to not install any optional dependencies or only those for a specific
 functionality, install `volcanite`, or `volcanite[converter]` instead.
