@@ -49,41 +49,25 @@ void DEBUG_img_cache_array(ivec2 pixel, inout vec4 color, bool enabled) {
     const ivec2 viewport_size = imageSize(inpaintedOutColor);
 
     #if CACHE_MODE == CACHE_BRICKS
-        // display the rendering in grayscale in the background
-        color = vec4(vec3(dot(color.rgb, vec3(1.f / 3.f))), color.a);
-    
-        // visualize the cache array
-        const int size = 8;
-        const uint elems_per_pixel = max(g_brick_idx_count / (viewport_size.x * viewport_size.y / size), 1u);
-        const uint brick_idx = elems_per_pixel * uint((pixel.x / size) + (pixel.y / size) * viewport_size.x);
+        // TODO: visualize the cache top pointers etc
 
-        if (brick_idx >= g_brick_idx_count)
-            return;
+        // cache top pointer:
+        if (pixel.y < 20) {
+            uint cache_top = g_assign_info[ASSIGN_CACHE_TOP_IDX];
+            if (uint(pixel.x) <= cache_top / g_cache_capacity) {
+                color = vec4(1.f, 0.f, 0.f, 1.f);
+            }
+        }
 
-        const uint brick_info_pos = brick_idx * 4u;
-        const uint req_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
-        const uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
+        // cache stacks
+        for (int inv_lod = 0; inv_lod < LOD_COUNT; inv_lod++) {
+            if (pixel.y > 20 * inv_lod)
+            uint number_of_requested_blocks = g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_REQUESTED_BLOCKS];
+            uint number_of_free_blocks = g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)];
 
-        vec3 display = vec3(0.f);
-        // marked invisible
-        if (req_inv_lod > LOD_COUNT)
-            display = vec3(1.f);
-        // not requested and not in cache
-        else if (cur_inv_lod == INVALID && req_inv_lod == LOD_COUNT)
-            display = vec3(0.f, 0.f, 0.4f);
-        // requested but not in cache
-        else if (cur_inv_lod == INVALID && req_inv_lod < LOD_COUNT)
-            display = vec3(0.8f, 0.f, 0.f);
-        // still in cache but no longer requested
-        else if (cur_inv_lod != INVALID && req_inv_lod >= LOD_COUNT)
-            display = vec3(0.f, 0.4f, 0.1f);
-        // in cache and requested
-        else if (cur_inv_lod != INVALID && req_inv_lod < LOD_COUNT)
-            display = vec3(0.f, 1.f, 0.f);
+        }
 
-        // blend colored cache vis with background
-        const float alpha = 0.8f;
-        color = vec4((1.f - alpha) * color.rgb + alpha * display, 1.f);
+
     #elif CACHE_MODE == CACHE_VOXELS
         // map the pixel to a cache cell [region]
         const int size = 4;
@@ -140,6 +124,59 @@ void DEBUG_img_cache_array(ivec2 pixel, inout vec4 color, bool enabled) {
         color = vec4((1.f - alpha) * color.rgb + alpha * display, 1.f);
     #endif
 
+#endif
+}
+
+// show for all bricks if the are decoded / invisible / requested but not decoded
+void DEBUG_img_brick_info(ivec2 pixel, inout vec4 color, bool enabled) {
+#ifdef ENALBE_CSGV_DEBUGGING
+    if (!enabled)
+        return;
+
+    #if CACHE_MODE == CACHE_BRICKS
+        const ivec2 viewport_size = imageSize(inpaintedOutColor);
+
+        // display the rendering in grayscale in the background
+        color = vec4(vec3(dot(color.rgb, vec3(1.f / 3.f))), color.a);
+
+        // visualize the brick infos array
+        const int size = clamp((viewport_size.x * viewport_size.y) / int(g_brick_idx_count), 1, 8);
+        const uint elems_per_pixel = max(g_brick_idx_count / (viewport_size.x * viewport_size.y / size), 1u);
+        const uint brick_idx = elems_per_pixel * uint((pixel.x / size) + (pixel.y / size) * viewport_size.x);
+
+        if (brick_idx >= g_brick_idx_count)
+            return;
+
+        const uint brick_info_pos = brick_idx * 4u;
+        const uint req_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
+        const uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
+
+        // ------------------
+        // Visibility and decoding state
+        vec3 display = vec3(0.f);
+        // marked invisible
+        if (req_inv_lod > LOD_COUNT)
+            display = vec3(1.f);
+        // not requested and not in cache
+        else if (cur_inv_lod == INVALID && req_inv_lod == LOD_COUNT)
+            display = vec3(0.f, 0.f, 0.4f);
+        // requested but not in cache
+        else if (cur_inv_lod == INVALID && req_inv_lod < LOD_COUNT)
+            display = vec3(0.8f, 0.f, 0.f);
+        // still in cache but no longer requested
+        else if (cur_inv_lod != INVALID && req_inv_lod >= LOD_COUNT)
+            display = vec3(0.f, 0.4f, 0.1f);
+        // in cache and requested
+        else if (cur_inv_lod != INVALID && req_inv_lod < LOD_COUNT)
+            display = vec3(0.f, 1.f, 0.f);
+
+
+        // TODO: include requested and current LODs in brick info debug visualization?
+
+        // blend colored cache vis with background
+        const float alpha = 0.8f;
+        color = vec4((1.f - alpha) * color.rgb + alpha * display, 1.f);
+    #endif
 #endif
 }
 

@@ -41,6 +41,7 @@ uint popFreeBlockStack(uint inv_lod) {
     }
 }
 
+// executed for every brick
 void main() {
     // at the beginning of this shader execution:
     // ASSIGN_NEW_BLOCK_START contains the first index (measured in base elements) in g_cache where the new elements for this LoD can start

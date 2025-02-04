@@ -80,6 +80,7 @@ void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {
     DEBUG_img_spp(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_SPP_BIT));
     DEBUG_img_cache_array(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_CACHE_ARRAY_BIT));
     DEBUG_img_request_limit(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_REQUEST_LIMIT_BIT));
+    DEBUG_img_brick_info(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_BRICK_INFO_BIT));
 
     // blend with background and output to display image
     imageStore(inpaintedOutColor, pixel, blendWithBackground(pixel, accum_rgba));
