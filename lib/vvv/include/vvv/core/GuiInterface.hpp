@@ -126,7 +126,7 @@ public:
         // colormap information (stored here so we can import/export)
         enum ColorMapType { SVTFSolidColor = 0, SVTFDivergent, SVTFPrecomputed, SVTFImport};
         struct ColorMapConfig {
-            ColorMapType type = SVTFPrecomputed;
+            ColorMapType type = SVTFDivergent;
             int precomputedIdx = getDefaultColorMapIdx();
             std::vector<glm::vec3> color = {};
         };

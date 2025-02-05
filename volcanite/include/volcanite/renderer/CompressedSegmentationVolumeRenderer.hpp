@@ -338,7 +338,7 @@ private:
     uint32_t m_debug_vis_flags = 0u;
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
-    int m_target_accum_frames = 16;
+    int m_target_accum_frames = 128;
     bool m_accum_step_mode = false;
     bool m_accum_do_step = false;
     int m_max_inv_lod = 6;

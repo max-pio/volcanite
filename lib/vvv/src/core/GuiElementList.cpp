@@ -57,7 +57,7 @@ namespace vvv {
         entry->colormapConfig = std::vector<GuiTFSegmentedVolumeEntry::ColorMapConfig>(materials->size());
         entry->label = name;
         m_entries.push_back(entry);
-        entry->initialize();
+        entry->initialize(true);
         return entry->id;
     }
 
@@ -487,9 +487,8 @@ namespace vvv {
                         }
 
                         cm.type = static_cast<GuiTFSegmentedVolumeEntry::ColorMapType>(type);
-
-                        e->initialize(false);
                     }
+                    e->initialize(false);
                     break;
                 }
                 default: {
