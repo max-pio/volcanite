@@ -622,8 +622,8 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     } else if (m_cache_mode == CACHE_BRICKS) {
         // limit cache size to maximum available GPU memory
         auto heap_budget_and_usage = getMemoryHeapBudgetAndUsage(*ctx);
-        size_t free_heap_size = heap_budget_and_usage.first - heap_budget_and_usage.second;
-        if (m_target_cache_size_MB * 1024 * 1024 > free_heap_size) {
+        size_t free_heap_size_byte = heap_budget_and_usage.first - heap_budget_and_usage.second;
+        if (m_target_cache_size_MB * 1024 * 1024 > free_heap_size_byte) {
             updateDeviceMemoryUsage();
             Logger(WARN) << "not enough GPU memory available to provide target cache size of " << m_target_cache_size_MB
                          << " MB. Using smaller cache. " << m_gui_device_mem_text;
@@ -631,10 +631,9 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
         }
         // target size of 0 means to allocate as much for the cache as we can (or rather 85% of it to have some leeway)
         if (m_target_cache_size_MB == 0) {
-            constexpr float free_heap_amount_to_use = 0.85f;
-            m_target_cache_size_MB = free_heap_size / 1024 / 1024;
-            m_target_cache_size_MB = static_cast<size_t>(free_heap_amount_to_use *
-                                                         static_cast<float>(free_heap_size) / 1024.f / 1024.f);
+            constexpr float other_required_device_mb = 128.f;
+            m_target_cache_size_MB = static_cast<size_t>(static_cast<float>(free_heap_size_byte) / 1024.f / 1024.f
+                                                         - other_required_device_mb);
         }
         // for small data sets, we can limit the cache so that it fits all LoDs of the data set at once
         size_t maximum_req_cache_size_MB = 4095;
