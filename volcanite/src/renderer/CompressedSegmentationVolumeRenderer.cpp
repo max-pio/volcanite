@@ -176,23 +176,34 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     if (m_enable_frame_time_tracking)
         m_last_frame_start_time = std::chrono::high_resolution_clock::now();
 
+    // set render update flags to denote which parameter sets changed, and which render stages have to be executed
+    updateRenderUpdateFlags();
+
     // download GPU statistics information, i.e. the cache occupancy to trigger cache hard resets when it is full
     static constexpr uint32_t gpu_stats_download_interval = 4u;
-    if (m_frame > 0u && m_frame % gpu_stats_download_interval == 0u) {
+    static constexpr GPUStats reset_gpu_stats = {
+        .min_spp_and_pixel = 0xFFFF0000FFFFFFFF, // 16 MSB: sample count, 32 LSB: pixel coordinate
+        .max_spp_and_pixel = 0x00000000FFFFFFFF,
+        .limit_area_pixel_spp = 0u,
+        .used_cache_base_elements = 0u,
+        .bbox_hits = 0u,
+        .blocks_decoded_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
+        .blocks_in_cache_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
+        .bricks_requested_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
+        .bricks_on_freestack_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
+    };
+    if (m_accumulated_frames == 0u) {
+        m_gpu_stats_buffer->upload(&reset_gpu_stats, sizeof(GPUStats));
+    } else if ((m_render_update_flags & UPDATE_RENDER_FRAME)
+                && m_accumulated_frames % gpu_stats_download_interval == 0u) {
         // download and reset the buffer
         m_gpu_stats_buffer->download(&m_last_gpu_stats, sizeof(GPUStats));
-        const static GPUStats reset_gpu_stats = {
-                .min_spp_and_pixel = 0xFFFF0000FFFFFFFF, // 16 MSB: sample count, 32 LSB: pixel coordinate
-                .max_spp_and_pixel = 0x00000000FFFFFFFF,
-                .used_cache_base_elements = 0u,
-                .bbox_hits = 0u,
-                .blocks_decoded_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
-                .blocks_in_cache_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
-        };
         m_gpu_stats_buffer->upload(&reset_gpu_stats, sizeof(GPUStats));
 
         // compute cache fill rate to feed it back to the renderer as uniform value
-        const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
+        const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u)
+                                                       * (m_compressed_segmentation_volume->getBrickSize() / 2u)
+                                                       * (m_compressed_segmentation_volume->getBrickSize() / 2u);
         const uint32_t global_min_spp = static_cast<uint32_t>(m_last_gpu_stats.min_spp_and_pixel >> 48u);
         m_req_limit.global_min_pixel = glm::ivec2(m_last_gpu_stats.min_spp_and_pixel & 0xFFFF,
                                                   (m_last_gpu_stats.min_spp_and_pixel >> 16u) & 0xFFFF);
@@ -210,12 +221,27 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         const size_t current_parameter_hash = hashMemory(&m_prender_hash, sizeof(m_prender_hash), m_pcamera_hash);
         // used_cache_base_elements: cache usage as the number of occupied 2x2x2 base elements
         if (m_accumulated_frames > 0u && m_auto_cache_reset
-            && m_last_gpu_stats.used_cache_base_elements >= m_cache_capacity - cache_elements_per_finest_lod // cache_fragmented!
-            && m_parameter_hash_at_last_reset != current_parameter_hash) {
-            m_pcache_reset = true;
-            m_parameter_hash_at_last_reset = current_parameter_hash;
+            && m_last_gpu_stats.used_cache_base_elements >= m_cache_capacity - cache_elements_per_finest_lod // cannot fit a single additional finest LOD brick
+            && m_parameter_hash_at_last_reset != current_parameter_hash) {  // cache was not yet reset on this position
+
+            // the cache can be fragmented: one of the free stacks did not contain enough base elements to fulfill all
+            // requests for its LOD (while the cache is already full), but other free stacks have unused elements
+            // that, in combination, span as much storage as is required to decode at least one brick in the finest LOD.
+            // uint32_t free_base_elements = 0u;
+            // long missing_base_elements = 0u;
+            // for (int inv_lod = 0; inv_lod < m_compressed_segmentation_volume->getLodCountPerBrick(); inv_lod++) {
+            //     free_base_elements += (1u << (3*inv_lod)) * m_last_gpu_stats.bricks_on_freestack_L1_to_7[inv_lod];
+            //     missing_base_elements += glm::max(0l, (1u << (3*inv_lod)) * (static_cast<long>(m_last_gpu_stats.bricks_requested_L1_to_7[inv_lod])
+            //                                 - static_cast<long>(m_last_gpu_stats.bricks_on_freestack_L1_to_7[inv_lod])));
+            // }
+            // if (free_base_elements > cache_elements_per_finest_lod && missing_base_elements > 0l) {
+            { // pragmatic approach: if the cache is full, reset it once for this camera perspective
+                m_pcache_reset = true;
+                m_parameter_hash_at_last_reset = current_parameter_hash;
+                disableRequestLimiation();
+            }
         }
-        else {
+        if (!m_pcache_reset) {
             // Request limitation limits requesting bricks for the cache to rays from pixels in a certain AABB on screen.
             // The AABB originates at m_req_limit_area_pos with size m_req_limit_area.
             if (m_req_limit.g_enable) {
@@ -257,9 +283,6 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         if (detail_request_count > 0u)
             m_detail_stage = DetailAwaitingCPUConstruction;
     }
-
-    // set render update flags to denote which parameter sets changed, and which render stages have to be executed
-    updateRenderUpdateFlags();
 
     // if no new data has to be rendered, just return the last frame
     if (!(m_render_update_flags & (UPDATE_RENDER_FRAME | UPDATE_PRESOLVE))) {
@@ -983,7 +1006,6 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
             // trigger empty space bit vector update as well
             m_render_update_flags |= UPDATE_PMATERIAL;
         }
-        Logger(DEBUG) << " cache reset set";
     }
 
     // reset render frame accumulation if any parameters that influence rendering changed
@@ -1331,11 +1353,11 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                             if (m_target_accum_frames > 0) {
                                 const int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
                                 if (m_global_illumination_enabled && m_shadow_pathtracing_ratio > 0.) {
-                                    // ambient occlusion / path tracing need some frames to converge (1024 SPP)
+                                    // ambient occlusion / path tracing need some frames to converge
                                     m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 512);
                                 } else {
-                                    // everything deterministic, nees only AA
-                                    m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 16);
+                                    // everything deterministic, nees only AA and iterative brick decoding
+                                    m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 64);
                                 }
                             }
                        }, "Rendering Preset");
@@ -1371,7 +1393,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addLabel("Ray Traversal");
     g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
     g_dev->addInt(&m_max_steps, "Max DDA Steps", 16, 1 << 16u, 16);
-    g_dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
+    g_dev->addFloat(&m_lod_bias, "LOD bias", -8.f, 8.f, 0.1f, 1.f);
     g_dev->addSeparator();
 
     g_dev->addLabel("Debug");
@@ -1581,7 +1603,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             m_req_limit.area_min_pixel_last_spp = global_min_spp;
             m_req_limit.area_min_pixel = m_req_limit.global_min_pixel;
             m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x;
-            Logger(DEBUG) << " Cache insufficient: starting brick request limitation.";
         }
         // if a brick request limitation is already set: move the AABB in which pixels can request bricks around
         // when a new area configuration is set, area_duration frames are accumlulated to see if it was effective

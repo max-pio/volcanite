@@ -193,6 +193,8 @@ struct GPUStats {
     CSGV_UINT bbox_hits;                    ///< total number of pixels that hit the volume bounding box
     CSGV_UINT blocks_decoded_L1_to_7[6];    ///< number of base elements per LOD 1 .. 7 that were acquired in frame
     CSGV_UINT blocks_in_cache_L1_to_7[6];   ///< number of base elements per LOD 1 .. 7 currently present in the cache
+    CSGV_UINT bricks_requested_L1_to_7[6];  ///< number of bricks per LOD 1 .. 7 that were requested in the last frame
+    CSGV_UINT bricks_on_freestack_L1_to_7[6];  ///< number of bricks per LOD 1 .. 7 that were on the free stack in the last frame
 };
 
 // Debug Visualiation --------------------------------------------------------------------------------------------------

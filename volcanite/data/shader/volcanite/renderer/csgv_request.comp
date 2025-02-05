@@ -59,7 +59,7 @@ void main() {
     // visibility
     // - BRICK_INFO_REQ_INV_LOD < LOD_COUNT means the brick is visible in renderer AND had visible palette entries in the frame before
     // stacks
-    // - ASSIGN_REQUESTED_BLOCKS was reset to zero before the shader execution started
+    // - ASSIGN_REQUESTED_BRICKS was reset to zero before the shader execution started
     // - the top pointers in the g_free_block_stacks point to the next free location in the LoD stack
 
     // find out for which brick we compute if it is visible
@@ -215,7 +215,7 @@ void main() {
         // get us a unique slot index within our requested LoD
         uint lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
         assertf(0u < lod && lod < LOD_COUNT, "lod=%u is not 0 < lod < lod_count while trying to allocate cache slot", lod);
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = atomicAdd(g_assign_info[(lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_REQUESTED_BLOCKS], 1u);
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = atomicAdd(g_assign_info[(lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_REQUESTED_BRICKS], 1u);
     }
     else {
         assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT
@@ -229,8 +229,8 @@ void main() {
     // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick still owns a cache element
     // - REQ_SLOT < INVALID <=> the brick needs a cache element <=> the REQ_SLOT is a valid entry for its REQ_LOD
     // - REQ_SLOT < INVALID => BRICK_INFO_INDEX == INVALID
-    // - the ASSIGN_REQUESTED_BLOCKS for each LoD contains the number of requested blocks for this LoD.
-    // - all SLOT indices < ASSIGN_REQUESTED_BLOCKS are uniquely assigned to one block each
+    // - the ASSIGN_REQUESTED_BRICKS for each LoD contains the number of requested blocks for this LoD.
+    // - all SLOT indices < ASSIGN_REQUESTED_BRICKS are uniquely assigned to one block each
     // visibility
     // - BRICK_INFO_REQ_INV_LOD < LOD_COUNT means the brick is visible in renderer AND had visible palette entries in the frame before
     // - BRICK_INFO_REQ_INV_LOD = LOD_COUNT means the brick contains visible labels in its palette

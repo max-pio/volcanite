@@ -99,8 +99,8 @@ layout(std430, binding = 4) buffer restrict assign_info
     uint g_assign_info[];
 };
 #define ASSIGN_NEW_BLOCK_START 0
-#define ASSIGN_NEW_BLOCK_COUNT 1
-#define ASSIGN_REQUESTED_BLOCKS 2
+#define ASSIGN_NEW_BRICK_COUNT 1
+#define ASSIGN_REQUESTED_BRICKS 2
 // how many elements per LoD are in the assign_info_ssbo
 #define ASSIGN_ELEMS_PER_LOD 3
 // lookup index in assign_info where the cache top pointer is stored

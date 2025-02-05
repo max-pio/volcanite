@@ -49,22 +49,37 @@ void DEBUG_img_cache_array(ivec2 pixel, inout vec4 color, bool enabled) {
     const ivec2 viewport_size = imageSize(inpaintedOutColor);
 
     #if CACHE_MODE == CACHE_BRICKS
-        // TODO: visualize the cache top pointers etc
+        const int bar_height = 20;
 
-        // cache top pointer:
-        if (pixel.y < 20) {
+        // cache top pointer
+        if (pixel.y < bar_height) {
             uint cache_top = g_assign_info[ASSIGN_CACHE_TOP_IDX];
-            if (uint(pixel.x) <= cache_top / g_cache_capacity) {
-                color = vec4(1.f, 0.f, 0.f, 1.f);
+            if (pixel.x <= int(float(cache_top) * float(viewport_size.x) / float(g_cache_capacity))) {
+                color = vec4(0.8f, 0.2f, 0.f, 1.f);
+            }
+
+            // cache_top counts in base elements. one base element is 8 x 4 Byte. Draw one tick every 128 MB:
+            if (pixel.x % int(float((128u / 32u) * 1024u * 1024u) * float(viewport_size.x) / float(g_cache_capacity)) == 0u) {
+                color = vec4(0.f, 0.f, 0.f, 1.f);
             }
         }
 
         // cache stacks
-        for (int inv_lod = 0; inv_lod < LOD_COUNT; inv_lod++) {
-            if (pixel.y > 20 * inv_lod)
-            uint number_of_requested_blocks = g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_REQUESTED_BLOCKS];
-            uint number_of_free_blocks = g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)];
+        // * 4u becasue the free stack is probably not used completely
+        const float free_stack_scaling = float(viewport_size.x) / float(g_free_stack_capacity) * 4u;
 
+        for (int inv_lod = 1; inv_lod < LOD_COUNT; inv_lod++) {
+            if (pixel.y >= bar_height * (inv_lod) && pixel.y < bar_height * (inv_lod + 1)) {
+                const uint number_of_requested_blocks = gpu_stats.bricks_requested_L1_to_7[(inv_lod - 1u)];
+                const uint number_of_free_blocks = gpu_stats.bricks_on_freestack_L1_to_7[(inv_lod - 1u)];
+                color = vec4(0.f, 0.f, 0.f, 1.f);
+                if (pixel.x < int(float(number_of_requested_blocks) * free_stack_scaling)) {
+                    color.r = 0.8f;
+                }
+                if (pixel.x < int(float(number_of_free_blocks) * free_stack_scaling)) {
+                    color.b = 0.8f;
+                }
+            }
         }
 
 

@@ -45,15 +45,15 @@ uint popFreeBlockStack(uint inv_lod) {
 void main() {
     // at the beginning of this shader execution:
     // ASSIGN_NEW_BLOCK_START contains the first index (measured in base elements) in g_cache where the new elements for this LoD can start
-    // ASSIGN_NEW_BLOCK_COUNT contains the number of elements (measured in LxLxL elements) in g_cache for this LoD available from there
+    // ASSIGN_NEW_BRICK_COUNT contains the number of elements (measured in LxLxL elements) in g_cache for this LoD available from there
     // (the other elements we will try to fetch from the freeBlockStack)
     //
     // cache element ownership
     // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick still owns a cache element
     // - REQ_SLOT < INVALID <=> the brick needs a cache element <=> the REQ_SLOT is a valid entry for its REQ_LOD
     // - REQ_SLOT < INVALID => BRICK_INFO_INDEX == INVALID
-    // - the ASSIGN_REQUESTED_BLOCKS for each LoD contains the number of requested blocks for this LoD.
-    // - all SLOT indices < ASSIGN_REQUESTED_BLOCKS are uniquely assigned to one block each
+    // - the ASSIGN_REQUESTED_BRICKS for each LoD contains the number of requested blocks for this LoD.
+    // - all SLOT indices < ASSIGN_REQUESTED_BRICKS are uniquely assigned to one block each
     // visibility
     // - BRICK_INFO_REQ_INV_LOD < LOD_COUNT means the brick is visible in renderer AND had visible palette entries in the frame before
     // - BRICK_INFO_REQ_INV_LOD = LOD_COUNT means the brick contains visible labels in its palette
@@ -100,7 +100,7 @@ void main() {
     // now find us an index in the cache
     uint cache_idx = INVALID;
     // the first slots can directly use one of the "new" elements.
-    if(slot < g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_COUNT]) {
+    if(slot < g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BRICK_COUNT]) {
         cache_idx = g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_START] + slot * elemSizeInCache;
     }
     // the others have to grab one from the freeBlockStack
