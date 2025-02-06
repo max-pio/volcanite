@@ -49,8 +49,17 @@ Haubold, Johannes; Kleesiek, Jens; Stiefelhagen, Rainer (2024). Towards Unifying
  https://www.synapse.org/Synapse:syn52287632/version/1
  https://github.com/alexanderjaus/AtlasDataset''', "https://www.apache.org/licenses/LICENSE-2.0.txt"),
 #
- "ara2016": ('''Allen Mouse Reference Atlas [Dataset]. bossdb archive. https://10.60533/BOSS-2017-DDKQ'''
-             , "https://creativecommons.org/licenses/by/4.0/legalcode.txt")}
+ "ara2016": ('''Allen Mouse Reference Atlas [Dataset]. bossdb archive. https://10.60533/BOSS-2017-DDKQ''',
+"https://creativecommons.org/licenses/by/4.0/legalcode.txt"),
+#
+"pa66": ('''Bertoldo, J., Decencière, E., Ryckelynck, D., & Proudhon, H. (2021). Glass fiber-reinforced polyamide
+ 66 3D X-ray computed tomography dataset for deep learning segmentation (0.0.0) [Data set]. Zenodo.
+ https://doi.org/10.5281/zenodo.4587827''', "https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt"),
+#
+"h01": ('''Alexander Shapson-Coe et al., A petavoxel fragment of human cerebral cortex reconstructed at nanoscale resolution.
+Science384,eadk4858(2024).DOI:10.1126/science.adk4858
+https://h01-release.storage.googleapis.com/''', "https://creativecommons.org/licenses/by/4.0/legalcode.txt")
+}
 
     if not name in citations:
         raise ValueError("No citation found for {name}")
@@ -85,6 +94,7 @@ def download_cloud_data(dataset: str, directory: Path, output_name: str | None =
     return data.download(output_dir=directory, output_name=output_name, output_format=filetype,
                          volume_size=size, origin=origin, chunk_size=chunk_size, continue_download=True)
 
+def __preview_arg(dataset: str, )
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -95,8 +105,9 @@ if __name__ == '__main__':
     parser.add_argument("directory", help="Base directory in which the data set subfolders will be downloaded.")
     parser.add_argument("--keep", action="store_true", help="Keep the original files after creating the CSGV volumes.")
     parser.add_argument("--volcanite-src", help="Location of the Volcanite source directory (git repository base).")
-    parser.add_argument("--big-data", help="Download large (~ 2TB) data sets as well. Use with care!")
+    parser.add_argument("--big-data", help="Download large (~1TB) data sets as well. Use with care!")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing volumes.")
+    parser.add_argument("--preview", action="store_true", help="Render a preview image for each data set.")
     args = parser.parse_args()
 
     csgv_directory = Path(args.directory)
@@ -134,10 +145,13 @@ if __name__ == '__main__':
     print("----------- AZBA ----------- ")
     cur_dir = csgv_directory / Path("azba")
     if not (csgv_directory / "azba.csgv").exists() or args.overwrite:
-        download_file("https://datadryad.org/api/v2/files/1098598/download", cur_dir, "azba.nii.gz")
         write_citation(csgv_directory, "azba")
+        download_file("https://datadryad.org/api/v2/files/1098598/download", cur_dir, "azba.nii.gz")
         vc.convert_volume(cur_dir / "azba.nii.gz", cur_dir / "azba.hdf5")
-        ve.VolcaniteExec.run_volcanite(volcanite_bin_dir, f"--headless -c {csgv_directory / "azba.csgv"} {cur_dir / "azba.hdf5"}")
+        if ve.VolcaniteExec.run_volcanite(volcanite_bin_dir, f"--headless -c {csgv_directory / "azba.csgv"}"
+                                                             f"{cur_dir / "azba.hdf5"}") != 0:
+            print("Volcanite compression returned with errors. Aborting.")
+            exit(5)
         # cleanup
         if not args.keep:
             shutil.rmtree(cur_dir)
@@ -147,22 +161,43 @@ if __name__ == '__main__':
 
     print("----------- Ara2016 ----------- ")
     cur_dir = csgv_directory / Path("ara2016")
-    if not  (csgv_directory / "ara2016.csgv").exists() or args.overwrite:
+    if not (csgv_directory / "ara2016.csgv").exists() or args.overwrite:
+        write_citation(csgv_directory, "ara2016")
         last_chunk = download_cloud_data("ara2016", directory=cur_dir, output_name="ara16", filetype="hdf5",
                                          size=None, origin=(0,0,0), chunk_size=(1024,1024,1024))
-        write_citation(csgv_directory, "ara2016")
-        ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+        if ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                        f"--headless --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]} "
-                                       f"-c {csgv_directory / "ara2016.csgv"} {cur_dir / "ara16_x{}y{}z{}.hdf5"}")
+                                       f"-c {csgv_directory / "ara2016.csgv"} {cur_dir / "ara16_x{}y{}z{}.hdf5"}") != 0:
+            print("Volcanite compression returned with errors. Aborting.")
+            exit(5)
         # cleanup
         if not args.keep:
             shutil.rmtree(cur_dir)
     else:
         print(f"{(csgv_directory / "ara2016.csgv")} already exists. Skipping download.")
 
+
+    print("----------- GF-PA66 ----------- ")
+    cur_dir = csgv_directory / Path("pa66")
+    if not (csgv_directory / "pa66.csgv").exists() or args.overwrite:
+        write_citation(csgv_directory, "pa66")
+        download_file("https://zenodo.org/records/4587827/files/pa66_volumes.h5", cur_dir, "pa66.h5")
+        vc.write_volume(vc.read_hdf5(cur_dir / "pa66.h5", 'pa66'), cur_dir / "pa66_segm.hdf5")
+        if ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                       f"--headless -c {csgv_directory / "pa66.csgv"} {cur_dir / "pa66_segm.hdf5"}") != 0:
+            print("Volcanite compression returned with errors. Aborting.")
+            exit(5)
+        # cleanup
+        if not args.keep:
+            shutil.rmtree(cur_dir)
+    else:
+        print(f"{(csgv_directory / "pa66.csgv")} already exists. Skipping download.")
+
     # DOWNLOADING AND COMPRESSING BIG DATA -----------------------------------------------------------------------------
     if args.big_data:
         exit(0)
 
+    print("------------------------------- ")
+    print(f"done! csgv data sets are available at {csgv_directory}")
     exit(0)
 

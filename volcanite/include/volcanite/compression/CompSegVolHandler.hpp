@@ -93,7 +93,7 @@ public:
                 Logger(WARN) << "trying to open .raw file " << path << " as Volcanite raw (.vraw).";
             volume = Volume<uint32_t>::load_volcanite_raw(path);
         }
-        else if (path.ends_with(".hdf5"))
+        else if (path.ends_with(".hdf5") || path.ends_with(".h5"))
             volume = Volume<uint32_t>::load_hdf5(path);
         else if (path.ends_with(".vti"))
             volume = Volume<uint32_t>::load_vti(path);
