@@ -632,8 +632,12 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
         // target size of 0 means to allocate as much for the cache as we can (or rather 85% of it to have some leeway)
         if (m_target_cache_size_MB == 0) {
             constexpr float other_required_device_mb = 128.f;
-            m_target_cache_size_MB = static_cast<size_t>(static_cast<float>(free_heap_size_byte) / 1024.f / 1024.f
-                                                         - other_required_device_mb);
+            if (free_heap_size_byte >= 196) {
+                m_target_cache_size_MB = static_cast<size_t>(static_cast<float>(free_heap_size_byte) / 1024.f / 1024.f
+                                                             - other_required_device_mb);
+            } else {
+                m_target_cache_size_MB = static_cast<size_t>(static_cast<float>(free_heap_size_byte) / 1024.f / 1024.f);
+            }
         }
         // for small data sets, we can limit the cache so that it fits all LoDs of the data set at once
         size_t maximum_req_cache_size_MB = 4095;
@@ -941,7 +945,8 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
 
     // camera parameters
     new_hash = 0ull;
-    new_hash = hashMemory(&(m_camera->get_world_to_projection_space(m_resolution)[0]), sizeof(glm::mat4));
+    glm::mat4 mvp = m_camera->get_world_to_projection_space(m_resolution);
+    new_hash = hashMemory(&mvp, sizeof(glm::mat4));
     if (new_hash != m_pcamera_hash) {
         m_render_update_flags |= UPDATE_PCAMERA;
         m_pcamera_hash = new_hash;

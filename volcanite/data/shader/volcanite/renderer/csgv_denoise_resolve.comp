@@ -69,11 +69,12 @@ vec4 blendWithBackground(ivec2 pixel, vec4 pixel_rgba) {
 
 void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {
 
-    // perform tonemapping and color space conversion
+    // expore correction, tonemapping, color space conversion
     if(g_tonemap_enable) {
+        accum_rgba.rgb *= 0.5f;
         accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb);
+        accum_rgba.rgb = rgb2srgb(accum_rgba.rgb);
     }
-    // accum_rgba.rgb = rgb2srgb(accum_rgba.rgb);
 
     DEBUG_img_g_buffer(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_G_BUFFER_BIT));
     DEBUG_img_no_postprocess(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_NO_POSTPROCESS_BIT));
@@ -97,8 +98,8 @@ void main() {
 
     // upsampling / denoising may be disabled or faded out
     // for n^2 samples, variance is halfed
-    const float fade = g_denoise_fade_enable ? min(1.f, g_denoise_fade_sigma / sqrt(float(g_camera_still_frames / (g_subsampling * g_subsampling)))) : 1.f;
-    if (!g_atrous_enabled || fade < 0.05f) {
+    const float fade = g_denoise_fade_enable ? min(1.f, g_denoise_fade_sigma / sqrt(max(float(imageLoad(accuSampleCountOut, pixel).r), 1.f))) : 1.f;
+    if (!g_atrous_enabled || fade < 0.1f) {
         if (pc.denoising_iteration == pc.last_denoising_iteration)
             writeFinalFramebuffer(pixel, imageLoad(denoisingBuffer[0], pixel));
         return;
