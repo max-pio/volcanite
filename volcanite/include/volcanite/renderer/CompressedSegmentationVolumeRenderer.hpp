@@ -331,7 +331,7 @@ private:
     bool m_atrous_enabled = true;
     float m_illumination_sigma = 4.0f;
     bool m_denoise_fade_enabled = true;
-    float m_denoise_fade_sigma = 1.f;
+    float m_denoise_fade_sigma = 2.f;
     // debugging and dev options
     float m_lod_bias = 0.f;
     bool m_blue_noise = true;
@@ -342,6 +342,7 @@ private:
     bool m_accum_step_mode = false;
     bool m_accum_do_step = false;
     int m_max_inv_lod = 6;
+    int m_max_request_path_length = 1u;
     // utility
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text, m_gui_cache_mem_text;

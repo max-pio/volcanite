@@ -46,6 +46,12 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #include "volcanite/compression/compressed_segmentation_volume.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
 
+// ray will request a brick for decompression if it is not available
+#define REQUEST_ENABLE_BIT 1u
+// ray will be set to invalid if brick is not available
+#define INVALIDATE_ENABLE_BIT 2u
+
+
 #ifdef EMPTY_SPACE_UINT_SIZE
     #include "volcanite/bit_vector.glsl"
 #endif
@@ -274,7 +280,9 @@ uint get_inv_lod(ivec3 voxel) {
     }
 #elif CACHE_MODE == CACHE_BRICKS
     /// returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
-    uint get_volume_label(const ivec3 voxel, inout float depth_valid, bool do_not_request) {
+    /// if REQUEST_ENABLE_BIT is set in request_invalid_bits, the brick is requested for decompression if not available
+    /// if INVALIDATE_ENABLE_BIT is set in request_invalid_bits, depth_valid is set to INVALID_DEPTH if birkc is not available
+    uint get_volume_label(const ivec3 voxel, inout float depth_valid, const uint request_invalid_bits) {
         assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
 
         const uvec3 brick = uvec3(voxel) / BRICK_SIZE;
@@ -304,9 +312,10 @@ uint get_inv_lod(ivec3 voxel) {
                     // visible (because the brick in front is an out-of-date LOD)
                 && isDepthValid(depth_valid)
             #else
+                // by default: request bricks with invalid rays as well, except if brick request limitation is enabled
                 && (isDepthValid(depth_valid) || g_req_limit_area_size == 0u)
             #endif
-                && !do_not_request) { // this path may still request new brick
+                && (request_invalid_bits & REQUEST_ENABLE_BIT) > 0u) { // this path may still request new brick
 
             atomicCompSwap(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], old_req_inv_lod, req_inv_lod);
 
@@ -327,7 +336,7 @@ uint get_inv_lod(ivec3 voxel) {
         assert(cur_inv_lod != 0u, "BRICK_INFO_CUR_INV_LOD should never be zero");
 
         // invalidate the sample if the brick is not decoded up to the requested LOD
-        if (cur_inv_lod != req_inv_lod)
+        if (cur_inv_lod != req_inv_lod && bool(request_invalid_bits & INVALIDATE_ENABLE_BIT))
             depth_valid = INVALID_DEPTH;
 
         // if the brick is not yet decoded: return a palette label
@@ -587,9 +596,12 @@ void main() {
     //  (1) only if request limitation is enabled,
     //  (2) limit to pixels that did not receive enough samples yet, and
     //  (3) limit to pixels that are within a certain area of the screen.
-    bool do_not_request = g_req_limit_area_size > 0
-                          && // (prev_sample_count > g_min_max_spp.x + g_req_limit_spp_delta ||
-                          (any(lessThan(pixel, g_req_limit_area_pos)) || any(greaterThanEqual(pixel, g_req_limit_area_pos + ivec2(g_req_limit_area_size))));
+    // by default, all pixels set the INVALIDATE_ENABLE_BIT that will invalidate rays if they access uncompressed bricks
+    const uint request_invalid_bits = INVALIDATE_ENABLE_BIT | (g_req_limit_area_size > 0
+                                        && (any(lessThan(pixel, g_req_limit_area_pos))
+                                            || any(greaterThanEqual(pixel, g_req_limit_area_pos
+                                                                            + ivec2(g_req_limit_area_size))))
+                                            ? 0u : REQUEST_ENABLE_BIT);
     if (prev_sample_count >= 0xFFFF) {
         // Force direct ray termination if this pixel already accumulated the maximum number of samples.
         // (The sample count frame buffer is in 16 bit and can thus only accumulate 2^16-1 valid samples.)
@@ -649,9 +661,16 @@ void main() {
         // Rread the label at the voxel from previously decoded volume segments in the brick cache or return a
         // placeholder label if not yet decoded, in which case the depth_valid will be set to INVALID_DEPTH.
         // An sample marked as invalid this way may not alter the framebuffer and skip certain cmoputation steps.
-        // If do_not_request is not set, this will request new bricks for decoding if necessary.
+        // request_invalid_bits always has the invalidate bit set, and the request conditionally set when brick
+        // request limitation is enabled. If the path length is > g_max_request_path_length, bricks are neither
+        // requested nor do undecoded bricks invalidate rays
         state.last_label = state.label;
-        state.label = get_volume_label(state.voxel, state.depth_valid, do_not_request);
+        #if CACHE_MODE == CACHE_BRICKS
+            state.label = get_volume_label(state.voxel, state.depth_valid,
+                                           abs(state.path_length) <= g_max_request_path_length ? INVALID : 0u);
+        #else
+            state.label = get_volume_label(state.voxel, state.depth_valid);
+        #endif
 
 #ifndef NDEBUG
         DEBUG_vis_invalid_label(state);

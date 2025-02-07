@@ -185,6 +185,7 @@ layout (std140, binding = 10) uniform render_info {
     uint g_detail_buffer_dirty;     // 0 if we can read from the detail buffer, 1 if the detail buffer is dirty
     float g_lod_bias;               // bias for the LOD into which bricks are decoded
     uint g_max_inv_lod;             // maximum inverse LOD that will be decoded for any brick
+    int g_max_request_path_length;  // paths up to this length invalidate when hitting undecoded bricks and request them
     int g_maxSteps;                 // maximum number of ray marching steps for each pixel
     bool g_blue_noise_enable;       // if view rays and other shading properties are jittered with ablue noise pattern
 };

@@ -787,8 +787,6 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
                 "EMPTY_SPACE_UINT_SIZE=" + std::to_string(m_empty_space_buffer_size / sizeof(uint32_t)));
     }
     shader_defines.emplace_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
-    if (!m_additional_shader_defs.empty())
-        shader_defines.emplace_back(m_additional_shader_defs);
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if (getCtx()->getWsi())
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), m_queue_family_index, shader_defines,
@@ -796,6 +794,9 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     else
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, m_queue_family_index, shader_defines,
                                                         m_compressed_segmentation_volume->isUsingRandomAccess(), m_cache_mode==CACHE_BRICKS);
+    if (!m_additional_shader_defs.empty())
+        shader_defines.emplace_back(m_additional_shader_defs);
+
     m_pass->allocateResources();
     m_ucamera_info = m_pass->getUniformSet("camera_info");
     m_urender_info = m_pass->getUniformSet("render_info");
@@ -963,7 +964,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_voxel_size) HASHP(m_bboxMin) HASHP(m_bboxMax)
     // HASHP(m_subblock_start) HASHP(m_subblock_size) HASHP(m_subblock_enabled)
     // general rendering config
-    HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_blue_noise) HASHP(m_max_steps)
+    HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_max_request_path_length) HASHP(m_blue_noise) HASHP(m_max_steps)
     // request limitation
     // TODO: should not reset frame accumulation. Right now the uniforms are always uploaded always at UPDATE_RENDER_FRAME
     //    HASHP(m_req_limit.area_size)
@@ -1169,6 +1170,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
         auto lod_count = m_compressed_segmentation_volume->getLodCountPerBrick();
         m_urender_info->setUniform<uint32_t>("g_max_inv_lod", glm::min(static_cast<uint32_t>(m_max_inv_lod), lod_count - 1u));
+        m_urender_info->setUniform<int32_t>("g_max_request_path_length", m_max_request_path_length);
         m_urender_info->setUniform<int32_t>("g_maxSteps", m_max_steps);
         m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? 1 : 0);
     }
@@ -1403,6 +1405,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addLabel("Debug");
     g_dev->addAction([this]() { printGPUMemoryUsage(); }, "Print GPU Memory Usage");
     g_dev->addInt(&m_max_inv_lod, "Max. Decoding LoD", 0, 6, 1);
+    g_dev->addInt(&m_max_request_path_length, "Max. Decoding Path Length", 0, 32, 1);
     const std::vector<std::string> option_labels = {"Model Space", "Level-of-Detail", "Empty Space", "Brick Index",
                                                     "Label Cache", "Raw Render", "Cache Buffer",
                                                     "Request Limitation", "Brick Info State",
