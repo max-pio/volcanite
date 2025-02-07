@@ -447,7 +447,9 @@ private:
 
     // debugging
     bool m_release_version = false;               ///< if this is used in a release where development parameters are hidden
-    GPUStats m_last_gpu_stats = {0u};
+    GPUStats m_last_gpu_stats = {0ul, 0ul, 0u, 0u, 0u,
+        {0u, 0u, 0u, 0u, 0u, 0u}, {0u, 0u, 0u, 0u, 0u, 0u},
+                              {0u, 0u, 0u, 0u, 0u, 0u}, {0u, 0u, 0u, 0u, 0u, 0u}, };
     std::string m_additional_shader_defs = {};
 
     struct BrickRequestLimitation {

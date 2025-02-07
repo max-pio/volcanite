@@ -207,7 +207,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         const uint32_t global_min_spp = static_cast<uint32_t>(m_last_gpu_stats.min_spp_and_pixel >> 48u);
         m_req_limit.global_min_pixel = glm::ivec2(m_last_gpu_stats.min_spp_and_pixel & 0xFFFF,
                                                   (m_last_gpu_stats.min_spp_and_pixel >> 16u) & 0xFFFF);
-        const uint32_t max_spp = static_cast<uint32_t>(m_last_gpu_stats.max_spp_and_pixel >> 48u);
+        const uint32_t global_max_spp = static_cast<uint32_t>(m_last_gpu_stats.max_spp_and_pixel >> 48u);
         // const glm::ivec2 max_spp_pixel = glm::ivec2(m_last_gpu_stats.max_spp_and_pixel & 0xFFFF,
         //                                             (m_last_gpu_stats.max_spp_and_pixel >> 16u) & 0xFFFF);
 
@@ -245,7 +245,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             // Request limitation limits requesting bricks for the cache to rays from pixels in a certain AABB on screen.
             // The AABB originates at m_req_limit_area_pos with size m_req_limit_area.
             if (m_req_limit.g_enable) {
-                updateRequestLimiation(global_min_spp);
+                updateRequestLimiation(global_min_spp, global_max_spp);
             } else {
                 disableRequestLimiation();
             }
@@ -1586,11 +1586,12 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         m_req_limit.area_start_frame = m_accumulated_frames;
     }
 
-    void CompressedSegmentationVolumeRenderer::updateRequestLimiation(const uint32_t global_min_spp) {
+    void CompressedSegmentationVolumeRenderer::updateRequestLimiation(const uint32_t global_min_spp,
+                                                                      const uint32_t global_max_spp) {
         const uint32_t subsampling_pixels = (1u << m_subsampling) * (1u << m_subsampling);
 
         // disable request limiation if the pixel with the lowest number af samples did catch up with the max. SPP
-        if (global_min_spp + m_req_limit.spp_delta >= m_last_gpu_stats.max_spp_and_pixel) {
+        if (global_min_spp + m_req_limit.spp_delta >= global_max_spp) {
             disableRequestLimiation();
         }
         // enable request limitation if:
@@ -1600,7 +1601,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         // (3) the cache is almost full
         else if (m_req_limit.area_size == 0
                  && m_accumulated_frames >= m_req_limit.area_start_frame + subsampling_pixels * m_req_limit.area_duration
-                 && (global_min_spp + m_req_limit.spp_delta < m_last_gpu_stats.max_spp_and_pixel)
+                 && (global_min_spp + m_req_limit.spp_delta < global_max_spp)
                  && getCacheFillRate() > 0.90f)
         {
             m_req_limit.random_area_pixel = false,
@@ -1732,6 +1733,10 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                          + (m_detail_requests_buffer ? m_detail_requests_buffer->getByteSize() : 0ul);
             }
             results.mem_cache_bytes = cache;
+            results.mem_cache_used_bytes = m_last_gpu_stats.used_cache_base_elements * m_cache_base_element_uints * sizeof(uint32_t);
+            results.mem_cache_fill_rate = getCacheFillRate();
+            results.min_samples_per_pixel = static_cast<int>(m_last_gpu_stats.min_spp_and_pixel >> 48u);
+            results.max_samples_per_pixel = static_cast<int>(m_last_gpu_stats.max_spp_and_pixel >> 48u);
 
             size_t empty_space = 0ul;
             if (m_empty_space_buffer) {
@@ -1750,7 +1755,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                 }
             }
             results.mem_encoding_bytes = encoding;
-
             results.mem_total_bytes = getMemoryHeapBudgetAndUsage(*getCtx()).second;
         }
 
