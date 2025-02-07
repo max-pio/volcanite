@@ -29,6 +29,8 @@
 #include <string_view>
 #include <sstream>
 #include <ranges>
+#define FMT_HEADER_ONLY
+#include "fmt/include/fmt/format.h"
 
 using namespace vvv;
 
@@ -257,8 +259,8 @@ public:
             if (!va.video_output_fmt_file.empty()) {
                 try {
                     size_t test_frame_idx = 1;
-                    auto f = std::vformat(va.video_output_fmt_file, std::make_format_args(test_frame_idx));
-                } catch(const std::format_error& err) {
+                    auto f = fmt::vformat(va.video_output_fmt_file, fmt::make_format_args(test_frame_idx));
+                } catch(const fmt::format_error& err) {
                     throw ArgException(videoArg.longID() + " must be a formatted image file path string containing a single {} replacement field. Example: ./out{:04}.jpg", videoArg.longID());
                 }
             }

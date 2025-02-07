@@ -153,8 +153,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     // export the final frame to the video path
     if (!cfg.video_fmt_file_out.empty()) {
         frame_idx--; // frame_idx is now the number of frames, but the last index is one before
-        std::string last_output_image_path = std::vformat(cfg.video_fmt_file_out,
-                                        std::make_format_args(frame_idx));
+        std::string last_output_image_path = fmt::vformat(cfg.video_fmt_file_out, fmt::make_format_args(frame_idx));
         Logger(INFO) << "exporting screenshot to " << last_output_image_path;
         ret_tex->writeFile(last_output_image_path);
     }
