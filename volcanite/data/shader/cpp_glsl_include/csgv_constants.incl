@@ -142,7 +142,7 @@
 #define OP_PALETTE_LAST_BIT 32
 #define OP_PALETTE_D_BIT 128
 #define OP_STOP_BIT 256
-#define OP_ALL 0xFFFFFFFF
+#define OP_ALL 0x1AF
 #define OP_ALL_WITHOUT_STOP (OP_ALL & (~OP_STOP_BIT))
 #define OP_ALL_WITHOUT_DELTA (OP_ALL & (~OP_PALETTE_D_BIT))
 
@@ -150,9 +150,9 @@
     namespace volcanite {
         static constexpr const char* OperationMask_STR(uint32_t op_mask) {
             std::string op_mask_str;
-            if (op_mask == OP_ALL)
+            if ((op_mask & OP_ALL) == OP_ALL)
                 op_mask_str = "ALL";
-            else if (op_mask == OP_ALL_WITHOUT_DELTA)
+            else if ((op_mask & OP_ALL_WITHOUT_DELTA) == OP_ALL_WITHOUT_DELTA)
                 op_mask_str = "OPT";
             else {
                 if (op_mask & OP_PARENT_BIT)

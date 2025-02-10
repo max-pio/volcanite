@@ -228,7 +228,6 @@ uint _unpack4BitFromEncodingSharedMemory(
                                             const EncodingRef brick_encoding,
                                          #endif
                                          uint entry_id) {
-    // ToDo: this is where the implementation of access(i) of the wavelet tree goes
     return bitfieldExtract(BRICK_ENCODING[entry_id/8], 28 - int(entry_id % 8u) * 4, 4);
 }
 
@@ -240,7 +239,6 @@ uint _rank_palette_adv(
                       #endif
                       uint enc_operation_index
                       ) {
-    // TODO: good lord this is expensive if we do it without an O(1) rank
     uint occurrences = 0u;
     for(uint entry_id = HEADER_SIZE; entry_id <= enc_operation_index; entry_id++) {
         if ((UNPACK_4BIT_FROM_ENC(entry_id) & 7u) == PALETTE_ADV)
@@ -319,6 +317,8 @@ uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
     }
 }
 
+#if CACHE_MODE == CACHE_BRICKS
+
 /** Decode a single voxel with index output_i in the target_inv_lod. Decoding is performed by chasing the operation
  * references from the output voxel to a palette reference. If DECODE_FROM_SHARED_MEMORY is set, it is assumed that the
  * brick encoding is located in a shared memory buffer uint SHARED_BRICK_ENCODING[]. */
@@ -342,6 +342,8 @@ void decompressCSGVVoxelToCache(const uint output_i, const uint target_inv_lod, 
     writeEntryToCache(decoded_brick_start_uint, output_i, BRICK_ENCODING[brick_encoding_length - 1u - palette_index]);
 #endif
 }
+
+#endif // CACHE_MODE == CACHE_BRICKS
 
 #ifndef DECODE_FROM_SHARED_MEMORY
 uint decompressCSGVVoxel(const uint brick_idx, const uvec3 brick_voxel, const uint target_inv_lod) {
