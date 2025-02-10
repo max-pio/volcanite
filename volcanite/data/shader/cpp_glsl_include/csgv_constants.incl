@@ -54,7 +54,7 @@
     namespace volcanite {
         enum EncodingMode {NIBBLE_ENC=0,
                            SINGLE_TABLE_RANS_ENC=1, DOUBLE_TABLE_RANS_ENC=2,
-                           WAVELET_MATRIX_ENC=4, HUFFMAN_WM_ENC=8, DOUBLE_TABLE_HUFFMAN_WM_ENC=9};
+                           WAVELET_MATRIX_ENC=4, HUFFMAN_WM_ENC=8};
 
         // Bit Flags
         //
@@ -63,8 +63,8 @@
         //
         // mutually exclusive:
         // rANS: bit 1 (2)
-        // wavelet tree: bit 2 (4)
-        // Huffman wavelet tree: bit 3 (8)
+        // wavelet matrix: bit 2 (4)
+        // Huffman wavelet matrix: bit 3 (8)
 
         static constexpr const char* EncodingMode_STR(EncodingMode e) {
             switch (e) {

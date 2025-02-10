@@ -269,8 +269,7 @@ uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
     uint operation = UNPACK_4BIT_FROM_ENC(enc_operation_index);
 
     assert(enc_operation_index < brick_encoding_length * 8u, "brick encoding out of bounds read");
-    // ToDo: handle stop bits
-    assert((operation & STOP_BIT) == 0u, "stop bit not yet supported in parallel decode");
+    assert((operation & STOP_BIT) == 0u, "stop bit not supported with Nibble parallel decoding");
 
     // follow the chain of operations from the current output voxel up to an operation that accesses the palette
     {

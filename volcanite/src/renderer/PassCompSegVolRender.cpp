@@ -42,21 +42,21 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
         Logger(DEBUG) << "hard reset brick cache";
     }
 
-    if (m_enable_cache_stages && (m_render_update_flags & UPDATE_RENDER_FRAME)) {
-        // block request and visibility classification
-        getCtx()->debugMarker->beginRegion(commandBuffer, "request", glm::vec4(0.f, 0.f, 0.9f, 1.f));
-        // if cache stages are not enabled, the request stage has to be executed nevertheless on material chagnes
-        // to recompute the empty space information
-        if (m_enable_cache_stages || (m_render_update_flags & UPDATE_PMATERIAL)) {
-            executeCommands(commandBuffer, REQUEST);
-            commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader,
-                                      {},
-                                      {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead |
-                                                                                           vk::AccessFlagBits::eShaderWrite)},
-                                      nullptr, nullptr);
-        }
-        getCtx()->debugMarker->endRegion(commandBuffer);
+    // block request and visibility classification
+    getCtx()->debugMarker->beginRegion(commandBuffer, "request", glm::vec4(0.f, 0.f, 0.9f, 1.f));
+    // if cache stages are not enabled, the request stage has to be executed nevertheless on material chagnes
+    // to recompute the empty space information
+    if (m_enable_cache_stages || (m_render_update_flags & UPDATE_PMATERIAL)) {
+        executeCommands(commandBuffer, REQUEST);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader,
+                                  {},
+                                  {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead |
+                                                                                       vk::AccessFlagBits::eShaderWrite)},
+                                  nullptr, nullptr);
+    }
+    getCtx()->debugMarker->endRegion(commandBuffer);
 
+    if (m_enable_cache_stages && (m_render_update_flags & UPDATE_RENDER_FRAME)) {
         // fetch new blocks at the end of the cache
         getCtx()->debugMarker->beginRegion(commandBuffer, "provision", glm::vec4(0.f, 0.3f, 0.6f, 1.f));
         executeCommands(commandBuffer, PROVISION);

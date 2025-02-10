@@ -1,4 +1,4 @@
-#  Copyright (C) 2024, Patrick Jaberg, Max Piochwoiak and Reiner Dolp, Karlsruhe Institute of Technology
+#  Copyright (C) 2024, Patrick Jaberg, Max Piochowiak, and Reiner Dolp, Karlsruhe Institute of Technology
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -69,7 +69,7 @@ function(makeVolcaniteExecutable name)
             # WIN32_EXECUTABLE TRUE # this hides the console window. Disabled, because we need to see the console output! maybe re-enable for distribution
             MACOSX_BUNDLE TRUE
             )
-    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap fmt::fmt-header-only SQLiteCpp libvolcanite)
+    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap SQLiteCpp fmt::fmt libvolcanite)
     if(NOT HEADLESS)
         target_link_libraries(${name} PRIVATE LibVVV::libvvvwindow portable_file_dialogs)
     endif()
@@ -113,7 +113,7 @@ endfunction()
 # same as makeExecutabe, but for libraries. Can be used to build a library from all shared project files and link that for each executable.
 function(makeVolcaniteLibrary name)
     add_library(${name} ${ARGN})
-    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap SQLiteCpp)
+    target_link_libraries(${name} PRIVATE LibVVV::libvvv libryg-rans tclap::tclap SQLiteCpp fmt::fmt)
     if(NOT HEADLESS)
         target_link_libraries(${name} PRIVATE LibVVV::libvvvwindow portable_file_dialogs)
     endif()

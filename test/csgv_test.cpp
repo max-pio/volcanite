@@ -76,7 +76,7 @@ int main() {
         // Wavelet Matrix
         {
             Logger(INFO) << "Wavelet Matrix";
-            csgv.setCompressionOptions64(32, WAVELET_MATRIX_ENC, OP_ALL_WITHOUT_STOP, true);
+            csgv.setCompressionOptions64(32, WAVELET_MATRIX_ENC, OP_ALL_WITHOUT_STOP & OP_ALL_WITHOUT_DELTA, true);
             if (!csgv.test(volume->dataConst(), dim, true))
                 return 4;
 
@@ -89,7 +89,7 @@ int main() {
         // Huffman Wavelet Matrix
         {
             Logger(INFO) << "Wavelet Matrix";
-            csgv.setCompressionOptions64(16, HUFFMAN_WM_ENC, OP_ALL_WITHOUT_STOP, true);
+            csgv.setCompressionOptions64(16, HUFFMAN_WM_ENC, OP_ALL_WITHOUT_DELTA, true);
             if (!csgv.test(volume->dataConst(), dim, true))
                 return 5;
 
@@ -102,7 +102,7 @@ int main() {
         // Huffman Wavelet Matrix with Stop Bits
         {
             Logger(INFO) << "Wavelet Matrix";
-            csgv.setCompressionOptions64(64, HUFFMAN_WM_ENC, OP_ALL, true);
+            csgv.setCompressionOptions64(64, HUFFMAN_WM_ENC, OP_ALL_WITHOUT_DELTA, true);
             if (!csgv.test(volume->dataConst(), dim, true))
                 return 6;
 

@@ -31,11 +31,11 @@ uint32_t NibbleEncoder::readNextLodOperationFromEncoding(const uint32_t* brick_e
 //       header_size*8 ᒧ                always zero ᒧ  ∟ .. one  ∟ palette size
 uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out,
                                                    glm::uvec3 start, glm::uvec3 volume_dim) const {
-    assert(!(m_op_mask & OP_STOP_BIT) && "Nibble encoder does not support stop bits in random access");
+    assert(!(m_op_mask & OP_STOP_BIT) && "Nibble encoder does not support stop bits with random access");
+    assert(!(m_op_mask & OP_PALETTE_D_BIT) && "Nibble encoder does not support palette delta operation with random access");
 
     std::vector<uint32_t> palette;
     palette.reserve(32);
-    glm::uvec3 brick_pos;
 
     const uint32_t lod_count = getLodCountPerBrick();
     const uint32_t header_size = getHeaderSize();
@@ -43,9 +43,8 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
 
     // we need to keep track of the current brick status from coarsest to finest level to determine the right operations
     // basically do an implicit decoding while we're encoding
-    uint32_t parent_value;
-    uint32_t value;
-    uint32_t child_index; // index of all children with the same coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
+    uint32_t parent_value = INVALID;
+    // index of all children with the same coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
 
     // construct the multigrid on this brick that we want to represent in this encoding
     std::vector<MultiGridNode> multigrid;
@@ -84,10 +83,10 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
         for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i += lod_width * lod_width * lod_width) {
             // we don't store any operations for a grid node that would lie completely outside the volume
             // if this is problematic, and we would like to always handle a full brick, we could output anything here and thus just write PARENT_STOP.
-            brick_pos = enumBrickPos(i);
+            glm::uvec3 brick_pos = enumBrickPos(i);
 
             // every 8th element (we span 2*2*2=8 elements of the coarse LOD above), we fetch the new parent
-            child_index = (i % (lod_width * lod_width * lod_width * 8)) / (lod_width * lod_width * lod_width);
+            uint32_t child_index = (i % (lod_width * lod_width * lod_width * 8)) / (lod_width * lod_width * lod_width);
             if (child_index == 0) {
                 assert(parent_counter <= 8 && "parent element would be used for more than 8 elements!");
 
@@ -106,7 +105,7 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
             }
             parent_counter++;
 
-            value = multigrid[muligrid_lod_start + voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].label;
+            uint32_t value = multigrid[muligrid_lod_start + voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].label;
             assert(value != INVALID && "Original volume mustn't contain the INVALID magic value!");
 
             uint32_t operation = 0u;
@@ -186,8 +185,7 @@ uint32_t NibbleEncoder::decompressCSGVBrickVoxel(const uint32_t output_i, const 
     uint32_t operation = read4Bit(brick_encoding, 0u, enc_operation_index);
 
     assert(enc_operation_index < brick_encoding_length * 8u && "brick encoding out of bounds read");
-    // ToDo: handle stop bits
-    assert((operation & STOP_BIT) == 0u && "stop bit not yet supported with random access");
+    assert((operation & STOP_BIT) == 0u && "stop bit not supported with random access in Nibble encoder");
 
     // follow the chain of operations from the current output voxel up to an operation that accesses the palette
     {

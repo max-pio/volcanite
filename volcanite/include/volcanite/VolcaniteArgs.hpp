@@ -29,8 +29,7 @@
 #include <string_view>
 #include <sstream>
 #include <ranges>
-#define FMT_HEADER_ONLY
-#include "fmt/include/fmt/format.h"
+#include <fmt/core.h>
 
 using namespace vvv;
 
@@ -399,21 +398,12 @@ public:
                     // count occurrences of {} in the string. It must be exactly 3 and there must be at least one
                     // character between consecutive placeholders {}.
                     {
-                        int count = 0;
-                        size_t pos = va.input_file.find("{}");
-                        while (pos < va.input_file.length() && count < 4) {
-                            count++;
-                            size_t last_pos = pos;
-                            pos = va.input_file.find("{}", pos + 1);
-                            if (pos - last_pos < 3)
-                                throw ArgException(
-                                        "Input file path must contain at least one other character between consecutive {} for x,y,z indices in chunked data",
-                                        inputpathArg.longID(""));
+                        try {
+                            uint32_t test_chunk_idx = 1;
+                            auto f = fmt::vformat(va.input_file, fmt::make_format_args(test_chunk_idx, test_chunk_idx, test_chunk_idx));
+                        } catch(const fmt::format_error& err) {
+                            throw ArgException("input volume must be a formatted file path string containing three {} keys to be replaced with x,y,z chunk indices. Example: ./x{}y{}z{}.hdf5", inputpathArg.longID(""));
                         }
-                        if (count != 3)
-                            throw ArgException(
-                                    "Input file path must contain exactly three placeholders {} for x,y,z indices in chunked data",
-                                    inputpathArg.longID(""));
                     }
                 }
                 va.run_tests = testArg.getValue();

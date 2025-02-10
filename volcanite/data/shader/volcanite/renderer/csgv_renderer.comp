@@ -364,8 +364,8 @@ uint get_inv_lod(ivec3 voxel) {
 bool isEmptySpace(ivec3 voxel) {
     assertf(all(greaterThanEqual(voxel, ivec3(0))) && all(lessThan(voxel, g_vol_dim)), "empty space request for invalid voxel %v3i", voxel);
 
-    uvec3 brick = uvec3(voxel / BRICK_SIZE);
-    uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
+    const uvec3 brick = uvec3(voxel / BRICK_SIZE);
+    const uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
 
     // if the brick contains nothing visible, it is empty space
     return g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > LOD_COUNT;  // marked "invisible" by request shader

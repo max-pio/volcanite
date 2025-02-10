@@ -46,6 +46,10 @@ void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, En
     // TODO: replace with switch / case
     // set up the respective brick encoder
     if (m_encoding_mode == NIBBLE_ENC) {
+        if (m_random_access && (m_op_mask & OP_PALETTE_D_BIT))
+            throw std::runtime_error("Nibble random access encoding does not support PALETTE_DELTA operation.");
+        if (m_random_access && (m_op_mask & OP_STOP_BIT))
+            throw std::runtime_error("Nibble random access encoding does not support stop bits.");
         m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     }
     else if (m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
@@ -61,9 +65,13 @@ void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, En
                                     ? normalizeCodeFrequencies(detail_code_frequencies).data()
                                     : nullptr);
     } else if (m_encoding_mode == WAVELET_MATRIX_ENC || m_encoding_mode == HUFFMAN_WM_ENC) {
+        if (m_random_access && (m_op_mask & OP_PALETTE_D_BIT))
+            throw std::runtime_error("Wavelet Matrix encoding does not support PALETTE_DELTA operation.");
+        if (m_encoding_mode == WAVELET_MATRIX_ENC && (m_op_mask & OP_STOP_BIT))
+            throw std::runtime_error("Wavelet Matrix encoding (without Huffman) does not support stop bits.");
         m_encoder = std::make_unique<WaveletMatrixEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     } else {
-        throw std::runtime_error("No CSGB brick encoder for given encoding mode available.");
+        throw std::runtime_error("No CSGV brick encoder for given encoding mode available.");
     }
     m_encoder->setCPUThreadCount(m_cpu_threads);
     m_encoder->setDecodeWithSeparateDetail(m_separate_detail);

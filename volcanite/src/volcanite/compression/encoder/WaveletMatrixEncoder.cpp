@@ -26,6 +26,8 @@ namespace volcanite {
 uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& volume,
                                                           std::vector<uint32_t>& out,
                                                           glm::uvec3 start, glm::uvec3 volume_dim) const {
+    assert(!(m_op_mask & OP_PALETTE_D_BIT) && "Wavelet matrix encoder does not support palette delta operation");
+    assert(!(m_encoding_mode == WAVELET_MATRIX_ENC && (m_op_mask & OP_STOP_BIT)) && "Wavelet matrix encoder (without Huffman encoding) does not support stop bits");
 
     std::vector<uint32_t> palette;
     palette.reserve(32);
@@ -149,10 +151,6 @@ uint32_t WaveletMatrixEncoder::encodeBrickForRandomAccess(const std::vector<uint
             assert(value != INVALID);
         }
 
-
-        if(m_encoding_mode == DOUBLE_TABLE_HUFFMAN_WM_ENC) {
-            throw std::runtime_error("DOUBLE_TABLE_HUFFMAN_WM_ENC not implemented yet");
-        }
         current_inv_lod++;
     }
 

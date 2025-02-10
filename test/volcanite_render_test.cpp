@@ -92,11 +92,10 @@ static const std::vector<VolcaniteArgs> RENDERING_TEST_CONFIGS = {
         {.brick_size=32, .encoding_mode=NIBBLE_ENC, .screenshot_output_file=OUT_DIR + "nibble_32.png"},
         {.cache_palettized=true, .brick_size=64, .encoding_mode=SINGLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANSd_64_cache-palette.png"},
         {.stream_lod=true, .brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANS_16_stream-lod.png"},
-        // TODO: compare with random access branch for merging errors: random access rendering does not work
-        // {.brick_size=16, .encoding_mode=NIBBLE_ENC, .operation_mask=OP_ALL_WITHOUT_STOP, .random_access=true, .screenshot_output_file=OUT_DIR + "nibble_16_ra.png"},
-        // {.cache_mode=CACHE_BRICKS, .decode_from_shared_memory=true, .brick_size=64, .encoding_mode=HUFFMAN_WM_ENC, .random_access=true,  .screenshot_output_file=OUT_DIR + "hWM_64_ra_cache-brck-sm.png"},
-        // {.cache_mode=CACHE_VOXELS, .empty_space_resolution=2u, .brick_size=16, .encoding_mode=HUFFMAN_WM_ENC,  .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_16_ra_cache-voxl_ess.png"},
-        // {.cache_mode=CACHE_NOTHING, .brick_size=32, .encoding_mode=HUFFMAN_WM_ENC, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_32_ra_cache-none.png"},
+        {.brick_size=16, .encoding_mode=NIBBLE_ENC, .operation_mask=(OP_ALL_WITHOUT_STOP & OP_ALL_WITHOUT_DELTA), .random_access=true, .screenshot_output_file=OUT_DIR + "nibble_16_ra.png"},
+        {.cache_mode=CACHE_BRICKS, .decode_from_shared_memory=true, .brick_size=64, .encoding_mode=HUFFMAN_WM_ENC, .operation_mask=OP_ALL_WITHOUT_DELTA, .random_access=true,  .screenshot_output_file=OUT_DIR + "hWM_64_ra_cache-brck-sm.png"},
+        {.cache_mode=CACHE_VOXELS, .empty_space_resolution=2u, .brick_size=16, .encoding_mode=HUFFMAN_WM_ENC, .operation_mask=OP_ALL_WITHOUT_DELTA, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_16_ra_cache-voxl_ess.png"},
+        {.cache_mode=CACHE_NOTHING, .brick_size=32, .encoding_mode=HUFFMAN_WM_ENC, .operation_mask=OP_ALL_WITHOUT_DELTA, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_32_ra_cache-none.png"},
     };
 
 glm::vec4 CIE_rgb2xyz(const glm::vec4& rgba) {

@@ -49,10 +49,11 @@ namespace volcanite {
     /// +synth_[args]
     /// @endcode{.cpp}
     /// where args is a _ separated list of the following keys:\n
-    /// {W}x{H}x{D}  width, height, and depth of the volume in voxels\n
+    /// d{W}x{H}x{D}  width, height, and depth of the volume in voxels\n
     /// l{VOXELS_PER_LABEL}  smaller values increase the number of labels in the volume\n
     /// max{MAXIMUM_LABEL}  maximum label value that will be assigned\n
     /// r{MIN_W}x{MIN_H}x{MIN_D}-{MAX_W}x{MAX_H}x{MAX_D} minimum and maximum sizes of the label regions\n
+    /// s{seed} seed to initialize the deterministic random number generation
     /// @returns a synthetically created segmentation volume
     std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view descr);
 

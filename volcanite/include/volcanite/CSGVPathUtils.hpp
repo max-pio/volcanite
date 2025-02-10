@@ -15,18 +15,18 @@
 
 #pragma once
 
+#include "vvv/util/Paths.hpp"
+
 #include <string>
 #include <filesystem>
-
-#include "vvv/util/Logger.hpp"
-#include "vvv/util/Paths.hpp"
+#include <fmt/core.h>
 
 using namespace vvv;
 
 namespace volcanite {
 
     /** Helper function to remove the file extension from a file path, e.g. test.abc -> test.*/
-    static std::string stripFileExtension(std::string path) {
+    static std::string stripFileExtension(const std::string& path) {
         return path.substr(0, path.find_last_of('.'));
     }
 
@@ -42,35 +42,19 @@ namespace volcanite {
     }
 
     static std::string formatChunkPath(const std::string& formatted_path, int x, int y, int z) {
-        std::string path = formatted_path;
-        if (path.find_first_of("{}") != std::string::npos)
-            path.replace(path.find_first_of("{}"), 2, std::to_string(x));
-        if (path.find_first_of("{}") != std::string::npos)
-            path.replace(path.find_first_of("{}"), 2, std::to_string(y));
-        if (path.find_first_of("{}") != std::string::npos)
-            path.replace(path.find_first_of("{}"), 2, std::to_string(z));
-        return path;
+        return fmt::vformat(formatted_path, fmt::make_format_args(x, y, z));
     }
 
     static std::string combinedPathForAllChunks(const std::string& formatted_path, int max_file_index_xyz[3]) {
         if (max_file_index_xyz[0] == 0 && max_file_index_xyz[1] == 0 && max_file_index_xyz[2] == 0) {
-            std::string path = formatted_path;
-            if (path.find_first_of("{}") != std::string::npos)
-                path.replace(path.find_first_of("{}"), 2, "0");
-            if (path.find_first_of("{}") != std::string::npos)
-                path.replace(path.find_first_of("{}"), 2, "0");
-            if (path.find_first_of("{}") != std::string::npos)
-                path.replace(path.find_first_of("{}"), 2, "0");
-            return path;
+            return fmt::vformat(formatted_path, fmt::make_format_args(max_file_index_xyz[0],
+                                                                            max_file_index_xyz[1],
+                                                                            max_file_index_xyz[2]));
         } else {
-            std::string path = formatted_path;
-            if (path.find_first_of("{}") != std::string::npos)
-                path.replace(path.find_first_of("{}"), 2, "0-" + std::to_string(max_file_index_xyz[0] ));
-            if (path.find_first_of("{}") != std::string::npos)
-                path.replace(path.find_first_of("{}"), 2, "0-" + std::to_string(max_file_index_xyz[1] ));
-            if (path.find_first_of("{}") != std::string::npos)
-                path.replace(path.find_first_of("{}"), 2, "0-" + std::to_string(max_file_index_xyz[2] ));
-            return path;
+            std::string str_x = "0-" + std::to_string(max_file_index_xyz[0]);
+            std::string str_y = "0-" + std::to_string(max_file_index_xyz[1]);
+            std::string str_z = "0-" + std::to_string(max_file_index_xyz[2]);
+            return fmt::vformat(formatted_path, fmt::make_format_args(str_x, str_y, str_z));
         }
     }
 

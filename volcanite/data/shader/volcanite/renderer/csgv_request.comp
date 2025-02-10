@@ -78,7 +78,11 @@ void main() {
     //    if(g_brick_info[brick_idx * 4u + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)
     //        return;
 
+#ifdef NO_EMPTY_BRICK_SKIPPING
+    bool potentially_visible = true;
+#else
     bool potentially_visible = false;
+#endif
 
     const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
     EncodingRef brick_address = getBrickEncodingRef(brick_idx);
@@ -169,15 +173,6 @@ void main() {
     else if(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]){
         allocate = true;
     }
-    // TODO: CONTINUE HERE, RANOMDLY EJECT ELEMENTS WHEN CACHE IS FULL. may yield: "G-buffer must not contain labels that are invisible"
-//    // brick is visible and already decoded to its requested level: but the cache is full, randomly eject elements
-//    else if (// (gpu_stats.used_cache_base_elements >= g_cache_capacity - ((BRICK_SIZE / 2u) << 3u)) && // TODO: check cache fill ratio here (pass by uniform?)
-//        //(hash_pcg2d(uvec2(~brick_idx + 18823571u, (g_frame << 10u) ^ g_frame)).x & 1u) == 0u) { // TODO: change random ejection hash{
-//        assert(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT, "visible brick is not decoded");
-//        assert(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < g_cache_capacity, "visible brick has no cache index");
-//        // this is the same as if the renderer would not "see" this brick
-//        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT;
-//    }
     // brick is visilbe and already decoded to its requeste level: it should remain in cache.
     else {
         assert(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT, "visible brick is not decoded");

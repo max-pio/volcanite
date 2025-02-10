@@ -18,9 +18,7 @@
 #include <vvv/util/Logger.hpp>
 #include <vvv/util/util.hpp>
 
-#define FMT_HEADER_ONLY
-#include "fmt/include/fmt/format.h"
-#include "fmt/include/fmt/args.h"
+#include <fmt/core.h>
 #include "glm/ext/scalar_constants.hpp"
 
 namespace vvv {

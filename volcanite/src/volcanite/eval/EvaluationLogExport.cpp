@@ -24,10 +24,7 @@
 #include <vector>
 #include <complex>
 
-#define FMT_HEADER_ONLY
-#include "fmt/include/fmt/format.h"
-#include "fmt/include/fmt/args.h"
-
+#include <fmt/args.h>
 
 using namespace vvv;
 

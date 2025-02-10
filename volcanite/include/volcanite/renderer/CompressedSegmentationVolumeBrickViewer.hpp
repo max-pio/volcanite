@@ -23,8 +23,8 @@
 #include "vvv/core/Renderer.hpp"
 #include "vvv/reflection/UniformReflection.hpp"
 #include "vvv/passes/PassCompute.hpp"
-#define FMT_HEADER_ONLY
-#include "fmt/include/fmt/format.h"
+#include <fmt/core.h>
+
 
 #ifdef IMGUI
     #include "imgui.h"

@@ -32,7 +32,7 @@
 
 #include <string>
 
-#include "fmt/base.h"
+#include <fmt/core.h>
 
 using namespace volcanite;
 

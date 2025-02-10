@@ -20,20 +20,15 @@
 #include "vvvwindow/tf/TransferFunction1DWidget.hpp"
 #include "vvvwindow/tf/TransferFunctionSegmentedVolumeWidget.hpp"
 
-#include "vvv/core/GpuContext.hpp"
 #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_glfw.h"
 #include "imgui/backends/imgui_impl_vulkan.h"
 #include "imgui/misc/cpp/imgui_stdlib.h"
 #include "imgui/imGuIZMO.quat/imGuIZMOquat.h"
-#include "imgui/implot/implot.h"
 #include <vvv/util/Paths.hpp>
 
+#include <fmt/core.h>
 #include "vvv/util/Logger.hpp"
-
-#define FMT_HEADER_ONLY
-#include "fmt/include/fmt/format.h"
-#include "fmt/include/fmt/args.h"
 
 void GuiImgui::updateGui() {
     // We don't store internal states so far.

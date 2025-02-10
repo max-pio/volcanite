@@ -15,8 +15,6 @@
 
 # TODO: we could replace shipped libraries with CMake FetchContent calls, but this would add git, ssh as dependencies
 
-list(APPEND EXT_TARGETS "")
-
 # extern GLM
 add_subdirectory(extern/glm)
 list(APPEND EXT_TARGETS glm)
