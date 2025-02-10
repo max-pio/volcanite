@@ -13,8 +13,8 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#ifndef DUMMY_ENVMAP_GLSL
-#define DUMMY_ENVMAP_GLSL
+#ifndef VOLCANITE_DUMMY_ENVMAP_GLSL
+#define VOLCANITE_DUMMY_ENVMAP_GLSL
 
 #include "random.glsl"
 
@@ -47,4 +47,4 @@ vec4 get_background_color(vec2 fragCoord, vec3 rayDirection) {
     return bgColor;
 }
 
-#endif
+#endif // VOLCANITE_DUMMY_ENVMAP_GLSL

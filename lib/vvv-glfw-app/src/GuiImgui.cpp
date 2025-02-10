@@ -406,7 +406,10 @@ void GuiImgui::renderGui() {
                 }
                 case GuiDynamicText: {
                     auto e = GUI_CAST(be, std::string);
-                    ImGui::TextUnformatted(e->value->c_str());
+                    if (e->label.empty())
+                        ImGui::TextUnformatted(e->value->c_str());
+                    else
+                        ImGui::LabelText(e->label.c_str(), "%s", e->value->c_str());
                     break;
                 }
                 case GuiProgress: {

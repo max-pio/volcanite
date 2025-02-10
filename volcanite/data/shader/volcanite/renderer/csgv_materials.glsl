@@ -13,8 +13,8 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#ifndef CSGV_MATERIALS_GLSL
-#define CSGV_MATERIALS_GLSL
+#ifndef VOLCANITE_MATERIALS_GLSL
+#define VOLCANITE_MATERIALS_GLSL
 
 #include "volcanite/compression/csgv_utils.glsl"
 
@@ -80,4 +80,4 @@ vec4 getColor(uint label, int material) {
     return vec4(textureLod(s_transferFunctions[material], v, 0.f).rgb, g_materials[material].opacity);
 }
 
-#endif // CSGV_MATERIALS_GLSL
+#endif // VOLCANITE_MATERIALS_GLSL

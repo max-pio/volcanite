@@ -13,8 +13,8 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#ifndef COMPRESSION_UTILS_GLSL
-#define COMPRESSION_UTILS_GLSL
+#ifndef VOLCANITE_COMPRESSION_UTILS_GLSL
+#define VOLCANITE_COMPRESSION_UTILS_GLSL
 
 // map brick + frame combination to 1D index, for example to access the index_buffer
 int brick_pos2idx(ivec3 brick_idx, ivec3 brick_count, int frame) {
@@ -31,4 +31,4 @@ uint brick_pos2idx(uvec3 brick_idx, uvec3 brick_count) {
     return brick_pos2idx(brick_idx, brick_count, 0u);
 }
 
-#endif // COMPRESSION_UTILS_GLSL
+#endif // VOLCANITE_COMPRESSION_UTILS_GLSL

@@ -44,7 +44,7 @@ Colors of such
 
 **Temporal Accumulation:**
 Ping-pong buffers are used for temporal accumulation of RGB radiance and sample counts.
-The [csgv_upsample_resolve](./data/shader/volcanite/renderer/csgv_upsample_resolve.comp) shader handles the feedback loop and blitting to the output color buffer.
+The [csgv_denoise_resolve](./data/shader/volcanite/renderer/csgv_denoise_resolve.comp) shader handles the feedback loop and blitting to the output color buffer.
 Any color space conversion, tonemapping or other post-processing can be handled in this stage.
 In general, our temporal accumulation allows us to
 * draw a different number of samples per pixel (including 0) between different pixels in the same frame,

@@ -195,27 +195,7 @@ public:
 
 
         if(cfg.verbose) {
-            std::string op_mask_str;
-            if (cfg.op_mask == OP_ALL)
-                op_mask_str = "ALL";
-            else if (cfg.op_mask == OP_ALL_WITHOUT_DELTA)
-                op_mask_str = "OPT";
-            else {
-                if (cfg.op_mask & OP_PARENT_BIT)
-                    op_mask_str.push_back('p');
-                if (cfg.op_mask & OP_NEIGHBORY_BIT)
-                    op_mask_str.push_back('x');
-                if (cfg.op_mask & OP_NEIGHBORY_BIT)
-                    op_mask_str.push_back('y');
-                if (cfg.op_mask & OP_NEIGHBORZ_BIT)
-                    op_mask_str.push_back('z');
-                if (cfg.op_mask & OP_PALETTE_LAST_BIT)
-                    op_mask_str.push_back('l');
-                if (cfg.op_mask & OP_PALETTE_D_BIT)
-                    op_mask_str.push_back('d');
-                if (cfg.op_mask & OP_STOP_BIT)
-                    op_mask_str.push_back('s');
-            }
+            std::string op_mask_str = OperationMask_STR(cfg.op_mask);
             Logger(INFO) << "Compressing " << volume_input_path
                          << (cfg.chunked_input_data ? " with chunk indices " + str(cfg.max_file_index) : "")
                          << " to " << csgv_path << " [b=" << cfg.brick_dim << ", e=" << EncodingMode_STR(cfg.encoding_mode)

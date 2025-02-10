@@ -35,6 +35,8 @@ struct RendererOutput {
 
 class Renderer {
 public:
+    virtual ~Renderer() = default;
+
     /// Schedule work for the next frame in the frame sequence
     /// @param awaitBeforeExecution A set of semaphores that are signaled when frame should start rendering. the rendering engine MUST await these semaphores.
     virtual RendererOutput renderNextFrame(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) = 0;

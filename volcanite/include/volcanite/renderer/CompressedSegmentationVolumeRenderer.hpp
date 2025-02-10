@@ -354,7 +354,7 @@ private:
     void updateDeviceMemoryUsage();
     void updateSegmentedVolumeMaterial(int m);
     vvv::AwaitableList updateAttributeBuffers();
-    void updateRequestLimiation(uint32_t global_min_spp);
+    void updateRequestLimiation(uint32_t global_min_spp, uint32_t global_max_spp);
     void disableRequestLimiation();
     void updateRenderUpdateFlags();
     void updateUniformDescriptorset();
