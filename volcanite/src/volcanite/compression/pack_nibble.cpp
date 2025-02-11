@@ -17,34 +17,33 @@
 
 namespace volcanite {
 
-/**
- * Returns the entry_id-th 4 bit entry from the memory block starting at v[start].
- * Note that start counts in elements of size uint32_t and entry_id counts in elements of 4 bit size.
- */
-    uint32_t read4Bit(const uint32_t *v, std::size_t start, std::size_t entry_id) {
+    /**
+     * Returns the entry_id-th 4 bit entry from the memory block starting at v[start].
+     * Note that start counts in elements of size uint32_t and entry_id counts in elements of 4 bit size.
+     */
+    uint32_t read4Bit(const uint32_t *v, size_t start, size_t entry_id) {
         // we packed into the highest bits first: one uint contains the indices [0000111122223333 ... 7777]
         //assert(start + entry_id / 8 < v.size() && "trying to unpack element out of bounds");
-        int shift = 28 - 4 * static_cast<int>(entry_id % 8);
+        const int shift = 28 - 4 * static_cast<int>(entry_id % 8);
         return (v[start + entry_id / 8] >> shift) & 0xFu;
         //    return (v[start + entry_id / 8] & (0xF0000000u >> shift)) >> (28 - shift); // first entry in lower bits
     }
 
-/**
- * Returns the entry_id-th 4 bit entry from the memory block starting at v[start].
- * Note that start counts in elements of size uint32_t and entry_id counts in elements of 4 bit size.
- */
-    uint32_t read4Bit(const std::vector<uint32_t> &v, std::size_t start, std::size_t entry_id) {
+    /**
+     * Returns the entry_id-th 4 bit entry from the memory block starting at v[start].
+     * Note that start counts in elements of size uint32_t and entry_id counts in elements of 4 bit size.
+     */
+    uint32_t read4Bit(const std::vector<uint32_t> &v, size_t start, size_t entry_id) {
         // we packed into the highest bits first: one uint contains the indices [0000111122223333 ... 7777]
         assert(start + entry_id / 8 < v.size() && "trying to unpack element out of bounds");
         int shift = 28 - 4 * static_cast<int>(entry_id % 8);
         return (v[start + entry_id / 8] >> shift) & 0xFu;
-        //    return (v[start + entry_id / 8] & (0xF0000000u >> shift)) >> (28 - shift); // first entry in lower bits
     }
 
 
-/**
- * Writes the value value4bit to the entry_id-th position in v, offset by start uint32_t elements.
- */
+    /**
+     * Writes the value value4bit to the entry_id-th position in v, offset by start uint32_t elements.
+     */
     void write4Bit(uint32_t *v, std::size_t start, std::size_t entry_id, uint32_t value4bit) {
         assert(value4bit < 16 && "value must be within 4 bit range");
 
@@ -55,9 +54,9 @@ namespace volcanite {
         v[start + entry_id / 8] |= value4bit << shift;
     }
 
-/**
- * Writes the value value4bit to the entry_id-th position in v, offset by start uint32_t elements.
- */
+    /**
+     * Writes the value value4bit to the entry_id-th position in v, offset by start uint32_t elements.
+     */
     void write4Bit(std::vector<uint32_t> &v, std::size_t start, std::size_t entry_id, uint32_t value4bit) {
         assert(value4bit < 16 && "value must be within 4 bit range");
         assert(start + entry_id / 8 < v.size() && "trying to write element out of bounds");
@@ -70,11 +69,11 @@ namespace volcanite {
     }
 
 
-/**
- * Squeezes 4bit elements into one uint32_t element respectively starting with first up to the element before last.
- * If the number of elements is not divided evenly, the last resulting element does not contain all entries, i.e. is padded.
- * @return the number of 4bit elements that were squeezed
- */
+    /**
+     * Squeezes 4bit elements into one uint32_t element respectively starting with first up to the element before last.
+     * If the number of elements is not divided evenly, the last resulting element does not contain all entries, i.e. is padded.
+     * @return the number of 4bit elements that were squeezed
+     */
     uint32_t pack4Bit(std::vector<uint32_t> &v, std::size_t start, std::size_t end) {
         // iterate over all 32 bit elements, pack them into 4 bit elements in the same array
         std::size_t i = start;

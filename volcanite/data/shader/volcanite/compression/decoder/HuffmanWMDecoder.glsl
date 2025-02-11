@@ -372,13 +372,12 @@ uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
     uint enc_operation_index = brick_encoding.buf[inv_lod] + inv_lod_op_i;
 #endif
 
-    assertf(inv_lod <= target_inv_lod, "inv lod out of bounds %u", inv_lod);
+    assertf(inv_lod < LOD_COUNT, "inv lod out of bounds %u", inv_lod);
     assertf(enc_operation_index < WM_HEADER.level_starts_1_to_4[0], "brick encoding out of bounds read (access, bound, diff): %v3u", uvec3(enc_operation_index, WM_HEADER.level_starts_1_to_4[0], enc_operation_index - WM_HEADER.level_starts_1_to_4[0]));
     uint operation = WM_HUFFMAN_ACCESS(enc_operation_index);
 
     // follow the chain of operations from the current output voxel up to an operation that accesses the palette
     {
-        assert(operation <= PALETTE_LAST, "Wavelet Matrix encoding does not support stop bits encoded in OP stream");
 
         // equal to (operation != PALETTE_LAST && operation != PALETTE_ADV && operation != PALETTE_D)
         while (operation < 4u) {
@@ -419,6 +418,7 @@ uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
             operation = WM_HUFFMAN_ACCESS(enc_operation_index);
             assertf(enc_operation_index != 0u || operation == PALETTE_ADV, "first brick operation must be PALETTE_ADV but is %u", operation);
         }
+        assert((operation & STOP_BIT) == 0u, "Wavelet Matrix encoding does not support stop bits encoded in OP stream");
 
         // at this point, the current operation accesses the palette: write the resulting palette entry
         // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
@@ -488,7 +488,7 @@ uint decompressCSGVVoxel(const uint brick_idx, const uvec3 brick_voxel, const ui
      const uint lod_width = BRICK_SIZE >> target_inv_lod;
      const uint voxel_idx = _cache_pos2idx(brick_voxel) / (lod_width * lod_width * lod_width);
     // same as:
-//    const uint voxel_idx = _cache_pos2idx(brick_voxel) / (1u << (3 * (findMSB(BRICK_SIZE) - target_inv_lod)));
+    // const uint voxel_idx = _cache_pos2idx(brick_voxel) / (1u << (3 * (findMSB(BRICK_SIZE) - target_inv_lod)));
 
     uint palette_index = getPaletteIndexOfCSGVVoxel(voxel_idx, target_inv_lod,
                                                     brick_encoding, brick_encoding_length,
@@ -499,7 +499,9 @@ uint decompressCSGVVoxel(const uint brick_idx, const uvec3 brick_voxel, const ui
                                                                                  brick_encoding.buf[PALETTE_SIZE_HEADER_INDEX])
                                                 #endif
                                                     );
-
+    assertf(palette_index < getBrickPaletteLength(brick_idx),
+           "palette index out of palette bounds (brick, palette_idx, palette_length): %v3u",
+           uvec3(brick_idx, palette_index, getBrickPaletteLength(brick_idx)));
     return brick_encoding.buf[brick_encoding_length - 1u - palette_index];
 }
 #endif

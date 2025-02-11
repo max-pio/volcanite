@@ -251,6 +251,8 @@ public:
         if (config.cache_mode > 2)
             throw std::runtime_error("Invalid cache mode " + std::to_string(config.cache_mode));
         m_cache_mode = config.cache_mode;
+        if (m_decode_from_shared_memory && config.cache_mode != CACHE_BRICKS)
+            throw std::runtime_error("Shared memory decoding can only be used with cache mode bricks");
         m_empty_space_block_dim = config.empty_space_resolution;
         m_additional_shader_defs = config.shader_defines;
     }

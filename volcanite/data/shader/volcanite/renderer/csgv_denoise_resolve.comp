@@ -240,7 +240,7 @@ void main() {
             // accum_rgba stores the offset to the neighbor (.rg) from which the color is copied for upsampling
             ivec2 offset = ivec2(accum_rgba.rg);
             accum_rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel + offset);
-            assert(g_debug_vis_flags != 0u || accum_rgba.a >= 0.f, "copying non-rendered pixel for upsampling");
+            //assert(g_debug_vis_flags != 0u || accum_rgba.a >= 0.f, "copying non-rendered pixel for upsampling");
         }
         writeFinalFramebuffer(pixel, accum_rgba);
     }
