@@ -15,8 +15,6 @@
 
 #define HEADLESS
 
-#include <string>
-
 #include "vvv/volren/Volume.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/util/segmentation_volume_synthesis.hpp"
@@ -26,6 +24,8 @@
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "vvv/core/HeadlessRendering.hpp"
 #include "stb/stb_image.hpp"
+#include <fmt/core.h>
+#include <string>
 
 using namespace volcanite;
 using namespace vvv;
@@ -215,8 +215,11 @@ int main() {
 
     // check output image files for pair-wise equality
     std::map<std::string, int> error_count;
-    for (const auto& args : RENDERING_TEST_CONFIGS)
+    int max_id_string_length = 0;
+    for (const auto& args : RENDERING_TEST_CONFIGS) {
         error_count[args.screenshot_output_file] = 0;
+        max_id_string_length = glm::max(static_cast<int>(args.screenshot_output_file.length()), max_id_string_length);
+    }
     Logger(DEBUG) << "----------------";
     int result = RET_SUCCESS;
     for (int img_a = 0; img_a < RENDERING_TEST_CONFIGS.size(); img_a++) {
@@ -246,7 +249,8 @@ int main() {
 
     Logger(DEBUG) << "Pair-Wise Comparison Error Counts:";
     for (const auto& args : RENDERING_TEST_CONFIGS)
-        Logger(DEBUG) << args.screenshot_output_file << ": " << error_count[args.screenshot_output_file];
+        Logger(DEBUG) << fmt::vformat("{:" + std::to_string(max_id_string_length) + "}", fmt::make_format_args(args.screenshot_output_file))
+                           << "  " << error_count[args.screenshot_output_file];
     Logger(DEBUG) << ((result == RET_SUCCESS) ? "  success" : "  errors");
     return result;
 }
