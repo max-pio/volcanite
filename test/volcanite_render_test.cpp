@@ -92,10 +92,9 @@ static const std::vector<VolcaniteArgs> RENDERING_TEST_CONFIGS = {
         {.brick_size=32, .encoding_mode=NIBBLE_ENC, .screenshot_output_file=OUT_DIR + "nibble_32.png"},
         {.cache_palettized=true, .brick_size=64, .encoding_mode=SINGLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANSd_64_cache-palette.png"},
         {.stream_lod=true, .brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANS_16_stream-lod.png"},
-        // TODO: nibble GPU decoding and Huffman voxel decoding are broken
         {.cache_mode=CACHE_NOTHING, .brick_size=16, .encoding_mode=NIBBLE_ENC, .operation_mask=(OP_ALL_WITHOUT_STOP & OP_ALL_WITHOUT_DELTA), .random_access=true, .screenshot_output_file=OUT_DIR + "nibble_16_ra.png"},
         {.cache_mode=CACHE_BRICKS, .decode_from_shared_memory=true, .brick_size=64, .encoding_mode=HUFFMAN_WM_ENC, .operation_mask=OP_ALL_WITHOUT_DELTA, .random_access=true,  .screenshot_output_file=OUT_DIR + "hWM_64_ra_cache-brck-sm.png"},
-        //{.cache_mode=CACHE_VOXELS, .empty_space_resolution=2u, .brick_size=16, .encoding_mode=HUFFMAN_WM_ENC, .operation_mask=OP_ALL_WITHOUT_DELTA, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_16_ra_cache-voxl_ess.png"},
+        {.cache_mode=CACHE_VOXELS, .empty_space_resolution=2u, .brick_size=16, .encoding_mode=HUFFMAN_WM_ENC, .operation_mask=OP_ALL_WITHOUT_DELTA, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_16_ra_cache-voxl_ess.png"},
         {.cache_mode=CACHE_NOTHING, .brick_size=32, .encoding_mode=HUFFMAN_WM_ENC, .operation_mask=OP_ALL_WITHOUT_DELTA, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_32_ra_cache-none.png"},
     };
 
@@ -215,6 +214,9 @@ int main() {
     }
 
     // check output image files for pair-wise equality
+    std::map<std::string, int> error_count;
+    for (const auto& args : RENDERING_TEST_CONFIGS)
+        error_count[args.screenshot_output_file] = 0;
     Logger(DEBUG) << "----------------";
     int result = RET_SUCCESS;
     for (int img_a = 0; img_a < RENDERING_TEST_CONFIGS.size(); img_a++) {
@@ -225,11 +227,16 @@ int main() {
                 Logger(ERROR) << "Image loading error for "
                               << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                               << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file;
+                error_count[RENDERING_TEST_CONFIGS[img_a].screenshot_output_file]++;
+                error_count[RENDERING_TEST_CONFIGS[img_b].screenshot_output_file]++;
+                result = RET_RENDER_ERROR;
             } else if (rmse >= 0.01) {
                 Logger(ERROR) << "Rendering differences with RMSE of " << rmse
                               << " for images " << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                               << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file;
                 result = RET_RENDER_ERROR;
+                error_count[RENDERING_TEST_CONFIGS[img_a].screenshot_output_file]++;
+                error_count[RENDERING_TEST_CONFIGS[img_b].screenshot_output_file]++;
             } else {
                 Logger(DEBUG) << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                                         << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file << " ok (RMSE " << rmse << ")";
@@ -237,5 +244,9 @@ int main() {
         }
     }
 
+    Logger(DEBUG) << "Pair-Wise Comparison Error Counts:";
+    for (const auto& args : RENDERING_TEST_CONFIGS)
+        Logger(DEBUG) << args.screenshot_output_file << ": " << error_count[args.screenshot_output_file];
+    Logger(DEBUG) << ((result == RET_SUCCESS) ? "  success" : "  errors");
     return result;
 }
