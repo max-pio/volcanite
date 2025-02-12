@@ -325,13 +325,9 @@ private:
     // denoising
     int m_atrous_iterations = 4;
     bool m_denoising_enabled = true;
-    int m_denoise_filter_kernel_size = 1;
-    float m_difference_depth_denoising = 1.0f;
-    float m_spatial_sigma = 2.0f;
+    int m_denoise_filter_kernel_size = 2;
     float m_depth_sigma = 1.f;
-    // svgf TODO: Not using SVGF anymore, remove this
     bool m_atrous_enabled = true;
-    float m_illumination_sigma = 4.0f;
     bool m_denoise_fade_enabled = true;
     float m_denoise_fade_sigma = 2.f;
     // debugging and dev options
@@ -343,8 +339,8 @@ private:
     int m_target_accum_frames = 128;
     bool m_accum_step_mode = false;
     bool m_accum_do_step = false;
-    int m_max_inv_lod = 6;
-    int m_max_request_path_length = 1u;
+    int m_max_inv_lod = 8;
+    int m_max_request_path_length_pow2 = 1u;
     // utility
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text, m_gui_cache_mem_text;

@@ -18,6 +18,7 @@
 #include "vvv/core/GuiInterface.hpp"
 
 namespace vvv {
+    // general GuiElementList functions
     bool GuiInterface::GuiElementList::remove(gui_id id) {
         auto it = std::find_if(m_entries.begin(), m_entries.end(), [id](const BaseGuiEntry *g) { return g->id == id; });
         if (it != m_entries.end()) {
@@ -32,6 +33,7 @@ namespace vvv {
         m_entries.clear();
     }
 
+    // GuiElementList Gui Types
     gui_id GuiInterface::GuiElementList::addTF1D(VectorTransferFunction* tf, std::vector<float> *histogram, float *histMin, float *histMax, std::function<void()> onChanged) {
         auto entry = new GuiTF1DEntry();
         entry->id = m_id_counter++;
@@ -61,6 +63,31 @@ namespace vvv {
         return entry->id;
     }
 
+    gui_id GuiInterface::GuiElementList::addDirection(glm::vec3 *v, const Camera* camera, const std::string &name) {
+        auto entry = new GuiDirectionEntry();
+        entry->id = m_id_counter++;
+        entry->type = GuiDirection;
+        entry->value = v;
+        entry->camera = camera;
+        entry->getter = nullptr;
+        entry->setter = nullptr;
+        entry->label = name;
+        m_entries.push_back(entry);
+        return entry->id;
+    }
+
+    gui_id GuiInterface::GuiElementList::addDirection(std::function<void(glm::vec3)> setter, std::function<glm::vec3()> getter, const Camera* camera, const std::string &name) {
+        auto entry = new GuiDirectionEntry();
+        entry->id = m_id_counter++;
+        entry->type = GuiDirection;
+        entry->value = {};
+        entry->camera = camera;
+        entry->getter = std::move(getter);
+        entry->setter = std::move(setter);
+        entry->label = name;
+        m_entries.push_back(entry);
+        return entry->id;
+    }
 
     // special types and grouping
     gui_id GuiInterface::GuiElementList::addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int)> onChanged, const std::string& name) {

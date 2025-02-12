@@ -44,7 +44,6 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
         GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapConfig& colormap_config = e->colormapConfig[m];
 
         bool materialChanged = false;
-        bool colormapChanged = false;
 
         // make child collapsable child
         // ImGui::BeginChild(id++,  ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize() * 24.0f), ImGuiChildFlags_None, ImGuiWindowFlags_MenuBar);
@@ -78,6 +77,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
 
             // skip the rest of the GUI if this material is disabled
             if(mat.discrAttribute != SegmentedVolumeMaterial::DISCR_NONE) {
+                bool colormapChanged = false;
                 // Discriminator range
                 {
                     glm::vec2 attrRange =

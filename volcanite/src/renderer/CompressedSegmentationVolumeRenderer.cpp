@@ -631,8 +631,8 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
         }
         // target size of 0 means to allocate as much for the cache as we can (or rather 85% of it to have some leeway)
         if (m_target_cache_size_MB == 0) {
-            constexpr float other_required_device_mb = 128.f;
             if (free_heap_size_byte >= 196) {
+                constexpr float other_required_device_mb = 128.f;
                 m_target_cache_size_MB = static_cast<size_t>(static_cast<float>(free_heap_size_byte) / 1024.f / 1024.f
                                                              - other_required_device_mb);
             } else {
@@ -899,7 +899,7 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
             m_pass->setImageSamplerArray("s_transferFunctions", m, m_materialTransferFunctions[m]->texture(), vk::ImageLayout::eReadOnlyOptimal, false);
     }
 
-    m_gui_resolution_text = "Render resolution: " + std::to_string(m_resolution.width) + "x" + std::to_string(m_resolution.height);
+    m_gui_resolution_text = "Rendering " + std::to_string(m_resolution.width) + " x " + std::to_string(m_resolution.height);
     getCtx()->sync->hostWaitOnDevice(reinitDone);
 
     // trigger a temporal accumulation flush and force parameter updates
@@ -965,7 +965,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_voxel_size) HASHP(m_bboxMin) HASHP(m_bboxMax)
     // HASHP(m_subblock_start) HASHP(m_subblock_size) HASHP(m_subblock_enabled)
     // general rendering config
-    HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_max_request_path_length) HASHP(m_blue_noise) HASHP(m_max_steps)
+    HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_max_request_path_length_pow2) HASHP(m_blue_noise) HASHP(m_max_steps)
     // request limitation
     // TODO: should not reset frame accumulation. Right now the uniforms are always uploaded always at UPDATE_RENDER_FRAME
     //    HASHP(m_req_limit.area_size)
@@ -992,8 +992,7 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     new_hash = 0ull;
     HASHP(m_background_color_a) HASHP(m_background_color_b) HASHP(m_tonemap_enabled)
     HASHP(m_atrous_iterations)
-    HASHP(m_denoising_enabled) HASHP(m_atrous_enabled) HASHP(m_difference_depth_denoising)
-    HASHP(m_spatial_sigma) HASHP(m_depth_sigma) HASHP(m_illumination_sigma) HASHP(m_denoise_fade_sigma)
+    HASHP(m_denoising_enabled) HASHP(m_atrous_enabled) HASHP(m_depth_sigma) HASHP(m_denoise_fade_sigma)
     HASHP(m_denoise_filter_kernel_size) HASHP(m_denoise_fade_enabled) HASHP(m_mouse_pos)
     uint32_t resolve_debug_bits = m_debug_vis_flags & (VDEB_NO_POSTPROCESS_BIT | VDEB_CACHE_ARRAY_BIT
                                                        | VDEB_EMPTY_SPACE_ARRAY_BIT | VDEB_SPP_BIT | VDEB_G_BUFFER_BIT | VDEB_ENVMAP_BIT
@@ -1090,13 +1089,13 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         // denoising
         m_uresolve_info->setUniform<uint32_t>("g_denoising_enabled", m_denoising_enabled ? 1 : 0);
         m_uresolve_info->setUniform<uint32_t>("g_atrous_enabled", m_atrous_enabled ? 1 : 0);
-        m_uresolve_info->setUniform<float>("g_difference_depth_denoising", m_difference_depth_denoising);
-        m_uresolve_info->setUniform<float>("g_spatial_sigma", m_spatial_sigma);
         m_uresolve_info->setUniform<float>("g_depth_sigma", m_depth_sigma);
-        m_uresolve_info->setUniform<float>("g_illumination_sigma", m_illumination_sigma);
         m_uresolve_info->setUniform<float>("g_denoise_fade_sigma", m_denoise_fade_sigma);
         m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
-        m_uresolve_info->setUniform<int>("g_denoise_filter_kernel_size",m_denoise_filter_kernel_size);
+        // automatically limit the kernel size after a certain number of frames
+        const uint32_t pixels_per_sample = (1u << m_subsampling) * (1u << m_subsampling);
+        m_uresolve_info->setUniform<int>("g_denoise_filter_kernel_size",
+                    glm::min(m_denoise_filter_kernel_size, (m_denoise_filter_kernel_size < 8 * pixels_per_sample) ? 3 : 1));
         m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
         m_uresolve_info->setUniform<glm::ivec2>("g_cursor_pixel_pos", glm::ivec2(m_mouse_pos * glm::vec2(m_resolution.width,
                                                                                                          m_resolution.height)));
@@ -1171,7 +1170,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
         auto lod_count = m_compressed_segmentation_volume->getLodCountPerBrick();
         m_urender_info->setUniform<uint32_t>("g_max_inv_lod", glm::min(static_cast<uint32_t>(m_max_inv_lod), lod_count - 1u));
-        m_urender_info->setUniform<int32_t>("g_max_request_path_length", m_max_request_path_length);
+        m_urender_info->setUniform<int32_t>("g_max_request_path_length", (1 << m_max_request_path_length_pow2) - 1);
         m_urender_info->setUniform<int32_t>("g_maxSteps", m_max_steps);
         m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? 1 : 0);
     }
@@ -1243,20 +1242,28 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                           });
 
     // General options
-    g_gen->addSeparator();
-    glm::uvec3 vol_dim = m_compressed_segmentation_volume->getVolumeDim();
-    g_gen->addVec3([this](glm::vec3 v) { if (glm::all(glm::greaterThan(v, glm::vec3(0.f)))) m_voxel_size = v; },
-                   [this]() { return m_voxel_size; }, "Voxel Size", 3);
-    g_gen->addIntRange([this](glm::ivec2 v) {m_bboxMin.x = v.x; m_bboxMax.x = v.y;},
-                         [this](){return glm::ivec2(m_bboxMin.x, m_bboxMax.x);},
-                         "Splitting Plane X",  glm::ivec2(0), glm::ivec2(vol_dim.x), glm::ivec2(1));
-    g_gen->addIntRange([this](glm::ivec2 v) {m_bboxMin.y = v.x; m_bboxMax.y = v.y;},
-                         [this](){return glm::ivec2(m_bboxMin.y, m_bboxMax.y);},
-                         "Splitting Plane Y", glm::ivec2(0), glm::ivec2(vol_dim.y), glm::ivec2(1));
-    g_gen->addIntRange([this](glm::ivec2 v) {m_bboxMin.z = v.x; m_bboxMax.z = v.y;},
-                         [this](){return glm::ivec2(m_bboxMin.z, m_bboxMax.z);},
-                         "Splitting Plane Z", glm::ivec2(0), glm::ivec2(vol_dim.z), glm::ivec2(1));
-    g_gen->addSeparator();
+    static int gui_preset_selection = 0;
+    std::vector<std::string> vcfg_preset_names;
+    std::ranges::transform(m_data_vcfg_presets, std::back_inserter(vcfg_preset_names),
+        [](const std::pair<std::string, std::filesystem::path>& c){return c.first;});
+    g_gen->addCombo(&gui_preset_selection, vcfg_preset_names,
+                       [this](int i) {
+                            // how many frames have to be accumulated so that each pixel received one sample
+                            if (i >= 0 && i < m_data_vcfg_presets.size())
+                                readParameterFile(m_data_vcfg_presets[i].second);
+
+                            // compute min. required number of total accumulation samples per pixel
+                            if (m_target_accum_frames > 0) {
+                                const int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
+                                if (m_global_illumination_enabled && m_shadow_pathtracing_ratio > 0.) {
+                                    // ambient occlusion / path tracing need some frames to converge
+                                    m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 512);
+                                } else {
+                                    // everything deterministic, nees only AA and iterative brick decoding
+                                    m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 64);
+                                }
+                            }
+                       }, "Rendering Preset");
     g_gen->addAction([this]() {
 #ifdef HEADLESS
         exportCurrentFrameToImage("./volcanite_output.png");
@@ -1316,97 +1323,106 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
         writeParameterFile(file, VOLCANITE_VERSION);
     }, "Export Parameters");
-    g_gen->addSeparator();
 #endif    // not HEADLESS
+#ifdef IMGUI
+    g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_gen->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
+#ifdef IMGUI
+    g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_gen->addAction([this](){ getCamera()->position_look_at_world_space = {0, 0, 0}; }, "Center Camera");
+    g_gen->addSeparator();
+    const glm::uvec3 vol_dim = m_compressed_segmentation_volume->getVolumeDim();
+    g_gen->addVec3([this](glm::vec3 v) { if (glm::all(glm::greaterThan(v, glm::vec3(0.f)))) m_voxel_size = v; },
+                   [this]() { return m_voxel_size; }, "Voxel Size", 3);
+    g_gen->addIntRange([this](glm::ivec2 v) {m_bboxMin.x = v.x; m_bboxMax.x = v.y;},
+                         [this](){return glm::ivec2(m_bboxMin.x, m_bboxMax.x);},
+                         "Splitting Plane X",  glm::ivec2(0), glm::ivec2(vol_dim.x), glm::ivec2(1));
+    g_gen->addIntRange([this](glm::ivec2 v) {m_bboxMin.y = v.x; m_bboxMax.y = v.y;},
+                         [this](){return glm::ivec2(m_bboxMin.y, m_bboxMax.y);},
+                         "Splitting Plane Y", glm::ivec2(0), glm::ivec2(vol_dim.y), glm::ivec2(1));
+    g_gen->addIntRange([this](glm::ivec2 v) {m_bboxMin.z = v.x; m_bboxMax.z = v.y;},
+                         [this](){return glm::ivec2(m_bboxMin.z, m_bboxMax.z);},
+                         "Splitting Plane Z", glm::ivec2(0), glm::ivec2(vol_dim.z), glm::ivec2(1));
+    g_gen->addSeparator();
     g_gen->addDynamicText(&m_gui_device_mem_text);
     g_gen->addDynamicText(&m_gui_cache_mem_text);
 
     // Display properties and render resolution
-    g_dis->addInt(&m_target_accum_frames, "Accumulation Frames");
-    g_dis->addProgress([this]() { return m_target_accum_frames > 0u ? static_cast<float>(m_accumulated_frames) / static_cast<float>(m_target_accum_frames)
-                                                                                   : -static_cast<float>(m_accumulated_frames); }, "Progress");
-    g_dis->addInt(&m_subsampling, "Subsampling Resolution", 0, 3, 1);
-    //
-    g_dis->addSeparator();
+    g_dis->addColor(&m_background_color_a, "Background Color A");
+    g_dis->addColor(&m_background_color_b, "Background Color B");
     g_dis->addDynamicText(&m_gui_resolution_text);
+#ifdef IMGUI
+    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
     g_dis->addBool([this](bool b) { if(getCtx()->getWsi()) getCtx()->getWsi()->setWindowResizable(b); }, [this]() { return getCtx()->getWsi() != nullptr && getCtx()->getWsi()->isWindowResizable(); }, "Resizable Window");
+#ifdef IMGUI
+        g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
 #ifdef IMGUI
     g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
-    g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(1080, 1920); }, "1080x1920 FullHD");
-#ifdef IMGUI
-    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
-#endif
-    g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize( 2160, 3840); }, "2160x3840 4K");
-    //g_dis->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
+    //     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(1080, 1920); }, "1080x1920 FullHD");
+    // #ifdef IMGUI
+    //     g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+    // #endif
+    //     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize( 2160, 3840); }, "2160x3840 4K");
+    //     g_dis->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
+    g_dis->addSeparator();
+    g_dis->addInt(&m_target_accum_frames, "Accumulation Frames");
+    g_dis->addProgress([this]() { return m_target_accum_frames > 0u ? static_cast<float>(m_accumulated_frames) / static_cast<float>(m_target_accum_frames)
+                                                                                   : -static_cast<float>(m_accumulated_frames); }, "Progress");
+    g_dis->addLabel("Performance Optimization");
+    g_dis->addInt(&m_subsampling, "Resolution Subsampling Factor ", 0, 3, 1);
+    g_dis->addInt(&m_max_request_path_length_pow2, "Decompression Path Length", 0, 5, 1);
+    g_dis->addFloat(&m_lod_bias, "Decompression LOD Bias", -8.f, 8.f, 0.1f, 1.f);
 
     // Materials
     g_mat->addTFSegmentedVolume(&m_materials, m_csgv_db->getAttributeNames(), m_csgv_db->getAttributeMinMax(), [this](int m) { updateSegmentedVolumeMaterial(m); }, "Materials");
 
     // Path Tracing / Rendering
-    static int gui_preset_selection = 0;
-    std::vector<std::string> vcfg_preset_names;
-    std::ranges::transform(m_data_vcfg_presets, std::back_inserter(vcfg_preset_names),
-        [](const std::pair<std::string, std::filesystem::path>& c){return c.first;});
-    g_render->addCombo(&gui_preset_selection, vcfg_preset_names,
-                       [this](int i) {
-                            // how many frames have to be accumulated so that each pixel received one sample
-                            if (i >= 0 && i < m_data_vcfg_presets.size())
-                                readParameterFile(m_data_vcfg_presets[i].second);
-
-                            // compute min. required number of total accumulation samples per pixel
-                            if (m_target_accum_frames > 0) {
-                                const int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
-                                if (m_global_illumination_enabled && m_shadow_pathtracing_ratio > 0.) {
-                                    // ambient occlusion / path tracing need some frames to converge
-                                    m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 512);
-                                } else {
-                                    // everything deterministic, nees only AA and iterative brick decoding
-                                    m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 64);
-                                }
-                            }
-                       }, "Rendering Preset");
     g_render->addFloat(&m_factor_ambient, "Constant Color", 0.0f, 1.f, 0.05f, 2);
     g_render->addSeparator();
     g_render->addFloat(&m_light_intensity, "Light Intensity", 0.f, 4.f, 0.05f, 2);
-    g_render->addDirection(&m_light_direction, "Light Direction");
+    g_render->addDirection(&m_light_direction, m_camera.get(), "Light Direction");
     g_render->addSeparator();
-    g_render->addBool(&m_global_illumination_enabled, "Ambient Global Illumination");
-    g_render->addFloat(&m_shadow_pathtracing_ratio, "Directional <> Ambient", 0.f, 1.f, 0.05f, 2);
+    g_render->addBool(&m_global_illumination_enabled, "Global Illumination");
+#ifdef IMGUI
+    g_render->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
     g_render->addBool(&m_envmap_enabled, "Environment Map");
+    g_render->addFloat(&m_shadow_pathtracing_ratio, "Directional <> Ambient", 0.f, 1.f, 0.05f, 2);
     g_render->addInt(&m_max_path_length, "Path Length", 1, 32, 1);
+    g_render->addBool(&m_denoising_enabled, "Denoising");
+#ifdef IMGUI
+        g_render->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_render->addBool(&m_tonemap_enabled, "Tone Mapping");
 
     // Post-Processing
-    g_post->addColor(&m_background_color_a, "Background Color A");
-    g_post->addColor(&m_background_color_b, "Background Color B");
-    g_post->addBool(&m_tonemap_enabled, "Tone Mapping");
-    g_post->addSeparator();
-    g_post->addLabel("Post-Processing");
-    g_post->addBool(&m_atrous_enabled, "Enable À-Trous Post-Processing");
-    g_post->addInt(&m_atrous_iterations, "Post-Process Iterations", 1, 4, 1);
-    g_post->addInt(&m_denoise_filter_kernel_size, "Post-Process Kernel Size", 0, 3, 1);
-    g_post->addLabel("Denoising");
-    g_post->addBool(&m_denoising_enabled, "Enable Denoising");
-    //    g_dev->addFloat(&m_difference_depth_denoising, "difference depth denoising", 0.001f, 1.f, 0.004, 3);
-    //    g_dev->addFloat(&m_spatial_sigma, "Spatial Sigma", 0.001f, 5.f, 0.01, 2);
-    g_post->addFloat(&m_depth_sigma, "Depth Sigma", 0.001f, 100.f, 0.01, 3);
-    //    g_dev->addFloat(&m_illumination_sigma, "Illumination Sigma", 0.01f, 10.f, 0.01, 2); // unnused for now
-    g_post->addBool(&m_denoise_fade_enabled, "Fade Denoiser Out");
-    g_post->addFloat(&m_denoise_fade_sigma, "Denoise Fade Sigma", 0.00f, 10.f, 0.01, 2);
+    g_dev->addLabel("Post Processing");
+    g_dev->addBool(&m_atrous_enabled, "Enable À-Trous Post-Processing");
+    g_dev->addInt(&m_atrous_iterations, "Post-Process Iterations", 1, 4, 1);
+    g_dev->addInt(&m_denoise_filter_kernel_size, "Post-Process Kernel Size", 0, 3, 1);
+    g_dev->addSeparator();
+    g_dev->addLabel("Denoising");
+    g_dev->addFloat(&m_depth_sigma, "Denoise Depth Sigma", 0.001f, 100.f, 0.01, 3);
+    g_dev->addBool(&m_denoise_fade_enabled, "Denoise Fade Out");
+#ifdef IMGUI
+        g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_dev->addFloat(&m_denoise_fade_sigma, "Denoise Fade Sigma", 0.00f, 10.f, 0.01, 2);
 
     // Development
     g_dev->addLabel("Ray Traversal");
     g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
-    g_dev->addInt(&m_max_steps, "Max DDA Steps", 16, 1 << 16u, 16);
-    g_dev->addFloat(&m_lod_bias, "LOD bias", -8.f, 8.f, 0.1f, 1.f);
+    g_dev->addInt(&m_max_steps, "Max. DDA Steps", 16, 1 << 16u, 16);
+    g_dev->addInt(&m_max_inv_lod, "Max. Decoding LoD", 0, 8, 1);
     g_dev->addSeparator();
-
-    g_dev->addLabel("Debug");
-    g_dev->addAction([this]() { printGPUMemoryUsage(); }, "Print GPU Memory Usage");
-    g_dev->addInt(&m_max_inv_lod, "Max. Decoding LoD", 0, 6, 1);
-    g_dev->addInt(&m_max_request_path_length, "Max. Decoding Path Length", 0, 32, 1);
+    g_dev->addLabel("Debug Views");
     const std::vector<std::string> option_labels = {"Model Space", "Level-of-Detail", "Empty Space", "Brick Index",
                                                     "Label Cache", "Raw Render", "Cache Buffer",
                                                     "Request Limitation", "Brick Info State",
@@ -1418,12 +1434,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                                VDEB_EMPTY_SPACE_ARRAY_BIT, VDEB_G_BUFFER_BIT, VDEB_SPP_BIT,
                                                VDEB_ENVMAP_BIT, VDEB_STATS_DOWNLOAD_BIT};
     g_dev->addBitFlags(&m_debug_vis_flags, option_labels, option_bits, true, "Debug View");
-    g_dev->addSeparator();
-    g_dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
-#ifdef IMGUI
-    g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
-#endif
-    g_dev->addAction([this](){ getCamera()->position_look_at_world_space = {0, 0, 0}; }, "Center Camera");
     g_dev->addSeparator();
     g_dev->addLabel("Label Cache Management");
     g_dev->addBool(&m_req_limit.g_enable, "Auto Cache Request Limitation");
@@ -1447,15 +1457,19 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
     g_dev->addBool(&m_clear_accum_every_frame, "Every Frame");
-    g_dev->addAction([this]() { m_pcache_reset = true;
-        m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
-                std::chrono::high_resolution_clock::now().time_since_epoch().count());}, "Clear Cache and Accumulation");
-    g_dev->addSeparator();
     g_dev->addBool(&m_accum_step_mode, "Step Accumulation");
 #ifdef IMGUI
     g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
     g_dev->addAction([this]() { m_accum_do_step = m_accum_step_mode; }, "Next Step");
+    g_dev->addAction([this]() { m_pcache_reset = true;
+        m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
+                std::chrono::high_resolution_clock::now().time_since_epoch().count());}, "Clear Cache and Accumulation");
+#ifdef IMGUI
+        g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_dev->addAction([this]() { printGPUMemoryUsage(); }, "Print GPU Memory Usage");
+
     // import initial config (if requested)
     if (m_init_vcfg_file.has_value())
         CompressedSegmentationVolumeRenderer::readParameterFile(m_init_vcfg_file.value());

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <utility>
 #include <vvv/volren/tf/VectorTransferFunction.hpp>
 #include <vvv/volren/tf/SegmentedVolumeMaterial.hpp>
 #include <vvv/util/Logger.hpp>
@@ -150,6 +151,10 @@ public:
         static const std::vector<std::string>& getAvailableColormaps();
     };
 
+    struct GuiDirectionEntry : GuiEntry<glm::vec3> {
+        const Camera* camera = nullptr;
+    };
+
     struct GuiComboEntry : BaseGuiEntry {
         int *selection = nullptr;
         std::function<void(int)> onChanged = {};
@@ -207,7 +212,6 @@ public:
         // TODO: GUI range properties receive min/max args in 2D, but use them only in 1D (red channel)
         FLOAT_PROPERTY_REF(addFloatRange, glm::vec2, GuiFloatRange)
         FLOAT_PROPERTY_REF(addVec3, glm::vec3, GuiVec3)
-        PROPERTY_REF(addDirection, glm::vec3, GuiDirection)
         FLOAT_PROPERTY_REF(addVec4, glm::vec4, GuiVec4)
         PROPERTY_REF(addColor, glm::vec4, GuiColor)
 
@@ -216,6 +220,8 @@ public:
         virtual gui_id addTFSegmentedVolume(std::vector<SegmentedVolumeMaterial>* materials, const std::vector<std::string>& attributeNames, const std::vector<glm::vec2>& attributeMinMax, std::function<void(int)> onChanged = nullptr, const std::string& name = "");
 
         // special types and grouping
+        virtual gui_id addDirection(glm::vec3 *v, const Camera* camera, const std::string &name = "");
+        virtual gui_id addDirection(std::function<void(glm::vec3)> setter, std::function<glm::vec3()> getter, const Camera* camera, const std::string &name = "");
         virtual gui_id addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int)> onChanged = nullptr, const std::string& name = "");
         virtual gui_id addBitFlags(unsigned int* bitfield, const std::vector<std::string>& options, const std::vector<unsigned int>& bitFlags, bool singleFlagOnly, const std::string& name = "");
         virtual gui_id addAction(void (*callback)(), const std::string& name);
@@ -512,8 +518,8 @@ gui_id GuiInterface::GuiElementList::add(std::function<void(T)> setter, std::fun
     auto entry = new GuiEntry<T>();
     entry->id = m_id_counter++;
     entry->type = type;
-    entry->getter = getter;
-    entry->setter = setter;
+    entry->getter = std::move(getter);
+    entry->setter = std::move(setter);
     entry->label = name;
     entry->floatDecimals = decimals;
 
@@ -525,8 +531,8 @@ template<class T> gui_id GuiInterface::GuiElementList::add(std::function<void(T)
     auto entry = new GuiEntry<T>();
     entry->id = m_id_counter++;
     entry->type = type;
-    entry->getter = getter;
-    entry->setter = setter;
+    entry->getter = std::move(getter);
+    entry->setter = std::move(setter);
     entry->label = name;
     entry->min = min;
     entry->max = max;

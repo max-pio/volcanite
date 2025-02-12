@@ -207,17 +207,12 @@ layout (std140, binding = 12) uniform resolve_info {
     vec4 g_background_color_b;
     bool g_tonemap_enable;
 // denoising
-    // TODO: Remove unused denoising properties
-    bool g_denoise;
-    bool g_denoising_enabled;
     bool g_atrous_enabled;
-    float g_difference_depth_denoising;
-    float g_spatial_sigma;
-    float g_depth_sigma;
-    float g_illumination_sigma;
-    float g_denoise_fade_sigma;
-    bool g_denoise_fade_enable;
     int g_denoise_filter_kernel_size;
+    bool g_denoising_enabled;
+    float g_depth_sigma;
+    bool g_denoise_fade_enable;
+    float g_denoise_fade_sigma;
 // interaction and debugging
     ivec2 g_cursor_pixel_pos;   // screen space mouse position in frame buffer pixels
     uint g_debug_vis_flags;     // bit mask to enable different debug visualizations (requires ENALBE_CSGV_DEBUGGING)
