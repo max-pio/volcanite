@@ -1,13 +1,9 @@
 Version 0.5.0
 
-[Post-Processing]
-Enable_Denoising: 0
-
-
 [Rendering]
-Rendering_Preset: Local~Shading
 Constant_Color: 0.400000
 Light_Intensity: 1.000000
-Ambient_Global_Illumination: 0
+Global_Illumination: 0
 Environment_Map: 0
+Denoising: 0
 

@@ -389,7 +389,6 @@ void GuiImgui::renderGui() {
                             if (ImGui::CheckboxFlags(e->options.at(i).c_str(), e->bitfield, e->bitFlags.at(i)))
                                 bits_just_set = e->bitFlags.at(i);
                         }
-                        ImGui::Separator();
                     }
                     if (e->singleFlagOnly && bits_just_set)
                         *e->bitfield &= bits_just_set;

@@ -899,7 +899,7 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
             m_pass->setImageSamplerArray("s_transferFunctions", m, m_materialTransferFunctions[m]->texture(), vk::ImageLayout::eReadOnlyOptimal, false);
     }
 
-    m_gui_resolution_text = "Rendering " + std::to_string(m_resolution.width) + " x " + std::to_string(m_resolution.height);
+    m_gui_resolution_text = "[" + std::to_string(m_resolution.width) + " x " + std::to_string(m_resolution.height) + "]";
     getCtx()->sync->hostWaitOnDevice(reinitDone);
 
     // trigger a temporal accumulation flush and force parameter updates
@@ -1225,7 +1225,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     // Note: the windows are created in this order in ImGui. the later windows are selected before the earlier ones.
     GuiInterface::GuiElementList* g_gen = gui->get("General");
     GuiInterface::GuiElementList* g_dis = gui->get("Display");
-    GuiInterface::GuiElementList* g_post = gui->get("Post-Processing");
     GuiInterface::GuiElementList* g_render = gui->get("Rendering");
     GuiInterface::GuiElementList* g_dev = gui->get("Development");
     GuiInterface::GuiElementList* g_mat = gui->get("Materials");
@@ -1235,7 +1234,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     // specify a docking layout for the windows
     gui->setDockingLayout({{"General", "d"},
                              {"Rendering", "d"},
-                             {"Post-Processing", "Rendering"},
                           {"Display", "d"},
                           {"Materials", "r"},
                           {"Development", "Materials"},
@@ -1352,10 +1350,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     // Display properties and render resolution
     g_dis->addColor(&m_background_color_a, "Background Color A");
     g_dis->addColor(&m_background_color_b, "Background Color B");
-    g_dis->addDynamicText(&m_gui_resolution_text);
-#ifdef IMGUI
-    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
-#endif
     g_dis->addBool([this](bool b) { if(getCtx()->getWsi()) getCtx()->getWsi()->setWindowResizable(b); }, [this]() { return getCtx()->getWsi() != nullptr && getCtx()->getWsi()->isWindowResizable(); }, "Resizable Window");
 #ifdef IMGUI
         g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
@@ -1365,6 +1359,10 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
+#ifdef IMGUI
+    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_dis->addDynamicText(&m_gui_resolution_text);
     //     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(1080, 1920); }, "1080x1920 FullHD");
     // #ifdef IMGUI
     //     g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
@@ -1444,19 +1442,19 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                                 m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x; },
                      "Trigger Random Requests");
     g_dev->addBool(&m_auto_cache_reset, "Auto Cache Defragmentation");
-    g_dev->addAction([this]() { m_pcache_reset = true; }, "Clear Label Cache");
+    g_dev->addBool(&m_clear_cache_every_frame, "Every Frame");
 #ifdef IMGUI
     g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
-    g_dev->addBool(&m_clear_cache_every_frame, "Every Frame");
+    g_dev->addAction([this]() { m_pcache_reset = true; }, "Clear Label Cache");
     g_dev->addSeparator();
     g_dev->addLabel("Framebuffer Accumulation");
-    g_dev->addAction([this]() { m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
-            std::chrono::high_resolution_clock::now().time_since_epoch().count()); }, "Clear Accumulation");
+    g_dev->addBool(&m_clear_accum_every_frame, "Every Frame");
 #ifdef IMGUI
     g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
-    g_dev->addBool(&m_clear_accum_every_frame, "Every Frame");
+    g_dev->addAction([this]() { m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
+        std::chrono::high_resolution_clock::now().time_since_epoch().count()); }, "Clear Accumulation");
     g_dev->addBool(&m_accum_step_mode, "Step Accumulation");
 #ifdef IMGUI
     g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");

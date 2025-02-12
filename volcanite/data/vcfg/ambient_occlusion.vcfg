@@ -1,23 +1,13 @@
 Version 0.5.0
 
-[Post-Processing]
-Enable_À-Trous_Post-Processing: 1
-Post-Process_Iterations: 4
-Post-Process_Kernel_Size: 1
-Enable_Denoising: 1
-Depth_Sigma: 1.000000
-Fade_Denoiser_Out: 1
-Denoise_Fade_Sigma: 1.000000
-
 [Rendering]
-Rendering_Preset: Ambient~Occlusion
 Constant_Color: 0.100000
 Light_Intensity: 1.220000
-Ambient_Global_Illumination: 1
+Global_Illumination: 1
 Directional_<>_Ambient: 1.000000
 Environment_Map: 0
 Path_Length: 1
-
+Denoising: 1
 
 [Display]
 Accumulation_Frames: 1024
