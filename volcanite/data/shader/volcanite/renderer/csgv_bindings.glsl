@@ -116,9 +116,9 @@ layout(std430, binding = 5) buffer restrict free_block_stacks
 layout(std430, binding = 6) buffer restrict brick_cache
 {
 #if CACHE_MODE == CACHE_VOXELS
-    // contains CACHE_UVEC2_SIZE elements as (voxel_id_key, voxel_label).
+    // contains CACHE_UVEC2_SIZE elements as pack64(voxel_id_key, voxel_label).
     // a voxel_id_key of INVALID denotes an empty cache cell
-    uvec2 g_cache[];
+    uint64_t g_cache[];
 #else
     // contains g_cache_capacity base elements made up by (base_element_size) uints to fit 2x2x2=8 output voxels.
     // the g_brick_info[].CACHE_INDEX points to a base element from which on it is decoded into N

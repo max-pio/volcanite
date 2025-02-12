@@ -38,9 +38,9 @@ layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly res
     BV_WORD_TYPE words[];
 };
 
-#define WORD_ACCESS(word, index) uint((word >> (index)) & 1u)
-#define WORD_SET0(word, index) atomicAnd(word, ~(BV_WORD_TYPE(1u) << (index)) )
-#define WORD_SET1(word, index) atomicOr(word, BV_WORD_TYPE(1u) << (index))
+#define WORD_ACCESS(word, index) uint(((word) >> (index)) & 1u)
+#define WORD_SET0(word, index) atomicAnd((word), ~(BV_WORD_TYPE(1u) << (index)) )
+#define WORD_SET1(word, index) atomicOr((word), BV_WORD_TYPE(1u) << (index))
 #if BV_WORD_TYPE == uint64_t
     #define WORD_RANK1(word, index) uint((index) != 0u ? bitCount64(word << (BV_WORD_BIT_SIZE - (index))) : 0u)
 #elif BV_WORD_TYPE uint

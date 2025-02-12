@@ -484,7 +484,7 @@ void CompressedSegmentationVolumeRenderer::setCompressedSegmentationVolume(
         // check if the ESS volume dimension supports the block size (has to be indexed with 32 bits)
         do {
             glm::uvec3 vol_dim = m_compressed_segmentation_volume->getVolumeDim();
-            ess_dim = vol_dim / m_empty_space_block_dim;
+            ess_dim = (vol_dim + glm::uvec3(m_empty_space_block_dim - 1u)) / m_empty_space_block_dim;
             if (static_cast<size_t>(ess_dim.x) * ess_dim.y * ess_dim.z <= 0xFFFFFFFFull)
                 break;
             m_empty_space_block_dim *= 2ul;
@@ -779,6 +779,7 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         shader_defines.emplace_back("DECODE_FROM_SHARED_MEMORY");
     shader_defines.emplace_back("CACHE_MODE=" + std::to_string(m_cache_mode));
     if (m_cache_mode == CACHE_VOXELS) {
+        // internally, the uvec2 are interpreted as pack64(.x, .y) uint64 values to support atomic operations
         shader_defines.emplace_back(
                 "CACHE_UVEC2_SIZE=" + std::to_string(m_target_cache_size_MB * 1024 * 1024 / sizeof(glm::uvec2)));
     }
@@ -1199,8 +1200,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
             m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_block_dim", m_empty_space_block_dim);
             uint32_t empty_space_set_size = m_empty_space_block_dim * m_empty_space_block_dim * m_empty_space_block_dim;
             m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_set_size", empty_space_set_size);
-
-            const glm::uvec3 empty_space_dim = m_compressed_segmentation_volume->getVolumeDim() / m_empty_space_block_dim;
+            // round up to get the number of empty space skipping cells
+            const glm::uvec3 empty_space_dim = (m_compressed_segmentation_volume->getVolumeDim() + glm::uvec3(m_empty_space_block_dim - 1u)) / m_empty_space_block_dim;
             const glm::uvec3 empty_space_dot_map = {1, empty_space_dim.x, empty_space_dim.x * empty_space_dim.y};
             assert(static_cast<size_t>(empty_space_dim.x) * empty_space_dim.y * empty_space_dim.z <= 0xFFFFFFFFull
                    && "empty space dim too large to be indexed in 32 bit. decrease empty space block size.");

@@ -169,7 +169,7 @@ uint get_inv_lod(ivec3 voxel) {
 #ifdef EMPTY_SPACE_UINT_SIZE
         uvec3 empty_space_base_voxel = uvec3(voxel) / g_empty_space_block_dim;
         // ess_permute_bits swizzles bits around to reduce collisions for the atomic operations
-        const uint empty_space_idx = empty_space_base_voxel.x
+        const uint empty_space_idx = empty_space_base_voxel.x  // * g_empty_space_dot_map.x is always 1
                                     + empty_space_base_voxel.y * g_empty_space_dot_map.y
                                     + empty_space_base_voxel.z * g_empty_space_dot_map.z;
         assertf(empty_space_idx < EMPTY_SPACE_BV_BIT_SIZE,
@@ -203,13 +203,13 @@ uint get_inv_lod(ivec3 voxel) {
         assertf(cache_pos < CACHE_UVEC2_SIZE, "invalid cache_pos %u", cache_pos);
 
         // check if the cache contains the voxel at the first or second lookup pos
-        uvec2 cache_elem = CSGV_DECODING_ARRAY[cache_pos];
+        uvec2 cache_elem = unpack32(CSGV_DECODING_ARRAY[cache_pos]);
         // at the first position, the key should have its MSB set to 0
         if (cache_elem.x == cache_key) {
             return cache_elem.y;
         }
         else {
-            uvec2 cache_elem2 = CSGV_DECODING_ARRAY[hash2(uvec2(cache_key, cache_pos)) + cache_block_pos];
+            uvec2 cache_elem2 = unpack32(CSGV_DECODING_ARRAY[hash2(uvec2(cache_key, cache_pos)) + cache_block_pos]);
             // at the second positoin, the key should have its MSB set to 1
             if (cache_elem2.x == (cache_key | KEY_TABLE2_BIT)) {
                 return cache_elem2.y;
@@ -240,21 +240,27 @@ uint get_inv_lod(ivec3 voxel) {
 #ifdef EMPTY_SPACE_UINT_SIZE
         if (!isLabelVisible(label)) {
             bool all_invisible = true;
-            // the base voxel is now the first (lowest component wise coords) local voxel in the brick
+            // the base voxel is now the first (lowest coordinate component-wise) local voxel in the brick
             empty_space_base_voxel = (empty_space_base_voxel * g_empty_space_block_dim) % BRICK_SIZE;
-            for (uint set_i = 0u; set_i < g_empty_space_set_size && all_invisible; set_i++) {
-
-                uvec3 s_brick_voxel = empty_space_base_voxel
+            for (uint set_i = 0u; set_i < g_empty_space_set_size; set_i++) {
+                const uvec3 s_brick_voxel = empty_space_base_voxel
                                       + uvec3(set_i / (g_empty_space_block_dim * g_empty_space_block_dim),
                                               (set_i / (g_empty_space_block_dim)) % g_empty_space_block_dim,
                                               set_i % g_empty_space_block_dim);
 
-                // for the empty-space info: decode on the finest LOD
-                // this means we have to recompute the label of the currently decoded voxel as well
-                uint s_label = decompressCSGVVoxel(brick_idx, s_brick_voxel, g_max_inv_lod); // this is extremely expensive!
-                if (isLabelVisible(s_label)) {
-                    // TODO: could add the label to the cache here!
+                // empty space set voxels outside of the volume always count as "invisible"
+                if (any(greaterThanEqual(brick * BRICK_SIZE + s_brick_voxel, g_vol_dim)))
+                    continue;
+                // the brick voxel itself was already decoded
+                if (all(equal(brick_voxel, s_brick_voxel)))
+                    continue;
+
+                // for the empty-space info: decode all voxels in this empty sapce set on the finest LOD.
+                // this is extremely expensive!
+                if (isLabelVisible(decompressCSGVVoxel(brick_idx, s_brick_voxel, g_max_inv_lod))) {
+                    // TODO: it would be possible to add the label to the cache here
                     all_invisible = false;
+                    break;
                 }
             }
             if (all_invisible) {
@@ -264,13 +270,13 @@ uint get_inv_lod(ivec3 voxel) {
         }
 #endif
 
-        // insert the element at its 1st cache position
-        CSGV_DECODING_ARRAY[cache_pos] = uvec2(cache_key, label);
+        // insert the element at its 1st cache position and obtain the (possibly) replaced element
+        cache_elem = unpack32(atomicExchange(CSGV_DECODING_ARRAY[cache_pos], pack64(uvec2(cache_key, label))));
 
         if (cache_elem.x != INVALID && (cache_elem.x & KEY_TABLE2_BIT) == 0u) {
             // only if the ejected element is not already at its second location:
             // insert the ejected element to its 2nd cache position, possibly forcing another element out
-            CSGV_DECODING_ARRAY[hash2(uvec2(cache_elem.x, cache_pos)) + cache_block_pos] = uvec2(cache_elem.x | KEY_TABLE2_BIT, cache_elem.y);
+            atomicExchange(CSGV_DECODING_ARRAY[hash2(uvec2(cache_elem.x, cache_pos)) + cache_block_pos], pack64(uvec2(cache_elem.x | KEY_TABLE2_BIT, cache_elem.y)));
 
             // if the element already was at its second location, it will be re-inserted at its first position if it is
             // accessed again. this results in the cuckoo ping-pong loop between first and second position of elements.

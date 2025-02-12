@@ -77,7 +77,7 @@ void main() {
     #if (CACHE_MODE == CACHE_VOXELS)
         // reset all cache elements
         for (uint id = brick_idx; id < CACHE_UVEC2_SIZE; id += g_brick_idx_count) {
-            g_cache[id].x = INVALID;
+            g_cache[id] = ~uint64_t(0);
         }
     #endif
 }

@@ -98,11 +98,12 @@ void DEBUG_img_cache_array(ivec2 pixel, inout vec4 color, bool enabled) {
         uint visible_count = 0u;
         vec3 label = vec3(0.f);
         for (uint i = idx; i < idx + elems_per_pixel; i++) {
-            if (i < CACHE_UVEC2_SIZE && g_cache[i].x != INVALID) {
+            const uvec2 key_and_label = unpack32(g_cache[i]);
+            if (i < CACHE_UVEC2_SIZE && key_and_label.x != INVALID) {
                 entry_count++;
-                if (isLabelVisible(g_cache[i].y)) {
+                if (isLabelVisible(key_and_label.y)) {
                     visible_count++;
-                    label += colormap_viridis(float(g_cache[i].y % 96) / 96.f);
+                    label += colormap_viridis(float(key_and_label.y % 96) / 96.f);
                 } else {
                     label += mix(vec3(1.f, 0.f, 1.f), vec3(0.8f), (0.5f * sin(float(g_frame) / 8.f) + 0.5f));
                 }

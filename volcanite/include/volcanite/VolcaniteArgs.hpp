@@ -54,7 +54,7 @@ public:
     uint32_t cache_mode = CACHE_BRICKS;
     bool cache_palettized = false;
     bool decode_from_shared_memory = false;
-    uint32_t empty_space_resolution = 2u;    ///< in cache mode CACHE_VOXELS, groups n³ voxels into one empty space entry
+    uint32_t empty_space_resolution = 0u;   ///< in cache mode CACHE_VOXELS, groups n³ voxels into one empty space entry
     bool show_development_gui = false;
     bool enable_vsync = true;
 
@@ -292,11 +292,18 @@ public:
                     break;
             }
             va.decode_from_shared_memory = decodedSharedMemoryArg.getValue();
-            if(va.decode_from_shared_memory && !va.random_access)
-                throw ArgException(decodedSharedMemoryArg.longID() + " must be used in combination with " + randomAccessArg.longID(), decodedSharedMemoryArg.longID());
+            if(va.decode_from_shared_memory && !va.random_access && !va.cache_mode == CACHE_BRICKS)
+                throw ArgException(decodedSharedMemoryArg.longID() + " must be used in combination with "
+                                    + randomAccessArg.longID() + " and " + cacheModeArg.longID() + " b",
+                                    decodedSharedMemoryArg.longID());
             va.show_development_gui = devArg.getValue();
             va.enable_vsync = !noVsyncArg.getValue();
             va.empty_space_resolution = emptySpaceResolutionArg.getValue();
+            if (va.cache_mode != CACHE_VOXELS && va.empty_space_resolution > 0u) {
+                Logger(WARN) << "Empty space skipping grid (" << emptySpaceResolutionArg.longID()
+                                  << " only supported in combination with " << cacheModeArg.longID() << " v. Disabling.";
+                va.empty_space_resolution = 0u;
+            }
             // if no input file was specified, try to open a file dialog
             std::string input_file = inputpathArg.getValue();
             if (!input_file.starts_with(CSGV_SYNTH_PREFIX_STR))
@@ -369,11 +376,19 @@ public:
                 // compression arguments
                 va.brick_size = bricksizeArg.getValue();
                 if (va.random_access) {
-                    // TODO: WAVELET_MATRIX_ENC does not make sense for S=1 as it has worse compression rates than NIBBLE_ENC
-                    const EncodingMode _strengths[] = {NIBBLE_ENC, WAVELET_MATRIX_ENC, HUFFMAN_WM_ENC};
+                    constexpr EncodingMode _strengths[] = {NIBBLE_ENC, WAVELET_MATRIX_ENC, HUFFMAN_WM_ENC};
                     va.encoding_mode = _strengths[strengthArg.getValue()];
+                    // Nibble encoding does not support PALETTE_DELTA and STOP_BITS
+                    if (va.operation_mask & OP_PALETTE_D_BIT) {
+                        va.operation_mask = va.operation_mask & ~OP_PALETTE_D_BIT;
+                        Logger(WARN) << "Encoding with random access does not support palette delta operation. Disabling.";
+                    }
+                    if (va.encoding_mode == NIBBLE_ENC && va.operation_mask & OP_STOP_BIT) {
+                        va.operation_mask = va.operation_mask & ~OP_STOP_BIT;
+                        Logger(WARN) << "Nibble encoding with random access does not support stop bits. Disabling.";
+                    }
                 } else {
-                    const EncodingMode _strengths[] = {NIBBLE_ENC, SINGLE_TABLE_RANS_ENC, DOUBLE_TABLE_RANS_ENC};
+                    constexpr EncodingMode _strengths[] = {NIBBLE_ENC, SINGLE_TABLE_RANS_ENC, DOUBLE_TABLE_RANS_ENC};
                     va.encoding_mode = _strengths[strengthArg.getValue()];
                 }
                 va.freq_subsampling = subsamplingArg.getValue();
@@ -383,7 +398,7 @@ public:
                     if(va.compress_export_file.empty())
                         throw ArgException("A csgv export path must be specified with " + compresspathArg.longID() + " when processing chunked volumes!");
 
-                    std::string chunk_indices = chunkedArg.getValue();
+                    const std::string& chunk_indices = chunkedArg.getValue();
                     std::stringstream ss(chunk_indices);
                     ss >> va.chunk_files[0];
                     ss.ignore();
@@ -425,7 +440,7 @@ public:
             }
             va.print_eval_keys = evalPrintArg.getValue();
             va.shader_defines = shaderDefineArg.getValue();
-            std::replace(va.shader_defines.begin(), va.shader_defines.end(), ';', ' ');
+            std::ranges::replace(va.shader_defines, ';', ' ');
 
             return va;
         }
