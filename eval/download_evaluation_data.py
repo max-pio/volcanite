@@ -94,7 +94,8 @@ def download_cloud_data(dataset: str, directory: Path, output_name: str | None =
     return data.download(output_dir=directory, output_name=output_name, output_format=filetype,
                          volume_size=size, origin=origin, chunk_size=chunk_size, continue_download=True)
 
-def __preview_arg(dataset: str, )
+def __preview_arg(enable: bool, directory: Path, dataset: str):
+    return "-i " + str(directory / Path(dataset + ".jpg")) if enable else ""
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -143,15 +144,18 @@ if __name__ == '__main__':
 
     # DOWNLOADING AND COMPRESSING --------------------------------------------------------------------------------------
     print("----------- AZBA ----------- ")
-    cur_dir = csgv_directory / Path("azba")
-    if not (csgv_directory / "azba.csgv").exists() or args.overwrite:
-        write_citation(csgv_directory, "azba")
+    name = "azba"
+    cur_dir = csgv_directory / Path(name)
+    if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+        write_citation(csgv_directory, name)
         download_file("https://datadryad.org/api/v2/files/1098598/download", cur_dir, "azba.nii.gz")
         vc.convert_volume(cur_dir / "azba.nii.gz", cur_dir / "azba.hdf5")
-        if ve.VolcaniteExec.run_volcanite(volcanite_bin_dir, f"--headless -c {csgv_directory / "azba.csgv"}"
-                                                             f"{cur_dir / "azba.hdf5"}") != 0:
-            print("Volcanite compression returned with errors. Aborting.")
-            exit(5)
+        ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir, f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                             f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                             f" {cur_dir / "azba.hdf5"}")
+        if ret.returncode != 0:
+            print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+            exit(ret.returncode)
         # cleanup
         if not args.keep:
             shutil.rmtree(cur_dir)
@@ -160,38 +164,48 @@ if __name__ == '__main__':
 
 
     print("----------- Ara2016 ----------- ")
-    cur_dir = csgv_directory / Path("ara2016")
-    if not (csgv_directory / "ara2016.csgv").exists() or args.overwrite:
-        write_citation(csgv_directory, "ara2016")
-        last_chunk = download_cloud_data("ara2016", directory=cur_dir, output_name="ara16", filetype="hdf5",
-                                         size=None, origin=(0,0,0), chunk_size=(1024,1024,1024))
-        if ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                       f"--headless --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]} "
-                                       f"-c {csgv_directory / "ara2016.csgv"} {cur_dir / "ara16_x{}y{}z{}.hdf5"}") != 0:
-            print("Volcanite compression returned with errors. Aborting.")
-            exit(5)
+    name = "ara2016"
+    cur_dir = csgv_directory / Path(name)
+    if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+        write_citation(csgv_directory, name)
+        last_chunk = download_cloud_data("ara2016", directory=cur_dir, output_name=name, filetype="hdf5",
+                                         size=None, origin=(0,0,0), chunk_size=(512,512,512))
+        ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                       f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                       f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                       f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
+                                       f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
+
+        if ret.returncode != 0:
+            print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+            exit(ret.returncode)
         # cleanup
         if not args.keep:
             shutil.rmtree(cur_dir)
     else:
-        print(f"{(csgv_directory / "ara2016.csgv")} already exists. Skipping download.")
+        print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
 
 
     print("----------- GF-PA66 ----------- ")
-    cur_dir = csgv_directory / Path("pa66")
-    if not (csgv_directory / "pa66.csgv").exists() or args.overwrite:
-        write_citation(csgv_directory, "pa66")
+    name = "pa66"
+    cur_dir = csgv_directory / Path(name)
+    if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+        write_citation(csgv_directory, name)
         download_file("https://zenodo.org/records/4587827/files/pa66_volumes.h5", cur_dir, "pa66.h5")
-        vc.write_volume(vc.read_hdf5(cur_dir / "pa66.h5", 'pa66'), cur_dir / "pa66_segm.hdf5")
-        if ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                       f"--headless -c {csgv_directory / "pa66.csgv"} {cur_dir / "pa66_segm.hdf5"}") != 0:
-            print("Volcanite compression returned with errors. Aborting.")
-            exit(5)
+        vc.write_volume(vc.read_hdf5(cur_dir / "pa66.h5", ['pa66']), cur_dir / "pa66_segm.hdf5")
+        ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                       f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                            f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                            f" {cur_dir / "pa66_segm.hdf5"}")
+
+        if ret.returncode != 0:
+            print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+            exit(ret.returncode)
         # cleanup
         if not args.keep:
             shutil.rmtree(cur_dir)
     else:
-        print(f"{(csgv_directory / "pa66.csgv")} already exists. Skipping download.")
+        print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
 
     # DOWNLOADING AND COMPRESSING BIG DATA -----------------------------------------------------------------------------
     if args.big_data:

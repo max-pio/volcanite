@@ -390,7 +390,7 @@ def __guard_volume_dtype(volume: np.ndarray, dtype) -> np.ndarray:
     return volume.astype(dtype)
 
 
-def convert_volume(path_in: str | os.PathLike, path_out: str | os.PathLike, input_axis_order: str = 'xyz', dtype=None) -> None:
+def convert_volume(path_in: str | os.PathLike, path_out: str | os.PathLike, input_axis_order: str = 'zyx', dtype=None) -> None:
     """Automatically selects the writer for the respective format based on the path_out file type.
     Volumes are always written in XYZ memory axis order for Volcanite compatibility."""
 
