@@ -453,6 +453,7 @@ public:
                 }
                 if (!found) {
                     Logger(WARN) << "Parameter import read unknown window " << window_name << ".";
+                    window_name = "";
                 }
             }
 
