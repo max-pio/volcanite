@@ -298,7 +298,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     m_detail_starts.clear();
 
     if(verbose)
-        Logger(INFO, true) << " Progress 0.0%";
+        Logger(INFO, true) << getLabel() << " Compression Progress 0.0%";
     MiniTimer progressTimer;
     MiniTimer totalTimer;
     uint32_t bricks_since_last_update = 0;
@@ -416,7 +416,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
                 uint32_t last_brick_index = glm::min(brick_index + m_cpu_threads - 1, brick_index_count);
                 float remaining_seconds = static_cast<float>(brick_index_count - last_brick_index) / bricks_per_second;
                 std::stringstream stream;
-                stream << " Progress " << std::fixed << std::setprecision(1) << static_cast<float>(last_brick_index) / static_cast<float>(brick_index_count) * 100.f << "%"
+                stream << getLabel() << " Compression Progress " << std::fixed << std::setprecision(1) << static_cast<float>(last_brick_index) / static_cast<float>(brick_index_count) * 100.f << "%"
                        << " (" << std::setprecision(2) << (bricks_per_second * static_cast<float>(m_brick_size * m_brick_size * m_brick_size) / 1000000.f)
                        << " million voxels/second), remaining: " << static_cast<int>(remaining_seconds / 60.f) << "m" << (static_cast<int>(remaining_seconds) % 60) << "s";
                 Logger(INFO, true) << stream.str();
@@ -436,7 +436,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     m_brick_starts[brick_index_count] = static_cast<uint32_t>(m_encodings.back().size());
 
     m_last_total_encoding_seconds = static_cast<float>(totalTimer.elapsed());
-    Logger(INFO) << " Progress 100% in " << std::fixed << std::setprecision(3) << m_last_total_encoding_seconds << "s (" << (static_cast<float>(volume.size()) / m_last_total_encoding_seconds / 1000000.f) << " million voxels/second) " << getEncodingInfoString();
+    Logger(INFO) << getLabel() << " Compression Progress 100% in " << std::fixed << std::setprecision(3) << m_last_total_encoding_seconds << "s (" << (static_cast<float>(volume.size()) / m_last_total_encoding_seconds / 1000000.f) << " million voxels/second) " << getEncodingInfoString();
 
     assert(verifyCompression() && "Compression did produce invalid encodings.");
 }

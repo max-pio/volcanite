@@ -90,6 +90,7 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
 static const std::string OUT_DIR = "./render_test/";
 static const std::vector<VolcaniteArgs> RENDERING_TEST_CONFIGS = {
         {.brick_size=32, .encoding_mode=NIBBLE_ENC, .screenshot_output_file=OUT_DIR + "nibble_32.png"},
+           {.brick_size=64, .encoding_mode=DOUBLE_TABLE_RANS_ENC, .operation_mask=(OP_ALL | OP_USE_OLD_PAL_D_BIT), .screenshot_output_file=OUT_DIR + "rANSd_64_old-delta.png"},
         {.cache_palettized=true, .brick_size=64, .encoding_mode=SINGLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANSd_64_cache-palette.png"},
         {.stream_lod=true, .brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANS_16_stream-lod.png"},
         {.cache_mode=CACHE_NOTHING, .brick_size=16, .encoding_mode=NIBBLE_ENC, .operation_mask=(OP_ALL_WITHOUT_STOP & OP_ALL_WITHOUT_DELTA), .random_access=true, .screenshot_output_file=OUT_DIR + "nibble_16_ra.png"},
@@ -206,6 +207,9 @@ int main() {
         if(args.stream_lod && !csgv->isUsingSeparateDetail()) {
             csgv->separateDetail();
         }
+
+        if (!csgv->testLOD(volume->dataConst(), dim))
+            return RET_COMPR_ERROR;
 
         // render one output image
         int ret = renderImageToFile(csgv, csgvDatabase, args);

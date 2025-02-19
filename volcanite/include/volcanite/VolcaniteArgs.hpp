@@ -139,7 +139,7 @@ public:
             ValuesConstraint<uint32_t> allowedBrickSize(_allowedBrickSize);
             ValueArg<uint32_t> bricksizeArg("b", "brick-size", "Compress with given brick size.", false, va.brick_size, &allowedBrickSize);
             cmd.add(bricksizeArg);
-            ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits. Quick: [a]ll or [o]ptimized.", false, "o", "(a|o|p|n|x|y|z|l|d|s)*", cmd);
+            ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits. Quick: [a]ll or [o]ptimized.", false, "o", "(a|o|p|n|x|y|z|l|d[-]|s)*", cmd);
             SwitchArg randomAccessArg("p", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
             // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
@@ -197,38 +197,45 @@ public:
                 std::string op_codes = opMaskArg.getValue();
                 std::transform(op_codes.begin(), op_codes.end(), op_codes.begin(), ::tolower);
                 va.operation_mask = 0;
-                for (const auto& c : opMaskArg.getValue()) {
-                    switch (c) {
+                for (int i = 0; i < op_codes.size(); i++) {
+                    switch (const char& c = op_codes.at(i)) {
                         case 'a':
                             va.operation_mask |= OP_ALL;
                         case 'o':
                             va.operation_mask |= OP_ALL_WITHOUT_DELTA;
                         case 'p':
                             va.operation_mask |= OP_PARENT_BIT;
-                            break;
+                        break;
                         case 'x':
                             va.operation_mask |= OP_NEIGHBORX_BIT;
-                            break;
+                        break;
                         case 'y':
                             va.operation_mask |= OP_NEIGHBORY_BIT;
-                            break;
+                        break;
                         case 'z':
                             va.operation_mask |= OP_NEIGHBORZ_BIT;
-                            break;
+                        break;
                         case 'n':
                             va.operation_mask |= OP_NEIGHBOR_BITS;
-                            break;
+                        break;
                         case 'l':
                             va.operation_mask |= OP_PALETTE_LAST_BIT;
-                            break;
+                        break;
                         case 'd':
+                            // a "d-" instead of "d" switch enables using the old palette delta operations where only
+                            // a single entry follows the delta operations and thus only deltas of 1<D<17 are supported
+                            if (i+1 < op_codes.size() && op_codes[i+1] == '-') {
+                                va.operation_mask |= OP_USE_OLD_PAL_D_BIT;
+                                i++;
+                                Logger(INFO) << " JOOO ITS HERE LELELEL";
+                            }
                             va.operation_mask |= OP_PALETTE_D_BIT;
                             break;
                         case 's':
                             va.operation_mask |= OP_STOP_BIT;
                             break;
                         default:
-                            throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d,s only", opMaskArg.longID());
+                            throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d[-],s only", opMaskArg.longID());
                     }
                 }
             }
