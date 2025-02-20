@@ -645,7 +645,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
 
     // write header: 8 chars CMPSGVOL + 4 chars version number
     const char *magic_header = "CMPSGVOL";
-    const char *version = "0015";
+    const char *version = "0016";
     /* VERSION HISTORY
      * 0001: initial version
      * 0002: adds booleans if RLE and rANS are used, as well as frequency tables for rANS
@@ -657,6 +657,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
      * 0013: split encoding buffers
      * 0014: re-ordered operation codes by occurring frequency to Parent,X,Y,Z,PaletteA,PaletteL,PaletteD
      * 0015: random access, op mask, encoders handle specialized export data like frequency tables
+     * 0016: default palette delta op ('d') uses arbitrary lengths. old behavior is special op. mask bit ('d-')
      */
     file.write(magic_header, 8);
     file.write(version, 4);
@@ -731,7 +732,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     int _numeric_version = std::stoi(std::string(_version));
 
     // backwards compatibility code:
-    if (std::string(_version) != "0015") {
+    if (std::string(_version) != "0015" && std::string(_version) != "0016") {
         Logger(ERROR) << "Import does not support version " << _version << " of Compressed Segmentation Volume file " << path << ". Skipping.";
         return false;
     }
@@ -745,6 +746,8 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
 
     // update encoder
     fin.read(reinterpret_cast<char *>(&m_op_mask), sizeof(uint32_t));
+    if (_numeric_version == 15)
+        m_op_mask |= OP_USE_OLD_PAL_D_BIT; // compatibility: changed behavior of palette delta operation in 0016
     if (m_encoding_mode == NIBBLE_ENC) {
         m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     } else if (m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
