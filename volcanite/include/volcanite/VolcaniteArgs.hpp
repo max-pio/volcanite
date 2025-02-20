@@ -442,6 +442,7 @@ public:
                         return {range.begin(), range.end()};
                     })) {
                 va.eval_logfiles.emplace_back(expandPath(std::string(logfile)));
+                // TODO: check if the logfiles contain valid format strings
             }
             va.eval_name = evalNameArg.getValue();
             if (!va.eval_name.empty() && va.eval_logfiles.empty()) {

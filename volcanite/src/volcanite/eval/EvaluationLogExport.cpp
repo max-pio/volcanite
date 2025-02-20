@@ -108,7 +108,7 @@ std::string EvaluationLogExport::format_evaluation_string(std::string format_str
     fmt::dynamic_format_arg_store<fmt::format_context> fmt_args = create_fmt_args(eval_name, argc, argv,
                                                                                   comp_res, decomp_res, render_res);
     try {
-        std::string result = fmt::vformat(format_string, fmt_args);
+        return fmt::vformat(format_string, fmt_args);
     } catch (const fmt::format_error& err)  {
         Logger(ERROR) << "evaluation output format error: " << format_string;
         throw err;
