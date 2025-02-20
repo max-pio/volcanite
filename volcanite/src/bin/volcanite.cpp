@@ -138,9 +138,14 @@ int volcanite_main(int argc, char *argv[]) {
             renderEngine->acquireResources();
             tryImportRenderConfigs(args, renderer);
 
-            size_t accumulation_frames = renderer->getTargetAccumulationFrames();
-            if (accumulation_frames == 0)
-                accumulation_frames = 60;
+            size_t accumulation_frames = args.record_convergence_frames;
+            // if no video is rendered (neither a camera path input nor a video output is given)
+            // render accumulation_frames (given by vcfg file) many frames for the single perspective
+            if (args.video_output_fmt_file.empty() && args.record_in_file.empty()) {
+                accumulation_frames = renderer->getTargetAccumulationFrames();
+                if (accumulation_frames == 0)
+                    accumulation_frames = 60;
+            }
 
             if (!args.eval_logfiles.empty())
                 renderer->startFrameTimeTracking();

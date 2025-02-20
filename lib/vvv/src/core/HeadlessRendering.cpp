@@ -86,6 +86,10 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         camera_auto_rotate_frames = 1u;
     }
 
+    Logger(INFO) << "rendering " << (camera_auto_rotate_frames == 0u ? (" camera poses from " + cfg.record_file_in)
+                                                    : (std::to_string(camera_auto_rotate_frames) +" camera pose(s)"))
+                   << " with " + std::to_string(cfg.accumulation_samples) << " frame(s) each";
+
     RendererOutput rendererOutput = {nullptr, {}};
     size_t frame_idx = 0u;
     MiniTimer timer;
@@ -98,6 +102,9 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
                 m_record_in->close();
                 m_record_in = {};
                 break;
+            }
+            if (m_record_in->fail()) {
+                throw std::runtime_error("Error reading camera pose from " + cfg.record_file_in);
             }
         }
 

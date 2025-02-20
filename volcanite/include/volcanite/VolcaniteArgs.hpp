@@ -80,6 +80,7 @@ public:
     bool run_tests = false;
     bool export_stats = false;
     std::string record_in_file = "";    ///< file that stores a previously exported camera path for replay in headless
+    uint32_t record_convergence_frames = 1; ///< number of render frames that are accumulated per output frame of a camera path
     std::vector<std::string> eval_logfiles = {}; // files into which evaluation results are exported (with 'append')
     std::string eval_name = {};         ///< name of the evaluation run that can be accessed in the log file as "%name"
     bool print_eval_keys = false;       ///< if true, prints all available evaluation log keys to the console on startup
@@ -145,6 +146,7 @@ public:
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
             ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path. Must be used with -i or -v.", false, va.record_in_file, "file", cmd);
+            ValueArg<uint32_t> recordConvergenceArg("", "record-frames", "How many render frames are accumulated per output frame of a camera path. Must be used with --record-in or -v.", false, va.record_convergence_frames, "int", cmd);
             ValueArg<std::string> evalLogFilesArg("", "eval-logfiles", "Comma separated files into which evaluation results are appended.", false, "", "file", cmd);
             ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"%name\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
             SwitchArg evalPrintArg("", "eval-print-keys", "Print all available evaluation keys to the console and exit.", cmd);
@@ -432,6 +434,7 @@ public:
             }
             va.export_stats = statsArg.getValue();
             va.record_in_file = expandPath(recordInFileArg.getValue());
+            va.record_convergence_frames = recordConvergenceArg.getValue();
             std::string comma_separated_logfiles = evalLogFilesArg.getValue();
             va.eval_logfiles.clear();
             for (const std::string_view& logfile : comma_separated_logfiles | std::views::split(',')
