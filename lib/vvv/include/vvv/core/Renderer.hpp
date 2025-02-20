@@ -166,7 +166,6 @@ public:
         // Load backup config in case of failure
         bool success = true;
         if(std::ifstream in(path); in.is_open()) {
-
             // read version strings from file
             std::string tmp;
             in >> tmp; // "Version"
@@ -186,7 +185,7 @@ public:
             in.close();
         }
         else {
-            Logger(WARN) << "Could not import parameters from " << path;
+            Logger(WARN) << "Could not open parameter file " << path;
             success = false;
         }
         return success;
