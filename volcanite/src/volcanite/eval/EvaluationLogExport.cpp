@@ -107,7 +107,12 @@ std::string EvaluationLogExport::format_evaluation_string(std::string format_str
     // replace all occurrences of all specifiers
     fmt::dynamic_format_arg_store<fmt::format_context> fmt_args = create_fmt_args(eval_name, argc, argv,
                                                                                   comp_res, decomp_res, render_res);
-    return fmt::vformat(format_string, fmt_args);
+    try {
+        std::string result = fmt::vformat(format_string, fmt_args);
+    } catch (const fmt::format_error& err)  {
+        Logger(ERROR) << "evaluation output format error: " << format_string;
+        throw err;
+    }
 }
 
 std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
