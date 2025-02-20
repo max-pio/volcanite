@@ -78,12 +78,12 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegment
 constexpr std::string getDummySegmentationVolumeHelpStr() {
     return CSGV_SYNTH_PREFIX_STR
                   "[_arg]* with arg in\n"
-                  "  d[x]x[y]x[z]: volume dimension [x,y,z]"
-                  "  l[v]: voxels per label (higher > fewer labels) [v]\n"
+                  "  d[x]x[y]x[z]: volume dimension [x,y,z]\n"
+                  "  l[v]: voxels per label [v] (higher values produce fewer labels)\n"
                   "  max[v]: maximum label value [v]\n"
                   "  r[a]x[b]x[c]-[s]x[t]x[u]: target label region size min. [a,b,c], max. [s,t,u]\n"
-                  "  b[v]: region shape control: [v]=0 all spheres, [v]=1 all boxes, 0<[v]<1 a mix of both"
-                  "  s[v]: deterministic random seed [v]. for chunked, set to s{}[v]{}[v]{}";
+                  "  b[v]: region shape control: [v]=0 all spheres, [v]=1 all boxes, 0<[v]<1 a mix of both\n"
+                  "  s[v]: deterministic random seed [v]. for chunked data, set to s{}[v]{}[v]{}";
 }
 
 std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view descr) {
@@ -162,8 +162,12 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
             ss >> c; // s
             ss >> cfg.seed;
         } else {
-            if (processed.contains('_'))
-                throw std::invalid_argument("Synthetic volume descriptor contains unknown key");
+            if (processed.contains('_')) {
+                std::stringstream err;
+                err << "Synthetic volume descriptor " << descr << " contains invalid key " << arg;
+                err << ". syntax:\n" << getDummySegmentationVolumeHelpStr();
+                throw std::invalid_argument(err.str());
+            }
             processed.insert('_');
             ss >> cfg.dim.x;
             ss >> c; // x
@@ -174,7 +178,8 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
 
         if (ss.fail()) {
             std::stringstream err;
-            err << "Synthetic volume descriptor " << descr << " contains invalid key " << arg;
+            err << "Error parsing synthetic volume descriptor. syntax:\n";
+            err << getDummySegmentationVolumeHelpStr();
             throw std::invalid_argument(err.str());
         }
     }
