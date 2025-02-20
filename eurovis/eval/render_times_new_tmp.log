@@ -1,4 +1,4 @@
-#fmt: & \numbersMinAvgMax{frame_min_ms}{frame_avg_ms}{frame_max_ms}  % {name} cache: {mem_cache_mb} MB
+#fmt: & \numbersMinAvgMax{{{frame_min_ms}}}{{{frame_avg_ms}}}{{{frame_max_ms}}}  % {{{name}}} cache: {{{mem_cache_mb}}} MB
 \begin{tabular}{ll|rrrr|rrrr|rrrr}
  & & \multicolumn{4}{c}{local shading} & \multicolumn{4}{c}{shadow rays} & \multicolumn{4}{c}{ambient occlusion}\\
  & & \cells{} & \fiber{} & \hone{} & \azba{} & \cells{} & \fiber{} & \hone{} & \azba{} & \cells{} & \fiber{} & \hone{} & \azba{} \\
