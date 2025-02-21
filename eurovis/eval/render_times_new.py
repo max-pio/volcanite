@@ -240,8 +240,6 @@ if __name__ == "__main__":
             log_manual("\\multirow{1}{*}{" + enc_tex[enc_mode_i] + "} ")
         else:
             log_manual("\\multirow{5}{*}{" + enc_tex[enc_mode_i] + "} ")
-        log_newline()
-
 
         for cache_mode_i, cache_mode in enumerate([cache_no, cache_voxel, cache_voxel_es, cache_brick, cache_brick_sm]):
 
