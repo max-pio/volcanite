@@ -293,7 +293,6 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
                 }
             }
 
-            assert((operation & 7u) > 0u && "no operation set");
             assert(operation < 16u && "only 4 bit operations are allowed");
             write4Bit(out, 0u, out_i++, operation);
 
