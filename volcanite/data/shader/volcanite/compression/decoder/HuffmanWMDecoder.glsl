@@ -278,23 +278,27 @@ uint _wm_huffman_rank_palette(
     // see: volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp HuffmanWaveletMatrix::rank()
 
     // the PALETTE_ADV operation consists of 5 bits (00001) => 4 loop iterations for the internal zeros
-    
-    uint interval_start = 0;
+
+    //uint interval_start = 0;
     #pragma unroll
     for (uint level = 0; level < 4 && (position > 0); ++level) {
-        const uint ones_before_interval = FR_RANK1(interval_start);
-        const uint ones_before_position = FR_RANK1(interval_start + position) - ones_before_interval;
+        // this would be the general 0 branch of a wavelet tree. Given that our trees have no 1 childs, the interval
+        // starts are always exactly the level starts => ones_before_interval == WM_HEADER.ones_before_level[level];
+        //    const uint ones_before_interval = FR_RANK1(interval_start);
+        //    const uint ones_before_position = FR_RANK1(interval_start + position) - ones_before_interval;
+        //
+        //    position = position - ones_before_position;
+        //    const uint ones_in_interval = ones_before_interval - WM_HEADER.ones_before_level[level];
+        //    interval_start = wmh_getLevelStart(level + 1, WM_HEADER.level_starts_1_to_4)
+        //            + (interval_start - wmh_getLevelStart(level, WM_HEADER.level_starts_1_to_4) - ones_in_interval);
 
-        // this is the 0 branch of the WM rank as no symbol has interal zeros
-
+        const uint interval_start = wmh_getLevelStart(level, WM_HEADER.level_starts_1_to_4);
+        const uint ones_before_position = FR_RANK1(interval_start + position) - WM_HEADER.ones_before_level[level];
         position = position - ones_before_position;
-        // TODO: ones_before_level could become an uvec4 as this case is excluded for level == chc.length-1 == 4
-        const uint ones_in_interval = ones_before_interval - WM_HEADER.ones_before_level[level];
-        interval_start = wmh_getLevelStart(level + 1, WM_HEADER.level_starts_1_to_4)
-                + (interval_start - wmh_getLevelStart(level, WM_HEADER.level_starts_1_to_4) - ones_in_interval);
     }
 
-    const uint ones_before_interval = FR_RANK1(interval_start);
+    const uint ones_before_interval = WM_HEADER.ones_before_level[4u];
+    const uint interval_start = wmh_getLevelStart(4u, WM_HEADER.level_starts_1_to_4);
     const uint ones_before_position = FR_RANK1(interval_start + position) - ones_before_interval;
     return ones_before_position;
 }
