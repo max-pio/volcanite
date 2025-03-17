@@ -157,7 +157,7 @@ public:
 
     struct GuiComboEntry : BaseGuiEntry {
         int *selection = nullptr;
-        std::function<void(int)> onChanged = {};
+        std::function<void(int, bool)> onChanged = {};
         std::vector<std::string> options = {};
     };
 
@@ -222,7 +222,9 @@ public:
         // special types and grouping
         virtual gui_id addDirection(glm::vec3 *v, const Camera* camera, const std::string &name = "");
         virtual gui_id addDirection(std::function<void(glm::vec3)> setter, std::function<glm::vec3()> getter, const Camera* camera, const std::string &name = "");
-        virtual gui_id addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int)> onChanged = nullptr, const std::string& name = "");
+        /// Add acombo box GUI element for selecting on e of options.size() entries.
+        /// @param onChanged called if an element is selected. the bool parameter is false, if this happens during a vcfg file import
+        virtual gui_id addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int, bool)> onChanged = nullptr, const std::string& name = "");
         virtual gui_id addBitFlags(unsigned int* bitfield, const std::vector<std::string>& options, const std::vector<unsigned int>& bitFlags, bool singleFlagOnly, const std::string& name = "");
         virtual gui_id addAction(void (*callback)(), const std::string& name);
         virtual gui_id addAction(std::function<void()> callback, const std::string& name);

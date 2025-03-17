@@ -63,7 +63,7 @@ RendererOutput PassSimpleSsao::renderSsao(AwaitableList awaitBeforeExecution, Bi
     return blurResult;
 }
 
-void PassSimpleSsao::addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int)>> shaderRecompileCallback) {
+void PassSimpleSsao::addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int, bool)>> shaderRecompileCallback) {
     m_ssaoPass.addToGui(gui, std::move(shaderRecompileCallback));
     gui->addInt([this](int i) { setBlurKernelRadius(i); }, [this]() { return getBlurKernelRadius(); }, "filter radius", 0, 32, 1);
 }
@@ -142,7 +142,7 @@ RendererOutput PassSimpleApplySsao::renderSsao(AwaitableList awaitBeforeExecutio
     return {.texture = m_outputTextures->getActive().get(), .renderingComplete = {applyAwait}, .queueFamilyIndex = m_applyPass.getQueueFamilyIndex()};
 }
 
-void PassSimpleApplySsao::addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int)>> shaderRecompileCallback) {
+void PassSimpleApplySsao::addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int, bool)>> shaderRecompileCallback) {
     gui->addFloat(&g_ssaoIntensity, "Intensity", 0, 1, 0.1f, 2);
     gui->addFloat(&g_ssaoGamma, "Gamma", 0.5, 2, 1, 2);
     PassSimpleSsao::addToGui(gui, shaderRecompileCallback);

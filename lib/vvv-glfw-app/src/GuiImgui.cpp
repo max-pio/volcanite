@@ -372,7 +372,7 @@ void GuiImgui::renderGui() {
                             const bool is_selected = i == *e->selection;
                             if (ImGui::Selectable(e->options.at(i).c_str(), is_selected)) {
                                 *e->selection = i;
-                                if (e->onChanged) e->onChanged(i);
+                                if (e->onChanged) e->onChanged(i, true);
                             }
                             if (is_selected)
                                 ImGui::SetItemDefaultFocus();

@@ -46,7 +46,7 @@ public:
     /// Add SSAO settings to the Gui.
     /// @param shaderRecompileCallback if a callback is provided, a selection box for the algorithm is added to the gui.
     ///        When it is used in the gui, the callback needs to call releaseSwapchain(), freeResources(), allocateResources(), initSwapchainResources().
-    void addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int)>> shaderRecompileCallback = {});
+    void addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int, bool)>> shaderRecompileCallback = {});
 
     static vk::ImageUsageFlags getInputImageUsageFlags() { return vk::ImageUsageFlagBits::eSampled; }
 

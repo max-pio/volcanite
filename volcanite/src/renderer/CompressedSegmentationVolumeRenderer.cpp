@@ -1241,7 +1241,11 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     std::ranges::transform(m_data_vcfg_presets, std::back_inserter(vcfg_preset_names),
         [](const std::pair<std::string, std::filesystem::path>& c){return c.first;});
     g_gen->addCombo(&gui_preset_selection, vcfg_preset_names,
-                       [this](int i) {
+                       [this](int i, bool by_user) {
+                           // if this combo is updated form a vcfg parameter file import, do not change the parameters
+                           if (!by_user)
+                               return;
+
                             // how many frames have to be accumulated so that each pixel received one sample
                             if (i >= 0 && i < m_data_vcfg_presets.size())
                                 readParameterFile(m_data_vcfg_presets[i].second);
@@ -1387,7 +1391,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             m_axis_transpose_mat = __get_axis_tranpose_mat(gui_transpose_order[gui_transpose_selection], m_axis_flip);
         }, [this]() { return m_axis_flip[2]; }, "Z Axis");
     g_gen->addCombo(&gui_transpose_selection, gui_transpose_strings,
-                    [this, __get_axis_tranpose_mat](int i) {
+                    [this, __get_axis_tranpose_mat](int i, bool by_user) {
                         assert(gui_transpose_selection < gui_transpose_order.size() && "GUI sets out of bounds transpose matrix.");
                         m_axis_transpose_mat = __get_axis_tranpose_mat(gui_transpose_order[gui_transpose_selection], m_axis_flip);
                     }, "Axis Order");

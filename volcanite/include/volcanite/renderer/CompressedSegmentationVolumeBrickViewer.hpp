@@ -82,7 +82,7 @@ public:
         g->addInt(&m_brick_slice, "Brick Slice", 0, brick_size - 1, 1);
         g->addSeparator();
         g->addInt(&m_label_color_mult, "Label Color Cycle", 1, 100000, 5);
-        g->addCombo(&m_show_code_mode, {"All", "New Palette", "Flat"}, [this](int v) { m_show_code_mode = v; });
+        g->addCombo(&m_show_code_mode, {"All", "New Palette", "Flat"}, [this](int v, bool by_user) { m_show_code_mode = v; });
         g->addBool(&m_show_label_bits, "Show Label Bits");
         g->addColor(&m_background_color_a, "Background Color A");
         g->addColor(&m_background_color_b, "Background Color B");

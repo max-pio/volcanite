@@ -90,7 +90,7 @@ namespace vvv {
     }
 
     // special types and grouping
-    gui_id GuiInterface::GuiElementList::addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int)> onChanged, const std::string& name) {
+    gui_id GuiInterface::GuiElementList::addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int, bool)> onChanged, const std::string& name) {
         auto entry = new GuiComboEntry();
         entry->id = m_id_counter++;
         entry->type = GuiCombo;
@@ -450,6 +450,8 @@ namespace vvv {
                         return false;
                     }
                     *e->selection = option;
+                    if (e->onChanged)
+                        e->onChanged(option, false);
                     break;
                 }
                 case GuiBitFlags: {
