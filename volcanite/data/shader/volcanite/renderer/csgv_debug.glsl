@@ -13,7 +13,7 @@ bool DEBUG_vis_model_space(Ray ray, float t_0, ivec2 pixel, const bool enabled) 
     if (!enabled)
         return false;
     const vec3 pos = ray.origin + t_0 * ray.direction;
-    const float depth = length(pos - g_camera_position_world_space) - (length(g_camera_position_world_space) - 0.8660254037f);
+    const float depth = length((g_model_to_world_space * vec4(pos, 1.f)).xyz - g_camera_position_world_space) - (length(g_camera_position_world_space) - 0.8660254037f);
     const vec3 borders = vec3(greaterThan(fract(pos), vec3(0.0f))) * vec3(lessThan(fract(pos - vec3(0.0001f)), vec3(0.2f)));
     const uvec3 voxel = uvec3(floor(pos));
     vec3 color = vec3(voxel) / vec3(g_vol_dim);

@@ -561,13 +561,10 @@ void main() {
 //        ray.direction = normalize(g_world_to_model_space_dir * ray.direction);
 //    }
 
-
     // In world space, we hit a small cuboid (largest dimension is 1) centered around the origin.
     // We transform this AABB to model space, where each voxel has unit size:
     float t_0, t_1;
-//    AABB bounding_box = AABB((g_world_to_model_space * vec4((vec3(g_bboxMin.xyz) / g_vol_dim.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz,
-//                             (g_world_to_model_space * vec4((vec3(g_bboxMax.xyz) / g_vol_dim.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz);
-    AABB bounding_box = AABB(vec3(g_bboxMin), vec3(g_bboxMax));
+    AABB bounding_box = AABB(g_bboxMin.xyz, g_bboxMax.xyz);
     ray_box_intersection(ray, bounding_box, t_0, t_1);
 
     // if the ray does not hit the data set, directly output the background

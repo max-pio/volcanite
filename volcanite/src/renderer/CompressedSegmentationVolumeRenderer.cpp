@@ -962,7 +962,8 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_global_illumination_enabled) HASHP(m_shadow_pathtracing_ratio) HASHP(m_light_direction)
     HASHP(m_ambient_occlusion_dist_strength) HASHP(m_envmap_enabled) HASHP(m_max_path_length)
     // volume transformations
-    HASHP(m_voxel_size) HASHP(m_bboxMin) HASHP(m_bboxMax)
+    HASHP(m_voxel_size) HASHP(m_bboxMin) HASHP(m_bboxMax) HASHP(m_axis_transpose_mat) HASHP(m_axis_flip[0])
+    HASHP(m_axis_flip[1]) HASHP(m_axis_flip[2])
     // HASHP(m_subblock_start) HASHP(m_subblock_size) HASHP(m_subblock_enabled)
     // general rendering config
     HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_max_request_path_length_pow2) HASHP(m_blue_noise) HASHP(m_max_steps)
@@ -1046,10 +1047,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
     glm::vec3 voldim = glm::vec3(m_compressed_segmentation_volume->getVolumeDim());
     glm::vec3 physical_voldim = voldim * m_voxel_size;
 
-    // size in world space: uniformly scaled so that the largest component is one
-    float scalingFactor = glm::max(physical_voldim.x, glm::max(physical_voldim.y, physical_voldim.z));
-    glm::vec3 normalized_volume_size(physical_voldim / scalingFactor);
-
     // camera uniform
     if (m_render_update_flags & UPDATE_PCAMERA) {
         const auto world_to_projection_space = camera->get_world_to_projection_space(m_resolution);
@@ -1104,6 +1101,28 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
 
     // render info uniform
     if (m_render_update_flags & (UPDATE_RENDER_FRAME | UPDATE_PRENDER)) {
+
+        // MVP matrices, transformations, volume sizes
+        float scalingFactor = glm::max(physical_voldim.x, glm::max(physical_voldim.y, physical_voldim.z));
+        // size in world space: uniformly scaled so that the largest component is one
+        glm::vec3 normalized_volume_size(physical_voldim / scalingFactor);
+        m_urender_info->setUniform<glm::vec3>("g_voxel_size", m_voxel_size);
+        m_urender_info->setUniform<glm::vec3>("g_physical_vol_dim", physical_voldim);
+        m_urender_info->setUniform<glm::vec3>("g_normalized_volume_size", normalized_volume_size);
+        // Transformation matrices:
+        // In world space, everything should be a cuboid with the largest dimension being one, centered around the origin.
+        // In model space, one voxel must be a unit cube. The normalization transform scales this down to world space [-0.5, 0.5]^3
+        glm::mat4 world_to_model_space;
+        world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), glm::vec3(voldim) / glm::vec3(normalized_volume_size)), glm::vec3(normalized_volume_size / 2.f)) * m_axis_transpose_mat;
+        m_urender_info->setUniform<glm::mat4x4>("g_model_to_world_space", glm::inverse(world_to_model_space));
+        m_urender_info->setUniform<glm::mat4x4>("g_world_to_model_space", world_to_model_space);
+        m_urender_info->setUniform<glm::mat3x3>("g_model_to_world_space_dir", glm::mat3(glm::inverse(world_to_model_space)));
+        m_urender_info->setUniform<glm::mat3x3>("g_world_to_model_space_dir", glm::mat3(world_to_model_space));
+        m_urender_info->setUniform<float>("g_world_to_model_space_scaling", scalingFactor);
+        // bbox is the volume dimension in voxels centered around the origin (if no bbox reduction is applied)
+        m_urender_info->setUniform<glm::ivec4>("g_bboxMin", glm::uvec4(glm::clamp(m_bboxMin, glm::ivec3(0), glm::ivec3(voldim)), 1));
+        m_urender_info->setUniform<glm::ivec4>("g_bboxMax", glm::uvec4(glm::clamp(m_bboxMax, glm::ivec3(0), glm::ivec3(voldim)), 1));
+
         // frame indices and seeds
         m_urender_info->setUniform<uint32_t>("g_frame", m_frame);
         m_urender_info->setUniform<uint32_t>("g_camera_still_frames", m_accumulated_frames);
@@ -1131,7 +1150,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_urender_info->setUniform<float>("g_light_intensity", m_light_intensity);
         m_urender_info->setUniform<uint32_t>("g_global_illumination_enable", m_global_illumination_enabled ? 1 : 0);
         m_urender_info->setUniform<float>("g_shadow_pathtracing_ratio", m_shadow_pathtracing_ratio);
-        m_urender_info->setUniform<glm::vec3>("g_light_direction", m_light_direction);
+        m_urender_info->setUniform<glm::vec3>("g_light_direction", glm::normalize(glm::mat3(world_to_model_space) * m_light_direction));
         m_urender_info->setUniform<uint32_t>("g_envmap_enable", m_envmap_enabled ? 1 : 0);
         m_urender_info->setUniform<int32_t>("g_max_path_length", m_max_path_length);
 
@@ -1141,30 +1160,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
             if (m_materials[m].isActive())
                 max_active_material = m;
         m_urender_info->setUniform<int32_t>("g_max_active_material", max_active_material);
-
-        m_urender_info->setUniform<glm::vec3>("g_voxel_size", m_voxel_size);
-        m_urender_info->setUniform<glm::vec3>("g_physical_vol_dim", physical_voldim);
-        m_urender_info->setUniform<glm::vec3>("g_normalized_volume_size", normalized_volume_size);
-        // Transformation matrices:
-        // In world space, everything should be a cuboid with the largest dimension being one, centered around the origin.
-        // In model space, one voxel must be a unit cube. The normalization transform scales this down to world space [-0.5, 0.5]^3
-        glm::mat4 world_to_model_space;
-        // TODO: generalize switching model space axes in the GUI as axes selector [xyz, xzy, yxz, ...])
-        glm::mat3 axis_transpose = glm::mat3{1.f};
-        if (true) {
-            axis_transpose = glm::mat3{glm::vec3{0, 1, 0},
-                                       glm::vec3{1, 0, 0},
-                                       glm::vec3{0, 0, 1}};
-        }
-        world_to_model_space = glm::mat4(axis_transpose) * glm::translate(glm::scale(glm::mat4(1.f), glm::vec3(scalingFactor)), glm::vec3(normalized_volume_size / 2.f));
-        m_urender_info->setUniform<glm::mat4x4>("g_model_to_world_space", glm::inverse(world_to_model_space));
-        m_urender_info->setUniform<glm::mat4x4>("g_world_to_model_space", world_to_model_space);
-        m_urender_info->setUniform<glm::mat3x3>("g_model_to_world_space_dir", glm::mat3(glm::inverse(world_to_model_space)));
-        m_urender_info->setUniform<glm::mat3x3>("g_world_to_model_space_dir", glm::mat3(world_to_model_space));
-        m_urender_info->setUniform<float>("g_world_to_model_space_scaling", scalingFactor);
-        // bbox is the volume dimension in voxels centered around the origin (if no bbox reduction is applied)
-        m_urender_info->setUniform<glm::ivec4>("g_bboxMin", glm::uvec4(glm::clamp(m_bboxMin, glm::ivec3(0), glm::ivec3(voldim)), 1));
-        m_urender_info->setUniform<glm::ivec4>("g_bboxMax", glm::uvec4(glm::clamp(m_bboxMax, glm::ivec3(0), glm::ivec3(voldim)), 1));
 
         // general render config
         m_urender_info->setUniform<uint32_t>("g_detail_buffer_dirty", m_detail_stage == DetailUploading ? 1u : 0u);
@@ -1344,6 +1339,58 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_gen->addIntRange([this](glm::ivec2 v) {m_bboxMin.z = v.x; m_bboxMax.z = v.y;},
                          [this](){return glm::ivec2(m_bboxMin.z, m_bboxMax.z);},
                          "Splitting Plane Z", glm::ivec2(0), glm::ivec2(vol_dim.z), glm::ivec2(1));
+    static int gui_transpose_selection = 0;
+    // TODO: GUI Combo arrays could become static constexpr with lambda init
+    static std::vector<glm::ivec3> gui_transpose_order;
+    constexpr std::pair<char, glm::vec4> __gui_transpose_xyz[3] = {std::make_pair<char, glm::vec4>('X', {1.f, 0.f, 0.f, 0.f}),
+                                                                   std::make_pair<char, glm::vec4>('Y', {0.f, 1.f, 0.f, 0.f}),
+                                                                   std::make_pair<char, glm::vec4>('Z', {0.f, 0.f, 1.f, 0.f})};
+    std::vector<std::string> gui_transpose_strings;
+    for (int a = 0; a < 3; a++) {
+        for (int b = 0; b < 3; b++) {
+            for (int c = 0; c < 3; c++) {
+                if (b == a || (c == a || c == b)) continue;
+                gui_transpose_strings.emplace_back("XYZ");
+                gui_transpose_strings.back()[0] = __gui_transpose_xyz[a].first;
+                gui_transpose_strings.back()[1] = __gui_transpose_xyz[b].first;
+                gui_transpose_strings.back()[2] = __gui_transpose_xyz[c].first;
+                gui_transpose_order.emplace_back(glm::ivec3{a,b,c});
+            }
+        }
+    }
+    constexpr auto __get_axis_tranpose_mat = [__gui_transpose_xyz](glm::ivec3 order, bool axis_flip[3])-> glm::mat4 {
+        return glm::mat4{__gui_transpose_xyz[order[0]].second * (axis_flip[0] ? -1.f : 1.f),
+                         __gui_transpose_xyz[order[1]].second * (axis_flip[1] ? -1.f : 1.f),
+                         __gui_transpose_xyz[order[2]].second * (axis_flip[2] ? -1.f : 1.f),
+                         glm::vec4{0.f, 0.f, 0.f, 1.f}};
+        };
+    g_gen->addLabel("Flip");
+#ifdef IMGUI
+        g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_gen->addBool([this, __get_axis_tranpose_mat](bool v) {
+            m_axis_flip[0] = v;
+            m_axis_transpose_mat = __get_axis_tranpose_mat(gui_transpose_order[gui_transpose_selection], m_axis_flip);
+        }, [this]() { return m_axis_flip[0]; }, "X Axis");
+#ifdef IMGUI
+    g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_gen->addBool([this, __get_axis_tranpose_mat](bool v) {
+            m_axis_flip[1] = v;
+            m_axis_transpose_mat = __get_axis_tranpose_mat(gui_transpose_order[gui_transpose_selection], m_axis_flip);
+        }, [this]() { return m_axis_flip[1]; }, "Y Axis");
+#ifdef IMGUI
+    g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
+#endif
+    g_gen->addBool([this, __get_axis_tranpose_mat](bool v) {
+            m_axis_flip[2] = v;
+            m_axis_transpose_mat = __get_axis_tranpose_mat(gui_transpose_order[gui_transpose_selection], m_axis_flip);
+        }, [this]() { return m_axis_flip[2]; }, "Z Axis");
+    g_gen->addCombo(&gui_transpose_selection, gui_transpose_strings,
+                    [this, __get_axis_tranpose_mat](int i) {
+                        assert(gui_transpose_selection < gui_transpose_order.size() && "GUI sets out of bounds transpose matrix.");
+                        m_axis_transpose_mat = __get_axis_tranpose_mat(gui_transpose_order[gui_transpose_selection], m_axis_flip);
+                    }, "Axis Order");
     g_gen->addSeparator();
     g_gen->addDynamicText(&m_gui_device_mem_text);
     g_gen->addDynamicText(&m_gui_cache_mem_text);
@@ -1443,14 +1490,14 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                                 m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x; },
                      "Trigger Random Requests");
     g_dev->addBool(&m_auto_cache_reset, "Auto Cache Defragmentation");
-    g_dev->addBool(&m_clear_cache_every_frame, "Every Frame");
+    g_dev->addBool(&m_clear_cache_every_frame, "Every Frame##cache");
 #ifdef IMGUI
     g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif
     g_dev->addAction([this]() { m_pcache_reset = true; }, "Clear Label Cache");
     g_dev->addSeparator();
     g_dev->addLabel("Framebuffer Accumulation");
-    g_dev->addBool(&m_clear_accum_every_frame, "Every Frame");
+    g_dev->addBool(&m_clear_accum_every_frame, "Every Frame##framebuffer");
 #ifdef IMGUI
     g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
 #endif

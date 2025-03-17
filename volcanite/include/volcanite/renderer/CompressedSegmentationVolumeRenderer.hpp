@@ -304,24 +304,26 @@ private:
     static constexpr uint32_t SEGMENTED_VOLUME_MATERIAL_COUNT = 8;
     std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
     float m_factor_ambient = 0.4f;
-    // shading and post processing
-    glm::vec4 m_background_color_a = glm::vec4(1.f, 1.f, 1.f, 1.f);
-    glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
+    // shading and post-processing
+    glm::vec4 m_background_color_a = glm::vec4{1.f, 1.f, 1.f, 1.f};
+    glm::vec4 m_background_color_b = glm::vec4{1.f, 1.f, 1.f, 1.f};
     int m_subsampling = 0;              ///< only one pixel per [2^subsampl, 2^subsampl] pixel block is rendered per frame
     bool m_tonemap_enabled = false;
     bool m_global_illumination_enabled = false;
     bool m_envmap_enabled = false;
     float m_shadow_pathtracing_ratio = 1.0f;
-    glm::vec2 m_ambient_occlusion_dist_strength = glm::vec2(15.f, 0.5f);
-    glm::vec3 m_light_direction = glm::vec3(-0.309426f, 0.721995f, -0.618853f);
+    glm::vec2 m_ambient_occlusion_dist_strength = glm::vec2{15.f, 0.5f};
+    glm::vec3 m_light_direction = glm::vec3{-0.309426f, 0.721995f, -0.618853f};
     float m_light_intensity = 1.f;
     // voxel traversal
     int m_max_path_length = 32;
     int m_max_steps = 16384;
-    glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
-    glm::ivec3 m_bboxMin = glm::uvec3(0, 0, 0);
-    glm::ivec3 m_bboxMax = glm::uvec3(INT_MAX, INT_MAX, INT_MAX);
-    glm::vec2 m_mouse_pos = glm::vec2(0.5f);    ///< screen space mouse position in [0,1]^2
+    glm::vec3 m_voxel_size = glm::vec3{1.f, 1.f, 1.f};
+    glm::ivec3 m_bboxMin = glm::uvec3{0, 0, 0};
+    glm::ivec3 m_bboxMax = glm::uvec3{INT_MAX, INT_MAX, INT_MAX};
+    bool m_axis_flip[3] = {false, false, false};
+    glm::mat4 m_axis_transpose_mat{1.f};
+    glm::vec2 m_mouse_pos = glm::vec2{0.5f};    ///< screen space mouse position in [0,1]^2
     // denoising
     int m_atrous_iterations = 4;
     bool m_denoising_enabled = true;
