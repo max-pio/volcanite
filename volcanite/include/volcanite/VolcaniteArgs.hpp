@@ -155,7 +155,7 @@ public:
 
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
-            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{label co'lumn name referenced by volume}]]\".", false, "", "database[,table[,label]]", cmd);
+            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{label collumn name referenced by volume}]]\".", false, "", "database[,table[,label]]", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal development GUI and enable shader debug outputs.", cmd);
             SwitchArg noVsyncArg("", "no-vsync", "Disable VSync in renderer.", cmd);

@@ -137,7 +137,8 @@ public:
 
     void writeTo(std::ostream& out, bool human_readable=false) {
         if (human_readable) {
-            out << "orbital: " << (orbital ? 1 : 0);
+            // TODO: write out look at, rotation and radius in orbital mode
+            out << "orbital: " << (orbital ? 1 : 0) << std::endl;
             out << "position: " << position_world_space.x << " " << position_world_space.y << " " << position_world_space.z << std::endl;
             out << "lookat: " << position_look_at_world_space.x << " " << position_look_at_world_space.y << " " << position_look_at_world_space.z << std::endl;
             out << "rotation: " << rotation_x << " " << rotation_y << " " << orbital_radius << std::endl;

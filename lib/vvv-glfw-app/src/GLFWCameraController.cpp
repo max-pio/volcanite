@@ -112,7 +112,7 @@ namespace vvv {
         // orbital movement
         if (m_camera->orbital) {
             // look at movement
-            float forward = 0.0f, right = 0.0f, vertical = 0.0f;
+            float forward = 0.0f, right = 0.0f, vertical = 0.0f, zoom = 0.0f;
             if (captureKeyboard) {
                 forward += (glfwGetKey(m_window, GLFW_KEY_S) == GLFW_PRESS) ? step : 0.0f;
                 forward -= (glfwGetKey(m_window, GLFW_KEY_W) == GLFW_PRESS) ? step : 0.0f;
@@ -120,6 +120,8 @@ namespace vvv {
                 right -= (glfwGetKey(m_window, GLFW_KEY_A) == GLFW_PRESS) ? step : 0.0f;
                 vertical += (glfwGetKey(m_window, GLFW_KEY_E) == GLFW_PRESS) ? step : 0.0f;
                 vertical -= (glfwGetKey(m_window, GLFW_KEY_Q) == GLFW_PRESS) ? step : 0.0f;
+                zoom += (glfwGetKey(m_window, GLFW_KEY_G) == GLFW_PRESS) ? step : 0.0f;
+                zoom -= (glfwGetKey(m_window, GLFW_KEY_T) == GLFW_PRESS) ? step : 0.0f;
             }
 
             // transform the look at offset in world space: move with WASD in the xz plane, move the plane up and down with QE
@@ -150,6 +152,7 @@ namespace vvv {
             constexpr float pi_eps = std::numbers::pi / 2.f - 0.001f;
             m_camera->rotation_x = glm::clamp(m_camera->rotation_x, -pi_eps, pi_eps);
 
+            m_camera->orbital_radius += (zoom * glm::min(m_camera->orbital_radius, 1.f));
             m_camera->orbital_radius -= (scrollWheelDelta / 10.f) * final_speed * m_camera->orbital_radius;
             m_camera->orbital_radius = glm::max(0.001f, m_camera->orbital_radius);
             m_camera->position_world_space = m_camera->position_look_at_world_space + glm::vec3(
@@ -157,7 +160,7 @@ namespace vvv {
                     m_camera->orbital_radius * sin(m_camera->rotation_x),
                     m_camera->orbital_radius * sin(m_camera->rotation_y) * cos(m_camera->rotation_x));
 
-            if (forward != 0.f || right != 0.f || vertical != 0.f || scrollWheelDelta != 0.f ||
+            if (forward != 0.f || right != 0.f || vertical != 0.f || zoom != 0.f || scrollWheelDelta != 0.f ||
                 m_camera->rotate_camera || glfwGetKey(m_window, GLFW_KEY_R)) {
                 m_camera->onCameraUpdate();
             }
