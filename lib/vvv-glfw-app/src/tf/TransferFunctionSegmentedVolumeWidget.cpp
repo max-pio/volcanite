@@ -292,10 +292,8 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                 materialChanged |= ImGui::RadioButton("Clamp", &mat.wrapping, 0);
                 ImGui::SameLine();
                 materialChanged |= ImGui::RadioButton("Wrap", &mat.wrapping, 1);
-                ImGui::BeginDisabled();
                 ImGui::SameLine();
                 materialChanged |= ImGui::RadioButton("Random", &mat.wrapping, 2);
-                ImGui::EndDisabled();
                 ImGui::PopID();
 
                 ImGui::Separator();

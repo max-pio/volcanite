@@ -90,7 +90,7 @@ public:
             mat.tfMinMax = glm::vec2(0.f, 100.f);
             mat.opacity = 1.f;
             mat.emission = 0.f;
-            mat.wrapping = (m == 0) ? 1 : 0;
+            mat.wrapping = 2;
             // we use opaque transfer functions
             mat.tf->m_controlPointsOpacity.resize(4);
             mat.tf->m_controlPointsOpacity[0] = 0.f;
