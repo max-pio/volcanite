@@ -35,9 +35,18 @@ int getMaterial(uint label) {
         return -1;
 #endif
     for(int m = 0; m <= g_max_active_material; m++) {
-        if(getAttribute(label, g_materials[m].discrAttributeStart) >= g_materials[m].discrIntervalMin
-            && getAttribute(label, g_materials[m].discrAttributeStart) <= g_materials[m].discrIntervalMax)
-        return m;
+        //#define HASHED_LABEL_VISIBILITY
+//        #ifdef HASHED_LABEL_VISIBILITY
+//            if (g_materials[m].discrAttributeStart == LABEL_AS_ATTRIBUTE) {
+//                if ((label %  g_materials[m].discrIntervalMax) <  g_materials[m].discrIntervalMin)
+//                    continue;
+//                else
+//                    return m;
+//            }
+//        #endif
+        const float attr = getAttribute(label, g_materials[m].discrAttributeStart);
+        if (attr >= g_materials[m].discrIntervalMin && attr <= g_materials[m].discrIntervalMax)
+            return m;
     }
     // a material fits, return "invisible" material
     return -1;
