@@ -150,7 +150,8 @@
 
 #ifndef GL_core_profile
     namespace volcanite {
-        static constexpr const char* OperationMask_STR(uint32_t op_mask) {
+     static const std::string OperationMask_STR(uint32_t op_mask) {
+            // in C++20 the function could be constexpr const char* but C++17 does not support std::string in costexpr.
             std::string op_mask_str;
             if (op_mask == OP_ALL)
                 op_mask_str = "ALL";
@@ -175,7 +176,7 @@
                 if (op_mask & OP_STOP_BIT)
                     op_mask_str.push_back('s');
             }
-            return op_mask_str.c_str();
+            return op_mask_str;
         }
     }
 #endif
