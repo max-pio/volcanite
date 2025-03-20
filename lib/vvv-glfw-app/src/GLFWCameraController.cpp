@@ -69,7 +69,6 @@ namespace vvv {
             right_mouse_state = GLFW_RELEASE;
         }
 
-
         float final_speed = m_camera->speed * 0.5f;
         if (captureKeyboard) {
             final_speed *= (glfwGetKey(m_window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) ? 2.0f : 1.0f;
@@ -146,8 +145,15 @@ namespace vvv {
                                                                   -CAMERA_MOVE_BORDER, CAMERA_MOVE_BORDER);
 #endif
 
-            if (captureKeyboard && !m_camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_R)) {
-                m_camera->rotation_y += 0.01f;
+#ifdef IMGUI
+            // TODO: register a GLFW keyboard callback to obtain key modifiers
+            if (captureKeyboard && ImGui::IsKeyChordPressed(ImGuiKey_R | ImGuiMod_Ctrl)) {
+                m_auto_rotate_camera = !m_auto_rotate_camera;
+            }
+#endif
+            if ((captureKeyboard && !m_camera->rotate_camera && glfwGetKey(m_window, GLFW_KEY_R))
+                || m_auto_rotate_camera) {
+                m_camera->rotation_y += 0.5 * time_delta;
             }
             constexpr float pi_eps = std::numbers::pi / 2.f - 0.001f;
             m_camera->rotation_x = glm::clamp(m_camera->rotation_x, -pi_eps, pi_eps);
