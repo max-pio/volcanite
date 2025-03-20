@@ -40,7 +40,7 @@ namespace volcanite {
     std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegmentationVolumeCfg cfg);
 
 
-    static constexpr std::string getDummySegmentationVolumeHelpStr();
+    static constexpr const char* getDummySegmentationVolumeHelpStr();
 
     /// Creates a synthetic segmentation volume based on the descriptor string.
     /// The volume is created from a zero volume by inserting randomly sized axis-aligned boxes of random labels.

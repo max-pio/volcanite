@@ -75,7 +75,7 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegment
 }
 
 
-constexpr std::string getDummySegmentationVolumeHelpStr() {
+constexpr const char* getDummySegmentationVolumeHelpStr() {
     return CSGV_SYNTH_PREFIX_STR
                   "[_arg]* with arg in\n"
                   "  d[x]x[y]x[z]: volume dimension [x,y,z]\n"

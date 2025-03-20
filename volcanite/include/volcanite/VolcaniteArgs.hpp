@@ -245,17 +245,20 @@ public:
             // rendering arguments
             {
                 auto split_configs = renderconfigArg.getValue() | std::views::split(';')
-                                                                | std::views::transform([](auto r) {
-                                                                    // remove leading and trailing spaces
-                                                                    std::string_view v(r.data(), r.size());
-                                                                    v.remove_prefix(std::min(v.find_first_not_of(' '), v.size()));
-                                                                    v.remove_suffix(r.size() - 1u - std::min(v.find_last_not_of(' '), v.size()));
-                                                                    return v;
-                                                                })
-                                                                | std::views::transform([](auto r) {
+                                                                | std::views::transform([](auto r) -> std::string  {
+                                                                    // in C++20 this could be done in string views only
+                                                                    //std::string_view v(r.data(), r.size());
+                                                                    //v.remove_prefix(std::min(v.find_first_not_of(' '), v.size()));
+                                                                    //v.remove_suffix(r.size() - 1u - std::min(v.find_last_not_of(' '), v.size()));
+                                                                    std::string cfg;
+                                                                    for (const char& c : r)
+                                                                        cfg.push_back(c);
+                                                                    // trim
+                                                                    auto first = cfg.find_first_not_of(' ');
+                                                                    auto last = cfg.find_last_not_of(' ');
+                                                                    cfg = cfg.substr(first, last - first);
                                                                     // expand file path (if it is a vcfg file)
                                                                     // and convert to strin
-                                                                    auto cfg = std::string(r.data(), r.size());
                                                                     if (cfg.ends_with(".vcfg"))
                                                                         return expandPath(cfg);
                                                                     return cfg;
@@ -438,8 +441,12 @@ public:
             std::string comma_separated_logfiles = evalLogFilesArg.getValue();
             va.eval_logfiles.clear();
             for (const std::string_view& logfile : comma_separated_logfiles | std::views::split(',')
-                    | std::views::transform([](auto &&range) -> std::string_view {
-                        return {range.begin(), range.end()};
+                    | std::views::transform([](const auto &&range) -> std::string_view {
+                        // string_view and string constructors do not accept the range iterators in C++17
+                        std::string tmp;
+                        for (const char c : range)
+                            tmp.push_back(c);
+                        return {tmp};
                     })) {
                 va.eval_logfiles.emplace_back(expandPath(std::string(logfile)));
                 // TODO: check if the logfiles contain valid format strings
