@@ -144,9 +144,10 @@ bool log_supported_device_extensions(vk::PhysicalDevice device) {
 
 void vvv::DefaultGpuContext::createInstance() {
 #if (VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1)
-    static vk::DynamicLoader dl;
-    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
+    // static vk::detail::DynamicLoader dl;
+    // PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    // VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
+    VULKAN_HPP_DEFAULT_DISPATCHER.init();
 #endif
 
     // create vulkan instance
@@ -212,8 +213,13 @@ void vvv::DefaultGpuContext::createInstance() {
 
 void vvv::DefaultGpuContext::destroyInstance() { VK_DESTROY(m_gpu.instance) }
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageTypes,
-                                                                  VkDebugUtilsMessengerCallbackDataEXT const *pCallbackData, void * /*pUserData*/) {
+#if VK_HEADER_VERSION >= 309
+    static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugUtilsMessengerCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity, vk::DebugUtilsMessageTypeFlagsEXT messageTypes,
+                                                                      vk::DebugUtilsMessengerCallbackDataEXT const *pCallbackData, void * /*pUserData*/) {
+#else
+    static VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageTypes,
+                                                                      VkDebugUtilsMessengerCallbackDataEXT const *pCallbackData, void * /*pUserData*/) {
+#endif
 
     // Note: set to VK_TRUE, to abort after the first set of validation errors
     auto shouldAbort = VK_FALSE;
@@ -249,16 +255,22 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessengerCallback(VkDebugUtilsMe
     }
 
     // shorter message format for printf in shaders
-    if (pCallbackData->messageIdNumber == -1841738615) {
+    if (std::string(pCallbackData->pMessageIdName).find("DEBUG-PRINTF") != std::string::npos) {
+        // the messageIdNumber from the debugPrintfEXT readme seems not reliable:
+        // pCallbackData->messageIdNumber == 0x4fe1fef9) // for me it may be: 0x76589099
+        // https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/main/docs/debug_printf.md
+
+        // old format:
         // messageIDName = <UNASSIGNED-DEBUG-PRINTF>
         // "<Validation Information: [ UNASSIGNED-DEBUG-PRINTF ] Object 0: handle =
         // 0x1b6f9b0, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0x92394c89 |
         // ".length == 140
 
-        if (std::strlen(pCallbackData->pMessage) < 140) {
+        // len("Validation Information: [ WARNING-DEBUG-PRINTF ] | MessageID = 0x76589099 | vkQueueSubmit():  ") == 94
+        if (std::strlen(pCallbackData->pMessage) < 94) {
             vvv::Logger(vvv::DEBUG) << "[shader] " << pCallbackData->pMessage;
         } else {
-            vvv::Logger(vvv::DEBUG) << "[shader] " << (pCallbackData->pMessage + 143);
+            vvv::Logger(vvv::DEBUG) << "[shader] " << (pCallbackData->pMessage + 94);
         }
 
         shouldAbort = VK_FALSE;
@@ -320,9 +332,9 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessengerCallback(VkDebugUtilsMe
 vk::DebugUtilsMessengerCreateInfoEXT vvv::DefaultGpuContext::getDebugMessengerCreateInfo() const {
     const vk::DebugUtilsMessengerCreateInfoEXT debugUtilsInfo = {{},
                                                                  vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo |
-                                                                     vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError,
+                                                                 vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError,
                                                                  vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
-                                                                     vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation,
+                                                                 vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation,
                                                                  debugUtilsMessengerCallback};
 
     return debugUtilsInfo;

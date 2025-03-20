@@ -75,7 +75,8 @@ public:
     /// exports all GUI interface parameters as well as camera parameters.
     /// @return true on success, false otherwise
     virtual bool writeParameters(std::ostream& out, const std::string& version_string="") const {
-        out << "Version " << version_string << std::endl;
+        assert(version_string.find(' ') == std::string::npos && "file version string must be a single token");
+        out << "Version " << (version_string.empty() ? "---" : version_string) << std::endl;
         if(!m_camera) {
             Logger(WARN) << "Cannot write renderer parameters as camera is not set!";
             return false;

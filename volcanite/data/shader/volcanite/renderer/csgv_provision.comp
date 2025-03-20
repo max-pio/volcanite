@@ -47,7 +47,7 @@ void main() {
 
     // find out for which lod we compute everything
     // invocation 0 = LoD 1 which is the coarsest that we handle and uses stores 2x2x2 output voxels in cache (= one base element)
-    uint inv_lod = gl_GlobalInvocationID.x + 1u;
+    const uint inv_lod = gl_GlobalInvocationID.x + 1u;
     if (isHelperLane(inv_lod, LOD_COUNT))
         return;
 
@@ -95,9 +95,9 @@ void main() {
 
     // .. we need to aquire new elements from the cache top
     const int brick_elem_size_in_cache = 1 << (3 * (int(inv_lod) - 1)); // number of base elements we need for storing one element of this LoD in g_cache
-    uint new_base_elements_to_request = uint(number_of_new_blocks * brick_elem_size_in_cache);
+    const uint new_base_elements_to_request = uint(number_of_new_blocks * brick_elem_size_in_cache);
 
-    uint start_idx = atomicAdd(g_assign_info[ASSIGN_CACHE_TOP_IDX], new_base_elements_to_request);
+    const uint start_idx = atomicAdd(g_assign_info[ASSIGN_CACHE_TOP_IDX], new_base_elements_to_request);
     if(start_idx >= g_cache_capacity) {
         // we can't create ANY new elements. revert and store the info in our ASSIGN_ location
         atomicAdd(g_assign_info[ASSIGN_CACHE_TOP_IDX], uint(-int(new_base_elements_to_request)));

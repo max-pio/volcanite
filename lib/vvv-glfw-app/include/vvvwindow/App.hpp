@@ -63,27 +63,20 @@ public:
 
     const WindowingSystemIntegration* getWsi() const override { return this; }
 
-    /**
-     * Acquire all GPU resources including instance, device and swapchain resources.
-     * This method is reintrant.
-     */
+    /// Acquire all GPU resources including instance, device and swapchain resources.
+    /// This method is reintrant.
     void acquireResources();
-    /**
-     * Release all GPU resources including instance, device and swapchain resources.
-     * This method is reintrant.
-     */
+
+    /// Release all GPU resources including instance, device and swapchain resources.
+    /// This method is reintrant.
     void releaseResources();
 
-    /**
-     * Run the renderloop taking ownership of the current thread.
-     * @return status code
-     */
+    /// Run the renderloop taking ownership of the current thread.
+    /// @return status code
     int exec();
 
-    /**
-     * Run the renderloop without taking ownership of the current thread.
-     * You MUST NOT call `execAsync` or `exec` to invoke a second instance of the renderloop until the forked renderloop terminates.
-     */
+    /// Run the renderloop without taking ownership of the current thread.
+    /// You MUST NOT call `execAsync` or `exec` to invoke a second instance of the renderloop until the forked renderloop terminates.
     void execAsync();
     std::thread execAsyncAttached();
 
@@ -100,9 +93,7 @@ public:
 
     void processHotKeys();
 
-    /**
-     * Saves render parameters (camera path) to a temporary file or loads them from this file, depending on rec state.
-     */
+    /// Saves render parameters (camera path) to a temporary file or loads them from this file, depending on rec state.
     void processParameterRecording();
 
     void processVideoRecording();
@@ -116,16 +107,13 @@ public:
         }
     }
 
-    /**
-     * @return an GuiInterface to which GUI controlled properties can be added in a sequential manner.
-     */
+    /// sets the renderer parameter file path template, e.g. "~/param_{}.cfg" for quick load store
+    void setQuickConfigLocationFmt(std::string config_file_fmt) { m_quick_access_file_fmt = config_file_fmt; }
+
+    /// @return an GuiInterface to which GUI controlled properties can be added in a sequential manner.
     GuiInterface *getGui() const { return m_gui.get(); }
 
-
-
-    /**
-    * To print out versions of libraries that are available.
-     */
+    /// To print out versions of libraries that are available.
     static void logLibraryAvailabilty();
 
 protected:
@@ -229,6 +217,8 @@ private:
 
     static void framebufferResizeCallback(GLFWwindow *window, int _width, int _height);
 
+    // quick store / load of renderer parameter files (CTRL +) [0-9]
+    std::string m_quick_access_file_fmt;
     // Recording / Replaying of camera paths
     std::string m_record_file_path;
     std::optional<std::ofstream> m_record_out = {};

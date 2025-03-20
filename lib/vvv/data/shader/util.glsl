@@ -24,8 +24,6 @@
     #define assertf(X, S, P) if(!(X)) debugPrintfEXT(S, P)
 #endif
 
-#define STATIC_FAIL(S) {S()}
-
 #ifndef PI
     #define PI 3.14159265359f
 #endif
