@@ -189,6 +189,11 @@ public:
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
     [[nodiscard]] int getTargetAccumulationFrames() const { return m_target_accum_frames; }
+    void setTargetAccumulationFrames(int count) {
+        if (count < 0)
+            throw std::runtime_error("Target accumluation frame count must be >= 0.");
+        m_target_accum_frames = count;
+     }
     /// Will save the renderer state to the path when the renderer is shut down
     void saveConfigOnShutdown(const std::string& path) { m_save_config_on_shutdown_path = expandPath(path); }
 

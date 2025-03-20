@@ -27,23 +27,23 @@
 ///   RANDOM_ACCESS
 
 #if ENCODING_MODE != HUFFMAN_WM_ENC
-    STATIC_FAIL(expected_HUFFMAN_WM_ENC_encoding_mode);
+    #error "expected HUFFMAN_WM_ENC encoding mode"
 #endif
 
 #ifdef SEPARATE_DETAIL
-    STATIC_FAIL(wavelet_matrix_does_not_support_detail_separation);
+    #error "wavelet matrix does not support detail separation"
 #endif
 
 #ifdef PALETTE_CACHE
-    STATIC_FAIL(wavelet_matrix_does_not_support_palletized_cache);
+    #error "wavelet matrix does not support palletized cache"
 #endif
 
 #ifndef RANDOM_ACCESS
-    STATIC_FAIL(wavelet_matrix_only_supports_random_access);
+    #error "wavelet matrix only supports random access"
 #endif
 
 #if !defined(RANDOM_ACCESS) && defined(DECODE_FROM_SHARED_MEMORY)
-    STATIC_FAIL(DECODE_FROM_SHARED_MEMORY_can_only_be_used_with_RANDOM_ACCESS);
+    #error "DECODE_FROM_SHARED_MEMORY can only be used with RANDOM_ACCESS"
 #endif
 
 // TYPE DEFINITIONS AND TYPE ACCESS ------------------------------------------------------------------------------------

@@ -26,19 +26,19 @@
 ///   DECODE_FROM_SHARED_MEMORY
 
 #if ENCODING_MODE != NIBBLE_ENC
-    STATIC_FAIL(expected_NIBBLE_ENC_encoding_mode);
+    #error "expected NIBBLE_ENC encoding mode"
 #endif
 
 #if defined(RANDOM_ACCESS) && defined(SEPARATE_DETAIL)
-    STATIC_FAIL(RANDOM_ACCESS_cannot_be_used_with_NIBBLE_ENC_and_DETAIL_SEPARATION);
+    #error "RANDOM_ACCESS cannot be used with NIBBLE_ENC and DETAIL_SEPARATION"
 #endif
 
 #if !defined(RANDOM_ACCESS) && defined(DECODE_FROM_SHARED_MEMORY)
-    STATIC_FAIL(DECODE_FROM_SHARED_MEMORY_can_only_be_used_with_RANDOM_ACCESS);
+    #error "DECODE_FROM_SHARED_MEMORY can only be used with RANDOM_ACCESS"
 #endif
 
 #if defined(RANDOM_ACCESS) && (OP_MASK & OP_STOP_BIT)
-    STATIC_FAIL(OP_STOP_BIT_cannot_be_used_with_NIBBLE_ENC_and_RANDOM_ACCESS);
+    #error "OP_STOP_BIT cannot be used with NIBBLE_ENC and RANDOM_ACCESS"
 #endif
 
 // SERIAL ENCODING -----------------------------------------------------------------------------------------------------

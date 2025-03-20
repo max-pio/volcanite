@@ -27,11 +27,11 @@
 
 // some compile time invariants
 #if defined(RANDOM_ACCESS) && defined(PALETTE_CACHE)
-    STATIC_FAIL(random_access_cannot_be_used_with_palette_cache);
+    #error "random access cannot be used with palette cache"
 #endif
 
 #if !defined(RANDOM_ACCESS) && defined(DECODE_FROM_SHARED_MEMORY)
-    STATIC_FAIL(DECODE_FROM_SHARED_MEMORY_can_only_be_used_with_RANDOM_ACCESS);
+    #error "DECODE_FROM_SHARED_MEMORY can only be used with RANDOM_ACCESS"
 #endif
 
 
@@ -171,7 +171,7 @@ void resetCSGVBrick(const uint decoded_brick_start_uint, const uint inv_lod) {
 #elif ENCODING_MODE == HUFFMAN_WM_ENC
     #include "volcanite/compression/decoder/HuffmanWMDecoder.glsl"
 #else
-    STATIC_FAIL(no_decoder_specified);
+    #error "unknown or no CSGV decoder specified in shader"
 #endif
 
 #endif // ifndef CSGV_READ_ONLY
