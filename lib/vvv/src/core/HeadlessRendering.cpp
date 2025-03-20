@@ -69,7 +69,8 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     // TODO: decouple HeadlessRendering::exec in an initialization method and multiple render calls, respect m_pendingRecreation
     // e.g.: hr.init(); hr.setRenderResolution(400, 400); hr.renderToFile(120); hr.setRenderParametersFromFile(path); auto output = hr.render(60);
 
-    size_t camera_auto_rotate_frames;
+    constexpr int MAX_CAMERA_AUTO_FRAMES = 1800; // 1800 frames: 1 min at 30 fps
+    int camera_auto_rotate_frames;
     // pre-recorded camera path playback
     std::optional<std::ifstream> m_record_in = {};
     if (!cfg.record_file_in.empty()) {
@@ -77,18 +78,28 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         if (!m_record_in->is_open()) {
             throw std::runtime_error("could not open recording input file " + cfg.record_file_in);
         }
-        camera_auto_rotate_frames = 0u; // exit when the camera file reached its end
+        camera_auto_rotate_frames = 0; // exit when the camera file reached its end
     }
     // rendering video images but no camera playback is specified: rotate camera around
     else if (!cfg.video_fmt_file_out.empty()) {
-        camera_auto_rotate_frames = 2000u;
+        camera_auto_rotate_frames = MAX_CAMERA_AUTO_FRAMES;
     } else {
-        camera_auto_rotate_frames = 1u;
+        camera_auto_rotate_frames = 1;
     }
 
     Logger(INFO) << "rendering " << (camera_auto_rotate_frames == 0u ? (" camera poses from " + cfg.record_file_in)
                                                     : (std::to_string(camera_auto_rotate_frames) +" camera pose(s)"))
                    << " with " + std::to_string(cfg.accumulation_samples) << " frame(s) each";
+
+    // interpolation start and end values (rotation around Y axis and zoom)
+    float roty_0 = 0.f, roty_1 = 1.5f * glm::pi<float>();
+    float rad_0 = 0.0001f, rad_1 = 1.f;
+    if (camera_auto_rotate_frames > 0) {
+        auto camera = getCamera();
+        roty_0 = camera->rotation_y;
+        roty_1 = roty_0 + roty_1;
+        rad_0 = camera->orbital_radius;
+    }
 
     RendererOutput rendererOutput = {nullptr, {}};
     size_t frame_idx = 0u;
@@ -123,9 +134,16 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
 
         if (camera_auto_rotate_frames > 0) {
             auto camera = getCamera();
+
+            // constexpr float smootherstep(float x, float s_min, float s_max) {
+            //     x = glm::clamp((x - s_min) / (s_max - s_min), 0.f, 1.f);
+            //     return x * x * x * (x * (6.f * x - 15.f) + 10.f);
+            // }
+
             // TODO: camera auto rotation in headless rendering could become a (configurable) camera controller 
-            camera->rotation_y += 2.f * glm::pi<float>() / static_cast<float>(camera_auto_rotate_frames);
-            camera->orbital_radius += (1.f /static_cast<float>(camera_auto_rotate_frames) * glm::min(camera->orbital_radius, 1.f));
+            float v = glm::smoothstep(0.01f, 0.99f, static_cast<float>(frame_idx) / static_cast<float>(camera_auto_rotate_frames));
+            camera->rotation_y = glm::mix(roty_0, roty_1, v);
+            camera->orbital_radius = glm::mix(rad_0, rad_1, v);
             camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
                     camera->orbital_radius * cos(camera->rotation_y) * cos(camera->rotation_x),
                     camera->orbital_radius * sin(camera->rotation_x),

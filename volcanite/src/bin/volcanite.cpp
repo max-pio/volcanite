@@ -145,13 +145,19 @@ int volcanite_main(int argc, char *argv[]) {
                 accumulation_frames = renderer->getTargetAccumulationFrames();
                 if (accumulation_frames == 0)
                     accumulation_frames = 60;
+            } else {
+                // if a video is rendered, ensure that the render will converge for at least the number
+                // of internal frames renderered for each output frame.
+                if (renderer->getTargetAccumulationFrames() > 0u
+                     && renderer->getTargetAccumulationFrames() < accumulation_frames)
+                    renderer->setTargetAccumulationFrames(static_cast<int>(accumulation_frames));
             }
 
             if (!args.eval_logfiles.empty())
                 renderer->startFrameTimeTracking();
             auto texture = renderEngine->renderFrames({.record_file_in=args.record_in_file,
-                                                                              .video_fmt_file_out=args.video_output_fmt_file,
-                                                                              .accumulation_samples=accumulation_frames});
+                                                       .video_fmt_file_out=args.video_output_fmt_file,
+                                                       .accumulation_samples=accumulation_frames});
             if (!args.eval_logfiles.empty()) {
                 renderer->stopFrameTimeTracking({}); // stopFrameTimeTracking is already called by renderEngine
                 renderer->writeParameterFile(stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg");
