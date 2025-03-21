@@ -1086,7 +1086,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_uresolve_info->setUniform<uint32_t>("g_tonemap_enable", m_tonemap_enabled ? ~0u : 0u);
         m_uresolve_info->setUniform<float>("g_brightness", m_brightness - 1.f);
         m_uresolve_info->setUniform<float>("g_contrast", m_contrast < 1.f ? m_contrast
-                                                                                    : glm::pow(m_contrast, 2.f));
+                                                                            : glm::pow(m_contrast, 2.f));
         m_uresolve_info->setUniform<float>("g_gamma", m_gamma);
         // denoising
         m_uresolve_info->setUniform<uint32_t>("g_denoising_enabled", m_denoising_enabled ? ~0u : 0u);
@@ -1433,18 +1433,19 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_render->addBool(&m_envmap_enabled, "Environment Map");
     g_render->addFloat(&m_shadow_pathtracing_ratio, "Directional <> Ambient", 0.f, 1.f, 0.05f, 2);
     g_render->addInt(&m_max_path_length, "Path Length", 1, 32, 1);
+    g_render->addSeparator();
     g_render->addBool(&m_denoising_enabled, "Denoising");
     GUI_SAME_LINE(g_render)
     g_render->addBool(&m_tonemap_enabled, "Tone Mapping");
-    g_render->addFloat(&m_brightness, "Brightness", 0.f, 2.f, 0.01f);
-    GUI_SAME_LINE(g_render)
     g_render->addAction([this](){ m_brightness = 1.f; }, "Reset##Brightness");
-    g_render->addFloat(&m_contrast, "Contrast", 0.f, 2.f, 0.01f);
     GUI_SAME_LINE(g_render)
+    g_render->addFloat(&m_brightness, "Brightness", 0.f, 2.f, 0.01f);
     g_render->addAction([this](){ m_contrast = 1.f; }, "Reset##Contrast");
-    g_render->addFloat(&m_gamma, "Gamma", 0.f, 4.f, 0.01f);
     GUI_SAME_LINE(g_render)
+    g_render->addFloat(&m_contrast, "Contrast", 0.f, 2.f, 0.01f);
     g_render->addAction([this](){ m_gamma = 1.f; }, "Reset##Gamma");
+    GUI_SAME_LINE(g_render)
+    g_render->addFloat(&m_gamma, "Gamma", 0.f, 4.f, 0.01f);
 
     // Post-Processing
     g_dev->addLabel("Post Processing");
@@ -1486,6 +1487,8 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                                 m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x; },
                      "Trigger Random Requests");
     g_dev->addBool(&m_auto_cache_reset, "Auto Cache Defragmentation");
+    g_dev->addBool([this](bool v) { m_pass->setCacheStagesEnabled(!v); },
+            [this]() { return !m_pass->getCacheStagesEnabled();}, "Freeze Cache");
     g_dev->addBool(&m_clear_cache_every_frame, "Every Frame##cache");
     GUI_SAME_LINE(g_dev)
     g_dev->addAction([this]() { m_pcache_reset = true; }, "Clear Label Cache");
