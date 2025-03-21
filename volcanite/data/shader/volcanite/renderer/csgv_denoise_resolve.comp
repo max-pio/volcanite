@@ -70,11 +70,11 @@ vec4 blendWithBackground(ivec2 pixel, vec4 pixel_rgba) {
 void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {
 
     // expore correction, tonemapping, color space conversion
-    if(g_tonemap_enable) {
-        accum_rgba.rgb *= 0.5f;
-        accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb);
-        accum_rgba.rgb = rgb2srgb(accum_rgba.rgb);
+    if (g_tonemap_enable) {
+        const float EXPOSURE_CORRECTION = 1.f;
+        accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb * EXPOSURE_CORRECTION);
     }
+    accum_rgba.rgb = rgb2srgb(clamp((accum_rgba.rgb + vec3(g_brightness - 0.5f)) * g_contrast + vec3(0.5f), vec3(0.f), vec3(1.f)), g_gamma);
 
     DEBUG_img_g_buffer(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_G_BUFFER_BIT));
     DEBUG_img_no_postprocess(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_NO_POSTPROCESS_BIT));

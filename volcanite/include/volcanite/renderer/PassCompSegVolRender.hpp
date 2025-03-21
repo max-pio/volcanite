@@ -83,6 +83,9 @@ public:
     [[nodiscard]] uint32_t getRenderUpdateFlagsForNextCall() const { return m_render_update_flags; }
     void setResolvePasses(int passes) { m_atrous_iterations = static_cast<uint32_t>(passes); }
 
+    void setChangeStagesEnabled(bool enable) { m_enable_cache_stages = enable; }
+    bool getChangeStagesEnabled() const { return m_enable_cache_stages; }
+
 protected:
     struct PushConstants {
         uint32_t denoising_iteration;   // denoising iteration variable for ping pong svgf-buffer

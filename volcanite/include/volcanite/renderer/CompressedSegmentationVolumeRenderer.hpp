@@ -314,6 +314,7 @@ private:
     glm::vec4 m_background_color_b = glm::vec4{1.f, 1.f, 1.f, 1.f};
     int m_subsampling = 0;              ///< only one pixel per [2^subsampl, 2^subsampl] pixel block is rendered per frame
     bool m_tonemap_enabled = false;
+    float m_gamma = 1.f, m_brightness = 1.f, m_contrast = 1.f;
     bool m_global_illumination_enabled = false;
     bool m_envmap_enabled = false;
     float m_shadow_pathtracing_ratio = 1.0f;
