@@ -188,16 +188,21 @@ void main() {
     }
 #endif
 
-    // if we switch the LoD, both allocate and deallocate have to be carried out
+    // note: if we switch the LoD, both allocate and deallocate have to be carried out
     if (deallocate) {
         assert(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID, "trying to deallocate an INVALID brick");
         bool push_successful = pushFreeBlockStack(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD], g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX]);
         // assert(push_successful, "freeStack is full preventing correct deallocate");
-        if (push_successful) {
+
+        // TODO: if a brick must be deallocated to switch its LOD but the free stack is full it remains in its old LOD.
+        // we now let it switch to its new LOD nevertheless even though this means that its previous memory location
+        // cannot be reused anymore (it is not on any free stack) => cache fragmentation => resolved by a cache reset.
+        // if (push_successful) {
+        if (push_successful || allocate) {
             g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] = INVALID;
             g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = INVALID;
         } else {
-            debugPrintfEXT("push not successful for brick %u lod %u", brick_idx, g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD]);
+            // debugPrintfEXT("push not successful for brick %u lod %u", brick_idx, g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD]);
             // never allocate a new slot if the current slot cannot be released
             // this would lead to a brick being decoded in two different LODs and the brick_info would be corrupted
             allocate = false;
