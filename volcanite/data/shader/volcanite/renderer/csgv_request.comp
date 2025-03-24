@@ -206,7 +206,7 @@ void main() {
 
     // every brick that needs to allocate a new element gets one uniqe index in [0, 1, ..] in its requested LOD
     // TODO: the assert for the BRICK_INFO_REQ_SLOT reset is (1) not necessary as it is overwritten here anyways, and (2) if the render update flags are not UPDATE_RENDER, the cache stages are not called. after reactivation the slots may not have been reset yet.
-    BUT THE g_assign_info + ASSIGN_REQUESTED_BRICKS MUST be reset before assigning slots again!!
+    // BUT THE g_assign_info + ASSIGN_REQUESTED_BRICKS MUST be reset before assigning slots again!!
     // assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] == INVALID, "brick req. slot was not set to invalid before new frame");
     if (allocate) {
         // get us a unique slot index within our requested LoD

@@ -820,6 +820,10 @@ namespace vvv {
     }
 
     void Application::processHotKeys() {
+
+        if (ImGui::GetIO().WantCaptureKeyboard)
+            return;
+
         // shader reload
         if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
             vvv::Logger(vvv::INFO) << "reloading shaders";
@@ -887,7 +891,7 @@ namespace vvv {
                 avg_ms_samples = 0;
             }
         }
-            // replay camera path
+        // replay camera path
         else if (!m_record_out.has_value() && !m_video_timing.has_value() && !m_video_frame.has_value() &&
                  (ImGui::IsKeyPressed(ImGuiKey_F10) || ImGui::IsKeyPressed(ImGuiKey_F11))) {
             // stop replay
