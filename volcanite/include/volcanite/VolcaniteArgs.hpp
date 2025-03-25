@@ -45,6 +45,7 @@ public:
     bool chunked = false;                    ///< if the first 3 {} in the input string should be chunk ids formatted
     uint32_t chunk_files[3] = {0u, 0u, 0u};  ///< max. xyz index of chunk files. e.g. (1,3,0) would load 8 chunk files
     uint32_t threads = 0;                    ///< number of CPU threads (0 = system supported concurrent threads)
+    std::filesystem::path working_dir;       ///< working directory, usually contains the .csgv. Maybe a temp directory.
 
     // rendering args
     std::vector<std::string> rendering_configs;  ///< one or more .vcfg files (ends with .vcfg) or config strings
@@ -189,7 +190,7 @@ public:
             va.verbose = verboseArg.getValue();
             va.headless = headlessArg.getValue();
 #ifdef HEADLESS
-            if(!va.headless) {
+            if (!va.headless) {
                 throw ArgException("Volcanite was build with CMake option HEADLESS set. volcanite must be run with --headless option and can not use interactive windows.", headlessArg.longID());
             }
 #endif
@@ -275,20 +276,20 @@ public:
                     throw ArgException(videoArg.longID() + " must be a formatted image file path string containing a single {} replacement field. Example: ./out{:04}.jpg", videoArg.longID());
                 }
             }
-            if(!resolutionArg.getValue().empty()) {
+            if (!resolutionArg.getValue().empty()) {
                 std::stringstream ss(resolutionArg.getValue());
                 ss >> va.render_resolution[0];
                 ss.ignore();
                 ss >> va.render_resolution[1];
                 if (ss.fail())
                     throw ArgException(resolutionArg.longID() + " must have the format '[width]x[height]'", resolutionArg.longID());
-                if(va.render_resolution[0] == 0u || va.render_resolution[1] == 0u)
+                if (va.render_resolution[0] == 0u || va.render_resolution[1] == 0u)
                     throw ArgException(resolutionArg.longID() + " must contain positive integers only", resolutionArg.longID());
             }
             va.stream_lod = streamlodArg.getValue();
             va.cache_size_MB = cacheSizeMBArg.getValue();
             va.cache_palettized = cachePalettizedArg.getValue();
-            if(va.cache_palettized && va.random_access)
+            if (va.cache_palettized && va.random_access)
                 throw ArgException(cachePalettizedArg.longID() + " can not be used in combination with " + randomAccessArg.longID(), cachePalettizedArg.longID());
             switch (cacheModeArg.getValue()) {
                 case 'n':
@@ -304,7 +305,7 @@ public:
                     break;
             }
             va.decode_from_shared_memory = decodedSharedMemoryArg.getValue();
-            if(va.decode_from_shared_memory && !va.random_access && !va.cache_mode == CACHE_BRICKS)
+            if (va.decode_from_shared_memory && !va.random_access && !va.cache_mode == CACHE_BRICKS)
                 throw ArgException(decodedSharedMemoryArg.longID() + " must be used in combination with "
                                     + randomAccessArg.longID() + " and " + cacheModeArg.longID() + " b",
                                     decodedSharedMemoryArg.longID());
@@ -321,11 +322,11 @@ public:
             if (!input_file.starts_with(CSGV_SYNTH_PREFIX_STR))
                 input_file = expandPath(input_file);
             input_volume_required = input_volume_required && !evalPrintArg.getValue();
-            if(input_file.empty() && input_volume_required) {
+            if (input_file.empty() && input_volume_required) {
 #ifdef HEADLESS
                 throw ArgException("Must provide input file in headless mode", inputpathArg.longID(""));
 #else
-                if(va.headless)
+                if (va.headless)
                     throw ArgException("Must provide input file in headless mode", inputpathArg.longID(""));
                 if (!pfd::settings::available())
                     throw ArgException("Must provide input file as file dialogs are unavailable", inputpathArg.longID(""));
@@ -333,7 +334,7 @@ public:
                 // Open a file dialog to choose a file
                 auto selected_file = pfd::open_file("Open Segmentation Volume", Paths::getHomeDirectory().string() + "/*",
                                                     { "Segmentation Volumes (.csgv .vti .hdf5 .h5 .raw .vraw .nrrd .nhdr)", "*.csgv *.vti *.hdf5 *.h5 *.raw *.vraw *.nrrd *.nhdr", "All Files", "*" });
-                if(selected_file.result().empty()) {
+                if (selected_file.result().empty()) {
                     throw ArgException("No input file was provided. Pass +synth as input file to create a synthetic volume.", inputpathArg.longID(""));
                 }
 
@@ -342,46 +343,54 @@ public:
             }
             va.input_file = input_file;
             // some arguments depend on if we import a previously compressed .csgv file..
-            if(input_file.ends_with(".csgv")) {
+            if (input_file.ends_with(".csgv")) {
                 // we could forbid to set any compression parameters at all if we are in this branch
-
-                if(!va.compress_export_file.empty()) {
+                if (!va.compress_export_file.empty()) {
                     throw ArgException(compresspathArg.longID() + " can not be used with an already compressed .csgv input file", compresspathArg.longID());
                 }
+
+                va.working_dir = expandPath(input_file).parent_path();
             }
             // .. or if we compress a volume
             else {
-                if(input_volume_required && !(input_file.starts_with(CSGV_SYNTH_PREFIX_STR) || input_file.ends_with(".vti")
+                if (input_volume_required && !(input_file.starts_with(CSGV_SYNTH_PREFIX_STR) || input_file.ends_with(".vti")
                     || input_file.ends_with(".raw") || input_file.ends_with(".vraw")
                     || input_file.ends_with(".hdf5") || input_file.ends_with(".h5")
                     || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {
                     throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.h5|.raw|.vraw|.nrrd|.nhdr})", inputpathArg.longID(""));
                 }
 
-                if(input_volume_required && !va.decompress_export_file.empty()) {
+                if (input_volume_required && !va.decompress_export_file.empty()) {
                     throw ArgException(decompresspathArg.longID() + " can only be used with a .csgv input file.", decompresspathArg.longID());
+                }
+
+                // set the working directory to store the csgv output volume, runtime configuration files etc.
+                if (!va.compress_export_file.empty())
+                    va.working_dir = expandPath(va.compress_export_file).parent_path();
+                else {
+                    va.working_dir = std::filesystem::temp_directory_path() / "volcanite";
                 }
 
                 // attribute arguments (if we import a .csgv file, the attributes are already stored in a database along with it)
                 va.label_remapping = labelRemappingArg.getValue();
-                if(!attributeArg.getValue().empty()) {
+                if (!attributeArg.getValue().empty()) {
                     va.label_remapping = true;
                     const std::string& attribute_info = attributeArg.getValue();
                     auto comma0 = attribute_info.find(',', 0);
                     auto comma1 = attribute_info.find(',', comma0 + 1);
 
                     va.attribute_database = attribute_info.substr(0, comma0);
-                    if(comma0 != std::string::npos)
+                    if (comma0 != std::string::npos)
                         va.attribute_table = attribute_info.substr(comma0+1, (comma1 - comma0-1));
                     else
                         va.attribute_table = "";
 
-                    if(comma1 != std::string::npos)
+                    if (comma1 != std::string::npos)
                         va.attribute_label = attribute_info.substr(comma1+1);
                     else
                         va.attribute_label = "";
 
-                    if(!std::filesystem::exists(va.attribute_database))
+                    if (!std::filesystem::exists(va.attribute_database))
                         throw ArgException(attributeArg.longID() + " attribute database file does not exists or can not be accessed.", attributeArg.longID());
                 }
 
@@ -406,8 +415,8 @@ public:
                 va.freq_subsampling = subsamplingArg.getValue();
                 va.threads = threadsArg.getValue();
                 va.chunked = !chunkedArg.getValue().empty();
-                if(va.chunked) {
-                    if(va.compress_export_file.empty())
+                if (va.chunked) {
+                    if (va.compress_export_file.empty())
                         throw ArgException("A csgv export path must be specified with " + compresspathArg.longID() + " when processing chunked volumes!");
 
                     const std::string& chunk_indices = chunkedArg.getValue();
@@ -419,7 +428,7 @@ public:
                     ss >> va.chunk_files[2];
                     if (ss.fail())
                         throw ArgException(chunkedArg.longID() + " must have the format 'xn,yn,zn' with *n being integer numbers", chunkedArg.longID());
-                    if(va.chunk_files[0] == 0u && va.chunk_files[1] == 0u && va.chunk_files[2] == 0u)
+                    if (va.chunk_files[0] == 0u && va.chunk_files[1] == 0u && va.chunk_files[2] == 0u)
                         throw ArgException(chunkedArg.longID() + " inclusive xn,yn,zn range must contain at least 2 chunks", chunkedArg.longID());
 
                     // count occurrences of {} in the string. It must be exactly 3 and there must be at least one
@@ -441,12 +450,12 @@ public:
             std::string comma_separated_logfiles = evalLogFilesArg.getValue();
             va.eval_logfiles.clear();
             for (const std::string_view& logfile : comma_separated_logfiles | std::views::split(',')
-                    | std::views::transform([](const auto &&range) -> std::string_view {
+                    | std::views::transform([](const auto &&range) -> std::string {
                         // string_view and string constructors do not accept the range iterators in C++17
                         std::string tmp;
                         for (const char c : range)
                             tmp.push_back(c);
-                        return {tmp};
+                        return tmp;
                     })) {
                 va.eval_logfiles.emplace_back(expandPath(std::string(logfile)));
                 // TODO: check if the logfiles contain valid format strings

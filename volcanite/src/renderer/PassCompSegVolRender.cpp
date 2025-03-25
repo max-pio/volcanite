@@ -44,7 +44,7 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
 
     // block request and visibility classification
     getCtx()->debugMarker->beginRegion(commandBuffer, "request", glm::vec4(0.f, 0.f, 0.9f, 1.f));
-    // if cache stages are not enabled, the request stage has to be executed nevertheless on material chagnes
+    // if cache stages are not enabled, the request stage has to be executed nevertheless on material changes
     // to recompute the empty space information
     if (m_enable_cache_stages || (m_render_update_flags & UPDATE_PMATERIAL)) {
         executeCommands(commandBuffer, REQUEST);

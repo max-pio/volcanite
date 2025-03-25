@@ -266,11 +266,13 @@ void vvv::DefaultGpuContext::destroyInstance() { VK_DESTROY(m_gpu.instance) }
         // 0x1b6f9b0, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0x92394c89 |
         // ".length == 140
 
-        // len("Validation Information: [ WARNING-DEBUG-PRINTF ] | MessageID = 0x76589099 | vkQueueSubmit():  ") == 94
-        if (std::strlen(pCallbackData->pMessage) < 94) {
+        // example:                                                            start ---v
+        // "Validation Information: [ WARNING-DEBUG-PRINTF ] | MessageID = 0x76589099 | vkQueueSubmit():
+        const size_t pos = std::string(pCallbackData->pMessage).find("MessageID =");
+        if (pos == std::string::npos) {
             vvv::Logger(vvv::DEBUG) << "[shader] " << pCallbackData->pMessage;
         } else {
-            vvv::Logger(vvv::DEBUG) << "[shader] " << (pCallbackData->pMessage + 94);
+            vvv::Logger(vvv::DEBUG) << "[shader] " << (pCallbackData->pMessage + pos + 24);
         }
 
         shouldAbort = VK_FALSE;

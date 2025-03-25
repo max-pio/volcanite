@@ -83,7 +83,6 @@ int tryImportRenderConfigs(VolcaniteArgs& args, std::shared_ptr<CompressedSegmen
 }
 
 int volcanite_main(int argc, char *argv[]) {
-
     VolcaniteArgs args;
     std::shared_ptr<volcanite::CompressedSegmentationVolume> compressedSegmentationVolume;
     std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase;
@@ -196,22 +195,13 @@ int volcanite_main(int argc, char *argv[]) {
             // export the state of the renderer next to the input or csgv volume when the app is closed,
             // and pass a directory where quick access states are stored to and loaded from
             if (!args.performCompression()) {
-                // input file was a csgv:
                 renderer->saveConfigOnShutdown(stripFileExtension(args.input_file) + ".vcfg");
-                app->setQuickConfigLocationFmt((std::filesystem::path(args.input_file).parent_path()
-                                                / (stripFileExtension(args.input_file) + "_q{}.vcfg")).generic_string());
             } else if (!args.compress_export_file.empty()) {
-                // export file is a csgv:
                 renderer->saveConfigOnShutdown(stripFileExtension(args.compress_export_file) + ".vcfg");
-                app->setQuickConfigLocationFmt((std::filesystem::path(args.input_file).parent_path()
-                                                / (stripFileExtension(args.input_file) + "_q{}.vcfg")).generic_string());
             } else {
-                // no csgv path:
-                std::filesystem::path working_dir = expandPath("~/volcanite");
-                std::filesystem::create_directory(working_dir);
-                renderer->saveConfigOnShutdown(working_dir.generic_string() + "/shutdown.vcfg");
-                app->setQuickConfigLocationFmt(working_dir.generic_string() + "/q{}.vcfg");
+                renderer->saveConfigOnShutdown(args.working_dir.generic_string() + "/shutdown.vcfg");
             }
+            app->setQuickConfigLocationFmt(args.working_dir.generic_string() + "/q{}.vcfg");
 
             app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
             app->setVSync(args.enable_vsync);

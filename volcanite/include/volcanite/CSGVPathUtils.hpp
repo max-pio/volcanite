@@ -30,17 +30,13 @@ namespace volcanite {
         return path.substr(0, path.find_last_of('.'));
     }
 
-    static std::string expandPath(std::string path) {
+    static std::filesystem::path expandPath(std::string path) {
         if(path.empty())
             return "";
         while (path.find('~') != std::string::npos)
             path.replace(path.find('~'), 1, Paths::getHomeDirectory().string());
-        // make path absolute and normalize
-        // TODO: weakly_canonical makes relative path for paths starting with existing followed by non existing elements
-        std::filesystem::path p = std::filesystem::path(path);
-        std::filesystem::path wc = std::filesystem::weakly_canonical(p);
-        std::filesystem::path a = std::filesystem::absolute(wc);
-        return a.make_preferred().string();
+        // make path absolute and canonical
+        return absolute(std::filesystem::weakly_canonical(path)).make_preferred();
     }
 
     static std::string formatChunkPath(const std::string& formatted_path, int x, int y, int z) {

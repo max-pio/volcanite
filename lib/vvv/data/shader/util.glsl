@@ -91,7 +91,7 @@ float luminance(vec3 v) {
     return 0.2126 * v.x + 0.7152 * v.y + 0.0722 * v.z;
 }
 
-vec3 rgb2srgb(vec3 x) {
+vec3 rgb2srgb(vec3 x, float gamma) {
     // simple mapping:
     // return pow(x, 1.f / vec3(2.4f));
     #pragma unroll
@@ -99,7 +99,7 @@ vec3 rgb2srgb(vec3 x) {
         if (x[i] < 0.0031308f)
         x[i] *= 12.92f;
         else
-        x[i] = 1.055f * pow(x[i], 1.0f/2.4f) - 0.055f;
+        x[i] = 1.055f * pow(x[i], 1.0f/gamma) - 0.055f;
     }
     return x;
 }

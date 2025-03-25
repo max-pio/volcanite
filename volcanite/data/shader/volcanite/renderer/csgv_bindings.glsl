@@ -206,6 +206,9 @@ layout (std140, binding = 12) uniform resolve_info {
     vec4 g_background_color_a;
     vec4 g_background_color_b;
     bool g_tonemap_enable;
+    float g_brightness;
+    float g_contrast;
+    float g_gamma;
 // denoising
     bool g_atrous_enabled;
     int g_denoise_filter_kernel_size;

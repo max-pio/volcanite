@@ -132,6 +132,7 @@ void main() {
     }
 
     // reset the request slot counter for the next frame
+    //THE ASSIGN_REQUESTED_BRICKS COUNTER IS NOT RESET IF THE CACHE_STAGES ARE NOT ENABLED! IF THEY ARE RE-ENABLED THIS MAY BE FAULTY!!
     #ifdef ENALBE_CSGV_DEBUGGING
         gpu_stats.bricks_requested_L1_to_7[(inv_lod - 1u)] = number_of_requests;
         gpu_stats.bricks_on_freestack_L1_to_7[(inv_lod - 1u)] = number_of_free_blocks;
