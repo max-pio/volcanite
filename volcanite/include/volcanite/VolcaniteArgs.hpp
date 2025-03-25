@@ -256,7 +256,7 @@ public:
                                                                     // trim
                                                                     auto first = cfg.find_first_not_of(' ');
                                                                     auto last = cfg.find_last_not_of(' ');
-                                                                    cfg = cfg.substr(first, last - first);
+                                                                    cfg = cfg.substr(first, last - first + 1);
                                                                     // expand file path (if it is a vcfg file)
                                                                     // and convert to strin
                                                                     if (cfg.ends_with(".vcfg"))

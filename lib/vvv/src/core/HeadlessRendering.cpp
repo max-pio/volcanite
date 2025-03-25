@@ -117,22 +117,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
             if (m_record_in->fail()) {
                 throw std::runtime_error("Error reading camera pose from " + cfg.record_file_in);
             }
-        }
-
-        // render one frame after the other = wait for the last renderingComplete to finish
-        for (size_t accumulation_idx = 0; accumulation_idx < cfg.accumulation_samples; accumulation_idx++) {
-            rendererOutput = renderFrame({rendererOutput.renderingComplete});
-        }
-
-        if (!cfg.video_fmt_file_out.empty()) {
-            m_renderer->exportCurrentFrameToImage(fmt::vformat(cfg.video_fmt_file_out, fmt::make_format_args(frame_idx)));
-        }
-
-        if(cfg.frameFinishedCallback) {
-            cfg.frameFinishedCallback(&rendererOutput);
-        }
-
-        if (camera_auto_rotate_frames > 0) {
+        } else if (camera_auto_rotate_frames > 0) {
             auto camera = getCamera();
 
             // constexpr float smootherstep(float x, float s_min, float s_max) {
@@ -150,6 +135,19 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
                     camera->orbital_radius * sin(camera->rotation_y) * cos(camera->rotation_x));
 
             camera->onCameraUpdate();
+        }
+
+        // render one frame after the other = wait for the last renderingComplete to finish
+        for (size_t accumulation_idx = 0; accumulation_idx < cfg.accumulation_samples; accumulation_idx++) {
+            rendererOutput = renderFrame({rendererOutput.renderingComplete});
+        }
+
+        if (!cfg.video_fmt_file_out.empty()) {
+            m_renderer->exportCurrentFrameToImage(fmt::vformat(cfg.video_fmt_file_out, fmt::make_format_args(frame_idx)));
+        }
+
+        if(cfg.frameFinishedCallback) {
+            cfg.frameFinishedCallback(&rendererOutput);
         }
     }
 
