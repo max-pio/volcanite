@@ -277,7 +277,7 @@ namespace vvv {
         double accum_display_time{0.0};
         size_t accum_display_frame_count{0};
 
-        while (!glfwWindowShouldClose(m_window)) {
+        while (!glfwWindowShouldClose(m_window) && !ImGui::IsKeyDown(ImGuiKey_Escape)) {
             double startTime = glfwGetTime();
             glfwPollEvents();
             processHotKeys();
@@ -411,10 +411,10 @@ namespace vvv {
             throw std::runtime_error("Vulkan not supported");
         }
 
-
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         m_window = glfwCreateWindow(static_cast<int>(m_startup_resolution.width),
-                                    static_cast<int>(m_startup_resolution.height), getAppName().c_str(), nullptr,
+                                    static_cast<int>(m_startup_resolution.height), getAppName().c_str(),
+                                    m_fullscreen ? glfwGetPrimaryMonitor() : nullptr,
                                     nullptr);
         glfwSetWindowUserPointer(m_window, this);
         glfwSetFramebufferSizeCallback(m_window, framebufferResizeCallback);
@@ -820,7 +820,6 @@ namespace vvv {
     }
 
     void Application::processHotKeys() {
-
         if (ImGui::GetIO().WantCaptureKeyboard)
             return;
 

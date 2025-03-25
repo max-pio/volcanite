@@ -50,6 +50,7 @@ public:
     // rendering args
     std::vector<std::string> rendering_configs;  ///< one or more .vcfg files (ends with .vcfg) or config strings
     uint32_t render_resolution[2] = {1920, 1080};
+    bool fullscreen = false;
     bool stream_lod = false;
     size_t cache_size_MB = 1024ul;
     uint32_t cache_mode = CACHE_BRICKS;
@@ -175,6 +176,7 @@ public:
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
             ValueArg<std::string> videoArg("v", "video", "Formatted file path with single {} placeholder to export intermediate images when rendering -i. Example: ./out{:04}.jpg", false, va.video_output_fmt_file, "formatted file", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
+            SwitchArg fullscreenArg("", "fullscreen", "Start renderer in fullscreen mode.", cmd);
             ValueArg<std::string> renderconfigArg("", "config", "List of .vcfg files or config strings, separated by ;", false, "", "config files or strings", cmd);
             // general arguments
             SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
@@ -286,6 +288,7 @@ public:
                 if (va.render_resolution[0] == 0u || va.render_resolution[1] == 0u)
                     throw ArgException(resolutionArg.longID() + " must contain positive integers only", resolutionArg.longID());
             }
+            va.fullscreen = fullscreenArg.getValue();
             va.stream_lod = streamlodArg.getValue();
             va.cache_size_MB = cacheSizeMBArg.getValue();
             va.cache_palettized = cachePalettizedArg.getValue();

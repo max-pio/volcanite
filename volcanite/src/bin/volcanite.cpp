@@ -203,7 +203,7 @@ int volcanite_main(int argc, char *argv[]) {
             }
             app->setQuickConfigLocationFmt(args.working_dir.generic_string() + "/q{}.vcfg");
 
-            app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
+            app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]}, args.fullscreen);
             app->setVSync(args.enable_vsync);
             app->acquireResources();
             tryImportRenderConfigs(args, renderer);

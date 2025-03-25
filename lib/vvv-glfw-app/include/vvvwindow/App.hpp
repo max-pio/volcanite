@@ -56,7 +56,9 @@ private:
         };
 
 public:
-    [[nodiscard]] static std::shared_ptr<Application> create(std::string appName, std::shared_ptr<Renderer> renderer, float guiScaling = 1.f, std::shared_ptr<DebugUtilities> debugUtilities = {}) {
+    [[nodiscard]] static std::shared_ptr<Application> create(std::string appName, std::shared_ptr<Renderer> renderer,
+                                                             float guiScaling = 1.f,
+                                                             std::shared_ptr<DebugUtilities> debugUtilities = {}) {
         // Not using std::make_shared<Best> because the c'tor is private.
         return std::shared_ptr<Application>(new Application(appName, renderer, debugUtilities));
     }
@@ -80,7 +82,9 @@ public:
     void execAsync();
     std::thread execAsyncAttached();
 
-    void setStartupWindowSize(vk::Extent2D resolution) { m_startup_resolution = resolution; }
+    void setStartupWindowSize(vk::Extent2D resolution, bool fullscreen=false) {
+        m_startup_resolution = resolution; m_fullscreen = fullscreen;
+    }
     vk::Extent2D getScreenExtent() const override;
 
     float getScreenContentScale() const override;
@@ -161,6 +165,7 @@ private:
     std::shared_ptr<Renderer> m_renderer;
 
     vk::Extent2D m_startup_resolution;
+    bool m_fullscreen;
     bool m_resources_acquired = false;
     GLFWwindow *m_window = nullptr;
     GLFWCameraController m_camera_controller;
