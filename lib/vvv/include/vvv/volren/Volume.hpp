@@ -74,22 +74,30 @@ public:
 
     /// An even more simplified nrrd format for the cellsinsilico volume data that Max hands out to students. Format is: one line "dim_x dim_y dim_z" and one line data type "uint[8|16|32]" followed by payload.
     static std::shared_ptr<Volume<ElementType, HolderType>> load_volcanite_raw(std::string path, bool allowCast = false);
-
     void write_volcanite_raw(std::string path);
 
     /// Hdf5 file which is expected to have a 3D array as its first root object which will be loaded as the volume
     static std::shared_ptr<Volume<ElementType, HolderType>> load_hdf5(std::string path, bool allowCast = false);
+    // static void write_hdf5(std::string path);
 
     /// vti file format from the vtk library, but we expect a very precise format: an ImageData file
     static std::shared_ptr<Volume<ElementType, HolderType>> load_vti(std::string path, bool allowCast = false);
-
+    // static void write_vti(std::string path);
 
 
     static std::shared_ptr<Volume<ElementType, HolderType>> load(std::string filepath) {
-        if (detail::EndsWith(filepath, ".tiff")) {
-            return Volume<ElementType, HolderType>::load_ome_tiff(filepath);
+        if (filepath.ends_with(".tiff")) {
+            return Volume < ElementType, HolderType > ::load_ome_tiff(filepath);
+        } else if (filepath.ends_with(".nrrd")) {
+            return Volume < ElementType, HolderType > ::load_nrrd(filepath);
+        } else if (filepath.ends_with(".hdf5") || filepath.ends_with(".h5")) {
+            return Volume < ElementType, HolderType > ::load_hdf5(filepath);
+        } else if (filepath.ends_with(".vti")) {
+            return Volume<ElementType, HolderType>::load_vti(filepath);
+        } else if (filepath.ends_with(".vraw") || filepath.ends_with(".raw")) {
+            return Volume<ElementType, HolderType>::load_vti(filepath);
         } else {
-            return Volume<ElementType, HolderType>::load_nrrd(filepath);
+            throw std::invalid_argument("unknown volume file extension for " + filepath);
         }
     }
 
