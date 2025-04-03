@@ -43,6 +43,7 @@ private:
     const std::string CSGV_ATTRIBUTE_TABLE = "csgv_attribute";
     const std::string CSGV_INFO_TABLE = "csgv_info";
     const std::string ID_COLUMN = "csgv_id";
+    const std::string IN_MEMORY_TABLE = "csgv_mem";
 
     /// Exports preprocessing results to a new database after which it is opened in read mode.
     bool databaseExportAndOpen(const std::string& sqlite_path, const std::vector<uint32_t>& index_to_label,

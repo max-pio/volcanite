@@ -21,13 +21,37 @@ std::vector<std::vector<float>> vvv::csv_float_import(const std::string& csv_pat
     column_names.clear();
     std::ifstream csv(csv_path, std::ios::in);
     if (csv.is_open()) {
-        // read column names from first row
-        // column_names = ...
-        // read
+        char delimiter = ' ';
+        std::vector<std::vector<float>> csv_file;
 
+        std::string attribute;
+
+        std::string first_line;
+        std::getline(csv, first_line);
+        first_line.erase(0, 1); // line starts with a '#'
+
+        // extract attributes from first line
+        std::stringstream ss(first_line);
+        while (std::getline(ss, attribute, delimiter)) {
+            column_names.emplace_back(attribute);
+        }
+
+
+        // read the values out of each line and insert them into the return map
+        std::string line;
+        std::vector<float> values;
+        std::string val;
+        while (std::getline(csv, line)) {
+            std::stringstream sss(line);
+            values.clear();
+            for (auto & i : column_names) {
+                std::getline(sss, val, delimiter);
+                values.emplace_back(static_cast<float>(std::stold(val)));
+            }
+            csv_file.emplace_back(values);
+        }
         csv.close();
-        // return ..
-	    return {};
+	    return csv_file;
     } else {
         Logger(ERROR) << "Could not open CSV file " << csv_path;
         return {};
