@@ -33,6 +33,8 @@ namespace vvv {
 /// @return a vector where the i-th element contains the list of values in the i-th CSV file row
 std::vector<std::vector<float>> csv_float_import(const std::string& csv_path, std::vector<std::string>& column_names);
 
+std::vector<unsigned int> csv_label_column_import(const std::string& csv_path, std::string& label_column);
+
 template<typename T>
 void csv_export(const std::vector<std::map<std::string, T>>& s, const std::string& path)  {
     std::ofstream fout(path, std::ios::out);

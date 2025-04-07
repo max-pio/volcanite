@@ -57,3 +57,45 @@ std::vector<std::vector<float>> vvv::csv_float_import(const std::string& csv_pat
         return {};
     }
 }
+
+std::vector<unsigned int> vvv::csv_label_column_import(const std::string& csv_path, std::string& label_column) {
+    std::ifstream csv(csv_path, std::ios::in);
+    if (csv.is_open()) {
+        char delimiter = ' ';
+        std::vector<unsigned int> label_column_values;
+
+        std::string attribute;
+
+        std::string first_line;
+        std::getline(csv, first_line);
+        first_line.erase(0, 1); // line starts with a '#'
+
+        // extract index of label_column column
+        int label_column_idx = -1, count_rows = 0;
+        std::stringstream ss(first_line);
+        while (std::getline(ss, attribute, delimiter)) {
+            if (attribute == label_column) label_column_idx = count_rows;
+            count_rows++;
+        }
+
+
+        // read only the label_column values and ignore the rest
+        std::string line;
+        unsigned int value = 0;
+        std::string val;
+        while (std::getline(csv, line)) {
+            std::stringstream sss(line);
+            value = 0;
+            for (int i = 0; i < count_rows; i++) {
+                std::getline(sss, val, delimiter);
+                if (i == label_column_idx) value = std::stoul(val);
+            }
+            label_column_values.emplace_back(value);
+        }
+        csv.close();
+        return label_column_values;
+    } else {
+        Logger(ERROR) << "Could not open CSV file " << csv_path;
+        return {};
+    }
+}
