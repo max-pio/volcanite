@@ -332,18 +332,30 @@ public:
                     auto comma1 = attribute_info.find(',', comma0 + 1);
 
                     va.attribute_database = attribute_info.substr(0, comma0);
-                    if(comma0 != std::string::npos)
-                        va.attribute_table = attribute_info.substr(comma0+1, (comma1 - comma0-1));
-                    else
+                    if (!std::filesystem::exists(va.attribute_database))
+                        throw ArgException(attributeArg.longID() +
+                                           " attribute database file does not exists or can not be accessed.",
+                                           attributeArg.longID());
+                    // csv file (only contains one table)
+                    if (va.attribute_database.ends_with("csv")) {
                         va.attribute_table = "";
+                        if (comma0 != std::string::npos)
+                            va.attribute_label = attribute_info.substr(comma0 + 1, (comma1 - comma0 - 1));
+                        else
+                            va.attribute_label = "";
+                    }
+                    // sqlite or db3 (SQLite Data Base)
+                    else {
+                        if (comma0 != std::string::npos)
+                            va.attribute_table = attribute_info.substr(comma0 + 1, (comma1 - comma0 - 1));
+                        else
+                            va.attribute_table = "";
 
-                    if(comma1 != std::string::npos)
-                        va.attribute_label = attribute_info.substr(comma1+1);
-                    else
-                        va.attribute_label = "";
-
-                    if(!std::filesystem::exists(va.attribute_database))
-                        throw ArgException(attributeArg.longID() + " attribute database file does not exists or can not be accessed.", attributeArg.longID());
+                        if (comma1 != std::string::npos)
+                            va.attribute_label = attribute_info.substr(comma1 + 1);
+                        else
+                            va.attribute_label = "";
+                    }
                 }
 
                 // compression arguments
