@@ -112,12 +112,13 @@ public:
             Logger(INFO, true) << "  CSV label remapping from " << path << RELABEL_IDS_FROM_CSV_SUFFIX;
             size_t volume_size = volume->size();
             uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
+            static constexpr uint32_t NON_EXISTING_LABEL = 0u;
             #pragma omp parallel for default(none) shared(data, id_types, volume_size)
             for (int i = 0; i < volume_size; i++) {
                 if (id_types.find(data[i]) != id_types.end())
                     data[i] = id_types[data[i]];
                 else
-                    data[i] = 0u;
+                    data[i] = NON_EXISTING_LABEL;
             }
             Logger(INFO) << "  CSV label remapping from " << path << RELABEL_IDS_FROM_CSV_SUFFIX << " finished.";
         }

@@ -61,6 +61,7 @@ public:
     std::string attribute_database;     // SQlite3 file with attributes for volume labels
     std::string attribute_table;        // table or view containing the attributes for the volume labels
     std::string attribute_label;        // name of the label attribute
+    std::string attribute_csv_separator = ","; // only for csv attribute databases
     bool label_remapping = false;       // if label ids in the volume should be remapped to a consecutive interval
 
     // compression args
@@ -152,7 +153,7 @@ public:
 
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
-            ValueArg<std::string> attributeArg("a", "attribute", "SQLite attribute database as: \"{database filepath}[,{attribute table/view name}[,{label co'lumn name referenced by volume}]]\".", false, "", "database[,table[,label]]", cmd);
+            ValueArg<std::string> attributeArg("a", "attribute", R"(SQLite attribute database as: "{file.sqlite}[,{table/view name}[,{label column referenced in volume}]]" or "{file.csv}[,{label column referenced in volume}[,{csv separator}]]".)", false, "", "database.sqlite[,table[,label]] or database.csv[,label[,separator]]", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal all development render parameters in GUI.", cmd);
             SwitchArg noVsyncArg("", "no-vsync", "Disable VSync in renderer.", cmd);
@@ -327,6 +328,9 @@ public:
                 va.label_remapping = labelRemappingArg.getValue();
                 if(!attributeArg.getValue().empty()) {
                     va.label_remapping = true;
+
+                    // the attribute argument string is a list of arguments itself:
+
                     const std::string& attribute_info = attributeArg.getValue();
                     auto comma0 = attribute_info.find(',', 0);
                     auto comma1 = attribute_info.find(',', comma0 + 1);
@@ -336,15 +340,30 @@ public:
                         throw ArgException(attributeArg.longID() +
                                            " attribute database file does not exists or can not be accessed.",
                                            attributeArg.longID());
-                    // csv file (only contains one table)
+                    // csv file (only contains one table so no table name is specified)
+                    // -a filename.csv[,label_column_name[,csv_separator]]
                     if (va.attribute_database.ends_with("csv")) {
                         va.attribute_table = "";
                         if (comma0 != std::string::npos)
                             va.attribute_label = attribute_info.substr(comma0 + 1, (comma1 - comma0 - 1));
                         else
                             va.attribute_label = "";
+
+                        if (comma1 != std::string::npos)
+                            va.attribute_csv_separator = attribute_info.substr(comma1 + 1);
+                        else
+                            va.attribute_csv_separator = ",";
+                        // the separator may be encapsulated by "" or ''
+                        if (va.attribute_csv_separator.length() > 2 &&
+                             (va.attribute_database.front() == '"' && va.attribute_database.back() == '"') ||
+                             (va.attribute_database.front() == '\'' && va.attribute_database.back() == '\'')) {
+                            va.attribute_csv_separator = va.attribute_csv_separator.substr(1, va.attribute_csv_separator.length() - 2);
+                        } else if (va.attribute_csv_separator.empty()) {
+                            va.attribute_csv_separator = ',';
+                        }
                     }
                     // sqlite or db3 (SQLite Data Base)
+                    // -a filename.{db3|sqlite}[,table_name[,label_column_name]]
                     else {
                         if (comma0 != std::string::npos)
                             va.attribute_table = attribute_info.substr(comma0 + 1, (comma1 - comma0 - 1));
