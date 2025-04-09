@@ -134,7 +134,7 @@ public:
             for(size_t i = 0; i < voxel_count; i++) {
                 if (!label_remapping->contains(voxels[i]))
                     throw std::runtime_error("label remapping does not contain voxel label " + std::to_string(voxels[i]));
-                voxels[i] = (*label_remapping)[voxels[i]];
+                voxels[i] = label_remapping->at(voxels[i]);
             }
             Logger(DEBUG) << "Attribute data base label remapping finished in " << t.elapsed() << " seconds.";
         }

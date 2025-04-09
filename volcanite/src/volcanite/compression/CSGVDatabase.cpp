@@ -354,7 +354,7 @@ namespace volcanite {
                 // the index_to_label vector if they did not occur before.
                 {
                     const uint64_t last_i = sfc::Morton3D::p2i_64(cur_chunk_dim);
-                    const int NUM_THREADS = 8;
+                    constexpr int NUM_THREADS = 8;
                     size_t voxels_per_thread = (32ul * 32ul * 32ul);
                     // parallel processing will only have a benefit if we can run at least 4 threads in parallel
                     if(last_i < 4ul * voxels_per_thread) {
@@ -445,14 +445,14 @@ namespace volcanite {
 
     size_t CSGVDatabase::getAttribute(int attributeIndex, float* begin, size_t maxSize) {
         if(!m_db)
-            throw std::runtime_error("No CSGV sqlite database present.");
+            throw std::runtime_error("No CSGV attribute database present.");
 
         if(attributeIndex >= m_attribute_names.size())
             throw std::runtime_error("invalid attribute index " + std::to_string(attributeIndex));
         if(maxSize < m_label_count)
             throw std::runtime_error("Buffer for attribute " + m_attribute_names[attributeIndex] + "(" + std::to_string(attributeIndex) + ") does not fit " + std::to_string(m_label_count) + " elements.");
 
-        SQLite::Statement query(*m_db, "SELECT " + m_attribute_names[attributeIndex] + " FROM " + CSGV_ATTRIBUTE_TABLE);
+        SQLite::Statement query(*m_db, "SELECT " + m_attribute_names[attributeIndex] + " FROM " + CSGV_ATTRIBUTE_TABLE + " ORDER BY " + ID_COLUMN);
         float* it = begin;
         while (query.executeStep()) {
             *it = static_cast<float>(query.getColumn(0).getDouble());
