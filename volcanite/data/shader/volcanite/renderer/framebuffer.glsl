@@ -219,8 +219,7 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
                 }
             }
 
-            // half float range rounds to intinity from 65520 onwards -> clamp
-            imageStore(accumulationOut, opix, min(accumulated_rgba_out, 65519.f));
+            imageStore(accumulationOut, opix, accumulated_rgba_out);
             imageStore(accuSampleCountOut, opix, uvec4(sample_count_out));
             // note: in theory, the denoisingBuffer could already contain the .a=-1 marker for pixels that did not
             // receive a single rendered sample. but this would require to read the (possibly unchanged) G-buffer

@@ -316,6 +316,7 @@ uint get_inv_lod(ivec3 voxel) {
                     // in front of them. limiting requests to valid rays, however, creates popping artifacts at
                     // interfaces between LODs when the camera moves: bricks behind other bricks are not flagged as
                     // visible (because the brick in front is an out-of-date LOD)
+                    // TODO: this may currently be a source for normal vector artifacts from DDA traversal
                 && isDepthValid(depth_valid)
             #else
                 // by default: request bricks with invalid rays as well, except if brick request limitation is enabled
@@ -323,7 +324,7 @@ uint get_inv_lod(ivec3 voxel) {
             #endif
                 && (request_invalid_bits & REQUEST_ENABLE_BIT) > 0u) { // this path may still request new brick
 
-            atomicCompSwap(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], old_req_inv_lod, req_inv_lod);
+                atomicCompSwap(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], old_req_inv_lod, req_inv_lod);
 
             // broken method: (write write race condition, undefined behavior)
 //             g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
@@ -605,11 +606,11 @@ void main() {
     //  (2) limit to pixels that did not receive enough samples yet, and
     //  (3) limit to pixels that are within a certain area of the screen.
     // by default, all pixels set the INVALIDATE_ENABLE_BIT that will invalidate rays if they access uncompressed bricks
-    const uint request_invalid_bits = INVALIDATE_ENABLE_BIT | (g_req_limit_area_size > 0
-                                        && (any(lessThan(pixel, g_req_limit_area_pos))
-                                            || any(greaterThanEqual(pixel, g_req_limit_area_pos
-                                                                            + ivec2(g_req_limit_area_size))))
-                                            ? 0u : REQUEST_ENABLE_BIT);
+    const uint request_invalid_bits = INVALIDATE_ENABLE_BIT |
+                            ((g_req_limit_area_size > 0
+                                && (any(lessThan(pixel, g_req_limit_area_pos))
+                                    || any(greaterThanEqual(pixel, g_req_limit_area_pos + ivec2(g_req_limit_area_size)))))
+                                ? 0u : REQUEST_ENABLE_BIT);
     if (prev_sample_count >= 0xFFFF) {
         // Force direct ray termination if this pixel already accumulated the maximum number of samples.
         // (The sample count frame buffer is in 16 bit and can thus only accumulate 2^16-1 valid samples.)
@@ -674,8 +675,7 @@ void main() {
         // requested nor do undecoded bricks invalidate rays
         state.last_label = state.label;
         #if CACHE_MODE == CACHE_BRICKS
-            state.label = get_volume_label(state.voxel, state.depth_valid,
-                                           abs(state.path_length) <= g_max_request_path_length ? INVALID : 0u);
+            state.label = get_volume_label(state.voxel, state.depth_valid, request_invalid_bits);
         #else
             state.label = get_volume_label(state.voxel, state.depth_valid);
         #endif

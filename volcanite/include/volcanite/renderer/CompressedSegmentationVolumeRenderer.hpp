@@ -461,8 +461,9 @@ private:
     struct BrickRequestLimitation {
         bool g_enable = true;               ///< if true, automatic request limitation is performed
         int g_area_size_min = 8u;           ///< the request area will never be smaller than this size^2
-        glm::ivec2 g_area_duration_bounds = {8, 256}; ///< min. / max. number of frames per render pixel for one area configuration
+        glm::ivec2 g_area_duration_bounds = {8, 64}; ///< min. / max. number of frames per render pixel for one area configuration
         //
+        bool tried_cache_reset = false;   ///< for each location (if the min. area is reached) we try to reset the cache ONCE at most
         bool random_area_pixel = false;   ///< if true, the next pixel for the area is selected randomly instead by min. spp
         int spp_delta = 8u;               ///< if the min. rendered spp are delta many frames behind the max. spp, limit brick requests
         uint32_t area_start_frame = 0u;   ///< accumulation frame index at which the current request area position was set
@@ -470,7 +471,7 @@ private:
         uint32_t area_min_pixel_last_spp = 0u;    ///< minimum samples the area pixel received at start of this area duration (INVALID if unknown)
         int area_duration = 16;           ///< how many times a pixel is rendered before the request area moves to another position
         int area_size = 0;                ///< if <= 0: no request limitation. otherwise: pixel area that can request bricks
-        glm::ivec2 area_pos = {0, 0};     ///< start position of the area of pixels that can request bricks
+        glm::ivec2 area_pos = {0, 0}; ///< start position of the area of pixels that can request bricks
         glm::ivec2 global_min_pixel;      ///< pixel that globally has the minimum number of accumulated samples so far
     } m_req_limit;
 

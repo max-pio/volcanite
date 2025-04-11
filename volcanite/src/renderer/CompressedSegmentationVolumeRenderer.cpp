@@ -180,7 +180,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     updateRenderUpdateFlags();
 
     // download GPU statistics information, i.e. the cache occupancy to trigger cache hard resets when it is full
-    static constexpr uint32_t gpu_stats_download_interval = 4u;
+    static constexpr uint32_t gpu_stats_download_interval = 1u;
     static constexpr GPUStats reset_gpu_stats = {
         .min_spp_and_pixel = 0xFFFF0000FFFFFFFF, // 16 MSB: sample count, 32 LSB: pixel coordinate
         .max_spp_and_pixel = 0x00000000FFFFFFFF,
@@ -219,6 +219,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         // A fragmented cache can occur if free stacks store unusable levels-of-detail leaving no space for other LoDs.
         // Trigger cache flush on demand, but only if the rendering config changed since the last flush.
         const size_t current_parameter_hash = hashMemory(&m_prender_hash, sizeof(m_prender_hash), m_pcamera_hash);
+
         // used_cache_base_elements: cache usage as the number of occupied 2x2x2 base elements
         if (m_accumulated_frames > 0u && m_auto_cache_reset
             && m_last_gpu_stats.used_cache_base_elements >= m_cache_capacity - cache_elements_per_finest_lod // cannot fit a single additional finest LOD brick
@@ -1656,6 +1657,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                  && (global_min_spp + m_req_limit.spp_delta < global_max_spp)
                  && getCacheFillRate() > 0.90f)
         {
+            m_req_limit.tried_cache_reset = false;
             m_req_limit.random_area_pixel = false,
             m_req_limit.area_size = 1 << glm::findMSB(glm::max(m_resolution.width, m_resolution.height));
             m_req_limit.area_pos = {0, 0};
@@ -1665,7 +1667,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x;
         }
         // if a brick request limitation is already set: move the AABB in which pixels can request bricks around
-        // when a new area configuration is set, area_duration frames are accumlulated to see if it was effective
+        // when a new area configuration is set, area_duration frames are accumulated to see if it was effective
         else if (m_req_limit.area_size > 0
                  && m_accumulated_frames >= m_req_limit.area_start_frame + subsampling_pixels * m_req_limit.area_duration) {
             m_req_limit.area_start_frame = m_accumulated_frames;
@@ -1702,11 +1704,19 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
                     // if the maximum duration and minimum size are reached: move over to sample random areas instead
                     if (m_req_limit.area_size <= m_req_limit.g_area_size_min) {
-                        if (!m_req_limit.random_area_pixel)
-                            Logger(WARN) << "Cache insufficient: unable to render all pixels under current request"
-                                                 " limitation configuration. Increase cache size with --cache-size [MB]";
-                        m_req_limit.random_area_pixel = true;
-                        m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x;
+                        //.. but first try to reset the cache ONCE to see if this solves the problem
+                        if (!m_req_limit.tried_cache_reset) {
+                            m_pcache_reset = true;
+                            m_req_limit.tried_cache_reset = true;
+                        }
+                        else {
+                            if (!m_req_limit.random_area_pixel)
+                                Logger(WARN) << "Cache insufficient: unable to render all pixels under current request"
+                                                     " limitation configuration. Increase cache size with --cache-size [MB]";
+                            //m_req_limit.random_area_pixel = true;
+                            m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x;
+                            m_accum_step_mode = true;
+                        }
                     } else {
                         m_req_limit.area_size = m_req_limit.g_area_size_min;
                     }
@@ -1717,6 +1727,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             // if it is not possible to render any sample for this pixel (even after a long accumulation),
             // random_area_pixel is set to true and the next pixel is always chosen randomly from now on
             if (m_req_limit.area_size > 0) {
+                glm::ivec2 last_pixel = m_req_limit.area_min_pixel;
                 if (m_req_limit.random_area_pixel) {
                     m_req_limit.area_min_pixel = glm::ivec2(rand() % m_resolution.width, rand() % m_resolution.height);
                     m_req_limit.area_min_pixel_last_spp = INVALID;
@@ -1726,6 +1737,10 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                 }
                 m_req_limit.area_pos = (m_req_limit.area_min_pixel / glm::ivec2(m_req_limit.area_size))
                                        * glm::ivec2(m_req_limit.area_size);
+
+                // if we moved over to another location now, we allow resetting the cache once again
+                if (last_pixel.x != m_req_limit.area_min_pixel.x && last_pixel.y != m_req_limit.area_min_pixel.y)
+                    m_req_limit.tried_cache_reset = false;
             }
         }
     }
