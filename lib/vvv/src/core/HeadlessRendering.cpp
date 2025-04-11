@@ -69,7 +69,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     // TODO: decouple HeadlessRendering::exec in an initialization method and multiple render calls, respect m_pendingRecreation
     // e.g.: hr.init(); hr.setRenderResolution(400, 400); hr.renderToFile(120); hr.setRenderParametersFromFile(path); auto output = hr.render(60);
 
-    constexpr int MAX_CAMERA_AUTO_FRAMES = 1800; // 1800 frames: 1 min at 30 fps
+    constexpr int MAX_CAMERA_AUTO_FRAMES = 256; // 1800 frames would be 1 min at 30 fps
     int camera_auto_rotate_frames;
     // pre-recorded camera path playback
     std::optional<std::ifstream> m_record_in = {};
@@ -92,13 +92,16 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
                    << " with " + std::to_string(cfg.accumulation_samples) << " frame(s) each";
 
     // interpolation start and end values (rotation around Y axis and zoom)
-    float roty_0 = 0.f, roty_1 = 1.5f * glm::pi<float>();
-    float rad_0 = 0.0001f, rad_1 = 1.f;
-    if (camera_auto_rotate_frames > 0) {
+    float roty_0, roty_1;
+    float rad_0, rad_1;
+    {
         auto camera = getCamera();
-        roty_0 = camera->rotation_y;
-        roty_1 = roty_0 + roty_1;
-        rad_0 = camera->orbital_radius;
+        roty_0 = roty_1 = camera->rotation_y;
+        rad_0 = rad_1 = camera->orbital_radius;
+        if (camera_auto_rotate_frames > 0) {
+            roty_1 = roty_0 + (2.f * glm::pi<float>());
+            rad_1 = 1.f;
+        }
     }
 
     RendererOutput rendererOutput = {nullptr, {}};
@@ -120,7 +123,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         } else if (camera_auto_rotate_frames > 0) {
             auto camera = getCamera();
 
-            // constexpr float smootherstep(float x, float s_min, float s_max) {
+            // constexpr float smootherstep(float s_min, float s_max, float x) {
             //     x = glm::clamp((x - s_min) / (s_max - s_min), 0.f, 1.f);
             //     return x * x * x * (x * (6.f * x - 15.f) + 10.f);
             // }
@@ -130,9 +133,9 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
             camera->rotation_y = glm::mix(roty_0, roty_1, v);
             camera->orbital_radius = glm::mix(rad_0, rad_1, v);
             camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
-                    camera->orbital_radius * cos(camera->rotation_y) * cos(camera->rotation_x),
-                    camera->orbital_radius * sin(camera->rotation_x),
-                    camera->orbital_radius * sin(camera->rotation_y) * cos(camera->rotation_x));
+                    camera->orbital_radius * glm::cos(camera->rotation_y) * glm::cos(camera->rotation_x),
+                    camera->orbital_radius * glm::sin(camera->rotation_x),
+                    camera->orbital_radius * glm::sin(camera->rotation_y) * glm::cos(camera->rotation_x));
 
             camera->onCameraUpdate();
         }

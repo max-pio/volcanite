@@ -209,7 +209,7 @@ if __name__ == '__main__':
 
     # DOWNLOADING AND COMPRESSING BIG DATA -----------------------------------------------------------------------------
     if args.big_data:
-        exit(0)
+        print("big data download not yet implemented. skipping.")
 
     print("------------------------------- ")
     print(f"done! csgv data sets are available at {csgv_directory}")
