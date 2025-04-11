@@ -144,10 +144,13 @@ bool log_supported_device_extensions(vk::PhysicalDevice device) {
 
 void vvv::DefaultGpuContext::createInstance() {
 #if (VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1)
-    // static vk::detail::DynamicLoader dl;
-    // PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
-    // VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
-    VULKAN_HPP_DEFAULT_DISPATCHER.init();
+    #if VK_HEADER_VERSION >= 255
+        VULKAN_HPP_DEFAULT_DISPATCHER.init();
+    #else
+        static vk::detail::DynamicLoader dl;
+        PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+        VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
+    #endif
 #endif
 
     // create vulkan instance
