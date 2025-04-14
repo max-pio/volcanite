@@ -49,7 +49,7 @@ private:
     bool databaseExportAndOpen(const std::string& sqlite_path, const std::vector<uint32_t>& index_to_label,
                                glm::uvec3 volume_dimension, glm::uvec3 chunk_dimension,
                                const std::string& attribute_database, std::string attribute_table,
-                               std::string label_column);
+                               const std::string& attribute_csv_separator, std::string label_column);
 
 public:
     CSGVDatabase() { createDummy(); };
@@ -98,10 +98,11 @@ public:
     /// attribute_table in the attribute_database and the attribute_label is used as the key column for voxel labels in the volume file.
     void importOrProcessChunkedVolume(const std::string& volume_input_path, const std::string& sqlite_output_path,
                                       const std::string& attribute_database = "", const std::string& attribute_table = "", const std::string& attribute_label = "",
+                                      const std::string& attribute_csv_separator = "",
                                       bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u)) {
         if(!std::filesystem::exists(sqlite_output_path)) {
             processVolumeAndCreateSqlite(sqlite_output_path, volume_input_path,
-                                         attribute_database, attribute_table, attribute_label,
+                                         attribute_database, attribute_table, attribute_label, attribute_csv_separator,
                                          chunked_input_data, max_file_index);
         }
         else {
@@ -117,7 +118,7 @@ public:
     /// the number of labels and the label to index re-mapping
     void processVolumeAndCreateSqlite(const std::string& sqlite_export_path, const std::string& volume_input_path,
                                       const std::string& attribute_database, const std::string& attribute_table,
-                                      const std::string& label_column,
+                                      const std::string& label_column, const std::string& attribute_csv_separator,
                                       bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u));
 
     /// Returns a mapping of the original volume's labels to new voxel ids that are\n

@@ -126,7 +126,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
             Logger(INFO) << "Initializing attribute database " << database_path;
             csgvDatabase->importOrProcessChunkedVolume(args.input_file, database_path,
                                                        args.attribute_database, args.attribute_table,
-                                                       args.attribute_label,
+                                                       args.attribute_label, args.attribute_csv_separator,
                                                        args.chunked, max_chunk_id);
             // obtain the label re-mapping from the database
             label_remapping = csgvDatabase->getLabelRemapping();

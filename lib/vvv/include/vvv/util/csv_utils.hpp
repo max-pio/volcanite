@@ -1,4 +1,4 @@
-//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//  Copyright (C) 2024, Max Piochowiak, Reiner Dolp and Fabian Schiekel, Karlsruhe Institute of Technology
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -27,13 +27,14 @@
 
 namespace vvv {
 
-/// Imports a comma ',' separated CSV file that contains only numerical values as data points and returns a vector
+/// Imports CSV file separated by the attribute_csv_separator that contains only numerical values as data points and returns a vector
 /// containing the value list of each row as float numbers. The first CSV row is assumed to contain the column names.
+/// @param attribute_csv_separator the CSV file attribute seperator
 /// @param column_names a vector into which the column names of the CSV file will be written
 /// @return a vector where the i-th element contains the list of values in the i-th CSV file row
-std::vector<std::vector<float>> csv_float_import(const std::string& csv_path, std::vector<std::string>& column_names);
+std::vector<std::vector<float>> csv_float_import(const std::string& csv_path, const std::string &attribute_csv_separator, std::vector<std::string>& column_names);
 
-std::vector<unsigned int> csv_label_column_import(const std::string& csv_path, std::string& label_column);
+std::vector<unsigned int> csv_label_column_import(const std::string& csv_path, const std::string &attribute_csv_separator, std::string& label_column);
 
 template<typename T>
 void csv_export(const std::vector<std::map<std::string, T>>& s, const std::string& path)  {

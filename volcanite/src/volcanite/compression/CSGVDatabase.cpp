@@ -1,4 +1,4 @@
-//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//  Copyright (C) 2024, Max Piochowiak and Fabian Schiekel, Karlsruhe Institute of Technology
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ namespace volcanite {
     bool CSGVDatabase::databaseExportAndOpen(const std::string& sqlite_path, const std::vector<uint32_t>& index_to_label,
                                              const glm::uvec3 volume_dimension, const glm::uvec3 chunk_dimension,
                                              const std::string& attribute_database, std::string attribute_table,
+                                             const std::string& attribute_csv_separator,
                                              std::string label_column) {
         if(m_db) {
             Logger(WARN) << "closing existing csgv database " << m_db->getFilename() << " before creation";
@@ -74,9 +75,8 @@ namespace volcanite {
                 if (attribute_database.ends_with(".csv")) {
                     std::vector<std::string> attribute_names;
                     int label_column_index = -1;
-                    std::vector<unsigned int> label_columns_values = csv_label_column_import(attribute_database, label_column);
-                    std::vector<std::vector<float>> csv_database = csv_float_import(attribute_database,
-                                                                                    attribute_names);
+                    std::vector<unsigned int> label_columns_values = csv_label_column_import(attribute_database, attribute_csv_separator, label_column);
+                    std::vector<std::vector<float>> csv_database = csv_float_import(attribute_database, attribute_csv_separator, attribute_names);
 
                     db.exec("ATTACH DATABASE ':memory:' AS attr_db");       // in-memory only database (no file)
                     std::ostringstream create_table_sql_csv;
@@ -302,6 +302,7 @@ namespace volcanite {
                                                     const std::string& attribute_database,
                                                     const std::string& attribute_table,
                                                     const std::string& label_column,
+                                                    const std::string& attribute_csv_separator,
                                                     bool chunked_input_data, glm::uvec3 max_file_index) {
 
         // this function computes volume dimensions and the index_to_label re-mapping that will be applied to the volume
@@ -420,7 +421,7 @@ namespace volcanite {
 
         // create new SQLite database, export all data and then re-import as read only
         databaseExportAndOpen(sqlite_export_path, index_to_label, volume_dimension, chunk_dimension,
-                              attribute_database, attribute_table, label_column);
+                              attribute_database, attribute_table, attribute_csv_separator, label_column);
     }
 
     [[nodiscard]] std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> CSGVDatabase::getLabelRemapping() const {
