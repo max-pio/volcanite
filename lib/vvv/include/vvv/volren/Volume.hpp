@@ -78,7 +78,7 @@ public:
 
     /// Hdf5 file which is expected to have a 3D array as its first root object which will be loaded as the volume
     static std::shared_ptr<Volume<ElementType, HolderType>> load_hdf5(std::string path, bool allowCast = false);
-    // static void write_hdf5(std::string path);
+    void write_hdf5(const std::string& path);
 
     /// vti file format from the vtk library, but we expect a very precise format: an ImageData file
     static std::shared_ptr<Volume<ElementType, HolderType>> load_vti(std::string path, bool allowCast = false);
@@ -99,6 +99,20 @@ public:
         } else {
             throw std::invalid_argument("unknown volume file extension for " + filepath);
         }
+    }
+
+    bool write(std::string filepath) {
+        if (filepath.ends_with(".nrrd")) {
+            Volume < ElementType, HolderType > ::write_nrrd(filepath);
+        } else if (filepath.ends_with(".hdf5") || filepath.ends_with(".h5")) {
+            Volume < ElementType, HolderType > ::write_hdf5(filepath);
+        } else if (filepath.ends_with(".vraw") || filepath.ends_with(".raw")) {
+            Volume<ElementType, HolderType>::write_volcanite_raw(filepath);
+        } else {
+            throw std::invalid_argument("unknown volume file extension for " + filepath);
+            return false;
+        }
+        return true;
     }
 
     template <typename... Args>
@@ -221,6 +235,13 @@ public:
         dim_y = y;
         dim_z = z;
         deleteTexture();
+    }
+
+    void writePayload(uint32_t x, uint32_t y, uint32_t z, std::shared_ptr<std::vector<ElementType>>& data) {
+        dim_x = x;
+        dim_y = y;
+        dim_z = z;
+        m_payload = *data;
     }
 
 protected:

@@ -29,6 +29,7 @@
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "volcanite/compression/CSGVDatabase.hpp"
 #include "volcanite/eval/EvaluationLogExport.hpp"
+#include "vvv/volren/Volume.hpp"
 
 #include <string>
 
@@ -66,9 +67,14 @@ int volcanite_main(int argc, char *argv[]) {
     if (ret != RET_SUCCESS) { return ret; }
 
     if(args.performDecompression()) {
-        // TODO: add decompression
-        Logger(ERROR) << "decompression not yet supported";
-        return RET_NOT_SUPPORTED;
+        auto payload = compressedSegmentationVolume->decompress();
+        auto dim = compressedSegmentationVolume->getVolumeDim();
+        vvv::Volume<uint32_t> decompressed_volume {0, 0, 0, 0, 0, 0, vk::Format::eUndefined};
+        decompressed_volume.writePayload(dim.x, dim.y, dim.z, payload);
+        if (!decompressed_volume.write(args.decompress_export_file))
+            Logger(ERROR) << "compressed volume could not be decompressed";
+        else
+            Logger(INFO) << "volume successfully decompressed and written to " << args.decompress_export_file;
     }
 
     if(args.export_stats) {
