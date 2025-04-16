@@ -123,6 +123,9 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
         csgvDatabase = std::make_shared<CSGVDatabase>();
         if(args.label_remapping) {
             std::string database_path = stripFileExtension(complete_csgv_path) + "_csgv.db3";
+            if(use_temporary_output_file && std::filesystem::exists(database_path))
+                std::filesystem::remove(database_path);
+
             MiniTimer t;
             Logger(INFO) << "Initializing attribute database " << database_path;
             csgvDatabase->importOrProcessChunkedVolume(args.input_file, database_path,

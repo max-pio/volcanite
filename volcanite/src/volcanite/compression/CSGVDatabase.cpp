@@ -129,9 +129,6 @@ namespace volcanite {
                         }
                         insert_sql_csv << ");";
 
-                        Logger(DEBUG) << "create table: " << create_table_sql_csv.str();
-                        Logger(DEBUG) << "insert sql: " << insert_sql_csv.str();
-
                         SQLite::Transaction transaction_csv(db);
                         SQLite::Statement query(db, insert_sql_csv.str());
 
