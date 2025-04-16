@@ -45,11 +45,12 @@
     #define WAVELET_MATRIX_ENC 4
     #define HUFFMAN_WM_ENC 8
 #else
+    #include <stdint.h>
+    #include <stdexcept>
+
     #define CSGV_UINT uint32_t
 
     #define CSGV_SYNTH_PREFIX_STR "+synth"
-
-    #include <stdexcept>
 
     namespace volcanite {
         enum EncodingMode {NIBBLE_ENC=0,

@@ -23,6 +23,7 @@
 #include "vvv/util/Logger.hpp"
 #include "CSGVPathUtils.hpp"
 #include "csgv_constants.incl"
+#include "volcanite/util/segmentation_volume_synthesis.hpp"
 
 #include <optional>
 #include <string>
@@ -184,7 +185,7 @@ public:
             SwitchArg verboseArg("", "verbose", "Verbose debug output.", cmd);
 
             // input file (file ending determines if we are on the import/decompress side (.csgv) or can specify compression options (other)
-            UnlabeledValueArg<std::string> inputpathArg("input", "Either a previously compressed .csgv file to render, or a segmentation volume file to compress or render. +synth to create and process a synthetic volume.", false, "", "(<volume file>|+synth[_args*])", cmd, true);
+            UnlabeledValueArg<std::string> inputpathArg("input", "Either a previously compressed .csgv file to render, or a segmentation volume file to compress or render. " CSGV_SYNTH_PREFIX_STR " to create and process a synthetic volume.", false, "", "(<volume file>|" CSGV_SYNTH_PREFIX_STR "[_args*])", cmd, true);
 
             // parse arguments
             cmd.parse(argc, argv);
@@ -325,6 +326,8 @@ public:
             std::string input_file = inputpathArg.getValue();
             if (!input_file.starts_with(CSGV_SYNTH_PREFIX_STR))
                 input_file = expandPath(input_file);
+            else
+                Logger(DEBUG) << getDummySegmentationVolumeHelpStr();
             input_volume_required = input_volume_required && !evalPrintArg.getValue();
             if (input_file.empty() && input_volume_required) {
 #ifdef HEADLESS
@@ -339,7 +342,7 @@ public:
                 auto selected_file = pfd::open_file("Open Segmentation Volume", Paths::getHomeDirectory().string() + "/*",
                                                     { "Segmentation Volumes (.csgv .vti .hdf5 .h5 .raw .vraw .nrrd .nhdr)", "*.csgv *.vti *.hdf5 *.h5 *.raw *.vraw *.nrrd *.nhdr", "All Files", "*" });
                 if (selected_file.result().empty()) {
-                    throw ArgException("No input file was provided. Pass +synth as input file to create a synthetic volume.", inputpathArg.longID(""));
+                    throw ArgException("No input file was provided. Pass " CSGV_SYNTH_PREFIX_STR " as input file to create a synthetic volume.", inputpathArg.longID(""));
                 }
 
                 input_file = selected_file.result().at(0);
@@ -364,9 +367,9 @@ public:
                     throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.h5|.raw|.vraw|.nrrd|.nhdr})", inputpathArg.longID(""));
                 }
 
-                if (input_volume_required && !va.decompress_export_file.empty()) {
-                    throw ArgException(decompresspathArg.longID() + " can only be used with a .csgv input file.", decompresspathArg.longID());
-                }
+                // if (input_volume_required && !va.decompress_export_file.empty()) {
+                //    throw ArgException(decompresspathArg.longID() + " can only be used with a .csgv input file.", decompresspathArg.longID());
+                // }
 
                 // set the working directory to store the csgv output volume, runtime configuration files etc.
                 if (!va.compress_export_file.empty())
