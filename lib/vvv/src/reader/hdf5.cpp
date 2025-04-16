@@ -87,7 +87,9 @@ template <typename T> void write_hdf5_(Volume<T>* volume, const std::string& pat
     }
 
     HighFive::DataSetCreateProps probs;
-    probs.add(HighFive::Chunking({dim[0], dim[1], dim[2]}));
+    probs.add(HighFive::Chunking({std::min(dim[0], size_t{128}),
+                                  std::min(dim[1], size_t{128}),
+                                  std::min(dim[2], size_t{128})}));
     probs.add(HighFive::Deflate(9));
 
     auto dataset = file.createDataSet<T>(datasetName, HighFive::DataSpace(dim), probs);
