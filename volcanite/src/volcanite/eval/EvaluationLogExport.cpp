@@ -22,13 +22,9 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
-
-#define FMT_HEADER_ONLY
 #include <complex>
 
-#include "fmt/include/fmt/format.h"
-#include "fmt/include/fmt/args.h"
-
+#include <fmt/args.h>
 
 using namespace vvv;
 
@@ -75,6 +71,8 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     fmt_args.push_back(fmt::arg("decomp_gpu_gb_per_s", decomp_res.gpu_GB_per_s));
     fmt_args.push_back(fmt::arg("decomp_gpu_s", decomp_res.gpu_decoded_seconds));
     // rendering
+    fmt_args.push_back(fmt::arg("min_spp", render_res.min_samples_per_pixel));
+    fmt_args.push_back(fmt::arg("max_spp", render_res.max_samples_per_pixel));
     fmt_args.push_back(fmt::arg("frame_min_ms", render_res.frame_min_ms));
     fmt_args.push_back(fmt::arg("frame_avg_ms", render_res.frame_avg_ms));
     fmt_args.push_back(fmt::arg("frame_sdv_ms", render_res.frame_sdv_ms));
@@ -92,6 +90,9 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     fmt_args.push_back(fmt::arg("mem_materials_mb", render_res.mem_materials_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_encoding_Mb", render_res.mem_encoding_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_cache_mb", render_res.mem_cache_bytes * BYTE_TO_MB));
+    fmt_args.push_back(fmt::arg("mem_cache_used_mb", render_res.mem_cache_used_bytes * BYTE_TO_MB));
+    fmt_args.push_back(fmt::arg("mem_cache_fillrate", render_res.mem_cache_fill_rate));
+    fmt_args.push_back(fmt::arg("mem_cache_fillrate_pcnt", render_res.mem_cache_fill_rate * 100.));
     fmt_args.push_back(fmt::arg("mem_emptyspace_mb", render_res.mem_empty_space_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_total_mb", render_res.mem_total_bytes * BYTE_TO_MB));
     return std::move(fmt_args);
@@ -106,17 +107,26 @@ std::string EvaluationLogExport::format_evaluation_string(std::string format_str
     // replace all occurrences of all specifiers
     fmt::dynamic_format_arg_store<fmt::format_context> fmt_args = create_fmt_args(eval_name, argc, argv,
                                                                                   comp_res, decomp_res, render_res);
-    return fmt::vformat(format_string, fmt_args);
+    try {
+        return fmt::vformat(format_string, fmt_args);
+    } catch (const fmt::format_error& err)  {
+        Logger(ERROR) << "evaluation output format error: " << format_string;
+        throw err;
+    }
 }
 
 std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
     return {
         "name","time","args","comprate","comprate_pcnt","comp_s","comp_mainpass_s","comp_prepass_s",
         "comp_gb_per_s","csgv_gb","orig_gb","orig_bytes_per_voxel","volume_dim","volume_labels",
-        "decomp_cpu_gb_per_s","decomp_cpu_s","decomp_gpu_gb_per_s","decomp_gpu_s","frame_min_ms",
-        "frame_avg_ms","frame_sdv_ms","frame_med_ms","frame_max_ms","frame_ms_[00...15]",
+        "decomp_cpu_gb_per_s","decomp_cpu_s","decomp_gpu_gb_per_s","decomp_gpu_s", "min_spp", "max_spp", "frame_min_ms",
+        "frame_avg_ms","frame_sdv_ms","frame_med_ms","frame_max_ms","frame_ms_00", "frame_ms_01",
+        "frame_ms_02", "frame_ms_03", "frame_ms_04", "frame_ms_05", "frame_ms_06", "frame_ms_07",
+        "frame_ms_08", "frame_ms_09", "frame_ms_10", "frame_ms_11", "frame_ms_12", "frame_ms_13",
+        "frame_ms_14", "frame_ms_15",
         "render_total_max","rendered_frames","mem_framebuffer_mb","mem_uniformbuffer_mb",
-        "mem_materials_mb","mem_encoding_Mb","mem_cache_mb","mem_emptyspace_mb", "mem_total_mb",
+        "mem_materials_mb","mem_encoding_Mb","mem_cache_mb","mem_cache_used_mb","mem_cache_fillrate",
+        "mem_cache_fillrate_pcnt", "mem_emptyspace_mb", "mem_total_mb",
     };
 }
 
@@ -149,22 +159,20 @@ int EvaluationLogExport::write_eval_logfile(const std::string& eval_logfile, con
     if (format_string.empty()) {
         // TODO: automatically create the default format and header from the replacement specifier vector
         // the default header and format string:
-        header_string = "# to remove the comment lines from the file use: sed -i '/#/d' ./" + eval_logfile + "\n"
-                        "name,volume_dim,orig_GB,csgv_GB,CR_%,comp_s,comp_GB_per_s,"
-                        "decomp_cpu_GB_per_s,decomp_gpu_GB_per_s,frame_min_ms,frame_avg_ms,frame_sdv_ms,frame_med_ms,frame_max_ms,"
-                        "render_total_ms,mem_framebuffer_MB,mem_uniformbuffer_MB,mem_materials_MB,mem_encoding_MB,"
-                        "mem_cache_MB,mem_emptyspace_MB,mem_total_MB,render_frames,"
-                        "frame_ms_00,frame_ms_01,frame_ms_02,frame_ms_03,frame_ms_04,frame_ms_05,frame_ms_06,"
-                        "frame_ms_07,frame_ms_08,frame_ms_09,frame_ms_10,frame_ms_11,frame_ms_12,frame_ms_13,"
-                        "frame_ms_14,frame_ms_15";
-        format_string = "#%time [%args] result:\n"
-                        "%name,%volume_dim,%orig_GB,%csgv_GB,%cr,%comp_s,%comp_GB_per_s,%"
-                        "decomp_cpu_GB_per_s,%decomp_gpu_GB_per_s,%frame_min_ms,%frame_avg_ms,%frame_sdv_ms,%frame_med_ms,%frame_max_ms,%"
-                        "render_total_ms,%mem_framebuffer_MB,%mem_uniformbuffer_MB,%mem_materials_MB,%mem_encoding_MB,%"
-                        "mem_cache_MB,%mem_emptyspace_MB,%mem_total_MB,%render_frames,"
-                        "%frame_ms_00,%frame_ms_01,%frame_ms_02,%frame_ms_03,%frame_ms_04,%frame_ms_05,%frame_ms_06,"
-                        "%frame_ms_07,%frame_ms_08,%frame_ms_09,%frame_ms_10,%frame_ms_11,%frame_ms_12,%frame_ms_13,"
-                        "%frame_ms_14,%frame_ms_15";
+        std::stringstream header_ss;
+        std::stringstream format_ss;
+        header_ss << "# comment lines start with #\n";
+        const auto& keys = get_all_evaluation_keys();
+        for (int k = 0; k < keys.size(); k++) {
+            header_ss << k;
+            format_ss << "{" << k << "}";
+            if (k < keys.size() - 1) {
+                header_ss << ",";
+                format_ss << ",";
+            }
+        }
+        header_string = header_ss.str();
+        format_string = format_ss.str();
     }
     std::ofstream output_file = std::ofstream(eval_logfile, std::ios_base::app);
     if (!output_file.is_open()) {

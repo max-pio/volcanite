@@ -1,3 +1,0 @@
-#fmt: & \numbersMinAvgMax{%frame_min_ms}{%frame_avg_ms}{%frame_max_ms}  % %name cache: %mem_cache_mb MB
-& \multicolumn{4}{c}{\gls{csgv} rANS} & \multicolumn{4}{|c}{\gls{csgvr}} & \multicolumn{4}{|c}{\gls{csgvr}+stop bits}\\
-& \cells{} & \fiber{} & \hone{} & \azba{} & \cells{}& \fiber{} & \hone{} & \azba{} & \cells{}& \fiber{} & \hone{} & \azba{}\\

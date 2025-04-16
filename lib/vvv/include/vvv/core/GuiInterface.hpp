@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <utility>
 #include <vvv/volren/tf/VectorTransferFunction.hpp>
 #include <vvv/volren/tf/SegmentedVolumeMaterial.hpp>
 #include <vvv/util/Logger.hpp>
@@ -81,7 +82,7 @@ namespace vvv {
 /// This can be used for quick prototyping, for example directly adding ImGUI-Code when using the ImGUI backend.
 class GuiInterface {
 protected:
-    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIVec3, GuiIVec4, GuiVec2,
+    enum GuiType { GuiNoneType, GuiBool, GuiInt, GuiFloat, GuiString, GuiIVec2, GuiIntRange, GuiIVec3, GuiIVec4, GuiVec2,
                    GuiFloatRange, GuiVec3, GuiDirection, GuiVec4, GuiColor, GuiCombo, GuiBitFlags, GuiAction, GuiLabel,
                    GuiDynamicText, GuiProgress, GuiSeparator, GuiTF1D, GuiTFSegmentedVolume, GuiCustomCode };
 
@@ -126,7 +127,7 @@ public:
         // colormap information (stored here so we can import/export)
         enum ColorMapType { SVTFSolidColor = 0, SVTFDivergent, SVTFPrecomputed, SVTFImport};
         struct ColorMapConfig {
-            ColorMapType type = SVTFPrecomputed;
+            ColorMapType type = SVTFDivergent;
             int precomputedIdx = getDefaultColorMapIdx();
             std::vector<glm::vec3> color = {};
         };
@@ -150,9 +151,13 @@ public:
         static const std::vector<std::string>& getAvailableColormaps();
     };
 
+    struct GuiDirectionEntry : GuiEntry<glm::vec3> {
+        const Camera* camera = nullptr;
+    };
+
     struct GuiComboEntry : BaseGuiEntry {
         int *selection = nullptr;
-        std::function<void(int)> onChanged = {};
+        std::function<void(int, bool)> onChanged = {};
         std::vector<std::string> options = {};
     };
 
@@ -195,12 +200,18 @@ public:
 
         // glm types
         PROPERTY_REF(addIVec2, glm::ivec2, GuiIVec2)
+        PROPERTY_REF_MINMAX(addIVec2, glm::ivec2, GuiIVec2)
+        // TODO: GUI range properties receive min/max args in 2D, but use them only in 1D (red channel)
+        PROPERTY_REF(addIntRange, glm::ivec2, GuiIntRange)
+        PROPERTY_REF_MINMAX(addIntRange, glm::ivec2, GuiIntRange)
         PROPERTY_REF(addIVec3, glm::ivec3, GuiIVec3)
+        PROPERTY_REF_MINMAX(addIVec3, glm::ivec3, GuiIVec3)
         PROPERTY_REF(addIVec4, glm::ivec4, GuiIVec4)
+        PROPERTY_REF_MINMAX(addIVec4, glm::ivec4, GuiIVec4)
         FLOAT_PROPERTY_REF(addVec2, glm::vec2, GuiVec2)
+        // TODO: GUI range properties receive min/max args in 2D, but use them only in 1D (red channel)
         FLOAT_PROPERTY_REF(addFloatRange, glm::vec2, GuiFloatRange)
         FLOAT_PROPERTY_REF(addVec3, glm::vec3, GuiVec3)
-        PROPERTY_REF(addDirection, glm::vec3, GuiDirection)
         FLOAT_PROPERTY_REF(addVec4, glm::vec4, GuiVec4)
         PROPERTY_REF(addColor, glm::vec4, GuiColor)
 
@@ -209,7 +220,11 @@ public:
         virtual gui_id addTFSegmentedVolume(std::vector<SegmentedVolumeMaterial>* materials, const std::vector<std::string>& attributeNames, const std::vector<glm::vec2>& attributeMinMax, std::function<void(int)> onChanged = nullptr, const std::string& name = "");
 
         // special types and grouping
-        virtual gui_id addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int)> onChanged = nullptr, const std::string& name = "");
+        virtual gui_id addDirection(glm::vec3 *v, const Camera* camera, const std::string &name = "");
+        virtual gui_id addDirection(std::function<void(glm::vec3)> setter, std::function<glm::vec3()> getter, const Camera* camera, const std::string &name = "");
+        /// Add acombo box GUI element for selecting on e of options.size() entries.
+        /// @param onChanged called if an element is selected. the bool parameter is false, if this happens during a vcfg file import
+        virtual gui_id addCombo(int* selection, const std::vector<std::string>& options, std::function<void(int, bool)> onChanged = nullptr, const std::string& name = "");
         virtual gui_id addBitFlags(unsigned int* bitfield, const std::vector<std::string>& options, const std::vector<unsigned int>& bitFlags, bool singleFlagOnly, const std::string& name = "");
         virtual gui_id addAction(void (*callback)(), const std::string& name);
         virtual gui_id addAction(std::function<void()> callback, const std::string& name);
@@ -220,7 +235,11 @@ public:
         virtual gui_id addSeparator();
 
         virtual bool writeParameters(std::ostream& out) const;
-        virtual bool readParameters(std::istream& in);
+
+        /// If this GuiElementList has a parameter with name parameter_label, reads the values for the parameter from in
+        /// and returns true.
+        /// @returns true if the parameter was consumed
+        virtual bool readParameter(const std::string& parameter_label, std::istream& parameter_stream);
     };
 
 protected:
@@ -283,10 +302,46 @@ protected:
             return true;
         }
 
-        virtual bool readParameters(std::istream& in) {
-            for(auto& c: m_columns) {
-                if(!c.readParameters(in))
+        /// Reads all parameters known to this element list from the file, skipping empty lines and unknown parameters.
+        /// A warning is printed if an unknown parameter is skipped. Once a new window name as [name] in braces
+        /// is encountered, this name is written (without braces) to next_window_name and the function returns.
+        /// @returns false if a parameter known to this element list was encountered but could not be read correctly
+        virtual bool readParameters(std::istream& in, std::string& next_window_name) {
+            std::string line;
+            while(!in.eof() && std::getline(in, line)) {
+
+                // skip any empty lines
+                if (std::ranges::all_of(line, [](const unsigned char& c) { return std::isspace(c); })) {
+                    continue;
+                }
+                // if this is the next window name which is a single line containing the name between braces as [name],
+                // return and let the next window continue
+                if (line.starts_with('[') && line.ends_with(']')) {
+                    next_window_name = line.substr(1, line.size() - 2);
+                    return true;
+                }
+
+                // one line contains data for one parameter. a single parameter is read from:
+                // [sanitized_parameter_label]: [parameter_values]
+                std::istringstream parameter_stream(line);
+                std::string parameter_label;
+                parameter_stream >> parameter_label;
+
+                bool consumed = false;
+                // the first column (GuiElementList) that has this parameter consumes it. A window must not contain
+                // a parameter with the same name.
+                for(auto& c: m_columns) {
+                    if(!consumed && c.readParameter(parameter_label, parameter_stream))
+                        consumed = true;
+                }
+                if (!consumed) {
+                    parameter_label.pop_back();
+                    Logger(WARN) << "Read unknown parameter " << parameter_label << " in window " << m_name;
+                }
+                if ((!parameter_stream.eof() && parameter_stream.fail()) || (!in.eof() && in.fail())) {
+                    Logger(WARN) << "Error reading parameter " << parameter_label << " in window " << m_name;
                     return false;
+                }
             }
             return true;
         }
@@ -344,50 +399,70 @@ public:
     }
 
     bool readParameters(std::istream& in, Camera* camera = nullptr) {
-        // TODO: camera should be registered in one of the windows
-        std::string tmp;
-        std::getline(in, tmp);
-        while (!(in.rdstate() & std::istream::eofbit)) {
-            // read a section name, decide for which window the parameters are read:
-            // read window name (skip empty lines until section key)
-            while((tmp.empty() || tmp.front() != '[' || tmp.back() != ']') && in.good()) {
-                if (!tmp.empty())
-                    Logger(WARN) << "Parameter import skipping non-key line " << tmp;
-                std::getline(in, tmp);
-            }
-            if (tmp.front() != '[' or tmp.back() != ']') {
-                Logger(WARN) << "Parameter import error: Got  " << tmp << " instead of section key [<NAME>]";
-                return false;
-            }
-            std::string name = tmp.substr(1, tmp.size()-2);
+        // std::getline(in, line);
 
-            if (tmp == "[Camera]") {
+        // // read first window name (skip empty lines until section key)
+        // while((line.empty() || line.front() != '[' || line.back() != ']') && in.good()) {
+        //     if (!line.empty())
+        //         Logger(WARN) << "Parameter import skipping non-key line " << line;
+        //     std::getline(in, line);
+        // }
+        // if (line.front() != '[' || line.back() != ']') {
+        //     Logger(WARN) << "Parameter import error: Could not find section starting with window name [<NAME>]";
+        //     return false;
+        // }
+
+        // name in braces [name] specifies GUI window / group
+        std::string window_name;
+        while (!(in.rdstate() & std::istream::eofbit)) {
+
+            // find next window name (if it was not already set by a parameter reader)
+            if (window_name.empty()) {
+                std::string line;
+                while((line.empty() || line.front() != '[' || line.back() != ']') && in.good()) {
+                    // skip any empty lines
+                    if (!std::ranges::all_of(line, [](const unsigned char& c) { return std::isspace(c); })) {
+                        Logger(WARN) << "Parameter import skipping non-key line " << line;
+                    }
+                    std::getline(in, line);
+                }
+                if (line.starts_with('[') && line.ends_with(']')) {
+                    window_name = line.substr(1, line.size() - 2);
+                } else {
+                    break;
+                }
+            }
+
+            // TODO: camera should be registered in one of the windows?
+            if (window_name == "Camera") {
                 if (!camera) {
                     Logger(WARN) << "Parameter import error: Reading [Camera] but camera is not set!";
                     return false;
                 }
+                window_name = "";
                 camera->readFrom(in, true);
             } else {
                 bool found = false;
                 for(auto& w: m_windows) {
-                    if (w.second.getName() == name) {
-                        // read parameters until an empty line marks the end of this section
-                        if(!w.second.readParameters(in))
+                    if (w.second.getName() == window_name) {
+                        // read parameters in this window until a new window key occurs
+                        window_name = "";
+                        if(!w.second.readParameters(in, window_name))
                             return false;
                         found = true;
                         break;
                     }
                 }
                 if (!found) {
-                    Logger(WARN) << "Parameter import read unkown key " << tmp << ".";
+                    Logger(WARN) << "Parameter import read unknown window " << window_name << ".";
+                    window_name = "";
                 }
             }
 
-            if (!in.good()) {
-                Logger(WARN) << "Parameter import error after reading section " << tmp << ".";
+            if (!in.eof() && in.fail()) {
+                Logger(WARN) << "Parameter import error after reading parameters for [" << window_name << "].";
                 return false;
             }
-            std::getline(in, tmp);
         }
 
         return true;
@@ -446,8 +521,8 @@ gui_id GuiInterface::GuiElementList::add(std::function<void(T)> setter, std::fun
     auto entry = new GuiEntry<T>();
     entry->id = m_id_counter++;
     entry->type = type;
-    entry->getter = getter;
-    entry->setter = setter;
+    entry->getter = std::move(getter);
+    entry->setter = std::move(setter);
     entry->label = name;
     entry->floatDecimals = decimals;
 
@@ -459,8 +534,8 @@ template<class T> gui_id GuiInterface::GuiElementList::add(std::function<void(T)
     auto entry = new GuiEntry<T>();
     entry->id = m_id_counter++;
     entry->type = type;
-    entry->getter = getter;
-    entry->setter = setter;
+    entry->getter = std::move(getter);
+    entry->setter = std::move(setter);
     entry->label = name;
     entry->min = min;
     entry->max = max;

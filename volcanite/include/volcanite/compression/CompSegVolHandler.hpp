@@ -93,7 +93,7 @@ public:
                 Logger(WARN) << "trying to open .raw file " << path << " as Volcanite raw (.vraw).";
             volume = Volume<uint32_t>::load_volcanite_raw(path);
         }
-        else if (path.ends_with(".hdf5"))
+        else if (path.ends_with(".hdf5") || path.ends_with(".h5"))
             volume = Volume<uint32_t>::load_hdf5(path);
         else if (path.ends_with(".vti"))
             volume = Volume<uint32_t>::load_vti(path);
@@ -196,27 +196,7 @@ public:
 
 
         if(cfg.verbose) {
-            std::string op_mask_str;
-            if (cfg.op_mask == OP_ALL)
-                op_mask_str = "ALL";
-            else if (cfg.op_mask == OP_ALL_WITHOUT_DELTA)
-                op_mask_str = "OPT";
-            else {
-                if (cfg.op_mask & OP_PARENT_BIT)
-                    op_mask_str.push_back('p');
-                if (cfg.op_mask & OP_NEIGHBORY_BIT)
-                    op_mask_str.push_back('x');
-                if (cfg.op_mask & OP_NEIGHBORY_BIT)
-                    op_mask_str.push_back('y');
-                if (cfg.op_mask & OP_NEIGHBORZ_BIT)
-                    op_mask_str.push_back('z');
-                if (cfg.op_mask & OP_PALETTE_LAST_BIT)
-                    op_mask_str.push_back('l');
-                if (cfg.op_mask & OP_PALETTE_D_BIT)
-                    op_mask_str.push_back('d');
-                if (cfg.op_mask & OP_STOP_BIT)
-                    op_mask_str.push_back('s');
-            }
+            std::string op_mask_str = OperationMask_STR(cfg.op_mask);
             Logger(INFO) << "Compressing " << volume_input_path
                          << (cfg.chunked_input_data ? " with chunk indices " + str(cfg.max_file_index) : "")
                          << " to " << csgv_path << " [b=" << cfg.brick_dim << ", e=" << EncodingMode_STR(cfg.encoding_mode)

@@ -105,7 +105,8 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
 
         // otherwise, we just use a tmp file
         if(use_temporary_output_file) {
-            create_directory(std::filesystem::temp_directory_path() / "volcanite");
+            if (args.working_dir.empty())
+                create_directory(args.working_dir);
             complete_csgv_path = (std::filesystem::temp_directory_path() / "volcanite" / "tmp.csgv").string();
             if (std::filesystem::exists(complete_csgv_path))
                 std::filesystem::remove(complete_csgv_path);
@@ -159,14 +160,14 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
         }
 
         // if no config file was specified, use a config file at the export or import location if it exists
-        if (args.rendering_config_file.empty() && !use_temporary_output_file) {
+        if (args.rendering_configs.empty() && !use_temporary_output_file) {
             std::string config_path = stripFileExtension(complete_csgv_path) + ".vcfg";
             if (std::filesystem::exists(config_path))
-                args.rendering_config_file = config_path;
+                args.rendering_configs = {config_path};
             else {
                 config_path = stripFileExtension(args.input_file) + ".vcfg";
                 if (std::filesystem::exists(config_path))
-                    args.rendering_config_file = config_path;
+                    args.rendering_configs = {config_path};
             }
         }
     }
@@ -199,10 +200,10 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
         }
 
         // if no config file was specified, use a previous config next to the volume input or .csgv file, if it exists
-        if (args.rendering_config_file.empty()) {
+        if (args.rendering_configs.empty()) {
             std::string config_path = stripFileExtension(args.input_file) + ".vcfg";
             if (std::filesystem::exists(config_path))
-                args.rendering_config_file = config_path;
+                args.rendering_configs = {config_path};
         }
     }
 

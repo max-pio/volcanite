@@ -25,6 +25,7 @@ namespace volcanite {
         glm::uvec3 dim = {100, 100, 100};               /// dimensions of the volume in voxels
         glm::uvec3 min_region_dim = {10u, 10u, 10u};    /// target minimum size of each region
         glm::uvec3 max_region_dim = {50u, 50u, 50u};    /// target maximum size of each region
+        float sphere_box_shape = 0.5f;                  /// how sphere- (0) or box-shaped regions are, in [0, 1]
         unsigned long long seed = 4194968861ull;        /// random seed
         uint32_t voxels_per_label = 8192u;              /// smaller values increase the number of labels
         uint32_t max_label = ~0u;                       /// maximum possible label value
@@ -39,6 +40,8 @@ namespace volcanite {
     std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegmentationVolumeCfg cfg);
 
 
+    static constexpr const char* getDummySegmentationVolumeHelpStr();
+
     /// Creates a synthetic segmentation volume based on the descriptor string.
     /// The volume is created from a zero volume by inserting randomly sized axis-aligned boxes of random labels.
     /// Note that regions are randomly generated one after the other and overwrite previously set voxels, possibly
@@ -49,10 +52,12 @@ namespace volcanite {
     /// +synth_[args]
     /// @endcode{.cpp}
     /// where args is a _ separated list of the following keys:\n
-    /// {W}x{H}x{D}  width, height, and depth of the volume in voxels\n
+    /// d{W}x{H}x{D}  width, height, and depth of the volume in voxels\n
     /// l{VOXELS_PER_LABEL}  smaller values increase the number of labels in the volume\n
     /// max{MAXIMUM_LABEL}  maximum label value that will be assigned\n
     /// r{MIN_W}x{MIN_H}x{MIN_D}-{MAX_W}x{MAX_H}x{MAX_D} minimum and maximum sizes of the label regions\n
+    /// b{[0-1]}  value in [0,1]. 0: only spherical region shapes, 1: only box shapes, 0.5: a mix of the two.
+    /// s{seed} seed to initialize the deterministic random number generation
     /// @returns a synthetically created segmentation volume
     std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view descr);
 

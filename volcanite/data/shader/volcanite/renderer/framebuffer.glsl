@@ -22,8 +22,13 @@
 
 // Work Item to Pixel Mapping / Subsampling ----------------------------------------------------------------------------
 
-vec2 subpixelOffset(ivec2 pixel) {
-    return vec2(0.5f) + (g_blue_noise_enable ? randomVec3(pixel, g_camera_still_frames ).xy : vec2(0.f));
+vec2 subpixelOffset(const ivec2 pixel) {
+    // TODO: code duplication with initialization of the random state. the
+    const uint prev_sample_count = imageLoad(accuSampleCountIn, pixel).r;
+    const vec2 u = randomVec3(pixel,((g_camera_still_frames / 256u) << 8u) ^ (prev_sample_count << 31u) ^ prev_sample_count).xy;
+
+    // blackman harris filter with a width of 1.5 pixels
+    return vec2(0.5f) + (g_blue_noise_enable ? sampleBlackmanHarris(u) : vec2(0.f));
 }
 
 ivec2 pixelOffsetInBlock() {
@@ -95,6 +100,7 @@ bool isSurfaceHitGBufferRGB16(uvec3 g_buffer_packed) {
     return g_buffer_packed.x != 65531u;
 }
 
+#ifndef VOLCANITE_FRAMEBUFFER_READONLY
 /// pack the given attributes in a value that can be stored in an RG8 format
 uvec3 packGBufferRGB16(uint label, vec3 normal, float normalized_depth) {
 
@@ -118,6 +124,7 @@ uvec3 packGBufferRGB16(uint label, vec3 normal, float normalized_depth) {
     // TODO: could return packed RGB16 g-buffer as u16vec3 to save registers
     return packed;
 }
+#endif
 
 
 /// unpack the given RGB16 G-Buffer value into attributes. Returns false if the G-Buffer did not receive a sample yet.
@@ -144,6 +151,7 @@ bool unpackGBufferRGB16(uvec3 g_buffer_packed, inout uint label, inout vec3 norm
 
 bool isDepthValid(float depth) { return depth >= 0.f; }
 
+#ifndef VOLCANITE_FRAMEBUFFER_READONLY
 void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_packed) {
 
     // invalidate any nan samples
@@ -154,13 +162,13 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
 
     // if subsamplign is enabled, we only render one pixel per [g_subsampling]^2 block
     ivec2 subpixel;
-    ivec2 pixel_block_start = (pixel/g_subsampling)*g_subsampling;
+    const ivec2 pixel_block_start = (pixel/g_subsampling)*g_subsampling;
     for (subpixel.y = 0; subpixel.y < g_subsampling; subpixel.y++) {
         for (subpixel.x = 0; subpixel.x < g_subsampling; subpixel.x++) {
             ivec2 opix = pixel_block_start + subpixel;
 
             vec4 accumulated_rgba_out;
-            uint sample_count_out;
+            uint sample_count_out = 0u;
 
             // first frame: reset
             if (g_camera_still_frames == 0u) {
@@ -168,27 +176,24 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
                 if (any(notEqual(opix, pixel))) {
                     accumulated_rgba_out = vec4(0.f);
                     sample_count_out = 0u;
-//                    imageStore(accuSampleCountOut, opix, uvec4(0u));
                     imageStore(gBuffer, opix, uvec4(invalidGBufferRGB16(), 0u));
                 }
                 // writing our pixel: invalid samples (depth < 0) will be overwritten in another frame
                 else {
                     accumulated_rgba_out = new_rgba;
                     sample_count_out = isDepthValid(depth_valid) ? 1u : 0u;
-//                    imageStore(accuSampleCountOut, opix, uvec4(isDepthValid(depth_valid) ? 1u : 0u));
                     imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u));
                 }
             }
             // later frames: accumulation
             else {
-                vec4 prev_rgba = imageLoad(accumulationIn, opix);
-                uint prev_sample_count = imageLoad(accuSampleCountIn, opix).r;
+                const vec4 prev_rgba = imageLoad(accumulationIn, opix);
+                const uint prev_sample_count = imageLoad(accuSampleCountIn, opix).r;
 
                 // writing other pixel: just copy from previous to current frame
                 if (any(notEqual(opix, pixel))) {
                     accumulated_rgba_out = prev_rgba;
                     sample_count_out = prev_sample_count;
-//                    imageStore(accuSampleCountOut, opix, uvec4(prev_valid_samples));
                     // G-buffer remains unchanged
                 }
                 // writing our pixel, but invalid new sample (a ray hit a brick that was not yet decoded)
@@ -198,27 +203,23 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
                         accumulated_rgba_out = prev_rgba;
                         // G-buffer remains unchanged
                     } else {
-                        // TODO: use flicker by taking the previous inv. instead of the new inv. sample here again?
                         // the accumulation buffer is not set
                         accumulated_rgba_out = new_rgba;
                         imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u));
                     }
                     sample_count_out = prev_sample_count;
-//                    imageStore(accuSampleCountOut, opix, uvec4(prev_valid_samples));
                 }
                 // writing our pixel with valid new sample: use previous pixel only if it already had valid samples
                 else {
                     // iterative re-weighting
-                    float new_weight = 1.f / float(prev_sample_count + 1);
+                    const float new_weight = 1.f / float(prev_sample_count + 1);
                     accumulated_rgba_out = new_rgba * new_weight + prev_rgba * (1.f - new_weight);
                     sample_count_out = prev_sample_count + 1u;
-//                    imageStore(accuSampleCountOut, opix, uvec4(1u + prev_valid_samples));
                     imageStore(gBuffer, opix, uvec4(g_buffer_packed, 0u));
                 }
             }
 
-            // half float range rounds to intinity from 65520 onwards -> clamp
-            imageStore(accumulationOut, opix, min(accumulated_rgba_out, 65519.f));
+            imageStore(accumulationOut, opix, accumulated_rgba_out);
             imageStore(accuSampleCountOut, opix, uvec4(sample_count_out));
             // note: in theory, the denoisingBuffer could already contain the .a=-1 marker for pixels that did not
             // receive a single rendered sample. but this would require to read the (possibly unchanged) G-buffer
@@ -227,5 +228,6 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
         }
     }
 }
+#endif // VOLCANITE_FRAMEBUFFER_READONLY
 
 #endif // VOLCANITE_FRAMEBUFFER_GLSL

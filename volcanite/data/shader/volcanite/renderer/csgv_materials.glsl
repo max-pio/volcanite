@@ -13,10 +13,11 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#ifndef CSGV_MATERIALS_GLSL
-#define CSGV_MATERIALS_GLSL
+#ifndef VOLCANITE_MATERIALS_GLSL
+#define VOLCANITE_MATERIALS_GLSL
 
 #include "volcanite/compression/csgv_utils.glsl"
+#include "pcg_hash.glsl"
 
 // Shading Materials ---------------------------------------------------------------------------------------------------
 float getAttribute(uint label, uint attributeStart) {
@@ -34,9 +35,18 @@ int getMaterial(uint label) {
         return -1;
 #endif
     for(int m = 0; m <= g_max_active_material; m++) {
-        if(getAttribute(label, g_materials[m].discrAttributeStart) >= g_materials[m].discrIntervalMin
-            && getAttribute(label, g_materials[m].discrAttributeStart) <= g_materials[m].discrIntervalMax)
-        return m;
+        //#define HASHED_LABEL_VISIBILITY
+//        #ifdef HASHED_LABEL_VISIBILITY
+//            if (g_materials[m].discrAttributeStart == LABEL_AS_ATTRIBUTE) {
+//                if ((label %  g_materials[m].discrIntervalMax) <  g_materials[m].discrIntervalMin)
+//                    continue;
+//                else
+//                    return m;
+//            }
+//        #endif
+        const float attr = getAttribute(label, g_materials[m].discrAttributeStart);
+        if (attr >= g_materials[m].discrIntervalMin && attr <= g_materials[m].discrIntervalMax)
+            return m;
     }
     // a material fits, return "invisible" material
     return -1;
@@ -51,15 +61,28 @@ bool isLabelVisible(uint label) {
 }
 
 vec4 getColor(uint label, int material) {
-    assert(material >= 0 && material <= g_max_active_material, "invalid material request in getColor");
+    assertf(material >= 0 && material <= g_max_active_material, "material %i assigned to label is invalid", material);
+    assert(!any(isnan(vec4(g_materials[material].discrIntervalMin,  g_materials[material].discrIntervalMax,
+                      g_materials[material].tfIntervalMin, g_materials[material].tfIntervalMax))),
+           "NaN in shader attribute limits");
 
     // read attribute, map tfInterval to [0, 1]
-    float v = (getAttribute(label, g_materials[material].tfAttributeStart) - g_materials[material].tfIntervalMin)
-    / (g_materials[material].tfIntervalMax + 1.f - g_materials[material].tfIntervalMin);
-    // wrapping mode: 0 = clamp, handled by textureLoD, 1 = repeat
-    if(g_materials[material].wrapping == 1) { // repeat
-        float interval_length = (g_materials[material].tfIntervalMax - g_materials[material].tfIntervalMin);
-        v = fract(v) * (interval_length + 1.f) / interval_length;
+    float v = 0.f;
+    // wrapping mode: 0 = clamp (handled by textureLoD), 1 = repeat, 2 = random
+    if (g_materials[material].wrapping == 2) { // repeat
+        v = fract(float(hash_pcg2d(uvec2(label, floatBitsToUint(g_materials[material].tfIntervalMin))).x % 65536) / 65536.f
+                  + g_materials[material].tfIntervalMax / 65536.f);
+    }
+    else {
+        // clamp
+        v = (getAttribute(label, g_materials[material].tfAttributeStart) - g_materials[material].tfIntervalMin)
+            / (g_materials[material].tfIntervalMax + 1.f - g_materials[material].tfIntervalMin);
+
+        // repeat
+        if (g_materials[material].wrapping == 1) {
+            const float interval_length = (g_materials[material].tfIntervalMax - g_materials[material].tfIntervalMin);
+            v = fract(v) * (interval_length + 1.f) / interval_length;
+        }
     }
 
     // problem that at least occurs on my old AMD RX480 card:
@@ -72,12 +95,7 @@ vec4 getColor(uint label, int material) {
     // Anyways, here's a fix by "forcing" non-uniform control flow:
     if(material == 0)
         return vec4(textureLod(s_transferFunctions[0], v, 0.f).rgb, g_materials[0].opacity);
-
-    assertf(material >= 0 && material <= g_max_active_material, "material %i assigned to label is invalid", material);
-    assert(!any(isnan(vec4(g_materials[material].discrIntervalMin,  g_materials[material].discrIntervalMax,
-    g_materials[material].tfIntervalMin, g_materials[material].tfIntervalMax))),
-    "NaN in shader attribute limits");
     return vec4(textureLod(s_transferFunctions[material], v, 0.f).rgb, g_materials[material].opacity);
 }
 
-#endif // CSGV_MATERIALS_GLSL
+#endif // VOLCANITE_MATERIALS_GLSL

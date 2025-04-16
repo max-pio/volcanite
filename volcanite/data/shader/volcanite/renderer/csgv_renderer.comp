@@ -19,6 +19,7 @@
 #extension GL_EXT_buffer_reference_uvec2 : require
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_shader_atomic_int64 : enable
 
 layout (local_size_x = 8, local_size_y = 8) in;
 
@@ -44,6 +45,12 @@ layout (local_size_x = 8, local_size_y = 8) in;
 #endif
 #include "volcanite/compression/compressed_segmentation_volume.glsl"
 #include "volcanite/compression/csgv_utils.glsl"
+
+// ray will request a brick for decompression if it is not available
+#define REQUEST_ENABLE_BIT 1u
+// ray will be set to invalid if brick is not available
+#define INVALIDATE_ENABLE_BIT 2u
+
 
 #ifdef EMPTY_SPACE_UINT_SIZE
     #include "volcanite/bit_vector.glsl"
@@ -162,7 +169,7 @@ uint get_inv_lod(ivec3 voxel) {
 #ifdef EMPTY_SPACE_UINT_SIZE
         uvec3 empty_space_base_voxel = uvec3(voxel) / g_empty_space_block_dim;
         // ess_permute_bits swizzles bits around to reduce collisions for the atomic operations
-        const uint empty_space_idx = empty_space_base_voxel.x
+        const uint empty_space_idx = empty_space_base_voxel.x  // * g_empty_space_dot_map.x is always 1
                                     + empty_space_base_voxel.y * g_empty_space_dot_map.y
                                     + empty_space_base_voxel.z * g_empty_space_dot_map.z;
         assertf(empty_space_idx < EMPTY_SPACE_BV_BIT_SIZE,
@@ -196,13 +203,13 @@ uint get_inv_lod(ivec3 voxel) {
         assertf(cache_pos < CACHE_UVEC2_SIZE, "invalid cache_pos %u", cache_pos);
 
         // check if the cache contains the voxel at the first or second lookup pos
-        uvec2 cache_elem = CSGV_DECODING_ARRAY[cache_pos];
+        uvec2 cache_elem = unpack32(CSGV_DECODING_ARRAY[cache_pos]);
         // at the first position, the key should have its MSB set to 0
         if (cache_elem.x == cache_key) {
             return cache_elem.y;
         }
         else {
-            uvec2 cache_elem2 = CSGV_DECODING_ARRAY[hash2(uvec2(cache_key, cache_pos)) + cache_block_pos];
+            uvec2 cache_elem2 = unpack32(CSGV_DECODING_ARRAY[hash2(uvec2(cache_key, cache_pos)) + cache_block_pos]);
             // at the second positoin, the key should have its MSB set to 1
             if (cache_elem2.x == (cache_key | KEY_TABLE2_BIT)) {
                 return cache_elem2.y;
@@ -233,21 +240,27 @@ uint get_inv_lod(ivec3 voxel) {
 #ifdef EMPTY_SPACE_UINT_SIZE
         if (!isLabelVisible(label)) {
             bool all_invisible = true;
-            // the base voxel is now the first (lowest component wise coords) local voxel in the brick
+            // the base voxel is now the first (lowest coordinate component-wise) local voxel in the brick
             empty_space_base_voxel = (empty_space_base_voxel * g_empty_space_block_dim) % BRICK_SIZE;
-            for (uint set_i = 0u; set_i < g_empty_space_set_size && all_invisible; set_i++) {
-
-                uvec3 s_brick_voxel = empty_space_base_voxel
+            for (uint set_i = 0u; set_i < g_empty_space_set_size; set_i++) {
+                const uvec3 s_brick_voxel = empty_space_base_voxel
                                       + uvec3(set_i / (g_empty_space_block_dim * g_empty_space_block_dim),
                                               (set_i / (g_empty_space_block_dim)) % g_empty_space_block_dim,
                                               set_i % g_empty_space_block_dim);
 
-                // for the empty-space info: decode on the finest LOD
-                // this means we have to recompute the label of the currently decoded voxel as well
-                uint s_label = decompressCSGVVoxel(brick_idx, s_brick_voxel, g_max_inv_lod); // this is extremely expensive!
-                if (isLabelVisible(s_label)) {
-                    // TODO: could add the label to the cache here!
+                // empty space set voxels outside of the volume always count as "invisible"
+                if (any(greaterThanEqual(brick * BRICK_SIZE + s_brick_voxel, g_vol_dim)))
+                    continue;
+                // the brick voxel itself was already decoded
+                if (all(equal(brick_voxel, s_brick_voxel)))
+                    continue;
+
+                // for the empty-space info: decode all voxels in this empty sapce set on the finest LOD.
+                // this is extremely expensive!
+                if (isLabelVisible(decompressCSGVVoxel(brick_idx, s_brick_voxel, g_max_inv_lod))) {
+                    // TODO: it would be possible to add the label to the cache here
                     all_invisible = false;
+                    break;
                 }
             }
             if (all_invisible) {
@@ -257,13 +270,13 @@ uint get_inv_lod(ivec3 voxel) {
         }
 #endif
 
-        // insert the element at its 1st cache position
-        CSGV_DECODING_ARRAY[cache_pos] = uvec2(cache_key, label);
+        // insert the element at its 1st cache position and obtain the (possibly) replaced element
+        cache_elem = unpack32(atomicExchange(CSGV_DECODING_ARRAY[cache_pos], pack64(uvec2(cache_key, label))));
 
         if (cache_elem.x != INVALID && (cache_elem.x & KEY_TABLE2_BIT) == 0u) {
             // only if the ejected element is not already at its second location:
             // insert the ejected element to its 2nd cache position, possibly forcing another element out
-            CSGV_DECODING_ARRAY[hash2(uvec2(cache_elem.x, cache_pos)) + cache_block_pos] = uvec2(cache_elem.x | KEY_TABLE2_BIT, cache_elem.y);
+            atomicExchange(CSGV_DECODING_ARRAY[hash2(uvec2(cache_elem.x, cache_pos)) + cache_block_pos], pack64(uvec2(cache_elem.x | KEY_TABLE2_BIT, cache_elem.y)));
 
             // if the element already was at its second location, it will be re-inserted at its first position if it is
             // accessed again. this results in the cuckoo ping-pong loop between first and second position of elements.
@@ -273,64 +286,82 @@ uint get_inv_lod(ivec3 voxel) {
     }
 #elif CACHE_MODE == CACHE_BRICKS
     /// returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
-    uint get_volume_label(ivec3 voxel, inout float depth_valid) {
+    /// if REQUEST_ENABLE_BIT is set in request_invalid_bits, the brick is requested for decompression if not available
+    /// if INVALIDATE_ENABLE_BIT is set in request_invalid_bits, depth_valid is set to INVALID_DEPTH if birkc is not available
+    uint get_volume_label(const ivec3 voxel, inout float depth_valid, const uint request_invalid_bits) {
         assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
 
-        uvec3 brick = uvec3(voxel) / BRICK_SIZE;
-        uvec3 brick_voxel = uvec3(voxel) - (brick * BRICK_SIZE);
-        uint brick_idx = brick_pos2idx(brick, g_brick_count);
-        uint brick_info_pos = brick_idx * 4u;
+        const uvec3 brick = uvec3(voxel) / BRICK_SIZE;
+        const uvec3 brick_voxel = uvec3(voxel) - (brick * BRICK_SIZE);
+        const uint brick_idx = brick_pos2idx(brick, g_brick_count);
+        const uint brick_info_pos = brick_idx * 4u;
 
+        // TODO: a lot of these computations would only be required when entering a *new* brick. store lod + last_brick_idx in the state?
         // compute optimal LOD for the center of this brick
+        // all threads that access this brick are guaranteed to compute the same LOD for this brick
         uint req_inv_lod = get_inv_lod(voxel);
 
-        // tell the other shaders that we can see this brick if it's visibility state is "unknown"
-        // but only if this is a valid pixel sample. An invalid sample could be accessing bricks that are actually not visible.
-        assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] <= LOD_COUNT, "we try to access a brick that's flagged as invisible");
-        if (isDepthValid(depth_valid) && req_inv_lod > 0 && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > req_inv_lod) {
-            g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
-            // old code, no longer necessary since all threads will compute the same LOD for the brick:
-            // // if the brick was not requested so far:
-            // if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT)
-            //     g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
-            // // if we request a finer level than the one that was requested so far:
-            // // (this should not happen if we instead compute the LOD in the provision shader)
-            // // TODO: Compute requested brick LOD in the provision shader based on the distance brick center <-> camera?
-            // else if (req_inv_lod > g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD])
-            //     atomicMax(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], req_inv_lod);
+        // the coarsest LOD will never be computed
+        if (req_inv_lod == 0u) {
+            // return the first palette entry = coarsests compressed representation of the brick for inv_lod 0
+            // we could alternatively perform a small linear search for the first *visible* label here
+            return getBrickEncodingRef(brick_idx).buf[getBrickEncodingLength(brick_idx) - 1u];
+        }
+
+        const uint old_req_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
+        assert(old_req_inv_lod <= LOD_COUNT, "trying to access a brick that's flagged as invisible");
+        if (old_req_inv_lod != req_inv_lod  //LOD_COUNT // brick is not yet requested
+            #ifdef VALID_RAY_REQUEST_ONLY
+                    // without checking for validity, may (rarely) request bricks that are actually obscured by bricks
+                    // in front of them. limiting requests to valid rays, however, creates popping artifacts at
+                    // interfaces between LODs when the camera moves: bricks behind other bricks are not flagged as
+                    // visible (because the brick in front is an out-of-date LOD)
+                    // TODO: this may currently be a source for normal vector artifacts from DDA traversal
+                && isDepthValid(depth_valid)
+            #else
+                // by default: request bricks with invalid rays as well, except if brick request limitation is enabled
+                && (isDepthValid(depth_valid) || g_req_limit_area_size == 0u)
+            #endif
+                && (request_invalid_bits & REQUEST_ENABLE_BIT) > 0u) { // this path may still request new brick
+
+                atomicCompSwap(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], old_req_inv_lod, req_inv_lod);
+
+            // broken method: (write write race condition, undefined behavior)
+//             g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
+            // old method:
+//             if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == LOD_COUNT)
+//                 g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = req_inv_lod;
+//             // if we request a finer level than the one that was requested so far:
+//             // (this should not happen if we instead compute the LOD in the provision shader)
+//             // TODO: Compute requested brick LOD in the provision shader based on the distance brick center <-> camera?
+//             else if (req_inv_lod > g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD])
+//                 atomicMax(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], req_inv_lod);
         }
 
         // find the current LOD
-        uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
+        const uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
         assert(cur_inv_lod != 0u, "BRICK_INFO_CUR_INV_LOD should never be zero");
 
         // invalidate the sample if the brick is not decoded up to the requested LOD
-        if (cur_inv_lod != req_inv_lod && req_inv_lod > 0u)
+        if (cur_inv_lod != req_inv_lod && bool(request_invalid_bits & INVALIDATE_ENABLE_BIT))
             depth_valid = INVALID_DEPTH;
 
-        // special case for coarsest LOD: we can do the lookup at the first palette element for LOD_Max
-        // or if the brick is not yet decoded
-        if (req_inv_lod == 0u || cur_inv_lod >= LOD_COUNT) {
-
+        // if the brick is not yet decoded: return a palette label
+        if (cur_inv_lod >= LOD_COUNT) {
             EncodingRef encoding_address = getBrickEncodingRef(brick_idx);
-            uint encoding_size = getBrickEncodingLength(brick_idx);
+            const uint encoding_size = getBrickEncodingLength(brick_idx);
+            const uint palette_size = getBrickPaletteLength(brick_idx);
 
-            // if the brick was not decoded, sample a random palette entry
-            if (req_inv_lod > 0u && g_max_inv_lod > 0u) {
-                uint palette_size = getBrickPaletteLength(brick_idx);
-
-                // read a random palette entry
-                uint random_palette_index = hash_pcg3d(uvec3(gl_GlobalInvocationID.xy, g_frame)).r % palette_size;
-                return  encoding_address.buf[encoding_size - 1u - random_palette_index];
-            }
-
-            // return the first palette entry = coarsests compressed representation of the brick for inv_lod 0
-            // we could alternatively perform a small linear search for the first *visible* label here
-            return  encoding_address.buf[encoding_size - 1u];
+            // read a "random" palette entry or return the first label (coarsest LOD)
+            #ifdef CSGV_UNDECODED_RANDOM_LABEL
+                const uint random_palette_index = hash_pcg3d(uvec3(gl_GlobalInvocationID.xy, g_frame)).r % palette_size;
+            #else
+                const uint random_palette_index = 0u;
+            #endif
+            return  encoding_address.buf[encoding_size - 1u - random_palette_index];
         }
         // read the voxel from the brick in the cache (with the currently decoded LOD)
         else {
-            // TODO: depth_valid validity is not changed here even if the requested LOD differs from currently decoded LOD
     #ifdef PALETTE_CACHE
             return readCSGVPaletteBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * g_cache_base_element_uints, brick_idx);
     #else
@@ -344,8 +375,8 @@ uint get_inv_lod(ivec3 voxel) {
 bool isEmptySpace(ivec3 voxel) {
     assertf(all(greaterThanEqual(voxel, ivec3(0))) && all(lessThan(voxel, g_vol_dim)), "empty space request for invalid voxel %v3i", voxel);
 
-    uvec3 brick = uvec3(voxel / BRICK_SIZE);
-    uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
+    const uvec3 brick = uvec3(voxel / BRICK_SIZE);
+    const uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
 
     // if the brick contains nothing visible, it is empty space
     return g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > LOD_COUNT;  // marked "invisible" by request shader
@@ -504,6 +535,7 @@ void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
 //}
 
 
+// called for each frame buffer pixel
 void main() {
     // obtain pixel and fragment coordinates
     ivec2 viewport_size = imageSize(accumulationOut);
@@ -530,12 +562,10 @@ void main() {
 //        ray.direction = normalize(g_world_to_model_space_dir * ray.direction);
 //    }
 
-
     // In world space, we hit a small cuboid (largest dimension is 1) centered around the origin.
     // We transform this AABB to model space, where each voxel has unit size:
     float t_0, t_1;
-    AABB bounding_box = AABB((g_world_to_model_space * vec4((g_bboxMin.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz,
-                             (g_world_to_model_space * vec4((g_bboxMax.xyz - vec3(0.5f)) * g_normalized_volume_size, 1.f)).xyz);
+    AABB bounding_box = AABB(g_bboxMin.xyz, g_bboxMax.xyz);
     ray_box_intersection(ray, bounding_box, t_0, t_1);
 
     // if the ray does not hit the data set, directly output the background
@@ -547,9 +577,18 @@ void main() {
 
     if (DEBUG_vis_model_space(ray, t_0, pixel, bool(g_debug_vis_flags & VDEB_MODEL_SPACE_BIT))) return;
 
-    // initialize ray marching state
+    // the number of (valid) samples that were accumulated for this pixel up to this frame
+    const uint prev_sample_count = imageLoad(accuSampleCountIn, pixelFromInvocationID()).r;
+
+    // the RayMarchState will contain all information necessary for the ray marching loop
     RayMarchState state;
-    state.rng = hash_pcg2d(uvec2(uint(blueNoise32x32_uint8(gl_GlobalInvocationID.xy)), (g_camera_still_frames << 10) | g_camera_still_frames)).x;
+    #ifndef UNBIASED_RNG
+        // the RNG state is initialized from the number of samples accumulated so far but always changes after 256 frames
+        state.rng = hash_pcg2d(uvec2(uint(blueNoise32x32_uint8(pixel)),
+                               ((g_camera_still_frames / 256u) << 8u) ^ (prev_sample_count << 31u) ^ prev_sample_count)).x;
+    #else
+        state.rng = hash_pcg3d(uvec3(pixel, g_frame)).x;
+    #endif
     state.label = INVALID;
     state.last_label = INVALID;
     state.path_length = 0;
@@ -561,6 +600,23 @@ void main() {
 
     // initialize DDA traversal with t_0  offset to prevent aliasing
     dda_init(state, ray, t_0 - 0.01f);
+
+    // if the cache is not large enough to fit all visible bricks, brick requestes are limited to some pixels:
+    //  (1) only if request limitation is enabled,
+    //  (2) limit to pixels that did not receive enough samples yet, and
+    //  (3) limit to pixels that are within a certain area of the screen.
+    // by default, all pixels set the INVALIDATE_ENABLE_BIT that will invalidate rays if they access uncompressed bricks
+    const uint request_invalid_bits = INVALIDATE_ENABLE_BIT |
+                            ((g_req_limit_area_size > 0
+                                && (any(lessThan(pixel, g_req_limit_area_pos))
+                                    || any(greaterThanEqual(pixel, g_req_limit_area_pos + ivec2(g_req_limit_area_size)))))
+                                ? 0u : REQUEST_ENABLE_BIT);
+    if (prev_sample_count >= 0xFFFF) {
+        // Force direct ray termination if this pixel already accumulated the maximum number of samples.
+        // (The sample count frame buffer is in 16 bit and can thus only accumulate 2^16-1 valid samples.)
+        state.depth_valid = INVALID_DEPTH;
+        state.throughput = vec3(0.f);
+    }
 
     // ray marching loop
     for(state.step = 0; state.step < g_maxSteps; state.step++) {
@@ -576,8 +632,8 @@ void main() {
             // edge cases not handled in multi-level DDA:
             //  - internal integer division does not handle negative voxel coordinates
             //  - upper volume borders may lie in the middle of a coarse voxel
-            if (any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
-                || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz))))
+            if (any(lessThan(state.voxel, g_bboxMin.xyz))
+                || any(greaterThanEqual(state.voxel,g_bboxMax.xyz)))
                 dda_voxel_size = 1u;
             // empty space skipping: directly step into the next brick
             else if (isEmptySpace(state.voxel))
@@ -594,8 +650,8 @@ void main() {
 #endif
 
         // out of bounds check
-        if (any(lessThan(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMin.xyz)))
-            || any(greaterThanEqual(state.voxel, ivec3(vec3(g_vol_dim) * g_bboxMax.xyz)))) {
+        if (any(lessThan(state.voxel, g_bboxMin.xyz))
+            || any(greaterThanEqual(state.voxel, g_bboxMax.xyz))) {
             if (state.path_length == 0 && state.step < 16)
                 continue;
             else
@@ -611,11 +667,18 @@ void main() {
         }
 
 
-        // sampling (read value at pos from previously decoded volume segments in brick cache) or return a
+        // Rread the label at the voxel from previously decoded volume segments in the brick cache or return a
         // placeholder label if not yet decoded, in which case the depth_valid will be set to INVALID_DEPTH.
         // An sample marked as invalid this way may not alter the framebuffer and skip certain cmoputation steps.
+        // request_invalid_bits always has the invalidate bit set, and the request conditionally set when brick
+        // request limitation is enabled. If the path length is > g_max_request_path_length, bricks are neither
+        // requested nor do undecoded bricks invalidate rays
         state.last_label = state.label;
-        state.label = get_volume_label(state.voxel, state.depth_valid);
+        #if CACHE_MODE == CACHE_BRICKS
+            state.label = get_volume_label(state.voxel, state.depth_valid, request_invalid_bits);
+        #else
+            state.label = get_volume_label(state.voxel, state.depth_valid);
+        #endif
 
 #ifndef NDEBUG
         DEBUG_vis_invalid_label(state);
@@ -764,8 +827,6 @@ void main() {
         }
     }
 
-    DEBUG_count_bbox_hits(state.step, bool(g_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT));
-
     // block all contributions if no light source was found
     if (state.step >= g_maxSteps || state.path_length > g_max_path_length) {
         state.throughput = vec3(0.f);
@@ -780,6 +841,33 @@ void main() {
     else {
         state.out_color.rgb += state.throughput * vec3(g_light_intensity);
     }
+
+
+    // only if this pixel had a chance to render:
+        // update min / max samples per pixel in stats buffer
+        const uint sample_count_out = imageLoad(accuSampleCountIn, pixelFromInvocationID()).r + (isDepthValid(state.depth_valid) ? 1u : 0u);
+    #ifdef GL_EXT_shader_atomic_int64
+        // TODO: reading here from a buffer (gpu_stats) that should be writeonly
+        assertf(sample_count_out < (1u << 16u), "Pixel sample count exceeds 16 bit domain (%u)", sample_count_out);
+        assertf(pixel.x < (1u << 16u) && pixel.y < (1u << 16u), "Pixel coordinate exceeds 16 bit domain (%v2i)", pixel);
+        // MSB ...                                                                            ... LSB
+        // 16 bit sample count | (16 bit unused) | 16 bit y coordinate | 16 bit x coordinate of pixel
+        const uint64_t samples_pixel_yx = (uint64_t(sample_count_out) << 48) | (uint64_t(pixel.y) << 16) | (uint64_t(pixel.x));
+        if (samples_pixel_yx < gpu_stats.min_spp_and_pixel) {
+            // the min_spp contains the min. number of valid samples any pixel received and coordinate of such a pixel
+            atomicMin(gpu_stats.min_spp_and_pixel, samples_pixel_yx);
+        }
+        if (samples_pixel_yx > gpu_stats.max_spp_and_pixel) {
+            // the max_spp contains the max. number of valid samples any pixel received and coordinate of such a pixel
+            atomicMax(gpu_stats.max_spp_and_pixel, samples_pixel_yx);
+        }
+    #endif
+        if (all(equal(pixel, g_req_limit_area_pixel))) {
+           // track the progress of the pixel that previously had the minimum number of samples in the request area
+            gpu_stats.limit_area_pixel_spp = sample_count_out;
+        }
+
+        DEBUG_count_bbox_hits(bool(g_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT));
 
     writePixel(pixel, state.out_color, state.depth_valid, state.packedGBuffer);
 }

@@ -39,19 +39,29 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegment
     Logger(INFO) << "Creating synthetic segmentation volume with dimension " << str(cfg.dim)
                       << " and approx. " << number_of_areas << " label regions, " << cfg.voxels_per_label << " voxels/label.";
     for (size_t i = 0; i < number_of_areas; i++) {
-        uint32_t label = V_RND_UINT();
-        uint32_t w = V_RND_UINT() % (cfg.max_region_dim.x - cfg.min_region_dim.x) + cfg.min_region_dim.x;
-        uint32_t h = V_RND_UINT() % (cfg.max_region_dim.y - cfg.min_region_dim.y) + cfg.min_region_dim.y;
-        uint32_t d = V_RND_UINT() % (cfg.max_region_dim.z - cfg.min_region_dim.z) + cfg.min_region_dim.z;
-        int x_min = static_cast<int>(V_RND_UINT() % cfg.dim[0]) - static_cast<int>(w / 2);
-        int y_min = static_cast<int>(V_RND_UINT() % cfg.dim[1]) - static_cast<int>(h / 2);
-        int z_min = static_cast<int>(V_RND_UINT() % cfg.dim[2]) - static_cast<int>(d / 2);
+        const uint32_t label = V_RND_UINT();
+        const uint32_t w = V_RND_UINT() % (cfg.max_region_dim.x - cfg.min_region_dim.x) + cfg.min_region_dim.x;
+        const uint32_t h = V_RND_UINT() % (cfg.max_region_dim.y - cfg.min_region_dim.y) + cfg.min_region_dim.y;
+        const uint32_t d = V_RND_UINT() % (cfg.max_region_dim.z - cfg.min_region_dim.z) + cfg.min_region_dim.z;
+        const int x_min = static_cast<int>(V_RND_UINT() % cfg.dim[0]) - static_cast<int>(w / 2);
+        const int y_min = static_cast<int>(V_RND_UINT() % cfg.dim[1]) - static_cast<int>(h / 2);
+        const int z_min = static_cast<int>(V_RND_UINT() % cfg.dim[2]) - static_cast<int>(d / 2);
+        const float sphere_box_interpolation = (static_cast<float>(V_RND_UINT() % 4096) / 4096.f)
+                                                + 2.f * (cfg.sphere_box_shape - 0.5f);
+        const float sphere_box_dist = sphere_box_interpolation * 0.73205080757f + 1.f;
 
-        #pragma omp parallel for collapse(3) default(none) shared(x_min, y_min, z_min, w, h, d, label, volume, cfg)
+        #pragma omp parallel for collapse(3) default(none) shared(x_min, y_min, z_min, w, h, d, label, volume, cfg, sphere_box_dist)
         for (int z = z_min; z < z_min + d; z++) {
             for (int y = y_min; y < y_min + h; y++) {
                 for (int x = x_min; x < x_min + w; x++) {
                     if (x < 0 || y < 0 || z < 0 || x >= cfg.dim[0] || y >= cfg.dim[1] || z >= cfg.dim[2])
+                        continue;
+
+                    // spherical:
+                    if (length(glm::vec3(static_cast<float>(x_min - x) + static_cast<float>(w/2u),
+                                            static_cast<float>(y_min - y) + static_cast<float>(h/2u),
+                                            static_cast<float>(z_min - z) + static_cast<float>(d/2u))
+                                            / (glm::vec3(w, h, d) / 2.f)) >= sphere_box_dist)
                         continue;
                     volume->setElement(x, y, z, label);
                 }
@@ -65,6 +75,18 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegment
 }
 
 
+constexpr const char* getDummySegmentationVolumeHelpStr() {
+    return "    "
+           CSGV_SYNTH_PREFIX_STR
+                  "    [_arg]* with arg in\n"
+                  "      d[x]x[y]x[z]: volume dimension [x,y,z]\n"
+                  "      l[v]: voxels per label [v] (higher values produce fewer labels)\n"
+                  "      max[v]: maximum label value [v]\n"
+                  "      r[a]x[b]x[c]-[s]x[t]x[u]: target label region size min. [a,b,c], max. [s,t,u]\n"
+                  "      b[v]: region shape control: [v]=0 all spheres, [v]=1 all boxes, 0<[v]<1 a mix of both\n"
+                  "      s[v]: deterministic random seed [v]. for chunked data, set to s{}[v]{}[v]{}";
+}
+
 std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view descr) {
     if (!descr.starts_with(CSGV_SYNTH_PREFIX_STR))
         throw std::invalid_argument("Synthetic volume descriptor must start with +synth");
@@ -73,14 +95,7 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
 
     std::set<unsigned char> processed = {};
 
-    constexpr auto help_str = "        +synth[_arg]* with arg in\n"
-                              "          d[x]x[y]x[z]: volume dimension [x,y,z]\n"
-                              "          l[v]: voxels per label (higher => fewer labels) [v]\n"
-                              "          max[v]: maximum label value [v]\n"
-                              "          r[a]x[b]x[c]-[s]x[t]x[u]: target label region size min. [a,b,c], max. [s,t,u]\n"
-                              "          s[v]: deterministic random seed [v]. for chunked, set to s{}[v]{}[v]{}";
-
-    Logger(INFO) << "synthetic volume creation syntax:\n" << help_str;
+    Logger(INFO) << "synthetic volume creation syntax:\n" << getDummySegmentationVolumeHelpStr();
 
     constexpr std::string_view split{"_"};
     for (const auto arg: std::views::split(descr, split)
@@ -136,6 +151,13 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
             ss >> cfg.max_region_dim.y;
             ss >> c; // x
             ss >> cfg.max_region_dim.z;
+        } else if (arg.starts_with("b")) {
+            if (processed.contains('b'))
+                throw std::invalid_argument("Synthetic volume descriptor key b duplicate");
+            processed.insert('b');
+            ss >> c; // b
+            ss >> cfg.sphere_box_shape;
+            cfg.sphere_box_shape = glm::clamp(cfg.sphere_box_shape, 0.f, 1.f);
         } else if (arg.starts_with("s")) {
             if (processed.contains('s'))
                 throw std::invalid_argument("Synthetic volume descriptor key s duplicate");
@@ -143,8 +165,12 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
             ss >> c; // s
             ss >> cfg.seed;
         } else {
-            if (processed.contains('_'))
-                throw std::invalid_argument("Synthetic volume descriptor contains unknown key");
+            if (processed.contains('_')) {
+                std::stringstream err;
+                err << "Synthetic volume descriptor " << descr << " contains invalid key " << arg;
+                err << ". syntax:\n" << getDummySegmentationVolumeHelpStr();
+                throw std::invalid_argument(err.str());
+            }
             processed.insert('_');
             ss >> cfg.dim.x;
             ss >> c; // x
@@ -155,7 +181,8 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
 
         if (ss.fail()) {
             std::stringstream err;
-            err << "Synthetic volume descriptor " << descr << " contains invalid key " << arg;
+            err << "Error parsing synthetic volume descriptor. syntax:\n";
+            err << getDummySegmentationVolumeHelpStr();
             throw std::invalid_argument(err.str());
         }
     }

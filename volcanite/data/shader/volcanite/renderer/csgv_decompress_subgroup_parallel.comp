@@ -47,7 +47,7 @@ layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
         shared uvec4 s_stop_bits_ref;
         #define SHARED_STOP_BITS_REF s_stop_bits_ref
     #else
-        STATIC_FAIL(unsupported_encoding_mode);
+        #error "unsupported encoding mode"
     #endif
 
 #endif
@@ -103,7 +103,7 @@ void main() {
     //                  perform the decompression of the brick into the previously assigned cache region              //
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     #ifdef SEPARATE_DETAIL
-        STATIC_FAIL(Subgroup_parallelized_decoding_does_not_support_DETAIL_SEPARATION);
+        #error "subgroup parallelized decoding does not support detail separation"
     #endif
 
 

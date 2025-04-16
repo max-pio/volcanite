@@ -70,15 +70,15 @@ layout(std430, binding = 2) buffer restrict readonly encoding_buffer_addresses
 layout(std430, binding = 3) buffer restrict brick_cache_infos
 {
 // for each block 4 entries:
-// req_inv_lod: <  lod_count is "req. inv. LoD and is visible"
-//              == lod_count is "potentially visible"
-//              >  lod_count is "guaranteed to be invisible" after transfer function check
-// cur_inv_lod: INVALID brick is not decoded
-//              otherwise currently decoded LoD
-// cache_index: INVALID brick is not decoded
-//              otherwise the cache index where each cache element is (base_element_size) uints large to fit 2x2x2=8 output voxels
-// req_slot:    INVALID nothing to do
-//              otherwise the unique request index in [0, total_number_of_requests_in_this_frame_for_this_lod)
+// req_inv_lod: <  lod_count: "brick is requested in this inv. LoD and visible"
+//              == lod_count: "brick is potentially visible"
+//              >  lod_count: "brick is guaranteed to be invisible" after transfer function check
+// cur_inv_lod: INVALID: brick is not decoded
+//              otherwise: currently decoded LoD
+// cache_index: INVALID: brick is not decoded
+//              otherwise: the cache index where each cache element is (base_element_size) uints large to fit 2x2x2=8 output voxels
+// req_slot:    INVALID: nothing to do
+//              otherwise: the unique request index in [0, total_number_of_requests_in_this_frame_for_this_lod)
 // TODO: change g_brick_info to array of structs
     uint g_brick_info[];
 };
@@ -99,8 +99,8 @@ layout(std430, binding = 4) buffer restrict assign_info
     uint g_assign_info[];
 };
 #define ASSIGN_NEW_BLOCK_START 0
-#define ASSIGN_NEW_BLOCK_COUNT 1
-#define ASSIGN_REQUESTED_BLOCKS 2
+#define ASSIGN_NEW_BRICK_COUNT 1
+#define ASSIGN_REQUESTED_BRICKS 2
 // how many elements per LoD are in the assign_info_ssbo
 #define ASSIGN_ELEMS_PER_LOD 3
 // lookup index in assign_info where the cache top pointer is stored
@@ -116,9 +116,9 @@ layout(std430, binding = 5) buffer restrict free_block_stacks
 layout(std430, binding = 6) buffer restrict brick_cache
 {
 #if CACHE_MODE == CACHE_VOXELS
-    // contains CACHE_UVEC2_SIZE elements as (voxel_id_key, voxel_label).
+    // contains CACHE_UVEC2_SIZE elements as pack64(voxel_id_key, voxel_label).
     // a voxel_id_key of INVALID denotes an empty cache cell
-    uvec2 g_cache[];
+    uint64_t g_cache[];
 #else
     // contains g_cache_capacity base elements made up by (base_element_size) uints to fit 2x2x2=8 output voxels.
     // the g_brick_info[].CACHE_INDEX points to a base element from which on it is decoded into N
@@ -149,10 +149,17 @@ layout (std140, binding = 10) uniform render_info {
     uint g_frame;                   // current frame index since the renderer was initialized
     uint g_camera_still_frames;     // current frame index within the current render accumulation loop
     uint g_target_accum_frames;     // how many frames will be rendered in this render loop
+    float g_cache_fill_rate;        // value in [0, 1] indicating how many base elements of the cache are occupied
+    int g_req_limit_area_size;      // value <= 0: no request limitation. otherwise: pixel area that can request bricks
+    ivec2 g_req_limit_area_pos;     // start position of the area of pixels that can request bricks
+    ivec2 g_req_limit_area_pixel;   // pixel with the (previously) min. spp within the area. used to track progress in
+    uint g_req_limit_spp_delta;     // pixels with at most (min_spp + spp_delta) valid samples can request bricks
+    uvec2 g_min_max_spp;            // minimum and maximum (valid) samples per pixel accumualted before this frame
+    ivec2 g_min_spp_pixel;          // coordinate of one of the pixels that received the minimum number of samples so far
     uint g_swapchain_index;         // index of this frame in the multiframe swapchain buffer lists
     int g_subsampling;              // border length of the subsampling pixel block in which one sample is rendered
     ivec2 g_subsampling_pixel;      // local coordinate of the currently rendered pixel in the subsampling pixel block
-    float g_random_seed;
+    uint g_random_seed;
 // shading
     float g_factor_ambient;
     float g_light_intensity;
@@ -172,12 +179,13 @@ layout (std140, binding = 10) uniform render_info {
     mat3 g_model_to_world_space_dir;
     mat3 g_world_to_model_space_dir;
     float g_world_to_model_space_scaling;
-    vec4 g_bboxMin;
-    vec4 g_bboxMax;
+    ivec4 g_bboxMin;
+    ivec4 g_bboxMax;
 // general render config
     uint g_detail_buffer_dirty;     // 0 if we can read from the detail buffer, 1 if the detail buffer is dirty
     float g_lod_bias;               // bias for the LOD into which bricks are decoded
     uint g_max_inv_lod;             // maximum inverse LOD that will be decoded for any brick
+    int g_max_request_path_length;  // paths up to this length invalidate when hitting undecoded bricks and request them
     int g_maxSteps;                 // maximum number of ray marching steps for each pixel
     bool g_blue_noise_enable;       // if view rays and other shading properties are jittered with ablue noise pattern
 };
@@ -198,20 +206,18 @@ layout (std140, binding = 12) uniform resolve_info {
     vec4 g_background_color_a;
     vec4 g_background_color_b;
     bool g_tonemap_enable;
+    float g_brightness;
+    float g_contrast;
+    float g_gamma;
 // denoising
-    // TODO: Remove unused denoising properties
-    bool g_denoise;
-    bool g_denoising_enabled;
     bool g_atrous_enabled;
-    float g_difference_depth_denoising;
-    float g_spatial_sigma;
-    float g_depth_sigma;
-    float g_illumination_sigma;
-    float g_denoise_fade_sigma;
-    bool g_denoise_fade_enable;
     int g_denoise_filter_kernel_size;
+    bool g_denoising_enabled;
+    float g_depth_sigma;
+    bool g_denoise_fade_enable;
+    float g_denoise_fade_sigma;
 // interaction and debugging
-    ivec2 g_cursor_pixel_pos;    // screen space mouse position in frame buffer pixels
+    ivec2 g_cursor_pixel_pos;   // screen space mouse position in frame buffer pixels
     uint g_debug_vis_flags;     // bit mask to enable different debug visualizations (requires ENALBE_CSGV_DEBUGGING)
 };
 
@@ -228,7 +234,7 @@ layout(binding = 23, rgba32f) uniform image2D denoisingBuffer[2];
 layout (binding = 15, rgba8) uniform restrict writeonly image2D inpaintedOutColor;
 
 
-layout(std430, binding = 16) buffer restrict writeonly csgv_gpu_stats
+layout(std430, binding = 16) buffer restrict csgv_gpu_stats // writeonly
 {
     GPUStats gpu_stats;
 };
@@ -248,6 +254,6 @@ layout(binding = 19) uniform sampler1D s_transferFunctions[SEGMENTED_VOLUME_MATE
 
 layout(push_constant) uniform PushConstants
 {
-    uint denoising_iteration;   // denoising iteration variable for ping pong svgf-buffer
+    uint denoising_iteration;   // denoising iteration variable for indexing the ping pong buffers
     uint last_denoising_iteration;
 } pc;

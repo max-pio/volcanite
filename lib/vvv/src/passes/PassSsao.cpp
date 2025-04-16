@@ -40,7 +40,7 @@ PassSsao::PassSsao(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering> &mul
                         SimpleGlslShaderRequest{.filename = "passes/ssao.comp", .defines = {algorithmToDefine.at(algorithm)}, .label = label + ".shader", }),
       m_outputImageUsage(outputImageUsage), m_perFrameConstantsUniform(nullptr) {}
 
-void PassSsao::addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int)>> shaderRecompileCallback) {
+void PassSsao::addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int, bool)>> shaderRecompileCallback) {
     const bool allowAlgorithmToChange = shaderRecompileCallback.has_value();
     if (allowAlgorithmToChange) {
         std::vector<std::string> options;

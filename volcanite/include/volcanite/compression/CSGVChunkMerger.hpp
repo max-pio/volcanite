@@ -312,7 +312,7 @@ public:
             // similar to CompressedSegmentationVolume::exportToFile(..)
             // write header: 8 chars CMPSGVOL + 4 chars version number
             const char *magic_header = "CMPSGVOL";
-            const char *version = "0015";
+            const char *version = "0016";
             file.write(magic_header, 8);
             file.write(version, 4);
 

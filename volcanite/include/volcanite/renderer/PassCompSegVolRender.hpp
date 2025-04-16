@@ -73,14 +73,18 @@ public:
             setGlobalInvocationSize(DECOMPRESS, brick_count.x, brick_count.y, brick_count.z);
         }
     }
-    void setImageInfo(uint32_t width, uint32_t height) {
+    void setImageInfo(const uint32_t width, const uint32_t height) {
         setGlobalInvocationSize(RENDERING, width, height, 1u);
         setGlobalInvocationSize(RESOLVE, width, height, 1u);
         setGlobalInvocationSize(RENDERING_DUMMY, width, height, 1u);
     }
 
     void setRenderUpdateFlagsForNextCall(uint32_t param_update_flags) { m_render_update_flags = param_update_flags; }
+    [[nodiscard]] uint32_t getRenderUpdateFlagsForNextCall() const { return m_render_update_flags; }
     void setResolvePasses(int passes) { m_atrous_iterations = static_cast<uint32_t>(passes); }
+
+    void setCacheStagesEnabled(bool enable) { m_enable_cache_stages = enable; }
+    [[nodiscard]] bool getCacheStagesEnabled() const { return m_enable_cache_stages; }
 
 protected:
     struct PushConstants {

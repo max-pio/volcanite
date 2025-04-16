@@ -103,14 +103,19 @@ def write_nrrd(volume: np.ndarray, path_out: str | os.PathLike, dtype = None) ->
 
 
 # HDF5
-def read_hdf5(path_in: str | os.PathLike) -> np.ndarray:
+def read_hdf5(path_in: str | os.PathLike, key_path: list[str] | None = None) -> np.ndarray:
     f = h5py.File(path_in, 'r')
     # obtain the volume in xyz shape
-    key = list(f.keys())[0]
-    volume = f[key][()]
+    if key_path is None:
+        # TODO: iterate through groups until first ndarray is found
+        key_path = [list(f.keys())[0]]
+    # iterate through keys
+    _data = f[key_path[0]]
+    for i in range(1, len(key_path)):
+        _data = _data[key_path[i]]
+    volume = _data[()]
     # return it in zyx shape (numpy convention)
     return volume.reshape((volume.shape[2], volume.shape[1], volume.shape[0]))
-
 
 def write_hdf5(volume: np.ndarray, path_out: str | os.PathLike, dtype = None) -> None:
     volume = __guard_volume_dtype(volume, dtype)
@@ -328,21 +333,21 @@ def read_volume(path_in: str | os.PathLike, input_axis_order: str = 'zyx') -> np
         # create a temporary decompressed file from which the volume will be loaded
         path_in = copy_from_gzip(path_in)
 
-    if extensions == [".vraw"] or extensions == [".raw"]:
+    if extensions[-1] == ".vraw" or extensions[-1] == ".raw":
         _volume_in = read_vraw(path_in)
-    elif extensions == [".nrrd"]:
+    elif extensions[-1] == ".nrrd":
         _volume_in = read_nrrd(path_in)
-    elif extensions == [".hdf5"] or extensions == [".h5"]:
+    elif extensions[-1] == ".hdf5" or extensions[-1] == ".h5":
         _volume_in = read_hdf5(path_in)
-    elif extensions == [".tiff"]:
+    elif extensions[-1] == ".tif" or extensions[-1] == ".tiff":
         _volume_in = read_sliced_tiff(path_in)
-    elif extensions == [".png"]:
+    elif extensions[-1] == ".png":
         _volume_in = read_sliced_png(path_in)
-    elif extensions == [".npy"] or extensions == [".npz"]:
+    elif extensions[-1] == ".npy" or extensions[-1] == ".npz":
         _volume_in = read_numpy(path_in)
-    elif extensions == [".nii"] or extensions == [".nii", ".gz"]:
+    elif extensions[-1] == ".nii" or extensions[-2:] == [".nii", ".gz"]:
         _volume_in = read_nifti(path_in)
-    elif extensions == [".vti"]:
+    elif extensions[-1] == ".vti":
         _volume_in = read_vti(path_in)
     else:
         raise Exception("unknown segmentation volume file extension " + "".join(extensions))
@@ -385,7 +390,7 @@ def __guard_volume_dtype(volume: np.ndarray, dtype) -> np.ndarray:
     return volume.astype(dtype)
 
 
-def convert_volume(path_in: str | os.PathLike, path_out: str | os.PathLike, input_axis_order: str = 'xyz', dtype=None) -> None:
+def convert_volume(path_in: str | os.PathLike, path_out: str | os.PathLike, input_axis_order: str = 'zyx', dtype=None) -> None:
     """Automatically selects the writer for the respective format based on the path_out file type.
     Volumes are always written in XYZ memory axis order for Volcanite compatibility."""
 

@@ -21,10 +21,10 @@
 #include <utility>
 
 #include "vvv/core/Renderer.hpp"
-#include "vvv/core/Shader.hpp"
-#include "vvv/util/hash_memory.hpp"
 #include "vvv/reflection/UniformReflection.hpp"
 #include "vvv/passes/PassCompute.hpp"
+#include <fmt/core.h>
+
 
 #ifdef IMGUI
     #include "imgui.h"
@@ -60,19 +60,36 @@ public:
 
     void initGui(vvv::GuiInterface * gui) override {
         assert(m_compressed_segmentation_volume && "must set CSGV data set before starting csgv brick viewer");
-        glm::uvec3 brick_count = m_compressed_segmentation_volume->getBrickCount();
-        uint32_t brick_size = m_compressed_segmentation_volume->getBrickSize();
+        const glm::ivec3 brick_count = {m_compressed_segmentation_volume->getBrickCount()};
+        const int brick_size = static_cast<int>(m_compressed_segmentation_volume->getBrickSize());
+
+        m_csgv_infos.emplace_back("Volume", m_compressed_segmentation_volume->getLabel());
+        m_csgv_infos.emplace_back("Encoding Mode", EncodingMode_STR(m_compressed_segmentation_volume->getEncodingMode()));
+        uint32_t op_mask = m_compressed_segmentation_volume->getOperationMask();
+        m_csgv_infos.emplace_back("Operation Mask", OperationMask_STR(op_mask));
+        m_csgv_infos.emplace_back("Max. Palette Size", std::to_string(m_compressed_segmentation_volume->getMaxBrickPaletteCount()));
+        m_csgv_infos.emplace_back("Unique Labels", std::to_string(m_compressed_segmentation_volume->getNumberOfUniqueLabelsInVolume()));
+        m_csgv_infos.emplace_back("Brick Size", std::to_string(m_compressed_segmentation_volume->getBrickSize()));
+        m_csgv_infos.emplace_back("LOD Count", std::to_string(m_compressed_segmentation_volume->getLodCountPerBrick()));
+        m_csgv_infos.emplace_back("Brick Count", str(m_compressed_segmentation_volume->getBrickCount()));
+        m_csgv_infos.emplace_back("Volume Size", str(m_compressed_segmentation_volume->getVolumeDim()));
+        m_csgv_infos.emplace_back("Compression Ratio", std::to_string(m_compressed_segmentation_volume->getCompressionRatio()) + "%");
 
         auto g = gui->get("Compressed Segmentation Volume Brick Visualizer");
-        g->addColor(&m_background_color_a, "Background Color A");
-        g->addColor(&m_background_color_b, "Background Color B");
         g->addInt(&m_brick_id.x, "Brick X", 0, brick_count.x - 1, 1);
         g->addInt(&m_brick_id.y, "Brick Y", 0, brick_count.y - 1, 1);
         g->addInt(&m_brick_id.z, "Brick Z", 0, brick_count.z - 1, 1);
         g->addInt(&m_brick_slice, "Brick Slice", 0, brick_size - 1, 1);
+        g->addSeparator();
         g->addInt(&m_label_color_mult, "Label Color Cycle", 1, 100000, 5);
+        g->addCombo(&m_show_code_mode, {"All", "New Palette", "Flat"}, [this](int v, bool by_user) { m_show_code_mode = v; });
         g->addBool(&m_show_label_bits, "Show Label Bits");
-        g->addCombo(&m_show_code_mode, {"All", "New Palette", "Flat"}, [this](int v) { m_show_code_mode = v; });
+        g->addColor(&m_background_color_a, "Background Color A");
+        g->addColor(&m_background_color_b, "Background Color B");
+        g->addSeparator();
+        for (auto& m_csgv_info : m_csgv_infos) {
+            g->addDynamicText(&m_csgv_info.second, m_csgv_info.first);
+        }
 #ifdef IMGUI
         g->addCustomCode([this](){
             auto mousePos = ImGui::GetMousePos();
@@ -88,17 +105,21 @@ public:
     void setCompressedSegmentationVolume(std::shared_ptr<CompressedSegmentationVolume> tree) {
         m_compressed_segmentation_volume = std::move(tree);
         m_data_changed = true;
+
+        m_brick_id = m_compressed_segmentation_volume->getBrickCount() / 2u;
+        m_brick_slice = static_cast<int>(m_compressed_segmentation_volume->getBrickSize() / 2u);
     }
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
 private:
     // gui parameters
+    std::vector<std::pair<std::string, std::string>> m_csgv_infos;
     glm::vec4 m_background_color_a = glm::vec4(1.f, 1.f, 1.f, 1.f);
-    glm::vec4 m_background_color_b = glm::vec4(0.9f, 0.95f, 1.f, 1.f);
+    glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
     glm::ivec3 m_brick_id = glm::ivec3(0);
     int m_brick_slice = 0;
-    glm::ivec3 m_current_decoded_brick = glm::ivec3(0);
+    glm::ivec3 m_current_decoded_brick = glm::ivec3(-1);
     bool m_show_label_bits = false;
     int m_show_code_mode = 0;
     int m_label_color_mult = 1;

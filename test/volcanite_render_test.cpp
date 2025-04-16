@@ -15,8 +15,6 @@
 
 #define HEADLESS
 
-#include <string>
-
 #include "vvv/volren/Volume.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/util/segmentation_volume_synthesis.hpp"
@@ -26,6 +24,8 @@
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "vvv/core/HeadlessRendering.hpp"
 #include "stb/stb_image.hpp"
+#include <fmt/core.h>
+#include <string>
 
 using namespace volcanite;
 using namespace vvv;
@@ -60,7 +60,8 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
                                      .palettized_cache=args.cache_palettized,
                                      .decode_from_shared_memory=false,
                                      .cache_mode=args.cache_mode,
-                                     .empty_space_resolution=args.empty_space_resolution});
+                                     .empty_space_resolution=args.empty_space_resolution,
+                                     .shader_defines=args.shader_defines});
     renderer->setCompressedSegmentationVolume(csgv, csgvDatabase);
     // not setting render config: use default values
     renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
@@ -71,7 +72,7 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
     renderEngine->acquireResources();
     // let the rendering converge for some frames (if specified in the rendering config, we use that number)
     int accumulation_frames = renderer->getTargetAccumulationFrames();
-    auto texture = renderEngine->renderFrames(accumulation_frames > 0 ? accumulation_frames : 300);
+    auto texture = renderEngine->renderFrames({.accumulation_samples=static_cast<size_t>(accumulation_frames > 0 ? accumulation_frames : 300)});
     if(texture == nullptr) {
         Logger(ERROR) << "internal rendering error";
         return RET_RENDER_ERROR;
@@ -89,13 +90,13 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
 static const std::string OUT_DIR = "./render_test/";
 static const std::vector<VolcaniteArgs> RENDERING_TEST_CONFIGS = {
         {.brick_size=32, .encoding_mode=NIBBLE_ENC, .screenshot_output_file=OUT_DIR + "nibble_32.png"},
+           {.brick_size=64, .encoding_mode=DOUBLE_TABLE_RANS_ENC, .operation_mask=(OP_ALL | OP_USE_OLD_PAL_D_BIT), .screenshot_output_file=OUT_DIR + "rANSd_64_old-delta.png"},
         {.cache_palettized=true, .brick_size=64, .encoding_mode=SINGLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANSd_64_cache-palette.png"},
         {.stream_lod=true, .brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANS_16_stream-lod.png"},
-        // TODO: compare with random access branch for merging errors: random access rendering does not work
-        // {.brick_size=16, .encoding_mode=NIBBLE_ENC, .operation_mask=OP_ALL_WITHOUT_STOP, .random_access=true, .screenshot_output_file=OUT_DIR + "nibble_16_ra.png"},
-        // {.cache_mode=CACHE_BRICKS, .decode_from_shared_memory=true, .brick_size=64, .encoding_mode=HUFFMAN_WM_ENC, .random_access=true,  .screenshot_output_file=OUT_DIR + "hWM_64_ra_cache-brck-sm.png"},
-        // {.cache_mode=CACHE_VOXELS, .empty_space_resolution=2u, .brick_size=16, .encoding_mode=HUFFMAN_WM_ENC,  .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_16_ra_cache-voxl_ess.png"},
-        // {.cache_mode=CACHE_NOTHING, .brick_size=32, .encoding_mode=HUFFMAN_WM_ENC, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_32_ra_cache-none.png"},
+        {.cache_mode=CACHE_NOTHING, .brick_size=16, .encoding_mode=NIBBLE_ENC, .operation_mask=(OP_ALL_WITHOUT_STOP & OP_ALL_WITHOUT_DELTA), .random_access=true, .screenshot_output_file=OUT_DIR + "nibble_16_ra.png"},
+        {.cache_mode=CACHE_BRICKS, .decode_from_shared_memory=true, .brick_size=64, .encoding_mode=HUFFMAN_WM_ENC, .operation_mask=OP_ALL_WITHOUT_DELTA, .random_access=true,  .screenshot_output_file=OUT_DIR + "hWM_64_ra_cache-brck-sm.png"},
+        {.cache_mode=CACHE_VOXELS, .empty_space_resolution=2u, .brick_size=16, .encoding_mode=HUFFMAN_WM_ENC, .operation_mask=OP_ALL_WITHOUT_DELTA, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_16_ra_cache-voxl_ess.png"},
+        {.cache_mode=CACHE_NOTHING, .brick_size=32, .encoding_mode=HUFFMAN_WM_ENC, .operation_mask=OP_ALL_WITHOUT_DELTA, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_32_ra_cache-none.png"},
     };
 
 glm::vec4 CIE_rgb2xyz(const glm::vec4& rgba) {
@@ -155,7 +156,7 @@ double computeImageRMSE(const std::string& path1, const std::string& path2, floa
         diff_image_out.erase(diff_image_out.rfind('.'), 4);
         diff_image_out.append("_DIFF_");
         diff_image_out.append(path2.substr(path2.rfind('/')+1));
-        Logger(DEBUG) << "writing difference image " << canonical(std::filesystem::path(diff_image_out));
+        Logger(DEBUG) << "writing difference image " << absolute(std::filesystem::path(diff_image_out));
         stbi_write_png(diff_image_out.c_str(), w1, h1, c1,
                        reinterpret_cast<const void*>(image1), w1 * c1);
     }
@@ -207,6 +208,9 @@ int main() {
             csgv->separateDetail();
         }
 
+        if (!csgv->testLOD(volume->dataConst(), dim))
+            return RET_COMPR_ERROR;
+
         // render one output image
         int ret = renderImageToFile(csgv, csgvDatabase, args);
         if (ret != RET_SUCCESS)
@@ -214,6 +218,12 @@ int main() {
     }
 
     // check output image files for pair-wise equality
+    std::map<std::string, int> error_count;
+    int max_id_string_length = 0;
+    for (const auto& args : RENDERING_TEST_CONFIGS) {
+        error_count[args.screenshot_output_file] = 0;
+        max_id_string_length = glm::max(static_cast<int>(args.screenshot_output_file.length()), max_id_string_length);
+    }
     Logger(DEBUG) << "----------------";
     int result = RET_SUCCESS;
     for (int img_a = 0; img_a < RENDERING_TEST_CONFIGS.size(); img_a++) {
@@ -224,11 +234,16 @@ int main() {
                 Logger(ERROR) << "Image loading error for "
                               << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                               << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file;
+                error_count[RENDERING_TEST_CONFIGS[img_a].screenshot_output_file]++;
+                error_count[RENDERING_TEST_CONFIGS[img_b].screenshot_output_file]++;
+                result = RET_RENDER_ERROR;
             } else if (rmse >= 0.01) {
                 Logger(ERROR) << "Rendering differences with RMSE of " << rmse
                               << " for images " << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                               << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file;
                 result = RET_RENDER_ERROR;
+                error_count[RENDERING_TEST_CONFIGS[img_a].screenshot_output_file]++;
+                error_count[RENDERING_TEST_CONFIGS[img_b].screenshot_output_file]++;
             } else {
                 Logger(DEBUG) << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                                         << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file << " ok (RMSE " << rmse << ")";
@@ -236,5 +251,10 @@ int main() {
         }
     }
 
+    Logger(DEBUG) << "Pair-Wise Comparison Error Counts:";
+    for (const auto& args : RENDERING_TEST_CONFIGS)
+        Logger(DEBUG) << fmt::vformat("{:" + std::to_string(max_id_string_length) + "}", fmt::make_format_args(args.screenshot_output_file))
+                           << "  " << error_count[args.screenshot_output_file];
+    Logger(DEBUG) << ((result == RET_SUCCESS) ? "  success" : "  errors");
     return result;
 }

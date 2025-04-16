@@ -5,7 +5,6 @@
 // functions in this header. As these functions use other definitions from csgv_renderer.comp it should be included
 // right above its main() function.
 
-#define ENALBE_CSGV_DEBUGGING
 
 /// Visualizes model space coordinates.
 /// Returns true if this thread should terminate afterwards as the pixel color was drawn.
@@ -14,7 +13,7 @@ bool DEBUG_vis_model_space(Ray ray, float t_0, ivec2 pixel, const bool enabled) 
     if (!enabled)
         return false;
     const vec3 pos = ray.origin + t_0 * ray.direction;
-    const float depth = length(pos - g_camera_position_world_space) - (length(g_camera_position_world_space) - 0.8660254037f);
+    const float depth = length((g_model_to_world_space * vec4(pos, 1.f)).xyz - g_camera_position_world_space) - (length(g_camera_position_world_space) - 0.8660254037f);
     const vec3 borders = vec3(greaterThan(fract(pos), vec3(0.0f))) * vec3(lessThan(fract(pos - vec3(0.0001f)), vec3(0.2f)));
     const uvec3 voxel = uvec3(floor(pos));
     vec3 color = vec3(voxel) / vec3(g_vol_dim);
@@ -26,6 +25,8 @@ bool DEBUG_vis_model_space(Ray ray, float t_0, ivec2 pixel, const bool enabled) 
     writePixel(pixel, vec4(color, 1.f), t_0, packGBufferRGB16(voxel.x ^ (voxel.y << 10u) ^ (voxel.z << 20u),
     vec3(0.f), depth));
     return true;
+#else
+    return false;
 #endif
 }
 
@@ -147,7 +148,7 @@ void DEBUG_check_state_and_ray(inout RayMarchState state, const Ray ray, int lin
 }
 
 /// Counts the total number of ray marching steps and the total number of view rays that hit the volume's bounding box.
-void DEBUG_count_bbox_hits(int steps, bool enabled) {
+void DEBUG_count_bbox_hits(bool enabled) {
 #ifdef ENALBE_CSGV_DEBUGGING
     if (!enabled)
         return;

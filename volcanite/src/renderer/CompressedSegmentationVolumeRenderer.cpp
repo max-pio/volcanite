@@ -48,14 +48,14 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
     if(m_data_changed) {
         // wait until all previous frames are processed
-        getCtx()->getDevice().waitIdle();
+        getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution);
 
-        // create and populate all encoding buffer
+        // create and populate all encoding buffer (blocking)
         initDataSetGPUBuffers();
 
         const size_t brick_size = m_compressed_segmentation_volume->getBrickSize();
         const size_t output_voxels_per_brick = brick_size * brick_size * brick_size;
-        const size_t cache_bricks = static_cast<uint32_t>(m_cache_capacity * 8u / output_voxels_per_brick);
+        const size_t cache_bricks = static_cast<uint32_t>(m_cache_capacity * m_cache_base_element_uints / output_voxels_per_brick);
         Logger(DEBUG) << "new data set with " << str(m_compressed_segmentation_volume->getBrickCount())
                       << " bricks added. Cache fits " << cache_bricks << " = "
                       << static_cast<uint32_t>(std::pow(static_cast<double>(cache_bricks), 1./3.))
@@ -142,15 +142,15 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     }
 
     // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts
-    // finished). Times out after 30 seconds and throws an exception.
+    // finished). Times out after a certain number of seconds and throws an exception.
     // Buffer upload synchronization is handled in PassCompSegVolRender
-    getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 30 * 1000000000ull);
+    getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 60 * 1000000000ull);
 
     // track timing of the last frame
     // TODO: renderFrame and thus the final timing finish will not be called after the last frame in HeadlessRendering
     if (m_enable_frame_time_tracking && m_last_frame_start_time.has_value()) {
-        m_last_frame_times.emplace_back(std::chrono::duration_cast<std::chrono::nanoseconds >(
-                std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value()).count() / 1000000.);
+        m_last_frame_times.emplace_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value()).count()) / 1000000.);
         m_last_frame_start_time.reset();
     }
 
@@ -166,28 +166,93 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         m_download_frame_to_image_file = {};
     }
 
+    // do not render anything in step mode if no new step is requested
+    if (m_accum_step_mode && !m_accum_do_step && m_accumulated_frames > 0u) {    // except at later frames: no step
+        return m_mostRecentFrame.value();
+    }
+    m_accum_do_step = false;
+
     // time tracking start (on host side to consider semaphores, CPU work as well, not just the GPU render times)
     if (m_enable_frame_time_tracking)
         m_last_frame_start_time = std::chrono::high_resolution_clock::now();
 
-    // download GPU statistics information, i.e. the cache occupancy to trigger cache hard resets when it is full
-    static constexpr uint32_t gpu_stats_download_interval = 4u;
-    if (m_frame > 0u && m_frame % gpu_stats_download_interval == 0u) {
-        m_gpu_stats_buffer->download(&m_last_gpu_stats, sizeof(GPUStats));
+    // set render update flags to denote which parameter sets changed, and which render stages have to be executed
+    updateRenderUpdateFlags();
 
+    // download GPU statistics information, i.e. the cache occupancy to trigger cache hard resets when it is full
+    static constexpr uint32_t gpu_stats_download_interval = 1u;
+    static constexpr GPUStats reset_gpu_stats = {
+        .min_spp_and_pixel = 0xFFFF0000FFFFFFFF, // 16 MSB: sample count, 32 LSB: pixel coordinate
+        .max_spp_and_pixel = 0x00000000FFFFFFFF,
+        .limit_area_pixel_spp = 0u,
+        .used_cache_base_elements = 0u,
+        .bbox_hits = 0u,
+        .blocks_decoded_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
+        .blocks_in_cache_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
+        .bricks_requested_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
+        .bricks_on_freestack_L1_to_7 = {0u, 0u, 0u, 0u, 0u, 0u},
+    };
+    if (m_accumulated_frames == 0u) {
+        m_gpu_stats_buffer->upload(&reset_gpu_stats, sizeof(GPUStats));
+    } else if ((m_render_update_flags & UPDATE_RENDER_FRAME)
+                && m_accumulated_frames % gpu_stats_download_interval == 0u) {
+        // download and reset the buffer
+        m_gpu_stats_buffer->download(&m_last_gpu_stats, sizeof(GPUStats));
+        m_gpu_stats_buffer->upload(&reset_gpu_stats, sizeof(GPUStats));
+
+        // compute cache fill rate to feed it back to the renderer as uniform value
+        const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u)
+                                                       * (m_compressed_segmentation_volume->getBrickSize() / 2u)
+                                                       * (m_compressed_segmentation_volume->getBrickSize() / 2u);
+        const uint32_t global_min_spp = static_cast<uint32_t>(m_last_gpu_stats.min_spp_and_pixel >> 48u);
+        m_req_limit.global_min_pixel = glm::ivec2(m_last_gpu_stats.min_spp_and_pixel & 0xFFFF,
+                                                  (m_last_gpu_stats.min_spp_and_pixel >> 16u) & 0xFFFF);
+        const uint32_t global_max_spp = static_cast<uint32_t>(m_last_gpu_stats.max_spp_and_pixel >> 48u);
+        // const glm::ivec2 max_spp_pixel = glm::ivec2(m_last_gpu_stats.max_spp_and_pixel & 0xFFFF,
+        //                                             (m_last_gpu_stats.max_spp_and_pixel >> 16u) & 0xFFFF);
+
+        // if the area pixel was selected randomly, its sample count was not known yet (marked by INVALID). set it here.
+        if (m_req_limit.area_min_pixel_last_spp == INVALID)
+            m_req_limit.area_min_pixel_last_spp = m_last_gpu_stats.limit_area_pixel_spp;
+
+        // TODO: check for cache fragmentation in the cache shaders by comparing the free stacks instead of checking the cache capacity here
         // A fragmented cache can occur if free stacks store unusable levels-of-detail leaving no space for other LoDs.
         // Trigger cache flush on demand, but only if the rendering config changed since the last flush.
-        const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
         const size_t current_parameter_hash = hashMemory(&m_prender_hash, sizeof(m_prender_hash), m_pcamera_hash);
+
         // used_cache_base_elements: cache usage as the number of occupied 2x2x2 base elements
-        if (m_accumulated_frames > 0
-                && m_last_gpu_stats.used_cache_base_elements >= m_cache_capacity - cache_elements_per_finest_lod
-                && m_parameter_hash_at_last_reset != current_parameter_hash) {
-            m_pcache_reset = true;
-            m_parameter_hash_at_last_reset = current_parameter_hash;
+        if (m_accumulated_frames > 0u && m_auto_cache_reset
+            && m_last_gpu_stats.used_cache_base_elements >= m_cache_capacity - cache_elements_per_finest_lod // cannot fit a single additional finest LOD brick
+            && m_parameter_hash_at_last_reset != current_parameter_hash) {  // cache was not yet reset on this position
+
+            // the cache can be fragmented: one of the free stacks did not contain enough base elements to fulfill all
+            // requests for its LOD (while the cache is already full), but other free stacks have unused elements
+            // that, in combination, span as much storage as is required to decode at least one brick in the finest LOD.
+            // uint32_t free_base_elements = 0u;
+            // long missing_base_elements = 0u;
+            // for (int inv_lod = 0; inv_lod < m_compressed_segmentation_volume->getLodCountPerBrick(); inv_lod++) {
+            //     free_base_elements += (1u << (3*inv_lod)) * m_last_gpu_stats.bricks_on_freestack_L1_to_7[inv_lod];
+            //     missing_base_elements += glm::max(0l, (1u << (3*inv_lod)) * (static_cast<long>(m_last_gpu_stats.bricks_requested_L1_to_7[inv_lod])
+            //                                 - static_cast<long>(m_last_gpu_stats.bricks_on_freestack_L1_to_7[inv_lod])));
+            // }
+            // if (free_base_elements > cache_elements_per_finest_lod && missing_base_elements > 0l) {
+            { // pragmatic approach: if the cache is full, reset it once for this camera perspective
+                m_pcache_reset = true;
+                m_parameter_hash_at_last_reset = current_parameter_hash;
+                disableRequestLimiation();
+            }
+        }
+        if (!m_pcache_reset) {
+            // Request limitation limits requesting bricks for the cache to rays from pixels in a certain AABB on screen.
+            // The AABB originates at m_req_limit_area_pos with size m_req_limit_area.
+            if (m_req_limit.g_enable) {
+                updateRequestLimiation(global_min_spp, global_max_spp);
+            } else {
+                disableRequestLimiation();
+            }
         }
 
-        // if requested, more GPU statistics are gathered during rendering and printed here
+        // if requested, more GPU statistics were gathered during rendering and printed here
         if (m_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT) {
             size_t decoded_bytes_in_frame = 0;
             size_t decoded_bytes_total = 0;
@@ -219,9 +284,6 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         if (detail_request_count > 0u)
             m_detail_stage = DetailAwaitingCPUConstruction;
     }
-
-    // set render update flags to denote which parameter sets changed, and which render stages have to be executed
-    updateRenderUpdateFlags();
 
     // if no new data has to be rendered, just return the last frame
     if (!(m_render_update_flags & (UPDATE_RENDER_FRAME | UPDATE_PRESOLVE))) {
@@ -423,7 +485,7 @@ void CompressedSegmentationVolumeRenderer::setCompressedSegmentationVolume(
         // check if the ESS volume dimension supports the block size (has to be indexed with 32 bits)
         do {
             glm::uvec3 vol_dim = m_compressed_segmentation_volume->getVolumeDim();
-            ess_dim = vol_dim / m_empty_space_block_dim;
+            ess_dim = (vol_dim + glm::uvec3(m_empty_space_block_dim - 1u)) / m_empty_space_block_dim;
             if (static_cast<size_t>(ess_dim.x) * ess_dim.y * ess_dim.z <= 0xFFFFFFFFull)
                 break;
             m_empty_space_block_dim *= 2ul;
@@ -439,6 +501,10 @@ void CompressedSegmentationVolumeRenderer::setCompressedSegmentationVolume(
     } else {
         m_empty_space_buffer_size = 0u;
     }
+
+    // update GUI parameters
+    m_bboxMin = glm::ivec3(0);
+    m_bboxMax = glm::ivec3(m_compressed_segmentation_volume->getVolumeDim());
 }
 
 void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
@@ -557,8 +623,8 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     } else if (m_cache_mode == CACHE_BRICKS) {
         // limit cache size to maximum available GPU memory
         auto heap_budget_and_usage = getMemoryHeapBudgetAndUsage(*ctx);
-        size_t free_heap_size = heap_budget_and_usage.first - heap_budget_and_usage.second;
-        if (m_target_cache_size_MB * 1024 * 1024 > free_heap_size) {
+        size_t free_heap_size_byte = heap_budget_and_usage.first - heap_budget_and_usage.second;
+        if (m_target_cache_size_MB * 1024 * 1024 > free_heap_size_byte) {
             updateDeviceMemoryUsage();
             Logger(WARN) << "not enough GPU memory available to provide target cache size of " << m_target_cache_size_MB
                          << " MB. Using smaller cache. " << m_gui_device_mem_text;
@@ -566,10 +632,13 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
         }
         // target size of 0 means to allocate as much for the cache as we can (or rather 85% of it to have some leeway)
         if (m_target_cache_size_MB == 0) {
-            constexpr float free_heap_amount_to_use = 0.85f;
-            m_target_cache_size_MB = free_heap_size / 1024 / 1024;
-            m_target_cache_size_MB = static_cast<size_t>(free_heap_amount_to_use *
-                                                         static_cast<float>(free_heap_size) / 1024.f / 1024.f);
+            if (free_heap_size_byte >= 196) {
+                constexpr float other_required_device_mb = 128.f;
+                m_target_cache_size_MB = static_cast<size_t>(static_cast<float>(free_heap_size_byte) / 1024.f / 1024.f
+                                                             - other_required_device_mb);
+            } else {
+                m_target_cache_size_MB = static_cast<size_t>(static_cast<float>(free_heap_size_byte) / 1024.f / 1024.f);
+            }
         }
         // for small data sets, we can limit the cache so that it fits all LoDs of the data set at once
         size_t maximum_req_cache_size_MB = 4095;
@@ -664,8 +733,8 @@ void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     // all buffers for the encoding etc. are created in initDataSetGPUBuffers() called in the first render loop
     if(m_compressed_segmentation_volume)
         m_data_changed = true; // trigger creation of buffers and re-upload of data
-    for (int m = 0; m < m_gpu_material_changed.size(); m++)
-        m_gpu_material_changed[m] = true;
+    for (auto && m : m_gpu_material_changed)
+        m = true;
     int attributeCount = m_csgv_db ? static_cast<int>(m_csgv_db->getAttributeCount()) : 1;
     for (int a = 0; a < attributeCount; a++)
         m_attribute_start_position.at(a) = -1;
@@ -702,23 +771,24 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
 
     // the shader code is dependent on data set properties like operation frequency tables
     std::vector<std::string> shader_defines = m_compressed_segmentation_volume->getGLSLDefines();
-    shader_defines.push_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
+    if (!m_release_version)
+        shader_defines.emplace_back("ENALBE_CSGV_DEBUGGING");
+    shader_defines.emplace_back("SEGMENTED_VOLUME_MATERIAL_COUNT=" + std::to_string(SEGMENTED_VOLUME_MATERIAL_COUNT));
     if (m_use_palette_cache)
         shader_defines.emplace_back("PALETTE_CACHE");
     if (m_decode_from_shared_memory)
         shader_defines.emplace_back("DECODE_FROM_SHARED_MEMORY");
     shader_defines.emplace_back("CACHE_MODE=" + std::to_string(m_cache_mode));
     if (m_cache_mode == CACHE_VOXELS) {
-        shader_defines.push_back(
+        // internally, the uvec2 are interpreted as pack64(.x, .y) uint64 values to support atomic operations
+        shader_defines.emplace_back(
                 "CACHE_UVEC2_SIZE=" + std::to_string(m_target_cache_size_MB * 1024 * 1024 / sizeof(glm::uvec2)));
     }
     if (m_empty_space_buffer_size > 0) {
-        shader_defines.push_back(
+        shader_defines.emplace_back(
                 "EMPTY_SPACE_UINT_SIZE=" + std::to_string(m_empty_space_buffer_size / sizeof(uint32_t)));
     }
-    shader_defines.push_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
-    if (!m_additional_shader_defs.empty())
-        shader_defines.push_back(m_additional_shader_defs);
+    shader_defines.emplace_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if (getCtx()->getWsi())
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), m_queue_family_index, shader_defines,
@@ -726,6 +796,9 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     else
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, m_queue_family_index, shader_defines,
                                                         m_compressed_segmentation_volume->isUsingRandomAccess(), m_cache_mode==CACHE_BRICKS);
+    if (!m_additional_shader_defs.empty())
+        shader_defines.emplace_back(m_additional_shader_defs);
+
     m_pass->allocateResources();
     m_ucamera_info = m_pass->getUniformSet("camera_info");
     m_urender_info = m_pass->getUniformSet("render_info");
@@ -760,7 +833,6 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     }
     m_pass->setVolumeInfo(m_compressed_segmentation_volume->getBrickCount(),
                           m_compressed_segmentation_volume->getLodCountPerBrick());
-//    m_pass->resetCacheOnNextCall();
 }
 
 void CompressedSegmentationVolumeRenderer::releaseShaderResources() {
@@ -781,9 +853,11 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
     m_pass->setImageInfo(m_resolution.width, m_resolution.height);
 
     // recreate all swapchain image sized textures
-    vvv::AwaitableList reinitDone;
-    m_accumulation_rgba_tex[0] = m_pass->reflectTexture("accumulationIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
-    m_accumulation_rgba_tex[1] = m_pass->reflectTexture("accumulationOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    AwaitableList reinitDone;
+    // m_accumulation_rgba_tex[0] = m_pass->reflectTexture("accumulationIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    // m_accumulation_rgba_tex[1] = m_pass->reflectTexture("accumulationOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR16G16B16A16Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_accumulation_rgba_tex[0] = m_pass->reflectTexture("accumulationIn", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
+    m_accumulation_rgba_tex[1] = m_pass->reflectTexture("accumulationOut", {.width = m_resolution.width, .height = m_resolution.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
     for (auto & texture : m_accumulation_rgba_tex) {
         texture->ensureResources();
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);
@@ -826,11 +900,12 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
             m_pass->setImageSamplerArray("s_transferFunctions", m, m_materialTransferFunctions[m]->texture(), vk::ImageLayout::eReadOnlyOptimal, false);
     }
 
-    m_gui_resolution_text = "Render resolution: " + std::to_string(m_resolution.width) + "x" + std::to_string(m_resolution.height);
+    m_gui_resolution_text = "[" + std::to_string(m_resolution.width) + " x " + std::to_string(m_resolution.height) + "]";
     getCtx()->sync->hostWaitOnDevice(reinitDone);
 
     // trigger a temporal accumulation flush and force parameter updates
-    m_pcamera_hash = static_cast<size_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
+            std::chrono::high_resolution_clock::now().time_since_epoch().count());
     m_accumulated_frames = 0;
     m_frame = 0u;
 }
@@ -873,7 +948,8 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
 
     // camera parameters
     new_hash = 0ull;
-    new_hash = hashMemory(&(m_camera->get_world_to_projection_space(m_resolution)[0]), sizeof(glm::mat4));
+    glm::mat4 mvp = m_camera->get_world_to_projection_space(m_resolution);
+    new_hash = hashMemory(&mvp, sizeof(glm::mat4));
     if (new_hash != m_pcamera_hash) {
         m_render_update_flags |= UPDATE_PCAMERA;
         m_pcamera_hash = new_hash;
@@ -887,10 +963,17 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_global_illumination_enabled) HASHP(m_shadow_pathtracing_ratio) HASHP(m_light_direction)
     HASHP(m_ambient_occlusion_dist_strength) HASHP(m_envmap_enabled) HASHP(m_max_path_length)
     // volume transformations
-    HASHP(m_voxel_size) HASHP(m_bboxMin) HASHP(m_bboxMax)
+    HASHP(m_voxel_size) HASHP(m_bboxMin) HASHP(m_bboxMax) HASHP(m_axis_transpose_mat) HASHP(m_axis_flip[0])
+    HASHP(m_axis_flip[1]) HASHP(m_axis_flip[2])
     // HASHP(m_subblock_start) HASHP(m_subblock_size) HASHP(m_subblock_enabled)
     // general rendering config
-    HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_blue_noise) HASHP(m_max_steps)
+    HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_max_request_path_length_pow2) HASHP(m_blue_noise) HASHP(m_max_steps)
+    // request limitation
+    // TODO: should not reset frame accumulation. Right now the uniforms are always uploaded always at UPDATE_RENDER_FRAME
+    //    HASHP(m_req_limit.area_size)
+    //    if (m_req_limit.area_size > 0) {
+    //        HASHP(m_req_limit.area_pos) HASHP(m_req_limit.area_min_pixel) HASHP(m_req_limit.spp_delta)
+    //    }
     // debug views and flags
     uint32_t render_debug_bits = m_debug_vis_flags & (VDEB_MODEL_SPACE_BIT | VDEB_LOD_BIT | VDEB_EMPTY_SPACE_BIT | VDEB_CACHE_VOXEL_BIT
             | VDEB_BRICK_IDX_BIT | VDEB_STATS_DOWNLOAD_BIT);
@@ -909,13 +992,14 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
 
     // resolve shader parameters
     new_hash = 0ull;
-    HASHP(m_background_color_a) HASHP(m_background_color_b) HASHP(m_tonemap_enabled)
+    HASHP(m_background_color_a) HASHP(m_background_color_b)
+    HASHP(m_tonemap_enabled) HASHP(m_brightness) HASHP(m_contrast) HASHP(m_gamma)
     HASHP(m_atrous_iterations)
-    HASHP(m_denoising_enabled) HASHP(m_atrous_enabled) HASHP(m_difference_depth_denoising)
-    HASHP(m_spatial_sigma) HASHP(m_depth_sigma) HASHP(m_illumination_sigma) HASHP(m_denoise_fade_sigma)
+    HASHP(m_denoising_enabled) HASHP(m_atrous_enabled) HASHP(m_depth_sigma) HASHP(m_denoise_fade_sigma)
     HASHP(m_denoise_filter_kernel_size) HASHP(m_denoise_fade_enabled) HASHP(m_mouse_pos)
     uint32_t resolve_debug_bits = m_debug_vis_flags & (VDEB_NO_POSTPROCESS_BIT | VDEB_CACHE_ARRAY_BIT
-                    | VDEB_EMPTY_SPACE_ARRAY_BIT | VDEB_G_BUFFER_BIT | VDEB_ENVMAP_BIT);
+                                                       | VDEB_EMPTY_SPACE_ARRAY_BIT | VDEB_SPP_BIT | VDEB_G_BUFFER_BIT | VDEB_ENVMAP_BIT
+                                                       | VDEB_REQUEST_LIMIT_BIT | VDEB_BRICK_INFO_BIT);
     HASHP(resolve_debug_bits)
     if (new_hash != m_presolve_hash) {
         m_render_update_flags |= UPDATE_PRESOLVE;
@@ -938,12 +1022,14 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
         // TODO: if m_target_accum_frames *increases*, UPDATE_PRENDER is set but accumulation should not reset
         m_render_update_flags |= UPDATE_CLEAR_ACCUM;
         m_accumulated_frames = 0u;
+        // reset brick request limitation to off
+        disableRequestLimiation();
     }
 
     // check if a new frame has to be accumulated, target frame count of 0 means: render as long as possible
-    if (m_accumulated_frames < m_target_accum_frames || m_target_accum_frames == 0u) {
-        m_render_update_flags |= UPDATE_RENDER_FRAME;
-        m_render_update_flags |= UPDATE_PRESOLVE;
+    if (m_accumulated_frames < m_target_accum_frames || m_target_accum_frames <= 0u) {
+            m_render_update_flags |= UPDATE_RENDER_FRAME;
+            m_render_update_flags |= UPDATE_PRESOLVE;
     }
 
     m_pass->setRenderUpdateFlagsForNextCall(m_render_update_flags);
@@ -962,10 +1048,6 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
 
     glm::vec3 voldim = glm::vec3(m_compressed_segmentation_volume->getVolumeDim());
     glm::vec3 physical_voldim = voldim * m_voxel_size;
-
-    // size in world space: uniformly scaled so that the largest component is one
-    float scalingFactor = glm::max(physical_voldim.x, glm::max(physical_voldim.y, physical_voldim.z));
-    glm::vec3 normalized_volume_size(physical_voldim / scalingFactor);
 
     // camera uniform
     if (m_render_update_flags & UPDATE_PCAMERA) {
@@ -1002,18 +1084,22 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
     if (m_render_update_flags & UPDATE_PRESOLVE) {
         m_uresolve_info->setUniform<glm::vec4>("g_background_color_a", m_background_color_a);
         m_uresolve_info->setUniform<glm::vec4>("g_background_color_b", m_background_color_b);
-        m_uresolve_info->setUniform<uint32_t>("g_tonemap_enable", m_tonemap_enabled ? 1 : 0);
+        m_uresolve_info->setUniform<uint32_t>("g_tonemap_enable", m_tonemap_enabled ? ~0u : 0u);
+        m_uresolve_info->setUniform<float>("g_brightness", m_brightness - 1.f);
+        m_uresolve_info->setUniform<float>("g_contrast", m_contrast < 1.f ? m_contrast
+                                                                            : glm::pow(m_contrast, 2.f));
+        m_uresolve_info->setUniform<float>("g_gamma", m_gamma);
         // denoising
-        m_uresolve_info->setUniform<uint32_t>("g_denoising_enabled", m_denoising_enabled ? 1 : 0);
-        m_uresolve_info->setUniform<uint32_t>("g_atrous_enabled", m_atrous_enabled ? 1 : 0);
-        m_uresolve_info->setUniform<float>("g_difference_depth_denoising", m_difference_depth_denoising);
-        m_uresolve_info->setUniform<float>("g_spatial_sigma", m_spatial_sigma);
+        m_uresolve_info->setUniform<uint32_t>("g_denoising_enabled", m_denoising_enabled ? ~0u : 0u);
+        m_uresolve_info->setUniform<uint32_t>("g_atrous_enabled", m_atrous_enabled ? ~0u : 0u);
         m_uresolve_info->setUniform<float>("g_depth_sigma", m_depth_sigma);
-        m_uresolve_info->setUniform<float>("g_illumination_sigma", m_illumination_sigma);
         m_uresolve_info->setUniform<float>("g_denoise_fade_sigma", m_denoise_fade_sigma);
-        m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
-        m_uresolve_info->setUniform<int>("g_denoise_filter_kernel_size",m_denoise_filter_kernel_size);
-        m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? 1 : 0);
+        m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? ~0u : 0u);
+        // automatically limit the kernel size after a certain number of frames
+        const uint32_t pixels_per_sample = (1u << m_subsampling) * (1u << m_subsampling);
+        m_uresolve_info->setUniform<int>("g_denoise_filter_kernel_size",
+                    glm::min(m_denoise_filter_kernel_size, (m_denoise_filter_kernel_size < 8 * pixels_per_sample) ? 3 : 1));
+        m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? ~0u : 0u);
         m_uresolve_info->setUniform<glm::ivec2>("g_cursor_pixel_pos", glm::ivec2(m_mouse_pos * glm::vec2(m_resolution.width,
                                                                                                          m_resolution.height)));
         m_uresolve_info->setUniform<uint32_t>("g_debug_vis_flags", m_debug_vis_flags);
@@ -1021,21 +1107,57 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
 
     // render info uniform
     if (m_render_update_flags & (UPDATE_RENDER_FRAME | UPDATE_PRENDER)) {
+
+        // MVP matrices, transformations, volume sizes
+        float scalingFactor = glm::max(physical_voldim.x, glm::max(physical_voldim.y, physical_voldim.z));
+        // size in world space: uniformly scaled so that the largest component is one
+        glm::vec3 normalized_volume_size(physical_voldim / scalingFactor);
+        m_urender_info->setUniform<glm::vec3>("g_voxel_size", m_voxel_size);
+        m_urender_info->setUniform<glm::vec3>("g_physical_vol_dim", physical_voldim);
+        m_urender_info->setUniform<glm::vec3>("g_normalized_volume_size", normalized_volume_size);
+        // Transformation matrices:
+        // In world space, everything should be a cuboid with the largest dimension being one, centered around the origin.
+        // In model space, one voxel must be a unit cube. The normalization transform scales this down to world space [-0.5, 0.5]^3
+        glm::mat4 world_to_model_space;
+        world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), glm::vec3(voldim) / glm::vec3(normalized_volume_size)), glm::vec3(normalized_volume_size / 2.f)) * m_axis_transpose_mat;
+        m_urender_info->setUniform<glm::mat4x4>("g_model_to_world_space", glm::inverse(world_to_model_space));
+        m_urender_info->setUniform<glm::mat4x4>("g_world_to_model_space", world_to_model_space);
+        m_urender_info->setUniform<glm::mat3x3>("g_model_to_world_space_dir", glm::mat3(glm::inverse(world_to_model_space)));
+        m_urender_info->setUniform<glm::mat3x3>("g_world_to_model_space_dir", glm::mat3(world_to_model_space));
+        m_urender_info->setUniform<float>("g_world_to_model_space_scaling", scalingFactor);
+        // bbox is the volume dimension in voxels centered around the origin (if no bbox reduction is applied)
+        m_urender_info->setUniform<glm::ivec4>("g_bboxMin", glm::uvec4(glm::clamp(m_bboxMin, glm::ivec3(0), glm::ivec3(voldim)), 1));
+        m_urender_info->setUniform<glm::ivec4>("g_bboxMax", glm::uvec4(glm::clamp(m_bboxMax, glm::ivec3(0), glm::ivec3(voldim)), 1));
+
         // frame indices and seeds
         m_urender_info->setUniform<uint32_t>("g_frame", m_frame);
         m_urender_info->setUniform<uint32_t>("g_camera_still_frames", m_accumulated_frames);
-        m_urender_info->setUniform<uint32_t>("g_target_accum_frames", m_target_accum_frames);
+        m_urender_info->setUniform<uint32_t>("g_target_accum_frames", glm::max(0, m_target_accum_frames));
+        m_urender_info->setUniform<float>("g_cache_fill_rate", getCacheFillRate());
+        // the sample counts of the min. and max. spp values are in the 16 MSB of the gpu_stats values
+        m_urender_info->setUniform<glm::uvec2>("g_min_max_spp", glm::uvec2(m_last_gpu_stats.min_spp_and_pixel >> 48,
+                                                                           m_last_gpu_stats.max_spp_and_pixel >> 48));
+        m_urender_info->setUniform<glm::ivec2>("g_min_spp_pixel", glm::ivec2(m_last_gpu_stats.min_spp_and_pixel & 0xFFFF,
+                                                                             (m_last_gpu_stats.min_spp_and_pixel >> 16) & 0xFFFF));
+        m_urender_info->setUniform<int32_t>("g_req_limit_area_size", m_req_limit.area_size);
+        m_urender_info->setUniform<glm::ivec2>("g_req_limit_area_pos", m_req_limit.area_pos);
+        m_urender_info->setUniform<glm::ivec2>("g_req_limit_area_pixel", m_req_limit.area_min_pixel);
+        m_urender_info->setUniform<uint32_t>("g_req_limit_spp_delta", m_req_limit.spp_delta);
         m_urender_info->setUniform<uint32_t>("g_swapchain_index", m_pass->getActiveIndex());
         m_urender_info->setUniform<int32_t>("g_subsampling", (1 << m_subsampling));
         m_urender_info->setUniform<glm::ivec2>("g_subsampling_pixel", PixelSequence::bitReverseMortonNxNVec(m_subsampling)[m_accumulated_frames % ((1 << m_subsampling) * (1 << m_subsampling))]);
-        m_urender_info->setUniform<float>("g_random_seed", static_cast<float>(m_frame) / 10000.f);
+        // the random seed should only change every other frame to allow requested bricks to be decoded for path tracing
+        const uint32_t pixels_in_subsampling_block = (1 << m_subsampling);
+        const uint32_t random_seed = (m_accumulated_frames / 2 / pixels_in_subsampling_block) << 16u
+                                   ^ (m_accumulated_frames / 2 / pixels_in_subsampling_block);
+        m_urender_info->setUniform<uint32_t>("g_random_seed", random_seed);
         // shading
         m_urender_info->setUniform<float>("g_factor_ambient", m_factor_ambient);
         m_urender_info->setUniform<float>("g_light_intensity", m_light_intensity);
-        m_urender_info->setUniform<uint32_t>("g_global_illumination_enable", m_global_illumination_enabled ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_global_illumination_enable", m_global_illumination_enabled ? ~0u : 0u);
         m_urender_info->setUniform<float>("g_shadow_pathtracing_ratio", m_shadow_pathtracing_ratio);
-        m_urender_info->setUniform<glm::vec3>("g_light_direction", m_light_direction);
-        m_urender_info->setUniform<uint32_t>("g_envmap_enable", m_envmap_enabled ? 1 : 0);
+        m_urender_info->setUniform<glm::vec3>("g_light_direction", glm::normalize(glm::mat3(world_to_model_space) * m_light_direction));
+        m_urender_info->setUniform<uint32_t>("g_envmap_enable", m_envmap_enabled ? ~0u : 0u);
         m_urender_info->setUniform<int32_t>("g_max_path_length", m_max_path_length);
 
         // materials
@@ -1045,36 +1167,14 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
                 max_active_material = m;
         m_urender_info->setUniform<int32_t>("g_max_active_material", max_active_material);
 
-        m_urender_info->setUniform<glm::vec3>("g_voxel_size", m_voxel_size);
-        m_urender_info->setUniform<glm::vec3>("g_physical_vol_dim", physical_voldim);
-        m_urender_info->setUniform<glm::vec3>("g_normalized_volume_size", normalized_volume_size);
-        // Transformation matrices:
-        // In world space, everything should be a cuboid with the largest dimension being one, centered around the origin.
-        // In model space, one voxel must be a unit cube. The normalization transform scales this down to world space [-0.5, 0.5]^3
-        glm::mat4 world_to_model_space;
-        // TODO: generalize switching model space axes in the GUI as axes selector [xyz, xzy, yxz, ...]) and remove the hacky fix
-        // if (switch axes) {
-        //     glm::mat4 _world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), glm::vec3(scalingFactor)), glm::vec3(normalized_volume_size / 2.f));
-        //     world_to_model_space = glm::mat4(_world_to_model_space[0], _world_to_model_space[2], _world_to_model_space[1], _world_to_model_space[3]);
-        // }
-        // else
-        world_to_model_space = glm::translate(glm::scale(glm::mat4(1.f), voldim / normalized_volume_size), normalized_volume_size / 2.f);
-        m_urender_info->setUniform<glm::mat4x4>("g_model_to_world_space", glm::inverse(world_to_model_space));
-        m_urender_info->setUniform<glm::mat4x4>("g_world_to_model_space", world_to_model_space);
-        m_urender_info->setUniform<glm::mat3x3>("g_model_to_world_space_dir", glm::mat3(glm::inverse(world_to_model_space)));
-        m_urender_info->setUniform<glm::mat3x3>("g_world_to_model_space_dir", glm::mat3(world_to_model_space));
-        m_urender_info->setUniform<float>("g_world_to_model_space_scaling", scalingFactor);
-        // bbox is the volume dimension in voxels centered around the origin (if no bbox reduction is applied)
-        m_urender_info->setUniform<glm::vec4>("g_bboxMin", glm::vec4(m_bboxMin, 1.f));
-        m_urender_info->setUniform<glm::vec4>("g_bboxMax", glm::vec4(m_bboxMax, 1.f));
-
         // general render config
         m_urender_info->setUniform<uint32_t>("g_detail_buffer_dirty", m_detail_stage == DetailUploading ? 1u : 0u);
         m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
         auto lod_count = m_compressed_segmentation_volume->getLodCountPerBrick();
         m_urender_info->setUniform<uint32_t>("g_max_inv_lod", glm::min(static_cast<uint32_t>(m_max_inv_lod), lod_count - 1u));
+        m_urender_info->setUniform<int32_t>("g_max_request_path_length", (1 << m_max_request_path_length_pow2) - 1);
         m_urender_info->setUniform<int32_t>("g_maxSteps", m_max_steps);
-        m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? 1 : 0);
+        m_urender_info->setUniform<uint32_t>("g_blue_noise_enable", m_blue_noise ? ~0u : 0u);
     }
 
     // static segmentation volume and buffer metadata uniform
@@ -1101,8 +1201,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
             m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_block_dim", m_empty_space_block_dim);
             uint32_t empty_space_set_size = m_empty_space_block_dim * m_empty_space_block_dim * m_empty_space_block_dim;
             m_usegmented_volume_info->setUniform<uint32_t>("g_empty_space_set_size", empty_space_set_size);
-
-            const glm::uvec3 empty_space_dim = m_compressed_segmentation_volume->getVolumeDim() / m_empty_space_block_dim;
+            // round up to get the number of empty space skipping cells
+            const glm::uvec3 empty_space_dim = (m_compressed_segmentation_volume->getVolumeDim() + glm::uvec3(m_empty_space_block_dim - 1u)) / m_empty_space_block_dim;
             const glm::uvec3 empty_space_dot_map = {1, empty_space_dim.x, empty_space_dim.x * empty_space_dim.y};
             assert(static_cast<size_t>(empty_space_dim.x) * empty_space_dim.y * empty_space_dim.z <= 0xFFFFFFFFull
                    && "empty space dim too large to be indexed in 32 bit. decrease empty space block size.");
@@ -1118,35 +1218,62 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
 }
 
 void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
+    if(!m_compressed_segmentation_volume)
+        throw std::runtime_error("CompressedSegmentationVolume must be set before calling initGui");
+    if(!m_csgv_db)
+        throw std::runtime_error("CompressedSegmentationVolume database must be set before calling initGui");
+
     Renderer::initGui(gui);
-//    GuiInterface::GuiElementList* g = gui->get("Compressed Segmentation Volume Renderer");
+    // Note: the windows are created in this order in ImGui. the later windows are selected before the earlier ones.
     GuiInterface::GuiElementList* g_gen = gui->get("General");
     GuiInterface::GuiElementList* g_dis = gui->get("Display");
     GuiInterface::GuiElementList* g_render = gui->get("Rendering");
     GuiInterface::GuiElementList* g_dev = gui->get("Development");
+    GuiInterface::GuiElementList* g_mat = gui->get("Materials");
+
     // we create an invisible GUI window to export all parameters but keep them hidden from the user
     gui->getWindow("Development")->setVisible(!m_release_version);
     // specify a docking layout for the windows
     gui->setDockingLayout({{"General", "d"},
-                           {"Rendering", "d"},
-                           {"Display", "d"},
-                           {"Materials", "r"},
-                           {"Development", "Materials"}});
+                             {"Rendering", "d"},
+                          {"Display", "d"},
+                          {"Materials", "r"},
+                          {"Development", "Materials"},
+                          });
+
+#ifdef IMGUI
+    #define GUI_SAME_LINE(G) G->addCustomCode([]() { ImGui::SameLine(); }, "");
+#else
+    #define GUI_SAME_LINE(G)
+#endif
 
     // General options
-    g_gen->addSeparator();
-    g_gen->addVec3([this](glm::vec3 v) { if (glm::all(glm::greaterThan(v, glm::vec3(0.f)))) m_voxel_size = v; },
-                   [this]() { return m_voxel_size; }, "Voxel Size", 3);
-    g_gen->addFloatRange([this](glm::vec2 v) {m_bboxMin.x = v.x; m_bboxMax.x = v.y;},
-                         [this](){return glm::vec2(m_bboxMin.x, m_bboxMax.x);},
-                         "Splitting Plane X", glm::vec2(0.f), glm::vec2(1.f), glm::vec2(0.01f), 2);
-    g_gen->addFloatRange([this](glm::vec2 v) {m_bboxMin.y = v.x; m_bboxMax.y = v.y;},
-                         [this](){return glm::vec2(m_bboxMin.y, m_bboxMax.y);},
-                         "Splitting Plane Y", glm::vec2(0.f), glm::vec2(1.f), glm::vec2(0.01f), 2);
-    g_gen->addFloatRange([this](glm::vec2 v) {m_bboxMin.z = v.x; m_bboxMax.z = v.y;},
-                         [this](){return glm::vec2(m_bboxMin.z, m_bboxMax.z);},
-                         "Splitting Plane Z", glm::vec2(0.f), glm::vec2(1.f), glm::vec2(0.01f), 2);
-    g_gen->addSeparator();
+    static int gui_preset_selection = 0;
+    std::vector<std::string> vcfg_preset_names;
+    std::ranges::transform(m_data_vcfg_presets, std::back_inserter(vcfg_preset_names),
+        [](const std::pair<std::string, std::filesystem::path>& c){return c.first;});
+    g_gen->addCombo(&gui_preset_selection, vcfg_preset_names,
+                       [this](int i, bool by_user) {
+                           // if this combo is updated form a vcfg parameter file import, do not change the parameters
+                           if (!by_user)
+                               return;
+
+                            // how many frames have to be accumulated so that each pixel received one sample
+                            if (i >= 0 && i < m_data_vcfg_presets.size())
+                                readParameterFile(m_data_vcfg_presets[i].second);
+
+                            // compute min. required number of total accumulation samples per pixel
+                            if (m_target_accum_frames > 0) {
+                                const int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
+                                if (m_global_illumination_enabled && m_shadow_pathtracing_ratio > 0.) {
+                                    // ambient occlusion / path tracing need some frames to converge
+                                    m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 512);
+                                } else {
+                                    // everything deterministic, nees only AA and iterative brick decoding
+                                    m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 64);
+                                }
+                            }
+                       }, "Rendering Preset");
     g_gen->addAction([this]() {
 #ifdef HEADLESS
         exportCurrentFrameToImage("./volcanite_output.png");
@@ -1166,9 +1293,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 #endif
     }, "Screenshot");
 #ifndef HEADLESS
-#ifdef IMGUI
-    g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
-#endif
+    GUI_SAME_LINE(g_gen)
     g_gen->addAction([this]() {
         std::string file;
         if (!pfd::settings::available()) {
@@ -1185,9 +1310,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         }
 
     }, "Import Parameters");
-#ifdef IMGUI
-    g_gen->addCustomCode([]() { ImGui::SameLine(); }, "");
-#endif
+    GUI_SAME_LINE(g_gen)
     g_gen->addAction([this]() {
         std::string file;
         if (!pfd::settings::available()) {
@@ -1206,128 +1329,188 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
         writeParameterFile(file, VOLCANITE_VERSION);
     }, "Export Parameters");
-    g_gen->addSeparator();
 #endif    // not HEADLESS
+    GUI_SAME_LINE(g_gen)
+    g_gen->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
+    GUI_SAME_LINE(g_gen)
+    g_gen->addAction([this](){ getCamera()->position_look_at_world_space = {0, 0, 0}; }, "Center Camera");
+    g_gen->addSeparator();
+    const glm::uvec3 vol_dim = m_compressed_segmentation_volume->getVolumeDim();
+    g_gen->addVec3([this](glm::vec3 v) { if (glm::all(glm::greaterThan(v, glm::vec3(0.f)))) m_voxel_size = v; },
+                   [this]() { return m_voxel_size; }, "Voxel Size", 3);
+    g_gen->addIntRange([this](glm::ivec2 v) {m_bboxMin.x = v.x; m_bboxMax.x = v.y;},
+                         [this](){return glm::ivec2(m_bboxMin.x, m_bboxMax.x);},
+                         "Splitting Plane X",  glm::ivec2(0), glm::ivec2(vol_dim.x), glm::ivec2(1));
+    g_gen->addIntRange([this](glm::ivec2 v) {m_bboxMin.y = v.x; m_bboxMax.y = v.y;},
+                         [this](){return glm::ivec2(m_bboxMin.y, m_bboxMax.y);},
+                         "Splitting Plane Y", glm::ivec2(0), glm::ivec2(vol_dim.y), glm::ivec2(1));
+    g_gen->addIntRange([this](glm::ivec2 v) {m_bboxMin.z = v.x; m_bboxMax.z = v.y;},
+                         [this](){return glm::ivec2(m_bboxMin.z, m_bboxMax.z);},
+                         "Splitting Plane Z", glm::ivec2(0), glm::ivec2(vol_dim.z), glm::ivec2(1));
+    static int gui_transpose_selection = 0;
+    // TODO: GUI Combo arrays could become static constexpr with lambda init
+    static std::vector<glm::ivec3> gui_transpose_order;
+    constexpr std::pair<char, glm::vec4> __gui_transpose_xyz[3] = {std::make_pair<char, glm::vec4>('X', {1.f, 0.f, 0.f, 0.f}),
+                                                                   std::make_pair<char, glm::vec4>('Y', {0.f, 1.f, 0.f, 0.f}),
+                                                                   std::make_pair<char, glm::vec4>('Z', {0.f, 0.f, 1.f, 0.f})};
+    std::vector<std::string> gui_transpose_strings;
+    for (int a = 0; a < 3; a++) {
+        for (int b = 0; b < 3; b++) {
+            for (int c = 0; c < 3; c++) {
+                if (b == a || (c == a || c == b)) continue;
+                gui_transpose_strings.emplace_back("XYZ");
+                gui_transpose_strings.back()[0] = __gui_transpose_xyz[a].first;
+                gui_transpose_strings.back()[1] = __gui_transpose_xyz[b].first;
+                gui_transpose_strings.back()[2] = __gui_transpose_xyz[c].first;
+                gui_transpose_order.emplace_back(glm::ivec3{a,b,c});
+            }
+        }
+    }
+    constexpr auto __get_axis_tranpose_mat = [__gui_transpose_xyz](glm::ivec3 order, bool axis_flip[3])-> glm::mat4 {
+        return glm::mat4{__gui_transpose_xyz[order[0]].second * (axis_flip[0] ? -1.f : 1.f),
+                         __gui_transpose_xyz[order[1]].second * (axis_flip[1] ? -1.f : 1.f),
+                         __gui_transpose_xyz[order[2]].second * (axis_flip[2] ? -1.f : 1.f),
+                         glm::vec4{0.f, 0.f, 0.f, 1.f}};
+        };
+    g_gen->addLabel("Flip");
+    GUI_SAME_LINE(g_gen)
+    g_gen->addBool([this, __get_axis_tranpose_mat](bool v) {
+            m_axis_flip[0] = v;
+            m_axis_transpose_mat = __get_axis_tranpose_mat(gui_transpose_order[gui_transpose_selection], m_axis_flip);
+        }, [this]() { return m_axis_flip[0]; }, "X Axis");
+    GUI_SAME_LINE(g_gen)
+    g_gen->addBool([this, __get_axis_tranpose_mat](bool v) {
+            m_axis_flip[1] = v;
+            m_axis_transpose_mat = __get_axis_tranpose_mat(gui_transpose_order[gui_transpose_selection], m_axis_flip);
+        }, [this]() { return m_axis_flip[1]; }, "Y Axis");
+    GUI_SAME_LINE(g_gen)
+    g_gen->addBool([this, __get_axis_tranpose_mat](bool v) {
+            m_axis_flip[2] = v;
+            m_axis_transpose_mat = __get_axis_tranpose_mat(gui_transpose_order[gui_transpose_selection], m_axis_flip);
+        }, [this]() { return m_axis_flip[2]; }, "Z Axis");
+    g_gen->addCombo(&gui_transpose_selection, gui_transpose_strings,
+                    [this, __get_axis_tranpose_mat](int i, bool by_user) {
+                        assert(gui_transpose_selection < gui_transpose_order.size() && "GUI sets out of bounds transpose matrix.");
+                        m_axis_transpose_mat = __get_axis_tranpose_mat(gui_transpose_order[gui_transpose_selection], m_axis_flip);
+                    }, "Axis Order");
+    g_gen->addSeparator();
     g_gen->addDynamicText(&m_gui_device_mem_text);
     g_gen->addDynamicText(&m_gui_cache_mem_text);
 
     // Display properties and render resolution
     g_dis->addColor(&m_background_color_a, "Background Color A");
     g_dis->addColor(&m_background_color_b, "Background Color B");
-    g_dis->addInt(&m_target_accum_frames, "Accumulation Frames");
-    g_dis->addProgress([this]() { return static_cast<float>(m_accumulated_frames) / static_cast<float>(m_target_accum_frames); }, "Progress");
-    g_dis->addInt(&m_subsampling, "Subsampling Resolution", 0, 3, 1);
-    //
-    g_dis->addSeparator();
-    g_dis->addDynamicText(&m_gui_resolution_text);
     g_dis->addBool([this](bool b) { if(getCtx()->getWsi()) getCtx()->getWsi()->setWindowResizable(b); }, [this]() { return getCtx()->getWsi() != nullptr && getCtx()->getWsi()->isWindowResizable(); }, "Resizable Window");
+    GUI_SAME_LINE(g_dis)
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(1920, 1080); }, "1920x1080 FullHD");
-#ifdef IMGUI
-    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
-#endif
+    GUI_SAME_LINE(g_dis)
     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(3840, 2160); }, "3840x2160 4K");
-    g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(1080, 1920); }, "1080x1920 FullHD");
-#ifdef IMGUI
-    g_dis->addCustomCode([]() { ImGui::SameLine(); }, "");
-#endif
-    g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize( 2160, 3840); }, "2160x3840 4K");
-    //g_dis->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
+    GUI_SAME_LINE(g_dis)
+    g_dis->addDynamicText(&m_gui_resolution_text);
+    //     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize(1080, 1920); }, "1080x1920 FullHD");
+    //     GUI_SAME_LINE(g_dis)
+    //     g_dis->addAction([this]() { getCtx()->getWsi()->setWindowSize( 2160, 3840); }, "2160x3840 4K");
+    //     g_dis->addAction([this]() { getCamera()->orbital = !getCamera()->orbital; getCamera()->reset(); }, "Switch Camera Mode");
+    g_dis->addSeparator();
+    g_dis->addInt(&m_target_accum_frames, "Accumulation Frames");
+    g_dis->addProgress([this]() { return m_target_accum_frames > 0u ? static_cast<float>(m_accumulated_frames) / static_cast<float>(m_target_accum_frames)
+                                                                                   : -static_cast<float>(m_accumulated_frames); }, "Progress");
+    g_dis->addLabel("Performance Optimization");
+    g_dis->addInt(&m_subsampling, "Resolution Subsampling Factor ", 0, 3, 1);
+    g_dis->addInt(&m_max_request_path_length_pow2, "Decompression Path Length", 0, 5, 1);
+    g_dis->addFloat(&m_lod_bias, "Decompression LOD Bias", -8.f, 8.f, 0.1f, 1.f);
 
     // Materials
-    if(m_csgv_db) {
-        gui->get("Materials")->addTFSegmentedVolume(&m_materials, m_csgv_db->getAttributeNames(), m_csgv_db->getAttributeMinMax(), [this](int m) { updateSegmentedVolumeMaterial(m); }, "Materials");
-    }
+    g_mat->addTFSegmentedVolume(&m_materials, m_csgv_db->getAttributeNames(), m_csgv_db->getAttributeMinMax(), [this](int m) { updateSegmentedVolumeMaterial(m); }, "Materials");
 
     // Path Tracing / Rendering
-    static int gui_preset_selection = 0;
-    std::vector<std::string> vcfg_preset_names;
-    std::ranges::transform(m_data_vcfg_presets, std::back_inserter(vcfg_preset_names),
-        [](const std::pair<std::string, std::filesystem::path>& c){return c.first;});
-    g_render->addCombo(&gui_preset_selection, vcfg_preset_names,
-                       [this](int i) {
-                            // how many frames have to be accumulated so that each pixel received one sample
-                            if (i >= 0 && i < m_data_vcfg_presets.size())
-                                readParameterFile(m_data_vcfg_presets[i].second.string());
-
-                            // compute min. required number of total accumulation samples per pixel
-                            const int frames_for_one_spp = (1 << m_subsampling) * (1 << m_subsampling);
-                            if (m_global_illumination_enabled && m_shadow_pathtracing_ratio > 0.) {
-                                // ambient occlusion / path tracing need some frames to converge (1024 SPP)
-                                m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 1024);
-                            } else {
-                                // everything deterministic, nees only AA
-                                m_target_accum_frames = glm::max(m_target_accum_frames, frames_for_one_spp * 16);
-                            }
-                       }, "Rendering Preset");
     g_render->addFloat(&m_factor_ambient, "Constant Color", 0.0f, 1.f, 0.05f, 2);
     g_render->addSeparator();
     g_render->addFloat(&m_light_intensity, "Light Intensity", 0.f, 4.f, 0.05f, 2);
-    g_render->addDirection(&m_light_direction, "Light Direction");
+    g_render->addDirection(&m_light_direction, m_camera.get(), "Light Direction");
     g_render->addSeparator();
     g_render->addBool(&m_global_illumination_enabled, "Global Illumination");
-    g_render->addFloat(&m_shadow_pathtracing_ratio, "Direct Light / Pathtracing Ratio", 0.f, 1.f, 0.1f, 1);
+    GUI_SAME_LINE(g_render)
     g_render->addBool(&m_envmap_enabled, "Environment Map");
+    g_render->addFloat(&m_shadow_pathtracing_ratio, "Directional <> Ambient", 0.f, 1.f, 0.05f, 2);
     g_render->addInt(&m_max_path_length, "Path Length", 1, 32, 1);
+    g_render->addSeparator();
+    g_render->addBool(&m_denoising_enabled, "Denoising");
+    GUI_SAME_LINE(g_render)
+    g_render->addBool(&m_tonemap_enabled, "Tone Mapping");
+    g_render->addAction([this](){ m_brightness = 1.f; }, "Reset##Brightness");
+    GUI_SAME_LINE(g_render)
+    g_render->addFloat(&m_brightness, "Brightness", 0.f, 2.f, 0.01f);
+    g_render->addAction([this](){ m_contrast = 1.f; }, "Reset##Contrast");
+    GUI_SAME_LINE(g_render)
+    g_render->addFloat(&m_contrast, "Contrast", 0.f, 2.f, 0.01f);
+    g_render->addAction([this](){ m_gamma = 1.f; }, "Reset##Gamma");
+    GUI_SAME_LINE(g_render)
+    g_render->addFloat(&m_gamma, "Gamma", 0.f, 4.f, 0.01f);
+
+    // Post-Processing
+    g_dev->addLabel("Post Processing");
+    g_dev->addBool(&m_atrous_enabled, "Enable À-Trous Post-Processing");
+    g_dev->addInt(&m_atrous_iterations, "Post-Process Iterations", 1, 4, 1);
+    g_dev->addInt(&m_denoise_filter_kernel_size, "Post-Process Kernel Size", 0, 3, 1);
+    g_dev->addSeparator();
+    g_dev->addLabel("Denoising");
+    g_dev->addFloat(&m_depth_sigma, "Denoise Depth Sigma", 0.001f, 100.f, 0.01, 3);
+    g_dev->addBool(&m_denoise_fade_enabled, "Denoise Fade Out");
+    GUI_SAME_LINE(g_dev)
+    g_dev->addFloat(&m_denoise_fade_sigma, "Denoise Fade Sigma", 0.00f, 10.f, 0.01, 2);
 
     // Development
     g_dev->addLabel("Ray Traversal");
     g_dev->addBool(&m_blue_noise, "Blue Noise Shift");
-    g_dev->addInt(&m_max_steps, "Max DDA Steps", 16, 1 << 16u, 16);
-    g_dev->addFloat(&m_lod_bias, "LOD bias", -4.f, 4.f, 0.1f, 1.f);
+    g_dev->addInt(&m_max_steps, "Max. DDA Steps", 16, 1 << 16u, 16);
+    g_dev->addInt(&m_max_inv_lod, "Max. Decoding LoD", 0, 8, 1);
     g_dev->addSeparator();
-
-    // TODO: remove some of these to a designated "Postprocessing" GUI tab (next to material, before g_dev)
-    g_dev->addLabel("Denoising");
-        g_dev->addBool(&m_atrous_enabled, "Enable À-Trous Post-Processing");
-    g_dev->addInt(&m_atrous_iterations, "Post-Process Iterations", 1, 4, 1);
-    g_dev->addInt(&m_denoise_filter_kernel_size, "Post-Process Kernel Size", 0, 3, 1);
-    g_dev->addBool(&m_denoising_enabled, "Enable Denoising");
-//    g_dev->addFloat(&m_difference_depth_denoising, "difference depth denoising", 0.001f, 1.f, 0.004, 3);
-//    g_dev->addFloat(&m_spatial_sigma, "Spatial Sigma", 0.001f, 5.f, 0.01, 2);
-    g_dev->addFloat(&m_depth_sigma, "Depth Sigma", 0.001f, 100.f, 0.01, 3);
-//    g_dev->addFloat(&m_illumination_sigma, "Illumination Sigma", 0.01f, 10.f, 0.01, 2); // unnused for now
-    g_dev->addBool(&m_denoise_fade_enabled, "Fade Denoiser Out");
-    g_dev->addFloat(&m_denoise_fade_sigma, "Denoise Fade Sigma", 0.00f, 10.f, 0.01, 2);
-    g_dev->addSeparator();
-    g_dev->addBool(&m_tonemap_enabled, "Tone Mapping");
-    g_dev->addSeparator();
-    g_dev->addLabel("Debug");
-    g_dev->addAction([this]() { printGPUMemoryUsage(); }, "Print GPU Memory Usage");
-    g_dev->addInt(&m_max_inv_lod, "Max. Decoding LoD", 0, 6, 1);
+    g_dev->addLabel("Debug Views");
     const std::vector<std::string> option_labels = {"Model Space", "Level-of-Detail", "Empty Space", "Brick Index",
-                                                    "Label Cache", "Raw Render", "Cache Buffer", "Empty Space Buffer",
-                                                    "G-Buffer", "Samples/Pixel", "Environment Map", "Print Statistics"};
+                                                    "Label Cache", "Raw Render", "Cache Buffer",
+                                                    "Request Limitation", "Brick Info State",
+                                                    "Empty Space Buffer", "G-Buffer", "Samples/Pixel",
+                                                    "Environment Map", "Print Statistics"};
     const std::vector<uint32_t> option_bits = {VDEB_MODEL_SPACE_BIT, VDEB_LOD_BIT, VDEB_EMPTY_SPACE_BIT, VDEB_BRICK_IDX_BIT,
                                                VDEB_CACHE_VOXEL_BIT, VDEB_NO_POSTPROCESS_BIT, VDEB_CACHE_ARRAY_BIT,
+                                               VDEB_REQUEST_LIMIT_BIT, VDEB_BRICK_INFO_BIT,
                                                VDEB_EMPTY_SPACE_ARRAY_BIT, VDEB_G_BUFFER_BIT, VDEB_SPP_BIT,
                                                VDEB_ENVMAP_BIT, VDEB_STATS_DOWNLOAD_BIT};
     g_dev->addBitFlags(&m_debug_vis_flags, option_labels, option_bits, true, "Debug View");
     g_dev->addSeparator();
-    g_dev->addAction([this]() { getCamera()->reset(); }, "Reset Camera");
-#ifdef IMGUI
-    g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
-#endif
-    g_dev->addAction([this](){ getCamera()->position_look_at_world_space = {0, 0, 0}; }, "Center Camera");
-    g_dev->addSeparator();
+    g_dev->addLabel("Label Cache Management");
+    g_dev->addBool(&m_req_limit.g_enable, "Auto Cache Request Limitation");
+    g_dev->addInt(&m_req_limit.spp_delta, "Allowed SPP Difference", 2, 512, 1);
+    g_dev->addInt(&m_req_limit.g_area_size_min, "Area Min. Size", 1, 4096, 1);
+    g_dev->addIntRange(&m_req_limit.g_area_duration_bounds, "Area Min. Duration", glm::ivec2(2), glm::ivec2(200), glm::ivec2(1));
+    g_dev->addAction([this]() {m_req_limit.random_area_pixel = true;
+                                                m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x; },
+                     "Trigger Random Requests");
+    g_dev->addBool(&m_auto_cache_reset, "Auto Cache Defragmentation");
+    g_dev->addBool([this](bool v) { m_pass->setCacheStagesEnabled(!v); },
+            [this]() { return !m_pass->getCacheStagesEnabled();}, "Freeze Cache");
+    g_dev->addBool(&m_clear_cache_every_frame, "Every Frame##cache");
+    GUI_SAME_LINE(g_dev)
     g_dev->addAction([this]() { m_pcache_reset = true; }, "Clear Label Cache");
-#ifdef IMGUI
-    g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
-#endif
-    g_dev->addBool(&m_clear_cache_every_frame, "Every Frame");
+    g_dev->addSeparator();
+    g_dev->addLabel("Framebuffer Accumulation");
+    g_dev->addBool(&m_clear_accum_every_frame, "Every Frame##framebuffer");
+    GUI_SAME_LINE(g_dev)
     g_dev->addAction([this]() { m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
-            std::chrono::high_resolution_clock::now().time_since_epoch().count()); }, "Clear Accumulation");
-#ifdef IMGUI
-    g_dev->addCustomCode([]() { ImGui::SameLine(); }, "");
-#endif
-    g_dev->addBool(&m_clear_accum_every_frame, "Every Frame");
+        std::chrono::high_resolution_clock::now().time_since_epoch().count()); }, "Clear Accumulation");
+    g_dev->addBool(&m_accum_step_mode, "Step Accumulation");
+    GUI_SAME_LINE(g_dev)
+    g_dev->addAction([this]() { m_accum_do_step = m_accum_step_mode; }, "Next Step");
     g_dev->addAction([this]() { m_pcache_reset = true;
         m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
                 std::chrono::high_resolution_clock::now().time_since_epoch().count());}, "Clear Cache and Accumulation");
-    g_dev->addSeparator();
+    GUI_SAME_LINE(g_dev)
+    g_dev->addAction([this]() { printGPUMemoryUsage(); }, "Print GPU Memory Usage");
 
     // import initial config (if requested)
     if (m_init_vcfg_file.has_value())
-        CompressedSegmentationVolumeRenderer::readParameterFile(m_init_vcfg_file.value().string());
+        CompressedSegmentationVolumeRenderer::readParameterFile(m_init_vcfg_file.value());
 }
 
     void CompressedSegmentationVolumeRenderer::updateDeviceMemoryUsage() {
@@ -1340,14 +1523,19 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                              << static_cast<float>(total) / 1073741824.f << " GB (used/avail/total)";
         m_gui_device_mem_text = ss.str();
         ss = {};
-        const size_t cache_total_bytes = (m_cache_capacity * 8 * sizeof(uint32_t));
+        const size_t cache_total_bytes = m_cache_buffer ? m_cache_buffer->getByteSize() : 0ull;
         if (m_last_gpu_stats.used_cache_base_elements > 0u) {
-            const size_t cache_occupied_bytes = (m_last_gpu_stats.used_cache_base_elements * 8 * sizeof(uint32_t));
+            const size_t cache_occupied_bytes = (m_last_gpu_stats.used_cache_base_elements * m_cache_base_element_uints * sizeof(uint32_t));
             ss << "Cache Usage: " << cache_occupied_bytes * BYTE_TO_MB
                << " / " << cache_total_bytes * BYTE_TO_MB << " MB ("
-               << 100.f * static_cast<float>(cache_occupied_bytes) / static_cast<float>(cache_total_bytes) << "%)";
+               << 100.f * static_cast<float>(cache_occupied_bytes) / static_cast<float>(cache_total_bytes) << "%) " << getCacheFillRate() * 100.f;
         } else {
-            ss << "Cache Usage: ? / " << cache_total_bytes * BYTE_TO_MB << " MB";
+            ss << "Cache Usage: ...";
+        }
+        if (const uint32_t global_max_spp = static_cast<uint32_t>(m_last_gpu_stats.max_spp_and_pixel >> 48u);
+            global_max_spp < 0xFFFF) {
+            ss << " | SPP min/max: " << static_cast<uint32_t>(m_last_gpu_stats.min_spp_and_pixel >> 48u)
+            << " / " << global_max_spp;
         }
         m_gui_cache_mem_text = ss.str();
     }
@@ -1441,18 +1629,137 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         return {};
     }
 
+
+
+    void CompressedSegmentationVolumeRenderer::disableRequestLimiation() {
+        // turn request limitation off
+        m_req_limit.area_size = 0;
+        m_req_limit.area_pos = {0, 0};
+        m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x;
+        m_req_limit.area_start_frame = m_accumulated_frames;
+    }
+
+    void CompressedSegmentationVolumeRenderer::updateRequestLimiation(const uint32_t global_min_spp,
+                                                                      const uint32_t global_max_spp) {
+        const uint32_t subsampling_pixels = (1u << m_subsampling) * (1u << m_subsampling);
+
+        // disable request limiation if the pixel with the lowest number af samples did catch up with the max. SPP
+        if (global_min_spp + m_req_limit.spp_delta >= global_max_spp) {
+            disableRequestLimiation();
+        }
+        // enable request limitation if:
+        // (0) it is not already active
+        // (1) some frames were rendered already
+        // (2) some pixels did not receive enough samples
+        // (3) the cache is almost full
+        else if (m_req_limit.area_size == 0
+                 && m_accumulated_frames >= m_req_limit.area_start_frame + subsampling_pixels * m_req_limit.area_duration
+                 && (global_min_spp + m_req_limit.spp_delta < global_max_spp)
+                 && getCacheFillRate() > 0.90f)
+        {
+            m_req_limit.tried_cache_reset = false;
+            m_req_limit.random_area_pixel = false,
+            m_req_limit.area_size = 1 << glm::findMSB(glm::max(m_resolution.width, m_resolution.height));
+            m_req_limit.area_pos = {0, 0};
+            m_req_limit.area_start_frame = m_accumulated_frames;
+            m_req_limit.area_min_pixel_last_spp = global_min_spp;
+            m_req_limit.area_min_pixel = m_req_limit.global_min_pixel;
+            m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x;
+        }
+        // if a brick request limitation is already set: move the AABB in which pixels can request bricks around
+        // when a new area configuration is set, area_duration frames are accumulated to see if it was effective
+        else if (m_req_limit.area_size > 0
+                 && m_accumulated_frames >= m_req_limit.area_start_frame + subsampling_pixels * m_req_limit.area_duration) {
+            m_req_limit.area_start_frame = m_accumulated_frames;
+
+            // after area_duration frames, this area should have received new samples
+            const int new_samples_rendered = static_cast<int>(m_last_gpu_stats.limit_area_pixel_spp)
+                                                - static_cast<int>(m_req_limit.area_min_pixel_last_spp);
+            if (new_samples_rendered > 0) {
+                // in area_duration many frames, the renderer could accumulate new_samples_rendered many samples
+                // this means that it took (new_samples_rendered - area_duration) many frames to fill the cache:
+                // reduce the area_duration accordingly
+                m_req_limit.area_duration = glm::max((m_req_limit.area_duration + (1 + new_samples_rendered - m_req_limit.area_duration)) / 2, 4);
+                // increase the area size (slower than it is decreased)
+                m_req_limit.area_size = ((m_req_limit.area_size * 3 + 7) / 8) * 8; // *3 rounded up to multiple of 8
+                // if the area would now cover the whole screen, disable request limitation
+                if (m_req_limit.area_size > glm::max(m_resolution.width, m_resolution.height)) {
+                    disableRequestLimiation();
+                }
+            }
+            // if not: reduce the area size and increase the area duration as long as this is possible
+            else {
+                // reduce size
+                m_req_limit.area_size = m_req_limit.area_size / 4;
+                if (m_req_limit.area_size < m_req_limit.g_area_size_min) {
+                    m_req_limit.area_size = m_req_limit.g_area_size_min;
+                }
+                // increase duration
+                if (m_req_limit.area_size <= m_req_limit.g_area_size_min)
+                    m_req_limit.area_duration *= 2u;
+                else
+                    m_req_limit.area_duration += 8u;
+                if (m_req_limit.area_duration > m_req_limit.g_area_duration_bounds.y) {
+                    m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.y;
+
+                    // if the maximum duration and minimum size are reached: move over to sample random areas instead
+                    if (m_req_limit.area_size <= m_req_limit.g_area_size_min) {
+                        //.. but first try to reset the cache ONCE to see if this solves the problem
+                        if (!m_req_limit.tried_cache_reset) {
+                            m_pcache_reset = true;
+                            m_req_limit.tried_cache_reset = true;
+                        }
+                        else {
+                            if (!m_req_limit.random_area_pixel)
+                                Logger(WARN) << "Cache insufficient: unable to render all pixels under current request"
+                                                     " limitation configuration. Increase cache size with --cache-size [MB]";
+                            //m_req_limit.random_area_pixel = true;
+                            m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x;
+                            m_accum_step_mode = true;
+                        }
+                    } else {
+                        m_req_limit.area_size = m_req_limit.g_area_size_min;
+                    }
+                }
+            }
+
+            // the new area of pixels that can request bricks must cover the pixel with the lowest number of samples yet
+            // if it is not possible to render any sample for this pixel (even after a long accumulation),
+            // random_area_pixel is set to true and the next pixel is always chosen randomly from now on
+            if (m_req_limit.area_size > 0) {
+                glm::ivec2 last_pixel = m_req_limit.area_min_pixel;
+                if (m_req_limit.random_area_pixel) {
+                    m_req_limit.area_min_pixel = glm::ivec2(rand() % m_resolution.width, rand() % m_resolution.height);
+                    m_req_limit.area_min_pixel_last_spp = INVALID;
+                } else {
+                    m_req_limit.area_min_pixel = m_req_limit.global_min_pixel;
+                    m_req_limit.area_min_pixel_last_spp = global_min_spp;
+                }
+                m_req_limit.area_pos = (m_req_limit.area_min_pixel / glm::ivec2(m_req_limit.area_size))
+                                       * glm::ivec2(m_req_limit.area_size);
+
+                // if we moved over to another location now, we allow resetting the cache once again
+                if (last_pixel.x != m_req_limit.area_min_pixel.x && last_pixel.y != m_req_limit.area_min_pixel.y)
+                    m_req_limit.tried_cache_reset = false;
+            }
+        }
+    }
+
     void CompressedSegmentationVolumeRenderer::printGPUMemoryUsage() {
         CSGVRenderEvaluationResults res = getLastEvaluationResults();
+        double available_vram_bytes = static_cast<double>(getMemoryHeapBudgetAndUsage(*getCtx()).first);
         Logger(INFO)  << "[GPU Memory] " << std::fixed << std::setprecision(3)
-                      << "Framebuffers: " << res.mem_framebuffers_bytes * BYTE_TO_GB << " GB | "
-                      << "Uniform Buffers: " << res.mem_ubos_bytes * BYTE_TO_GB << " GB | "
-                      << "Materials: " << res.mem_materials_bytes * BYTE_TO_GB << " GB | "
-                      << "Encoding: " << res.mem_encoding_bytes * BYTE_TO_GB << " GB | "
-                      << "Cache: " << res.mem_cache_bytes * BYTE_TO_GB << " GB | "
-                      << "Empty Space: " << res.mem_empty_space_bytes * BYTE_TO_GB << " GB | "
-                      << "  = " << res.mem_framebuffers_bytes + res.mem_ubos_bytes
-                      + res.mem_materials_bytes + res.mem_encoding_bytes + res.mem_cache_bytes + res.mem_empty_space_bytes * BYTE_TO_GB << " GB"
-                      << " / " << res.mem_total_bytes * BYTE_TO_GB << " GB";
+                << "Framebuffers: " << res.mem_framebuffers_bytes * BYTE_TO_GB << " GB | "
+                << "Uniform Buffers: " << res.mem_ubos_bytes * BYTE_TO_GB << " GB | "
+                << "Materials: " << res.mem_materials_bytes * BYTE_TO_GB << " GB | "
+                << "Encoding: " << res.mem_encoding_bytes * BYTE_TO_GB << " GB | "
+                << "Cache: " << res.mem_cache_bytes * BYTE_TO_GB << " GB | "
+                << "Empty Space: " << res.mem_empty_space_bytes * BYTE_TO_GB << " GB | "
+                << "Rest: " << (res.mem_framebuffers_bytes + res.mem_ubos_bytes + res.mem_materials_bytes
+                                      + res.mem_encoding_bytes + res.mem_cache_bytes + res.mem_empty_space_bytes
+                                      - res.mem_total_bytes) * BYTE_TO_GB << " GB"
+                << " = " << res.mem_total_bytes * BYTE_TO_GB << " total GB / "
+                << available_vram_bytes * BYTE_TO_GB << " GB";
     }
 
     CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluationResults() {
@@ -1493,6 +1800,10 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                          + (m_detail_requests_buffer ? m_detail_requests_buffer->getByteSize() : 0ul);
             }
             results.mem_cache_bytes = cache;
+            results.mem_cache_used_bytes = m_last_gpu_stats.used_cache_base_elements * m_cache_base_element_uints * sizeof(uint32_t);
+            results.mem_cache_fill_rate = getCacheFillRate();
+            results.min_samples_per_pixel = static_cast<int>(m_last_gpu_stats.min_spp_and_pixel >> 48u);
+            results.max_samples_per_pixel = static_cast<int>(m_last_gpu_stats.max_spp_and_pixel >> 48u);
 
             size_t empty_space = 0ul;
             if (m_empty_space_buffer) {
@@ -1511,7 +1822,6 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                 }
             }
             results.mem_encoding_bytes = encoding;
-
             results.mem_total_bytes = getMemoryHeapBudgetAndUsage(*getCtx()).second;
         }
 

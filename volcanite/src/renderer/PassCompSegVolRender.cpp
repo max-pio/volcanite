@@ -42,21 +42,21 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
         Logger(DEBUG) << "hard reset brick cache";
     }
 
-    if (m_enable_cache_stages && (m_render_update_flags & UPDATE_RENDER_FRAME)) {
-        // block request and visibility classification
-        getCtx()->debugMarker->beginRegion(commandBuffer, "request", glm::vec4(0.f, 0.f, 0.9f, 1.f));
-        // if cache stages are not enabled, the request stage has to be executed nevertheless on material chagnes
-        // to recompute the empty space information
-        if (m_enable_cache_stages || (m_render_update_flags & UPDATE_PMATERIAL)) {
-            executeCommands(commandBuffer, REQUEST);
-            commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader,
-                                      {},
-                                      {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead |
-                                                                                           vk::AccessFlagBits::eShaderWrite)},
-                                      nullptr, nullptr);
-        }
-        getCtx()->debugMarker->endRegion(commandBuffer);
+    // block request and visibility classification
+    getCtx()->debugMarker->beginRegion(commandBuffer, "request", glm::vec4(0.f, 0.f, 0.9f, 1.f));
+    // if cache stages are not enabled, the request stage has to be executed nevertheless on material changes
+    // to recompute the empty space information
+    if (m_enable_cache_stages || (m_render_update_flags & UPDATE_PMATERIAL)) {
+        executeCommands(commandBuffer, REQUEST);
+        commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader,
+                                  {},
+                                  {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead |
+                                                                                       vk::AccessFlagBits::eShaderWrite)},
+                                  nullptr, nullptr);
+    }
+    getCtx()->debugMarker->endRegion(commandBuffer);
 
+    if (m_enable_cache_stages && (m_render_update_flags & UPDATE_RENDER_FRAME)) {
         // fetch new blocks at the end of the cache
         getCtx()->debugMarker->beginRegion(commandBuffer, "provision", glm::vec4(0.f, 0.3f, 0.6f, 1.f));
         executeCommands(commandBuffer, PROVISION);
@@ -164,7 +164,6 @@ std::vector<std::shared_ptr<Shader>> PassCompSegVolRender::createShaders() {
             m_parallel_decode ? std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_decompress_subgroup_parallel.comp", .defines= m_shader_defines, .label="csgv_decompress_subgroup_parallel.comp"}, compileErrorCallback) :
                                 std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_decompress.comp", .defines= m_shader_defines, .label="csgv_decompress.comp"}, compileErrorCallback),
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_renderer.comp", .defines= m_shader_defines, .label="csgv_renderer.comp"}, compileErrorCallback),
-//            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_upsample_resolve.comp", .defines= m_shader_defines, .label="csgv_upsample_resolve.comp"}, compileErrorCallback),
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_denoise_resolve.comp", .defines= m_shader_defines, .label="csgv_denoise_resolve.comp"}, compileErrorCallback),
             std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_renderer_dummy.comp", .defines= m_shader_defines, .label="csgv_renderer_dummy.comp"}, compileErrorCallback),
             };

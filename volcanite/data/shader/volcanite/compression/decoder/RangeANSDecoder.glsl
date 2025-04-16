@@ -25,23 +25,23 @@
 ///   SEPARATE_DETAIL
 
 #if ENCODING_MODE != SINGLE_TABLE_RANS_ENC && ENCODING_MODE != DOUBLE_TABLE_RANS_ENC
-    STATIC_FAIL(expected_SINGLE_TABLE_RANS_ENC_or_DOUBLE_TABLE_RANS_ENC_encoding_mode);
+    #error "expected SINGLE_TABLE_RANS_ENC or DOUBLE_TABLE_RANS_ENC encoding mode"
 #endif
 
 #ifdef RANDOM_ACCESS
-    STATIC_FAIL(RangeANS_encoding_does_not_support_RANDOM_ACCESS);
+    #error "RangeANS encoding does not support RANDOM_ACCESS"
 #endif
 
 #ifdef DECODE_FROM_SHARED_MEMORY
-    STATIC_FAIL(RangeANS_encoding_does_not_support_DECODE_FROM_SHARED_MEMORY);
+    #error "RangeANS encoding does not support DECODE_FROM_SHARED_MEMORY"
 #endif
 
 #if CACHE_MODE != CACHE_BRICKS
-    STATIC_FAIL(RangeANS_encoding_only_supports_CACHE_MODE_set_to_CACHE_BRICKS);
+    #error "RangeANS encoding only supports CACHE_MODE set to CACHE_BRICKS"
 #endif
 
 #if defined(SEPARATE_DETAIL) && ENCODING_MODE != DOUBLE_TABLE_RANS_ENC
-    STATIC_FAIL(SEPARATE_DETAIL_only_supported_in_double_table_RangeANS_encoding);
+    #error "SEPARATE_DETAIL only supported in double table RangeANS encoding"
 #endif
 
 
@@ -180,8 +180,19 @@ void decompressCSGVBrick(const uint brick_idx,
                 writeEntryToCache(decoded_brick_start_uint, i, paletteE - 1);
             }
             else if (operation_lsb == PALETTE_D) {
-                uint palette_delta = _readNextLodOperationFromEncoding(brick_encoding, readState) + 2u;
-                writeEntryToCache(decoded_brick_start_uint, i, paletteE - palette_delta);
+                #if ((OP_MASK & OP_USE_OLD_PAL_D_BIT) != 0)
+                    const uint palette_delta = _readNextLodOperationFromEncoding(brick_encoding, readState);
+                #else
+                    uint palette_delta = 0u;
+                    while (true) {
+                        uint next_delta_bits = _readNextLodOperationFromEncoding(brick_encoding, readState);
+                        // 3 LSB are the next three bits of delta
+                        palette_delta = (palette_delta << 3u) | (next_delta_bits & 7u);
+                        if ((next_delta_bits & 8u) == 0u)
+                            break;
+                    }
+                #endif
+                writeEntryToCache(decoded_brick_start_uint, i, paletteE - palette_delta - 2u);
             }
 #else
             // When the cache is not palettized, 32 bit labels are directly stored in the cache.
@@ -192,8 +203,19 @@ void decompressCSGVBrick(const uint brick_idx,
                 writeEntryToCache(decoded_brick_start_uint, i, brick_palette.buf[paletteE+1]);
             }
             else if (operation_lsb == PALETTE_D) {
-                uint palette_delta = _readNextLodOperationFromEncoding(brick_encoding, readState) + 2u;
-                writeEntryToCache(decoded_brick_start_uint, i, brick_palette.buf[paletteE + palette_delta]);
+                #if ((OP_MASK & OP_USE_OLD_PAL_D_BIT) != 0)
+                    const uint palette_delta = _readNextLodOperationFromEncoding(brick_encoding, readState);
+                #else
+                    uint palette_delta = 0u;
+                    while (true) {
+                        uint next_delta_bits = _readNextLodOperationFromEncoding(brick_encoding, readState);
+                        // 3 LSB are the next three bits of delta
+                        palette_delta = (palette_delta << 3u) | (next_delta_bits & 7u);
+                        if ((next_delta_bits & 8u) == 0u)
+                            break;
+                    }
+                #endif
+                writeEntryToCache(decoded_brick_start_uint, i, brick_palette.buf[paletteE + palette_delta + 2u]);
             }
 #endif
 

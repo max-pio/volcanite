@@ -49,7 +49,7 @@ public:
     /// Add SSAO settings to the Gui.
     /// @param shaderRecompileCallback if a callback is provided, a selection box for the algorithm is added to the gui.
     ///        When it is used in the gui, the callback needs to call releaseSwapchain(), freeResources(), allocateResources(), initSwapchainResources().
-    virtual void addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int)>> shaderRecompileCallback = {});
+    virtual void addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int, bool)>> shaderRecompileCallback = {});
 
     // GUI parameters
     glm::float32& g_ssaoRadius = m_ssaoPass.g_ssaoRadius;         ///< radius in world space
@@ -86,7 +86,7 @@ public:
     glm::float32 g_ssaoIntensity = 1.0f; ///< contrast slider. white image at zero
     glm::float32 g_ssaoGamma = 1.0f;     ///< make mids brighter or darker using gamma curve
 
-    virtual void addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int)>> shaderRecompileCallback = {}) override;
+    virtual void addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int, bool)>> shaderRecompileCallback = {}) override;
 
 private:
     SinglePassCompute m_applyPass;

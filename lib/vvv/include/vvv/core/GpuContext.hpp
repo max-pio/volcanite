@@ -21,6 +21,7 @@
 #include "WindowingSystemIntegration.hpp"
 #include "vvv/vk/debug_marker.hpp"
 
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <limits>
@@ -61,6 +62,8 @@ struct QueueFamilyIndices {
 // https://github.com/KhronosGroup/Vulkan-Samples/blob/30e0ef953f9492726945d2042400a3808c8408f5/framework/resource_cache.h
 class GpuPipelineCache {
 public:
+    virtual ~GpuPipelineCache() = default;
+
     virtual vk::PipelineCache getPipelineCache() const { return m_pipelineCache; }
 
     virtual void destroyPipelineCache(vk::Device device) { VK_DEVICE_DESTROY(device, m_pipelineCache); }
@@ -70,6 +73,8 @@ protected:
 
     void writePipelineCacheToDisk(vk::Device device) {
         // Get size of pipeline cache
+        if (m_pipelineCache == VK_NULL_HANDLE)
+            throw std::runtime_error("pipeline cache is null");
         auto data = device.getPipelineCacheData(m_pipelineCache);
 
         std::ios_base::sync_with_stdio(false);
@@ -78,7 +83,6 @@ protected:
         cache_file.close();
     }
     void readPipelineCacheFromDisk(vk::Device device) {
-
         // Try to read pipeline cache file if exists
         std::vector<char> pipeline_data;
         vk::PipelineCacheCreateInfo pipelineCacheCreateInfo;
@@ -88,9 +92,17 @@ protected:
             pipelineCacheCreateInfo.initialDataSize = pipeline_data.size();
             pipelineCacheCreateInfo.pInitialData = pipeline_data.data();
         } catch (std::runtime_error &ex) {
+            Logger(ERROR) << "Pipeline cache create info failed: " << ex.what();
         }
 
         m_pipelineCache = device.createPipelineCache(pipelineCacheCreateInfo);
+        if (m_pipelineCache == VK_NULL_HANDLE) {
+            Logger(WARN) << "Error reading vulkan pipeline cache from " << getPipelineCachePath() << ". Resetting file.";
+            std::filesystem::remove(getPipelineCachePath());
+            m_pipelineCache = device.createPipelineCache(pipelineCacheCreateInfo);
+            if (m_pipelineCache == VK_NULL_HANDLE)
+                throw std::runtime_error("Reading pipeline cache " + getPipelineCachePath() + " failed.");
+        }
     }
 
 private:

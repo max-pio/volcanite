@@ -1,2 +1,1 @@
-
-STATIC_FAIL(not_implemented);
+#error "plain wavelet matrix encoder not implemented"

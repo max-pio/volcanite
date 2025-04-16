@@ -45,10 +45,10 @@ class VolcaniteLogFile:
                                     "csgv_gb", "orig_gb", "volume_dim",
                                     "decomp_cpu_gb_per_s", "decomp_gpu_gb_per_s",
                                     "frame_min_ms", "frame_avg_ms", "frame_sdv_ms", "frame_med_ms", "frame_max_ms",
-                                    "render_total_ms",
+                                    "render_total_ms", "min_spp", "max_spp",
                                     "mem_framebuffer_mb", "mem_uniformbuffer_mb", "mem_materials_mb", "mem_encoding_ms",
-                                    "mem_cache_mb", "mem_emptyspace_mb", "mem_total_mb",
-                                    "render_frames"]
+                                    "mem_cache_mb", "mem_cache_used_mb", "mem_cache_fillrate", "mem_cache_fillrate_pcnt",
+                                    "mem_emptyspace_mb", "mem_total_mb", "render_frames"]
         format_string = '\n'.join(self.__fmt_strs)
         for possible_key in possible_keys:
             format_string = format_string.replace("%" + possible_key, replace_with)

@@ -303,23 +303,22 @@ namespace volcanite {
     uint32_t wm_huffman_rank(uint32_t position, uint32_t symbol, const WMHBrickHeader* wm_header, const BV_WordType* bit_vector) {
         // see: volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp HuffmanWaveletMatrix::rank()
 
-        size_t interval_start = 0;
         const HuffmanCode chc = HuffmanWaveletMatrix::SYMBOL2CHC[symbol];
         uint32_t bit_mask = 1ULL << (HuffmanCode::CHC_BIT_SIZE - 1);
         for (uint32_t level = 0; level < chc.length && position > 0; ++level) {
-            uint32_t const ones_before_interval = _fr_rank1(interval_start, bit_vector, wm_header->fr);
-            uint32_t const ones_before_position = _fr_rank1(interval_start + position, bit_vector, wm_header->fr) - ones_before_interval;
-            // due to the assumptions for the canonical Huffman codes used in the wavelet matrix,
-            // ANY 1 bit directly terminates the canonical huffman code and the symbol is the position of this bit.
-            if (chc.bit_code & bit_mask) {
+            // due to the assumptions for the canonical Huffman codes used in the wavelet matrix:
+            // a) ANY 1 bit directly terminates the canonical huffman code and the symbol is the position of this bit.
+            //    (there is not branch for 1 child nodes as no 1 child nodes exist)
+            // b) each interval_start == level_starts(level)
+            // c) each ones_before_interval == wm_header.ones_before_level[level]
+
+            const uint32_t interval_start = wmh_getLevelStart(level, wm_header->level_starts_1_to_4);
+            const uint32_t ones_before_position = _fr_rank1(interval_start + position, bit_vector, wm_header->fr) - wm_header->ones_before_level[level];
+
+            if (chc.bit_code & bit_mask)
                 return ones_before_position;
-            } else {
-                position = position - ones_before_position;
-                // TODO: ones_before_level could become an uvec4 if we exclude this case for level == chc.length-1
-                size_t const ones_in_interval = ones_before_interval - wm_header->ones_before_level[level];
-                interval_start = wmh_getLevelStart(level + 1, wm_header->level_starts_1_to_4)
-                        + (interval_start - wmh_getLevelStart(level, wm_header->level_starts_1_to_4) - ones_in_interval);
-            }
+
+            position = position - ones_before_position;
             bit_mask >>= 1;
         }
         return position;

@@ -48,19 +48,19 @@ The command line arguments to specify log files and the name of an execution are
 
 These results are only available if the compression is performed, i.e. no pre-computed CSGV volume is loaded. 
 
-| Key   | Value                                                       |
-|-------|-------------------------------------------------------------|
-| comprate | compression rate (CSGV size / original size)                | 
-| comprate_pcnt | compression rate [%]                                        |
-| comp_s | total compression time (without i/o) [s]                    |
-| comp_mainpass_s | time of compression the main pass [s]                       |
-| comp_prepass_s | time of the compression prepass [s]                         |
-| comp_gb_per_s | compression throughput [GB/s]                               |
-| csgv_gb | CSGV size [GB]                                              | 
-| orig_gb | Uncompressed volume size [GB}                               
-| orig_bytes_per_voxel | Bytes stored per voxel in uncompressed volume¹ (1\|2\|4\|8) |
-| volume_dim | Volume dimension in voxels (*WIDTH*x*HEIGHT*x*DEPTH*)       |
-| volume_labels | Number of unique labels in the volume                       |
+| Key   | Value                                                                     |
+|-------|---------------------------------------------------------------------------|
+| comprate | compression rate (CSGV size / original size)                              | 
+| comprate_pcnt | compression rate [%]                                                      |
+| comp_s | total compression time (without i/o) [s]                                  |
+| comp_mainpass_s | time of compression the main pass [s]                                     |
+| comp_prepass_s | time of the compression prepass [s]                                       |
+| comp_gb_per_s | compression throughput [GB/s]                                             |
+| csgv_gb | CSGV size [GB]                                                            | 
+| orig_gb | Uncompressed volume size [GB}                                             
+| orig_bytes_per_voxel | Bytes stored per voxel in uncompressed volume¹ (1\|2\|4\|8)               |
+| volume_dim | Volume dimension in voxels (*WIDTH*x*HEIGHT*x*DEPTH*)                     |
+| volume_labels | Number of unique labels in the volume                                     |
 
 ¹ For a fair comparison of compression rates, Volcanite assumes that the uncompressed volume stores labels in
 $B = \lceil log_2(\textrm{volume_labels}) \rceil$ bytes per voxel, with B being rounded up to a power of two. 
@@ -80,23 +80,28 @@ This is even if the maximum label is higher than $2^B$.
 
 These results are only available if an image `-i` or video `-v` is rendered. 
 
-| Key                  | Value                                              |
-|----------------------|----------------------------------------------------|
-| frame_min_ms         | minimum frame time [ms]                            |
-| frame_avg_ms         | average frame time [ms]                            |
-| frame_sdv_ms         | standard deviation of frame time [ms]              |
-| frame_med_ms         | median frame time [ms]                             |
-| frame_max_ms         | maximum frame time [ms]                            |
-| frame_ms_00 to *_15  | render time of the first 16 frames [ms]            |  
-| render_total_ms      | total render time for all frames [ms]              |
-| rendered_frames      | number of rendered frames                          |
-| mem_framebuffer_mb   | GPU memory for frame buffers [MB]                  |
-| mem_uniformbuffer_mb | GPU memory for uniform buffers [MB]                |
-| mem_materials_mb     | GPU memory for attribute and material buffers [MB] |
-| mem_encoding_mb      | GPU memory for the CSGV encoding [MB]              |
-| mem_cache_mb         | GPU memory for the cache [MB]                      |
-| mem_emptyspace_mb    | GPU memory for empty space skipping [MB]           |
-| mem_total_mb         | the total GPU memory in use [MB]                   |
+| Key                    | Value                                              |
+|------------------------|----------------------------------------------------|
+| min_spp                | minimum number of valid samples of a pixel         |
+| max_spp                | maxmium number of valid samples of a pixel         |
+| frame_min_ms           | minimum frame time [ms]                            |
+| frame_avg_ms           | average frame time [ms]                            |
+| frame_sdv_ms           | standard deviation of frame time [ms]              |
+| frame_med_ms           | median frame time [ms]                             |
+| frame_max_ms           | maximum frame time [ms]                            |
+| frame_ms_00 to *_15    | render time of the first 16 frames [ms]            |  
+| render_total_ms        | total render time for all frames [ms]              |
+| rendered_frames        | number of rendered frames                          |
+| mem_framebuffer_mb     | GPU memory for frame buffers [MB]                  |
+| mem_uniformbuffer_mb   | GPU memory for uniform buffers [MB]                |
+| mem_materials_mb       | GPU memory for attribute and material buffers [MB] |
+| mem_encoding_mb        | GPU memory for the CSGV encoding [MB]              |
+| mem_cache_mb           | GPU memory for the cache [MB]                      |
+| mem_cache_used_mb      | occupied memory in the cache [MB]                  |
+| mem_cache_fillrate     | ratio of occupied memory in the cache              |
+| mem_cache_fillrate_pct | ratio of occupied memory in the cache [%]          |
+| mem_emptyspace_mb      | GPU memory for empty space skipping [MB]           |
+| mem_total_mb           | the total GPU memory in use [MB]                   |
 
 ## Python Script Execution
 

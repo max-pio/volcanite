@@ -46,6 +46,10 @@ void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, En
     // TODO: replace with switch / case
     // set up the respective brick encoder
     if (m_encoding_mode == NIBBLE_ENC) {
+        if (m_random_access && (m_op_mask & OP_PALETTE_D_BIT))
+            throw std::runtime_error("Nibble random access encoding does not support PALETTE_DELTA operation.");
+        if (m_random_access && (m_op_mask & OP_STOP_BIT))
+            throw std::runtime_error("Nibble random access encoding does not support stop bits.");
         m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     }
     else if (m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
@@ -61,9 +65,13 @@ void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, En
                                     ? normalizeCodeFrequencies(detail_code_frequencies).data()
                                     : nullptr);
     } else if (m_encoding_mode == WAVELET_MATRIX_ENC || m_encoding_mode == HUFFMAN_WM_ENC) {
+        if (m_random_access && (m_op_mask & OP_PALETTE_D_BIT))
+            throw std::runtime_error("Wavelet Matrix encoding does not support PALETTE_DELTA operation.");
+        if (m_encoding_mode == WAVELET_MATRIX_ENC && (m_op_mask & OP_STOP_BIT))
+            throw std::runtime_error("Wavelet Matrix encoding (without Huffman) does not support stop bits.");
         m_encoder = std::make_unique<WaveletMatrixEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     } else {
-        throw std::runtime_error("No CSGB brick encoder for given encoding mode available.");
+        throw std::runtime_error("No CSGV brick encoder for given encoding mode available.");
     }
     m_encoder->setCPUThreadCount(m_cpu_threads);
     m_encoder->setDecodeWithSeparateDetail(m_separate_detail);
@@ -290,7 +298,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     m_detail_starts.clear();
 
     if(verbose)
-        Logger(INFO, true) << " Progress 0.0%";
+        Logger(INFO, true) << getLabel() << " Compression Progress 0.0%";
     MiniTimer progressTimer;
     MiniTimer totalTimer;
     uint32_t bricks_since_last_update = 0;
@@ -408,7 +416,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
                 uint32_t last_brick_index = glm::min(brick_index + m_cpu_threads - 1, brick_index_count);
                 float remaining_seconds = static_cast<float>(brick_index_count - last_brick_index) / bricks_per_second;
                 std::stringstream stream;
-                stream << " Progress " << std::fixed << std::setprecision(1) << static_cast<float>(last_brick_index) / static_cast<float>(brick_index_count) * 100.f << "%"
+                stream << getLabel() << " Compression Progress " << std::fixed << std::setprecision(1) << static_cast<float>(last_brick_index) / static_cast<float>(brick_index_count) * 100.f << "%"
                        << " (" << std::setprecision(2) << (bricks_per_second * static_cast<float>(m_brick_size * m_brick_size * m_brick_size) / 1000000.f)
                        << " million voxels/second), remaining: " << static_cast<int>(remaining_seconds / 60.f) << "m" << (static_cast<int>(remaining_seconds) % 60) << "s";
                 Logger(INFO, true) << stream.str();
@@ -428,7 +436,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     m_brick_starts[brick_index_count] = static_cast<uint32_t>(m_encodings.back().size());
 
     m_last_total_encoding_seconds = static_cast<float>(totalTimer.elapsed());
-    Logger(INFO) << " Progress 100% in " << std::fixed << std::setprecision(3) << m_last_total_encoding_seconds << "s (" << (static_cast<float>(volume.size()) / m_last_total_encoding_seconds / 1000000.f) << " million voxels/second) " << getEncodingInfoString();
+    Logger(INFO) << getLabel() << " Compression Progress 100% in " << std::fixed << std::setprecision(3) << m_last_total_encoding_seconds << "s (" << (static_cast<float>(volume.size()) / m_last_total_encoding_seconds / 1000000.f) << " million voxels/second) " << getEncodingInfoString();
 
     assert(verifyCompression() && "Compression did produce invalid encodings.");
 }
@@ -637,7 +645,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
 
     // write header: 8 chars CMPSGVOL + 4 chars version number
     const char *magic_header = "CMPSGVOL";
-    const char *version = "0015";
+    const char *version = "0016";
     /* VERSION HISTORY
      * 0001: initial version
      * 0002: adds booleans if RLE and rANS are used, as well as frequency tables for rANS
@@ -649,6 +657,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
      * 0013: split encoding buffers
      * 0014: re-ordered operation codes by occurring frequency to Parent,X,Y,Z,PaletteA,PaletteL,PaletteD
      * 0015: random access, op mask, encoders handle specialized export data like frequency tables
+     * 0016: default palette delta op ('d') uses arbitrary lengths. old behavior is special op. mask bit ('d-')
      */
     file.write(magic_header, 8);
     file.write(version, 4);
@@ -723,7 +732,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     int _numeric_version = std::stoi(std::string(_version));
 
     // backwards compatibility code:
-    if (std::string(_version) != "0015") {
+    if (std::string(_version) != "0015" && std::string(_version) != "0016") {
         Logger(ERROR) << "Import does not support version " << _version << " of Compressed Segmentation Volume file " << path << ". Skipping.";
         return false;
     }
@@ -737,6 +746,8 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
 
     // update encoder
     fin.read(reinterpret_cast<char *>(&m_op_mask), sizeof(uint32_t));
+    if (_numeric_version == 15)
+        m_op_mask |= OP_USE_OLD_PAL_D_BIT; // compatibility: changed behavior of palette delta operation in 0016
     if (m_encoding_mode == NIBBLE_ENC) {
         m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     } else if (m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {

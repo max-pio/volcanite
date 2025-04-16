@@ -31,6 +31,8 @@
 #include "imgui/implot/implot.h"
 #include "imgui/backends/imgui_impl_glfw.h"
 #include "imgui/backends/imgui_impl_vulkan.h"
+
+#include <fmt/core.h>
 #endif
 
 namespace vvv {
@@ -275,7 +277,7 @@ namespace vvv {
         double accum_display_time{0.0};
         size_t accum_display_frame_count{0};
 
-        while (!glfwWindowShouldClose(m_window)) {
+        while (!glfwWindowShouldClose(m_window) && !ImGui::IsKeyDown(ImGuiKey_Escape)) {
             double startTime = glfwGetTime();
             glfwPollEvents();
             processHotKeys();
@@ -409,10 +411,10 @@ namespace vvv {
             throw std::runtime_error("Vulkan not supported");
         }
 
-
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         m_window = glfwCreateWindow(static_cast<int>(m_startup_resolution.width),
-                                    static_cast<int>(m_startup_resolution.height), getAppName().c_str(), nullptr,
+                                    static_cast<int>(m_startup_resolution.height), getAppName().c_str(),
+                                    m_fullscreen ? glfwGetPrimaryMonitor() : nullptr,
                                     nullptr);
         glfwSetWindowUserPointer(m_window, this);
         glfwSetFramebufferSizeCallback(m_window, framebufferResizeCallback);
@@ -818,11 +820,31 @@ namespace vvv {
     }
 
     void Application::processHotKeys() {
+        if (ImGui::GetIO().WantCaptureKeyboard)
+            return;
+
         // shader reload
         if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
             vvv::Logger(vvv::INFO) << "reloading shaders";
             recreateShaderResources();
             writePipelineCacheToDisk(getDevice());
+        }
+
+        // parameter quick store / load
+        if (!m_quick_access_file_fmt.empty()) {
+            constexpr ImGuiKey quick_keys[10] = {ImGuiKey_0, ImGuiKey_1, ImGuiKey_2, ImGuiKey_3, ImGuiKey_4, ImGuiKey_5,
+                                                 ImGuiKey_6, ImGuiKey_7, ImGuiKey_8, ImGuiKey_9};
+            for (int slot = 0; slot <= 9; slot++) {
+                if (ImGui::IsKeyPressed(quick_keys[slot])) {
+                    const std::string path = fmt::vformat(m_quick_access_file_fmt,  fmt::make_format_args(slot));
+                    // ctrl pressed: store. not pressed: load
+                    if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl))
+                        m_renderer->writeParameterFile(path);
+                    else if (std::filesystem::exists(path))
+                        m_renderer->readParameterFile(path);
+                    break;
+                }
+            }
         }
 
         // record camera path and time stamps
@@ -868,7 +890,7 @@ namespace vvv {
                 avg_ms_samples = 0;
             }
         }
-            // replay camera path
+        // replay camera path
         else if (!m_record_out.has_value() && !m_video_timing.has_value() && !m_video_frame.has_value() &&
                  (ImGui::IsKeyPressed(ImGuiKey_F10) || ImGui::IsKeyPressed(ImGuiKey_F11))) {
             // stop replay
@@ -1052,7 +1074,8 @@ namespace vvv {
         init_info.MinImageCount = 2; // m_imgui.minImageCount; for whatever reason minImageCount is 3 and maxInFlightFrames is 2 here.. so we wait for the swapchain recreation to fix it
         init_info.ImageCount = maximalInFlightFrameCount();
         init_info.CheckVkResultFn = check_vk_result;
-        ImGui_ImplVulkan_Init(&init_info, m_renderpass.renderpass);
+        init_info.RenderPass = m_renderpass.renderpass;
+        ImGui_ImplVulkan_Init(&init_info);
 
         m_imgui.initialized = true;
     }

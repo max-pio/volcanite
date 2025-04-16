@@ -33,6 +33,8 @@
 
 #include <string>
 
+#include <fmt/core.h>
+
 using namespace volcanite;
 
 int export_texture(Texture* tex, const std::string& export_file_path) {
@@ -47,19 +49,41 @@ int export_texture(Texture* tex, const std::string& export_file_path) {
     return 0;
 }
 
-int tryImportRenderConfig(VolcaniteArgs& args, std::shared_ptr<CompressedSegmentationVolumeRenderer> renderer) {
+int tryImportRenderConfigs(VolcaniteArgs& args, std::shared_ptr<CompressedSegmentationVolumeRenderer> renderer) {
     // set the startup resolution
     //renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
-    // read optional config file
-    if(!args.rendering_config_file.empty()) {
-        if (!renderer->readParameterFile(args.rendering_config_file, VOLCANITE_VERSION))
-            return RET_INVALID_ARG;
+    // the config arg is a list of vcfg files
+
+    for (const auto& config: args.rendering_configs) {
+        if (config.ends_with(".vcfg") || renderer->getParameterPreset(config) != nullptr) {
+            if (!renderer->readParameterFile(config, VOLCANITE_VERSION))
+                return RET_INVALID_ARG;
+        } else {
+            // construct a string stream from the config string which must be of the form:
+            // [window_name] {parameter_label_1}: {parameter_values_1}
+            long window_name_end = static_cast<long>(config.find(']'));
+            long label_name_end = static_cast<long>(config.find(':'));
+            if (!config.starts_with('[') || window_name_end == std::string::npos
+                || label_name_end == std::string::npos || label_name_end <= window_name_end) {
+                Logger(WARN) << "Invalid config '" << config << "'. Configs must be in the form [{window}] {label}: {values}";
+                continue;
+            }
+            std::stringstream vcfg_stream;
+            // first line is the window name: [{window}]\n
+            vcfg_stream << config.substr(0, window_name_end + 1) << '\n';
+            // folllowed by another line for the parameter: {label}: {values}
+            std::string_view label_view(config.begin() + window_name_end + 1, config.begin() + label_name_end + 1); // end of config string
+            label_view.remove_prefix(std::min(label_view.find_first_not_of(' '), label_view.size())); // remove leading spaces
+            auto sanitized_string = std::string(label_view); // replace spaces in name with _ (as is done in vcfg files)
+            std::ranges::replace(sanitized_string, ' ', '_');
+            vcfg_stream << sanitized_string << config.substr(label_name_end + 1) << '\n';
+            renderer->readParameters(vcfg_stream, VOLCANITE_VERSION, true);
+        }
     }
     return 0;
 }
 
 int volcanite_main(int argc, char *argv[]) {
-
     VolcaniteArgs args;
     std::shared_ptr<volcanite::CompressedSegmentationVolume> compressedSegmentationVolume;
     std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase;
@@ -106,7 +130,8 @@ int volcanite_main(int argc, char *argv[]) {
                                          .palettized_cache=args.cache_palettized,
                                          .decode_from_shared_memory=args.decode_from_shared_memory,
                                          .cache_mode=args.cache_mode,
-                                         .empty_space_resolution=args.empty_space_resolution});
+                                         .empty_space_resolution=args.empty_space_resolution,
+                                         .shader_defines=args.shader_defines});
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
         renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
 
@@ -116,20 +141,28 @@ int volcanite_main(int argc, char *argv[]) {
             // obtain a headless rendering engine
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
             renderEngine->acquireResources();
-            tryImportRenderConfig(args, renderer);
-            // if frame count is specified in the rendering config, use that number.
-            int accumulation_frames = renderer->getTargetAccumulationFrames();
-            // if a recording file is given, play the full recording file instead (flagged as frame count 0)
-            if (!args.record_in_file.empty())
-                accumulation_frames = 0;
-            else if (accumulation_frames == 0)
-                accumulation_frames = 60;
+            tryImportRenderConfigs(args, renderer);
+
+            size_t accumulation_frames = args.record_convergence_frames;
+            // if no video is rendered (neither a camera path input nor a video output is given)
+            // render accumulation_frames (given by vcfg file) many frames for the single perspective
+            if (args.video_output_fmt_file.empty() && args.record_in_file.empty()) {
+                accumulation_frames = renderer->getTargetAccumulationFrames();
+                if (accumulation_frames == 0)
+                    accumulation_frames = 60;
+            } else {
+                // if a video is rendered, ensure that the render will converge for at least the number
+                // of internal frames renderered for each output frame.
+                if (renderer->getTargetAccumulationFrames() > 0u
+                     && renderer->getTargetAccumulationFrames() < accumulation_frames)
+                    renderer->setTargetAccumulationFrames(static_cast<int>(accumulation_frames));
+            }
 
             if (!args.eval_logfiles.empty())
                 renderer->startFrameTimeTracking();
-            auto texture = renderEngine->renderFrames(accumulation_frames,
-                                                      args.record_in_file,
-                                                      args.video_output_fmt_file);
+            auto texture = renderEngine->renderFrames({.record_file_in=args.record_in_file,
+                                                       .video_fmt_file_out=args.video_output_fmt_file,
+                                                       .accumulation_samples=accumulation_frames});
             if (!args.eval_logfiles.empty()) {
                 renderer->stopFrameTimeTracking({}); // stopFrameTimeTracking is already called by renderEngine
                 renderer->writeParameterFile(stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg");
@@ -160,21 +193,26 @@ int volcanite_main(int argc, char *argv[]) {
 #ifndef HEADLESS
         // only start the application if we are not in headless mode
         if (!args.headless) {
-            // export the state of the renderer next to the input or csgv volume when the app is closed
-            if (!args.performCompression())
-                renderer->saveConfigOnShutdown(stripFileExtension(args.input_file) + ".vcfg");
-            else if (!args.compress_export_file.empty())
-                renderer->saveConfigOnShutdown(stripFileExtension(args.compress_export_file) + ".vcfg");
-
             // we only need the rendering part for screenshots/videos or the interactive app
             const std::string appName = "Volcanite " + VolcaniteArgs::getVolcaniteVersionString()
                                         + "  " + compressedSegmentationVolume->getLabel();
-            bool vsync = true;  // TODO: vsync should be a parameter of the CompressedSegmentationVolumeRenderer config
             auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
-            app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]});
+
+            // export the state of the renderer next to the input or csgv volume when the app is closed,
+            // and pass a directory where quick access states are stored to and loaded from
+            if (!args.performCompression()) {
+                renderer->saveConfigOnShutdown(stripFileExtension(args.input_file) + ".vcfg");
+            } else if (!args.compress_export_file.empty()) {
+                renderer->saveConfigOnShutdown(stripFileExtension(args.compress_export_file) + ".vcfg");
+            } else {
+                renderer->saveConfigOnShutdown(args.working_dir.generic_string() + "/shutdown.vcfg");
+            }
+            app->setQuickConfigLocationFmt(args.working_dir.generic_string() + "/q{}.vcfg");
+
+            app->setStartupWindowSize({args.render_resolution[0], args.render_resolution[1]}, args.fullscreen);
             app->setVSync(args.enable_vsync);
             app->acquireResources();
-            tryImportRenderConfig(args, renderer);
+            tryImportRenderConfigs(args, renderer);
             return app->exec();
         }
 #endif

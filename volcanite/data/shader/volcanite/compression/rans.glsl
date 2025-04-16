@@ -13,6 +13,8 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+// this file uses code from Fabien Giesen's CC0 ryg-rans implementation. See the Volcanite dependencies for details.
+
 #ifndef RANS_GLSL
 #define RANS_GLSL
 

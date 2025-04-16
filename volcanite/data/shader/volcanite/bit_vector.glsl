@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #ifndef VOLCANITE_BITVECTOR_GLSL
 #define VOLCANITE_BITVECTOR_GLSL
 
@@ -23,15 +38,15 @@ layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly res
     BV_WORD_TYPE words[];
 };
 
-#define WORD_ACCESS(word, index) uint((word >> (index)) & 1u)
-#define WORD_SET0(word, index) atomicAnd(word, ~(BV_WORD_TYPE(1u) << (index)) )
-#define WORD_SET1(word, index) atomicOr(word, BV_WORD_TYPE(1u) << (index))
+#define WORD_ACCESS(word, index) uint(((word) >> (index)) & 1u)
+#define WORD_SET0(word, index) atomicAnd((word), ~(BV_WORD_TYPE(1u) << (index)) )
+#define WORD_SET1(word, index) atomicOr((word), BV_WORD_TYPE(1u) << (index))
 #if BV_WORD_TYPE == uint64_t
     #define WORD_RANK1(word, index) uint((index) != 0u ? bitCount64(word << (BV_WORD_BIT_SIZE - (index))) : 0u)
 #elif BV_WORD_TYPE uint
     #define WORD_RANK1(word, index) uint((index) != 0u ? bitCount(word << (BV_WORD_BIT_SIZE - (index))) : 0u)
 #else
-     STATIC_FAIL("unkown bit vector word size");
+     #error "unkown bit vector word size"
 #endif
 
 
@@ -53,9 +68,9 @@ uint word_access_uvec4(uvec4 word, uint index) {
 }
 
 uint word_rank1_uvec4(uvec4 word, uint index) {
-//    #if (BV_WORD_BIT_SIZE != 32u)
-//        STATIC_FAIL("bit vector word size must be 32 when used in uvec4 words");
-//    #endif
+    //    #if (BV_WORD_BIT_SIZE != 32u)
+    //        #error "bit vector word size must be 32 when used in uvec4 words";
+    //    #endif
     const uvec4 offset[4] = { uvec4(0u, 0u, 0u, 0u),
                               uvec4(~0u, 0u, 0u, 0u),
                               uvec4(~0u, ~0u, 0u, 0u),

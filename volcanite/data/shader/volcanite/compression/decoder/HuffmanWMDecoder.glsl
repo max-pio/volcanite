@@ -27,23 +27,23 @@
 ///   RANDOM_ACCESS
 
 #if ENCODING_MODE != HUFFMAN_WM_ENC
-    STATIC_FAIL(expected_HUFFMAN_WM_ENC_encoding_mode);
+    #error "expected HUFFMAN_WM_ENC encoding mode"
 #endif
 
 #ifdef SEPARATE_DETAIL
-    STATIC_FAIL(wavelet_matrix_does_not_support_detail_separation);
+    #error "wavelet matrix does not support detail separation"
 #endif
 
 #ifdef PALETTE_CACHE
-    STATIC_FAIL(wavelet_matrix_does_not_support_palletized_cache);
+    #error "wavelet matrix does not support palletized cache"
 #endif
 
 #ifndef RANDOM_ACCESS
-    STATIC_FAIL(wavelet_matrix_only_supports_random_access);
+    #error "wavelet matrix only supports random access"
 #endif
 
 #if !defined(RANDOM_ACCESS) && defined(DECODE_FROM_SHARED_MEMORY)
-    STATIC_FAIL(DECODE_FROM_SHARED_MEMORY_can_only_be_used_with_RANDOM_ACCESS);
+    #error "DECODE_FROM_SHARED_MEMORY can only be used with RANDOM_ACCESS"
 #endif
 
 // TYPE DEFINITIONS AND TYPE ACCESS ------------------------------------------------------------------------------------
@@ -278,23 +278,27 @@ uint _wm_huffman_rank_palette(
     // see: volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp HuffmanWaveletMatrix::rank()
 
     // the PALETTE_ADV operation consists of 5 bits (00001) => 4 loop iterations for the internal zeros
-    
-    uint interval_start = 0;
+
+    //uint interval_start = 0;
     #pragma unroll
     for (uint level = 0; level < 4 && (position > 0); ++level) {
-        const uint ones_before_interval = FR_RANK1(interval_start);
-        const uint ones_before_position = FR_RANK1(interval_start + position) - ones_before_interval;
+        // this would be the general 0 branch of a wavelet tree. Given that our trees have no 1 childs, the interval
+        // starts are always exactly the level starts => ones_before_interval == WM_HEADER.ones_before_level[level];
+        //    const uint ones_before_interval = FR_RANK1(interval_start);
+        //    const uint ones_before_position = FR_RANK1(interval_start + position) - ones_before_interval;
+        //
+        //    position = position - ones_before_position;
+        //    const uint ones_in_interval = ones_before_interval - WM_HEADER.ones_before_level[level];
+        //    interval_start = wmh_getLevelStart(level + 1, WM_HEADER.level_starts_1_to_4)
+        //            + (interval_start - wmh_getLevelStart(level, WM_HEADER.level_starts_1_to_4) - ones_in_interval);
 
-        // this is the 0 branch of the WM rank as no symbol has interal zeros
-
+        const uint interval_start = wmh_getLevelStart(level, WM_HEADER.level_starts_1_to_4);
+        const uint ones_before_position = FR_RANK1(interval_start + position) - WM_HEADER.ones_before_level[level];
         position = position - ones_before_position;
-        // TODO: ones_before_level could become an uvec4 as this case is excluded for level == chc.length-1 == 4
-        const uint ones_in_interval = ones_before_interval - WM_HEADER.ones_before_level[level];
-        interval_start = wmh_getLevelStart(level + 1, WM_HEADER.level_starts_1_to_4)
-                + (interval_start - wmh_getLevelStart(level, WM_HEADER.level_starts_1_to_4) - ones_in_interval);
     }
 
-    const uint ones_before_interval = FR_RANK1(interval_start);
+    const uint ones_before_interval = WM_HEADER.ones_before_level[4u];
+    const uint interval_start = wmh_getLevelStart(4u, WM_HEADER.level_starts_1_to_4);
     const uint ones_before_position = FR_RANK1(interval_start + position) - ones_before_interval;
     return ones_before_position;
 }
@@ -372,13 +376,12 @@ uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
     uint enc_operation_index = brick_encoding.buf[inv_lod] + inv_lod_op_i;
 #endif
 
-    assertf(inv_lod <= target_inv_lod, "inv lod out of bounds %u", inv_lod);
+    assertf(inv_lod < LOD_COUNT, "inv lod out of bounds %u", inv_lod);
     assertf(enc_operation_index < WM_HEADER.level_starts_1_to_4[0], "brick encoding out of bounds read (access, bound, diff): %v3u", uvec3(enc_operation_index, WM_HEADER.level_starts_1_to_4[0], enc_operation_index - WM_HEADER.level_starts_1_to_4[0]));
     uint operation = WM_HUFFMAN_ACCESS(enc_operation_index);
 
     // follow the chain of operations from the current output voxel up to an operation that accesses the palette
     {
-        assert(operation <= PALETTE_LAST, "Wavelet Matrix encoding does not support stop bits encoded in OP stream");
 
         // equal to (operation != PALETTE_LAST && operation != PALETTE_ADV && operation != PALETTE_D)
         while (operation < 4u) {
@@ -419,6 +422,7 @@ uint getPaletteIndexOfCSGVVoxel(const uint output_i, const uint target_inv_lod,
             operation = WM_HUFFMAN_ACCESS(enc_operation_index);
             assertf(enc_operation_index != 0u || operation == PALETTE_ADV, "first brick operation must be PALETTE_ADV but is %u", operation);
         }
+        assert((operation & STOP_BIT) == 0u, "Wavelet Matrix encoding does not support stop bits encoded in OP stream");
 
         // at this point, the current operation accesses the palette: write the resulting palette entry
         // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
@@ -488,7 +492,7 @@ uint decompressCSGVVoxel(const uint brick_idx, const uvec3 brick_voxel, const ui
      const uint lod_width = BRICK_SIZE >> target_inv_lod;
      const uint voxel_idx = _cache_pos2idx(brick_voxel) / (lod_width * lod_width * lod_width);
     // same as:
-//    const uint voxel_idx = _cache_pos2idx(brick_voxel) / (1u << (3 * (findMSB(BRICK_SIZE) - target_inv_lod)));
+    // const uint voxel_idx = _cache_pos2idx(brick_voxel) / (1u << (3 * (findMSB(BRICK_SIZE) - target_inv_lod)));
 
     uint palette_index = getPaletteIndexOfCSGVVoxel(voxel_idx, target_inv_lod,
                                                     brick_encoding, brick_encoding_length,
@@ -499,7 +503,9 @@ uint decompressCSGVVoxel(const uint brick_idx, const uvec3 brick_voxel, const ui
                                                                                  brick_encoding.buf[PALETTE_SIZE_HEADER_INDEX])
                                                 #endif
                                                     );
-
+    assertf(palette_index < getBrickPaletteLength(brick_idx),
+           "palette index out of palette bounds (brick, palette_idx, palette_length): %v3u",
+           uvec3(brick_idx, palette_index, getBrickPaletteLength(brick_idx)));
     return brick_encoding.buf[brick_encoding_length - 1u - palette_index];
 }
 #endif

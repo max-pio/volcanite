@@ -16,7 +16,6 @@
 #ifndef MORTON_GLSL
 #define MORTON_GLSL
 
-#include "volcanite/compression/csgv_utils.glsl"
 
 // 2D ------------------------------------------------------------------------------------------------------------------
 

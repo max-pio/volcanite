@@ -20,15 +20,14 @@
 #include "vvvwindow/tf/TransferFunction1DWidget.hpp"
 #include "vvvwindow/tf/TransferFunctionSegmentedVolumeWidget.hpp"
 
-#include "vvv/core/GpuContext.hpp"
 #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_glfw.h"
 #include "imgui/backends/imgui_impl_vulkan.h"
 #include "imgui/misc/cpp/imgui_stdlib.h"
 #include "imgui/imGuIZMO.quat/imGuIZMOquat.h"
-#include "imgui/implot/implot.h"
 #include <vvv/util/Paths.hpp>
 
+#include <fmt/core.h>
 #include "vvv/util/Logger.hpp"
 
 void GuiImgui::updateGui() {
@@ -63,6 +62,8 @@ void GuiImgui::renderGui() {
             ImGui::GetStyle().ScaleAllSizes(m_gui_scaling / m_current_gui_scaling);
         }
 
+        // set static render parameters of GuIZMO
+        imguiGizmo::cubeSize = 0.15f;
     }
 
     ImGui_ImplVulkan_NewFrame();
@@ -71,7 +72,7 @@ void GuiImgui::renderGui() {
 
     // WINDOW DOCKING
     {
-        ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+        ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
         if (m_firstCall) {
             ImGui::DockBuilderRemoveNode(dockspace_id);
@@ -205,6 +206,13 @@ void GuiImgui::renderGui() {
                     renderGuiTFSegmentedVolume(*e, getCtx());
                     break;
                 }
+                case GuiString: {
+                    auto e = GUI_CAST(be, std::string);
+                    auto value = gui_get(e);
+                    bool changed = ImGui::InputText(e->label.c_str(), &value);
+                    gui_set(e, changed, value);
+                    break;
+                }
                 case GuiBool: {
                     auto e = GUI_CAST(be, bool);
                     auto value = gui_get(e);
@@ -223,6 +231,50 @@ void GuiImgui::renderGui() {
                     gui_set(e, changed, value);
                     break;
                 }
+                case GuiIVec2: {
+                    auto e = GUI_CAST(be, glm::ivec2);
+                    auto value = gui_get(e);
+                    bool changed;
+                    if (e->min.has_value() && e->max.has_value())
+                        changed = ImGui::SliderInt2(e->label.c_str(), &value.r, e->min.value().r, e->max.value().r);
+                    else
+                        changed = ImGui::InputInt2(e->label.c_str(), &value.r);
+                    gui_set(e, changed, value);
+                    break;
+                }
+                case GuiIntRange: {
+                    auto e = GUI_CAST(be, glm::ivec2);
+                    auto value = gui_get(e);
+                    bool changed;
+                    if (e->min.has_value() && e->max.has_value())
+                        changed = ImGui::DragIntRange2(e->label.c_str(), &value.x, &value.y, glm::pow(10, -e->floatDecimals), e->min.value().r, e->max.value().r);
+                    else
+                        changed = ImGui::DragIntRange2(e->label.c_str(), &value.x, &value.y, glm::pow(10, -e->floatDecimals), 0.f, 0.f);
+                    gui_set(e, changed, value);
+                    break;
+                }
+                case GuiIVec3: {
+                    auto e = GUI_CAST(be, glm::ivec3);
+                    auto value = gui_get(e);
+                    bool changed;
+                    if (e->min.has_value() && e->max.has_value())
+                        changed = ImGui::SliderInt3(e->label.c_str(), &value.r, e->min.value().r, e->max.value().r);
+                    else
+                        changed = ImGui::InputInt3(e->label.c_str(), &value.r);
+                    gui_set(e, changed, value);
+                    break;
+                }
+                case GuiIVec4: {
+                    auto e = GUI_CAST(be, glm::ivec4);
+                    auto value = gui_get(e);
+                    bool changed;
+                    if (e->min.has_value() && e->max.has_value())
+                        changed = ImGui::SliderInt4(e->label.c_str(), &value.r, e->min.value().r, e->max.value().r);
+                    else
+                        changed = ImGui::InputInt4(e->label.c_str(), &value.r);
+                    gui_set(e, changed, value);
+                    break;
+                }
                 case GuiFloat: {
                     auto e = GUI_CAST(be, float);
                     auto value = gui_get(e);
@@ -235,13 +287,7 @@ void GuiImgui::renderGui() {
                     gui_set(e, changed, value);
                     break;
                 }
-                case GuiString: {
-                    auto e = GUI_CAST(be, std::string);
-                    auto value = gui_get(e);
-                    bool changed = ImGui::InputText(e->label.c_str(), &value);
-                    gui_set(e, changed, value);
-                    break;
-                }
+
                 case GuiVec2: {
                     auto e = GUI_CAST(be, glm::vec2);
                     auto value = gui_get(e);
@@ -278,18 +324,22 @@ void GuiImgui::renderGui() {
                 case GuiDirection: {
                     auto e = GUI_CAST(be, glm::vec3);
                     auto value = gui_get(e);
+                    value = vec3(value.z, value.y, -value.x);
                     float size = ImGui::GetFrameHeightWithSpacing() * 4 - ImGui::GetStyle().ItemSpacing.y * 2;
                     bool changed = ImGui::gizmo3D(("##gizmo_" + std::to_string(e->id)).c_str(), value, size, imguiGizmo::modeDirPlane);
                     ImGui::SameLine();
-                    quat q = {};
-                    vec3 l = -value;
-                    ImGui::gizmo3D(("##gizmo_vis_" + std::to_string(e->id)).c_str(), q, l, size);
+                    const vvv::Camera* camera_ptr = reinterpret_cast<GuiDirectionEntry*>(be)->camera;
+                    quat q = camera_ptr ? quat_cast(glm::mat3(camera_ptr->get_world_to_view_space())) : quat{1, 0, 0, 0};
+                    vec3 l = q * -vec3(-value.z, value.y, value.x);
+                    ImGui::BeginDisabled();
+                    ImGui::gizmo3D(("##gizmo_vis_" + std::to_string(e->id)).c_str(), q, l, size, imguiGizmo::modeFullAxes | imguiGizmo::cubeAtOrigin);
+                    ImGui::EndDisabled();
                     imguiGizmo::restoreDirectionColor();
                     ImGui::SameLine();
-                    ImGui::Text("%.2f\n%.2f\n%.2f", value.x, value.y, value.z);
-                    ImGui::SameLine(-0.0000001f); // should be 0 but it's buggy..
+                    ImGui::Text("x % .2f\ny % .2f\nz % .2f", value.x, value.y, value.z);
+                    ImGui::SameLine(-0.0000001f); // should be 0
                     ImGui::LabelText(e->label.c_str(), "\n");
-                    gui_set(e, changed, glm::normalize(value));
+                    gui_set(e, changed, glm::normalize(vec3(-value.z, value.y, value.x)));
                     ImGui::Columns();   // colormap column layout
                     break;
                 }
@@ -322,7 +372,7 @@ void GuiImgui::renderGui() {
                             const bool is_selected = i == *e->selection;
                             if (ImGui::Selectable(e->options.at(i).c_str(), is_selected)) {
                                 *e->selection = i;
-                                if (e->onChanged) e->onChanged(i);
+                                if (e->onChanged) e->onChanged(i, true);
                             }
                             if (is_selected)
                                 ImGui::SetItemDefaultFocus();
@@ -334,12 +384,11 @@ void GuiImgui::renderGui() {
                 case GuiBitFlags: {
                     auto e = reinterpret_cast<GuiBitFlagsEntry*>(be);
                     unsigned int bits_just_set = 0;
-                    if (ImGui::CollapsingHeader(e->label.c_str()), ImGuiTreeNodeFlags_DefaultOpen) {
+                    if (ImGui::CollapsingHeader(e->label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
                         for (int i = 0; i < e->options.size(); i++) {
                             if (ImGui::CheckboxFlags(e->options.at(i).c_str(), e->bitfield, e->bitFlags.at(i)))
                                 bits_just_set = e->bitFlags.at(i);
                         }
-                        ImGui::Separator();
                     }
                     if (e->singleFlagOnly && bits_just_set)
                         *e->bitfield &= bits_just_set;
@@ -357,19 +406,32 @@ void GuiImgui::renderGui() {
                 }
                 case GuiDynamicText: {
                     auto e = GUI_CAST(be, std::string);
-                    ImGui::TextUnformatted(e->value->c_str());
+                    if (e->label.empty())
+                        ImGui::TextUnformatted(e->value->c_str());
+                    else
+                        ImGui::LabelText(e->label.c_str(), "%s", e->value->c_str());
                     break;
                 }
                 case GuiProgress: {
                     auto e = GUI_CAST(be, float);
-                    if(be->label.empty()) {
-                        ImGui::ProgressBar(e->getter());
-                    }  else {
-                        // ImVec2(0.0f,0.0f) uses ItemWidth.
-                        ImGui::ProgressBar(e->getter(), ImVec2(0.0f, 0.0f));
-                        ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-                        ImGui::TextUnformatted(be->label.c_str());
+                    float progress = e->getter ? e->getter() : 0.f;
+                    // ImVec2(0.0f,0.0f) uses ItemWidth.
+                    if (progress >= 0.f) {
+                        ImGui::ProgressBar(progress, be->label.empty() ? ImVec2(-FLT_MIN, 0) : ImVec2(0.0f, 0.0f));
+                    } else {
+                        progress *= -1.f;
+                        std::string pstr;
+                        int int_progress = static_cast<int>(progress);
+                        if (glm::abs(progress - static_cast<float>(int_progress)) < 0.0001f)
+                            pstr = fmt::vformat("{}", fmt::make_format_args(int_progress));
+                        else
+                            pstr = fmt::vformat("{:.4f}", fmt::make_format_args(progress));
+                        ImGui::ProgressBar(-progress / 100.f,
+                                            be->label.empty() ? ImVec2(-FLT_MIN, 0) : ImVec2(0.0f, 0.0f),
+                                            pstr.c_str());
                     }
+                    ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+                    ImGui::TextUnformatted(be->label.c_str());
                     break;
                 }
                 case GuiSeparator: {

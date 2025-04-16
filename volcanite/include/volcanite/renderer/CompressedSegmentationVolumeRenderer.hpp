@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <glm/glm.hpp>
@@ -89,7 +90,7 @@ public:
             mat.tfMinMax = glm::vec2(0.f, 100.f);
             mat.opacity = 1.f;
             mat.emission = 0.f;
-            mat.wrapping = (m == 0) ? 1 : 0;
+            mat.wrapping = 2;
             // we use opaque transfer functions
             mat.tf->m_controlPointsOpacity.resize(4);
             mat.tf->m_controlPointsOpacity[0] = 0.f;
@@ -188,10 +189,17 @@ public:
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
     [[nodiscard]] int getTargetAccumulationFrames() const { return m_target_accum_frames; }
+    void setTargetAccumulationFrames(int count) {
+        if (count < 0)
+            throw std::runtime_error("Target accumluation frame count must be >= 0.");
+        m_target_accum_frames = count;
+     }
     /// Will save the renderer state to the path when the renderer is shut down
     void saveConfigOnShutdown(const std::string& path) { m_save_config_on_shutdown_path = expandPath(path); }
 
-    bool readParameterFile(const std::string& path, const std::string& version_string="") override {
+    /// Returns a pair of the tag and file path of a parameter preset if it matches the given path string.
+    /// If not rendering preset exists for the path string, returns a nullptr.
+    [[nodiscard]] const std::pair<std::string, std::filesystem::path>* getParameterPreset(const std::string& path) const {
         auto to_tag = [](std::string str) -> std::string {
             std::ranges::transform(str, str.begin(),[](const unsigned char c) {
                                                                         return std::tolower(c); });
@@ -200,15 +208,22 @@ public:
             str.erase(it.begin(), it.end());
             return str;
         };
-        // first check if the given path matches the name of one of the preset files
+        // if the given path does not contain any file system control characters, check if it matches a preset
         if (path.find('.') == std::string::npos && path.find('~') == std::string::npos
             && path.find('/') == std::string::npos && path.find('\\') == std::string::npos) {
-            for (const auto&[vcfg_name, vcfg_path]: m_data_vcfg_presets) {
-                if (to_tag(path) == to_tag(vcfg_name))
-                    return Renderer::readParameterFile((Paths::findDataPath("vcfg") / vcfg_path).string(), version_string);
+            for (int i = 0; i < m_data_vcfg_presets.size(); i++) {
+                if (to_tag(m_data_vcfg_presets[i].first) == to_tag(path))
+                    return &m_data_vcfg_presets[i];
             }
         }
-        return Renderer::readParameterFile(expandPath(path), version_string);
+        return nullptr;
+    }
+
+    bool readParameterFile(const std::string& path, const std::string& version_string="", bool backup_parameters=true) override {
+        if (const auto preset = getParameterPreset(path))
+            return Renderer::readParameterFile(Paths::findDataPath("vcfg") / preset->second, version_string, backup_parameters);
+        else
+            return Renderer::readParameterFile(expandPath(path), version_string, backup_parameters);
     }
 
     struct CSGVRenderingConfig {
@@ -242,6 +257,8 @@ public:
         if (config.cache_mode > 2)
             throw std::runtime_error("Invalid cache mode " + std::to_string(config.cache_mode));
         m_cache_mode = config.cache_mode;
+        if (m_decode_from_shared_memory && config.cache_mode != CACHE_BRICKS)
+            throw std::runtime_error("Shared memory decoding can only be used with cache mode bricks");
         m_empty_space_block_dim = config.empty_space_resolution;
         m_additional_shader_defs = config.shader_defines;
     }
@@ -293,44 +310,46 @@ private:
     static constexpr uint32_t SEGMENTED_VOLUME_MATERIAL_COUNT = 8;
     std::vector<SegmentedVolumeMaterial> m_materials = std::vector<SegmentedVolumeMaterial>(SEGMENTED_VOLUME_MATERIAL_COUNT);
     float m_factor_ambient = 0.4f;
-    // shading and post processing
-    glm::vec4 m_background_color_a = glm::vec4(1.f, 1.f, 1.f, 1.f);
-    glm::vec4 m_background_color_b = glm::vec4(1.f, 1.f, 1.f, 1.f);
-    int m_subsampling = 0;
+    // shading and post-processing
+    glm::vec4 m_background_color_a = glm::vec4{1.f, 1.f, 1.f, 1.f};
+    glm::vec4 m_background_color_b = glm::vec4{1.f, 1.f, 1.f, 1.f};
+    int m_subsampling = 0;              ///< only one pixel per [2^subsampl, 2^subsampl] pixel block is rendered per frame
     bool m_tonemap_enabled = false;
+    float m_gamma = 1.f, m_brightness = 1.f, m_contrast = 1.f;
     bool m_global_illumination_enabled = false;
     bool m_envmap_enabled = false;
     float m_shadow_pathtracing_ratio = 1.0f;
-    glm::vec2 m_ambient_occlusion_dist_strength = glm::vec2(15.f, 0.5f);
-    glm::vec3 m_light_direction = glm::vec3(-0.309426f, 0.721995f, -0.618853f);
+    glm::vec2 m_ambient_occlusion_dist_strength = glm::vec2{15.f, 0.5f};
+    glm::vec3 m_light_direction = glm::vec3{-0.309426f, 0.721995f, -0.618853f};
     float m_light_intensity = 1.f;
     // voxel traversal
     int m_max_path_length = 32;
     int m_max_steps = 16384;
-    glm::vec3 m_voxel_size = glm::vec3(1.f, 1.f, 1.f);
-    glm::vec3 m_bboxMin = glm::vec3(0.f, 0.f, 0.f);
-    glm::vec3 m_bboxMax = glm::vec3(1.f, 1.f, 1.f);
-    glm::vec2 m_mouse_pos = glm::vec2(0.5f);    ///< screen space mouse position in [0,1]^2
+    glm::vec3 m_voxel_size = glm::vec3{1.f, 1.f, 1.f};
+    glm::ivec3 m_bboxMin = glm::uvec3{0, 0, 0};
+    glm::ivec3 m_bboxMax = glm::uvec3{INT_MAX, INT_MAX, INT_MAX};
+    bool m_axis_flip[3] = {false, false, false};
+    glm::mat4 m_axis_transpose_mat{1.f};
+    glm::vec2 m_mouse_pos = glm::vec2{0.5f};    ///< screen space mouse position in [0,1]^2
     // denoising
     int m_atrous_iterations = 4;
     bool m_denoising_enabled = true;
-    int m_denoise_filter_kernel_size = 1;
-    float m_difference_depth_denoising = 1.0f;
-    float m_spatial_sigma = 2.0f;
+    int m_denoise_filter_kernel_size = 2;
     float m_depth_sigma = 1.f;
-    // svgf TODO: Not using SVGF anymore, remove this
     bool m_atrous_enabled = true;
-    float m_illumination_sigma = 4.0f;
     bool m_denoise_fade_enabled = true;
-    float m_denoise_fade_sigma = 1.f;
+    float m_denoise_fade_sigma = 2.f;
     // debugging and dev options
     float m_lod_bias = 0.f;
     bool m_blue_noise = true;
     uint32_t m_debug_vis_flags = 0u;
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
-    int m_target_accum_frames = 16;
-    int m_max_inv_lod = 6;
+    int m_target_accum_frames = 128;
+    bool m_accum_step_mode = false;
+    bool m_accum_do_step = false;
+    int m_max_inv_lod = 8;
+    int m_max_request_path_length_pow2 = 1u;
     // utility
     std::string m_gui_resolution_text;
     std::string m_gui_device_mem_text, m_gui_cache_mem_text;
@@ -342,8 +361,16 @@ private:
     void updateDeviceMemoryUsage();
     void updateSegmentedVolumeMaterial(int m);
     vvv::AwaitableList updateAttributeBuffers();
+    void updateRequestLimiation(uint32_t global_min_spp, uint32_t global_max_spp);
+    void disableRequestLimiation();
     void updateRenderUpdateFlags();
     void updateUniformDescriptorset();
+
+    float getCacheFillRate() const {
+        const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
+        return glm::clamp(static_cast<float>(m_last_gpu_stats.used_cache_base_elements)
+            / static_cast<float>(m_cache_capacity - cache_elements_per_finest_lod), 0.f, 1.f);
+    }
 
     uint32_t m_queue_family_index = 0u;
     std::unique_ptr<PassCompSegVolRender> m_pass = nullptr;
@@ -373,7 +400,7 @@ private:
     size_t m_cache_capacity = 0ul;              ///< this many 2x2x2 base elements fit into the cache. Each element is 2x2x2 x (sizeof(uint)=32) / m_palette_indices_per_uint bytes large
     uint32_t m_empty_space_block_dim = 2ul;                ///< block_size^3 voxels are grouped together into one empty space bit
     size_t m_empty_space_buffer_size = 0ul;                 ///< byte size of the empty space skipping bit vector (dividable by 16)
-    const size_t m_free_stack_capacity = 262144ul;          ///< how many elements (one uint = 4B each) fit into the free stack of EACH LoD > 0. We need max. volume_size/brick_size/lod_width³ elements. a capacity of 262144 equals 1MB * (lod_count-1)
+    const size_t m_free_stack_capacity = (4*262144ul);          ///< how many elements (one uint = 4B each) fit into the free stack of EACH LoD > 0. We need max. volume_size/brick_size/lod_width³ elements. a capacity of 262144 equals 1MB * (lod_count-1)
     std::shared_ptr<Buffer> m_cache_info_buffer = nullptr;
     std::shared_ptr<Buffer> m_cache_buffer = nullptr;       ///< cache_capacity * 2x2x2 uints
     glm::uvec2 m_cache_buffer_address = {};
@@ -398,7 +425,7 @@ private:
     // detail management
     static constexpr uint32_t m_max_detail_requests_per_frame = 1023u;  ///< how many brick_ids can be requested for detail upload per frame (affects the request buffer size)
     enum DetailConstructionStage { DetailReady = 0, DetailAwaitingCPUConstruction, DetailCPUConstruction, DetailAwaitingUpload, DetailUploading};
-    DetailConstructionStage m_detail_stage = DetailReady;
+    std::atomic<DetailConstructionStage> m_detail_stage = DetailReady;
     std::vector<uint32_t> m_detail_requests = {};
     std::shared_ptr<Buffer> m_detail_requests_buffer = nullptr;
     std::vector<uint32_t> m_constructed_detail_starts = {};
@@ -410,25 +437,44 @@ private:
     std::shared_ptr<Buffer> m_detail_buffer = nullptr;
     glm::uvec2 m_detail_buffer_address = {};
     std::pair<std::shared_ptr<vvv::Awaitable>, std::shared_ptr<Buffer>> m_detail_staging = {nullptr, nullptr};
+
+    // parameter, render flags, amd update tracking
     size_t m_parameter_hash_at_last_reset = 0u;
-
     uint32_t m_render_update_flags = 0u;          ///< each bit marks if a set of rendering parameters changed in this frame
-
     size_t m_pcamera_hash = ~0u;                  ///< hash of the last camera parameters
     size_t m_prender_hash = ~0u;                  ///< hash of the last rendering parameters
     bool m_pmaterial_reset = true;                ///< if the material parameters where changed since the last frame
     size_t m_presolve_hash = ~0u;                 ///< hash of the last resolve shader parameters
     bool m_pcache_reset = true;                   ///< if the cache must reset this frame
+    bool m_auto_cache_reset = true;               ///< automatically clear the cache if a new camera position is reached and it is full
     uint32_t m_accumulated_frames = 0u;
     vk::Extent2D m_resolution;
-
     uint32_t m_frame;
     std::optional<RendererOutput> m_mostRecentFrame = {};
 
     // debugging
     bool m_release_version = false;               ///< if this is used in a release where development parameters are hidden
-    GPUStats m_last_gpu_stats = {0u};
-    std::string m_additional_shader_defs = "";
+    GPUStats m_last_gpu_stats = {0ul, 0ul, 0u, 0u, 0u,
+        {0u, 0u, 0u, 0u, 0u, 0u}, {0u, 0u, 0u, 0u, 0u, 0u},
+                              {0u, 0u, 0u, 0u, 0u, 0u}, {0u, 0u, 0u, 0u, 0u, 0u}, };
+    std::string m_additional_shader_defs = {};
+
+    struct BrickRequestLimitation {
+        bool g_enable = true;               ///< if true, automatic request limitation is performed
+        int g_area_size_min = 8u;           ///< the request area will never be smaller than this size^2
+        glm::ivec2 g_area_duration_bounds = {8, 64}; ///< min. / max. number of frames per render pixel for one area configuration
+        //
+        bool tried_cache_reset = false;   ///< for each location (if the min. area is reached) we try to reset the cache ONCE at most
+        bool random_area_pixel = false;   ///< if true, the next pixel for the area is selected randomly instead by min. spp
+        int spp_delta = 8u;               ///< if the min. rendered spp are delta many frames behind the max. spp, limit brick requests
+        uint32_t area_start_frame = 0u;   ///< accumulation frame index at which the current request area position was set
+        glm::ivec2 area_min_pixel;        ///< pixel that is the representative in the area (the old global min. pixel)
+        uint32_t area_min_pixel_last_spp = 0u;    ///< minimum samples the area pixel received at start of this area duration (INVALID if unknown)
+        int area_duration = 16;           ///< how many times a pixel is rendered before the request area moves to another position
+        int area_size = 0;                ///< if <= 0: no request limitation. otherwise: pixel area that can request bricks
+        glm::ivec2 area_pos = {0, 0}; ///< start position of the area of pixels that can request bricks
+        glm::ivec2 global_min_pixel;      ///< pixel that globally has the minimum number of accumulated samples so far
+    } m_req_limit;
 
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
 

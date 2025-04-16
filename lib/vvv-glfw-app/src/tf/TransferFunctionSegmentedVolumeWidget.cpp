@@ -44,7 +44,6 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
         GuiInterface::GuiTFSegmentedVolumeEntry::ColorMapConfig& colormap_config = e->colormapConfig[m];
 
         bool materialChanged = false;
-        bool colormapChanged = false;
 
         // make child collapsable child
         // ImGui::BeginChild(id++,  ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize() * 24.0f), ImGuiChildFlags_None, ImGuiWindowFlags_MenuBar);
@@ -78,12 +77,15 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
 
             // skip the rest of the GUI if this material is disabled
             if(mat.discrAttribute != SegmentedVolumeMaterial::DISCR_NONE) {
+                bool colormapChanged = false;
                 // Discriminator range
                 {
                     glm::vec2 attrRange =
                             mat.discrAttribute >= 0 ? e->attributeMinMax.at(mat.discrAttribute) : glm::vec2(0.f, 0.f);
                     ImGui::BeginDisabled();
+                    ImGui::PushID(id++);
                     ImGui::DragFloatRange2("Min / Max", &attrRange.x, &attrRange.y);
+                    ImGui::PopID();
                     ImGui::EndDisabled();
                     ImGui::PushID(id++);
                     materialChanged |= ImGui::DragFloatRange2("Bounds",
@@ -104,7 +106,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                 ImGui::NewLine();
 
                 ImGui::PushID(id++);
-                std::string types[] = {"Solid Color", "Divergent", "Precomputed", "PNG Import"};
+                std::string types[] = {"Solid Color", "Divergent", "Precomputed", "Image Import"};
                 if (ImGui::BeginCombo("Type", types[colormap_config.type].c_str())) {
                     for (int i = 0; i < 4; i++) {
                         const bool is_selected = i == colormap_config.type;
@@ -272,7 +274,9 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                 {
                     glm::vec2 attrRange = e->attributeMinMax.at(mat.tfAttribute);
                     ImGui::BeginDisabled();
+                    ImGui::PushID(id++);
                     ImGui::DragFloatRange2("Min / Max", &attrRange.x, &attrRange.y);
+                    ImGui::PopID();
                     ImGui::EndDisabled();
                     ImGui::PushID(id++);
                     materialChanged |= ImGui::DragFloatRange2("Range",
@@ -288,10 +292,8 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                 materialChanged |= ImGui::RadioButton("Clamp", &mat.wrapping, 0);
                 ImGui::SameLine();
                 materialChanged |= ImGui::RadioButton("Wrap", &mat.wrapping, 1);
-                ImGui::BeginDisabled();
                 ImGui::SameLine();
                 materialChanged |= ImGui::RadioButton("Random", &mat.wrapping, 2);
-                ImGui::EndDisabled();
                 ImGui::PopID();
 
                 ImGui::Separator();

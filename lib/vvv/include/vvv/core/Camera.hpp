@@ -136,7 +136,8 @@ public:
     void onCameraUpdate();
 
     void writeTo(std::ostream& out, bool human_readable=false) {
-        if(human_readable) {
+        if (human_readable) {
+            // TODO: write out look at, rotation and radius in orbital mode
             out << "orbital: " << (orbital ? 1 : 0) << std::endl;
             out << "position: " << position_world_space.x << " " << position_world_space.y << " " << position_world_space.z << std::endl;
             out << "lookat: " << position_look_at_world_space.x << " " << position_look_at_world_space.y << " " << position_look_at_world_space.z << std::endl;
@@ -149,9 +150,27 @@ public:
             out.write(reinterpret_cast<char *>(&rotation_y), sizeof(rotation_y));
             out.write(reinterpret_cast<char *>(&orbital_radius), sizeof(orbital_radius));
         }
+
+        // if(human_readable) {
+        //     out << "orbital: " << (orbital ? 1 : 0) << std::endl;
+        //     out << "position: " << position_world_space.x << " " << position_world_space.y << " " << position_world_space.z << std::endl;
+        //     out << "lookat: " << position_look_at_world_space.x << " " << position_look_at_world_space.y << " " << position_look_at_world_space.z << std::endl;
+        //     out << "rotation: " << rotation_x << " " << rotation_y << " " << orbital_radius << std::endl;
+        // } else {
+        //     out << orbital;
+        //     out << position_world_space.x;
+        //     out << position_world_space.y;
+        //     out << position_world_space.z;
+        //     out << position_look_at_world_space.x;
+        //     out << position_look_at_world_space.y;
+        //     out << position_look_at_world_space.z;
+        //     out << rotation_x;
+        //     out << rotation_y;
+        //     out << orbital_radius;
+        // }
     }
     void readFrom(std::istream& in, bool human_readable=false) {
-        if(human_readable) {
+        if (human_readable) {
             std::string tmp;
             in >> tmp; // "orbital:"
             in >> orbital;
@@ -175,6 +194,26 @@ public:
             in.read(reinterpret_cast<char *>(&rotation_y), sizeof(rotation_y));
             in.read(reinterpret_cast<char *>(&orbital_radius), sizeof(orbital_radius));
         }
+
+        // std::string tmp;
+        // if (human_readable)
+        //     in >> tmp; // "orbital:"
+        // in >> orbital;
+        // if (human_readable)
+        //     in >> tmp; // "position:"
+        // in >> position_world_space.x;
+        // in >> position_world_space.y;
+        // in >> position_world_space.z;
+        // if (human_readable)
+        //     in >> tmp; // *lookat*
+        // in >> position_look_at_world_space.x;
+        // in >> position_look_at_world_space.y;
+        // in >> position_look_at_world_space.z;
+        // if (human_readable)
+        //     in >> tmp; // "rotation:"
+        // in >> rotation_x;
+        // in >> rotation_y;
+        // in >> orbital_radius;
     }
 
 private:

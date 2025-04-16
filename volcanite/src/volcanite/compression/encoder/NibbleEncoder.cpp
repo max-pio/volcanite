@@ -31,11 +31,11 @@ uint32_t NibbleEncoder::readNextLodOperationFromEncoding(const uint32_t* brick_e
 //       header_size*8 ᒧ                always zero ᒧ  ∟ .. one  ∟ palette size
 uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out,
                                                    glm::uvec3 start, glm::uvec3 volume_dim) const {
-    assert(!(m_op_mask & OP_STOP_BIT) && "Nibble encoder does not support stop bits in random access");
+    assert(!(m_op_mask & OP_STOP_BIT) && "Nibble encoder does not support stop bits with random access");
+    assert(!(m_op_mask & OP_PALETTE_D_BIT) && "Nibble encoder does not support palette delta operation with random access");
 
     std::vector<uint32_t> palette;
     palette.reserve(32);
-    glm::uvec3 brick_pos;
 
     const uint32_t lod_count = getLodCountPerBrick();
     const uint32_t header_size = getHeaderSize();
@@ -43,9 +43,8 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
 
     // we need to keep track of the current brick status from coarsest to finest level to determine the right operations
     // basically do an implicit decoding while we're encoding
-    uint32_t parent_value;
-    uint32_t value;
-    uint32_t child_index; // index of all children with the same coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
+    uint32_t parent_value = INVALID;
+    // index of all children with the same coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
 
     // construct the multigrid on this brick that we want to represent in this encoding
     std::vector<MultiGridNode> multigrid;
@@ -84,10 +83,10 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
         for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i += lod_width * lod_width * lod_width) {
             // we don't store any operations for a grid node that would lie completely outside the volume
             // if this is problematic, and we would like to always handle a full brick, we could output anything here and thus just write PARENT_STOP.
-            brick_pos = enumBrickPos(i);
+            glm::uvec3 brick_pos = enumBrickPos(i);
 
             // every 8th element (we span 2*2*2=8 elements of the coarse LOD above), we fetch the new parent
-            child_index = (i % (lod_width * lod_width * lod_width * 8)) / (lod_width * lod_width * lod_width);
+            uint32_t child_index = (i % (lod_width * lod_width * lod_width * 8)) / (lod_width * lod_width * lod_width);
             if (child_index == 0) {
                 assert(parent_counter <= 8 && "parent element would be used for more than 8 elements!");
 
@@ -106,7 +105,7 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
             }
             parent_counter++;
 
-            value = multigrid[muligrid_lod_start + voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].label;
+            uint32_t value = multigrid[muligrid_lod_start + voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].label;
             assert(value != INVALID && "Original volume mustn't contain the INVALID magic value!");
 
             uint32_t operation = 0u;
@@ -165,7 +164,7 @@ uint32_t rank_palette_adv_4bit(const uint32_t* brick_encoding, uint32_t enc_oper
     uint32_t occurrences = 0u;
     const uint32_t header_size = brick_encoding[0];
     for(uint32_t entry_id = header_size; entry_id < enc_operation_index; entry_id++) {
-        if ((read4Bit(brick_encoding, 0u, entry_id) & 7u) == PALETTE_ADV)
+        if (read4Bit(brick_encoding, 0u, entry_id) == PALETTE_ADV)
             occurrences++;
     }
     return occurrences;
@@ -178,61 +177,53 @@ uint32_t NibbleEncoder::decompressCSGVBrickVoxel(const uint32_t output_i, const 
     uint32_t inv_lod = target_inv_lod;
     // operation index within in the current inv. LoD, starting at the target LoD
     uint32_t inv_lod_op_i = output_i;
-    // corresponding voxel position within the inv. LoD
-    glm::uvec3 inv_lod_voxel = enumBrickPos(inv_lod_op_i);
 
     // obtain encoding operation read index (4 bit)
     uint32_t enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
     uint32_t operation = read4Bit(brick_encoding, 0u, enc_operation_index);
 
     assert(enc_operation_index < brick_encoding_length * 8u && "brick encoding out of bounds read");
-    // ToDo: handle stop bits
-    assert((operation & STOP_BIT) == 0u && "stop bit not yet supported with random access");
 
     // follow the chain of operations from the current output voxel up to an operation that accesses the palette
     {
-        uint32_t operation_lsb = operation & 7u; // extract least significant 3 bits
-
-        // equal to (operation_lsb != PALETTE_LAST && operation_lsb != PALETTE_ADV && operation_lsb != PALETTE_D)
-        while (operation_lsb < 4u) {
+        // equal to (operation != PALETTE_LAST && operation != PALETTE_ADV && operation != PALETTE_D)
+        while (operation < 4u) {
             // find the read position for the next operation along the chain
-            if (operation_lsb == PARENT) {
+            if (operation == PARENT) {
                 // read from the parent in the next iteration
                 inv_lod--;
                 inv_lod_op_i /= 8u;
-                inv_lod_voxel = enumBrickPos(inv_lod_op_i);
             }
-                // operation_lsb is NEIGHBOR_X, NEIGHBOR_Y, or NEIGHBOR_Z:
+            // operation is NEIGHBOR_X, NEIGHBOR_Y, or NEIGHBOR_Z:
             else {
                 // read from a neighbor in the next iteration
-                const uint32_t neighbor_index = operation_lsb - NEIGHBOR_X; // X: 0, Y: 1, Z: 2
+                const uint32_t neighbor_index = operation - NEIGHBOR_X; // X: 0, Y: 1, Z: 2
                 const uint32_t child_index = inv_lod_op_i % 8u;
 
-                inv_lod_voxel += neighbor[child_index][neighbor_index];
+                const glm::uvec3 inv_lod_voxel = glm::uvec3(glm::ivec3(enumBrickPos(inv_lod_op_i)) + neighbor[child_index][neighbor_index]);
                 inv_lod_op_i = indexOfBrickPos(inv_lod_voxel);
 
                 // ToDo: may be able to remove this later! for neighbors with later indices, we have to copy from its parent instead
                 if (any(greaterThan(neighbor[child_index][neighbor_index], glm::ivec3(0)))) {
                     inv_lod--;
                     inv_lod_op_i /= 8u;
-                    inv_lod_voxel = enumBrickPos(inv_lod_op_i);
                 }
             }
 
             // at this point: inv_lod, inv_lod_op_i, and inv_lod_voxel must be valid and set correctly!
             enc_operation_index = brick_encoding[inv_lod] + inv_lod_op_i;
-            operation_lsb = read4Bit(brick_encoding, 0u, enc_operation_index) & 7u;
+            operation = read4Bit(brick_encoding, 0u, enc_operation_index);
         }
+        assert(operation != PALETTE_D && "palette delta operation not supported with random access");
+        assert((read4Bit(brick_encoding, 0u, enc_operation_index) & STOP_BIT) == 0u && "stop bit not supported with random access in Nibble encoder");
 
         // at this point, the current operation accesses the palette: write the resulting palette entry
         // the palette index to read is the (exclusive!) rank_{PALETTE_ADV}(enc_operation_index)
         uint32_t palette_index = rank_palette_adv_4bit(brick_encoding, enc_operation_index);
         // the actual palette index may be offset depending on the operation
-        if (operation_lsb == PALETTE_LAST) {
+        if (operation == PALETTE_LAST) {
             palette_index--;
         }
-        assert(operation_lsb != PALETTE_D && "palette delta operation not supported with random access");
-        //assert(palette_index < getBrickPaletteLength(brick_idx), "obtained wrong palette index");
 
         // Write to the index in the output array. The output array's positions are in Morton order.
         return brick_encoding[brick_encoding_length - 1u - palette_index];

@@ -22,7 +22,7 @@ namespace vvv {
 class GuiTFSegmentedVolumeData {
 public:
     explicit GuiTFSegmentedVolumeData(GuiInterface::GuiTFSegmentedVolumeEntry &entry) : e(&entry) {
-        e->initialize(true);
+        e->initialize(false);
 
         // Disable (-2), Any (-1), attributes (0..) for the visibility test of the material
         discriminatorNames.clear();

@@ -33,6 +33,7 @@ namespace vvv {
         Camera* m_camera;
         static double s_mouse_scroll_wheel;
         double m_mouse_scroll_wheel_previous_frame = 0.f;
+        bool m_auto_rotate_camera = false;
 
         static void glfwUpdateScrollWheel(GLFWwindow* window, double xoffset, double yoffset);
 

@@ -17,6 +17,7 @@ compile_commands.json
 **/.idea/*
 **/python/internal/*
 **/.venv/*
+**/.env/*
 
 # large evaluation files
 /eurovis/eval/**/**.csgv

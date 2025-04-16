@@ -22,6 +22,7 @@ layout (local_size_x = 8, local_size_y = 8) in;
 
 #include "util.glsl"
 #include "volcanite/renderer/csgv_bindings.glsl"
+#define VOLCANITE_FRAMEBUFFER_READONLY
 #include "volcanite/renderer/framebuffer.glsl"
 #include "volcanite/renderer/csgv_materials.glsl"
 #include "volcanite/renderer/dummy_envmap.glsl"
@@ -35,7 +36,7 @@ vec3 getAlbedoOfLabel(uint label) {
 
     const int material = getMaterial(label);
     if (material < 0) {
-        assert(false, "G-buffer must not contain labels that are invisible");
+        assert(g_debug_vis_flags != 0u, "G-buffer must not contain labels that are invisible"); // debug modes may write strange label
         return vec3(1.f);
     } else {
         return getColor(label, material).rgb;
@@ -63,20 +64,24 @@ vec4 blendWithBackground(ivec2 pixel, vec4 pixel_rgba) {
     vec4 bgColor = get_background_color(fragCoord, viewRayDirection);
 
     DEBUG_img_envmap(fragCoord, viewRayDirection, bgColor, bool(g_debug_vis_flags & VDEB_ENVMAP_BIT));
-    return pixel_rgba.a * pixel_rgba + (1.f - pixel_rgba.a) * bgColor;
+    return vec4((pixel_rgba.a * pixel_rgba + (1.f - pixel_rgba.a) * bgColor).rgb, 1.f);
 }
 
 void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {
 
-    // perform tonemapping and color space conversion
-    if(g_tonemap_enable) {
-        accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb);
+    // expore correction, tonemapping, color space conversion
+    if (g_tonemap_enable) {
+        const float EXPOSURE_CORRECTION = 1.f;
+        accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb * EXPOSURE_CORRECTION);
     }
-    // accum_rgba.rgb = rgb2srgb(accum_rgba.rgb);
+    accum_rgba.rgb = rgb2srgb(clamp((accum_rgba.rgb + vec3(g_brightness - 0.5f)) * g_contrast + vec3(0.5f), vec3(0.f), vec3(1.f)), g_gamma);
 
     DEBUG_img_g_buffer(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_G_BUFFER_BIT));
     DEBUG_img_no_postprocess(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_NO_POSTPROCESS_BIT));
     DEBUG_img_spp(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_SPP_BIT));
+    DEBUG_img_cache_array(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_CACHE_ARRAY_BIT));
+    DEBUG_img_request_limit(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_REQUEST_LIMIT_BIT));
+    DEBUG_img_brick_info(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_BRICK_INFO_BIT));
 
     // blend with background and output to display image
     imageStore(inpaintedOutColor, pixel, blendWithBackground(pixel, accum_rgba));
@@ -93,8 +98,8 @@ void main() {
 
     // upsampling / denoising may be disabled or faded out
     // for n^2 samples, variance is halfed
-    const float fade = g_denoise_fade_enable ? min(1.f, g_denoise_fade_sigma / sqrt(float(g_camera_still_frames / (g_subsampling * g_subsampling)))) : 1.f;
-    if (!g_atrous_enabled || fade < 0.05f) {
+    const float fade = g_denoise_fade_enable ? min(1.f, g_denoise_fade_sigma / sqrt(max(float(imageLoad(accuSampleCountOut, pixel).r), 1.f))) : 1.f;
+    if (!g_atrous_enabled || fade < 0.1f) {
         if (pc.denoising_iteration == pc.last_denoising_iteration)
             writeFinalFramebuffer(pixel, imageLoad(denoisingBuffer[0], pixel));
         return;
@@ -235,7 +240,7 @@ void main() {
             // accum_rgba stores the offset to the neighbor (.rg) from which the color is copied for upsampling
             ivec2 offset = ivec2(accum_rgba.rg);
             accum_rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel + offset);
-            assert(accum_rgba.a >= 0.f, "copying non-rendered pixel for upsampling");
+            // assert(g_debug_vis_flags != 0u || accum_rgba.a >= 0.f, "copying non-rendered pixel for upsampling");
         }
         writeFinalFramebuffer(pixel, accum_rgba);
     }

@@ -14,7 +14,9 @@
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <string>
-#include "vvv/util/Logger.hpp"
+
+#include "volcanite/VolcaniteArgs.hpp"
+#include "volcanite/util/args_and_csgv_provider.hpp"
 
 #ifdef HEADLESS
     #include "vvv/headless_entrypoint.hpp"
@@ -23,34 +25,32 @@
 #include "vvvwindow/App.hpp"
 #include "vvvwindow/entrypoint.hpp"
 
+
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp"
 #include <memory>
+
+namespace volcanite {
+    class CSGVDatabase;
+}
 
 using namespace volcanite;
 
 
 int csgv_brick_viewer(int argc, char *argv[]) {
 
-    if (argc <= 1) {
-        Logger(ERROR) << "No CSGV file path provided as command line argument. Compress a volume with Volcanite first.";
-        return -1;
-    }
+    VolcaniteArgs args;
+    std::shared_ptr<volcanite::CompressedSegmentationVolume> csgv;
+    std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase;
+    auto ret = volcanite_provide_args_and_csgv(args, csgv, csgvDatabase, argc, argv);
+    if (ret != RET_SUCCESS) { return ret; }
 
-    std::string path = argv[1];
     std::string appName = "Compressed Segmentation Volume Brick Viewer";
 
-    // Load a data set and encode it as a CompressedSegmentationVolume
-    auto csgv = std::make_shared<volcanite::CompressedSegmentationVolume>();
-    if(!csgv->importFromFile(path, true)) {
-        Logger(ERROR) << "Could not import CSGV from " << path;
-        return -2;
-    }
-
     // create and run the interactive Application
-    const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeBrickViewer>();
+    const auto renderer = std::make_shared<CompressedSegmentationVolumeBrickViewer>();
     renderer->setCompressedSegmentationVolume(csgv);
-    auto app = Application::create(appName, renderer);
+    const auto app = Application::create(appName, renderer);
     app->setVSync(true);
     return app->exec();
 }
