@@ -73,12 +73,14 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
 
     std::set<unsigned char> processed = {};
 
-    constexpr auto help_str = "+synth[_arg]* with arg in\n"
-                              "  d[x]x[y]x[z]: volume dimension [x,y,z]"
-                              "  l[v]: voxels per label (higher > fewer labels) [v]\n"
-                              "  max[v]: maximum label value [v]\n"
-                              "  r[a]x[b]x[c]-[s]x[t]x[u]: target label region size min. [a,b,c], max. [s,t,u]\n"
-                              "  s[v]: deterministic random seed [v]. for chunked, set to s{}[v]{}[v]{}";
+    constexpr auto help_str = "        +synth[_arg]* with arg in\n"
+                              "          d[x]x[y]x[z]: volume dimension [x,y,z]\n"
+                              "          l[v]: voxels per label (higher => fewer labels) [v]\n"
+                              "          max[v]: maximum label value [v]\n"
+                              "          r[a]x[b]x[c]-[s]x[t]x[u]: target label region size min. [a,b,c], max. [s,t,u]\n"
+                              "          s[v]: deterministic random seed [v]. for chunked, set to s{}[v]{}[v]{}";
+
+    Logger(INFO) << "synthetic volume creation syntax:\n" << help_str;
 
     constexpr std::string_view split{"_"};
     for (const auto arg: std::views::split(descr, split)
