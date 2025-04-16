@@ -237,11 +237,11 @@ public:
         deleteTexture();
     }
 
-    void writePayload(uint32_t x, uint32_t y, uint32_t z, std::shared_ptr<std::vector<ElementType>>& data) {
+    void setPayload(uint32_t x, uint32_t y, uint32_t z, HolderType& data) {
         dim_x = x;
         dim_y = y;
         dim_z = z;
-        m_payload = *data;
+        m_payload = data;
     }
 
 protected:

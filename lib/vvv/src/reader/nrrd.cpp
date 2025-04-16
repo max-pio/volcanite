@@ -321,8 +321,12 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(const std:
         } else if (fieldName == "spacings") {
             std::istringstream spacings(fieldValue);
             spacings >> spacing_width >> spacing_height >> spacing_depth;
+        } else if (fieldName == "space") {
+            // TODO 'space' field not applied when reading NRRD volume
+        } else if (fieldName == "kinds") {
+            // TODO 'kinds' field not applied when reading NRRD volume
         } else {
-            std::cout << "ignoring unknown NRRD header field: " << fieldName << std::endl;
+            Logger(WARN) << "ignoring unknown NRRD header field: " << fieldName;
         }
     }
 

@@ -320,9 +320,9 @@ public:
                     throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.h5|.raw|.vraw|.nrrd|.nhdr})", inputpathArg.longID(""));
                 }
 
-                if(input_volume_required && !va.decompress_export_file.empty()) {
-                    throw ArgException(decompresspathArg.longID() + " can only be used with a .csgv input file.", decompresspathArg.longID());
-                }
+                // if(input_volume_required && !va.decompress_export_file.empty()) {
+                //    throw ArgException(decompresspathArg.longID() + " can only be used with a .csgv input file.", decompresspathArg.longID());
+                // }
 
                 // attribute arguments (if we import a .csgv file, the attributes are already stored in a database along with it)
                 va.label_remapping = labelRemappingArg.getValue();

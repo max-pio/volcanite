@@ -69,12 +69,12 @@ int volcanite_main(int argc, char *argv[]) {
     if(args.performDecompression()) {
         auto payload = compressedSegmentationVolume->decompress();
         auto dim = compressedSegmentationVolume->getVolumeDim();
-        vvv::Volume<uint32_t> decompressed_volume {0, 0, 0, 0, 0, 0, vk::Format::eUndefined};
-        decompressed_volume.writePayload(dim.x, dim.y, dim.z, payload);
+        vvv::Volume<uint32_t> decompressed_volume{static_cast<float>(dim.x), static_cast<float>(dim.y), static_cast<float>(dim.z),
+                                                  dim.x, dim.y, dim.z, vk::Format::eUndefined, *payload};
         if (!decompressed_volume.write(args.decompress_export_file))
-            Logger(ERROR) << "compressed volume could not be decompressed";
+            Logger(ERROR) << "volume could not be decompressed";
         else
-            Logger(INFO) << "volume successfully decompressed and written to " << args.decompress_export_file;
+            Logger(INFO) << "volume decompressed to " << args.decompress_export_file;
     }
 
     if(args.export_stats) {
