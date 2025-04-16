@@ -73,7 +73,6 @@ template <typename T> void write_hdf5_(Volume<T>* volume, const std::string& pat
         file.unlink(datasetName);
 
     auto dim = std::vector<size_t>{volume->dim_x, volume->dim_y, volume->dim_z};
-    auto dataset = file.createDataSet<T>(datasetName, HighFive::DataSpace(dim));
 
     // rewrite volume data s.t. it is a 3D vector
     std::vector<std::vector<std::vector<T>>> tmp_volume_data (dim[0], std::vector<std::vector<T>>(dim[1], std::vector<T>(dim[2])));
@@ -87,6 +86,11 @@ template <typename T> void write_hdf5_(Volume<T>* volume, const std::string& pat
         }
     }
 
+    HighFive::DataSetCreateProps probs;
+    probs.add(HighFive::Chunking({dim[0], dim[1], dim[2]}));
+    probs.add(HighFive::Deflate(9));
+
+    auto dataset = file.createDataSet<T>(datasetName, HighFive::DataSpace(dim), probs);
     dataset.write(tmp_volume_data);
 #else
 throw std::runtime_error("HighFIVE / HDF5 libraries not found! Cannot write volume to .hdf5 file!");
