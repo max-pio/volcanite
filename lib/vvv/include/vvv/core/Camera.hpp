@@ -25,6 +25,11 @@
 #include <functional>
 #include <vvv/core/preamble_forward_decls.hpp>
 
+#ifdef _WIN32
+    #undef near
+    #undef far
+#endif
+
 namespace vvv {
 
 /// Holds state for a first person camera that characterizes the world to
@@ -66,8 +71,9 @@ class Camera {
     Mode camera_mode;
     float orthogonal_scale;
 
-    Camera(bool is_orbital = true) : orbital(is_orbital), rotation_x(0), rotation_y(0),
-                                     rotation_x_0(0), rotation_y_0(0), near(0.05f), far(1.0e3f),
+    explicit Camera(bool is_orbital = true) : orbital(is_orbital), rotation_x(0), rotation_y(0),
+                                     orbital_radius(1.5f), rotation_x_0(0), rotation_y_0(0),
+                                     near(0.05f), far(1.0e3f),
                                      vertical_fov(0.33f * std::numbers::pi), speed(2.0f),
                                      position_world_space(0, 0, 5),
                                      position_look_at_world_space(0, 0, 0),

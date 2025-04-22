@@ -13,15 +13,15 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 #include <vvvwindow/entrypoint.hpp>
 
 #include <vvv/util/Logger.hpp>
 #include <vvv/util/Paths.hpp>
 #include <vvv/util/detect_debugger.hpp>
-
-#ifdef _WIN32
-#include <Windows.h>
-#endif
 
 #include <string>
 
