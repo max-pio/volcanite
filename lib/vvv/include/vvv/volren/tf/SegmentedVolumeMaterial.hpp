@@ -15,11 +15,10 @@
 
 #pragma once
 
-#include <vvv/volren/tf/builtin.hpp>
 #include <vvv/volren/tf/VectorTransferFunction.hpp>
+#include <vvv/volren/tf/builtin.hpp>
 
 #include <glm/glm.hpp>
-
 
 namespace vvv {
 
