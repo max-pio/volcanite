@@ -512,8 +512,8 @@ public:
             return va;
         }
         catch (TCLAP::ArgException &e) {
-#ifdef _WIN64
-            vvv::Logger(ERROR) << "argument error: " << e.error() << " for " << e.argId();
+#ifdef _WIN32
+            vvv::Logger(Error) << "argument error: " << e.error() << " for " << e.argId();
 #else
             vvv::Logger(vvv::Error) << "argument error: " << e.error() << " for " << e.argId();
 #endif

@@ -598,7 +598,7 @@ bool neuroglancer::test(const std::string &path, int brick_size) {
 
     for(size_t i = 0; i < xres * yres * zres; i++) {
         if(decode[i] != static_cast<unsigned long>(volume->data()[i])) {
-            vvv::Logger(vvv::ERROR) << "test err " << decode[i] << " " << static_cast<unsigned long>(volume->data()[i]) << " at " << (i%xres) <<"," << ((i/xres)%yres) << "," << ((i/xres/yres)%zres);
+            vvv::Logger(vvv::Error) << "test err " << decode[i] << " " << static_cast<unsigned long>(volume->data()[i]) << " at " << (i%xres) <<"," << ((i/xres)%yres) << "," << ((i/xres/yres)%zres);
             delete[] encode;
             delete[] decode;
             return false;

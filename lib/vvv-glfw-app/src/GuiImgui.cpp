@@ -47,7 +47,7 @@ void GuiImgui::renderGui() {
         ImGuiIO& io = ImGui::GetIO(); (void)io;
         io.Fonts->Clear();
 
-#ifdef _WIN64
+#ifdef _WIN32
         // on windows, the path.c_str() returns a wide char pointer which we have to convert to a const char*
         std::string unicode_query = vvv::Paths::findDataPath("QuicksandFamily/Quicksand-Medium.ttf").string();
         io.Fonts->AddFontFromFileTTF(unicode_query.c_str(), m_defaultFontSize * m_gui_scaling);

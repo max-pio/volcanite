@@ -222,7 +222,7 @@ int test_wm() {
         // access
         uint32_t ref_access = read4Bit(v4bit, 0, i);
         if (m.access(i) != ref_access) {
-            Logger(ERROR) << m.access(i) << " instead of " << ref_access;
+            Logger(Error) << m.access(i) << " instead of " << ref_access;
             return i + 1;
         }
 

@@ -468,7 +468,7 @@ void compresso::Compress(const std::string& path, int zstep, int ystep, int xste
         else
             ret = lzma_easy_encoder(&strm, 6u, LZMA_CHECK_CRC64);
         if (ret != LZMA_OK) {
-            vvv::Logger(vvv::ERROR) << "lzma initialization error";
+            vvv::Logger(vvv::Error) << "lzma initialization error";
             return;
         }
         strm.next_in = reinterpret_cast<uint8_t*>(out);
@@ -479,7 +479,7 @@ void compresso::Compress(const std::string& path, int zstep, int ystep, int xste
         ret = lzma_code(&strm, LZMA_FINISH);
         lzma_seconds = t.elapsed();
         if(ret != LZMA_OK && ret != LZMA_STREAM_END) {
-            vvv::Logger(vvv::ERROR) << "lzma compression error";
+            vvv::Logger(vvv::Error) << "lzma compression error";
             return;
         }
         lzma_end(&strm);
@@ -709,7 +709,7 @@ bool compresso::test(const std::string& path, int zstep, int ystep, int xstep, E
             labels[i] = static_cast<unsigned long>(volume->data().at(i));
 
             if(labels[i] > UINT32_MAX)
-                vvv::Logger(vvv::ERROR) << labels[i] << " brr";
+                vvv::Logger(vvv::Error) << labels[i] << " brr";
         }
 
         int out_size;
@@ -730,7 +730,7 @@ bool compresso::test(const std::string& path, int zstep, int ystep, int xstep, E
             else
                 ret = lzma_easy_encoder(&strm, 6u, LZMA_CHECK_CRC64);
             if (ret != LZMA_OK) {
-                vvv::Logger(vvv::ERROR) << "lzma initialization error";
+                vvv::Logger(vvv::Error) << "lzma initialization error";
                 return false;
             }
             strm.next_in = reinterpret_cast<uint8_t*>(out);
@@ -739,7 +739,7 @@ bool compresso::test(const std::string& path, int zstep, int ystep, int xstep, E
             strm.avail_out = lzma_out.size() * sizeof(lzma_out[0]);
             ret = lzma_code(&strm, LZMA_FINISH);
             if(ret != LZMA_OK && ret != LZMA_STREAM_END) {
-                vvv::Logger(vvv::ERROR) << "lzma compression error";
+                vvv::Logger(vvv::Error) << "lzma compression error";
                 return false;
             }
             lzma_end(&strm);
@@ -750,7 +750,7 @@ bool compresso::test(const std::string& path, int zstep, int ystep, int xstep, E
             strm = LZMA_STREAM_INIT;
             ret = lzma_stream_decoder(&strm, UINT64_MAX, 0);
             if (ret != LZMA_OK) {
-                vvv::Logger(vvv::ERROR) << "lzma initialization error";
+                vvv::Logger(vvv::Error) << "lzma initialization error";
                 return false;
             }
             strm.next_in = reinterpret_cast<uint8_t*>(lzma_out.data());
@@ -760,7 +760,7 @@ bool compresso::test(const std::string& path, int zstep, int ystep, int xstep, E
             strm.avail_out = out_size;
             ret = lzma_code(&strm, LZMA_FINISH);
             if(ret != LZMA_OK && ret != LZMA_STREAM_END) {
-                vvv::Logger(vvv::ERROR) << "lzma compression error";
+                vvv::Logger(vvv::Error) << "lzma compression error";
                 return false;
             }
             lzma_end(&strm);
@@ -774,9 +774,9 @@ bool compresso::test(const std::string& path, int zstep, int ystep, int xstep, E
 
     for(size_t i = 0; i < xres * yres * zres; i++) {
         if(static_cast<uint32_t>(decode[i]) != volume->data().at(i)) {
-            vvv::Logger(vvv::ERROR) << UINT32_MAX << " test err " << decode[i] << " " << static_cast<unsigned long>(volume->data()[i]) << " orig " << volume->data()[i] << " at " << (i%xres) <<"," << ((i/xres)%yres) << "," << ((i/xres/yres)%zres);
+            vvv::Logger(vvv::Error) << UINT32_MAX << " test err " << decode[i] << " " << static_cast<unsigned long>(volume->data()[i]) << " orig " << volume->data()[i] << " at " << (i%xres) <<"," << ((i/xres)%yres) << "," << ((i/xres/yres)%zres);
 //        if(decode[i] != i) {
-//            vvv::Logger(vvv::ERROR) << "test err " << decode[i] << " " << i << " at " << (i%xres) <<"," << ((i/xres)%yres) << "," << ((i/xres/yres)%zres);
+//            vvv::Logger(vvv::Error) << "test err " << decode[i] << " " << i << " at " << (i%xres) <<"," << ((i/xres)%yres) << "," << ((i/xres/yres)%zres);
 //            delete[] encoding;
 //            delete[] decode;
 //            return false;

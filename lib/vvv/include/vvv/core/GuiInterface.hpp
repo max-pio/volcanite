@@ -404,11 +404,11 @@ public:
         // // read first window name (skip empty lines until section key)
         // while((line.empty() || line.front() != '[' || line.back() != ']') && in.good()) {
         //     if (!line.empty())
-        //         Logger(WARN) << "Parameter import skipping non-key line " << line;
+        //         Logger(Warn) << "Parameter import skipping non-key line " << line;
         //     std::getline(in, line);
         // }
         // if (line.front() != '[' || line.back() != ']') {
-        //     Logger(WARN) << "Parameter import error: Could not find section starting with window name [<NAME>]";
+        //     Logger(Warn) << "Parameter import error: Could not find section starting with window name [<NAME>]";
         //     return false;
         // }
 

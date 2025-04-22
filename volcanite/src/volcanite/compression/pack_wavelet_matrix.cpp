@@ -279,7 +279,7 @@ namespace volcanite {
         // due to the assumptions for the canonical Huffman codes used in the wavelet matrix,
         // ANY 1 bit directly terminates the canonical huffman code and the symbol is the position of this bit.
         for (uint32_t level = 0; level < HWM_LEVELS; level++) {
-//            Logger(WARN) << "||| level "<< level <<" ||| bv_access(" << position << ")=" << _bv_access(position, bit_vector)
+//            Logger(Warn) << "||| level "<< level <<" ||| bv_access(" << position << ")=" << _bv_access(position, bit_vector)
 //            << " fr_rank1=" << _fr_rank1(position, bit_vector, wm_header->fr) << ", ones_before_level="
 //            << wm_header->ones_before_level[level];
 

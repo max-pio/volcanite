@@ -427,7 +427,7 @@ void CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers() {
         for (int i = 0; i < glm::min(detail_request_count, 8u); i++) {
             ss << m_detail_requests[i] << " ";
         }
-        Logger(INFO) << ss.str();
+        Logger(Info) << ss.str();
     }
 #endif
 

@@ -134,7 +134,7 @@ namespace volcanite {
 //        }
 //        ss << " | sum: " << (i - brick_encoding[0]);
 //
-//        Logger(INFO) << ss.str();
+//        Logger(Info) << ss.str();
     }
 
     std::vector<glm::uvec4> CompressedSegmentationVolume::createBrickPosBuffer(uint32_t brick_size) {
@@ -532,7 +532,7 @@ namespace volcanite {
 //        for(int i = 0; i < lod_count; i++) {
 //            ss_head << "LoD" << i << ": " << (m_encoding[m_brick_starts[brick_idx] + i] - start4bit) << " ";
 //        }
-//        Logger(INFO) << "exporting example brick with start indices " << ss_head.str();
+//        Logger(Info) << "exporting example brick with start indices " << ss_head.str();
 //
 //        std::ofstream fout(path, std::ios::out);
 //        assert(fout.is_open());

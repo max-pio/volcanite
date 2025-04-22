@@ -41,17 +41,17 @@ int eval_related_work(int argc, char *argv[]) {
     if(argc > 1) {
         path = std::string(argv[1]);
     } else {
-        Logger(WARN) << " add a path to a segmentation volume as a command line argument!";
+        Logger(Warn) << " add a path to a segmentation volume as a command line argument!";
     }
 
     double seconds, lzma_seconds;
     float cr, cr_lzma;
 
-    Logger(INFO) << "Evaluation volume " << path << "\n\n";
+    Logger(Info) << "Evaluation volume " << path << "\n\n";
     Logger::s_minLevel = WARN; // disable all distracting messages
 
     // compresso
-//    Logger(INFO) << "Compresso ------------------------------------------------------------------";
+//    Logger(Info) << "Compresso ------------------------------------------------------------------";
 //    {
 //        //std::cout << "test " << (compresso::test(path, 1, 8, 8, compresso::LZMA) ? "ok" : "error!");
 //        compresso::Compress(path, 1, 8, 8, compresso::LZMA, cr, cr_lzma, seconds, lzma_seconds);
@@ -60,13 +60,13 @@ int eval_related_work(int argc, char *argv[]) {
 //    }
 
     // hdf5
-    // Logger(INFO) << "HDF5 ------------------------------------------------------------------";
+    // Logger(Info) << "HDF5 ------------------------------------------------------------------";
     // {
     //     // TODO: implement a HighFive compressor in libvvv?
     // }
 
     // Fast Compressed Segmentation Volumes
-    Logger(INFO) << "CSGV (one thread) -----------------------------------------------------";
+    Logger(Info) << "CSGV (one thread) -----------------------------------------------------";
     {
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = 64,
                 .encoding_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC,
@@ -91,7 +91,7 @@ int eval_related_work(int argc, char *argv[]) {
     }
 
     // Random Access Compressed Segmentation Volumes
-    Logger(INFO) << "CSGV-R (one thread) ---------------------------------------------------";
+    Logger(Info) << "CSGV-R (one thread) ---------------------------------------------------";
     {
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = 64,
                 .encoding_mode = EncodingMode::HUFFMAN_WM_ENC,
@@ -117,7 +117,7 @@ int eval_related_work(int argc, char *argv[]) {
 
     // Random Access Compressed Segmentation Volumes
     CSGVCompressionEvaluationResults volume_info;
-    Logger(INFO) << "CSGV-R+sb (one thread) ------------------------------------------------";
+    Logger(Info) << "CSGV-R+sb (one thread) ------------------------------------------------";
     {
         CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = 64,
                 .encoding_mode = EncodingMode::HUFFMAN_WM_ENC,
@@ -145,7 +145,7 @@ int eval_related_work(int argc, char *argv[]) {
     }
 
     // neuroglancer
-    Logger(INFO) << "Neuroglancer ---------------------------------------------------------------";
+    Logger(Info) << "Neuroglancer ---------------------------------------------------------------";
     {
         //std::cout << "test " << (neuroglancer::test(path, 8) ? " ok" : " error!");
         neuroglancer::Compress(path, 8, cr, seconds);

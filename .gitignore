@@ -24,6 +24,9 @@ compile_commands.json
 /eurovis/eval/out/**/**.png
 /eurovis/eval/out/**/**.jpg
 /eurovis/eval/out/**/**.mp4
+/demo/**
+/vid/**
+/*.mp4
 
 # operating system and IDE specific ignores
 /.idea*

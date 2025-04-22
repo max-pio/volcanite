@@ -19,7 +19,7 @@
 #include <vvv/util/Paths.hpp>
 #include <vvv/util/Logger.hpp>
 
-#ifdef _WIN64
+#ifdef _WIN32
 #include <Windows.h>
 #include <iostream>
 #endif
@@ -33,7 +33,7 @@ int entrypoint_main(int(*main)(int, char**), int argc, char **argv, const std::s
             vvv::Paths::initPaths(dataDirs);
             int ret = main(argc, argv);
 
-#ifdef _WIN64
+#ifdef _WIN32
             std::cout << "Application exit with return code " << ret << ". Press any key to close." << std::endl;
             _getwch();
 #endif
@@ -41,11 +41,11 @@ int entrypoint_main(int(*main)(int, char**), int argc, char **argv, const std::s
             return ret;
         } catch (const std::exception &exc) {
             using namespace vvv;
-            Logger(ERROR) << "An exception occurred: " << exc.what();
+            Logger(Error) << "An exception occurred: " << exc.what();
             throw exc;
         }
     } else {
-        vvv::Logger(vvv::DEBUG) << "Running in DEBUG mode";
+        vvv::Logger(vvv::Debug) << "Running in DEBUG mode";
         vvv::Paths::initPaths(dataDirs);
         return main(argc, argv);
     }

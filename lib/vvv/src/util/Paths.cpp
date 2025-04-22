@@ -18,14 +18,10 @@
 #include <vvv/util/Logger.hpp>
 #include <optional>
 
-#ifdef _WIN64
+#ifdef _WIN32
 #include <Windows.h>
 #include <array>
 #include <process.h>
-
-// Windows.h defines ERROR as a number. This would break the Logger(ERROR) call completely, so it is undefined here
-#undef ERROR
-
 #else
 #include <unistd.h>
 #include <pwd.h>
@@ -89,7 +85,7 @@ std::filesystem::path Paths::findExecutablePath() {
     // src for the method: https://stackoverflow.com/a/1528493/13565664
 #if defined(unix) || defined(__unix) || defined(__unix__)
     auto path = std::filesystem::canonical("/proc/self/exe").remove_filename();
-#elif defined(_WIN64)
+#elif defined(_WIN32)
     std::array<wchar_t, 1024> buffer{};
     DWORD ret = GetModuleFileNameW(NULL, buffer.data(), buffer.size());
     if (ret == buffer.size()) throw std::runtime_error("Executable path does not fit in buffer. Consider increasing its size.");
@@ -180,7 +176,7 @@ std::filesystem::path Paths::getLocalFileForDataPath(const std::filesystem::path
 }
 
 std::filesystem::path Paths::getHomeDirectory() {
-#ifdef _WIN64
+#ifdef _WIN32
     std::string drive = getenv("HOMEDRIVE");
     std::string path = getenv("HOMEPATH");
     if (drive.empty() || path.empty())
