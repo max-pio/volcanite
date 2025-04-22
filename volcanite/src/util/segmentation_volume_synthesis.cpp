@@ -24,7 +24,7 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegment
                                     " must not be 0.");
     }
 
-    std::default_random_engine eng{cfg.seed};
+    std::default_random_engine eng{static_cast<uint_fast32_t>(cfg.seed)};
     std::uniform_int_distribution<unsigned int> urd(0u, ~0u);
     #define V_RND_UINT() urd(eng)
 

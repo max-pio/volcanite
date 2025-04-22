@@ -13,16 +13,16 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#ifdef _WIN32
+#include <Windows.h>
+#include <iostream>
+#endif
+
 #include <vvv/headless_entrypoint.hpp>
 
 #include <vvv/util/detect_debugger.hpp>
 #include <vvv/util/Paths.hpp>
 #include <vvv/util/Logger.hpp>
-
-#ifdef _WIN32
-#include <Windows.h>
-#include <iostream>
-#endif
 
 #include <string>
 
