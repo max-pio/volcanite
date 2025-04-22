@@ -15,16 +15,16 @@
 
 #pragma once
 
+#include <glm/glm.hpp>
 #include <string>
 #include <vector>
-#include <glm/glm.hpp>
 
 #include "csgv_constants.incl"
 
 namespace volcanite {
 
 struct CSGVCompressionEvaluationResults {
-    double compression_mainpass_seconds = 0.;          ///< total compression time [s] without pre-pass and IO
+    double compression_mainpass_seconds = 0.; ///< total compression time [s] without pre-pass and IO
     double compression_prepass_seconds = 0.;
     double compression_total_seconds = 0.;
     double csgv_base_encoding_bytes = 0.;
@@ -85,21 +85,20 @@ struct CSGVRenderEvaluationResults {
 
 class EvaluationLogExport {
 
-private:
-    static std::string format_evaluation_string(std::string format_string, const std::string& eval_name,
-                                                  int argc, char *argv[],
-                                                  CSGVCompressionEvaluationResults comp_res,
-                                                  CSGVDecompressionEvaluationResults decomp_res,
-                                                  CSGVRenderEvaluationResults render_res);
+  private:
+    static std::string format_evaluation_string(std::string format_string, const std::string &eval_name,
+                                                int argc, char *argv[],
+                                                CSGVCompressionEvaluationResults comp_res,
+                                                CSGVDecompressionEvaluationResults decomp_res,
+                                                CSGVRenderEvaluationResults render_res);
 
-public:
-
+  public:
     static std::vector<std::string> get_all_evaluation_keys();
 
-    static int write_eval_logfile(const std::string& eval_logfile, const std::string& eval_name, int argc, char *argv[],
-                                   CSGVCompressionEvaluationResults comp_res,
-                                   CSGVDecompressionEvaluationResults decomp_res,
-                                   CSGVRenderEvaluationResults render_res);
+    static int write_eval_logfile(const std::string &eval_logfile, const std::string &eval_name, int argc, char *argv[],
+                                  CSGVCompressionEvaluationResults comp_res,
+                                  CSGVDecompressionEvaluationResults decomp_res,
+                                  CSGVRenderEvaluationResults render_res);
 };
 
 } // namespace volcanite

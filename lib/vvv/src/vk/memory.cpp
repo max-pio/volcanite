@@ -52,12 +52,12 @@ size_t vvv::getMemoryHeapSize(vvv::GpuContextRef ctx, vk::MemoryHeapFlagBits req
     size_t total_heap_memory = 0ul;
     const auto memoryProperties = ctx.getPhysicalDevice().getMemoryProperties();
     for (uint32_t heap_idx = 0; heap_idx < memoryProperties.memoryHeapCount; heap_idx++) {
-        if(memoryProperties.memoryHeaps[heap_idx].flags & requirementMask) {
+        if (memoryProperties.memoryHeaps[heap_idx].flags & requirementMask) {
             total_heap_memory += memoryProperties.memoryHeaps[heap_idx].size;
         }
     }
 
-    if(total_heap_memory == 0ul)
+    if (total_heap_memory == 0ul)
         throw std::runtime_error("Could not find a matching memory heap");
     return total_heap_memory;
 }
@@ -74,7 +74,7 @@ std::pair<size_t, size_t> vvv::getMemoryHeapBudgetAndUsage(vvv::GpuContextRef ct
     vk::PhysicalDeviceMemoryProperties2 memoryProperties2;
     memoryProperties2.pNext = &budgetProperties;
 
-    if(ctx.hasDeviceExtension("VK_EXT_memory_budget")) {
+    if (ctx.hasDeviceExtension("VK_EXT_memory_budget")) {
         ctx.getPhysicalDevice().getMemoryProperties2(&memoryProperties2);
     } else {
         throw std::runtime_error("Could not query video heap budget and usage because VK_EXT_memory_budget vulkan extension is missing/not enabled");
@@ -85,13 +85,13 @@ std::pair<size_t, size_t> vvv::getMemoryHeapBudgetAndUsage(vvv::GpuContextRef ct
 
     const auto memoryProperties = ctx.getPhysicalDevice().getMemoryProperties();
     for (uint32_t heap_idx = 0; heap_idx < memoryProperties.memoryHeapCount; heap_idx++) {
-        if(memoryProperties.memoryHeaps[heap_idx].flags & requirementMask) {
+        if (memoryProperties.memoryHeaps[heap_idx].flags & requirementMask) {
             budget_heap_memory += budgetProperties.heapBudget[heap_idx];
             used_heap_memory += budgetProperties.heapUsage[heap_idx];
         }
     }
 
-    if(budget_heap_memory == 0ul)
+    if (budget_heap_memory == 0ul)
         throw std::runtime_error("Could not find a matching memory heap");
 
     return std::make_pair(budget_heap_memory, used_heap_memory);
@@ -101,7 +101,7 @@ std::pair<size_t, size_t> vvv::getMemoryHeapBudgetAndUsage(vvv::GpuContextRef ct
 // released under the Apache License 2.0
 // another implementation available on the web is: https://github.com/nvpro-samples/nvpro_core/blob/f2c05e161bba9ab9a8c96c0173bf0edf7c168dfa/nvvk/images_vk.cpp#L108-L116
 void vvv::setImageLayout(vk::CommandBuffer const &commandBuffer, vk::Image image, vk::Format format, vk::ImageLayout oldImageLayout, vk::ImageLayout newImageLayout,
-                    vk::PipelineStageFlags destinationStage) {
+                         vk::PipelineStageFlags destinationStage) {
     vk::AccessFlags sourceAccessMask;
     switch (oldImageLayout) {
     case vk::ImageLayout::eTransferDstOptimal:
@@ -218,8 +218,7 @@ void vvv::setImageLayout(vk::CommandBuffer const &commandBuffer, vk::Image image
     }
 
     vk::ImageAspectFlags aspectMask;
-    if (newImageLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal
-        || newImageLayout == vk::ImageLayout::eDepthStencilReadOnlyOptimal) {
+    if (newImageLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal || newImageLayout == vk::ImageLayout::eDepthStencilReadOnlyOptimal) {
 
         aspectMask = vk::ImageAspectFlagBits::eDepth;
         if (format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint) {
@@ -233,7 +232,6 @@ void vvv::setImageLayout(vk::CommandBuffer const &commandBuffer, vk::Image image
     vk::ImageMemoryBarrier imageMemoryBarrier(sourceAccessMask, destinationAccessMask, oldImageLayout, newImageLayout, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, image, imageSubresourceRange);
     return commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, nullptr, nullptr, imageMemoryBarrier);
 }
-
 
 /// Create a buffer with exclusive sharing mode -- meaning the buffer has to be transferred explicitly between queues.
 std::pair<vk::Buffer, vk::DeviceMemory> vvv::createBuffer(vvv::GpuContextRef ctx, vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, const char *label) {

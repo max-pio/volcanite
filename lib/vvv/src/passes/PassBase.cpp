@@ -150,22 +150,18 @@ void PassBase::updateDescriptorSetsImageArray(uint32_t setIdx, uint32_t bindingI
     //  we can define the descriptor sets for all the frames in flight at once only one time.
 
     detail::BindingState state = {
-            .setIdx = setIdx,
-            .writeOp = {}
-    };
+        .setIdx = setIdx,
+        .writeOp = {}};
 
     if (atActiveIndex) {
         state.writeOp.emplace_back(
-                m_descriptorSets->getActive()[setIdx], bindingIdx, arrayElement, descriptorCount, descriptorType, &texture.descriptor
-        );
+            m_descriptorSets->getActive()[setIdx], bindingIdx, arrayElement, descriptorCount, descriptorType, &texture.descriptor);
     } else {
         for (uint32_t i = 0; i < getIndexCount(); i++) {
             state.writeOp.emplace_back(
-                    (*m_descriptorSets)[i][setIdx], bindingIdx, arrayElement, descriptorCount, descriptorType, &texture.descriptor
-            );
+                (*m_descriptorSets)[i][setIdx], bindingIdx, arrayElement, descriptorCount, descriptorType, &texture.descriptor);
         }
     }
-
 
     if (layout != vk::ImageLayout::eUndefined) {
         // instead of using texture.descriptor, create new vk::DescriptorImageInfo with imageLayout == layout
@@ -194,14 +190,12 @@ void PassBase::updateDescriptorSetsImage(uint32_t setIdx, uint32_t bindingIdx, M
     std::vector<vk::WriteDescriptorSet> writeOp = {};
     for (uint32_t i = 0; i < getIndexCount(); i++) {
         writeOp.emplace_back(
-                (*m_descriptorSets)[i][setIdx], bindingIdx, arrayElement, descriptorCount, descriptorType, &textures[i]->descriptor
-        );
+            (*m_descriptorSets)[i][setIdx], bindingIdx, arrayElement, descriptorCount, descriptorType, &textures[i]->descriptor);
     }
 
     detail::BindingState state = {
-            .setIdx = setIdx,
-            .writeOp = writeOp
-    };
+        .setIdx = setIdx,
+        .writeOp = writeOp};
 
     if (layout != vk::ImageLayout::eUndefined) {
         for (uint32_t i = 0; i < getIndexCount(); i++) {
@@ -223,15 +217,13 @@ void PassBase::setStorageBuffer(uint32_t setIdx, uint32_t bindingIdx, Buffer &bu
     } else {
         for (uint32_t i = 0; i < getIndexCount(); i++) {
             writeOp.emplace_back(vk::WriteDescriptorSet(
-                    (*m_descriptorSets)[i][setIdx], bindingIdx, 0,vk::DescriptorType::eStorageBuffer, {}, buffer.descriptor
-            ));
+                (*m_descriptorSets)[i][setIdx], bindingIdx, 0, vk::DescriptorType::eStorageBuffer, {}, buffer.descriptor));
         }
     }
 
     detail::BindingState state = {
-            .setIdx = setIdx,
-            .writeOp = writeOp
-    };
+        .setIdx = setIdx,
+        .writeOp = writeOp};
 
     m_descriptorSetWrites[m_descriptorSetNumberToIdx[setIdx]][bindingIdx] = state;
 
@@ -242,7 +234,7 @@ std::shared_ptr<MultiBufferedTexture> PassBase::reflectTextures(const char *name
     return std::make_shared<MultiBufferedTexture>(getMultiBuffering(), reflectTexture(std::string(name), std::move(opts)));
 }
 
-std::shared_ptr<Texture> PassBase::getTexture(const std::string &name, TextureReflectionOptions opts)  {
+std::shared_ptr<Texture> PassBase::getTexture(const std::string &name, TextureReflectionOptions opts) {
     std::shared_ptr<Texture> texture = reflectTexture(name, std::move(opts));
     texture->initResources();
     texture->setName(m_label + "." + name);
@@ -255,7 +247,7 @@ std::shared_ptr<Texture> PassBase::getTexture(const std::string &name, TextureRe
     return texture;
 }
 
-std::shared_ptr<UniformReflected> PassBase::getUniformSet(const std::string &name)  {
+std::shared_ptr<UniformReflected> PassBase::getUniformSet(const std::string &name) {
     auto set = ::vvv::reflectUniformSet(getCtx(), getShaders(), name);
     set->createGpuBuffers(getCtx(), getIndexCount());
 
@@ -278,32 +270,32 @@ void PassBase::setUniformBuffer(uint32_t setIdx, uint32_t bindingIdx, UniformRef
     std::vector<vk::DescriptorBufferInfo> uniformBufferInfo = {};
     for (uint32_t i = 0; i < getIndexCount(); i++) {
         const auto &data = *uniform.getGpuBuffer(i);
-        uniformBufferInfo.emplace_back( data.getBuffer(), 0, data.getByteSize() );
+        uniformBufferInfo.emplace_back(data.getBuffer(), 0, data.getByteSize());
     }
 
     std::vector<vk::WriteDescriptorSet> writeOp = {};
     for (uint32_t i = 0; i < getIndexCount(); i++) {
         writeOp.emplace_back(vk::WriteDescriptorSet(
-                (*m_descriptorSets)[i][setIdx], bindingIdx, 0, vk::DescriptorType::eUniformBuffer, {}, uniformBufferInfo[i]));
+            (*m_descriptorSets)[i][setIdx], bindingIdx, 0, vk::DescriptorType::eUniformBuffer, {}, uniformBufferInfo[i]));
     }
 
     detail::BindingState state = {
-            .setIdx = setIdx,
-            .writeOp = writeOp,
-            .uniformBufferInfo = uniformBufferInfo};
+        .setIdx = setIdx,
+        .writeOp = writeOp,
+        .uniformBufferInfo = uniformBufferInfo};
 
     m_descriptorSetWrites[m_descriptorSetNumberToIdx[setIdx]][bindingIdx] = state;
 
     // rebind the pointer to the persistent storage location (terrible code)
     for (uint32_t i = 0; i < getIndexCount(); i++) {
         m_descriptorSetWrites[m_descriptorSetNumberToIdx[setIdx]][bindingIdx].writeOp[i].pBufferInfo =
-                &m_descriptorSetWrites[m_descriptorSetNumberToIdx[setIdx]][bindingIdx].uniformBufferInfo[i];
+            &m_descriptorSetWrites[m_descriptorSetNumberToIdx[setIdx]][bindingIdx].uniformBufferInfo[i];
     }
 
     device().updateDescriptorSets(writeOp, {});
 }
 
-void PassBase::createCommandBuffers()  {
+void PassBase::createCommandBuffers() {
     const auto device = getCtx()->getDevice();
     const auto debug = getCtx()->debugMarker;
 
@@ -361,7 +353,7 @@ void PassBase::createPipelineLayout() {
 
     if (hasDescriptors()) {
         m_descriptorPool =
-                device.createDescriptorPool(vk::DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, m_descriptorSetLayouts.size() * getIndexCount(), poolSizes));
+            device.createDescriptorPool(vk::DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, m_descriptorSetLayouts.size() * getIndexCount(), poolSizes));
         debug->setName(m_descriptorPool, m_label + ".m_descriptorPool");
 
         m_descriptorSets = std::make_unique<MultiBufferedResource<std::vector<vk::DescriptorSet>>>(getMultiBuffering());

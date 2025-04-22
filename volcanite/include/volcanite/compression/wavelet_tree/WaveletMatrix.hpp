@@ -18,14 +18,13 @@
 
 #pragma once
 
-
-#include <cassert>
-#include <cstring>
 #include "vvv/util/Logger.hpp"
 #include "vvv/util/util.hpp"
+#include <cassert>
+#include <cstring>
 
-#include "WaveletMatrixBase.hpp"
 #include "BitVector.hpp"
+#include "WaveletMatrixBase.hpp"
 
 using namespace vvv;
 
@@ -36,31 +35,31 @@ constexpr static uint32_t WM_ALPHABET_SIZE = 1u << WM_LEVELS;
 
 class WaveletMatrix : public WaveletMatrixBase {
 
-    protected:
-        BitVector m_bv;                          ///< Wavelet matrix bit vectors of all 4 levels concatenated.
-        FlatRank* m_fr;                          ///< Flat rank L12-block acceleration structure for rank operations.
-        uint32_t m_zeros_on_level[WM_LEVELS];    ///< Number of zeros in each level of the wavelet matrix.
-        uint32_t m_ones_before[WM_LEVELS];       ///< Number of ones before each level of the wavelet matrix.
+  protected:
+    BitVector m_bv;                       ///< Wavelet matrix bit vectors of all 4 levels concatenated.
+    FlatRank *m_fr;                       ///< Flat rank L12-block acceleration structure for rank operations.
+    uint32_t m_zeros_on_level[WM_LEVELS]; ///< Number of zeros in each level of the wavelet matrix.
+    uint32_t m_ones_before[WM_LEVELS];    ///< Number of ones before each level of the wavelet matrix.
 
-    public:
-        WaveletMatrix(const uint32_t* op_stream_in, uint32_t start4bit, uint32_t end4bit);
+  public:
+    WaveletMatrix(const uint32_t *op_stream_in, uint32_t start4bit, uint32_t end4bit);
 
-        [[nodiscard]] uint32_t access(uint32_t position) const override;
-        [[nodiscard]] uint32_t rank(uint32_t position, uint32_t symbol) const override;
+    [[nodiscard]] uint32_t access(uint32_t position) const override;
+    [[nodiscard]] uint32_t rank(uint32_t position, uint32_t symbol) const override;
 
-        [[nodiscard]] const BitVector* getBitVector() const override { return &m_bv; }
-        [[nodiscard]] const FlatRank* getFlatRank() const override { return m_fr; }
+    [[nodiscard]] const BitVector *getBitVector() const override { return &m_bv; }
+    [[nodiscard]] const FlatRank *getFlatRank() const override { return m_fr; }
 
-        [[nodiscard]] uint32_t getLevels() const override { return WM_LEVELS; };
-        [[nodiscard]] const uint32_t* getZerosInLevel() const override { return &m_zeros_on_level[0]; }
-        [[nodiscard]] const uint32_t* getOnesBeforeLevel() const override { return &m_ones_before[0]; }
+    [[nodiscard]] uint32_t getLevels() const override { return WM_LEVELS; };
+    [[nodiscard]] const uint32_t *getZerosInLevel() const override { return &m_zeros_on_level[0]; }
+    [[nodiscard]] const uint32_t *getOnesBeforeLevel() const override { return &m_ones_before[0]; }
 
-        [[nodiscard]] size_t getByteSize() const override {
-            size_t bytes = (1 + 2*WM_LEVELS) * sizeof(uint32_t)            // ones_before, zeros_on_level, text_size
-                           + m_bv.getRawDataSize() * sizeof(BV_WordType)   // bit vector(s) for all levels
-                           + m_fr->getRawDataSize() * sizeof(BV_L12Type) + 12;  // FlatRank incl. size and data pointer
-            return bytes;
-        }
-    };
+    [[nodiscard]] size_t getByteSize() const override {
+        size_t bytes = (1 + 2 * WM_LEVELS) * sizeof(uint32_t)              // ones_before, zeros_on_level, text_size
+                       + m_bv.getRawDataSize() * sizeof(BV_WordType)       // bit vector(s) for all levels
+                       + m_fr->getRawDataSize() * sizeof(BV_L12Type) + 12; // FlatRank incl. size and data pointer
+        return bytes;
+    }
+};
 
 } // namespace volcanite

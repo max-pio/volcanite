@@ -20,31 +20,31 @@
 #include "vvvwindow/tf/TransferFunction1DWidget.hpp"
 #include "vvvwindow/tf/TransferFunctionSegmentedVolumeWidget.hpp"
 
-#include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_glfw.h"
 #include "imgui/backends/imgui_impl_vulkan.h"
-#include "imgui/misc/cpp/imgui_stdlib.h"
 #include "imgui/imGuIZMO.quat/imGuIZMOquat.h"
+#include "imgui/imgui.h"
+#include "imgui/misc/cpp/imgui_stdlib.h"
 #include <vvv/util/Paths.hpp>
 
-#include <fmt/core.h>
 #include "vvv/util/Logger.hpp"
+#include <fmt/core.h>
 
 void GuiImgui::updateGui() {
     // We don't store internal states so far.
     // (ImGui accesses everything directly through pointers)
 }
 
-
 void GuiImgui::renderGui() {
     // check if we have to update GUI scaling (in all childs and for the font)
     constexpr float gui_scaling_eps = 0.2f;
     const bool updateGuiScaling = abs(m_gui_scaling - m_current_gui_scaling) > gui_scaling_eps;
-    if(updateGuiScaling || m_firstCall) {
+    if (updateGuiScaling || m_firstCall) {
         // if this is called a second time, i.e. a second font is rasterized, some Vulkan image object is not destroyed
-        if(!m_firstCall)
+        if (!m_firstCall)
             vvv::Logger(vvv::Warn) << "Rescaling the GUI leads to undestroyed Vulkan objects from ImGUI font rasterization!";
-        ImGuiIO& io = ImGui::GetIO(); (void)io;
+        ImGuiIO &io = ImGui::GetIO();
+        (void)io;
         io.Fonts->Clear();
 
 #ifdef _WIN32
@@ -58,7 +58,7 @@ void GuiImgui::renderGui() {
         ImGui_ImplVulkan_CreateFontsTexture();
 
         // update the scaling of the GUI if necessary
-        if(updateGuiScaling) {
+        if (updateGuiScaling) {
             ImGui::GetStyle().ScaleAllSizes(m_gui_scaling / m_current_gui_scaling);
         }
 
@@ -85,25 +85,24 @@ void GuiImgui::renderGui() {
             // keep track of parents
             std::unordered_map<std::string, ImGuiID> parents = {};
 
-            for(const auto& l : m_docking_layout) {
-                const std::string& window = l.first;
-                const std::string& loc = l.second;
+            for (const auto &l : m_docking_layout) {
+                const std::string &window = l.first;
+                const std::string &loc = l.second;
 
-                if(!m_windows.contains(window)) {
+                if (!m_windows.contains(window)) {
                     vvv::Logger(vvv::Warn) << "can not dock non-existing window " << window;
                     continue;
                 }
 
-                if(m_windows.contains(loc)) {
+                if (m_windows.contains(loc)) {
                     // Dock at an existing window
-                    if(parents.contains(loc)) {
+                    if (parents.contains(loc)) {
                         ImGui::DockBuilderDockWindow(window.c_str(), parents[loc]);
                     } else {
                         vvv::Logger(vvv::Warn) << "cannot dock to windows that were not already docked elsewhere (cannot dock " << window << " to " << loc << ")";
                         // would have to create a new docking node as parent for both window and loc..
                     }
-                }
-                else {
+                } else {
                     // Dock down / left / up / right of the docking central node
                     // Create a new split location of the central node if none exists yet.
                     // Otherwise, append next to the existing windows.
@@ -163,16 +162,16 @@ void GuiImgui::renderGui() {
     }
 
     // iterate over all windows
-    for(const auto& window : m_windows) {
+    for (const auto &window : m_windows) {
 
-        if(!window.second.isVisible())
+        if (!window.second.isVisible())
             continue;
 
         // begin window (implicitly pushes the ID of its name)
         ImGui::Begin(window.first.c_str());
 
         auto columns = window.second.getColumns();
-        for(int c_id = 0; c_id < columns.size(); c_id++) {
+        for (int c_id = 0; c_id < columns.size(); c_id++) {
             ImGuiWindowFlags window_flags = ImGuiWindowFlags_HorizontalScrollbar;
             ImGui::BeginChild((window.second.getName() + std::to_string(c_id)).c_str(), ImVec2(ImGui::GetContentRegionAvail().x / columns.size(), 0), false, window_flags);
 
@@ -197,12 +196,12 @@ void GuiImgui::renderGui() {
 
                 switch (be->type) {
                 case GuiTF1D: {
-                    auto e = reinterpret_cast<GuiTF1DEntry*>(be);
+                    auto e = reinterpret_cast<GuiTF1DEntry *>(be);
                     renderGuiTF1D(*e);
                     break;
                 }
                 case GuiTFSegmentedVolume: {
-                    auto e = reinterpret_cast<GuiTFSegmentedVolumeEntry*>(be);
+                    auto e = reinterpret_cast<GuiTFSegmentedVolumeEntry *>(be);
                     renderGuiTFSegmentedVolume(*e, getCtx());
                     break;
                 }
@@ -328,7 +327,7 @@ void GuiImgui::renderGui() {
                     float size = ImGui::GetFrameHeightWithSpacing() * 4 - ImGui::GetStyle().ItemSpacing.y * 2;
                     bool changed = ImGui::gizmo3D(("##gizmo_" + std::to_string(e->id)).c_str(), value, size, imguiGizmo::modeDirPlane);
                     ImGui::SameLine();
-                    const vvv::Camera* camera_ptr = reinterpret_cast<GuiDirectionEntry*>(be)->camera;
+                    const vvv::Camera *camera_ptr = reinterpret_cast<GuiDirectionEntry *>(be)->camera;
                     quat q = camera_ptr ? quat_cast(glm::mat3(camera_ptr->get_world_to_view_space())) : quat{1, 0, 0, 0};
                     vec3 l = q * -vec3(-value.z, value.y, value.x);
                     ImGui::BeginDisabled();
@@ -340,7 +339,7 @@ void GuiImgui::renderGui() {
                     ImGui::SameLine(-0.0000001f); // should be 0
                     ImGui::LabelText(e->label.c_str(), "\n");
                     gui_set(e, changed, glm::normalize(vec3(-value.z, value.y, value.x)));
-                    ImGui::Columns();   // colormap column layout
+                    ImGui::Columns(); // colormap column layout
                     break;
                 }
                 case GuiVec4: {
@@ -362,7 +361,7 @@ void GuiImgui::renderGui() {
                     break;
                 }
                 case GuiCombo: {
-                    auto e = reinterpret_cast<GuiComboEntry*>(be);
+                    auto e = reinterpret_cast<GuiComboEntry *>(be);
                     if (e->options.empty()) {
                         if (ImGui::BeginCombo(e->label.c_str(), nullptr)) {
                             ImGui::EndCombo();
@@ -372,7 +371,8 @@ void GuiImgui::renderGui() {
                             const bool is_selected = i == *e->selection;
                             if (ImGui::Selectable(e->options.at(i).c_str(), is_selected)) {
                                 *e->selection = i;
-                                if (e->onChanged) e->onChanged(i, true);
+                                if (e->onChanged)
+                                    e->onChanged(i, true);
                             }
                             if (is_selected)
                                 ImGui::SetItemDefaultFocus();
@@ -382,7 +382,7 @@ void GuiImgui::renderGui() {
                     break;
                 }
                 case GuiBitFlags: {
-                    auto e = reinterpret_cast<GuiBitFlagsEntry*>(be);
+                    auto e = reinterpret_cast<GuiBitFlagsEntry *>(be);
                     unsigned int bits_just_set = 0;
                     if (ImGui::CollapsingHeader(e->label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
                         for (int i = 0; i < e->options.size(); i++) {
@@ -427,8 +427,8 @@ void GuiImgui::renderGui() {
                         else
                             pstr = fmt::vformat("{:.4f}", fmt::make_format_args(progress));
                         ImGui::ProgressBar(-progress / 100.f,
-                                            be->label.empty() ? ImVec2(-FLT_MIN, 0) : ImVec2(0.0f, 0.0f),
-                                            pstr.c_str());
+                                           be->label.empty() ? ImVec2(-FLT_MIN, 0) : ImVec2(0.0f, 0.0f),
+                                           pstr.c_str());
                     }
                     ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
                     ImGui::TextUnformatted(be->label.c_str());
@@ -453,7 +453,7 @@ void GuiImgui::renderGui() {
             }
 
             ImGui::EndChild();
-            if (c_id < columns.size()-1)
+            if (c_id < columns.size() - 1)
                 ImGui::SameLine();
         } // columns
 
@@ -461,7 +461,7 @@ void GuiImgui::renderGui() {
         ImGui::End();
     }
 
-    if(updateGuiScaling) {
+    if (updateGuiScaling) {
         m_current_gui_scaling = m_gui_scaling;
     }
 
@@ -474,4 +474,4 @@ void GuiImgui::setGuiScaling(float guiScaling) {
     m_gui_scaling = guiScaling;
 }
 
-#endif //ifdef IMGUI
+#endif // ifdef IMGUI

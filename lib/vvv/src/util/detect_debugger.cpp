@@ -19,10 +19,10 @@
 
 #ifndef _WIN32
 
+#include <cctype>
+#include <cstring>
 #include <fcntl.h>
 #include <unistd.h>
-#include <cstring>
-#include <cctype>
 
 bool vvv::debuggerIsAttached() {
     char buf[4096];

@@ -16,13 +16,13 @@
 #include "volcanite/eval/EvaluationLogExport.hpp"
 #include "vvv/util/Logger.hpp"
 
+#include <complex>
 #include <ctime>
-#include <iomanip>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <vector>
-#include <complex>
 
 #include <fmt/args.h>
 
@@ -30,7 +30,7 @@ using namespace vvv;
 
 namespace volcanite {
 
-fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::string& eval_name,
+fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::string &eval_name,
                                                                    int argc, char *argv[],
                                                                    CSGVCompressionEvaluationResults comp_res,
                                                                    CSGVDecompressionEvaluationResults decomp_res,
@@ -62,8 +62,7 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     fmt_args.push_back(fmt::arg("csgv_gb", comp_res.csgv_bytes * BYTE_TO_GB));
     fmt_args.push_back(fmt::arg("orig_gb", comp_res.original_volume_bytes * BYTE_TO_GB));
     fmt_args.push_back(fmt::arg("orig_bytes_per_voxel", comp_res.original_volume_bytes_per_voxel));
-    fmt_args.push_back(fmt::arg("volume_dim", std::to_string(comp_res.volume_dim.x) + "x" + std::to_string(comp_res.volume_dim.y) + "x"
-                            + std::to_string(comp_res.volume_dim.z)));
+    fmt_args.push_back(fmt::arg("volume_dim", std::to_string(comp_res.volume_dim.x) + "x" + std::to_string(comp_res.volume_dim.y) + "x" + std::to_string(comp_res.volume_dim.z)));
     fmt_args.push_back(fmt::arg("volume_labels", comp_res.volume_labels));
     // decompression
     fmt_args.push_back(fmt::arg("decomp_cpu_gb_per_s", decomp_res.cpu_GB_per_s));
@@ -98,18 +97,18 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     return std::move(fmt_args);
 }
 
-std::string EvaluationLogExport::format_evaluation_string(std::string format_string, const std::string& eval_name,
-                                                             int argc, char *argv[],
-                                                             CSGVCompressionEvaluationResults comp_res,
-                                                             CSGVDecompressionEvaluationResults decomp_res,
-                                                             CSGVRenderEvaluationResults render_res) {
+std::string EvaluationLogExport::format_evaluation_string(std::string format_string, const std::string &eval_name,
+                                                          int argc, char *argv[],
+                                                          CSGVCompressionEvaluationResults comp_res,
+                                                          CSGVDecompressionEvaluationResults decomp_res,
+                                                          CSGVRenderEvaluationResults render_res) {
 
     // replace all occurrences of all specifiers
     fmt::dynamic_format_arg_store<fmt::format_context> fmt_args = create_fmt_args(eval_name, argc, argv,
                                                                                   comp_res, decomp_res, render_res);
     try {
         return fmt::vformat(format_string, fmt_args);
-    } catch (const fmt::format_error& err)  {
+    } catch (const fmt::format_error &err) {
         Logger(Error) << "evaluation output format error: " << format_string;
         throw err;
     }
@@ -117,20 +116,63 @@ std::string EvaluationLogExport::format_evaluation_string(std::string format_str
 
 std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
     return {
-        "name","time","args","comprate","comprate_pcnt","comp_s","comp_mainpass_s","comp_prepass_s",
-        "comp_gb_per_s","csgv_gb","orig_gb","orig_bytes_per_voxel","volume_dim","volume_labels",
-        "decomp_cpu_gb_per_s","decomp_cpu_s","decomp_gpu_gb_per_s","decomp_gpu_s", "min_spp", "max_spp", "frame_min_ms",
-        "frame_avg_ms","frame_sdv_ms","frame_med_ms","frame_max_ms","frame_ms_00", "frame_ms_01",
-        "frame_ms_02", "frame_ms_03", "frame_ms_04", "frame_ms_05", "frame_ms_06", "frame_ms_07",
-        "frame_ms_08", "frame_ms_09", "frame_ms_10", "frame_ms_11", "frame_ms_12", "frame_ms_13",
-        "frame_ms_14", "frame_ms_15",
-        "render_total_max","rendered_frames","mem_framebuffer_mb","mem_uniformbuffer_mb",
-        "mem_materials_mb","mem_encoding_Mb","mem_cache_mb","mem_cache_used_mb","mem_cache_fillrate",
-        "mem_cache_fillrate_pcnt", "mem_emptyspace_mb", "mem_total_mb",
+        "name",
+        "time",
+        "args",
+        "comprate",
+        "comprate_pcnt",
+        "comp_s",
+        "comp_mainpass_s",
+        "comp_prepass_s",
+        "comp_gb_per_s",
+        "csgv_gb",
+        "orig_gb",
+        "orig_bytes_per_voxel",
+        "volume_dim",
+        "volume_labels",
+        "decomp_cpu_gb_per_s",
+        "decomp_cpu_s",
+        "decomp_gpu_gb_per_s",
+        "decomp_gpu_s",
+        "min_spp",
+        "max_spp",
+        "frame_min_ms",
+        "frame_avg_ms",
+        "frame_sdv_ms",
+        "frame_med_ms",
+        "frame_max_ms",
+        "frame_ms_00",
+        "frame_ms_01",
+        "frame_ms_02",
+        "frame_ms_03",
+        "frame_ms_04",
+        "frame_ms_05",
+        "frame_ms_06",
+        "frame_ms_07",
+        "frame_ms_08",
+        "frame_ms_09",
+        "frame_ms_10",
+        "frame_ms_11",
+        "frame_ms_12",
+        "frame_ms_13",
+        "frame_ms_14",
+        "frame_ms_15",
+        "render_total_max",
+        "rendered_frames",
+        "mem_framebuffer_mb",
+        "mem_uniformbuffer_mb",
+        "mem_materials_mb",
+        "mem_encoding_Mb",
+        "mem_cache_mb",
+        "mem_cache_used_mb",
+        "mem_cache_fillrate",
+        "mem_cache_fillrate_pcnt",
+        "mem_emptyspace_mb",
+        "mem_total_mb",
     };
 }
 
-int EvaluationLogExport::write_eval_logfile(const std::string& eval_logfile, const std::string& eval_name, int argc, char *argv[],
+int EvaluationLogExport::write_eval_logfile(const std::string &eval_logfile, const std::string &eval_name, int argc, char *argv[],
                                             CSGVCompressionEvaluationResults comp_res,
                                             CSGVDecompressionEvaluationResults decomp_res,
                                             CSGVRenderEvaluationResults render_res) {
@@ -162,7 +204,7 @@ int EvaluationLogExport::write_eval_logfile(const std::string& eval_logfile, con
         std::stringstream header_ss;
         std::stringstream format_ss;
         header_ss << "# comment lines start with #\n";
-        const auto& keys = get_all_evaluation_keys();
+        const auto &keys = get_all_evaluation_keys();
         for (int k = 0; k < keys.size(); k++) {
             header_ss << k;
             format_ss << "{" << k << "}";
@@ -214,5 +256,4 @@ int EvaluationLogExport::write_eval_logfile(const std::string& eval_logfile, con
     return 0;
 }
 
-
-}
+} // namespace volcanite

@@ -18,36 +18,37 @@
 #include <string>
 #include <vector>
 
-#include "vvv/core/preamble.hpp"
 #include "vvv/core/Texture.hpp"
+#include "vvv/core/preamble.hpp"
 
 namespace vvv {
 
 namespace detail {
-    /// check if string `a` ends with `b`
-    static bool EndsWith(const std::string &a, const std::string &b) {
-        if (b.size() > a.size())
-            return false;
-        return std::equal(a.begin() + a.size() - b.size(), a.end(), b.begin());
-    }
-};
+/// check if string `a` ends with `b`
+static bool EndsWith(const std::string &a, const std::string &b) {
+    if (b.size() > a.size())
+        return false;
+    return std::equal(a.begin() + a.size() - b.size(), a.end(), b.begin());
+}
+}; // namespace detail
 
 const vk::Format DeviceFormatDontCare = static_cast<vk::Format>(-1);
 
-template <typename ElementType = uint16_t> struct RangeLimits {
+template <typename ElementType = uint16_t>
+struct RangeLimits {
     ElementType minValue;
     ElementType maxValue;
     float minGrad; //<! gradient magnitude
     float maxGrad;
 };
 
-
 /// Phyisical size determines the bounding box of the volume, while the dimensions determines the number of data samples
 /// along each axis within the volume.
 ///
 /// The volume data is layed out in [z][y][x] order, meaning the x-axis is coalesced/varies fastest, z has the largest stride and varies slowest.
 /// The logical data layout uses a right-handed coordinate system where z is the UP axis (height), y the depth and x the width.
-template <typename ElementType = uint16_t, typename HolderType = std::vector<ElementType>> class Volume {
+template <typename ElementType = uint16_t, typename HolderType = std::vector<ElementType>>
+class Volume {
 
     // possible extension:
     // accessor via [] a la vector
@@ -57,8 +58,7 @@ template <typename ElementType = uint16_t, typename HolderType = std::vector<Ele
     // decouple CPU and GPU memory. e.g. add a place a la torch, or make it possible to drop a location within the class
     // abstract read-write routines in a way that allows them to be used in Texture, Volume, ...
 
-public:
-
+  public:
     /// Load volumetric data from a open microscopy TIFF file.
     ///
     /// This loader is not standard conformat and only supports the standard
@@ -70,7 +70,7 @@ public:
     /// A non-standard conformant NRRD reader that is able to read files from https://klacansky.com/open-scivis-datasets/
     /// @param allowCast By default, an error is thrown if the volume component type and the component type stored in the file mismatch. If set to true, a conversion is attempted instead.
     static std::shared_ptr<Volume<ElementType, HolderType>> load_nrrd(std::string path, bool allowCast = true); // { throw std::runtime_error("element holder type combination unsupported for NRRD"); }
-    void write_nrrd(const std::string& path, bool separatePayloadFile = true);
+    void write_nrrd(const std::string &path, bool separatePayloadFile = true);
 
     /// An even more simplified nrrd format for the cellsinsilico volume data that Max hands out to students. Format is: one line "dim_x dim_y dim_z" and one line data type "uint[8|16|32]" followed by payload.
     static std::shared_ptr<Volume<ElementType, HolderType>> load_volcanite_raw(std::string path, bool allowCast = false);
@@ -78,20 +78,19 @@ public:
 
     /// Hdf5 file which is expected to have a 3D array as its first root object which will be loaded as the volume
     static std::shared_ptr<Volume<ElementType, HolderType>> load_hdf5(std::string path, bool allowCast = false);
-    void write_hdf5(const std::string& path);
+    void write_hdf5(const std::string &path);
 
     /// vti file format from the vtk library, but we expect a very precise format: an ImageData file
     static std::shared_ptr<Volume<ElementType, HolderType>> load_vti(std::string path, bool allowCast = false);
     // static void write_vti(std::string path);
 
-
     static std::shared_ptr<Volume<ElementType, HolderType>> load(std::string filepath) {
         if (filepath.ends_with(".tiff")) {
-            return Volume < ElementType, HolderType > ::load_ome_tiff(filepath);
+            return Volume<ElementType, HolderType>::load_ome_tiff(filepath);
         } else if (filepath.ends_with(".nrrd")) {
-            return Volume < ElementType, HolderType > ::load_nrrd(filepath);
+            return Volume<ElementType, HolderType>::load_nrrd(filepath);
         } else if (filepath.ends_with(".hdf5") || filepath.ends_with(".h5")) {
-            return Volume < ElementType, HolderType > ::load_hdf5(filepath);
+            return Volume<ElementType, HolderType>::load_hdf5(filepath);
         } else if (filepath.ends_with(".vti")) {
             return Volume<ElementType, HolderType>::load_vti(filepath);
         } else if (filepath.ends_with(".vraw") || filepath.ends_with(".raw")) {
@@ -103,9 +102,9 @@ public:
 
     bool write(std::string filepath) {
         if (filepath.ends_with(".nrrd")) {
-            Volume < ElementType, HolderType > ::write_nrrd(filepath);
+            Volume<ElementType, HolderType>::write_nrrd(filepath);
         } else if (filepath.ends_with(".hdf5") || filepath.ends_with(".h5")) {
-            Volume < ElementType, HolderType > ::write_hdf5(filepath);
+            Volume<ElementType, HolderType>::write_hdf5(filepath);
         } else if (filepath.ends_with(".vraw") || filepath.ends_with(".raw")) {
             Volume<ElementType, HolderType>::write_volcanite_raw(filepath);
         } else {
@@ -122,7 +121,7 @@ public:
 
     ~Volume() { delete m_texture; }
 
-     /// Get the single channel, uncompressed volumentric data slice in row major order
+    /// Get the single channel, uncompressed volumentric data slice in row major order
     char *getDataInRowMajorOrder() { return reinterpret_cast<char *>(m_payload.data()); }
     const char *getDataInRowMajorOrder_const() { return reinterpret_cast<const char *>(m_payload.data()); }
 
@@ -139,11 +138,13 @@ public:
     inline bool isElementInBounds(size_t x, size_t y, size_t z) const { return x < dim_x && y < dim_y && z < dim_z; }
     inline bool isElementInBounds(int x, int y, int z) const { return x < dim_x && y < dim_y && z < dim_z; }
 
-    template <typename V> inline ElementType getElement(V x, V y, V z) const { return m_payload[z * (dim_x * dim_y) + y * dim_x + x]; }
+    template <typename V>
+    inline ElementType getElement(V x, V y, V z) const { return m_payload[z * (dim_x * dim_y) + y * dim_x + x]; }
     inline ElementType getElement(glm::uvec3 v) const { return getElement(v.x, v.y, v.z); }
     inline ElementType getElement(glm::ivec3 v) const { return getElement(v.x, v.y, v.z); }
 
-    template <typename V> inline ElementType getElementClamped(V x, V y, V z) const {
+    template <typename V>
+    inline ElementType getElementClamped(V x, V y, V z) const {
         uint32_t cx = std::clamp(static_cast<uint32_t>(x), 0u, dim_x - 1);
         uint32_t cy = std::clamp(static_cast<uint32_t>(y), 0u, dim_y - 1);
         uint32_t cz = std::clamp(static_cast<uint32_t>(z), 0u, dim_z - 1);
@@ -153,7 +154,8 @@ public:
     inline ElementType getElementClamped(glm::uvec3 v) const { return getElementClamped(v.x, v.y, v.z); }
     inline ElementType getElementClamped(glm::ivec3 v) const { return getElementClamped(v.x, v.y, v.z); }
 
-    template <typename V> inline glm::vec3 getGradient(V x, V y, V z) const {
+    template <typename V>
+    inline glm::vec3 getGradient(V x, V y, V z) const {
         const auto gx = 0.5 * (static_cast<float>(getElementClamped(x + 1, y, z)) - static_cast<float>(getElementClamped(x - 1, y, z)));
         const auto gy = 0.5 * (static_cast<float>(getElementClamped(x, y + 1, z)) - static_cast<float>(getElementClamped(x, y - 1, z)));
         const auto gz = 0.5 * (static_cast<float>(getElementClamped(x, y, z + 1)) - static_cast<float>(getElementClamped(x, y, z - 1)));
@@ -164,7 +166,8 @@ public:
     inline glm::vec3 getGradient(glm::uvec3 v) const { return getGradient(v.x, v.y, v.z); }
     inline glm::vec3 getGradient(glm::ivec3 v) const { return getGradient(v.x, v.y, v.z); }
 
-    template <typename V> inline float getGradientMagnitude(V x, V y, V z) const { return glm::length(getGradient(x, y, z)); }
+    template <typename V>
+    inline float getGradientMagnitude(V x, V y, V z) const { return glm::length(getGradient(x, y, z)); }
     inline float getGradientMagnitude(glm::uvec3 v) const { return getGradientMagnitude(v.x, v.y, v.z); }
     inline float getGradientMagnitude(glm::ivec3 v) const { return getGradientMagnitude(v.x, v.y, v.z); }
 
@@ -215,21 +218,23 @@ public:
     }
 
     glm::vec3 shape() const {
-        return glm::vec3(dim_x,dim_y,dim_z);
+        return glm::vec3(dim_x, dim_y, dim_z);
     }
 
     glm::vec3 physicalSize() const {
-        return glm::vec3(physical_size_x,physical_size_y,physical_size_z);
+        return glm::vec3(physical_size_x, physical_size_y, physical_size_z);
     }
 
     void resize(uint32_t x, uint32_t y, uint32_t z, ElementType padding_element = 0) {
-        HolderType new_payload(x*y*z, padding_element);
-        for(int iz = 0; iz < dim_z; iz++) {
-        for(int iy = 0; iy < dim_y; iy++) {
-        for(int ix = 0; ix < dim_x; ix++) {
-            if(ix < x && iy < y && iz < z)
-                new_payload[iz * (x*y) + iy * x + ix] = getElement(ix, iy, iz);
-        }}}
+        HolderType new_payload(x * y * z, padding_element);
+        for (int iz = 0; iz < dim_z; iz++) {
+            for (int iy = 0; iy < dim_y; iy++) {
+                for (int ix = 0; ix < dim_x; ix++) {
+                    if (ix < x && iy < y && iz < z)
+                        new_payload[iz * (x * y) + iy * x + ix] = getElement(ix, iy, iz);
+                }
+            }
+        }
         m_payload = new_payload;
         dim_x = x;
         dim_y = y;
@@ -237,27 +242,28 @@ public:
         deleteTexture();
     }
 
-    void setPayload(uint32_t x, uint32_t y, uint32_t z, HolderType& data) {
+    void setPayload(uint32_t x, uint32_t y, uint32_t z, HolderType &data) {
         dim_x = x;
         dim_y = y;
         dim_z = z;
         m_payload = data;
     }
 
-protected:
+  protected:
     HolderType m_payload;
     Texture *m_texture;
 
-public:
+  public:
     float physical_size_x, physical_size_y, physical_size_z;
     uint32_t dim_x, dim_y, dim_z;
 
     vk::Format format;
 };
 
-template <typename T> struct HomogenousCube : public Volume<T> {
+template <typename T>
+struct HomogenousCube : public Volume<T> {
     HomogenousCube(uint32_t dim_x, uint32_t dim_y, uint32_t dim_z, T payload, vk::Format format) : Volume<T>(1, 1, 1, dim_x, dim_y, dim_z, format, dim_x * dim_y * dim_z, payload) {}
     HomogenousCube(T payload, vk::Format format) : HomogenousCube(1, 1, 1, payload, format) {}
 };
 
-};
+}; // namespace vvv

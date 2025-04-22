@@ -20,12 +20,13 @@
 
 #include <cmath>
 #ifdef LIB_HIGHFIVE
-    #include <highfive/H5File.hpp>
+#include <highfive/H5File.hpp>
 #endif
 
 namespace vvv {
 
-template <typename T> std::shared_ptr<Volume<T>> load_volume_from_hdf5(std::string url, vk::Format gpuFormat) {
+template <typename T>
+std::shared_ptr<Volume<T>> load_volume_from_hdf5(std::string url, vk::Format gpuFormat) {
 #ifdef LIB_HIGHFIVE
     HighFive::File file(url, HighFive::File::ReadOnly);
     auto dataset = file.getDataSet(file.getObjectName(0));
@@ -37,7 +38,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_volume_from_hdf5(std::stri
     float physical_size_y = static_cast<float>(dimensions.at(1)) / max_dim;
     float physical_size_z = static_cast<float>(dimensions.at(2)) / max_dim;
 
-    if (physical_size_x <= 0.f || physical_size_y <= 0.f || physical_size_z <= 0.f || !std::isfinite(physical_size_x) || !std::isfinite(physical_size_y)|| !std::isfinite(physical_size_z)) {
+    if (physical_size_x <= 0.f || physical_size_y <= 0.f || physical_size_z <= 0.f || !std::isfinite(physical_size_x) || !std::isfinite(physical_size_y) || !std::isfinite(physical_size_z)) {
         throw std::invalid_argument("invalid hdf5 physical volume size");
     }
 
@@ -51,21 +52,24 @@ template <typename T> std::shared_ptr<Volume<T>> load_volume_from_hdf5(std::stri
 #endif
 }
 
-
-template <> std::shared_ptr<Volume<uint32_t>> Volume<uint32_t>::load_hdf5(std::string path, bool allowCast) {
+template <>
+std::shared_ptr<Volume<uint32_t>> Volume<uint32_t>::load_hdf5(std::string path, bool allowCast) {
     assert(!allowCast && "Casting not yet supported for hdf5 volume loaders.");
     return load_volume_from_hdf5<uint32_t>(path, vk::Format::eR32Uint);
 }
-template <> std::shared_ptr<Volume<uint16_t>> Volume<uint16_t>::load_hdf5(std::string path, bool allowCast) {
+template <>
+std::shared_ptr<Volume<uint16_t>> Volume<uint16_t>::load_hdf5(std::string path, bool allowCast) {
     assert(!allowCast && "Casting not yet supported for hdf5 volume loaders.");
     return load_volume_from_hdf5<uint16_t>(path, vk::Format::eR16Uint);
 }
-template <> std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_hdf5(std::string path, bool allowCast) {
+template <>
+std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_hdf5(std::string path, bool allowCast) {
     assert(!allowCast && "Casting not yet supported for hdf5 volume loaders.");
     return load_volume_from_hdf5<uint8_t>(path, vk::Format::eR8Uint);
 }
 
-template <typename T> void write_hdf5_(Volume<T>* volume, const std::string& path) {
+template <typename T>
+void write_hdf5_(Volume<T> *volume, const std::string &path) {
 #ifdef LIB_HIGHFIVE
     HighFive::File file(path, HighFive::File::ReadWrite | HighFive::File::Create | HighFive::File::Truncate);
     const std::string datasetName = "decompressed_volume_data";
@@ -75,7 +79,7 @@ template <typename T> void write_hdf5_(Volume<T>* volume, const std::string& pat
     auto dim = std::vector<size_t>{volume->dim_x, volume->dim_y, volume->dim_z};
 
     // rewrite volume data s.t. it is a 3D vector
-    std::vector<std::vector<std::vector<T>>> tmp_volume_data (dim[0], std::vector<std::vector<T>>(dim[1], std::vector<T>(dim[2])));
+    std::vector<std::vector<std::vector<T>>> tmp_volume_data(dim[0], std::vector<std::vector<T>>(dim[1], std::vector<T>(dim[2])));
 
     for (size_t z = 0; z < dim[0]; ++z) {
         for (size_t y = 0; y < dim[1]; ++y) {
@@ -95,17 +99,20 @@ template <typename T> void write_hdf5_(Volume<T>* volume, const std::string& pat
     auto dataset = file.createDataSet<T>(datasetName, HighFive::DataSpace(dim), probs);
     dataset.write(tmp_volume_data);
 #else
-throw std::runtime_error("HighFIVE / HDF5 libraries not found! Cannot write volume to .hdf5 file!");
+    throw std::runtime_error("HighFIVE / HDF5 libraries not found! Cannot write volume to .hdf5 file!");
 #endif
 }
 
-template <> void Volume<uint32_t>::write_hdf5(const std::string& path) {
+template <>
+void Volume<uint32_t>::write_hdf5(const std::string &path) {
     write_hdf5_<uint32_t>(this, path);
 }
-template <> void Volume<uint16_t>::write_hdf5(const std::string& path) {
+template <>
+void Volume<uint16_t>::write_hdf5(const std::string &path) {
     write_hdf5_<uint16_t>(this, path);
 }
-template <> void Volume<uint8_t>::write_hdf5(const std::string& path) {
+template <>
+void Volume<uint8_t>::write_hdf5(const std::string &path) {
     write_hdf5_<uint8_t>(this, path);
 }
 } // namespace vvv

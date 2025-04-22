@@ -24,10 +24,9 @@
 #include <vvv/reflection/TextureReflection.hpp>
 #include <vvv/reflection/UniformReflection.hpp>
 
+#include <functional>
 #include <map>
 #include <utility>
-#include <functional>
-
 
 namespace vvv {
 
@@ -38,7 +37,7 @@ namespace vvv {
 //     using ImageSamplers = decltype(Types::imageSamplers)::type;
 //     using StorageBuffers = decltype(Types::storageBuffers)::type;
 class PassCompute : public PassBase {
-public:
+  public:
     //  a pass is either `TimelineSemaphoreWaitable execute(queue)` or `executeCommands(vk::CommandBuffer commandBuffer)`.
     // The first submits to the queue itself and is required for multipass or multiqueue algorithms,
     // the second variant just writes into a command buffer and the caller is responsible for submitting the work. This
@@ -49,9 +48,9 @@ public:
 
     [[nodiscard]] AwaitableHandle execute(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override = 0;
 
-protected:
-    PassCompute(GpuContextPtr ctx, std::string label, const std::shared_ptr<MultiBuffering>& multiBuffering = NoMultiBuffering, uint32_t queueFamilyIndex = 0)
-        : WithGpuContext(ctx), WithMultiBuffering(multiBuffering), PassBase(ctx, label, multiBuffering, queueFamilyIndex) { }
+  protected:
+    PassCompute(GpuContextPtr ctx, std::string label, const std::shared_ptr<MultiBuffering> &multiBuffering = NoMultiBuffering, uint32_t queueFamilyIndex = 0)
+        : WithGpuContext(ctx), WithMultiBuffering(multiBuffering), PassBase(ctx, label, multiBuffering, queueFamilyIndex) {}
 
     std::vector<vk::Pipeline> createPipelines() override {
         const auto device = getCtx()->getDevice();
@@ -61,7 +60,7 @@ protected:
 
         std::vector<vk::ComputePipelineCreateInfo> computePipelineCreateInfos = {};
 
-        for (const auto& shader : m_shaders) {
+        for (const auto &shader : m_shaders) {
             vk::ComputePipelineCreateInfo computePipelineCreateInfo({}, *shader->pipelineShaderStageCreateInfo(getCtx()), m_pipelineLayout);
             computePipelineCreateInfos.push_back(computePipelineCreateInfo);
         }
@@ -77,7 +76,6 @@ protected:
 
         return pipelines;
     }
-
 };
 
 struct SinglePassComputeSettings {
@@ -91,7 +89,7 @@ struct SinglePassComputeSettings {
 /// A special variant of a compute pass that can execute in a single submission to the GPU. This is the case if the algorithm does
 /// not rely on multiple passes or multiple queues.
 class SinglePassCompute : public PassCompute {
-public:
+  public:
     template <typename... ShaderArgs>
     explicit SinglePassCompute(SinglePassComputeSettings settings, ShaderArgs &&...shaderArgs)
         : WithGpuContext(settings.ctx), WithMultiBuffering(settings.multiBuffering), PassCompute(settings.ctx, settings.label, settings.multiBuffering, settings.queueFamilyIndex),
@@ -100,10 +98,10 @@ public:
         setShaderArgs(shaderArgs...);
     }
 
-    template<typename... ShaderArgs>
+    template <typename... ShaderArgs>
     void setShaderArgs(ShaderArgs &&...shaderArgs) {
         // store vvv::Shader() constructor args for use in createShaders()
-        m_shaderContructor = [this,shaderArgs...]() -> std::shared_ptr<Shader> {
+        m_shaderContructor = [this, shaderArgs...]() -> std::shared_ptr<Shader> {
             auto shader = std::make_shared<Shader>(shaderArgs...);
             shader->label = m_label;
             return shader;
@@ -112,7 +110,7 @@ public:
 
     void freeResources() override {
         m_shader = nullptr;
-        
+
         PassCompute::freeResources();
     }
 
@@ -144,14 +142,13 @@ public:
     void setGlobalInvocationSize(vk::Extent2D domain) { m_workgroupCount = getDispatchSize(domain.width, domain.height, 1u, m_shader->reflectWorkgroupSize()); }
     void setGlobalInvocationSize(uint32_t width, uint32_t height = 1, uint32_t depth = 1) { m_workgroupCount = getDispatchSize(width, height, depth, m_shader->reflectWorkgroupSize()); }
 
-
     // setSize(vk::Extent2D domain, vk::Extent2D workgroupSize);
     // setSize(vk::Extent1D domain, vk::Extent1D workgroupSize);
     // setWorkgroupSize(vk::Extent3D);
     // setWorkgroupSize(vk::Extent2D);
     //  etc
 
-protected:
+  protected:
     std::vector<std::shared_ptr<Shader>> createShaders() override {
         m_shader = m_shaderContructor();
         return {m_shader};
@@ -160,7 +157,7 @@ protected:
     std::shared_ptr<Shader> m_shader;
     vk::Extent3D m_workgroupCount;
 
-private:
+  private:
     // this lambda is used as a type-erased container to store the vvv::Shader constructor arguments.
     // It is used in createShaders().
     std::function<std::shared_ptr<Shader>()> m_shaderContructor;

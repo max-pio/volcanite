@@ -15,19 +15,18 @@
 
 #pragma once
 
+#include <glm/glm.hpp>
 #include <memory>
 #include <optional>
-#include <glm/glm.hpp>
 #include <utility>
 
 #include "vvv/core/Renderer.hpp"
-#include "vvv/reflection/UniformReflection.hpp"
 #include "vvv/passes/PassCompute.hpp"
+#include "vvv/reflection/UniformReflection.hpp"
 #include <fmt/core.h>
 
-
 #ifdef IMGUI
-    #include "imgui.h"
+#include "imgui.h"
 #endif
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
@@ -35,10 +34,9 @@ using namespace vvv;
 
 namespace volcanite {
 
-
 class CompressedSegmentationVolumeBrickViewer : public Renderer, public WithGpuContext {
 
-public:
+  public:
     CompressedSegmentationVolumeBrickViewer() : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false) {}
 
     RendererOutput renderNextFrame(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override;
@@ -58,7 +56,7 @@ public:
     void initSwapchainResources() override;
     void releaseSwapchain() override;
 
-    void initGui(vvv::GuiInterface * gui) override {
+    void initGui(vvv::GuiInterface *gui) override {
         assert(m_compressed_segmentation_volume && "must set CSGV data set before starting csgv brick viewer");
         const glm::ivec3 brick_count = {m_compressed_segmentation_volume->getBrickCount()};
         const int brick_size = static_cast<int>(m_compressed_segmentation_volume->getBrickSize());
@@ -87,18 +85,19 @@ public:
         g->addColor(&m_background_color_a, "Background Color A");
         g->addColor(&m_background_color_b, "Background Color B");
         g->addSeparator();
-        for (auto& m_csgv_info : m_csgv_infos) {
+        for (auto &m_csgv_info : m_csgv_infos) {
             g->addDynamicText(&m_csgv_info.second, m_csgv_info.first);
         }
 #ifdef IMGUI
-        g->addCustomCode([this](){
+        g->addCustomCode([this]() {
             auto mousePos = ImGui::GetMousePos();
             m_mouseClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
             m_mouseHeldDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
             if (m_mouseHeldDown) {
                 m_mousePos = mousePos;
             }
-        }, "Mouse");
+        },
+                         "Mouse");
 #endif
     };
 
@@ -112,7 +111,7 @@ public:
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
-private:
+  private:
     // gui parameters
     std::vector<std::pair<std::string, std::string>> m_csgv_infos;
     glm::vec4 m_background_color_a = glm::vec4(1.f, 1.f, 1.f, 1.f);
@@ -128,7 +127,6 @@ private:
     bool m_mouseClicked = false;
     bool m_mouseHeldDown = false;
     MiniTimer m_timer;
-
 
     void updateUniformDescriptorset();
 

@@ -15,9 +15,9 @@
 
 #include <vvv/headless_entrypoint.hpp>
 
-#include <vvv/util/detect_debugger.hpp>
-#include <vvv/util/Paths.hpp>
 #include <vvv/util/Logger.hpp>
+#include <vvv/util/Paths.hpp>
+#include <vvv/util/detect_debugger.hpp>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -26,7 +26,7 @@
 
 #include <string>
 
-int entrypoint_main(int(*main)(int, char**), int argc, char **argv, const std::string& dataDirs) {
+int entrypoint_main(int (*main)(int, char **), int argc, char **argv, const std::string &dataDirs) {
     /* print uncaught exceptions before segmentation fault. But don't do this when a debugger is attached, otherwise the stacktrace is lost. */
     if (!vvv::debuggerIsAttached()) {
         try {

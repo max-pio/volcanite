@@ -34,7 +34,7 @@ namespace vvv {
 /// to be computed as needed.  Our world and camera setup uses a right-handed
 /// coordinate system (y is up, x to the right, z pointing out of the plane spanned by xy).
 class Camera {
-public:
+  public:
     /// If true, this is an orbital (rotate with mouse + scrollwheel) camera instead of the first person controls
     bool orbital;
     /// The distance of the camera to (0,0,0) if in orbital mode
@@ -61,7 +61,8 @@ public:
     /// to coordinate (0, 0) with rotate_camera enabled
     float rotation_x_0, rotation_y_0;
     /// The projection mode of the camera
-    enum class Mode { Perspective, Orthogonal };
+    enum class Mode { Perspective,
+                      Orthogonal };
     Mode camera_mode;
     float orthogonal_scale;
 
@@ -92,7 +93,7 @@ public:
     }
 
     void reset() {
-        if(orbital) {
+        if (orbital) {
             rotation_x = 0.5f;
             rotation_y = 4.0f;
             rotation_x_0 = 0.f;
@@ -100,15 +101,14 @@ public:
             orbital_radius = 1.5f;
             speed = 2.0f;
             position_world_space = position_look_at_world_space + glm::vec3(
-                    orbital_radius * cos(rotation_y) * cos(rotation_x),
-                    orbital_radius * sin(rotation_x),
-                    orbital_radius * sin(rotation_y) * cos(rotation_x));
+                                                                      orbital_radius * cos(rotation_y) * cos(rotation_x),
+                                                                      orbital_radius * sin(rotation_x),
+                                                                      orbital_radius * sin(rotation_y) * cos(rotation_x));
             position_look_at_world_space = glm::vec3(0.f);
             rotate_camera = false;
             camera_mode = Mode::Perspective;
             orthogonal_scale = 5.0f;
-        }
-        else {
+        } else {
             rotation_x = 0.6f;
             rotation_y = 2.25;
             rotation_x_0 = 0.f;
@@ -135,7 +135,7 @@ public:
 
     void onCameraUpdate();
 
-    void writeTo(std::ostream& out, bool human_readable=false) {
+    void writeTo(std::ostream &out, bool human_readable = false) {
         if (human_readable) {
             // TODO: write out look at, rotation and radius in orbital mode
             out << "orbital: " << (orbital ? 1 : 0) << std::endl;
@@ -169,7 +169,7 @@ public:
         //     out << orbital_radius;
         // }
     }
-    void readFrom(std::istream& in, bool human_readable=false) {
+    void readFrom(std::istream &in, bool human_readable = false) {
         if (human_readable) {
             std::string tmp;
             in >> tmp; // "orbital:"
@@ -216,8 +216,8 @@ public:
         // in >> orbital_radius;
     }
 
-private:
+  private:
     std::function<void()> m_cameraUpdateFunction = nullptr;
 };
 
-}
+} // namespace vvv

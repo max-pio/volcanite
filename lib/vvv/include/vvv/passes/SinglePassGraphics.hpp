@@ -41,22 +41,21 @@ namespace vvv {
 namespace detail {
 
 struct VertexBinding {
-    uint32_t binding; ///< binding point
+    uint32_t binding;               ///< binding point
     std::vector<std::string> names; ///< ordered list of names of vertex shader inputs on this binding
 };
 
-}
+} // namespace detail
 
 struct GraphicsPassConfig {
     const vk::PrimitiveTopology primitiveTopology = vk::PrimitiveTopology::eTriangleList;
     std::unordered_map<std::string, vk::Format> colorAttachmentFormats = {}; ///< for each output name: set to vk::Format::Undefined to let it be reflected from shaders or to required format
-    std::optional<vk::Format> depthAttachmentFormat = {}; ///< set to a depth buffer vk::Format::eD[...] to enable depth buffering
-    const bool alphaBlending = false; ///< alpha blending not supported yet!
+    std::optional<vk::Format> depthAttachmentFormat = {};                    ///< set to a depth buffer vk::Format::eD[...] to enable depth buffering
+    const bool alphaBlending = false;                                        ///< alpha blending not supported yet!
     std::string vertexShaderName = "fullscreen_triangle.vert";
     std::string fragmentShaderName = "white.frag";
     std::string geometryShaderName; ///< geometry stage supported yet!
 };
-
 
 /// This is a typesafe wrapper around the non-typesafe but more flexible `PassComputeDynamic`
 // template <PassComputeStructure Types> class PassCompute : public virtual MultiBuffering, public virtual WithGpuContext /*: PassComputeDynamic */ {
@@ -65,10 +64,9 @@ struct GraphicsPassConfig {
 //     using ImageSamplers = decltype(Types::imageSamplers)::type;
 //     using StorageBuffers = decltype(Types::storageBuffers)::type;
 class SinglePassGraphics : public PassBase {
-public:
-
+  public:
     void freeResources() override {
-        for(auto& tex : m_colorAttachmentTextures)
+        for (auto &tex : m_colorAttachmentTextures)
             tex = nullptr;
         m_depthAttachmentTexture = nullptr;
         PassBase::freeResources();
@@ -92,31 +90,30 @@ public:
         vk::ClearValue depthClear = {};
         depthClear.depthStencil.depth = 1.f;
 
-        //updateUniformBufferMemory(getActiveIndex());
-
+        // updateUniformBufferMemory(getActiveIndex());
 
         auto &commandBuffer = m_commandBuffer->getActive();
         commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
         commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_pipelines[0]);
-        if(hasDescriptors())
+        if (hasDescriptors())
             commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, m_descriptorSets->getActive(), nullptr);
 
         std::vector<vk::RenderingAttachmentInfo> renderingAttachmentInfos;
-        for(const auto& col : m_colorAttachmentTextures) {
+        for (const auto &col : m_colorAttachmentTextures) {
             renderingAttachmentInfos.emplace_back(col->view, vk::ImageLayout::eColorAttachmentOptimal, vk::ResolveModeFlagBits::eNone,
-                                                                     nullptr, vk::ImageLayout::eUndefined, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, colorClear);
+                                                  nullptr, vk::ImageLayout::eUndefined, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, colorClear);
         }
 
         std::optional<vk::RenderingAttachmentInfo> depth_attachment_info;
-        if(m_depthAttachmentTexture) {
+        if (m_depthAttachmentTexture) {
             assert(m_depthAttachmentTexture->aspectMask | vk::ImageAspectFlagBits::eDepth);
             depth_attachment_info = vk::RenderingAttachmentInfo(m_depthAttachmentTexture->view, vk::ImageLayout::eDepthAttachmentOptimal, vk::ResolveModeFlagBits::eNone, nullptr,
                                                                 vk::ImageLayout::eUndefined, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, depthClear);
         }
 
-        auto renderArea               = vk::Rect2D{vk::Offset2D{}, getCtx()->getWsi()->getScreenExtent()};
-        auto renderInfo               = vk::RenderingInfo(vk::RenderingFlags(), renderArea, 1, 0, renderingAttachmentInfos.size(), renderingAttachmentInfos.data(), depth_attachment_info.has_value() ? &depth_attachment_info.value() : nullptr, nullptr);
+        auto renderArea = vk::Rect2D{vk::Offset2D{}, getCtx()->getWsi()->getScreenExtent()};
+        auto renderInfo = vk::RenderingInfo(vk::RenderingFlags(), renderArea, 1, 0, renderingAttachmentInfos.size(), renderingAttachmentInfos.data(), depth_attachment_info.has_value() ? &depth_attachment_info.value() : nullptr, nullptr);
         commandBuffer.beginRendering(renderInfo);
 
         // set viewport and scissor (remains the same for all renderings)
@@ -124,7 +121,7 @@ public:
         vk::Viewport viewport;
         viewport.x = viewport.y = 0;
         viewport.width = static_cast<float>(extent.width);
-        viewport.height =  static_cast<float>(extent.height);
+        viewport.height = static_cast<float>(extent.height);
         viewport.minDepth = 0;
         viewport.maxDepth = 1;
         commandBuffer.setViewport(0, 1, &viewport);
@@ -144,12 +141,12 @@ public:
     }
 
     // Attachments
-    void setColorAttachment(const std::string& name, std::shared_ptr<Texture> color) {
+    void setColorAttachment(const std::string &name, std::shared_ptr<Texture> color) {
         assert(m_graphicsPassConfig.colorAttachmentFormats.contains(name) && "Color attachment was not specified before or does not exist!");
         assert(color->format == m_graphicsPassConfig.colorAttachmentFormats.at(name) && "Color attachment texture format must match the format passed to the constructor configuration!");
 
         size_t location = ::vvv::reflectColorAttachmentLocation(getCtx(), name, m_shaders.at(1));
-        m_colorAttachmentTextures.resize(std::max(m_colorAttachmentTextures.size(), location+1), nullptr);
+        m_colorAttachmentTextures.resize(std::max(m_colorAttachmentTextures.size(), location + 1), nullptr);
         m_colorAttachmentTextures[location] = std::move(color);
     }
 
@@ -159,7 +156,7 @@ public:
     }
 
     [[nodiscard]] std::shared_ptr<Texture> reflectColorAttachment(vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts) const {
-        if(opts.format.has_value()) {
+        if (opts.format.has_value()) {
             for (const auto &n : names) {
                 if (m_graphicsPassConfig.colorAttachmentFormats.contains(n) && m_graphicsPassConfig.colorAttachmentFormats.at(n) != opts.format.value())
                     Logger(Warn) << "Color attachment format " << to_string(opts.format.value()) << " does not equal format " << to_string(m_graphicsPassConfig.colorAttachmentFormats.at(n)) << " for "
@@ -172,8 +169,8 @@ public:
 
     std::shared_ptr<Texture> createDepthStencilAttachment(TextureReflectionOptions opts) {
         assert(m_graphicsPassConfig.depthAttachmentFormat.has_value() && "You must set depthAttachmentFormat to a depth texture format to enable depth buffering for this pass!");
-        
-        if(opts.format.has_value() && opts.format.value() != vk::Format::eUndefined && m_graphicsPassConfig.depthAttachmentFormat.value() != opts.format.value()) {
+
+        if (opts.format.has_value() && opts.format.value() != vk::Format::eUndefined && m_graphicsPassConfig.depthAttachmentFormat.value() != opts.format.value()) {
             Logger(Warn) << "Queried depth texture format " << to_string(opts.format.value()) << " differs from render pass attachment format " << to_string(m_graphicsPassConfig.depthAttachmentFormat.value())
                          << "! Returning texture with " << to_string(m_graphicsPassConfig.depthAttachmentFormat.value());
         }
@@ -182,22 +179,20 @@ public:
                                                           opts.usage | vk::ImageUsageFlagBits::eDepthStencilAttachment, opts.queues);
     }
 
-
-protected:
-    SinglePassGraphics(GpuContextPtr ctx, std::string label, GraphicsPassConfig  config, const std::shared_ptr<MultiBuffering>& multiBuffering = NoMultiBuffering, uint32_t queueFamilyIndex = 0)
+  protected:
+    SinglePassGraphics(GpuContextPtr ctx, std::string label, GraphicsPassConfig config, const std::shared_ptr<MultiBuffering> &multiBuffering = NoMultiBuffering, uint32_t queueFamilyIndex = 0)
         : PassBase(ctx, std::move(label), multiBuffering, queueFamilyIndex), m_graphicsPassConfig(std::move(config)) {}
 
-
     /// Must be implemented by subclass and is called between commandBuffer.beginRendering(renderInfo) and commandBuffer.endRendering().
-    virtual void draw(vk::CommandBuffer& commandBuffer) = 0;
+    virtual void draw(vk::CommandBuffer &commandBuffer) = 0;
 
     std::vector<std::shared_ptr<Shader>> createShaders() override {
         auto shaders = std::vector<std::shared_ptr<Shader>>();
         shaders.push_back(std::make_shared<Shader>(SimpleGlslShaderRequest({.filename = m_graphicsPassConfig.vertexShaderName, .label = m_label + ".shaders.0"})));
         shaders.push_back(std::make_shared<Shader>(SimpleGlslShaderRequest({.filename = m_graphicsPassConfig.fragmentShaderName, .label = m_label + ".shaders.1"})));
         assert(m_graphicsPassConfig.geometryShaderName.empty() && "Geometry stage not yet supported in graphics pass. Maybe you can implement it?");
-        if(!m_graphicsPassConfig.geometryShaderName.empty())
-            shaders.push_back(std::make_shared<Shader>(Shader({.filename = m_graphicsPassConfig.geometryShaderName, .label = m_label+ ".shaders.2"})));
+        if (!m_graphicsPassConfig.geometryShaderName.empty())
+            shaders.push_back(std::make_shared<Shader>(Shader({.filename = m_graphicsPassConfig.geometryShaderName, .label = m_label + ".shaders.2"})));
         return shaders;
     }
     std::shared_ptr<Shader> getVertexShader() { return m_shaders.at(0); }
@@ -205,7 +200,7 @@ protected:
     std::shared_ptr<Shader> getGeometryShader() { return m_shaders.size() > 1 ? m_shaders.at(2) : nullptr; }
 
     /// Has to fill out the VertexInputBindingDescription and VertexAttributeDescription vectors by reference.
-    virtual void createVertexInputDescriptions(std::vector<vk::VertexInputBindingDescription>& vertexBindingDescriptions, std::vector<vk::VertexInputAttributeDescription>& vertexAttributeDescriptions) = 0;
+    virtual void createVertexInputDescriptions(std::vector<vk::VertexInputBindingDescription> &vertexBindingDescriptions, std::vector<vk::VertexInputAttributeDescription> &vertexAttributeDescriptions) = 0;
 
     std::vector<vk::Pipeline> createPipelines() override {
         assert(!isPipelineCreated());
@@ -214,13 +209,13 @@ protected:
         const auto device = getCtx()->getDevice();
         const auto debug = getCtx()->debugMarker;
 
-        //create pipeline stage infos ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        // create pipeline stage infos ------------------------------------------------------------------------------------------------------------------------------------------------------------------
         std::vector<vk::VertexInputBindingDescription> vertexBindingDescriptions;
         std::vector<vk::VertexInputAttributeDescription> vertexAttributeDescriptions;
         createVertexInputDescriptions(vertexBindingDescriptions, vertexAttributeDescriptions);
 
         // shader stages
-        std::array<vk::PipelineShaderStageCreateInfo,2> pipelineShaderStageCreateInfos = {
+        std::array<vk::PipelineShaderStageCreateInfo, 2> pipelineShaderStageCreateInfos = {
             *m_shaders[0]->pipelineShaderStageCreateInfo(getCtx()),
             *m_shaders[1]->pipelineShaderStageCreateInfo(getCtx()),
         };
@@ -247,19 +242,18 @@ protected:
         std::array<vk::DynamicState, 3> dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor, vk::DynamicState::eLineWidth};
         vk::PipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo(vk::PipelineDynamicStateCreateFlags(), dynamicStates);
 
-
         // dynamic rendering (we don't use a render pass) passed to GraphicsPipeLineCreateInfo in pNext ------------------------------------------------------------------------------------------------
         std::vector<vk::Format> colorAttachmentFormats = {};
         std::vector<std::pair<std::string, vk::Format>> shaderColorAttachmentFormats = ::vvv::reflectColorAttachmentInfo(getCtx(), m_shaders.at(1));
-        for(int i = 0; i < shaderColorAttachmentFormats.size(); i++) {
-            const auto& name = shaderColorAttachmentFormats[i].first;
+        for (int i = 0; i < shaderColorAttachmentFormats.size(); i++) {
+            const auto &name = shaderColorAttachmentFormats[i].first;
             // if no format was specified for the output attachment at all, we use the refleted format
-            if(!m_graphicsPassConfig.colorAttachmentFormats.contains(name)) {
+            if (!m_graphicsPassConfig.colorAttachmentFormats.contains(name)) {
                 Logger(Warn) << "No format was specified for color attachment " << name << "! Using reflected format " << to_string(shaderColorAttachmentFormats[i].second);
                 m_graphicsPassConfig.colorAttachmentFormats[name] = shaderColorAttachmentFormats[i].second;
             }
             // if the format was specified as undefined, we also use the reflected format
-            else if(m_graphicsPassConfig.colorAttachmentFormats[name] == vk::Format::eUndefined) {
+            else if (m_graphicsPassConfig.colorAttachmentFormats[name] == vk::Format::eUndefined) {
                 m_graphicsPassConfig.colorAttachmentFormats[name] = shaderColorAttachmentFormats[i].second;
             }
             // we add the formats to this vector to ensure that they are in the correct order (as read from the reflection)
@@ -272,12 +266,12 @@ protected:
         vk::PipelineColorBlendStateCreateInfo pipelineColorBlendStateCreateInfo(vk::PipelineColorBlendStateCreateFlags(), false, vk::LogicOp::eNoOp, pipelineColorBlendAttachmentStates,
                                                                                 {{1.0f, 1.0f, 1.0f, 1.0f}});
         vk::PipelineRenderingCreateInfo pipeline_create;
-        if(m_graphicsPassConfig.depthAttachmentFormat.has_value()) {
+        if (m_graphicsPassConfig.depthAttachmentFormat.has_value()) {
             pipeline_create = vk::PipelineRenderingCreateInfo({}, colorAttachmentFormats.size(), colorAttachmentFormats.data(), m_graphicsPassConfig.depthAttachmentFormat.value(),
-                                                            vk::Format::eUndefined);
+                                                              vk::Format::eUndefined);
         } else {
             pipeline_create = vk::PipelineRenderingCreateInfo({}, colorAttachmentFormats.size(), colorAttachmentFormats.data(), vk::Format::eUndefined,
-                                                            vk::Format::eUndefined);
+                                                              vk::Format::eUndefined);
         }
 
         // create pipeline -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -286,7 +280,6 @@ protected:
                                                                   &pipelineDepthStencilStateCreateInfo, &pipelineColorBlendStateCreateInfo, &pipelineDynamicStateCreateInfo, m_pipelineLayout,
                                                                   nullptr, 0, nullptr, 0);
         graphicsPipelineCreateInfo.setPNext(&pipeline_create);
-
 
         const auto [pipelineResult, pipeline] = device.createGraphicsPipeline(getCtx()->getPipelineCache(), graphicsPipelineCreateInfo);
 
@@ -303,21 +296,19 @@ protected:
     GraphicsPassConfig m_graphicsPassConfig;
     std::vector<std::shared_ptr<Texture>> m_colorAttachmentTextures = {};
     std::shared_ptr<Texture> m_depthAttachmentTexture = {};
-
 };
 
-
 class SinglePassFullscreenGraphics : public SinglePassGraphics {
-public:
+  public:
     SinglePassFullscreenGraphics(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering> &multiBuffering, std::string fragmentShaderName, std::unordered_map<std::string, vk::Format> colorAttachmentFormats = {}, std::string label = "SinglePassFullscreenGraphics")
         : WithGpuContext(ctx), WithMultiBuffering(multiBuffering), SinglePassGraphics(ctx, std::move(label), {.colorAttachmentFormats = std::move(colorAttachmentFormats), .fragmentShaderName = std::move(fragmentShaderName)},
                                                                                       multiBuffering, ctx->getQueueFamilyIndices().graphics.value()) {}
 
-    void createVertexInputDescriptions(std::vector<vk::VertexInputBindingDescription>& vertexBindingDescriptions, std::vector<vk::VertexInputAttributeDescription>& vertexAttributeDescriptions) override {
+    void createVertexInputDescriptions(std::vector<vk::VertexInputBindingDescription> &vertexBindingDescriptions, std::vector<vk::VertexInputAttributeDescription> &vertexAttributeDescriptions) override {
         // we have no vertex input, so we leave it empty
     }
 
-protected:
+  protected:
     void draw(vk::CommandBuffer &commandBuffer) override {
         // the default vertex shader "fullscreen_triangle.vert" draws a fullscreen triangle from three implicit vertices
         commandBuffer.draw(3, 1, 0, 0);

@@ -26,27 +26,27 @@ class GLFWwindow;
 
 namespace vvv {
 
-    class GLFWCameraController {
+class GLFWCameraController {
 
-    private:
-        GLFWwindow* m_window;
-        Camera* m_camera;
-        static double s_mouse_scroll_wheel;
-        double m_mouse_scroll_wheel_previous_frame = 0.f;
-        bool m_auto_rotate_camera = false;
+  private:
+    GLFWwindow *m_window;
+    Camera *m_camera;
+    static double s_mouse_scroll_wheel;
+    double m_mouse_scroll_wheel_previous_frame = 0.f;
+    bool m_auto_rotate_camera = false;
 
-        static void glfwUpdateScrollWheel(GLFWwindow* window, double xoffset, double yoffset);
+    static void glfwUpdateScrollWheel(GLFWwindow *window, double xoffset, double yoffset);
 
-    public:
-        GLFWCameraController() : m_window(nullptr), m_camera(nullptr) {}
-        GLFWCameraController(Camera* camera) : m_window(nullptr), m_camera(camera) {}
+  public:
+    GLFWCameraController() : m_window(nullptr), m_camera(nullptr) {}
+    GLFWCameraController(Camera *camera) : m_window(nullptr), m_camera(camera) {}
 
-        void setCamera(Camera* camera) { m_camera = camera; }
-        Camera* getCamera() { return m_camera; }
+    void setCamera(Camera *camera) { m_camera = camera; }
+    Camera *getCamera() { return m_camera; }
 
-        void setWindow(GLFWwindow* window);
+    void setWindow(GLFWwindow *window);
 
-        void updateCamera(bool captureMouse = true, bool captureKeyboard = true);
-    };
+    void updateCamera(bool captureMouse = true, bool captureKeyboard = true);
+};
 
-}
+} // namespace vvv

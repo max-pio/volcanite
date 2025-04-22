@@ -17,48 +17,48 @@
 
 #include "vvv/util/Paths.hpp"
 
-#include <string>
 #include <filesystem>
-#include <utility>
 #include <fmt/core.h>
+#include <string>
+#include <utility>
 
 using namespace vvv;
 
 namespace volcanite {
 
-    /** Helper function to remove the file extension from a file path, e.g. test.abc -> test.*/
-    static std::string stripFileExtension(const std::string& path) {
-        return path.substr(0, path.find_last_of('.'));
-    }
-
-    static std::filesystem::path expandPath(std::string path) {
-        if(path.empty())
-            return "";
-        while (path.find('~') != std::string::npos)
-            path.replace(path.find('~'), 1, Paths::getHomeDirectory().string());
-        // make path absolute and canonical
-        return absolute(std::filesystem::weakly_canonical(path)).make_preferred();
-    }
-
-    static std::string expandPathStr(std::string path) {
-        return expandPath(std::move(path)).generic_string();
-    }
-
-    static std::string formatChunkPath(const std::string& formatted_path, int x, int y, int z) {
-        return fmt::vformat(formatted_path, fmt::make_format_args(x, y, z));
-    }
-
-    static std::string combinedPathForAllChunks(const std::string& formatted_path, int max_file_index_xyz[3]) {
-        if (max_file_index_xyz[0] == 0 && max_file_index_xyz[1] == 0 && max_file_index_xyz[2] == 0) {
-            return fmt::vformat(formatted_path, fmt::make_format_args(max_file_index_xyz[0],
-                                                                            max_file_index_xyz[1],
-                                                                            max_file_index_xyz[2]));
-        } else {
-            std::string str_x = "0-" + std::to_string(max_file_index_xyz[0]);
-            std::string str_y = "0-" + std::to_string(max_file_index_xyz[1]);
-            std::string str_z = "0-" + std::to_string(max_file_index_xyz[2]);
-            return fmt::vformat(formatted_path, fmt::make_format_args(str_x, str_y, str_z));
-        }
-    }
-
+/** Helper function to remove the file extension from a file path, e.g. test.abc -> test.*/
+static std::string stripFileExtension(const std::string &path) {
+    return path.substr(0, path.find_last_of('.'));
 }
+
+static std::filesystem::path expandPath(std::string path) {
+    if (path.empty())
+        return "";
+    while (path.find('~') != std::string::npos)
+        path.replace(path.find('~'), 1, Paths::getHomeDirectory().string());
+    // make path absolute and canonical
+    return absolute(std::filesystem::weakly_canonical(path)).make_preferred();
+}
+
+static std::string expandPathStr(std::string path) {
+    return expandPath(std::move(path)).generic_string();
+}
+
+static std::string formatChunkPath(const std::string &formatted_path, int x, int y, int z) {
+    return fmt::vformat(formatted_path, fmt::make_format_args(x, y, z));
+}
+
+static std::string combinedPathForAllChunks(const std::string &formatted_path, int max_file_index_xyz[3]) {
+    if (max_file_index_xyz[0] == 0 && max_file_index_xyz[1] == 0 && max_file_index_xyz[2] == 0) {
+        return fmt::vformat(formatted_path, fmt::make_format_args(max_file_index_xyz[0],
+                                                                  max_file_index_xyz[1],
+                                                                  max_file_index_xyz[2]));
+    } else {
+        std::string str_x = "0-" + std::to_string(max_file_index_xyz[0]);
+        std::string str_y = "0-" + std::to_string(max_file_index_xyz[1]);
+        std::string str_z = "0-" + std::to_string(max_file_index_xyz[2]);
+        return fmt::vformat(formatted_path, fmt::make_format_args(str_x, str_y, str_z));
+    }
+}
+
+} // namespace volcanite

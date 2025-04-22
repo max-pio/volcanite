@@ -21,18 +21,18 @@
 
 namespace vvv {
 class WithGpuContext {
-protected:
+  protected:
     WithGpuContext(GpuContextPtr ctx) : m_ctx(ctx) {}
 
-public:
+  public:
     GpuContextPtr getCtx() const;
     vk::Device device() const;
     std::shared_ptr<DebugUtilities> debug() const;
 
-protected:
+  protected:
     void setCtx(GpuContextPtr ctx) { m_ctx = ctx; }
 
-private:
+  private:
     GpuContext const *m_ctx;
 };
 }; // namespace vvv

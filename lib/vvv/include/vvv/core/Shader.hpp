@@ -49,7 +49,7 @@ struct GlslShaderRequest {
     bool optimize;
 
     // allow use in std::map<GlslShaderRequest,T>
-    auto operator<=>(const GlslShaderRequest&) const = default;
+    auto operator<=>(const GlslShaderRequest &) const = default;
 };
 
 /// Handles all information needed to compile a shader into a module.
@@ -72,7 +72,7 @@ struct DescriptorSetLayout {
 struct DescriptorBinding {
     uint32_t set_number;
     vk::DescriptorSetLayoutBinding binding;
-    const SpvReflectDescriptorBinding* spirv_binding;
+    const SpvReflectDescriptorBinding *spirv_binding;
 };
 
 struct DescriptorLocation {
@@ -81,10 +81,10 @@ struct DescriptorLocation {
 };
 
 class ShaderCompileError : public std::runtime_error {
-public:
-    ShaderCompileError(const GlslShaderRequest& request, const std::filesystem::path& spirvPath, int returnValue, const std::string& errorText, const std::string& cmd)
+  public:
+    ShaderCompileError(const GlslShaderRequest &request, const std::filesystem::path &spirvPath, int returnValue, const std::string &errorText, const std::string &cmd)
         : request(request), spirvPath(spirvPath), returnValue(returnValue), errorText(errorText), cmd(cmd),
-          runtime_error("Compilation of shader " + request.shader_file_path.filename().string() + "failed") { }
+          runtime_error("Compilation of shader " + request.shader_file_path.filename().string() + "failed") {}
 
     GlslShaderRequest request;
     std::filesystem::path spirvPath;
@@ -98,8 +98,7 @@ enum class ShaderCompileErrorCallbackAction {
     USE_PREVIOUS_CODE
 };
 
-using ShaderCompileErrorCallback = std::function<ShaderCompileErrorCallbackAction(const ShaderCompileError&)>;
-
+using ShaderCompileErrorCallback = std::function<ShaderCompileErrorCallbackAction(const ShaderCompileError &)>;
 
 /// Bundles a Vulkan shader module with its SPIRV code
 struct Shader {
@@ -109,14 +108,14 @@ struct Shader {
 
     std::string label;
 
-    explicit Shader(const GlslShaderRequest& req, const ShaderCompileErrorCallback& compileErrorCallback = nullptr);
-    explicit Shader(const SimpleGlslShaderRequest& req, const ShaderCompileErrorCallback& compileErrorCallback = nullptr);
+    explicit Shader(const GlslShaderRequest &req, const ShaderCompileErrorCallback &compileErrorCallback = nullptr);
+    explicit Shader(const SimpleGlslShaderRequest &req, const ShaderCompileErrorCallback &compileErrorCallback = nullptr);
 
-    explicit Shader(size_t spirv_size, const std::vector<uint32_t>& spirv_code, const std::string& label = "") : spirv_binary(spirv_code), label(label) { reflectShader(); }
+    explicit Shader(size_t spirv_size, const std::vector<uint32_t> &spirv_code, const std::string &label = "") : spirv_binary(spirv_code), label(label) { reflectShader(); }
 
-    explicit Shader(const std::string& filename) : Shader(SimpleGlslShaderRequest{.filename = filename}) {}
-    Shader(const std::string& filename, const std::vector<std::string>& defines) : Shader(SimpleGlslShaderRequest{.filename = filename, .defines = defines}) {}
-    Shader(const std::string& filename, const std::vector<std::string>& defines, const std::string& label) : Shader(SimpleGlslShaderRequest{.filename = filename, .defines = defines, .label = label}) {}
+    explicit Shader(const std::string &filename) : Shader(SimpleGlslShaderRequest{.filename = filename}) {}
+    Shader(const std::string &filename, const std::vector<std::string> &defines) : Shader(SimpleGlslShaderRequest{.filename = filename, .defines = defines}) {}
+    Shader(const std::string &filename, const std::vector<std::string> &defines, const std::string &label) : Shader(SimpleGlslShaderRequest{.filename = filename, .defines = defines, .label = label}) {}
 
     vk::PipelineShaderStageCreateInfo *pipelineShaderStageCreateInfo(vvv::GpuContextPtr ctx);
     vk::ShaderModule shaderModule(vvv::GpuContextPtr ctx);
@@ -132,7 +131,6 @@ struct Shader {
 
     std::vector<DescriptorSetLayout> reflectDescriptorLayouts() const;
 
-
     /// @brief Get the workgroup size by inspecting the shader source.
     ///
     /// Beware: this will falsely return 1x1x1 if the workgroup size is configured through
@@ -142,7 +140,7 @@ struct Shader {
     vk::ShaderStageFlagBits reflectShaderStage() const;
     const char *const reflectEntryPointName() const;
 
-    std::optional<DescriptorBinding> reflectBindingByName(const std::string& name) const;
+    std::optional<DescriptorBinding> reflectBindingByName(const std::string &name) const;
 
     spv_reflect::ShaderModule const *const rawReflect() const { return m_reflection.get(); }
 
@@ -154,7 +152,7 @@ struct Shader {
             return std::nullopt;
     }
 
-    SpvReflectDescriptorBinding const *const rawReflectBindingByName(const std::string& name) const {
+    SpvReflectDescriptorBinding const *const rawReflectBindingByName(const std::string &name) const {
 
         auto v = tryRawReflectBindingByName(name);
 
@@ -165,7 +163,7 @@ struct Shader {
         return v.value();
     }
 
-    std::optional<SpvReflectInterfaceVariable const *const> tryRawReflectOutputByName(const std::string& name) const {
+    std::optional<SpvReflectInterfaceVariable const *const> tryRawReflectOutputByName(const std::string &name) const {
         uint32_t count = 0;
         auto ret = m_reflection->EnumerateOutputVariables(&count, nullptr);
         assert(ret == SPV_REFLECT_RESULT_SUCCESS);
@@ -182,7 +180,7 @@ struct Shader {
         return std::nullopt;
     }
 
-    SpvReflectInterfaceVariable const *const rawReflectOutputByName(const std::string& name) const {
+    SpvReflectInterfaceVariable const *const rawReflectOutputByName(const std::string &name) const {
         auto v = tryRawReflectOutputByName(name);
         if (!v) {
             throw std::runtime_error("output with name <" + name + "> does not exist in shader <" + label + ">.");
@@ -190,19 +188,18 @@ struct Shader {
         return v.value();
     }
 
-    std::vector<SpvReflectInterfaceVariable*> reflectOutputs() const {
+    std::vector<SpvReflectInterfaceVariable *> reflectOutputs() const {
         uint32_t count = 0;
         auto ret = m_reflection->EnumerateOutputVariables(&count, nullptr);
         assert(ret == SPV_REFLECT_RESULT_SUCCESS);
 
-        std::vector<SpvReflectInterfaceVariable*> outs(count);
+        std::vector<SpvReflectInterfaceVariable *> outs(count);
         ret = m_reflection->EnumerateOutputVariables(&count, outs.data());
         assert(ret == SPV_REFLECT_RESULT_SUCCESS);
         return outs;
     }
 
-
-    std::optional<SpvReflectInterfaceVariable const *const> tryRawReflectInputByName(const std::string& name) const {
+    std::optional<SpvReflectInterfaceVariable const *const> tryRawReflectInputByName(const std::string &name) const {
         // it's not that simple to reflect vertex input because the layout of the bindings / vertex data on the host
         // side is indifferent to the layout locations inside vertex shaders
 
@@ -222,7 +219,7 @@ struct Shader {
         return std::nullopt;
     }
 
-    SpvReflectInterfaceVariable const *const rawReflectInputByName(const std::string& name) const {
+    SpvReflectInterfaceVariable const *const rawReflectInputByName(const std::string &name) const {
         auto v = tryRawReflectInputByName(name);
         if (!v) {
             throw std::runtime_error("input with name <" + name + "> does not exist in shader <" + label + ">.");
@@ -230,19 +227,18 @@ struct Shader {
         return v.value();
     }
 
-private:
-    void createShader(const GlslShaderRequest& request, const ShaderCompileErrorCallback& compileErrorCallback = nullptr);
+  private:
+    void createShader(const GlslShaderRequest &request, const ShaderCompileErrorCallback &compileErrorCallback = nullptr);
     /// compile a GLSL shader to a spirv file by calling a compiler via the command line
-    [[nodiscard]] static std::filesystem::path compileGlslShaderCMD(const GlslShaderRequest& request);
+    [[nodiscard]] static std::filesystem::path compileGlslShaderCMD(const GlslShaderRequest &request);
     /// Directly compile the GLSL shader form the request for this shader.
     /// @param write_spirv_tmp_file if true, the spirv shader is written to a tmp file
     /// @return the path of the compiled spirv binary if writing to a spirv tmp file was successful
-    std::optional<std::filesystem::path> compileGlslShader(const GlslShaderRequest& request, bool write_spirv_tmp_file=true);
-    void loadSpirvFromFile(const std::filesystem::path& path);
+    std::optional<std::filesystem::path> compileGlslShader(const GlslShaderRequest &request, bool write_spirv_tmp_file = true);
+    void loadSpirvFromFile(const std::filesystem::path &path);
     void reflectShader();
 
-    static std::optional<std::filesystem::path> getPrecompiledLocalSpirvPath(const SimpleGlslShaderRequest& request);
-
+    static std::optional<std::filesystem::path> getPrecompiledLocalSpirvPath(const SimpleGlslShaderRequest &request);
 
     vk::ShaderModule m_shaderModule = nullptr;
     std::unique_ptr<vk::PipelineShaderStageCreateInfo> m_shaderStageCreateInfo = nullptr;
@@ -252,4 +248,4 @@ private:
 void setShaderIncludeDirectory(std::string v);
 std::string const &getShaderIncludeDirectory();
 
-}
+} // namespace vvv

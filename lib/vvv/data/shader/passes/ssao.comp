@@ -86,10 +86,10 @@ void main() {
     // [Optimized Screen-Space Ambient Occlusion in Mobile Devices, Sunet,Vazquez, 2016] https://dl.acm.org/doi/pdf/10.1145/2945292.2945300
     // Blog Post on different SSAO techniques:
     // [Ambient Occlusion – approaches in screen space (SSAO), Keutel, 2010] http://www.michaelkeutel.de/computer-graphics/ambient-occlusion/ssao-screen-space-approaches-to-ambient-occlusion/
-#if defined(SSAO_CRYTEK)
+    #if defined(SSAO_CRYTEK)
     // note: this darkens the image on flat surfaces, use min(2 * ao, 1) if flat surfaces sould have ao=1
     // ref:  [Finding Next Gen – CryEngine 2, Mittring, Crytek, 2007] https://dl.acm.org/doi/pdf/10.1145/1281500.1281671
-    for(int i = 0; i < num_samples; i++) {
+    for (int i = 0; i < num_samples; i++) {
         vec3 rand = hash(uvec3(P, i + 11));
         vec3 offset = sample_sphere(rand);
         vec3 sampleWorldPos = worldPos + offset * radius;
@@ -97,14 +97,14 @@ void main() {
         vec3 sampleProjected = hSampleProjected.xyz / hSampleProjected.w;
         vec2 sampleUV = vec2(sampleProjected.x * 0.5f + 0.5f, sampleProjected.y * 0.5f + 0.5f);
         float sampleDepth = texture(depthTexture, sampleUV).r;
-        if(sampleDepth < sampleProjected.z)
-            ao -= 1.0f / num_samples;
+        if (sampleDepth < sampleProjected.z)
+        ao -= 1.0f / num_samples;
     }
-#elif defined(SSAO_STARCRAFT)
+    #elif defined(SSAO_STARCRAFT)
     // ref: [Effects & techniques, Filion, McNaughton, 2008] https://dl.acm.org/doi/pdf/10.1145/1404435.1404441
     const float eps = bias;
     const float power = falloff;
-    for(int i = 0; i < num_samples; i++) {
+    for (int i = 0; i < num_samples; i++) {
         vec3 rand = hash(uvec3(P, i + 11));
         vec3 offset = sample_sphere(rand);
         if (dot(offset, normal) < 0) offset *= -1;
@@ -132,9 +132,9 @@ void main() {
         occ = min(1, max(0, occ));
         ao -= occ / num_samples;
     }
-#elif defined(SSAO_HBAO)
+    #elif defined(SSAO_HBAO)
     // ref: [Image-Space Horizon-Based Ambient Occlusion, Bavoil, Sainz, Dimitrov, 2008] https://dl.acm.org/doi/pdf/10.1145/1401032.1401061
-    vec4 hCamPos = projection_to_world_space * vec4(0,0,0,1);
+    vec4 hCamPos = projection_to_world_space * vec4(0, 0, 0, 1);
     vec3 camPos = hCamPos.xyz / hCamPos.w;
     vec3 V = normalize(camPos - worldPos);
     mat3 TBN;
@@ -164,7 +164,7 @@ void main() {
             vec3 sampleWorldSpace = hSampleWorldSpace.xyz / hSampleWorldSpace.w;
             vec3 D_worldSpace = sampleWorldSpace - worldPos;
             vec3 D = inv_TBN * D_worldSpace - vec3(0, 0, bias);
-            float new_horizon = atan(D.z, length(D.xy)); // new_horizon \in [-pi,pi]
+            float new_horizon = atan(D.z, length(D.xy));// new_horizon \in [-pi,pi]
             float new_dist = length(D_worldSpace);
             if (new_horizon > horizon && new_dist < radius) {
                 horizon = new_horizon;
@@ -178,9 +178,9 @@ void main() {
         }
         ao -= WAO / float(num_samples);
     }
-#else
+    #else
     #error "No SSAO algorithm is selected. Use for example -DSSAO_CRYTEK=1 when compiling this shader"
-#endif
+    #endif
 
     vec4 outColor = vec4(vec3(ao), 1);
     imageStore(outputTexture, P, outColor);

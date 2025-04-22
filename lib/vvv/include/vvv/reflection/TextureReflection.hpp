@@ -38,37 +38,40 @@ const std::map<SpvDim, TextureDimensions> spvr2vvv_Dimensions{
 
 const std::map<SpvReflectFormat, vk::Format> spvr_refl2vk_format{
     {SPV_REFLECT_FORMAT_UNDEFINED, vk::Format::eUndefined}, {SPV_REFLECT_FORMAT_R32G32B32A32_SFLOAT, vk::Format::eR32G32B32A32Sfloat},
-//    SPV_REFLECT_FORMAT_R32_UINT            =  98, // = VK_FORMAT_R32_UINT
-//    SPV_REFLECT_FORMAT_R32_SINT            =  99, // = VK_FORMAT_R32_SINT
-//    SPV_REFLECT_FORMAT_R32_SFLOAT          = 100, // = VK_FORMAT_R32_SFLOAT
-//    SPV_REFLECT_FORMAT_R32G32_UINT         = 101, // = VK_FORMAT_R32G32_UINT
-//    SPV_REFLECT_FORMAT_R32G32_SINT         = 102, // = VK_FORMAT_R32G32_SINT
-//    SPV_REFLECT_FORMAT_R32G32_SFLOAT       = 103, // = VK_FORMAT_R32G32_SFLOAT
-//    SPV_REFLECT_FORMAT_R32G32B32_UINT      = 104, // = VK_FORMAT_R32G32B32_UINT
-//    SPV_REFLECT_FORMAT_R32G32B32_SINT      = 105, // = VK_FORMAT_R32G32B32_SINT
-//    SPV_REFLECT_FORMAT_R32G32B32_SFLOAT    = 106, // = VK_FORMAT_R32G32B32_SFLOAT
-//    SPV_REFLECT_FORMAT_R32G32B32A32_UINT   = 107, // = VK_FORMAT_R32G32B32A32_UINT
-//    SPV_REFLECT_FORMAT_R32G32B32A32_SINT   = 108, // = VK_FORMAT_R32G32B32A32_SINT
-//    SPV_REFLECT_FORMAT_R64_UINT            = 110, // = VK_FORMAT_R64_UINT
-//    SPV_REFLECT_FORMAT_R64_SINT            = 111, // = VK_FORMAT_R64_SINT
-//    SPV_REFLECT_FORMAT_R64_SFLOAT          = 112, // = VK_FORMAT_R64_SFLOAT
-//    SPV_REFLECT_FORMAT_R64G64_UINT         = 113, // = VK_FORMAT_R64G64_UINT
-//    SPV_REFLECT_FORMAT_R64G64_SINT         = 114, // = VK_FORMAT_R64G64_SINT
-//    SPV_REFLECT_FORMAT_R64G64_SFLOAT       = 115, // = VK_FORMAT_R64G64_SFLOAT
-//    SPV_REFLECT_FORMAT_R64G64B64_UINT      = 116, // = VK_FORMAT_R64G64B64_UINT
-//    SPV_REFLECT_FORMAT_R64G64B64_SINT      = 117, // = VK_FORMAT_R64G64B64_SINT
-//    SPV_REFLECT_FORMAT_R64G64B64_SFLOAT    = 118, // = VK_FORMAT_R64G64B64_SFLOAT
-//    SPV_REFLECT_FORMAT_R64G64B64A64_UINT   = 119, // = VK_FORMAT_R64G64B64A64_UINT
-//    SPV_REFLECT_FORMAT_R64G64B64A64_SINT   = 120, // = VK_FORMAT_R64G64B64A64_SINT
-//    SPV_REFLECT_FORMAT_R64G64B64A64_SFLOAT = 121, // = VK_FORMAT_R64G64B64A64_SFLOAT
+    //    SPV_REFLECT_FORMAT_R32_UINT            =  98, // = VK_FORMAT_R32_UINT
+    //    SPV_REFLECT_FORMAT_R32_SINT            =  99, // = VK_FORMAT_R32_SINT
+    //    SPV_REFLECT_FORMAT_R32_SFLOAT          = 100, // = VK_FORMAT_R32_SFLOAT
+    //    SPV_REFLECT_FORMAT_R32G32_UINT         = 101, // = VK_FORMAT_R32G32_UINT
+    //    SPV_REFLECT_FORMAT_R32G32_SINT         = 102, // = VK_FORMAT_R32G32_SINT
+    //    SPV_REFLECT_FORMAT_R32G32_SFLOAT       = 103, // = VK_FORMAT_R32G32_SFLOAT
+    //    SPV_REFLECT_FORMAT_R32G32B32_UINT      = 104, // = VK_FORMAT_R32G32B32_UINT
+    //    SPV_REFLECT_FORMAT_R32G32B32_SINT      = 105, // = VK_FORMAT_R32G32B32_SINT
+    //    SPV_REFLECT_FORMAT_R32G32B32_SFLOAT    = 106, // = VK_FORMAT_R32G32B32_SFLOAT
+    //    SPV_REFLECT_FORMAT_R32G32B32A32_UINT   = 107, // = VK_FORMAT_R32G32B32A32_UINT
+    //    SPV_REFLECT_FORMAT_R32G32B32A32_SINT   = 108, // = VK_FORMAT_R32G32B32A32_SINT
+    //    SPV_REFLECT_FORMAT_R64_UINT            = 110, // = VK_FORMAT_R64_UINT
+    //    SPV_REFLECT_FORMAT_R64_SINT            = 111, // = VK_FORMAT_R64_SINT
+    //    SPV_REFLECT_FORMAT_R64_SFLOAT          = 112, // = VK_FORMAT_R64_SFLOAT
+    //    SPV_REFLECT_FORMAT_R64G64_UINT         = 113, // = VK_FORMAT_R64G64_UINT
+    //    SPV_REFLECT_FORMAT_R64G64_SINT         = 114, // = VK_FORMAT_R64G64_SINT
+    //    SPV_REFLECT_FORMAT_R64G64_SFLOAT       = 115, // = VK_FORMAT_R64G64_SFLOAT
+    //    SPV_REFLECT_FORMAT_R64G64B64_UINT      = 116, // = VK_FORMAT_R64G64B64_UINT
+    //    SPV_REFLECT_FORMAT_R64G64B64_SINT      = 117, // = VK_FORMAT_R64G64B64_SINT
+    //    SPV_REFLECT_FORMAT_R64G64B64_SFLOAT    = 118, // = VK_FORMAT_R64G64B64_SFLOAT
+    //    SPV_REFLECT_FORMAT_R64G64B64A64_UINT   = 119, // = VK_FORMAT_R64G64B64A64_UINT
+    //    SPV_REFLECT_FORMAT_R64G64B64A64_SINT   = 120, // = VK_FORMAT_R64G64B64A64_SINT
+    //    SPV_REFLECT_FORMAT_R64G64B64A64_SFLOAT = 121, // = VK_FORMAT_R64G64B64A64_SFLOAT
 };
 
 const std::map<SpvImageFormat, vk::Format> spvr2vk_format{
-    {SpvImageFormatUnknown, vk::Format::eUndefined},  {SpvImageFormatRgba32f, vk::Format::eR32G32B32A32Sfloat}, {SpvImageFormatRgba16f, vk::Format::eR16G16B16A16Sfloat},
-    {SpvImageFormatR32f, vk::Format::eR32Sfloat},     {SpvImageFormatRgba8, vk::Format::eR8G8B8A8Srgb},         {SpvImageFormatRgba8Snorm, vk::Format::eR8G8B8A8Snorm},
+    {SpvImageFormatUnknown, vk::Format::eUndefined}, {SpvImageFormatRgba32f, vk::Format::eR32G32B32A32Sfloat}, {SpvImageFormatRgba16f, vk::Format::eR16G16B16A16Sfloat}, {SpvImageFormatR32f, vk::Format::eR32Sfloat}, {SpvImageFormatRgba8, vk::Format::eR8G8B8A8Srgb}, {SpvImageFormatRgba8Snorm, vk::Format::eR8G8B8A8Snorm},
 
-    {SpvImageFormatRg32f, vk::Format::eR32G32Sfloat}, {SpvImageFormatRg16f, vk::Format::eR16G16Sfloat},         {SpvImageFormatR11fG11fB10f, vk::Format::eB10G11R11UfloatPack32},
-    {SpvImageFormatR16f, vk::Format::eR16Sfloat},     {SpvImageFormatRgba16, vk::Format::eR16G16B16A16Sfloat},  {SpvImageFormatRgb10A2, vk::Format::eA2R10G10B10SintPack32},
+    {SpvImageFormatRg32f, vk::Format::eR32G32Sfloat},
+    {SpvImageFormatRg16f, vk::Format::eR16G16Sfloat},
+    {SpvImageFormatR11fG11fB10f, vk::Format::eB10G11R11UfloatPack32},
+    {SpvImageFormatR16f, vk::Format::eR16Sfloat},
+    {SpvImageFormatRgba16, vk::Format::eR16G16B16A16Sfloat},
+    {SpvImageFormatRgb10A2, vk::Format::eA2R10G10B10SintPack32},
     {SpvImageFormatRg16, vk::Format::eR16G16Sfloat},
     //    SpvImageFormatRg8 = 13,
     //    SpvImageFormatR16 = 14,
@@ -111,6 +114,6 @@ std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<c
 
 std::vector<std::shared_ptr<Texture>> reflectTextureArray(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts);
 
-std::shared_ptr<Texture> reflectColorAttachment(vvv::GpuContextPtr ctx,vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts);
+std::shared_ptr<Texture> reflectColorAttachment(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders, vk::ArrayProxy<const std::string> names, TextureReflectionOptions opts);
 
 }; // namespace vvv

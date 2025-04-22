@@ -21,9 +21,9 @@ namespace volcanite {
 
 class RangeANSEncoder : public CSGVSerialBrickEncoder {
 
-public:
+  public:
     RangeANSEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask)
-            : CSGVSerialBrickEncoder(brick_size, encoding_mode, op_mask) {
+        : CSGVSerialBrickEncoder(brick_size, encoding_mode, op_mask) {
         if (encoding_mode != SINGLE_TABLE_RANS_ENC && encoding_mode != DOUBLE_TABLE_RANS_ENC)
             throw std::runtime_error("NibbleEncoder must be used with SINGLE_TABLE_RANS or DOUBLE_TABLE_RANS"
                                      " encoding mode.");
@@ -32,13 +32,13 @@ public:
 
     RangeANSEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask,
                     const uint32_t code_frequencies[16], const uint32_t detail_code_frequencies[16])
-            : CSGVSerialBrickEncoder(brick_size, encoding_mode, op_mask) {
+        : CSGVSerialBrickEncoder(brick_size, encoding_mode, op_mask) {
         if (encoding_mode != SINGLE_TABLE_RANS_ENC && encoding_mode != DOUBLE_TABLE_RANS_ENC)
             throw std::runtime_error("NibbleEncoder must be used with SINGLE_TABLE_RANS or DOUBLE_TABLE_RANS"
                                      " encoding mode.");
 
         m_rans.recomputeFrequencyTables(code_frequencies);
-        if(encoding_mode == DOUBLE_TABLE_RANS_ENC) {
+        if (encoding_mode == DOUBLE_TABLE_RANS_ENC) {
             if (detail_code_frequencies == nullptr)
                 throw std::runtime_error("Detail code frequencies must be given if using double table rANS encoding!");
             m_detail_rans.recomputeFrequencyTables(detail_code_frequencies);
@@ -68,7 +68,7 @@ public:
 
     // FILE IMPORT AND EXPORT ------------------------------------------------------------------------------------------
 
-    void exportToFile(std::ostream& out) override {
+    void exportToFile(std::ostream &out) override {
         CSGVSerialBrickEncoder::exportToFile(out);
 
         auto freq_table = getCurrentFrequencyTable();
@@ -81,7 +81,7 @@ public:
         }
     }
 
-    bool importFromFile(std::istream& in) override {
+    bool importFromFile(std::istream &in) override {
         if (!CSGVSerialBrickEncoder::importFromFile(in))
             return false;
 
@@ -112,7 +112,7 @@ public:
         ss << "RANS_SYMBOL_TABLE=uvec3[34](";
         ss << m_rans.getGLSLSymbolArrayString();
         ss << ",";
-        if(m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
+        if (m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
             ss << m_detail_rans.getGLSLSymbolArrayString();
         } else {
             // just some dummy entries so the shader compiles..
@@ -125,10 +125,9 @@ public:
         return defines;
     }
 
-protected:
+  protected:
     /// Reads the next element from the brick encoding, possibly using the rANS decoder from this CompressedSegmentationVolume, and updates the state.
-    uint32_t readNextLodOperationFromEncoding(const uint32_t* brick_encoding, ReadState& state) const override;
-
+    uint32_t readNextLodOperationFromEncoding(const uint32_t *brick_encoding, ReadState &state) const override;
 };
 
 } // namespace volcanite

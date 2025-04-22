@@ -22,10 +22,10 @@
 
 #include <cstdio>
 
+#include "vvv/config.hpp"
+#include <SPIRV-Reflect/spirv_reflect.h>
 #include <shaderc/shaderc.hpp>
 #include <utility>
-#include <SPIRV-Reflect/spirv_reflect.h>
-#include "vvv/config.hpp"
 
 namespace vvv {
 /// Returns the standardized name for the given shader stage, e.g. "vert" or "frag". Only one bit of
@@ -67,7 +67,7 @@ std::string get_shader_stage_name(vk::ShaderStageFlagBits stage) {
     };
 }
 
-vk::ShaderStageFlagBits get_shader_stage(const std::string& stage) {
+vk::ShaderStageFlagBits get_shader_stage(const std::string &stage) {
     if (stage == "vert")
         return vk::ShaderStageFlagBits::eVertex;
     if (stage == "tesc")
@@ -106,11 +106,11 @@ std::map<GlslShaderRequest, std::filesystem::path> alreadyCompilesSpirvFiles;
 
 #define USE_PRECOMPILED_LOCAL_SPIRV
 
-Shader::Shader(const SimpleGlslShaderRequest& req, const ShaderCompileErrorCallback& compileErrorCallback) {
+Shader::Shader(const SimpleGlslShaderRequest &req, const ShaderCompileErrorCallback &compileErrorCallback) {
 #ifdef USE_PRECOMPILED_LOCAL_SPIRV
     // try to load a precompiled spirv file from a data path
     auto local_spirv = getPrecompiledLocalSpirvPath(req);
-    if(local_spirv.has_value()) {
+    if (local_spirv.has_value()) {
         loadSpirvFromFile(local_spirv.value());
         Logger(Info) << "Loaded " << local_spirv.value().string();
         reflectShader();
@@ -131,14 +131,14 @@ Shader::Shader(const SimpleGlslShaderRequest& req, const ShaderCompileErrorCallb
     createShader(request, compileErrorCallback);
 }
 
-Shader::Shader(const GlslShaderRequest& req, const ShaderCompileErrorCallback& compileErrorCallback) {
+Shader::Shader(const GlslShaderRequest &req, const ShaderCompileErrorCallback &compileErrorCallback) {
 #ifdef USE_PRECOMPILED_LOCAL_SPIRV
     Logger(Warn) << "Cannot load precompiled shaders for non-simple GlslShaderRequests";
 #endif
     createShader(req, compileErrorCallback);
 }
 
-std::optional<std::filesystem::path> Shader::getPrecompiledLocalSpirvPath(const SimpleGlslShaderRequest& request) {
+std::optional<std::filesystem::path> Shader::getPrecompiledLocalSpirvPath(const SimpleGlslShaderRequest &request) {
     // find out which name a spirv file for this request would have
     std::string filename = request.filename;
     {
@@ -165,103 +165,99 @@ std::optional<std::filesystem::path> Shader::getPrecompiledLocalSpirvPath(const 
     // try to find this spirv file within the data paths
     if (!Paths::hasDataPath(path.string())) {
         return {};
-    }
-    else {
+    } else {
         return Paths::findDataPath(path.string());
     }
 }
 
-void Shader::createShader(const GlslShaderRequest& request, const ShaderCompileErrorCallback& compileErrorCallback) {
-        std::filesystem::path spirvPath;
+void Shader::createShader(const GlslShaderRequest &request, const ShaderCompileErrorCallback &compileErrorCallback) {
+    std::filesystem::path spirvPath;
 
-        label = request.shader_file_path.filename().string();
-        Logger(Debug) << "Compiling " << request.shader_file_path;
-        try {
+    label = request.shader_file_path.filename().string();
+    Logger(Debug) << "Compiling " << request.shader_file_path;
+    try {
 #ifdef USE_SYSTEM_GLSLANG_COMPILER
-            // call glslang on the commandline
-            auto path = compileGlslShaderCMD(request);
-            loadSpirvFromFile(path);
+        // call glslang on the commandline
+        auto path = compileGlslShaderCMD(request);
+        loadSpirvFromFile(path);
 #else
-            compileGlslShader(request, true);
+        compileGlslShader(request, true);
 #endif
-        }
-        catch(ShaderCompileError& e) {
+    } catch (ShaderCompileError &e) {
 
-            auto callback = compileErrorCallback ? compileErrorCallback : ShaderCompileErrorCallback([](const ShaderCompileError& e) {
-                Logger(Error) << "Compilation of shader " << e.request.shader_file_path.filename() << " failed.\n\n"
-                              << "Command line: " << e.cmd << "\n"
-                              << "Return value: " << e.returnValue << "\n"
-                              << "\n" << e.errorText;
-                return ShaderCompileErrorCallbackAction::THROW;
-            });
+        auto callback = compileErrorCallback ? compileErrorCallback : ShaderCompileErrorCallback([](const ShaderCompileError &e) {
+            Logger(Error) << "Compilation of shader " << e.request.shader_file_path.filename() << " failed.\n\n"
+                          << "Command line: " << e.cmd << "\n"
+                          << "Return value: " << e.returnValue << "\n"
+                          << "\n"
+                          << e.errorText;
+            return ShaderCompileErrorCallbackAction::THROW;
+        });
 
-            auto action = callback(e);
+        auto action = callback(e);
 
-            if (action == ShaderCompileErrorCallbackAction::USE_PREVIOUS_CODE) {
-                if (!alreadyCompilesSpirvFiles.contains(request))
-                    throw std::runtime_error("Cannot reuse old shader source for " + e.request.shader_file_path.string() + " as it has not yet been compiled.");
+        if (action == ShaderCompileErrorCallbackAction::USE_PREVIOUS_CODE) {
+            if (!alreadyCompilesSpirvFiles.contains(request))
+                throw std::runtime_error("Cannot reuse old shader source for " + e.request.shader_file_path.string() + " as it has not yet been compiled.");
 
-                spirvPath = alreadyCompilesSpirvFiles[request];
-                loadSpirvFromFile(spirvPath);
-            }
-            else if (action == ShaderCompileErrorCallbackAction::THROW) {
-                throw; // rethrow this exception
-            }
-            else throw std::runtime_error("ShaderCompileErrorCallbackAction not defined.");
-        }
+            spirvPath = alreadyCompilesSpirvFiles[request];
+            loadSpirvFromFile(spirvPath);
+        } else if (action == ShaderCompileErrorCallbackAction::THROW) {
+            throw; // rethrow this exception
+        } else
+            throw std::runtime_error("ShaderCompileErrorCallbackAction not defined.");
+    }
 
-        reflectShader();
+    reflectShader();
 }
 
 shaderc_shader_kind get_shaderc_kind(vk::ShaderStageFlagBits stage) {
     switch (stage) {
-        case vk::ShaderStageFlagBits::eVertex:
-            return shaderc_glsl_vertex_shader;
-        case vk::ShaderStageFlagBits::eTessellationControl:
-            return shaderc_glsl_tess_control_shader;
-        case vk::ShaderStageFlagBits::eTessellationEvaluation:
-            return shaderc_glsl_tess_evaluation_shader;
-        case vk::ShaderStageFlagBits::eGeometry:
-            return shaderc_glsl_geometry_shader;
-        case vk::ShaderStageFlagBits::eFragment:
-            return shaderc_glsl_fragment_shader;
-        case vk::ShaderStageFlagBits::eCompute:
-            return shaderc_glsl_compute_shader;
-        case vk::ShaderStageFlagBits::eRaygenKHR:
-            return shaderc_glsl_raygen_shader;
-        case vk::ShaderStageFlagBits::eIntersectionKHR:
-            return shaderc_glsl_intersection_shader;
-        case vk::ShaderStageFlagBits::eAnyHitKHR:
-            return shaderc_glsl_anyhit_shader;
-        case vk::ShaderStageFlagBits::eClosestHitKHR:
-            return shaderc_glsl_closesthit_shader;
-        case vk::ShaderStageFlagBits::eMissKHR:
-            return shaderc_glsl_miss_shader;
-        case vk::ShaderStageFlagBits::eCallableKHR:
-            return shaderc_glsl_callable_shader;
-        case vk::ShaderStageFlagBits::eTaskNV:
-            return shaderc_glsl_task_shader;
-        case vk::ShaderStageFlagBits::eMeshNV:
-            return shaderc_glsl_mesh_shader;
-        default:
-            std::ostringstream err;
-            err << "Unsupported shared stage " << to_string(stage);
-            throw std::runtime_error(err.str());
+    case vk::ShaderStageFlagBits::eVertex:
+        return shaderc_glsl_vertex_shader;
+    case vk::ShaderStageFlagBits::eTessellationControl:
+        return shaderc_glsl_tess_control_shader;
+    case vk::ShaderStageFlagBits::eTessellationEvaluation:
+        return shaderc_glsl_tess_evaluation_shader;
+    case vk::ShaderStageFlagBits::eGeometry:
+        return shaderc_glsl_geometry_shader;
+    case vk::ShaderStageFlagBits::eFragment:
+        return shaderc_glsl_fragment_shader;
+    case vk::ShaderStageFlagBits::eCompute:
+        return shaderc_glsl_compute_shader;
+    case vk::ShaderStageFlagBits::eRaygenKHR:
+        return shaderc_glsl_raygen_shader;
+    case vk::ShaderStageFlagBits::eIntersectionKHR:
+        return shaderc_glsl_intersection_shader;
+    case vk::ShaderStageFlagBits::eAnyHitKHR:
+        return shaderc_glsl_anyhit_shader;
+    case vk::ShaderStageFlagBits::eClosestHitKHR:
+        return shaderc_glsl_closesthit_shader;
+    case vk::ShaderStageFlagBits::eMissKHR:
+        return shaderc_glsl_miss_shader;
+    case vk::ShaderStageFlagBits::eCallableKHR:
+        return shaderc_glsl_callable_shader;
+    case vk::ShaderStageFlagBits::eTaskNV:
+        return shaderc_glsl_task_shader;
+    case vk::ShaderStageFlagBits::eMeshNV:
+        return shaderc_glsl_mesh_shader;
+    default:
+        std::ostringstream err;
+        err << "Unsupported shared stage " << to_string(stage);
+        throw std::runtime_error(err.str());
     };
 }
 
-
 shaderc::CompileOptions getDefaultShaderCCompileOptions(const GlslShaderRequest &request) {
-    class VolcaniteShaderIncluder : public shaderc::CompileOptions::IncluderInterface
-    {
-    public:
+    class VolcaniteShaderIncluder : public shaderc::CompileOptions::IncluderInterface {
+      public:
         explicit VolcaniteShaderIncluder(std::vector<std::filesystem::path> include_paths)
-                : m_include_paths(std::move(include_paths)) {}
+            : m_include_paths(std::move(include_paths)) {}
 
-        shaderc_include_result* GetInclude(const char* requestedSource, shaderc_include_type type,
-                                           const char* requestingSource, size_t includeDepth) override {
+        shaderc_include_result *GetInclude(const char *requestedSource, shaderc_include_type type,
+                                           const char *requestingSource, size_t includeDepth) override {
 
-            auto* label_source = new std::pair<std::string, std::string>{std::string(requestedSource), ""};
+            auto *label_source = new std::pair<std::string, std::string>{std::string(requestedSource), ""};
 
             // check if the requested file exists in any of the include directories
             bool include_found = false;
@@ -283,28 +279,27 @@ shaderc::CompileOptions getDefaultShaderCCompileOptions(const GlslShaderRequest 
                         label_source->second = "could not open shader include file " + source_path.string();
                         return new shaderc_include_result{label_source->first.data(), label_source->first.size(),
                                                           label_source->second.data(), label_source->second.size(),
-                                                          label_source};                    }
+                                                          label_source};
+                    }
                     break;
                 }
                 if (i >= m_include_paths.size())
                     break;
                 include_dir = m_include_paths.at(i++);
-            } while(true);
+            } while (true);
 
             if (!include_found) {
                 label_source->first.clear();
-                label_source->second = "could not find shader file " + std::string(requestedSource)
-                                        + " for requesting shader " + std::string(requestingSource)
-                                        + " in include directories: ";
-                for (const auto& id : m_include_paths)
+                label_source->second = "could not find shader file " + std::string(requestedSource) + " for requesting shader " + std::string(requestingSource) + " in include directories: ";
+                for (const auto &id : m_include_paths)
                     label_source->second.append(id.string() + "; ");
                 label_source->second.append(std::filesystem::path(requestingSource).parent_path().string());
             }
             return new shaderc_include_result{label_source->first.data(), label_source->first.size(),
                                               label_source->second.data(), label_source->second.size(), label_source};
         }
-        void ReleaseInclude(shaderc_include_result* data) override {
-            auto* label_source = reinterpret_cast<std::pair<std::string, std::string>*>(data->user_data);
+        void ReleaseInclude(shaderc_include_result *data) override {
+            auto *label_source = reinterpret_cast<std::pair<std::string, std::string> *>(data->user_data);
             delete label_source;
             delete data;
         }
@@ -330,7 +325,7 @@ shaderc::CompileOptions getDefaultShaderCCompileOptions(const GlslShaderRequest 
 #ifdef NDEBUG
     options.AddMacroDefinition("NDEBUG");
 #endif
-    for (const auto &def: request.defines) {
+    for (const auto &def : request.defines) {
         if (def.find('=') != std::string::npos)
             options.AddMacroDefinition(def.substr(0, def.find('=')),
                                        def.substr(def.find('=') + 1, std::string::npos));
@@ -341,13 +336,11 @@ shaderc::CompileOptions getDefaultShaderCCompileOptions(const GlslShaderRequest 
     return options;
 }
 
-
-
 std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderRequest &request, bool write_spirv_tmp_file) {
 
     // obtain spirv output file path
     std::optional<std::filesystem::path> spirv_path =
-            write_spirv_tmp_file ? Paths::getTempFileForDataPath(request.shader_file_path) : std::optional<std::filesystem::path>{};
+        write_spirv_tmp_file ? Paths::getTempFileForDataPath(request.shader_file_path) : std::optional<std::filesystem::path>{};
 
     // read shader source file
     std::string glsl_source;
@@ -371,8 +364,8 @@ std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderR
     // (optional) run shader preprocessor to check for preprocessor failures
     if (false) {
         shaderc::PreprocessedSourceCompilationResult preprocess_result =
-                compiler.PreprocessGlsl(glsl_source, get_shaderc_kind(request.stage),
-                                        request.label.c_str(), options);
+            compiler.PreprocessGlsl(glsl_source, get_shaderc_kind(request.stage),
+                                    request.label.c_str(), options);
 
         if (preprocess_result.GetCompilationStatus() != shaderc_compilation_status_success) {
             throw ShaderCompileError(request, spirv_path.has_value() ? spirv_path.value() : "",
@@ -384,7 +377,7 @@ std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderR
 
     // compile the shader to spirv
     shaderc::SpvCompilationResult compilation_result =
-            compiler.CompileGlslToSpv(glsl_source, get_shaderc_kind(request.stage), request.label.c_str(), options);
+        compiler.CompileGlslToSpv(glsl_source, get_shaderc_kind(request.stage), request.label.c_str(), options);
 
     if (compilation_result.GetCompilationStatus() != shaderc_compilation_status_success) {
         throw ShaderCompileError(request, spirv_path.has_value() ? spirv_path.value() : "",
@@ -404,8 +397,8 @@ std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderR
         if (!request.defines.empty()) {
             size_t compile_hash = 0;
             // hash all defines
-            for (const std::string &define: request.defines) {
-                for (char c: define) {
+            for (const std::string &define : request.defines) {
+                for (char c : define) {
                     compile_hash = std::hash<char>{}(c) ^ (std::rotl<size_t>(compile_hash, 1));
                 }
             }
@@ -418,7 +411,7 @@ std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderR
         // write file
         std::ofstream spirv_file = std::ofstream(spirv_path.value(), std::ios::binary);
         if (spirv_file.is_open()) {
-            spirv_file.write(reinterpret_cast<const char*>(spirv_binary.data()),
+            spirv_file.write(reinterpret_cast<const char *>(spirv_binary.data()),
                              static_cast<std::streamsize>(spirv_binary.size() * sizeof(uint32_t)));
             spirv_file.close();
             alreadyCompilesSpirvFiles[request] = spirv_path.value();
@@ -430,7 +423,7 @@ std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderR
     return spirv_path;
 }
 
-std::filesystem::path Shader::compileGlslShaderCMD(const GlslShaderRequest& request) {
+std::filesystem::path Shader::compileGlslShaderCMD(const GlslShaderRequest &request) {
 
     // Verify that the shader file exists using std::filesystem
     if (!is_regular_file(request.shader_file_path)) {
@@ -446,17 +439,17 @@ std::filesystem::path Shader::compileGlslShaderCMD(const GlslShaderRequest& requ
     size_t compile_hash = 0;
     // hash all defines
     for (const std::string &define : request.defines) {
-            // old way to do it:
-            // spirv_path += '_';
-            // for (char c : define)
-            //     spirv_path += (c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z') ? c : '_';
-            for (char c : define) {
-                compile_hash = std::hash<char>{}(c) ^ (std::rotl<size_t>(compile_hash, 1));
-            }
+        // old way to do it:
+        // spirv_path += '_';
+        // for (char c : define)
+        //     spirv_path += (c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z') ? c : '_';
+        for (char c : define) {
+            compile_hash = std::hash<char>{}(c) ^ (std::rotl<size_t>(compile_hash, 1));
+        }
     }
     // here would be the place to add other compile time things to the hash
     // ..
-    if(compile_hash != 0)
+    if (compile_hash != 0)
         spirv_path += "_" + std::to_string(compile_hash);
     spirv_path += ".spv";
 
@@ -464,9 +457,9 @@ std::filesystem::path Shader::compileGlslShaderCMD(const GlslShaderRequest& requ
 
     // note: nothing here is escaped!
     cmd << vvv::shader_compiler_executable
-        << " --client vulkan100"                                 // Vulkan SPIR-V semantics
-        << " --target-env spirv1.6"                              // 1.6 is default for vulkan 1.3
-        << " --quiet"                                            // supress output of currently compiling file
+        << " --client vulkan100"                           // Vulkan SPIR-V semantics
+        << " --target-env spirv1.6"                        // 1.6 is default for vulkan 1.3
+        << " --quiet"                                      // supress output of currently compiling file
         << " -S " << get_shader_stage_name(request.stage); // select shader stage
 
     for (const auto &flag : request.defines) {
@@ -476,7 +469,7 @@ std::filesystem::path Shader::compileGlslShaderCMD(const GlslShaderRequest& requ
     cmd << " -DNDEBUG";
 #endif
 
-    for (auto& path : request.include_paths) {
+    for (auto &path : request.include_paths) {
         cmd << " -I\"" << path.string() << "\" ";
     }
 
@@ -493,7 +486,7 @@ std::filesystem::path Shader::compileGlslShaderCMD(const GlslShaderRequest& requ
         cmd_output += read_buffer;
     int cmd_ret = _pclose(cmd_stream);
 #else
-    FILE* cmd_stream = popen(cmd.str().c_str(), "r");
+    FILE *cmd_stream = popen(cmd.str().c_str(), "r");
     while (fgets(read_buffer, sizeof(read_buffer), cmd_stream))
         cmd_output += read_buffer;
     int cmd_ret = pclose(cmd_stream);
@@ -507,7 +500,7 @@ std::filesystem::path Shader::compileGlslShaderCMD(const GlslShaderRequest& requ
     return spirv_path;
 }
 
-void Shader::loadSpirvFromFile(const std::filesystem::path& path) {
+void Shader::loadSpirvFromFile(const std::filesystem::path &path) {
     std::ifstream source_file = std::ifstream(path, std::ios::binary);
     if (source_file.is_open()) {
         auto file_size = std::filesystem::file_size(path);
@@ -516,7 +509,7 @@ void Shader::loadSpirvFromFile(const std::filesystem::path& path) {
         if ((file_size / sizeof(uint32_t)) * sizeof(uint32_t) != file_size)
             throw std::runtime_error("SPIRV binary file " + path.string() + " is not a uint32 stream as expected.");
         spirv_binary.resize(file_size / sizeof(uint32_t));
-        source_file.read(reinterpret_cast<char*>(spirv_binary.data()), file_size);
+        source_file.read(reinterpret_cast<char *>(spirv_binary.data()), file_size);
         source_file.close();
     } else {
         throw std::runtime_error("could not open SPIRV file " + path.string());
@@ -564,7 +557,6 @@ std::vector<DescriptorSetLayout> Shader::reflectDescriptorLayouts() const {
     result = m_reflection->EnumerateDescriptorSets(&count, sets.data());
     assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
-
     std::vector<DescriptorSetLayout> set_layouts(sets.size(), DescriptorSetLayout{});
 
     for (size_t i_set = 0; i_set < sets.size(); ++i_set) {
@@ -590,7 +582,7 @@ std::vector<DescriptorSetLayout> Shader::reflectDescriptorLayouts() const {
     return set_layouts;
 }
 
-std::optional<DescriptorBinding> Shader::reflectBindingByName(const std::string& name) const {
+std::optional<DescriptorBinding> Shader::reflectBindingByName(const std::string &name) const {
     uint32_t count = 0;
     SpvReflectResult result;
     result = m_reflection->EnumerateDescriptorSets(&count, nullptr);
@@ -646,4 +638,4 @@ std::string _shader_include_dir = vvv::default_shader_include_dir;
 void setShaderIncludeDirectory(std::string v) { _shader_include_dir = v; }
 std::string const &getShaderIncludeDirectory() { return _shader_include_dir; }
 
-}
+} // namespace vvv

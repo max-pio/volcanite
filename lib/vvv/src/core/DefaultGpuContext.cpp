@@ -21,8 +21,8 @@
 
 #include <vvv/util/Logger.hpp>
 
-#include <thread>
 #include <cstdlib>
+#include <thread>
 
 bool vvv::DefaultGpuContext::hasEnabledInstanceExtension(const char *name) { return std::find(m_builder.instanceExtensions.begin(), m_builder.instanceExtensions.end(), name) != m_builder.instanceExtensions.end(); }
 bool vvv::DefaultGpuContext::hasEnabledInstanceLayer(const char *name) { return std::find(m_builder.instanceLayers.begin(), m_builder.instanceLayers.end(), name) != m_builder.instanceLayers.end(); }
@@ -84,19 +84,21 @@ void vvv::DefaultGpuContext::destroyGpuContext() {
 }
 
 bool is_instance_extension_supported(std::string name) {
-    const auto extensions = vk::enumerateInstanceExtensionProperties(); //get number of extensions
-    for (auto const& extension : extensions) {
+    const auto extensions = vk::enumerateInstanceExtensionProperties(); // get number of extensions
+    for (auto const &extension : extensions) {
         std::string ex_name = extension.extensionName;
-        if (ex_name == name) { return true; }
+        if (ex_name == name) {
+            return true;
+        }
     }
     return false;
 }
 
 bool log_supported_instance_extensions() {
-    const auto extensions = vk::enumerateInstanceExtensionProperties(); //get number of extensions
+    const auto extensions = vk::enumerateInstanceExtensionProperties(); // get number of extensions
     auto logline = vvv::Logger(vvv::Debug);
     logline << "supported instance extensions: ";
-    for (auto const& extension : extensions) {
+    for (auto const &extension : extensions) {
         logline << extension.extensionName << ", ";
     }
     return false;
@@ -104,9 +106,10 @@ bool log_supported_instance_extensions() {
 
 bool is_instance_layer_supported(std::string name) {
     const auto layers = vk::enumerateInstanceLayerProperties();
-    for (auto const& layer : layers) {
+    for (auto const &layer : layers) {
         std::string l_name = layer.layerName;
-        if (l_name == name) return true;
+        if (l_name == name)
+            return true;
     }
     return false;
 }
@@ -115,16 +118,18 @@ void log_supported_instance_layers() {
     const auto layers = vk::enumerateInstanceLayerProperties();
     auto logline = vvv::Logger(vvv::Debug);
     logline << "supported instance layers: ";
-    for (auto const& layer : layers) {
+    for (auto const &layer : layers) {
         logline << layer.layerName << ", ";
     }
 }
 
 bool is_device_extension_supported(vk::PhysicalDevice device, std::string name) {
-    const auto extensions = device.enumerateDeviceExtensionProperties(); //get number of extensions
-    for (auto const& extension : extensions) {
+    const auto extensions = device.enumerateDeviceExtensionProperties(); // get number of extensions
+    for (auto const &extension : extensions) {
         std::string ex_name = extension.extensionName;
-        if (ex_name == name) { return true; }
+        if (ex_name == name) {
+            return true;
+        }
     }
     return false;
 }
@@ -133,10 +138,10 @@ bool vvv::DefaultGpuContext::hasDeviceExtension(const char *name) const { return
 bool vvv::DefaultGpuContext::hasInstanceExtension(const char *name) const { return is_instance_extension_supported(std::string(name)); }
 
 bool log_supported_device_extensions(vk::PhysicalDevice device) {
-    const auto extensions = device.enumerateDeviceExtensionProperties(); //get number of extensions
+    const auto extensions = device.enumerateDeviceExtensionProperties(); // get number of extensions
     auto logline = vvv::Logger(vvv::Debug);
     logline << "supported device extensions: ";
-    for (auto const& extension : extensions) {
+    for (auto const &extension : extensions) {
         logline << extension.extensionName << ", ";
     }
     return false;
@@ -144,13 +149,13 @@ bool log_supported_device_extensions(vk::PhysicalDevice device) {
 
 void vvv::DefaultGpuContext::createInstance() {
 #if (VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1)
-    #if VK_HEADER_VERSION >= 255
-        VULKAN_HPP_DEFAULT_DISPATCHER.init();
-    #else
-        static vk::detail::DynamicLoader dl;
-        PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
-        VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
-    #endif
+#if VK_HEADER_VERSION >= 255
+    VULKAN_HPP_DEFAULT_DISPATCHER.init();
+#else
+    static vk::detail::DynamicLoader dl;
+    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
+#endif
 #endif
 
     // create vulkan instance
@@ -164,7 +169,7 @@ void vvv::DefaultGpuContext::createInstance() {
     log_supported_instance_extensions();
     Logger(Debug) << "enabling instance extensions:";
 
-    for(const auto& ext : extensions) {
+    for (const auto &ext : extensions) {
         Logger(Debug) << "    " << (is_instance_extension_supported(ext) ? "[x] " : "[ ] ") << ext;
     }
 
@@ -174,12 +179,11 @@ void vvv::DefaultGpuContext::createInstance() {
     for (size_t i = 0; i < m_builder.instanceLayers.size(); ++i)
         instanceLayers.push_back(const_cast<char *>(m_builder.instanceLayers[i].c_str()));
 
-
     log_supported_instance_layers();
     Logger(Debug) << "enabling instance layers:";
 
     const auto allLayers = vk::enumerateInstanceLayerProperties();
-    for(const auto& layer : instanceLayers) {
+    for (const auto &layer : instanceLayers) {
         Logger(Debug) << (is_instance_layer_supported(layer) ? "    [x] " : "    [ ] ") << layer;
     }
 
@@ -196,14 +200,14 @@ void vvv::DefaultGpuContext::createInstance() {
     // TODO: enabling DebugPrintf by default makes it impossible to enable GPU assisted validation (can only use one)
     vk::ValidationFeaturesEXT valFeatures;
     auto features = {vk::ValidationFeatureEnableEXT::eDebugPrintf,
-                                                      vk::ValidationFeatureEnableEXT::eSynchronizationValidation};
+                     vk::ValidationFeatureEnableEXT::eSynchronizationValidation};
     valFeatures.setEnabledValidationFeatures(features);
     valFeatures.pNext = instanceCreateInfo.pNext;
     instanceCreateInfo.pNext = &valFeatures;
 
     try {
         m_gpu.instance = vk::createInstance(instanceCreateInfo);
-    } catch (std::runtime_error& e) {
+    } catch (std::runtime_error &e) {
         Logger(Error) << "Error encountered in vk::createInstance(): " << e.what();
         Logger(Info) << "Try running with VK_LOADER_DEBUG=all to see errors from broken layers.";
         throw e;
@@ -217,11 +221,11 @@ void vvv::DefaultGpuContext::createInstance() {
 void vvv::DefaultGpuContext::destroyInstance() { VK_DESTROY(m_gpu.instance) }
 
 #if VK_HEADER_VERSION >= 309
-    static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugUtilsMessengerCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity, vk::DebugUtilsMessageTypeFlagsEXT messageTypes,
-                                                                      vk::DebugUtilsMessengerCallbackDataEXT const *pCallbackData, void * /*pUserData*/) {
+static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugUtilsMessengerCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity, vk::DebugUtilsMessageTypeFlagsEXT messageTypes,
+                                                                    vk::DebugUtilsMessengerCallbackDataEXT const *pCallbackData, void * /*pUserData*/) {
 #else
-    static VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageTypes,
-                                                                      VkDebugUtilsMessengerCallbackDataEXT const *pCallbackData, void * /*pUserData*/) {
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageTypes,
+                                                                  VkDebugUtilsMessengerCallbackDataEXT const *pCallbackData, void * /*pUserData*/) {
 #endif
 
     // Note: set to VK_TRUE, to abort after the first set of validation errors
@@ -284,25 +288,29 @@ void vvv::DefaultGpuContext::destroyInstance() { VK_DESTROY(m_gpu.instance) }
 
     auto severity = static_cast<vk::DebugUtilsMessageSeverityFlagBitsEXT>(messageSeverity);
     vvv::loglevel level = vvv::Info;
-    if      (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose) level = vvv::Debug;
-    else if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo)    level = vvv::Info;
-    else if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning) level = vvv::Warn;
-    else if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)   level = vvv::Error;
+    if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose)
+        level = vvv::Debug;
+    else if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo)
+        level = vvv::Info;
+    else if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning)
+        level = vvv::Warn;
+    else if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)
+        level = vvv::Error;
     auto err = vvv::Logger(level);
 
     // color validation message if it fits this known pattern
     std::string message = pCallbackData->pMessage;
     auto pos = message.find("encountered the following validation error at ");
     auto pos1 = message.find(": ", pos);
-    if (pos1 != std::string::npos) pos1 += 2;
+    if (pos1 != std::string::npos)
+        pos1 += 2;
     auto pos2 = message.find("The Vulkan spec states: ", pos1);
     auto pos3 = pos2 + std::string("The Vulkan spec states: ").size();
     auto pos4 = message.find(" (http", pos2);
     const auto bold_on = "\033[1m";
     const auto bold_off = "\033[22m";
     if (vvv::Logger::getUseColors() && pos1 != std::string::npos && pos2 != std::string::npos && pos3 != std::string::npos && pos4 != std::string::npos)
-        message = message.substr(0, pos1) + bold_on + message.substr(pos1, pos2 - pos1) + bold_off
-                + message.substr(pos2, pos3 - pos2) + bold_on + message.substr(pos3, pos4 - pos3) + bold_off + message.substr(pos4);
+        message = message.substr(0, pos1) + bold_on + message.substr(pos1, pos2 - pos1) + bold_off + message.substr(pos2, pos3 - pos2) + bold_on + message.substr(pos3, pos4 - pos3) + bold_off + message.substr(pos4);
 
     err << vk::to_string(static_cast<vk::DebugUtilsMessageTypeFlagsEXT>(messageTypes)) << ":\n";
     err << "\tmessageIDName   = <" << pCallbackData->pMessageIdName << ">\n";
@@ -337,9 +345,9 @@ void vvv::DefaultGpuContext::destroyInstance() { VK_DESTROY(m_gpu.instance) }
 vk::DebugUtilsMessengerCreateInfoEXT vvv::DefaultGpuContext::getDebugMessengerCreateInfo() const {
     const vk::DebugUtilsMessengerCreateInfoEXT debugUtilsInfo = {{},
                                                                  vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo |
-                                                                 vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError,
+                                                                     vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError,
                                                                  vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
-                                                                 vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation,
+                                                                     vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation,
                                                                  debugUtilsMessengerCallback};
 
     return debugUtilsInfo;
@@ -386,16 +394,17 @@ void vvv::DefaultGpuContext::createPhysicalDevice() {
     std::optional<int> firstSelection = {};
 
     // parse env variable
-    char* envStr = std::getenv("VOLCANITE_DEVICE");
+    char *envStr = std::getenv("VOLCANITE_DEVICE");
     if (envStr) {
         try {
             int selection = std::stoi(std::string(envStr));
             if (selection >= 0 && selection < devices.size())
                 envSelection = selection;
-            else Logger(Warn) << "Environment variable VOLCANITE_DEVICE is out of range. VOLCANITE_DEVICE will be ignored.";
-        } catch(std::invalid_argument& e) {
+            else
+                Logger(Warn) << "Environment variable VOLCANITE_DEVICE is out of range. VOLCANITE_DEVICE will be ignored.";
+        } catch (std::invalid_argument &e) {
             Logger(Warn) << "Environment variable VOLCANITE_DEVICE is not a valid number. VOLCANITE_DEVICE will be ignored.";
-        } catch(std::out_of_range& e) {
+        } catch (std::out_of_range &e) {
             Logger(Warn) << "Environment variable VOLCANITE_DEVICE is not a valid number. VOLCANITE_DEVICE will be ignored.";
         }
     }
@@ -405,10 +414,13 @@ void vvv::DefaultGpuContext::createPhysicalDevice() {
         const auto deviceProperties = devices[i].getProperties2();
         bool discrete = deviceProperties.properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
 
-        if (isBlacklistedPhysicalDevice(deviceProperties.properties)) continue;
+        if (isBlacklistedPhysicalDevice(deviceProperties.properties))
+            continue;
 
-        if (!firstSelection.has_value()) firstSelection = i;
-        if (discrete && !firstDiscreteSelection.has_value()) firstDiscreteSelection = i;
+        if (!firstSelection.has_value())
+            firstSelection = i;
+        if (discrete && !firstDiscreteSelection.has_value())
+            firstDiscreteSelection = i;
     }
 
     if (envSelection.has_value())
@@ -447,7 +459,7 @@ void vvv::DefaultGpuContext::createLogicalDevice() {
 
     Logger(Debug) << "enabling device layers:";
 
-    for(const auto& layer : enabledDeviceLayers) {
+    for (const auto &layer : enabledDeviceLayers) {
         Logger(Debug) << "    " << layer;
     }
 
@@ -459,7 +471,7 @@ void vvv::DefaultGpuContext::createLogicalDevice() {
     log_supported_device_extensions(getPhysicalDevice());
     Logger(Debug) << "enabling device extensions:";
 
-    for(const auto& ext : enabledDeviceExtensions) {
+    for (const auto &ext : enabledDeviceExtensions) {
         Logger(Debug) << "    " << (is_device_extension_supported(getPhysicalDevice(), ext) ? "[x] " : "[ ] ") << ext;
     }
 
@@ -487,16 +499,15 @@ void vvv::DefaultGpuContext::createLogicalDevice() {
     initContext();
 }
 
-void vvv::DefaultGpuContext::destroyLogicalDevice() {
-    VK_DESTROY(m_gpu.device)
-}
+void vvv::DefaultGpuContext::destroyLogicalDevice(){
+    VK_DESTROY(m_gpu.device)}
 
 vk::PhysicalDeviceSubgroupProperties vvv::DefaultGpuContext::getPhysicalDeviceSubgroupProperties() const {
     vk::PhysicalDeviceSubgroupProperties subgroupProperties;
     vk::PhysicalDeviceProperties2 deviceProperties2;
     deviceProperties2.pNext = &subgroupProperties;
 
-    if(hasDeviceExtension("VK_EXT_memory_budget"))
+    if (hasDeviceExtension("VK_EXT_memory_budget"))
         getPhysicalDevice().getProperties2(&deviceProperties2);
     return subgroupProperties;
 }

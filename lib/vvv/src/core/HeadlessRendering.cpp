@@ -18,8 +18,8 @@
 #include <vvv/util/Logger.hpp>
 #include <vvv/util/util.hpp>
 
-#include <fmt/core.h>
 #include "glm/ext/scalar_constants.hpp"
+#include <fmt/core.h>
 
 namespace vvv {
 
@@ -46,20 +46,20 @@ void HeadlessRendering::recreateSwapchain() {
 }
 
 RendererOutput HeadlessRendering::renderFrame(AwaitableList awaitBeforeExecution) {
-    if(m_pendingRecreation)
+    if (m_pendingRecreation)
         recreateSwapchain();
     return m_renderer->renderNextFrame(awaitBeforeExecution, {});
 }
 
-//std::thread HeadlessRendering::execAsyncAttached() {
-//    std::thread renderThread(&HeadlessRendering::exec, this);
-//    return renderThread;
-//}
+// std::thread HeadlessRendering::execAsyncAttached() {
+//     std::thread renderThread(&HeadlessRendering::exec, this);
+//     return renderThread;
+// }
 //
-//void HeadlessRendering::execAsync() { execAsyncAttached().detach(); }
+// void HeadlessRendering::execAsync() { execAsyncAttached().detach(); }
 
 std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRenderingConfig &cfg) {
-    if(!isGpuContextCreated())
+    if (!isGpuContextCreated())
         throw std::runtime_error("GPU context not available. You must call acquireResources() before rendering.");
     if (cfg.accumulation_samples == 0)
         throw std::runtime_error("Accumulation frames must be greater then zero.");
@@ -87,9 +87,8 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         camera_auto_rotate_frames = 1;
     }
 
-    Logger(Info) << "rendering " << (camera_auto_rotate_frames == 0u ? (" camera poses from " + cfg.record_file_in)
-                                                                     : (std::to_string(camera_auto_rotate_frames) +" camera pose(s)"))
-                   << " with " + std::to_string(cfg.accumulation_samples) << " frame(s) each";
+    Logger(Info) << "rendering " << (camera_auto_rotate_frames == 0u ? (" camera poses from " + cfg.record_file_in) : (std::to_string(camera_auto_rotate_frames) + " camera pose(s)"))
+                 << " with " + std::to_string(cfg.accumulation_samples) << " frame(s) each";
 
     // interpolation start and end values (rotation around Y axis and zoom)
     float roty_0, roty_1;
@@ -128,14 +127,14 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
             //     return x * x * x * (x * (6.f * x - 15.f) + 10.f);
             // }
 
-            // TODO: camera auto rotation in headless rendering could become a (configurable) camera controller 
+            // TODO: camera auto rotation in headless rendering could become a (configurable) camera controller
             float v = glm::smoothstep(0.01f, 0.99f, static_cast<float>(frame_idx) / static_cast<float>(camera_auto_rotate_frames));
             camera->rotation_y = glm::mix(roty_0, roty_1, v);
             camera->orbital_radius = glm::mix(rad_0, rad_1, v);
             camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
-                    camera->orbital_radius * glm::cos(camera->rotation_y) * glm::cos(camera->rotation_x),
-                    camera->orbital_radius * glm::sin(camera->rotation_x),
-                    camera->orbital_radius * glm::sin(camera->rotation_y) * glm::cos(camera->rotation_x));
+                                                                                      camera->orbital_radius * glm::cos(camera->rotation_y) * glm::cos(camera->rotation_x),
+                                                                                      camera->orbital_radius * glm::sin(camera->rotation_x),
+                                                                                      camera->orbital_radius * glm::sin(camera->rotation_y) * glm::cos(camera->rotation_x));
 
             camera->onCameraUpdate();
         }
@@ -149,7 +148,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
             m_renderer->exportCurrentFrameToImage(fmt::vformat(cfg.video_fmt_file_out, fmt::make_format_args(frame_idx)));
         }
 
-        if(cfg.frameFinishedCallback) {
+        if (cfg.frameFinishedCallback) {
             cfg.frameFinishedCallback(&rendererOutput);
         }
     }
@@ -163,9 +162,9 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     auto ret_tex = std::make_shared<Texture>(this, rendererOutput.texture->format, rendererOutput.texture->width, rendererOutput.texture->height,
                                              vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eStorage, std::set<uint32_t>{rendererOutput.queueFamilyIndex});
     ret_tex->ensureResources();
-    const auto layoutTransformDone = ret_tex->setImageLayout(vk::ImageLayout::eTransferDstOptimal, vk::PipelineStageFlagBits::eAllCommands, {.queueFamily=rendererOutput.queueFamilyIndex});
+    const auto layoutTransformDone = ret_tex->setImageLayout(vk::ImageLayout::eTransferDstOptimal, vk::PipelineStageFlagBits::eAllCommands, {.queueFamily = rendererOutput.queueFamilyIndex});
     rendererOutput.renderingComplete.push_back(layoutTransformDone);
-    sync->hostWaitOnDevice({this->executeCommands([rendererOutput, ret_tex](const vk::CommandBuffer cmd){
+    sync->hostWaitOnDevice({this->executeCommands([rendererOutput, ret_tex](const vk::CommandBuffer cmd) {
         auto width = rendererOutput.texture->width;
         auto height = rendererOutput.texture->height;
         const auto originalLayout = rendererOutput.texture->descriptor.imageLayout;
@@ -174,7 +173,8 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
                                  vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(width, height, 1));
         cmd.copyImage(rendererOutput.texture->image, vk::ImageLayout::eTransferSrcOptimal, ret_tex->image, vk::ImageLayout::eTransferDstOptimal, {copyRegion});
         rendererOutput.texture->setImageLayout(cmd, originalLayout);
-    }, {.queueFamily=rendererOutput.queueFamilyIndex, .await=rendererOutput.renderingComplete})});
+    },
+                                                  {.queueFamily = rendererOutput.queueFamilyIndex, .await = rendererOutput.renderingComplete})});
 
     // export the final frame to the video path
     if (!cfg.video_fmt_file_out.empty()) {
@@ -185,7 +185,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     }
 
     Logger(Info) << "rendering of " << (frame_idx * cfg.accumulation_samples)
-                      << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
+                 << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
     return ret_tex;
 }
 
@@ -207,7 +207,7 @@ void HeadlessRendering::createQueues() {
     debugMarker->setName(m_queues.graphics, "HeadlessRendering.m_queues.graphics");
     m_queues.compute = getDevice().getQueue(getQueueFamilyIndices().compute.value(), 0);
     debugMarker->setName(m_queues.compute, "HeadlessRendering.m_queues.compute");
-    m_queues.present = nullptr;     // we do not need a present queue in headless rendering
+    m_queues.present = nullptr; // we do not need a present queue in headless rendering
 }
 
 void HeadlessRendering::destroyQueues() {

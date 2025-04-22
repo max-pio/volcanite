@@ -23,9 +23,9 @@ namespace volcanite {
 
 class WaveletMatrixEncoder : public CSGVBrickEncoder {
 
-public:
+  public:
     WaveletMatrixEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask = OP_ALL)
-            : CSGVBrickEncoder(brick_size, encoding_mode, op_mask) {
+        : CSGVBrickEncoder(brick_size, encoding_mode, op_mask) {
         if (encoding_mode != WAVELET_MATRIX_ENC && encoding_mode != HUFFMAN_WM_ENC)
             throw std::runtime_error("WaveletMatrixEncoder must be used with (Huffman) WAVELET_MATRIX encoding mode.");
     }
@@ -103,7 +103,6 @@ public:
         throw std::runtime_error("freq encoding for random access not yet implemented");
     }
 
-
     // COMPONENT AND SHADER INTERFACE ----------------------------------------------------------------------------------
 
     /// @returns the index of the uint32_t element in the brick encoding / header that stores the palette size.
@@ -111,8 +110,8 @@ public:
 
     /// @returns a list of shader defines used during decoding which are passed to the shader compilation stage
     [[nodiscard]] virtual std::vector<std::string>
-                                getGLSLDefines(std::function<std::span<const uint32_t>(uint32_t)> getBrickEncodingSpan,
-                                               uint32_t brick_idx_count) const;
+    getGLSLDefines(std::function<std::span<const uint32_t>(uint32_t)> getBrickEncodingSpan,
+                   uint32_t brick_idx_count) const;
 
     // FILE IMPORT AND EXPORT ------------------------------------------------------------------------------------------
 
@@ -121,7 +120,7 @@ public:
                                       BV_L2_BIT_SIZE, BV_L2_WORD_SIZE, BV_STORE_L1_BITS, BV_STORE_L2_BITS,
                                       BV_WORD_BIT_SIZE, getWMHeaderIndex()};
         uint32_t hash = 0u;
-        for (const auto &k: keys)
+        for (const auto &k : keys)
             hash = (std::hash<unsigned char>{}(k ^ (std::rotl<size_t>(hash, 1))));
         return hash;
     }
@@ -154,26 +153,24 @@ public:
     /// A quick way of checking some invariants of CSGV representations to verify the compressed volume.
     /// Messages must be passed to error if and only if errors are found for this brick.
     void verifyBrickCompression(const uint32_t *brick_encoding, uint32_t brick_encoding_length,
-                                        const uint32_t *brick_detail_encoding, uint32_t brick_detail_encoding_length,
-                                        std::ostream &error) const override;
-
+                                const uint32_t *brick_detail_encoding, uint32_t brick_detail_encoding_length,
+                                std::ostream &error) const override;
 
     /// @brief returns count many operations starting from offset as a string
     [[nodiscard]] std::string
     outputOperationStream(std::span<const uint32_t> encoding, uint32_t offset, uint32_t count) const;
 
-    void getBrickStatistics(std::map<std::string, float>& statistics,
-                            const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
+    void getBrickStatistics(std::map<std::string, float> &statistics,
+                            const uint32_t *brick_encoding, const uint32_t brick_encoding_length,
                             glm::uvec3 valid_brick_size) const override;
 
-private:
+  private:
     static uint32_t decompressCSGVBrickVoxelWM(uint32_t output_i, uint32_t target_inv_lod,
                                                glm::uvec3 valid_brick_size,
                                                const uint32_t *brick_encoding,
                                                uint32_t brick_encoding_length,
                                                const WMBrickHeader *wm_header,
                                                const BV_WordType *bit_vector);
-
 
     static uint32_t decompressCSGVBrickVoxelWMHuffman(uint32_t output_i, uint32_t target_inv_lod,
                                                       glm::uvec3 valid_brick_size,
@@ -182,7 +179,6 @@ private:
                                                       const WMHBrickHeader *wm_header,
                                                       const BV_WordType *bit_vector,
                                                       const FlatRank_BitVector_ptrs &stop_bits);
-
 
     // ===============================================================================================================//
     //                                         ENCODING COMPONENT ACCESS                                              //
@@ -204,16 +200,15 @@ private:
     }
 
     // Wavelet Matrix -------
-    inline const WMBrickHeader* getWMBrickHeaderFromEncoding(const uint32_t* v) const;
-    inline const BV_WordType* getWMBitVectorFromEncoding(const uint32_t* v) const;
+    inline const WMBrickHeader *getWMBrickHeaderFromEncoding(const uint32_t *v) const;
+    inline const BV_WordType *getWMBitVectorFromEncoding(const uint32_t *v) const;
 
     // Huffman Wavelet Matrix -------
-    inline const WMHBrickHeader* getWMHBrickHeaderFromEncoding(const uint32_t* v) const;
-    inline const BV_L12Type* getWMHFlatRankFromEncoding(const uint32_t* v) const;
-    inline const BV_WordType* getWMHBitVectorFromEncoding(const uint32_t* v) const;
-    FlatRank_BitVector_ptrs getWMHStopBitsFromEncoding(const uint32_t* brick_encoding,
+    inline const WMHBrickHeader *getWMHBrickHeaderFromEncoding(const uint32_t *v) const;
+    inline const BV_L12Type *getWMHFlatRankFromEncoding(const uint32_t *v) const;
+    inline const BV_WordType *getWMHBitVectorFromEncoding(const uint32_t *v) const;
+    FlatRank_BitVector_ptrs getWMHStopBitsFromEncoding(const uint32_t *brick_encoding,
                                                        uint32_t brick_encoding_length, uint32_t palette_size) const;
-
 };
 
 } // namespace volcanite

@@ -29,7 +29,7 @@ struct GpuContextOptions {
 
 struct HeadFeaturesKhr {
     VkStructureType sType;
-    void* pNext;
+    void *pNext;
 };
 
 /// A collection of all vulkan resources that are usually acquired during
@@ -40,7 +40,7 @@ struct HeadFeaturesKhr {
 /// like `Renderer::initSwapchainResources` should just be understood as events
 /// that only announce change for data within the stable class reference.
 class DefaultGpuContext : public GpuContext {
-public:
+  public:
     DefaultGpuContext(GpuContextOptions const opts) : GpuContext(opts.debugUtilities) {
         m_builder.appName = opts.appName;
         m_builder.enableDebug = opts.enableDebug;
@@ -61,10 +61,10 @@ public:
 
     /// Lots of extensions require you to enable features on some <...FeaturesKHR> struct. You can enable these features
     /// by passing them to this function. Make sure to keep the pointer valid until after the context is created.
-    void physicalDeviceAddExtensionFeatures(void* featuresKhr) override {
+    void physicalDeviceAddExtensionFeatures(void *featuresKhr) override {
         // put the new extension features object at the beginning of the linked list of config objects
         // we do not have to check for nullpointers since we always manually append `PhysicalDeviceVulkan12Features` at startup.
-        static_cast<HeadFeaturesKhr*>(featuresKhr)->pNext = m_builder.deviceFeatures2.pNext;
+        static_cast<HeadFeaturesKhr *>(featuresKhr)->pNext = m_builder.deviceFeatures2.pNext;
         m_builder.deviceFeatures2.pNext = featuresKhr;
     }
 
@@ -92,13 +92,13 @@ public:
 
     ~DefaultGpuContext() { destroyGpuContext(); }
 
-protected:
+  protected:
     /// by default, a context without present capabilities will be created
     virtual vk::SurfaceKHR createSurface() { return nullptr; };
     virtual void destroySurface();
     vk::SurfaceKHR getSurface() { return m_gpu.surface; }
 
-private:
+  private:
     vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerCreateInfo() const;
     bool isDebugMessengerEnabled() const { return std::find(m_builder.instanceLayers.begin(), m_builder.instanceLayers.end(), "VK_LAYER_KHRONOS_validation") != m_builder.instanceLayers.end(); }
 

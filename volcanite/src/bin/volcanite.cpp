@@ -13,22 +13,22 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include "vvv/util/Logger.hpp"
 #include "vvv/core/HeadlessRendering.hpp"
+#include "vvv/util/Logger.hpp"
 #ifdef HEADLESS
-    #include "vvv/headless_entrypoint.hpp"
+#include "vvv/headless_entrypoint.hpp"
 #else
-    #include "vvvwindow/App.hpp"
-    #include "vvvwindow/entrypoint.hpp"
+#include "vvvwindow/App.hpp"
+#include "vvvwindow/entrypoint.hpp"
 #endif
 
-#include "volcanite/util/args_and_csgv_provider.hpp"
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/VolcaniteArgs.hpp"
-#include "volcanite/compression/CompressedSegmentationVolume.hpp"
-#include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "volcanite/compression/CSGVDatabase.hpp"
+#include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/eval/EvaluationLogExport.hpp"
+#include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
+#include "volcanite/util/args_and_csgv_provider.hpp"
 #include "vvv/volren/Volume.hpp"
 
 #include <string>
@@ -37,24 +37,23 @@
 
 using namespace volcanite;
 
-int export_texture(Texture* tex, const std::string& export_file_path) {
+int export_texture(Texture *tex, const std::string &export_file_path) {
     try {
         Logger(Info) << "Exporting render output to " << export_file_path;
         tex->writeFile(export_file_path);
-    }
-    catch(const std::runtime_error& e) {
+    } catch (const std::runtime_error &e) {
         Logger(Error) << "Render export error: " << e.what();
         return RET_IO_ERROR;
     }
     return 0;
 }
 
-int tryImportRenderConfigs(VolcaniteArgs& args, std::shared_ptr<CompressedSegmentationVolumeRenderer> renderer) {
+int tryImportRenderConfigs(VolcaniteArgs &args, std::shared_ptr<CompressedSegmentationVolumeRenderer> renderer) {
     // set the startup resolution
-    //renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
+    // renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
     // the config arg is a list of vcfg files
 
-    for (const auto& config: args.rendering_configs) {
+    for (const auto &config : args.rendering_configs) {
         if (config.ends_with(".vcfg") || renderer->getParameterPreset(config) != nullptr) {
             if (!renderer->readParameterFile(config, VOLCANITE_VERSION))
                 return RET_INVALID_ARG;
@@ -63,8 +62,7 @@ int tryImportRenderConfigs(VolcaniteArgs& args, std::shared_ptr<CompressedSegmen
             // [window_name] {parameter_label_1}: {parameter_values_1}
             long window_name_end = static_cast<long>(config.find(']'));
             long label_name_end = static_cast<long>(config.find(':'));
-            if (!config.starts_with('[') || window_name_end == std::string::npos
-                || label_name_end == std::string::npos || label_name_end <= window_name_end) {
+            if (!config.starts_with('[') || window_name_end == std::string::npos || label_name_end == std::string::npos || label_name_end <= window_name_end) {
                 Logger(Warn) << "Invalid config '" << config << "'. Configs must be in the form [{window}] {label}: {values}";
                 continue;
             }
@@ -73,8 +71,8 @@ int tryImportRenderConfigs(VolcaniteArgs& args, std::shared_ptr<CompressedSegmen
             vcfg_stream << config.substr(0, window_name_end + 1) << '\n';
             // folllowed by another line for the parameter: {label}: {values}
             std::string_view label_view(config.begin() + window_name_end + 1, config.begin() + label_name_end + 1); // end of config string
-            label_view.remove_prefix(std::min(label_view.find_first_not_of(' '), label_view.size())); // remove leading spaces
-            auto sanitized_string = std::string(label_view); // replace spaces in name with _ (as is done in vcfg files)
+            label_view.remove_prefix(std::min(label_view.find_first_not_of(' '), label_view.size()));               // remove leading spaces
+            auto sanitized_string = std::string(label_view);                                                        // replace spaces in name with _ (as is done in vcfg files)
             std::ranges::replace(sanitized_string, ' ', '_');
             vcfg_stream << sanitized_string << config.substr(label_name_end + 1) << '\n';
             renderer->readParameters(vcfg_stream, VOLCANITE_VERSION, true);
@@ -88,9 +86,11 @@ int volcanite_main(int argc, char *argv[]) {
     std::shared_ptr<volcanite::CompressedSegmentationVolume> compressedSegmentationVolume;
     std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase;
     auto ret = volcanite_provide_args_and_csgv(args, compressedSegmentationVolume, csgvDatabase, argc, argv);
-    if (ret != RET_SUCCESS) { return ret; }
+    if (ret != RET_SUCCESS) {
+        return ret;
+    }
 
-    if(args.performDecompression()) {
+    if (args.performDecompression()) {
         auto payload = compressedSegmentationVolume->decompress();
         auto dim = compressedSegmentationVolume->getVolumeDim();
         vvv::Volume<uint32_t> decompressed_volume{static_cast<float>(dim.x), static_cast<float>(dim.y), static_cast<float>(dim.z),
@@ -101,7 +101,7 @@ int volcanite_main(int argc, char *argv[]) {
             Logger(Info) << "volume decompressed to " << args.decompress_export_file;
     }
 
-    if(args.export_stats) {
+    if (args.export_stats) {
         Logger(Info, true) << "export brick statistics...";
         std::string stats_path = stripFileExtension(args.input_file) + "_brickstats.csv";
         csv_export(compressedSegmentationVolume->gatherBrickStatistics(), stats_path);
@@ -115,23 +115,23 @@ int volcanite_main(int argc, char *argv[]) {
         Logger(Info) << "initializing Volcanite renderer";
 
         // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
-        if(args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
+        if (args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
             Logger(Debug) << "separating detail level encoding for streaming";
             compressedSegmentationVolume->separateDetail();
             Logger(Debug) << compressedSegmentationVolume->getEncodingInfoString();
         }
 
         // if the attribute database is a dummy, we update the min/max attribute values for the volume labels
-        if(csgvDatabase->isDummy())
+        if (csgvDatabase->isDummy())
             csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
 
         const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
-        renderer->setDecodingParameters({.cache_size_MB=args.cache_size_MB,
-                                         .palettized_cache=args.cache_palettized,
-                                         .decode_from_shared_memory=args.decode_from_shared_memory,
-                                         .cache_mode=args.cache_mode,
-                                         .empty_space_resolution=args.empty_space_resolution,
-                                         .shader_defines=args.shader_defines});
+        renderer->setDecodingParameters({.cache_size_MB = args.cache_size_MB,
+                                         .palettized_cache = args.cache_palettized,
+                                         .decode_from_shared_memory = args.decode_from_shared_memory,
+                                         .cache_mode = args.cache_mode,
+                                         .empty_space_resolution = args.empty_space_resolution,
+                                         .shader_defines = args.shader_defines});
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
         renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
 
@@ -153,37 +153,35 @@ int volcanite_main(int argc, char *argv[]) {
             } else {
                 // if a video is rendered, ensure that the render will converge for at least the number
                 // of internal frames renderered for each output frame.
-                if (renderer->getTargetAccumulationFrames() > 0u
-                     && renderer->getTargetAccumulationFrames() < accumulation_frames)
+                if (renderer->getTargetAccumulationFrames() > 0u && renderer->getTargetAccumulationFrames() < accumulation_frames)
                     renderer->setTargetAccumulationFrames(static_cast<int>(accumulation_frames));
             }
 
             if (!args.eval_logfiles.empty())
                 renderer->startFrameTimeTracking();
-            auto texture = renderEngine->renderFrames({.record_file_in=args.record_in_file,
-                                                       .video_fmt_file_out=args.video_output_fmt_file,
-                                                       .accumulation_samples=accumulation_frames});
+            auto texture = renderEngine->renderFrames({.record_file_in = args.record_in_file,
+                                                       .video_fmt_file_out = args.video_output_fmt_file,
+                                                       .accumulation_samples = accumulation_frames});
             if (!args.eval_logfiles.empty()) {
                 renderer->stopFrameTimeTracking({}); // stopFrameTimeTracking is already called by renderEngine
                 renderer->writeParameterFile(stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg");
             }
 
             // export final frame
-            if (!args.screenshot_output_file.empty()
-                && (texture == nullptr || export_texture(texture.get(), args.screenshot_output_file))) {
+            if (!args.screenshot_output_file.empty() && (texture == nullptr || export_texture(texture.get(), args.screenshot_output_file))) {
                 Logger(Error) << "could not export final render frame to " << args.screenshot_output_file;
                 return RET_RENDER_ERROR;
             }
-            for (const auto& eval_logfile : args.eval_logfiles) {
+            for (const auto &eval_logfile : args.eval_logfiles) {
                 if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
-                                       compressedSegmentationVolume->getLastEvaluationResults(),
-                                       {}, // TODO: decompression benchmark
-                                       renderer->getLastEvaluationResults())) {
+                                                             compressedSegmentationVolume->getLastEvaluationResults(),
+                                                             {}, // TODO: decompression benchmark
+                                                             renderer->getLastEvaluationResults())) {
                     Logger(Info) << "exported evaluation results to " << eval_logfile;
-                                       } else {
-                                           Logger(Warn) << "could not export evaluation results to " << eval_logfile;
-                                           return RET_IO_ERROR;
-                                       }
+                } else {
+                    Logger(Warn) << "could not export evaluation results to " << eval_logfile;
+                    return RET_IO_ERROR;
+                }
             }
             texture.reset();
             texture = nullptr;
@@ -194,8 +192,7 @@ int volcanite_main(int argc, char *argv[]) {
         // only start the application if we are not in headless mode
         if (!args.headless) {
             // we only need the rendering part for screenshots/videos or the interactive app
-            const std::string appName = "Volcanite " + VolcaniteArgs::getVolcaniteVersionString()
-                                        + "  " + compressedSegmentationVolume->getLabel();
+            const std::string appName = "Volcanite " + VolcaniteArgs::getVolcaniteVersionString() + "  " + compressedSegmentationVolume->getLabel();
             auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());
 
             // export the state of the renderer next to the input or csgv volume when the app is closed,
@@ -216,19 +213,18 @@ int volcanite_main(int argc, char *argv[]) {
             return app->exec();
         }
 #endif
-    }
-    else {
+    } else {
         // If no rendering is requested: export the copmression results here
-        for (const auto& eval_logfile : args.eval_logfiles) {
+        for (const auto &eval_logfile : args.eval_logfiles) {
             if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
-                                   compressedSegmentationVolume->getLastEvaluationResults(),
-                                   {}, // TODO: decompression benchmark
-                                   {})) {
+                                                         compressedSegmentationVolume->getLastEvaluationResults(),
+                                                         {}, // TODO: decompression benchmark
+                                                         {})) {
                 Logger(Info) << "exported evaluation results to " << eval_logfile;
-                                   } else {
-                                       Logger(Warn) << "could not export evaluation results to " << eval_logfile;
-                                       return RET_IO_ERROR;
-                                   }
+            } else {
+                Logger(Warn) << "could not export evaluation results to " << eval_logfile;
+                return RET_IO_ERROR;
+            }
         }
     }
 

@@ -23,8 +23,8 @@
 namespace volcanite {
 
 WaveletMatrix::WaveletMatrix(const uint32_t *op_stream_in, uint32_t start4bit, uint32_t end4bit)
-                                : WaveletMatrixBase(op_stream_in, start4bit, end4bit),
-                                  m_bv(m_text_size * WM_LEVELS), m_zeros_on_level(), m_ones_before() {
+    : WaveletMatrixBase(op_stream_in, start4bit, end4bit),
+      m_bv(m_text_size * WM_LEVELS), m_zeros_on_level(), m_ones_before() {
     // construct the concatenated bit vector
     prefix_counting(op_stream_in, start4bit, end4bit, m_bv);
     // construct flat rank acceleration structure over the bit vector
@@ -50,10 +50,10 @@ uint32_t WaveletMatrix::access(uint32_t position) const {
         if (bit) {
             result |= 1ULL;
             position =
-                    (level + 1) * m_text_size + m_zeros_on_level[level] + ones_before;
+                (level + 1) * m_text_size + m_zeros_on_level[level] + ones_before;
         } else {
             size_t const zeros_before =
-                    (position - (level * m_text_size)) - ones_before;
+                (position - (level * m_text_size)) - ones_before;
             position = (level + 1) * m_text_size + zeros_before;
         }
         if (level < WM_LEVELS - 1u)
@@ -68,9 +68,9 @@ uint32_t WaveletMatrix::rank(uint32_t position, uint32_t symbol) const {
     for (size_t level = 0; level < WM_LEVELS && position > 0; ++level) {
         size_t const ones_before_interval = m_fr->rank1(interval_start);
         size_t const ones_before_position =
-                m_fr->rank1(interval_start + position) - ones_before_interval;
+            m_fr->rank1(interval_start + position) - ones_before_interval;
         size_t const ones_in_interval =
-                ones_before_interval - m_ones_before[level];
+            ones_before_interval - m_ones_before[level];
         if (symbol & bit_mask) {
             position = ones_before_position;
             interval_start = ((level + 1) * m_text_size) + m_zeros_on_level[level] +
@@ -78,8 +78,8 @@ uint32_t WaveletMatrix::rank(uint32_t position, uint32_t symbol) const {
         } else {
             position = position - ones_before_position;
             interval_start =
-                    ((level + 1) * m_text_size) +
-                    (interval_start - (level * m_text_size) - ones_in_interval);
+                ((level + 1) * m_text_size) +
+                (interval_start - (level * m_text_size) - ones_in_interval);
         }
         bit_mask >>= 1;
     }

@@ -22,46 +22,48 @@
 
 namespace vvv {
 
-const std::map<PassSsao::Algorithm, const char*> PassSsao::algorithmToDefine = {
+const std::map<PassSsao::Algorithm, const char *> PassSsao::algorithmToDefine = {
     {Crytek, "SSAO_CRYTEK"},
     {Starcraft, "SSAO_STARCRAFT"},
-    {Hbao, "SSAO_HBAO"}
-};
-const std::map<PassSsao::Algorithm, const char*> PassSsao::algorithmToGuiNames = {
+    {Hbao, "SSAO_HBAO"}};
+const std::map<PassSsao::Algorithm, const char *> PassSsao::algorithmToGuiNames = {
     {Crytek, "Crytek SSAO"},
     {Starcraft, "Starcraft SSAO (default)"},
-    {Hbao, "HBAO"}
-};
-
+    {Hbao, "HBAO"}};
 
 PassSsao::PassSsao(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering> &multiBuffering, vk::ImageUsageFlags outputImageUsage, const std::string &label, Algorithm algorithm)
     : WithGpuContext(ctx), WithMultiBuffering(multiBuffering), g_ssaoAlgorithm(algorithm),
       SinglePassCompute(SinglePassComputeSettings{.ctx = ctx, .label = label, .multiBuffering = multiBuffering, .queueFamilyIndex = ctx->getQueueFamilyIndices().graphics.value()},
-                        SimpleGlslShaderRequest{.filename = "passes/ssao.comp", .defines = {algorithmToDefine.at(algorithm)}, .label = label + ".shader", }),
+                        SimpleGlslShaderRequest{
+                            .filename = "passes/ssao.comp",
+                            .defines = {algorithmToDefine.at(algorithm)},
+                            .label = label + ".shader",
+                        }),
       m_outputImageUsage(outputImageUsage), m_perFrameConstantsUniform(nullptr) {}
 
-void PassSsao::addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int, bool)>> shaderRecompileCallback) {
+void PassSsao::addToGui(GuiInterface::GuiElementList *gui, std::optional<std::function<void(int, bool)>> shaderRecompileCallback) {
     const bool allowAlgorithmToChange = shaderRecompileCallback.has_value();
     if (allowAlgorithmToChange) {
         std::vector<std::string> options;
-        for (auto& [algorithm, text] : algorithmToGuiNames)
+        for (auto &[algorithm, text] : algorithmToGuiNames)
             options.emplace_back(text);
 
-        gui->addCombo(reinterpret_cast<int*>(&g_ssaoAlgorithm), options, shaderRecompileCallback.value());
+        gui->addCombo(reinterpret_cast<int *>(&g_ssaoAlgorithm), options, shaderRecompileCallback.value());
     }
     gui->addInt(&g_ssaoNumSamples, "Num Samples");
     gui->addFloat(&g_ssaoRadius, "Radius", 0.001f, 1.0f, 0.001f, 3);
 
     if (allowAlgorithmToChange) {
         // implement settings as dynamic ImGui code to that the gui changes along with g_ssaoAlgorithm
-        gui->addCustomCode([this](){
+        gui->addCustomCode([this]() {
             if (g_ssaoAlgorithm == Starcraft || g_ssaoAlgorithm == Hbao)
                 ImGui::SliderFloat("Bias", &g_ssaoBias, 0, 0.1f);
             if (g_ssaoAlgorithm == Starcraft)
                 ImGui::SliderFloat("Falloff", &g_ssaoFalloff, 0, 15);
             if (g_ssaoAlgorithm == Hbao)
                 ImGui::SliderInt("Num Steps", &g_ssaoNumSteps, 1, 32);
-        }, "");
+        },
+                           "");
     } else {
         // we can use static gui->add*() here
         if (g_ssaoAlgorithm == Starcraft || g_ssaoAlgorithm == Hbao)
@@ -97,7 +99,8 @@ void PassSsao::initSwapchainResources() {
     opts.usage |= m_outputImageUsage;
     m_outputTextures = reflectTextures("outputTexture", opts);
 
-    for (auto& tex : *m_outputTextures) tex->initResources();
+    for (auto &tex : *m_outputTextures)
+        tex->initResources();
 }
 
 void PassSsao::releaseSwapchain() {
@@ -153,11 +156,15 @@ void PassSsao::updateUniforms(uint32_t index) {
 
 void PassSsao::allocateResources() {
     // again set shader args here to allow freeResources()+allocateResources() cycle to change the algorithm
-    SinglePassCompute::setShaderArgs(SimpleGlslShaderRequest{.filename = "passes/ssao.comp", .defines = {algorithmToDefine.at(g_ssaoAlgorithm)}, .label = m_label + ".shader", });
+    SinglePassCompute::setShaderArgs(SimpleGlslShaderRequest{
+        .filename = "passes/ssao.comp",
+        .defines = {algorithmToDefine.at(g_ssaoAlgorithm)},
+        .label = m_label + ".shader",
+    });
 
     SinglePassCompute::allocateResources();
 
     m_perFrameConstantsUniform = getUniformSet("per_frame_constants");
 }
 
-}
+} // namespace vvv

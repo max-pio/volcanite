@@ -25,7 +25,7 @@ void renderGuiTF1D(GuiInterface::GuiTF1DEntry &entry) {
     if (!entry.widgetData.has_value())
         entry.widgetData.emplace<GuiTF1DData>(entry);
 
-    std::any_cast<GuiTF1DData&>(entry.widgetData).renderGui();
+    std::any_cast<GuiTF1DData &>(entry.widgetData).renderGui();
 }
 
 inline glm::vec2 fromPixelSpace(glm::vec2 canvas_p0, glm::vec2 canvas_sz, glm::vec2 v) {
@@ -98,14 +98,14 @@ bool GuiTF1DData::renderButtons() {
         ImGui::SameLine();
 
         const char *currColormapName = "colormap";
-        for (int i = 0; auto& [name, _] : vvv::colormaps::colormaps) {
+        for (int i = 0; auto &[name, _] : vvv::colormaps::colormaps) {
             if (i == selectedColorMap.value_or(-1))
                 currColormapName = name.c_str();
             i++;
         }
         ImGui::SetNextItemWidth(ImGui::CalcTextSize("black, orange and white").x + 30);
         if (ImGui::BeginCombo("", currColormapName)) {
-            for (int n = 0; auto& [name, value] : vvv::colormaps::colormaps) {
+            for (int n = 0; auto &[name, value] : vvv::colormaps::colormaps) {
                 const bool is_selected = selectedColorMap.value_or(-1) == n;
                 if (ImGui::Selectable(name.c_str(), is_selected)) {
                     selectedColorMap = n;
@@ -149,7 +149,7 @@ void GuiTF1DData::renderCanvas(glm::vec2 canvas_p0, glm::vec2 canvas_sz) {
                     x = (x - *entry.histogramMin) / (*entry.histogramMax - *entry.histogramMin);
                 return x;
             };
-            auto p0 = toPixelSpace(canvas_p0, canvas_sz, {transform(i),       0.0f});
+            auto p0 = toPixelSpace(canvas_p0, canvas_sz, {transform(i), 0.0f});
             auto p1 = toPixelSpace(canvas_p0, canvas_sz, {transform(i + 1), (*entry.histogram)[i] / maxValue});
 
             draw_list->AddRectFilled(p0, p1, ImGui::GetColorU32(IM_COL32(128, 128, 128, 128)));
@@ -160,10 +160,10 @@ void GuiTF1DData::renderCanvas(glm::vec2 canvas_p0, glm::vec2 canvas_sz) {
     auto black = ImGui::GetColorU32(IM_COL32(0, 0, 0, 255));
     auto white = ImGui::GetColorU32(IM_COL32(255, 255, 255, 255));
     for (int i = 0; i < tf.m_controlPointsOpacity.size() / 2 - 1; i++) {
-        draw_list->AddLine(toPixelSpace(canvas_p0, canvas_sz, {tf.m_controlPointsOpacity[2 * i],     tf.m_controlPointsOpacity[2 * i + 1]}),
+        draw_list->AddLine(toPixelSpace(canvas_p0, canvas_sz, {tf.m_controlPointsOpacity[2 * i], tf.m_controlPointsOpacity[2 * i + 1]}),
                            toPixelSpace(canvas_p0, canvas_sz, {tf.m_controlPointsOpacity[2 * i + 2], tf.m_controlPointsOpacity[2 * i + 3]}),
                            black, 3);
-        draw_list->AddLine(toPixelSpace(canvas_p0, canvas_sz, {tf.m_controlPointsOpacity[2 * i],     tf.m_controlPointsOpacity[2 * i + 1]}),
+        draw_list->AddLine(toPixelSpace(canvas_p0, canvas_sz, {tf.m_controlPointsOpacity[2 * i], tf.m_controlPointsOpacity[2 * i + 1]}),
                            toPixelSpace(canvas_p0, canvas_sz, {tf.m_controlPointsOpacity[2 * i + 2], tf.m_controlPointsOpacity[2 * i + 3]}),
                            white, 1);
     }
@@ -236,7 +236,7 @@ bool GuiTF1DData::isSorted() {
 }
 
 void GuiTF1DData::sort() {
-    auto& opacity = tf.m_controlPointsOpacity;
+    auto &opacity = tf.m_controlPointsOpacity;
 
     using CP = std::tuple<int, float, float>;
     std::vector<CP> controlPoints(opacity.size() / 2);
@@ -247,15 +247,15 @@ void GuiTF1DData::sort() {
     std::sort(controlPoints.begin(), controlPoints.end(), [](CP a, CP b) { return std::get<1>(a) < std::get<1>(b); });
 
     int newSelection = 0;
-    for (int i = 0; auto& [idx, x, y] : controlPoints) {
+    for (int i = 0; auto &[idx, x, y] : controlPoints) {
         if (selectedControlPoint == idx) {
             newSelection = i;
         }
-        opacity[2 * i]     = x;
+        opacity[2 * i] = x;
         opacity[2 * i + 1] = y;
         i++;
     }
     selectedControlPoint = newSelection;
 }
 
-}
+} // namespace vvv

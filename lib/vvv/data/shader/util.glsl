@@ -17,24 +17,24 @@
 #define UTIL_H
 
 #ifdef NDEBUG
-    #define assert(X, S)
-    #define assertf(X, S, P)
+#define assert(X, S)
+#define assertf(X, S, P)
 #else
-    #define assert(X, S) if(!(X)) debugPrintfEXT(S)
-    #define assertf(X, S, P) if(!(X)) debugPrintfEXT(S, P)
+#define assert(X, S) if(!(X)) debugPrintfEXT(S)
+#define assertf(X, S, P) if(!(X)) debugPrintfEXT(S, P)
 #endif
 
 #ifndef PI
-    #define PI 3.14159265359f
+#define PI 3.14159265359f
 #endif
 #ifndef TWO_PI
-    #define TWO_PI 6.28318530718f
+#define TWO_PI 6.28318530718f
 #endif
 #ifndef ONE_OVER_PI
-    #define ONE_OVER_PI 0.3183098861837907f
+#define ONE_OVER_PI 0.3183098861837907f
 #endif
 #ifndef ONE_OVER_TWO_PI
-    #define ONE_OVER_TWO_PI 0.1591549430918953f
+#define ONE_OVER_TWO_PI 0.1591549430918953f
 #endif
 
 /// Check whether a dispatched thread is out of bounds.
@@ -68,7 +68,7 @@ bool isHelperLane(uint invocationIdx, uint targetSize) {
 // color converters released by Sam Hocevar into the public domain (CC0)
 // see: https://www.shadertoy.com/view/tstcDX
 vec3 hsl2rgb(in vec3 c) {
-    vec3 rgb = clamp( abs(mod(c.x*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0, 0.0, 1.0 );
+    vec3 rgb = clamp(abs(mod(c.x*6.0+vec3(0.0, 4.0, 2.0), 6.0)-3.0)-1.0, 0.0, 1.0);
     return c.z + c.y * (rgb-0.5)*(1.0-abs(2.0*c.z-1.0));
 }
 vec3 rgb2hsv(vec3 c) {
@@ -114,7 +114,7 @@ vec3 tonemap_ACES(vec3 x)  {
 }
 
 vec3 integer2colorlabel(uint id, bool linear) {
-    if(!linear) {
+    if (!linear) {
         uvec4 hash_base = (uvec4(id, id << 8, id << 16, id << 24) * uvec4(137u, 97u, 31u, 7u)) >> 8u;
         id = hash_base.x ^ hash_base.y ^ hash_base.z ^ hash_base.w + 117u;
     }
@@ -132,10 +132,10 @@ bool isFirstWorkItem() {
 int argmin(vec3 v) {
     if (v.y < v.x) {
         if (v.y < v.z)
-            return 1;
+        return 1;
     } else {
         if (v.z < v.x)
-            return 2;
+        return 2;
     }
     return 0;
 }
@@ -143,10 +143,10 @@ int argmin(vec3 v) {
 int argmax(vec3 v) {
     if (v.y > v.x) {
         if (v.y > v.z)
-            return 1;
+        return 1;
     } else {
         if (v.z > v.x)
-            return 2;
+        return 2;
     }
     return 0;
 }
@@ -156,4 +156,4 @@ float map(float v, float v_min, float v_max, float new_min, float new_max) {
     return (v - v_min) / (v_max - v_min) * (new_max - new_min) + new_min;
 }
 
-#endif // UTIL_H
+#endif// UTIL_H

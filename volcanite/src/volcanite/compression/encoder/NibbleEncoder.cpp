@@ -14,14 +14,14 @@
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "volcanite/compression/encoder/NibbleEncoder.hpp"
-#include "volcanite/compression/pack_nibble.hpp"
 #include "volcanite/compression/VolumeCompressionBase.hpp"
 #include "volcanite/compression/memory_mapping.hpp"
+#include "volcanite/compression/pack_nibble.hpp"
 #include <omp.h>
 
 namespace volcanite {
 
-uint32_t NibbleEncoder::readNextLodOperationFromEncoding(const uint32_t* brick_encoding, ReadState &state) const {
+uint32_t NibbleEncoder::readNextLodOperationFromEncoding(const uint32_t *brick_encoding, ReadState &state) const {
     return read4Bit(brick_encoding, 0u, state.idxE++);
 }
 
@@ -29,7 +29,7 @@ uint32_t NibbleEncoder::readNextLodOperationFromEncoding(const uint32_t* brick_e
 // HEADER                 ENCODING:
 // 4bit_encoding_start[0, 1, .. L-1], palette_start[0, 1 .. L], 4bit_encoding_padded_to32bit[0, 1, .. L], 32bit_palette[L, .., 1, 0]
 //       header_size*8 ᒧ                always zero ᒧ  ∟ .. one  ∟ palette size
-uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out,
+uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t> &volume, std::vector<uint32_t> &out,
                                                    glm::uvec3 start, glm::uvec3 volume_dim) const {
     assert(!(m_op_mask & OP_STOP_BIT) && "Nibble encoder does not support stop bits with random access");
     assert(!(m_op_mask & OP_PALETTE_D_BIT) && "Nibble encoder does not support palette delta operation with random access");
@@ -39,7 +39,7 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
 
     const uint32_t lod_count = getLodCountPerBrick();
     const uint32_t header_size = getHeaderSize();
-    uint32_t out_i = header_size * 8u;  // write head position in out, counted as number of encoded 4 bit elements
+    uint32_t out_i = header_size * 8u; // write head position in out, counted as number of encoded 4 bit elements
 
     // we need to keep track of the current brick status from coarsest to finest level to determine the right operations
     // basically do an implicit decoding while we're encoding
@@ -53,17 +53,15 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
     // we start with the coarsest LOD, which is always a PALETTE_ADV of the max occuring value in the whole brick
     // we handle this here because it allows us to skip some special handling (for example checking if the palette is empty) in the following loop
     // in theory, we could start with a finer level here too and skip the first levels (= Carsten's original idea)
-    out[0] = out_i;                 // LoD start position
-    out[lod_count] = 0u;            // palette start position (from back)
+    out[0] = out_i;      // LoD start position
+    out[lod_count] = 0u; // palette start position (from back)
     uint32_t muligrid_lod_start = multigrid.size() - 1;
     if (multigrid[muligrid_lod_start].constant_subregion) {
         write4Bit(out, 0u, out_i++, PALETTE_ADV | STOP_BIT);
-    }
-    else {
+    } else {
         write4Bit(out, 0u, out_i++, PALETTE_ADV);
     }
     palette.push_back(multigrid[muligrid_lod_start].label);
-
 
     // DEBUG
     uint32_t parent_counter = 0;
@@ -76,7 +74,7 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
         // out[lod_count + current_inv_lod] = static_cast<uint32_t>(palette.size()); (no longer writing LOD palette sizes)
 
         // in the multigrid, LODs are ordered from finest to coarsest, so we have to go through them in reverse.
-        uint32_t lod_dim = (m_brick_size/lod_width);
+        uint32_t lod_dim = (m_brick_size / lod_width);
         uint32_t parent_multigrid_lod_start = muligrid_lod_start;
         muligrid_lod_start -= lod_dim * lod_dim * lod_dim;
 
@@ -128,7 +126,7 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
                 operation |= PALETTE_LAST;
             else {
                 // Random access encoding does not use the palette delta operation
-                {  // if nothing helps, we add a completely new palette entry
+                { // if nothing helps, we add a completely new palette entry
                     palette.push_back(value);
                     operation |= PALETTE_ADV;
                 }
@@ -144,26 +142,25 @@ uint32_t NibbleEncoder::encodeBrickForRandomAccess(const std::vector<uint32_t>& 
     // last entry of our header stores the palette size
     out[CSGVSerialBrickEncoder::getPaletteSizeHeaderIndex()] = palette.size();
     // now we calculate everything in 32 bit elements. round up to start the palette at an uint32_t index but AFTER the last encoding element
-    while(out_i % 8u != 0u)
+    while (out_i % 8u != 0u)
         write4Bit(out, 0u, out_i++, 0u);
     out_i /= 8u;
     // palette is added in reverse order at the end to be read from encoding back to front
-    for(int i = static_cast<int>(palette.size()) - 1; i >= 0; i--) {
+    for (int i = static_cast<int>(palette.size()) - 1; i >= 0; i--) {
         out.at(out_i++) = palette.at(i);
     }
 
-    if(out_i >= out.size())
+    if (out_i >= out.size())
         throw std::runtime_error("out doesn't provide enough memory for encoded brick, writing outside of allocated region");
     return out_i;
 }
 
-
 /// Dummy method to replace the rank operation for querying palette indices when a plain 4 bit encoding is used.
 /// @return the number of PALETTE_ADV occurrences before enc_operation_index.
-uint32_t rank_palette_adv_4bit(const uint32_t* brick_encoding, uint32_t enc_operation_index) {
+uint32_t rank_palette_adv_4bit(const uint32_t *brick_encoding, uint32_t enc_operation_index) {
     uint32_t occurrences = 0u;
     const uint32_t header_size = brick_encoding[0];
-    for(uint32_t entry_id = header_size; entry_id < enc_operation_index; entry_id++) {
+    for (uint32_t entry_id = header_size; entry_id < enc_operation_index; entry_id++) {
         if (read4Bit(brick_encoding, 0u, entry_id) == PALETTE_ADV)
             occurrences++;
     }
@@ -171,7 +168,7 @@ uint32_t rank_palette_adv_4bit(const uint32_t* brick_encoding, uint32_t enc_oper
 }
 
 uint32_t NibbleEncoder::decompressCSGVBrickVoxel(const uint32_t output_i, const uint32_t target_inv_lod,
-                                                 const glm::uvec3 valid_brick_size, const uint32_t* brick_encoding,
+                                                 const glm::uvec3 valid_brick_size, const uint32_t *brick_encoding,
                                                  const uint32_t brick_encoding_length) const {
     // Start by reading the operations in the target inverse LoD's encoding:
     uint32_t inv_lod = target_inv_lod;
@@ -230,8 +227,7 @@ uint32_t NibbleEncoder::decompressCSGVBrickVoxel(const uint32_t output_i, const 
     }
 }
 
-
-void NibbleEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, uint32_t brick_encoding_length,
+void NibbleEncoder::parallelDecodeBrick(const uint32_t *brick_encoding, uint32_t brick_encoding_length,
                                         uint32_t *output_brick, glm::uvec3 valid_brick_size, int target_inv_lod) const {
     // ToDo: support detail separation, stop bits, and palette delta operations in parallelDecodeBrick
     assert(!m_separate_detail && "detail separation not yet supported in parallelDecodeBrick");
@@ -249,18 +245,18 @@ void NibbleEncoder::parallelDecodeBrick(const uint32_t* brick_encoding, uint32_t
     const uint32_t output_index_step = (m_brick_size / target_brick_size) * (m_brick_size / target_brick_size) *
                                        (m_brick_size / target_brick_size);
 
-    // m_cpu_threads many threads go through the Morton indexing order from front to back. The threads work on the next
-    // following items in parallel. read_offset is the index of the first thread 0.
-    //
-    // Of course, we could directly parallelize over the number of output voxels in a for loop here, but:
-    // on a GPU m_cpu_threads should be equal to the number of threads in a warp allowing us to do vulkan subgroup optimizations
-    #pragma omp parallel num_threads(m_cpu_threads) default(none) shared(output_index_step, output_voxel_count, target_inv_lod, brick_encoding, output_brick, target_brick_size, brick_encoding_length)
+// m_cpu_threads many threads go through the Morton indexing order from front to back. The threads work on the next
+// following items in parallel. read_offset is the index of the first thread 0.
+//
+// Of course, we could directly parallelize over the number of output voxels in a for loop here, but:
+// on a GPU m_cpu_threads should be equal to the number of threads in a warp allowing us to do vulkan subgroup optimizations
+#pragma omp parallel num_threads(m_cpu_threads) default(none) shared(output_index_step, output_voxel_count, target_inv_lod, brick_encoding, output_brick, target_brick_size, brick_encoding_length)
     {
         uint32_t output_i = omp_get_thread_num();
         while (output_i < output_voxel_count) {
             output_brick[output_index_step * output_i] =
-                    decompressCSGVBrickVoxel(output_i, target_inv_lod, glm::uvec3(m_brick_size),
-                                             brick_encoding, brick_encoding_length);
+                decompressCSGVBrickVoxel(output_i, target_inv_lod, glm::uvec3(m_brick_size),
+                                         brick_encoding, brick_encoding_length);
             // #pragma omp barrier
             output_i += omp_get_num_threads();
         }

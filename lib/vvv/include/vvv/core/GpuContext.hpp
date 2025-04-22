@@ -61,14 +61,14 @@ struct QueueFamilyIndices {
 // Note that the official khronos examples cache way more stuff:
 // https://github.com/KhronosGroup/Vulkan-Samples/blob/30e0ef953f9492726945d2042400a3808c8408f5/framework/resource_cache.h
 class GpuPipelineCache {
-public:
+  public:
     virtual ~GpuPipelineCache() = default;
 
     virtual vk::PipelineCache getPipelineCache() const { return m_pipelineCache; }
 
     virtual void destroyPipelineCache(vk::Device device) { VK_DEVICE_DESTROY(device, m_pipelineCache); }
 
-protected:
+  protected:
     virtual std::string getPipelineCachePath() { return "vulkan_pipeline_cache.data"; }
 
     void writePipelineCacheToDisk(vk::Device device) {
@@ -105,7 +105,7 @@ protected:
         }
     }
 
-private:
+  private:
     vk::PipelineCache m_pipelineCache = nullptr;
 };
 
@@ -132,7 +132,7 @@ struct OpenGLStyleSubmitOptions {
 /// like `Renderer::initSwapchainResources` should just be understood as events
 /// that only announce change for data within the stable class reference.
 class GpuContext : public GpuPipelineCache {
-public:
+  public:
     GpuContext(std::shared_ptr<DebugUtilities> debugUtilities);
 
     virtual void destroyGpuContext() {
@@ -144,15 +144,15 @@ public:
             destroyPipelineCache(device);
         }
 
-        for(auto& [queueFamily,commandBuffers] : m_commandBuffers) {
-            for(auto& cb : commandBuffers) {
+        for (auto &[queueFamily, commandBuffers] : m_commandBuffers) {
+            for (auto &cb : commandBuffers) {
                 VK_DEVICE_FREE(device, m_commandPool[queueFamily], cb.handle);
             }
         }
 
         m_commandBuffers.clear();
 
-        for(auto& [queueFamily,pool] : m_commandPool) {
+        for (auto &[queueFamily, pool] : m_commandPool) {
             VK_DEVICE_DESTROY(device, pool);
         }
 
@@ -219,8 +219,8 @@ public:
 
     /// Methods to interact with the swapchain, resp. windowing system.
     /// @return `nullptr` if the context is not associated with a windowing system, for example if vulkan is only used for compute work
-    virtual const WindowingSystemIntegration* getWsi() const { return nullptr; }
-//    virtual std::shared_ptr<const WindowingSystemIntegration> getWsi() const { return nullptr; }
+    virtual const WindowingSystemIntegration *getWsi() const { return nullptr; }
+    //    virtual std::shared_ptr<const WindowingSystemIntegration> getWsi() const { return nullptr; }
 
     virtual bool hasDeviceExtension(char const *name) const = 0;
     virtual bool hasDeviceExtension(std::string name) const { return hasDeviceExtension(name.c_str()); }
@@ -242,14 +242,14 @@ public:
     virtual bool hasEnabledInstanceLayer(std::string name) { return hasEnabledInstanceLayer(name.c_str()); }
 
     virtual void enableDeviceLayer(std::string layer) = 0;
-    virtual void enableDeviceExtension(std::string ext)  = 0;
+    virtual void enableDeviceExtension(std::string ext) = 0;
 
     virtual vk::PhysicalDeviceFeatures &physicalDeviceFeatures() = 0;
     virtual vk::PhysicalDeviceVulkan12Features &physicalDeviceFeaturesV12() = 0;
     virtual vk::PhysicalDeviceVulkan13Features &physicalDeviceFeaturesV13() = 0;
-    virtual void physicalDeviceAddExtensionFeatures(void* featuresKhr) = 0;
+    virtual void physicalDeviceAddExtensionFeatures(void *featuresKhr) = 0;
 
-protected:
+  protected:
     std::map<uint32_t, vk::Queue> m_queues;
 
     std::map<uint32_t, vk::CommandPool> m_commandPool;

@@ -17,9 +17,9 @@
 
 #include <vvv/core/preamble_forward_decls.hpp>
 
+#include <vvv/core/Buffer.hpp>
 #include <vvv/core/MultiBuffering.hpp>
 #include <vvv/core/Shader.hpp>
-#include <vvv/core/Buffer.hpp>
 
 #include <SPIRV-Reflect/spirv_reflect.h>
 
@@ -28,12 +28,12 @@
 namespace vvv {
 
 // reflecting vertex shader inputs is not simple because bindings and alignments can have arbitrary structures
-//std::vector<vk::VertexInputBindingDescription> reflectVertexInputBindingDescriptions(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders);
-//std::vector<vk::VertexInputAttributeDescription> reflectVertexAttributeDescriptions(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders);
+// std::vector<vk::VertexInputBindingDescription> reflectVertexInputBindingDescriptions(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders);
+// std::vector<vk::VertexInputAttributeDescription> reflectVertexAttributeDescriptions(vvv::GpuContextPtr ctx, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders);
 
 uint32_t reflectColorAttachmentLocation(vvv::GpuContextPtr ctx, std::string name, vk::ArrayProxy<const std::shared_ptr<Shader>> shaders);
 
 /// @return name and format of all color output attachments as an ordered vector.
 std::vector<std::pair<std::string, vk::Format>> reflectColorAttachmentInfo(vvv::GpuContextPtr ctx, std::shared_ptr<Shader> shader);
 
-}
+} // namespace vvv

@@ -19,7 +19,7 @@ using namespace vvv;
 
 namespace volcanite {
 
-AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore* signalBinarySemaphore) {
+AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore *signalBinarySemaphore) {
 
     // fill command buffer
     auto &commandBuffer = m_commandBuffer->getActive();
@@ -28,7 +28,8 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
     // all uploads must be finished before the rendering can access the buffers
     commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eComputeShader, {},
                                   {vk::MemoryBarrier(vk::AccessFlagBits::eTransferWrite,
-                                                     vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
+                                                     vk::AccessFlagBits::eShaderRead)},
+                                  nullptr, nullptr);
 
     getCtx()->debugMarker->beginRegion(commandBuffer, "total_rendering", glm::vec4(1.f));
     // potential cache reset / garbage collection
@@ -38,7 +39,8 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
         commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
                                       vk::PipelineStageFlagBits::eComputeShader, {},
                                       {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite,
-                                                         vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
+                                                         vk::AccessFlagBits::eMemoryRead)},
+                                      nullptr, nullptr);
         Logger(Debug) << "hard reset brick cache";
     }
 
@@ -49,10 +51,10 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
     if (m_enable_cache_stages || (m_render_update_flags & UPDATE_PMATERIAL)) {
         executeCommands(commandBuffer, REQUEST);
         commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader,
-                                  {},
-                                  {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead |
-                                                                                       vk::AccessFlagBits::eShaderWrite)},
-                                  nullptr, nullptr);
+                                      {},
+                                      {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead |
+                                                                                               vk::AccessFlagBits::eShaderWrite)},
+                                      nullptr, nullptr);
     }
     getCtx()->debugMarker->endRegion(commandBuffer);
 
@@ -63,7 +65,8 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
         commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
                                       vk::PipelineStageFlagBits::eComputeShader, {},
                                       {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
-                                                         vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
+                                                         vk::AccessFlagBits::eShaderRead)},
+                                      nullptr, nullptr);
         getCtx()->debugMarker->endRegion(commandBuffer);
         // assign brick decompression requests to free cache regions
         getCtx()->debugMarker->beginRegion(commandBuffer, "assign", glm::vec4(0.f, 1.f, 0.6f, 0.3f));
@@ -71,7 +74,8 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
         commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
                                       vk::PipelineStageFlagBits::eComputeShader, {},
                                       {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
-                                                         vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
+                                                         vk::AccessFlagBits::eShaderRead)},
+                                      nullptr, nullptr);
         getCtx()->debugMarker->endRegion(commandBuffer);
 
         // decompress all bricks that request it to their assigned cache region (if it exists)
@@ -80,7 +84,8 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
         commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
                                       vk::PipelineStageFlagBits::eComputeShader, {},
                                       {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
-                                                         vk::AccessFlagBits::eShaderRead)}, nullptr, nullptr);
+                                                         vk::AccessFlagBits::eShaderRead)},
+                                      nullptr, nullptr);
         getCtx()->debugMarker->endRegion(commandBuffer);
     }
 
@@ -92,7 +97,8 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
                                       vk::PipelineStageFlagBits::eComputeShader, {},
                                       {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
                                                          vk::AccessFlagBits::eShaderRead |
-                                                         vk::AccessFlagBits::eShaderWrite)}, nullptr, nullptr);
+                                                             vk::AccessFlagBits::eShaderWrite)},
+                                      nullptr, nullptr);
         getCtx()->debugMarker->endRegion(commandBuffer);
     } else {
         // simply copy the previous ping-pong buffers to the next ping-pong buffers
@@ -102,7 +108,8 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
                                       vk::PipelineStageFlagBits::eComputeShader, {},
                                       {vk::MemoryBarrier(vk::AccessFlagBits::eShaderWrite,
                                                          vk::AccessFlagBits::eShaderRead |
-                                                         vk::AccessFlagBits::eShaderWrite)}, nullptr, nullptr);
+                                                             vk::AccessFlagBits::eShaderWrite)},
+                                      nullptr, nullptr);
         getCtx()->debugMarker->endRegion(commandBuffer);
     }
 
@@ -115,7 +122,7 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
         }
         for (uint32_t i = 0; i < m_atrous_iterations; i++) {
             commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite)}, nullptr, nullptr);
-            PushConstants pushConstants{.denoising_iteration=i, .last_denoising_iteration=(m_atrous_iterations-1u)};
+            PushConstants pushConstants{.denoising_iteration = i, .last_denoising_iteration = (m_atrous_iterations - 1u)};
             commandBuffer.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants), &pushConstants);
             commandBuffer.dispatch(m_work_group_sizes[RESOLVE].width, m_work_group_sizes[RESOLVE].height, m_work_group_sizes[RESOLVE].depth);
             commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
@@ -149,24 +156,24 @@ std::vector<std::shared_ptr<Shader>> PassCompSegVolRender::createShaders() {
     {
         std::stringstream ss;
         ss << "Shader Definitions: ";
-        for (const auto &s: m_shader_defines)
+        for (const auto &s : m_shader_defines)
             ss << s << " ";
         Logger(Debug) << ss.str();
     }
-    ShaderCompileErrorCallback compileErrorCallback = [](const ShaderCompileError& err) {
+    ShaderCompileErrorCallback compileErrorCallback = [](const ShaderCompileError &err) {
         Logger(Error) << err.errorText;
         return ShaderCompileErrorCallbackAction::USE_PREVIOUS_CODE;
     };
-    return {std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_cacheclear.comp", .defines= m_shader_defines, .label="csgv_cacheclear.comp"}, compileErrorCallback),
-            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_request.comp", .defines= m_shader_defines, .label="csgv_request.comp"}, compileErrorCallback),
-            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_provision.comp", .defines= m_shader_defines, .label="csgv_provision.comp"}, compileErrorCallback),
-            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_assign.comp", .defines= m_shader_defines, .label="csgv_assign.comp"}, compileErrorCallback),
-            m_parallel_decode ? std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_decompress_subgroup_parallel.comp", .defines= m_shader_defines, .label="csgv_decompress_subgroup_parallel.comp"}, compileErrorCallback) :
-                                std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_decompress.comp", .defines= m_shader_defines, .label="csgv_decompress.comp"}, compileErrorCallback),
-            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_renderer.comp", .defines= m_shader_defines, .label="csgv_renderer.comp"}, compileErrorCallback),
-            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_denoise_resolve.comp", .defines= m_shader_defines, .label="csgv_denoise_resolve.comp"}, compileErrorCallback),
-            std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_renderer_dummy.comp", .defines= m_shader_defines, .label="csgv_renderer_dummy.comp"}, compileErrorCallback),
-            };
+    return {
+        std::make_shared<Shader>(SimpleGlslShaderRequest{.filename = "volcanite/renderer/csgv_cacheclear.comp", .defines = m_shader_defines, .label = "csgv_cacheclear.comp"}, compileErrorCallback),
+        std::make_shared<Shader>(SimpleGlslShaderRequest{.filename = "volcanite/renderer/csgv_request.comp", .defines = m_shader_defines, .label = "csgv_request.comp"}, compileErrorCallback),
+        std::make_shared<Shader>(SimpleGlslShaderRequest{.filename = "volcanite/renderer/csgv_provision.comp", .defines = m_shader_defines, .label = "csgv_provision.comp"}, compileErrorCallback),
+        std::make_shared<Shader>(SimpleGlslShaderRequest{.filename = "volcanite/renderer/csgv_assign.comp", .defines = m_shader_defines, .label = "csgv_assign.comp"}, compileErrorCallback),
+        m_parallel_decode ? std::make_shared<Shader>(SimpleGlslShaderRequest{.filename = "volcanite/renderer/csgv_decompress_subgroup_parallel.comp", .defines = m_shader_defines, .label = "csgv_decompress_subgroup_parallel.comp"}, compileErrorCallback) : std::make_shared<Shader>(SimpleGlslShaderRequest{.filename = "volcanite/renderer/csgv_decompress.comp", .defines = m_shader_defines, .label = "csgv_decompress.comp"}, compileErrorCallback),
+        std::make_shared<Shader>(SimpleGlslShaderRequest{.filename = "volcanite/renderer/csgv_renderer.comp", .defines = m_shader_defines, .label = "csgv_renderer.comp"}, compileErrorCallback),
+        std::make_shared<Shader>(SimpleGlslShaderRequest{.filename = "volcanite/renderer/csgv_denoise_resolve.comp", .defines = m_shader_defines, .label = "csgv_denoise_resolve.comp"}, compileErrorCallback),
+        std::make_shared<Shader>(SimpleGlslShaderRequest{.filename = "volcanite/renderer/csgv_renderer_dummy.comp", .defines = m_shader_defines, .label = "csgv_renderer_dummy.comp"}, compileErrorCallback),
+    };
 }
 
 std::vector<vk::PushConstantRange> PassCompSegVolRender::definePushConstantRanges() {
@@ -178,5 +185,4 @@ std::vector<vk::PushConstantRange> PassCompSegVolRender::definePushConstantRange
     return {pushConstantRange};
 }
 
-} // namspace volcanite
-
+} // namespace volcanite

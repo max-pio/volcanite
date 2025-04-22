@@ -17,16 +17,16 @@
 
 #pragma once
 
+#include <glm/glm.hpp>
 #include <memory>
 #include <optional>
-#include <glm/glm.hpp>
 #include <utility>
 
 #include "vvv/core/Renderer.hpp"
 #include "vvv/core/Shader.hpp"
-#include "vvv/util/hash_memory.hpp"
-#include "vvv/reflection/UniformReflection.hpp"
 #include "vvv/passes/PassCompute.hpp"
+#include "vvv/reflection/UniformReflection.hpp"
+#include "vvv/util/hash_memory.hpp"
 
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
@@ -34,10 +34,9 @@ using namespace vvv;
 
 namespace volcanite {
 
-
 class PassCompSegVolRender : public PassCompute {
 
-public:
+  public:
     enum CSGVRenderStage {
         CACHECLEAR = 0,
         REQUEST = 1,
@@ -49,9 +48,9 @@ public:
         RENDERING_DUMMY = 7
     };
 
-    PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering, uint32_t queueFamilyIndex,
+    PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering> &multiBuffering, uint32_t queueFamilyIndex,
                          std::vector<std::string> shaderDefines = {}, bool parallel_decode = false, bool enable_cache_stages = true,
-                         vk::ImageUsageFlags outputImageUsage = {}, const std::string& label = "PassCompSegVolRender")
+                         vk::ImageUsageFlags outputImageUsage = {}, const std::string &label = "PassCompSegVolRender")
         : PassCompute(ctx, label, multiBuffering, queueFamilyIndex),
           WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_shader_defines(std::move(shaderDefines)),
           m_parallel_decode(parallel_decode), m_enable_cache_stages(enable_cache_stages) {}
@@ -60,11 +59,10 @@ public:
                             BinaryAwaitableList awaitBinaryAwaitableList = {},
                             vk::Semaphore *signalBinarySemaphore = nullptr) override;
 
-
     void setVolumeInfo(glm::uvec3 brick_count, uint32_t lod_count) {
         setGlobalInvocationSize(CACHECLEAR, brick_count.x, brick_count.y, brick_count.z);
         setGlobalInvocationSize(REQUEST, brick_count.x, brick_count.y, brick_count.z);
-        setGlobalInvocationSize(PROVISION, lod_count-1u, 1u, 1u);
+        setGlobalInvocationSize(PROVISION, lod_count - 1u, 1u, 1u);
         setGlobalInvocationSize(ASSIGN, brick_count.x, brick_count.y, brick_count.z);
         if (m_parallel_decode) {
             const uint32_t subgroup_size = getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize;
@@ -86,9 +84,9 @@ public:
     void setCacheStagesEnabled(bool enable) { m_enable_cache_stages = enable; }
     [[nodiscard]] bool getCacheStagesEnabled() const { return m_enable_cache_stages; }
 
-protected:
+  protected:
     struct PushConstants {
-        uint32_t denoising_iteration;   // denoising iteration variable for ping pong svgf-buffer
+        uint32_t denoising_iteration; // denoising iteration variable for ping pong svgf-buffer
         uint32_t last_denoising_iteration;
     };
 
@@ -102,13 +100,12 @@ protected:
     void executeCommands(vk::CommandBuffer commandBuffer, CSGVRenderStage stage);
 
     /// work group sizes per stage
-    vk::Extent3D m_work_group_sizes[8] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u},
-                                          {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}};
-    uint32_t m_render_update_flags = 0u;                /// among others: if the GPU cache reset should be triggered on the next call
+    vk::Extent3D m_work_group_sizes[8] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}};
+    uint32_t m_render_update_flags = 0u; /// among others: if the GPU cache reset should be triggered on the next call
     uint32_t m_atrous_iterations = 1u;
-    const std::vector<std::string> m_shader_defines;   /// defines that are passed on to shader compilation
-    bool m_parallel_decode = false;                    /// if decompression is parallelized within one brick
-    bool m_enable_cache_stages = true;                 /// if the cache provision, assign, and decompress stages are executed. only required when caching full bricks.
+    const std::vector<std::string> m_shader_defines; /// defines that are passed on to shader compilation
+    bool m_parallel_decode = false;                  /// if decompression is parallelized within one brick
+    bool m_enable_cache_stages = true;               /// if the cache provision, assign, and decompress stages are executed. only required when caching full bricks.
 };
 
 } // namespace volcanite

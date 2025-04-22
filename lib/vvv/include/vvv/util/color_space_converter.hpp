@@ -113,9 +113,12 @@ static const glm::vec3 XYZToRGB(glm::vec3 xyz) {
         b /= maxVal;
     }
 
-    if (r < 0) r = 0;
-    if (g < 0) g = 0;
-    if (b < 0) b = 0;
+    if (r < 0)
+        r = 0;
+    if (g < 0)
+        g = 0;
+    if (b < 0)
+        b = 0;
 
     return glm::vec3(r, g, b);
 }
@@ -130,7 +133,8 @@ static const glm::vec3 LABToXYZ(glm::vec3 lab) {
     };
     return glm::vec3(xn * finv(((lab.x + 16.f) / 116.f) + lab.y / 500.f),
                      yn * finv((lab.x + 16.f) / 116.f),
-                     zn * finv(((lab.x + 16.f) / 116.f) - lab.z / 200.f));;
+                     zn * finv(((lab.x + 16.f) / 116.f) - lab.z / 200.f));
+    ;
 }
 
 static const glm::vec3 LABToRGB(glm::vec3 lab) {
@@ -147,4 +151,4 @@ static const glm::vec3 MshToLAB(glm::vec3 msh) {
 static const glm::vec3 MshToRGB(glm::vec3 msh) {
     return LABToRGB(MshToLAB(msh));
 }
-}
+} // namespace vvv

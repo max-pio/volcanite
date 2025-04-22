@@ -42,7 +42,7 @@ struct BindingState {
 } // namespace detail
 
 class PassBase : public virtual WithMultiBuffering, public virtual WithGpuContext {
-public:
+  public:
     virtual ~PassBase() { assert(m_pipelines.empty() && "You must call freeResources() before destroying Pass objects"); }
 
     virtual void allocateResources();
@@ -135,7 +135,7 @@ public:
     [[nodiscard]] std::string getLabel() const { return m_label; }
     [[nodiscard]] uint32_t getQueueFamilyIndex() const { return m_queueFamilyIndex; }
 
-private:
+  private:
     static uint32_t bufferIdToMask(BufferCopyId copy) { return (uint32_t)1 << copy; }
     void setResourceCount(size_t count, bool initiallyDirty = true) { m_isDirty = std::vector(count, initiallyDirty ? m_allDirtyMask : 0 /* allCleanMask */); }
 
@@ -143,7 +143,7 @@ private:
     void updateDescriptorSetsImageArray(uint32_t setIdx, uint32_t bindingIdx, uint32_t arrayElement, Texture &texture, vk::DescriptorType descriptorType, vk::ImageLayout layout = vk::ImageLayout::eUndefined, bool atActiveIndex = true);
     void updateDescriptorSetsImage(uint32_t setIdx, uint32_t bindingIdx, MultiBufferedResource<std::shared_ptr<Texture>> &textures, vk::DescriptorType descriptorType, vk::ImageLayout layout = vk::ImageLayout::eUndefined);
 
-protected:
+  protected:
     PassBase(GpuContextPtr ctx, std::string label, const std::shared_ptr<MultiBuffering> &multiBuffering = NoMultiBuffering, uint32_t queueFamilyIndex = 0)
         : WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_label(std::move(label)), m_queueFamilyIndex(queueFamilyIndex),
           m_allDirtyMask(((uint32_t)1 << multiBuffering->getIndexCount()) - 1) {}

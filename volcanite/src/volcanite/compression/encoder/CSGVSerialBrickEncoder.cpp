@@ -13,7 +13,6 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-
 #include "volcanite/compression/encoder/CSGVSerialBrickEncoder.hpp"
 #include "volcanite/compression/VolumeCompressionBase.hpp"
 #include "volcanite/compression/memory_mapping.hpp"
@@ -24,7 +23,7 @@
 
 namespace volcanite {
 
-void printBrick(const std::vector <uint32_t> &brick, uint32_t brick_size, int z_step, vvv::loglevel log) {
+void printBrick(const std::vector<uint32_t> &brick, uint32_t brick_size, int z_step, vvv::loglevel log) {
     static const std::string digits[] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
                                          "A", "B", "C", "D", "E", "F", "G", "H", "I", "J"};
     std::string s;
@@ -51,15 +50,14 @@ void printBrick(const std::vector <uint32_t> &brick, uint32_t brick_size, int z_
     }
 }
 
-uint32_t CSGVSerialBrickEncoder::valueOfNeighbor(const uint32_t* brick, const glm::uvec3 &brick_pos,
+uint32_t CSGVSerialBrickEncoder::valueOfNeighbor(const uint32_t *brick, const glm::uvec3 &brick_pos,
                                                  const uint32_t child_index, const uint32_t lod_width,
                                                  const uint32_t brick_size, const int neighbor_i) {
     assert(lod_width > 0);
     assert(child_index >= 0 && child_index < 8);
     // find the position of the neighbor
     glm::ivec3 neighbor_pos = glm::ivec3(brick_pos) + neighbor[child_index][neighbor_i] * static_cast<int>(lod_width);
-    if (glm::any(glm::lessThan(neighbor_pos, glm::ivec3(0)))
-        || glm::any(glm::greaterThanEqual(neighbor_pos, glm::ivec3(static_cast<int>(brick_size))))) {
+    if (glm::any(glm::lessThan(neighbor_pos, glm::ivec3(0))) || glm::any(glm::greaterThanEqual(neighbor_pos, glm::ivec3(static_cast<int>(brick_size))))) {
         // this is only called during decompression in which case nothing outside the volume should be referenced
         assert(false && "Invalid neighbor reference!");
         return INVALID;
@@ -81,8 +79,8 @@ uint32_t CSGVSerialBrickEncoder::valueOfNeighbor(const uint32_t* brick, const gl
     return brick[neighbor_index];
 }
 
-void CSGVSerialBrickEncoder::verifyBrickCompression(const uint32_t* brick_encoding, uint32_t brick_encoding_length,
-                                                    const uint32_t* detail_encoding, uint32_t detail_encoding_length,
+void CSGVSerialBrickEncoder::verifyBrickCompression(const uint32_t *brick_encoding, uint32_t brick_encoding_length,
+                                                    const uint32_t *detail_encoding, uint32_t detail_encoding_length,
                                                     std::ostream &error) const {
 
     uint32_t header_size = getHeaderSize();
@@ -90,41 +88,40 @@ void CSGVSerialBrickEncoder::verifyBrickCompression(const uint32_t* brick_encodi
     uint32_t header_start_lods = lod_count - (detail_encoding ? 1 : 0);
 
     // check brick having an encoding length greater than header size + 1 operation + 1 palette entry
-    if(brick_encoding_length < header_size + 1u + 1u)
-        error << " brick encoding is shorter than minimum. (header size + 1 encoding + 1 palette)=" << (header_size+2) <<" but is " << brick_encoding_length << "\n";
+    if (brick_encoding_length < header_size + 1u + 1u)
+        error << " brick encoding is shorter than minimum. (header size + 1 encoding + 1 palette)=" << (header_size + 2) << " but is " << brick_encoding_length << "\n";
 
     // check first header entry being header_size * 8
-    if(brick_encoding[0] != header_size * 8u)
-        error << "  first encoding starts 4bit must be header*8=" << (header_size * 8u) << " but is "  << brick_encoding[0] << "\n";
+    if (brick_encoding[0] != header_size * 8u)
+        error << "  first encoding starts 4bit must be header*8=" << (header_size * 8u) << " but is " << brick_encoding[0] << "\n";
 
     // check encoding starts being in ascending order
     // note: the header count the number of entries, except the last entry when using double table rANS
     // for which this entry refers to the raw 4 bit index at which the detail encoding starts AFTER packing the earlier LoDs
-    for(int l = 1; l < header_start_lods - (m_encoding_mode == DOUBLE_TABLE_RANS_ENC ? 1 : 0); l++) {
+    for (int l = 1; l < header_start_lods - (m_encoding_mode == DOUBLE_TABLE_RANS_ENC ? 1 : 0); l++) {
         long distance = static_cast<long>(brick_encoding[l]) - static_cast<long>(brick_encoding[l - 1]);
-        if(distance < 0l) {
+        if (distance < 0l) {
             error << "  encoding starts are not in ascending order (distance " << distance << " for LoD " << l << ")\n";
             break;
-        }
-        else if(distance > m_brick_size * m_brick_size * m_brick_size) {
+        } else if (distance > m_brick_size * m_brick_size * m_brick_size) {
             error << "  encoding starts between LoDs are too far away\n";
             break;
         }
     }
 
     // Brick headers do no longer store LOD palette starts
-//    // check palette start of first LoD being 0 and second LoD being 1
-//    if(brick_encoding[header_start_lods] != 0u)
-//        error << "  first palette start must be 0 but is " << brick_encoding[header_start_lods] << "\n";
-//    if(brick_encoding[header_start_lods + 1u] != 1u)
-//        error << "  second palette start must be 1 but is " << brick_encoding[header_start_lods + 1u] << "\n";
-//    // check palette starts being in ascending order
-//    for(int l = 2u; l <= lod_count + 1; l++) {
-//        if(brick_encoding[header_start_lods + l] < brick_encoding[header_start_lods + l - 1]) {
-//            error << "  palette starts are not in ascending order\n";
-//            break;
-//        }
-//    }
+    //    // check palette start of first LoD being 0 and second LoD being 1
+    //    if(brick_encoding[header_start_lods] != 0u)
+    //        error << "  first palette start must be 0 but is " << brick_encoding[header_start_lods] << "\n";
+    //    if(brick_encoding[header_start_lods + 1u] != 1u)
+    //        error << "  second palette start must be 1 but is " << brick_encoding[header_start_lods + 1u] << "\n";
+    //    // check palette starts being in ascending order
+    //    for(int l = 2u; l <= lod_count + 1; l++) {
+    //        if(brick_encoding[header_start_lods + l] < brick_encoding[header_start_lods + l - 1]) {
+    //            error << "  palette starts are not in ascending order\n";
+    //            break;
+    //        }
+    //    }
 
     uint32_t palette_size = brick_encoding[getPaletteSizeHeaderIndex()];
     // check palette size not being zero
@@ -133,7 +130,7 @@ void CSGVSerialBrickEncoder::verifyBrickCompression(const uint32_t* brick_encodi
     }
 
     // check palette size + encoding start of last LoD being shorter than the brick encoding
-    if (palette_size + brick_encoding[header_start_lods]/8u > brick_encoding_length) {
+    if (palette_size + brick_encoding[header_start_lods] / 8u > brick_encoding_length) {
         error << "  palette size and encoding of first (L-1) levels are longer than the total brick encoding\n";
     }
 
@@ -145,12 +142,11 @@ void CSGVSerialBrickEncoder::verifyBrickCompression(const uint32_t* brick_encodi
     }
 }
 
-
 // BRICK MEMORY LAYOUT for L = log2(brick_size) LODs
 // HEADER                 ENCODING:
 // 4bit_encoding_start[0, 1, .. L-1], palette_start[0, 1 .. L], 4bit_encoding_padded_to32bit[0, 1, .. L], 32bit_palette[L, .., 1, 0]
 //       header_size*8 ᒧ                always zero ᒧ  ∟ .. one  ∟ palette size
-uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out, const glm::uvec3 start, const glm::uvec3 volume_dim) const {
+uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t> &volume, std::vector<uint32_t> &out, const glm::uvec3 start, const glm::uvec3 volume_dim) const {
     assert(m_encoding_mode == NIBBLE_ENC || m_rans_initialized);
 
     std::vector<uint32_t> palette;
@@ -158,7 +154,7 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
 
     const uint32_t lod_count = getLodCountPerBrick();
     const uint32_t header_size = getHeaderSize();
-    uint32_t out_i = header_size * 8u;  // write head position in out, counted as number of encoded 4 bit elements
+    uint32_t out_i = header_size * 8u; // write head position in out, counted as number of encoded 4 bit elements
 
     // we need to keep track of the current brick status from coarsest to finest level to determine the right operations
     // basically do an implicit decoding while we're encoding
@@ -169,22 +165,20 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
     // construct the multigrid on this brick that we want to represent in this encoding
     std::vector<MultiGridNode> multigrid;
     VolumeCompressionBase::constructMultiGrid(multigrid, volume, volume_dim, start, m_brick_size,
-                                              m_op_mask & OP_STOP_BIT,  false);
+                                              m_op_mask & OP_STOP_BIT, false);
 
     // we start with the coarsest LOD, which is always a PALETTE_ADV of the max occuring value in the whole brick
     // we handle this here because it allows us to skip some special handling (for example checking if the palette is empty) in the following loop
     // in theory, we could start with a finer level here too and skip the first levels (= Carsten's original idea)
-    out[0] = out_i;                 // LoD start position
-    out[lod_count] = 0u;            // palette start position (from back)
+    out[0] = out_i;      // LoD start position
+    out[lod_count] = 0u; // palette start position (from back)
     uint32_t muligrid_lod_start = multigrid.size() - 1;
     if (multigrid[muligrid_lod_start].constant_subregion) {
         write4Bit(out, 0u, out_i++, PALETTE_ADV | STOP_BIT);
-    }
-    else {
+    } else {
         write4Bit(out, 0u, out_i++, PALETTE_ADV);
     }
     palette.push_back(multigrid[muligrid_lod_start].label);
-
 
     // DEBUG
     uint32_t parent_counter = 0;
@@ -197,7 +191,7 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
         // out[lod_count + current_inv_lod] = static_cast<uint32_t>(palette.size()); (not writing LOD palette sizes anymore)
 
         // in the multigrid, LODs are ordered from finest to coarsest, so we have to go through them in reverse.
-        uint32_t lod_dim = (m_brick_size/lod_width);
+        uint32_t lod_dim = (m_brick_size / lod_width);
         uint32_t parent_multigrid_lod_start = muligrid_lod_start;
         muligrid_lod_start -= lod_dim * lod_dim * lod_dim;
 
@@ -220,7 +214,8 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
                 // note that this will also happen if this grid node lies completely outside the volume because some parent would've been set to STOP_BIT earlier
                 // our parent spanned 8 elements of this finer current level, so we need to look at the element 7 indices further
                 if (multigrid[parent_multigrid_lod_start +
-                              voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].constant_subregion) {
+                              voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))]
+                        .constant_subregion) {
                     parent_counter = 0;
                     i += (lod_width * lod_width * lod_width * 7);
                     continue;
@@ -228,7 +223,8 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
 
                 parent_counter = 0;
                 parent_value = multigrid[parent_multigrid_lod_start +
-                                         voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].label;
+                                         voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))]
+                                   .label;
                 assert(parent_value != INVALID && "parent element in brick was not set in previous LOD!");
             }
             parent_counter++;
@@ -272,9 +268,8 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
                             palette.push_back(value);
                             operation |= PALETTE_ADV;
                         }
-                    }
-                    else {
-                        palette_delta--; // the "0" case is already handled by PALETTE_LAST. Only consider cases 1 ... MAX_PALETTE_DELTA_DISTANCE
+                    } else {
+                        palette_delta--;                                                     // the "0" case is already handled by PALETTE_LAST. Only consider cases 1 ... MAX_PALETTE_DELTA_DISTANCE
                         int palette_delta_shift = (glm::findMSB(palette_delta) / 3 + 1) * 3; // start one after the MSB 3 bit package
                         // the operation stream will consist of
                         // [PALETTE_D | STOP_BIT] [CONTINUE_DELTA_BIT][DELTA 1st 3 MSB] [CONTINUE_DELTA_BIT][DELTA 2nd 3 MSB] ...
@@ -284,10 +279,9 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
                             palette_delta_shift -= 3;                                // move over to next three bits
                             operation = (palette_delta >> palette_delta_shift) & 7u; // write the next 3 most-significant bits of delta
                             operation |= (palette_delta_shift > 0u ? 8u : 0u);       // set the 4th MSB of this entry if delta has bits remaining
-                        } while(palette_delta_shift > 0u);
+                        } while (palette_delta_shift > 0u);
                     }
-                } else
-                {  // if nothing helps, add a completely new palette entry
+                } else { // if nothing helps, add a completely new palette entry
                     palette.push_back(value);
                     operation |= PALETTE_ADV;
                 }
@@ -299,8 +293,7 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
             assert(value != INVALID);
         }
 
-
-        if(m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
+        if (m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
             // pack all previous levels via rANS encoding if we're at the second last LoD (last LoD of non-detail encoding)
             // NOTE: the old out_i and header starts count in number of elements. the following out_i counts in 4bit
             if (current_inv_lod == lod_count - 2u) {
@@ -308,8 +301,8 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
                 // the detail encoding has to start at a new 32bit element (which is guaranteed by our rANS output)
                 assert(out_i % 8u == 0u && "next element after rANS output should start at a new uint32_t element");
             }
-                // pack the detail (=finest LOD) via rANS encoding.
-                // We have a separate rANS encoder here because the detail level does not use stop bits => different operation frequencies
+            // pack the detail (=finest LOD) via rANS encoding.
+            // We have a separate rANS encoder here because the detail level does not use stop bits => different operation frequencies
             else if (in_detail_lod) {
                 out_i = m_detail_rans.packRANS(out, out[current_inv_lod], out_i);
             }
@@ -318,42 +311,39 @@ uint32_t CSGVSerialBrickEncoder::encodeBrick(const std::vector<uint32_t>& volume
     }
 
     // if we did not apply the rANS packing before, because we are only using a single freq. table, we do it here
-    if(m_encoding_mode == SINGLE_TABLE_RANS_ENC)
+    if (m_encoding_mode == SINGLE_TABLE_RANS_ENC)
         out_i = m_rans.packRANS(out, out[0], out_i);
-
 
     // last entry of our header stores the palette size
     out[getPaletteSizeHeaderIndex()] = palette.size();
     // now we calculate everything in 32 bit elements. round up to start the palette at an uint32_t index but AFTER the last encoding element
-    while(out_i % 8u != 0u)
+    while (out_i % 8u != 0u)
         write4Bit(out, 0u, out_i++, 0u);
     out_i /= 8u;
     // palette is added in reverse order at the end to be read from encoding back to front
-    for(int i = static_cast<int>(palette.size()) - 1; i >= 0; i--) {
+    for (int i = static_cast<int>(palette.size()) - 1; i >= 0; i--) {
         out.at(out_i++) = palette.at(i);
     }
 
-    if(out_i >= out.size())
+    if (out_i >= out.size())
         throw std::runtime_error("out doesn't provide enough memory for encoded brick, writing outside of allocated region");
     return out_i; // we return the number of uint32_t elements that we used
 }
 
-
-
-void CSGVSerialBrickEncoder::decodeBrick(const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
-                                         const uint32_t* brick_detail_encoding,
+void CSGVSerialBrickEncoder::decodeBrick(const uint32_t *brick_encoding, const uint32_t brick_encoding_length,
+                                         const uint32_t *brick_detail_encoding,
                                          const uint32_t brick_detail_encoding_length,
-                                         uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const {
+                                         uint32_t *output_brick, glm::uvec3 valid_brick_size, int inv_lod) const {
     assert(m_encoding_mode == NIBBLE_ENC || m_rans_initialized);
 
     // the palette starts at the end of the encoding block
     uint32_t paletteE = brick_encoding_length - 1u;
-    const uint32_t* brick_palette = brick_encoding;
+    const uint32_t *brick_palette = brick_encoding;
 
     // first: read the header (= first header entry is the start positions of the inv. LoD 0)
     uint32_t lod_count = getLodCountPerBrick();
-    ReadState readState = {.idxE=brick_encoding[0], .in_detail_lod=false};
-    if(m_encoding_mode != NIBBLE_ENC) {
+    ReadState readState = {.idxE = brick_encoding[0], .in_detail_lod = false};
+    if (m_encoding_mode != NIBBLE_ENC) {
         // idxE counts in bytes for rANS state instead of number of 4 bit entries
         readState.idxE = (readState.idxE / 8) * 4;
         m_rans.itr_initDecoding(readState.rans_state, readState.idxE, brick_encoding);
@@ -371,15 +361,14 @@ void CSGVSerialBrickEncoder::decodeBrick(const uint32_t* brick_encoding, const u
     for (int lod = 0; lod <= inv_lod; lod++) {
 
         // check if we ran into the detail layer and change the readState accordingly
-        if(m_encoding_mode == DOUBLE_TABLE_RANS_ENC && lod == lod_count - 1) {
+        if (m_encoding_mode == DOUBLE_TABLE_RANS_ENC && lod == lod_count - 1) {
             readState.in_detail_lod = true;
-            if(m_separate_detail) {
+            if (m_separate_detail) {
                 // we now read from the separated detail encoding buffer
                 brick_encoding = brick_detail_encoding;
                 readState.idxE = 0u;
                 m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, brick_encoding);
-            }
-            else {
+            } else {
                 // Read the lod start from the brick header to start reading at the right encoding buffer index.
                 // We have to start at a fully padded uint32, because we switch the rANS decoder.
                 readState.idxE = (brick_encoding[lod] / 8) * 4;
@@ -420,11 +409,9 @@ void CSGVSerialBrickEncoder::decodeBrick(const uint32_t* brick_encoding, const u
                 output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i), child_index, lod_width, m_brick_size, 2);
             else if (operation_lsb == PALETTE_ADV) { // read palette entry and advance palette pointer to the next entry
                 output_brick[i] = brick_palette[paletteE--];
-            }
-            else if (operation_lsb == PALETTE_LAST) {
+            } else if (operation_lsb == PALETTE_LAST) {
                 output_brick[i] = brick_palette[paletteE + 1];
-            }
-            else if (operation_lsb == PALETTE_D) {
+            } else if (operation_lsb == PALETTE_D) {
                 uint32_t palette_delta = 0u;
                 if (m_op_mask & OP_USE_OLD_PAL_D_BIT) {
                     palette_delta = readNextLodOperationFromEncoding(brick_encoding, readState);
@@ -438,8 +425,7 @@ void CSGVSerialBrickEncoder::decodeBrick(const uint32_t* brick_encoding, const u
                     }
                 }
                 output_brick[i] = brick_palette[paletteE + palette_delta + 2u];
-            }
-            else
+            } else
                 assert(false && "unrecognized compression operation");
 
             // stop traversal: fill all other parts of the brick with this value
@@ -459,22 +445,22 @@ void CSGVSerialBrickEncoder::decodeBrick(const uint32_t* brick_encoding, const u
     }
 }
 
-void CSGVSerialBrickEncoder::decodeBrickWithDebugEncoding(const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
-                                                          const uint32_t* brick_detail_encoding,
+void CSGVSerialBrickEncoder::decodeBrickWithDebugEncoding(const uint32_t *brick_encoding, const uint32_t brick_encoding_length,
+                                                          const uint32_t *brick_detail_encoding,
                                                           const uint32_t brick_detail_encoding_length,
-                                                          uint32_t* output_brick, uint32_t* output_encoding,
-                                                          std::vector<glm::uvec4>* output_palette, glm::uvec3 valid_brick_size,
+                                                          uint32_t *output_brick, uint32_t *output_encoding,
+                                                          std::vector<glm::uvec4> *output_palette, glm::uvec3 valid_brick_size,
                                                           int inv_lod) const {
     assert(m_encoding_mode == NIBBLE_ENC || m_rans_initialized);
 
     // the palette starts at the end of the encoding block
     uint32_t paletteE = brick_encoding_length - 1u;
-    const uint32_t* brick_palette = brick_encoding;
+    const uint32_t *brick_palette = brick_encoding;
 
     // first: read the header (= first header entry is the start positions of the inv. LoD 0)
     uint32_t lod_count = getLodCountPerBrick();
-    ReadState readState = {.idxE=brick_encoding[0], .in_detail_lod=false};
-    if(m_encoding_mode != NIBBLE_ENC) {
+    ReadState readState = {.idxE = brick_encoding[0], .in_detail_lod = false};
+    if (m_encoding_mode != NIBBLE_ENC) {
         // idxE counts in bytes for rANS state instead of number of 4 bit entries
         readState.idxE = (readState.idxE / 8) * 4;
         m_rans.itr_initDecoding(readState.rans_state, readState.idxE, brick_encoding);
@@ -483,33 +469,32 @@ void CSGVSerialBrickEncoder::decodeBrickWithDebugEncoding(const uint32_t* brick_
     uint32_t index_step = m_brick_size * m_brick_size * m_brick_size;
     uint32_t lod_width = m_brick_size;
     uint32_t parent_value;
-    uint32_t child_index;   // index of all children with the same coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
+    uint32_t child_index; // index of all children with the same coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
 
     // first, set the whole brick to INVALID, so we know later which elements and LOD blocks were already processed
     for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i++) {
         output_brick[i] = INVALID;
         output_encoding[i] = INVALID;
     }
-    if(output_palette) {
+    if (output_palette) {
         output_palette->resize(inv_lod + 2, glm::uvec4(0u));
     }
     std::map<uint32_t, uint32_t> output_palette_duplicates;
 
     for (int lod = 0; lod <= inv_lod; lod++) {
 
-        if(output_palette)
+        if (output_palette)
             output_palette->at(lod) = glm::uvec4(output_palette->size());
 
         // check if we ran into the detail layer and change the readState accordingly
-        if(m_encoding_mode == DOUBLE_TABLE_RANS_ENC && lod == lod_count - 1) {
+        if (m_encoding_mode == DOUBLE_TABLE_RANS_ENC && lod == lod_count - 1) {
             readState.in_detail_lod = true;
-            if(m_separate_detail) {
+            if (m_separate_detail) {
                 // we now read from the separated detail encoding buffer
                 brick_encoding = brick_detail_encoding;
                 readState.idxE = 0u;
                 m_detail_rans.itr_initDecoding(readState.rans_state, readState.idxE, brick_encoding);
-            }
-            else {
+            } else {
                 // Read the lod start from the brick header to start reading at the right encoding buffer index.
                 // We have to start at a fully padded uint32, because we switch the rANS decoder.
                 readState.idxE = (brick_encoding[lod] / 8) * 4;
@@ -552,19 +537,17 @@ void CSGVSerialBrickEncoder::decodeBrickWithDebugEncoding(const uint32_t* brick_
                 output_brick[i] = valueOfNeighbor(output_brick, enumBrickPos(i), child_index, lod_width, m_brick_size, 2);
             else if (operation_lsb == PALETTE_ADV) { // read palette entry and advance palette pointer to the next entry
                 output_brick[i] = brick_palette[paletteE--];
-                if(output_palette) {
+                if (output_palette) {
                     auto value = output_brick[i];
-                    if(!output_palette_duplicates.contains(value)) {
+                    if (!output_palette_duplicates.contains(value)) {
                         output_palette_duplicates[value] = 0u;
                     }
                     output_palette->push_back(glm::uvec4{value, lod, i, output_palette_duplicates[value]});
                     output_palette_duplicates[value]++;
                 }
-            }
-            else if (operation_lsb == PALETTE_LAST) {
+            } else if (operation_lsb == PALETTE_LAST) {
                 output_brick[i] = brick_palette[paletteE + 1];
-            }
-            else if (operation_lsb == PALETTE_D) {
+            } else if (operation_lsb == PALETTE_D) {
                 uint32_t palette_delta = 0u;
                 if (m_op_mask & OP_USE_OLD_PAL_D_BIT) {
                     palette_delta = readNextLodOperationFromEncoding(brick_encoding, readState);
@@ -578,8 +561,7 @@ void CSGVSerialBrickEncoder::decodeBrickWithDebugEncoding(const uint32_t* brick_
                     }
                 }
                 output_brick[i] = brick_palette[paletteE + palette_delta + 2u];
-            }
-            else
+            } else
                 assert(false && "unrecognized compression operation");
 
             // stop traversal: fill all other parts of the brick with this value
@@ -599,13 +581,12 @@ void CSGVSerialBrickEncoder::decodeBrickWithDebugEncoding(const uint32_t* brick_
     }
 
     // last dummy size element for palette lod starts
-    if(output_palette)
+    if (output_palette)
         output_palette->at(inv_lod + 1) = glm::uvec4(output_palette->size());
 }
 
-
-void CSGVSerialBrickEncoder::freqEncodeBrick(const std::vector<uint32_t>& volume, size_t* brick_freq, glm::uvec3 start,
-                                      glm::uvec3 volume_dim, bool detail_freq) const {
+void CSGVSerialBrickEncoder::freqEncodeBrick(const std::vector<uint32_t> &volume, size_t *brick_freq, glm::uvec3 start,
+                                             glm::uvec3 volume_dim, bool detail_freq) const {
     std::vector<uint32_t> palette;
     palette.reserve(32);
     glm::uvec3 volume_pos, brick_pos;
@@ -616,7 +597,7 @@ void CSGVSerialBrickEncoder::freqEncodeBrick(const std::vector<uint32_t>& volume
     // basically do an implicit decoding while we're encoding
     uint32_t parent_value;
     uint32_t value;
-    uint32_t child_index;   // index of all children with the same coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
+    uint32_t child_index; // index of all children with the same coarser parent element, in 0 - 7, used for parent_value and neighbor-lookup index
 
     // construct the multigrid on this brick that we want to represent in this encoding
     std::vector<MultiGridNode> multigrid;
@@ -629,8 +610,7 @@ void CSGVSerialBrickEncoder::freqEncodeBrick(const std::vector<uint32_t>& volume
     uint32_t muligrid_lod_start = multigrid.size() - 1;
     if (multigrid[muligrid_lod_start].constant_subregion) {
         brick_freq[PALETTE_ADV | STOP_BIT]++;
-    }
-    else {
+    } else {
         brick_freq[PALETTE_ADV]++;
     }
     palette.push_back(multigrid[muligrid_lod_start].label);
@@ -639,7 +619,7 @@ void CSGVSerialBrickEncoder::freqEncodeBrick(const std::vector<uint32_t>& volume
     uint32_t current_inv_lod = 1u;
     for (uint32_t lod_width = m_brick_size / 2u; lod_width > 0u; lod_width /= 2u) {
         // in the multigrid, LODs are ordered from finest to coarsest, so we have to go through them in reverse.
-        uint32_t lod_dim = (m_brick_size/lod_width);
+        uint32_t lod_dim = (m_brick_size / lod_width);
         uint32_t parent_multigrid_lod_start = muligrid_lod_start;
         muligrid_lod_start -= lod_dim * lod_dim * lod_dim;
 
@@ -660,14 +640,15 @@ void CSGVSerialBrickEncoder::freqEncodeBrick(const std::vector<uint32_t>& volume
                 // if this subtree is already filled (because in a previous LOD we set a STOP_BIT for this area), the last element of this block is set and we can skip it
                 // note that this will also happen if this LOD block lies completely outside the volume because some parent would've been set to STOP_BIT earlier
                 // our parent spanned 8 elements of this finer current level, so we need to look at the element 7 indices further
-                if ((m_op_mask & OP_STOP_BIT)
-                     && multigrid[parent_multigrid_lod_start +
-                              voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].constant_subregion) {
+                if ((m_op_mask & OP_STOP_BIT) && multigrid[parent_multigrid_lod_start +
+                                                           voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))]
+                                                     .constant_subregion) {
                     i += (lod_width * lod_width * lod_width * 7);
                     continue;
                 }
                 parent_value = multigrid[parent_multigrid_lod_start +
-                                         voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))].label;
+                                         voxel_pos2idx(brick_pos / lod_width / 2u, glm::uvec3(lod_dim / 2u))]
+                                   .label;
                 assert(parent_value != INVALID && "parent element in brick was not set in previous LOD!");
             }
 
@@ -677,9 +658,7 @@ void CSGVSerialBrickEncoder::freqEncodeBrick(const std::vector<uint32_t>& volume
             uint32_t operation = 0u;
             // if the whole subtree from here has this parent_value, we can set a stop sign and fill the whole brick area of the subtree
             // note that grid nodes outside the volume are by definition also homogeneous
-            if ((m_op_mask & OP_STOP_BIT) && lod_width >= 1
-                 && multigrid[muligrid_lod_start +
-                                            voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].constant_subregion) {
+            if ((m_op_mask & OP_STOP_BIT) && lod_width >= 1 && multigrid[muligrid_lod_start + voxel_pos2idx(brick_pos / lod_width, glm::uvec3(lod_dim))].constant_subregion) {
                 operation = STOP_BIT;
             }
             // determine operation for the next entry
@@ -696,14 +675,14 @@ void CSGVSerialBrickEncoder::freqEncodeBrick(const std::vector<uint32_t>& volume
                 operation |= PALETTE_LAST;
             else {
                 uint32_t palette_delta = static_cast<uint32_t>(std::find(palette.rbegin(), palette.rend(), value) - palette.rbegin());
-                if((m_op_mask & OP_PALETTE_D_BIT) && palette_delta < palette.size() && palette_delta <= MAX_PALETTE_DELTA_DISTANCE) {
+                if ((m_op_mask & OP_PALETTE_D_BIT) && palette_delta < palette.size() && palette_delta <= MAX_PALETTE_DELTA_DISTANCE) {
                     assert(palette.at(palette.size() - palette_delta - 1u) == value && "palette label does not fit for delta");
                     assert(palette_delta > 0u && "palette delta 0 should've been caught by the palette_last value!");
 
                     if (m_op_mask & OP_USE_OLD_PAL_D_BIT) {
                         // the old mode stores only one single 4 bit element for the delta: 0 < palette_delta < 17u
                         if (palette_delta < 17u) {
-                            if(detail_freq && (current_inv_lod == lod_count - 1u))
+                            if (detail_freq && (current_inv_lod == lod_count - 1u))
                                 brick_freq[16 + (operation | PALETTE_D)]++;
                             else
                                 brick_freq[(operation | PALETTE_D)]++;
@@ -714,32 +693,30 @@ void CSGVSerialBrickEncoder::freqEncodeBrick(const std::vector<uint32_t>& volume
                             palette.push_back(value);
                             operation |= PALETTE_ADV;
                         }
-                    }
-                    else {
-                        palette_delta--; // the "0" case is already handled by PALETTE_LAST. Only consider cases 1 ... MAX_PALETTE_DELTA_DISTANCE
+                    } else {
+                        palette_delta--;                                                     // the "0" case is already handled by PALETTE_LAST. Only consider cases 1 ... MAX_PALETTE_DELTA_DISTANCE
                         int palette_delta_shift = (glm::findMSB(palette_delta) / 3 + 1) * 3; // start one after the MSB 3 bit package
                         // the operation stream will consist of
                         // [PALETTE_D | STOP_BIT] [CONTINUE_DELTA_BIT][DELTA 1st 3 MSB] [CONTINUE_DELTA_BIT][DELTA 2nd 3 MSB] ...
                         operation |= PALETTE_D;
                         do {
-                            if(detail_freq && (current_inv_lod == lod_count - 1u))
+                            if (detail_freq && (current_inv_lod == lod_count - 1u))
                                 brick_freq[16 + operation]++;
                             else
                                 brick_freq[operation]++;
                             palette_delta_shift -= 3;                                // move over to next three bits
                             operation = (palette_delta >> palette_delta_shift) & 7u; // write the next 3 most-significant bits of delta
                             operation |= (palette_delta_shift > 0u ? 8u : 0u);       // set the 4th MSB of this entry if delta has bits remaining
-                        } while(palette_delta_shift > 0u);
+                        } while (palette_delta_shift > 0u);
                     }
-                } else
-                {  // if nothing helps, we add a completely new palette entry
+                } else { // if nothing helps, we add a completely new palette entry
                     current_lod_palette++;
                     palette.push_back(value);
                     operation |= PALETTE_ADV;
                 }
             }
             assert(operation < 16u && "we only allow writing 4 bit operations!");
-            if(detail_freq && (current_inv_lod == lod_count - 1u))
+            if (detail_freq && (current_inv_lod == lod_count - 1u))
                 brick_freq[16 + operation]++;
             else
                 brick_freq[operation]++;

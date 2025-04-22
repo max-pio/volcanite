@@ -18,11 +18,10 @@
 
 #pragma once
 
-
-#include <cassert>
-#include <cstring>
 #include "vvv/util/Logger.hpp"
 #include "vvv/util/util.hpp"
+#include <cassert>
+#include <cstring>
 
 #include "BitVector.hpp"
 
@@ -30,27 +29,27 @@ using namespace vvv;
 
 namespace volcanite {
 
-    class WaveletMatrixBase {
+class WaveletMatrixBase {
 
-    protected:
-        uint32_t m_text_size;
+  protected:
+    uint32_t m_text_size;
 
-    public:
-        WaveletMatrixBase(const uint32_t* op_stream_in, uint32_t start4bit, uint32_t end4bit)
-                                : m_text_size(end4bit - start4bit) {}
+  public:
+    WaveletMatrixBase(const uint32_t *op_stream_in, uint32_t start4bit, uint32_t end4bit)
+        : m_text_size(end4bit - start4bit) {}
 
-        [[nodiscard]] virtual uint32_t access(uint32_t position) const = 0;
-        [[nodiscard]] virtual uint32_t rank(uint32_t position, uint32_t symbol) const = 0;
+    [[nodiscard]] virtual uint32_t access(uint32_t position) const = 0;
+    [[nodiscard]] virtual uint32_t rank(uint32_t position, uint32_t symbol) const = 0;
 
-        [[nodiscard]] uint32_t getTextSize() const { return m_text_size; }
-        [[nodiscard]] virtual const BitVector* getBitVector() const = 0;
-        [[nodiscard]] virtual const FlatRank* getFlatRank() const = 0;
+    [[nodiscard]] uint32_t getTextSize() const { return m_text_size; }
+    [[nodiscard]] virtual const BitVector *getBitVector() const = 0;
+    [[nodiscard]] virtual const FlatRank *getFlatRank() const = 0;
 
-        [[nodiscard]] virtual uint32_t getLevels() const = 0;
-        [[nodiscard]] virtual const uint32_t* getZerosInLevel() const = 0;
-        [[nodiscard]] virtual const uint32_t* getOnesBeforeLevel() const = 0;
+    [[nodiscard]] virtual uint32_t getLevels() const = 0;
+    [[nodiscard]] virtual const uint32_t *getZerosInLevel() const = 0;
+    [[nodiscard]] virtual const uint32_t *getOnesBeforeLevel() const = 0;
 
-        [[nodiscard]] virtual size_t getByteSize() const = 0;
-    };
+    [[nodiscard]] virtual size_t getByteSize() const = 0;
+};
 
 } // namespace volcanite

@@ -23,9 +23,9 @@
 
 #include "vvvwindow/GLFWCameraController.hpp"
 
+#include <filesystem>
 #include <optional>
 #include <thread>
-#include <filesystem>
 
 // forward decl
 class GLFWwindow;
@@ -36,26 +36,24 @@ namespace vvv {
 /// The code here is heavily deprecated and should use modern Vulkan 1.3 VK_KHR_DYNAMIC_RENDERING or even better:
 /// modernize and use the GraphicsPass abstraction.
 class Application : public DefaultGpuContext, public WindowingSystemIntegration, public std::enable_shared_from_this<Application> {
-private:
+  private:
     Application(std::string appName, std::shared_ptr<Renderer> renderer, std::shared_ptr<DebugUtilities> debugUtilities)
         : DefaultGpuContext({.debugUtilities = debugUtilities, .appName = appName}), m_renderer(renderer),
-        m_camera_controller(), m_gui(std::make_unique<GuiImgui>(this)), m_startup_resolution(1920, 1080)
-        {
-            // choose a camera controller for the renderer
-            m_renderer->setCamera(std::make_shared<Camera>(true));
-            m_camera_controller.setCamera(&(*m_renderer->getCamera()));
+          m_camera_controller(), m_gui(std::make_unique<GuiImgui>(this)), m_startup_resolution(1920, 1080) {
+        // choose a camera controller for the renderer
+        m_renderer->setCamera(std::make_shared<Camera>(true));
+        m_camera_controller.setCamera(&(*m_renderer->getCamera()));
 
-            auto video_directory = Paths::getHomeDirectory().append("volcanite_video");
-            if(!std::filesystem::exists(video_directory) && !std::filesystem::create_directory(video_directory)) {
-                Logger(Warn) << "Could not create non-existing video export directory " << video_directory;
-            }
-            else {
-                m_record_file_path = video_directory.generic_string() + "/volcanite_record_file.rec";
-                m_video_file_path = video_directory.generic_string() + "/video";
-            }
-        };
+        auto video_directory = Paths::getHomeDirectory().append("volcanite_video");
+        if (!std::filesystem::exists(video_directory) && !std::filesystem::create_directory(video_directory)) {
+            Logger(Warn) << "Could not create non-existing video export directory " << video_directory;
+        } else {
+            m_record_file_path = video_directory.generic_string() + "/volcanite_record_file.rec";
+            m_video_file_path = video_directory.generic_string() + "/video";
+        }
+    };
 
-public:
+  public:
     [[nodiscard]] static std::shared_ptr<Application> create(std::string appName, std::shared_ptr<Renderer> renderer,
                                                              float guiScaling = 1.f,
                                                              std::shared_ptr<DebugUtilities> debugUtilities = {}) {
@@ -63,7 +61,7 @@ public:
         return std::shared_ptr<Application>(new Application(appName, renderer, debugUtilities));
     }
 
-    const WindowingSystemIntegration* getWsi() const override { return this; }
+    const WindowingSystemIntegration *getWsi() const override { return this; }
 
     /// Acquire all GPU resources including instance, device and swapchain resources.
     /// This method is reintrant.
@@ -82,8 +80,9 @@ public:
     void execAsync();
     std::thread execAsyncAttached();
 
-    void setStartupWindowSize(vk::Extent2D resolution, bool fullscreen=false) {
-        m_startup_resolution = resolution; m_fullscreen = fullscreen;
+    void setStartupWindowSize(vk::Extent2D resolution, bool fullscreen = false) {
+        m_startup_resolution = resolution;
+        m_fullscreen = fullscreen;
     }
     vk::Extent2D getScreenExtent() const override;
 
@@ -120,17 +119,18 @@ public:
     /// To print out versions of libraries that are available.
     static void logLibraryAvailabilty();
 
-protected:
+  protected:
     vk::SurfaceKHR createSurface() override;
 
-private:
+  private:
     static void errorCallback(int error, const char *description) { std::cerr << "GLFW Error " << error << ": " << description << std::flush; }
 
     /// @deprecated use MultiBuffering instead
-    template <typename T> using ForEachSwapchainImage = std::vector<T>;
+    template <typename T>
+    using ForEachSwapchainImage = std::vector<T>;
     /// @deprecated use MultiBuffering instead
-    template <typename T> using ForEachInFlightFrame = std::vector<T>;
-
+    template <typename T>
+    using ForEachInFlightFrame = std::vector<T>;
 
     void createWindow();
     void createQueues();
@@ -235,9 +235,8 @@ private:
     size_t m_video_frame_count = 0;
     std::optional<int> m_video_frame = {};
 
-    double min_ms = 9999999999., avg_ms = 0.,  var_ms = 0., max_ms = 0.;
+    double min_ms = 9999999999., avg_ms = 0., var_ms = 0., max_ms = 0.;
     size_t avg_ms_samples = 0;
-
 
 #ifdef IMGUI
     bool m_display_imgui = true;

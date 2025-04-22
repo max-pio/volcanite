@@ -19,23 +19,21 @@
 #include "volcanite/util/args_and_csgv_provider.hpp"
 
 #ifdef HEADLESS
-    #include "vvv/headless_entrypoint.hpp"
+#include "vvv/headless_entrypoint.hpp"
 #else
 
 #include "vvvwindow/App.hpp"
 #include "vvvwindow/entrypoint.hpp"
-
 
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp"
 #include <memory>
 
 namespace volcanite {
-    class CSGVDatabase;
+class CSGVDatabase;
 }
 
 using namespace volcanite;
-
 
 int csgv_brick_viewer(int argc, char *argv[]) {
 
@@ -43,7 +41,9 @@ int csgv_brick_viewer(int argc, char *argv[]) {
     std::shared_ptr<volcanite::CompressedSegmentationVolume> csgv;
     std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase;
     auto ret = volcanite_provide_args_and_csgv(args, csgv, csgvDatabase, argc, argv);
-    if (ret != RET_SUCCESS) { return ret; }
+    if (ret != RET_SUCCESS) {
+        return ret;
+    }
 
     std::string appName = "Compressed Segmentation Volume Brick Viewer";
 

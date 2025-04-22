@@ -15,12 +15,11 @@
 
 #pragma once
 
-#include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
+#include <vector>
 
-namespace vvv
-{
+namespace vvv {
 
 /// @brief VertexPrimitives can be used to generate glm::vec3 arrays of vertices for creating geometric primitives.
 ///
@@ -32,15 +31,14 @@ namespace vvv
 /// - These are just vertex vectors. We may use a mesh representation object and/or indexed meshes instead.
 class VertexPrimitives {
 
-public:
+  public:
     /// Transform all vertices of the given vector with the transformation in place.
-    static void transformAll(std::vector<glm::vec3>& vertices, const glm::mat4 transformation) {
-        for(glm::vec3& v : vertices)
+    static void transformAll(std::vector<glm::vec3> &vertices, const glm::mat4 transformation) {
+        for (glm::vec3 &v : vertices)
             v = glm::vec3(transformation * glm::vec4(v, 1.f));
     }
 
-
-    static std::vector<glm::vec3> createUVSphereVec3(int tesselation=8) {
+    static std::vector<glm::vec3> createUVSphereVec3(int tesselation = 8) {
         assert(tesselation >= 2);
         int parallelNumber = tesselation;
         int meridianNumber = tesselation * 2;
@@ -52,11 +50,11 @@ public:
         unsigned int lastVertex = 0;
 
         for (int i = 0; i < parallelNumber; i++) {
-            for (int j = 0; j < meridianNumber; j++) {//meridianNumber/2; ++j) {
+            for (int j = 0; j < meridianNumber; j++) { // meridianNumber/2; ++j) {
                 float lambda0 = static_cast<float>(j) * dLambda;
-                float phi0    = static_cast<float>(i) * dPhi;
+                float phi0 = static_cast<float>(i) * dPhi;
                 float lambda1 = (j + 1) == meridianNumber ? 2 * glm::pi<float>() : static_cast<float>(j + 1) * dLambda;
-                float phi1    = (i + 1) == parallelNumber ?     glm::pi<float>() : static_cast<float>(i + 1) * dPhi;
+                float phi1 = (i + 1) == parallelNumber ? glm::pi<float>() : static_cast<float>(i + 1) * dPhi;
 
                 // Vertex order: 0, 1, 2, 1, 3, 2
                 vertices.push_back(glm::vec3(glm::cos(lambda0) * glm::sin(phi0), glm::cos(phi0), glm::sin(lambda0) * glm::sin(phi0)) * radius);
@@ -78,65 +76,60 @@ public:
     }
 
     static constexpr glm::float32 cubeVertices[] = {
-        -0.5f,-0.5f,-0.5f,
-        -0.5f,-0.5f, 0.5f,
+        -0.5f, -0.5f, -0.5f,
+        -0.5f, -0.5f, 0.5f,
         -0.5f, 0.5f, 0.5f,
-        0.5f, 0.5f,-0.5f,
-        -0.5f,-0.5f,-0.5f,
-        -0.5f, 0.5f,-0.5f,
-        0.5f,-0.5f, 0.5f,
-        -0.5f,-0.5f,-0.5f,
-        0.5f,-0.5f,-0.5f,
-        0.5f, 0.5f,-0.5f,
-        0.5f,-0.5f,-0.5f,
-        -0.5f,-0.5f,-0.5f,
-        -0.5f,-0.5f,-0.5f,
+        0.5f, 0.5f, -0.5f,
+        -0.5f, -0.5f, -0.5f,
+        -0.5f, 0.5f, -0.5f,
+        0.5f, -0.5f, 0.5f,
+        -0.5f, -0.5f, -0.5f,
+        0.5f, -0.5f, -0.5f,
+        0.5f, 0.5f, -0.5f,
+        0.5f, -0.5f, -0.5f,
+        -0.5f, -0.5f, -0.5f,
+        -0.5f, -0.5f, -0.5f,
         -0.5f, 0.5f, 0.5f,
-        -0.5f, 0.5f,-0.5f,
-        0.5f,-0.5f, 0.5f,
-        -0.5f,-0.5f, 0.5f,
-        -0.5f,-0.5f,-0.5f,
+        -0.5f, 0.5f, -0.5f,
+        0.5f, -0.5f, 0.5f,
+        -0.5f, -0.5f, 0.5f,
+        -0.5f, -0.5f, -0.5f,
         -0.5f, 0.5f, 0.5f,
-        -0.5f,-0.5f, 0.5f,
-        0.5f,-0.5f, 0.5f,
+        -0.5f, -0.5f, 0.5f,
+        0.5f, -0.5f, 0.5f,
         0.5f, 0.5f, 0.5f,
-        0.5f,-0.5f,-0.5f,
-        0.5f, 0.5f,-0.5f,
-        0.5f,-0.5f,-0.5f,
+        0.5f, -0.5f, -0.5f,
+        0.5f, 0.5f, -0.5f,
+        0.5f, -0.5f, -0.5f,
         0.5f, 0.5f, 0.5f,
-        0.5f,-0.5f, 0.5f,
+        0.5f, -0.5f, 0.5f,
         0.5f, 0.5f, 0.5f,
-        0.5f, 0.5f,-0.5f,
-        -0.5f, 0.5f,-0.5f,
+        0.5f, 0.5f, -0.5f,
+        -0.5f, 0.5f, -0.5f,
         0.5f, 0.5f, 0.5f,
-        -0.5f, 0.5f,-0.5f,
+        -0.5f, 0.5f, -0.5f,
         -0.5f, 0.5f, 0.5f,
         0.5f, 0.5f, 0.5f,
         -0.5f, 0.5f, 0.5f,
-        0.5f,-0.5f, 0.5f
-    };
+        0.5f, -0.5f, 0.5f};
 
-private:
-
+  private:
     /// Creates a vector of vec3 elements from a list of floats [x0, y0, z0, x1, y1, z1, x2, ..].
     /// @param vertices Pointer to the coordinate float array.
     /// @param length Single float elements in the array (3x the vertex count).
-    static std::vector<glm::vec3> createVec3FromFloatList(const glm::float32* vertices, size_t length)
-    {
+    static std::vector<glm::vec3> createVec3FromFloatList(const glm::float32 *vertices, size_t length) {
         assert((length % 3) == 0);
 
         std::vector<glm::vec3> out;
         size_t n = length / 3;
         out.resize(n);
-        for(size_t i = 0; i < n; i++)
-        {
-            out[i].x = vertices[i*3 + 0];
-            out[i].y = vertices[i*3 + 1];
-            out[i].z = vertices[i*3 + 2];
+        for (size_t i = 0; i < n; i++) {
+            out[i].x = vertices[i * 3 + 0];
+            out[i].y = vertices[i * 3 + 1];
+            out[i].z = vertices[i * 3 + 2];
         }
         return out;
     }
-
 };
 
-}
+} // namespace vvv

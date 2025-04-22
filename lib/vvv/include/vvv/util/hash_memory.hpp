@@ -19,12 +19,12 @@ namespace vvv {
 
 /// Hash an arbitrary memory block of size byte_size starting at data.
 /// @param combine_hash can be initialized with a hash to combine hashes
-    static size_t hashMemory(const void *data, size_t byte_size, size_t combine_hash = 0) {
-        size_t hash = combine_hash;
-        auto p = static_cast<const unsigned char *>(data);
-        for (size_t i = 0; i < byte_size; i++)
-            hash = (std::hash < unsigned char > {}(p[i]) ^ (std::rotl<size_t>(hash, 1)));
-        return hash;
-    }
+static size_t hashMemory(const void *data, size_t byte_size, size_t combine_hash = 0) {
+    size_t hash = combine_hash;
+    auto p = static_cast<const unsigned char *>(data);
+    for (size_t i = 0; i < byte_size; i++)
+        hash = (std::hash<unsigned char>{}(p[i]) ^ (std::rotl<size_t>(hash, 1)));
+    return hash;
+}
 
 } // namespace vvv

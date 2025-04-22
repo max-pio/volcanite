@@ -23,7 +23,7 @@ set(HEADERS
         include/vvvwindow/entrypoint.hpp
         include/vvvwindow/tf/TransferFunction1DWidget.hpp
         include/vvvwindow/tf/TransferFunctionSegmentedVolumeWidget.hpp
-        )
+)
 
 set(SOURCES
         src/App.cpp
@@ -32,7 +32,7 @@ set(SOURCES
         src/entrypoint.cpp
         src/tf/TransferFunction1DWidget.cpp
         src/tf/TransferFunctionSegmentedVolumeWidget.cpp
-        )
+)
 
 # create library target
 add_library(libvvvwindow STATIC ${HEADERS} ${SOURCES})
@@ -58,13 +58,13 @@ target_compile_definitions(libvvvwindow PUBLIC -DGLFW=1)
 target_link_libraries(libvvvwindow
         PUBLIC LibVVV::libvvv
         PRIVATE glfw ${CMAKE_DL_LIBS} tclap::tclap portable_file_dialogs fmt::fmt
-#        PRIVATE Threads::Threads
-        )
+        #        PRIVATE Threads::Threads
+)
 if (TARGET imgui)
     target_link_libraries(libvvvwindow PUBLIC imgui PRIVATE glfw)
-else()
+else ()
     message(WARNING "target imgui not found")
-endif()
+endif ()
 
 target_include_directories(libvvvwindow
         PRIVATE imgui
@@ -75,7 +75,7 @@ target_include_directories(libvvvwindow
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
         PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        )
+)
 
 # add data/ folder as target_property to install() by each project
 set_target_properties(libvvvwindow PROPERTIES INTERFACE_DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)

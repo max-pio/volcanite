@@ -23,8 +23,8 @@
 namespace volcanite {
 
 HuffmanWaveletMatrix::HuffmanWaveletMatrix(const uint32_t *op_stream_in, uint32_t start4bit, uint32_t end4bit)
-                        : WaveletMatrixBase(op_stream_in, start4bit, end4bit),
-                         m_bv(m_text_size * HWM_LEVELS) {
+    : WaveletMatrixBase(op_stream_in, start4bit, end4bit),
+      m_bv(m_text_size * HWM_LEVELS) {
 
     // construct the concatenated bit vector
     prefix_counting_huffman(op_stream_in, start4bit, end4bit, m_bv, m_level_starts);
@@ -55,8 +55,8 @@ uint32_t HuffmanWaveletMatrix::access(uint32_t position) const {
         } else {
             // TODO: we should not use the inverted CHC but the normal CHC, interpret 1 as left and 0 as right in the wavelet matrix to optimize the rank0 / rank1 queries
             size_t const ones_before = m_fr->rank1(position) - m_ones_before[level];
-            size_t const zeros_before = (position -  m_level_starts[level]) - ones_before;
-            position =  m_level_starts[level + 1] + zeros_before;
+            size_t const zeros_before = (position - m_level_starts[level]) - ones_before;
+            position = m_level_starts[level + 1] + zeros_before;
         }
     }
     return 5u;

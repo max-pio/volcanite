@@ -17,12 +17,16 @@
 
 namespace vvv {
 
-void Texture::setName(const std::string& name) {
+void Texture::setName(const std::string &name) {
     m_label = name;
-    if (image)        m_ctx->debugMarker->setName(image, name);
-    if (view)         m_ctx->debugMarker->setName(view, name);
-    if (sampler)      m_ctx->debugMarker->setName(sampler, name);
-    if (deviceMemory) m_ctx->debugMarker->setName(deviceMemory, name);
+    if (image)
+        m_ctx->debugMarker->setName(image, name);
+    if (view)
+        m_ctx->debugMarker->setName(view, name);
+    if (sampler)
+        m_ctx->debugMarker->setName(sampler, name);
+    if (deviceMemory)
+        m_ctx->debugMarker->setName(deviceMemory, name);
 }
 
 size_t Texture::memorySize(vk::ImageAspectFlags aspectMask) const {
@@ -223,4 +227,4 @@ std::pair<vvv::AwaitableHandle, std::shared_ptr<vvv::Buffer>> Texture::upload(co
     return {awaitable, staging};
 }
 
-}
+} // namespace vvv

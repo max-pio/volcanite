@@ -18,15 +18,15 @@
 #include <memory>
 
 #include "volcanite/CSGVPathUtils.hpp"
-#include "volcanite/compression/memory_mapping.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
+#include "volcanite/compression/memory_mapping.hpp"
 
 using namespace vvv;
 
 namespace volcanite {
 
 class CSGVChunkMerger {
-private:
+  private:
     // full volume properties
     glm::ivec3 chunk_count = {0, 0, 0};
     uint32_t total_chunk_count = 0u;
@@ -35,7 +35,7 @@ private:
     uint32_t max_brick_palette_count = 0u;
 
     // all previously compressed chunks
-    CompressedSegmentationVolume* chunks = nullptr;
+    CompressedSegmentationVolume *chunks = nullptr;
     // (inner) chunk properties
     glm::uvec3 chunk_dimension = {0u, 0u, 0u};
     glm::uvec3 bricks_in_chunk = {0u, 0u, 0u};
@@ -47,7 +47,7 @@ private:
      * @param encoding pointer to uint* to which the start address of the brick encoding is written
      * @param encoding_length pointer to uint to which the length of the brick encoding in number of uints is written.
      */
-    void getEncodingForOutputBrick(glm::uvec3 output_brick, const uint32_t** encoding, uint32_t* encoding_length) {
+    void getEncodingForOutputBrick(glm::uvec3 output_brick, const uint32_t **encoding, uint32_t *encoding_length) {
         // determine input chunk index and local brick position within input chunk
         glm::uvec3 chunk_pos = output_brick / bricks_in_chunk;
         glm::uvec3 brick_in_chunk = output_brick - chunk_pos * bricks_in_chunk;
@@ -58,7 +58,7 @@ private:
         *encoding_length = chunks[chunk_idx].getBrickEncodingLength(brick_idx_in_chunk);
     }
 
-public:
+  public:
     CSGVChunkMerger() = default;
 
     ~CSGVChunkMerger() {
@@ -74,8 +74,8 @@ public:
      * @param input_csgv_template_path formatted path of input chunk *.csgv files
      * @param max_input_csgv_index inclusive last x y z tile indices to merge
      */
-    std::shared_ptr<CompressedSegmentationVolume> mergeCompressedSegmentationVolumeChunksFromFiles(const std::string& output_csgv_path,
-                                                                                                   const std::string& input_csgv_template_path,
+    std::shared_ptr<CompressedSegmentationVolume> mergeCompressedSegmentationVolumeChunksFromFiles(const std::string &output_csgv_path,
+                                                                                                   const std::string &input_csgv_template_path,
                                                                                                    glm::ivec3 max_input_csgv_index) {
         // TODO: make target_uints_per_split_encoding a parameter for merging or obtain it from the first input chunk
         // target a size of ~2GB per split encoding vector
@@ -93,32 +93,30 @@ public:
         total_chunk_count = chunk_count.x * chunk_count.y * chunk_count.z;
         Logger(Info, true) << "Merging Compressed Segmentation Volume chunk files 0% (import " << total_chunk_count << " chunk csgv files)";
         chunks = new CompressedSegmentationVolume[total_chunk_count];
-        for(uint32_t c = 0; c < total_chunk_count; c++) {
+        for (uint32_t c = 0; c < total_chunk_count; c++) {
             glm::ivec3 chunk_index = sfc::Cartesian::i2p(c, chunk_count);
             chunks[c].importFromFile(formatChunkPath(input_csgv_template_path, chunk_index.x, chunk_index.y, chunk_index.z), false, false);
 
             // double check here as verifying the compression is cheap
             if (!chunks[c].verifyCompression()) {
                 Logger(Error) << "Verification error when importing compressed chunk "
-                            << formatChunkPath(input_csgv_template_path, chunk_index.x, chunk_index.y, chunk_index.z)
-                            << " during merging.";
+                              << formatChunkPath(input_csgv_template_path, chunk_index.x, chunk_index.y, chunk_index.z)
+                              << " during merging.";
                 return nullptr;
             }
 
             // keep track of maximum pallette entry count over all chunks
             max_brick_palette_count = glm::max(max_brick_palette_count, chunks[c].getMaxBrickPaletteCount());
 
-            if(chunks[c].isUsingSeparateDetail()) {
+            if (chunks[c].isUsingSeparateDetail()) {
                 Logger(Error) << "Detail separation can only be applied AFTER merging Compressed Segmentation Volumes. Import CSGV chunks must not use detail separation.";
                 return nullptr;
             }
-            if(c == 0) {
+            if (c == 0) {
                 // store parameters of chunks
                 chunk_dimension = chunks[0].getVolumeDim();
                 chunks[0].m_encoding_mode = chunks[0].getEncodingMode();
-                if((chunk_count.x > 1 && chunk_dimension.x % chunks[0].m_brick_size != 0)
-                   || (chunk_count.y > 1 && chunk_dimension.y % chunks[0].m_brick_size != 0)
-                   || (chunk_count.z > 1 && chunk_dimension.z % chunks[0].m_brick_size != 0)) {
+                if ((chunk_count.x > 1 && chunk_dimension.x % chunks[0].m_brick_size != 0) || (chunk_count.y > 1 && chunk_dimension.y % chunks[0].m_brick_size != 0) || (chunk_count.z > 1 && chunk_dimension.z % chunks[0].m_brick_size != 0)) {
                     Logger(Error) << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunk dimension must be multiple of brick size.";
                     return nullptr;
                 }
@@ -126,30 +124,25 @@ public:
 
                 if (chunks[0].m_encoding_mode == SINGLE_TABLE_RANS_ENC || chunks[0].m_encoding_mode == DOUBLE_TABLE_RANS_ENC)
                     reference_frequency_table = chunks[0].getCurrentFrequencyTable();
-                if(chunks[0].m_encoding_mode == DOUBLE_TABLE_RANS_ENC)
+                if (chunks[0].m_encoding_mode == DOUBLE_TABLE_RANS_ENC)
                     reference_detail_frequency_table = chunks[0].getCurrentDetailFrequencyTable();
             } else {
                 // check if chunk CSGV use the same compression parameters
                 if (chunks[0].m_encoding_mode != chunks[c].getEncodingMode()) {
                     Logger(Error)
-                            << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunks must use same encoding mode.";
+                        << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunks must use same encoding mode.";
                     return nullptr;
                 }
                 if ((!reference_frequency_table.empty() && reference_frequency_table != chunks[c].getCurrentFrequencyTable()) ||
                     (!reference_detail_frequency_table.empty() &&
                      reference_detail_frequency_table != chunks[c].getCurrentDetailFrequencyTable())) {
                     Logger(Error)
-                            << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunks must use same rANS frequency tables.";
+                        << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunks must use same rANS frequency tables.";
                     return nullptr;
                 }
-                if ((chunk_index.x < max_input_csgv_index.x
-                        && chunk_index.y < max_input_csgv_index.y
-                        && chunk_index.z < max_input_csgv_index.z)
-                    && (chunk_dimension.x != chunks[c].getVolumeDim().x
-                        || chunk_dimension.y != chunks[c].getVolumeDim().y
-                        || chunk_dimension.z != chunks[c].getVolumeDim().z)) {
+                if ((chunk_index.x < max_input_csgv_index.x && chunk_index.y < max_input_csgv_index.y && chunk_index.z < max_input_csgv_index.z) && (chunk_dimension.x != chunks[c].getVolumeDim().x || chunk_dimension.y != chunks[c].getVolumeDim().y || chunk_dimension.z != chunks[c].getVolumeDim().z)) {
                     Logger(Error)
-                            << "Merging Compressed Segmentation Volume chunk files failed. Inner CSGV chunks must have the same volume dimensions.";
+                        << "Merging Compressed Segmentation Volume chunk files failed. Inner CSGV chunks must have the same volume dimensions.";
                     return nullptr;
                 }
                 // ToDo: check if volume dimensions of outer CSGV chunks fit
@@ -158,9 +151,9 @@ public:
         glm::uvec3 complete_volume_dim = chunk_dimension * glm::uvec3(max_input_csgv_index) + chunks[sfc::Cartesian::p2i(max_input_csgv_index, chunk_count)].getVolumeDim();
         brick_count = (glm::uvec3(chunk_count - glm::ivec3(1)) * chunk_dimension + chunks[sfc::Cartesian::p2i(max_input_csgv_index, chunk_count)].getVolumeDim() - glm::uvec3(1)) / chunks[0].m_brick_size + 1u;
         total_brick_count = brick_count.x * brick_count.y * brick_count.z;
-        if(total_brick_count > (1ull << 32) - 1ull) {
+        if (total_brick_count > (1ull << 32) - 1ull) {
             Logger(Error)
-                    << "Merging Compressed Segmentation Volume chunk files failed. Brick count exceeds 32 bit range. Use a larger brick size.";
+                << "Merging Compressed Segmentation Volume chunk files failed. Brick count exceeds 32 bit range. Use a larger brick size.";
             return nullptr;
         }
         Logger(Info, true) << "Merging Compressed Segmentation Volume chunk files 0% (chunk import for " << str(complete_volume_dim) << " volume complete)";
@@ -205,11 +198,11 @@ public:
         // write a dummy entry for encoding size that will be overwritten once the first split encoding is written out
         encoding_file.write(reinterpret_cast<const char *>(&encoding_size), sizeof(size_t));
 
-        for(uint32_t brick_idx = 0u; brick_idx < total_brick_count; brick_idx++) {
+        for (uint32_t brick_idx = 0u; brick_idx < total_brick_count; brick_idx++) {
 
             // get encoding and encoding length of next output brick
             glm::uvec3 output_brick = brick_idx2pos(brick_idx, brick_count);
-            const uint32_t* brick_encoding;
+            const uint32_t *brick_encoding;
             uint32_t brick_encoding_size;
             getEncodingForOutputBrick(output_brick, &brick_encoding, &brick_encoding_size);
 
@@ -221,24 +214,23 @@ public:
             // Check if the initial split must happen here (when the uint32_t element count exceeds target_uints_per_split_encoding)
             // We can not reduce brick_idx_to_enc_vector further if it was already used for splitting encoding vectors.
             // Otherwise, the old split may become invalid.
-            if(split_encoding_count == 1u && encoding_size + brick_encoding_size > target_uints_per_split_encoding) {
-                if(brick_idx == 0u) {
+            if (split_encoding_count == 1u && encoding_size + brick_encoding_size > target_uints_per_split_encoding) {
+                if (brick_idx == 0u) {
                     Logger(Warn) << "Requested split encoding size is too small. Using minimal size.";
-                }
-                else {
+                } else {
                     brick_idx_to_enc_vector = brick_idx;
                 }
             }
             // Check if we have to start a new split encoding "vector" before writing the next brick's encoding.
-            if(brick_idx / brick_idx_to_enc_vector >= split_encoding_count) {
+            if (brick_idx / brick_idx_to_enc_vector >= split_encoding_count) {
                 if (encoding_size != encoding_size_uint32_t) {
                     Logger(Error) << "Split encoding size overflow for array " << (split_encoding_count - 1)
-                                       << ", uint size " << encoding_size;
+                                  << ", uint size " << encoding_size;
                     return nullptr;
-                } else if(encoding_size > target_uints_per_split_encoding) {
+                } else if (encoding_size > target_uints_per_split_encoding) {
                     Logger(Debug) << "Brick index to encoding array mapping is underestimating sizes: "
-                                      << "Split array " << (split_encoding_count - 1) << " with "
-                                      << (static_cast<size_t>(encoding_size) * sizeof(uint32_t)) << " bytes.";
+                                  << "Split array " << (split_encoding_count - 1) << " with "
+                                  << (static_cast<size_t>(encoding_size) * sizeof(uint32_t)) << " bytes.";
                 }
 
                 // write size of now finished previous split encoding to the previously reserved encoding size location
@@ -259,7 +251,7 @@ public:
             encoding_file.write(reinterpret_cast<const char *>(brick_encoding), static_cast<size_t>(brick_encoding_size) * sizeof(uint32_t));
             encoding_size += brick_encoding_size;
 
-            if((static_cast<long>(brick_idx) * 100l / total_brick_count) * total_brick_count == static_cast<long>(brick_idx) * 100l) {
+            if ((static_cast<long>(brick_idx) * 100l / total_brick_count) * total_brick_count == static_cast<long>(brick_idx) * 100l) {
                 Logger(Info, true) << "Merging Compressed Segmentation Volume chunk files " << std::fixed
                                    << std::setprecision(0)
                                    << 95.f * static_cast<float>(brick_idx) / static_cast<float>(total_brick_count)
@@ -289,7 +281,7 @@ public:
         chunks[0].m_brick_starts.clear();
         chunks[0].m_detail_encodings.clear();
         chunks[0].m_detail_starts.clear();
-        for(uint32_t c = 1; c < total_chunk_count; c++) {
+        for (uint32_t c = 1; c < total_chunk_count; c++) {
             chunks[c].clear();
         }
         // wait for cleanup
@@ -318,14 +310,14 @@ public:
 
             // write general info
             file.write(reinterpret_cast<const char *>(&chunks[0].m_brick_size), sizeof(uint32_t));
-            file.write(reinterpret_cast<const char*>(&complete_volume_dim), sizeof(glm::uvec3));
-            file.write(reinterpret_cast<const char*>(&chunks[0].m_encoding_mode), sizeof(EncodingMode)); // since 0011
-            file.write(reinterpret_cast<const char*>(&chunks[0].m_random_access), sizeof(bool)); // since 015
-            file.write(reinterpret_cast<const char*>(&max_brick_palette_count), sizeof(uint32_t));
-            file.write(reinterpret_cast<const char*>(&chunks[0].m_op_mask), sizeof(uint32_t)); // since 015
-            chunks[0].m_encoder->exportToFile(file); // since 015
+            file.write(reinterpret_cast<const char *>(&complete_volume_dim), sizeof(glm::uvec3));
+            file.write(reinterpret_cast<const char *>(&chunks[0].m_encoding_mode), sizeof(EncodingMode)); // since 0011
+            file.write(reinterpret_cast<const char *>(&chunks[0].m_random_access), sizeof(bool));         // since 015
+            file.write(reinterpret_cast<const char *>(&max_brick_palette_count), sizeof(uint32_t));
+            file.write(reinterpret_cast<const char *>(&chunks[0].m_op_mask), sizeof(uint32_t)); // since 015
+            chunks[0].m_encoder->exportToFile(file);                                            // since 015
 
-            file.write(reinterpret_cast<const char*>(&brick_idx_to_enc_vector), sizeof(uint32_t)); // since 0013
+            file.write(reinterpret_cast<const char *>(&brick_idx_to_enc_vector), sizeof(uint32_t)); // since 0013
 
             // free all remaining memory of CSGV chunks
             delete[] chunks;
@@ -337,7 +329,7 @@ public:
 
             // write brick starts buffer
             size_t complete_brickstarts_size = total_brick_count + 1;
-            file.write(reinterpret_cast<const char*>(&complete_brickstarts_size), sizeof(size_t));
+            file.write(reinterpret_cast<const char *>(&complete_brickstarts_size), sizeof(size_t));
             if (complete_brickstarts_size * sizeof(uint32_t) != std::filesystem::file_size(brickstarts_path)) {
                 Logger(Error) << "Brickstarts size " << std::filesystem::file_size(brickstarts_path) << " does not match the expected size " << (complete_brickstarts_size * sizeof(uint32_t));
                 file.close();
@@ -359,16 +351,15 @@ public:
                 file.close();
                 return nullptr;
             }
-            file.write(reinterpret_cast<const char*>(&split_encoding_count), sizeof(size_t));
+            file.write(reinterpret_cast<const char *>(&split_encoding_count), sizeof(size_t));
             file << encoding_file_in.rdbuf();
             encoding_file_in.close();
 
             // we never use detail separation here
             bool use_detail_separation = false;
-            file.write(reinterpret_cast<const char*>(&use_detail_separation), sizeof(bool));
+            file.write(reinterpret_cast<const char *>(&use_detail_separation), sizeof(bool));
             file.close();
         }
-
 
         // reimport complete CSGV file
         Logger(Info) << "Merging Compressed Segmentation Volume chunk files 100%. complete volume size " << str(complete_volume_dim) << "                ";
@@ -384,15 +375,14 @@ public:
 
         std::shared_ptr<CompressedSegmentationVolume> full_csgv = std::make_shared<volcanite::CompressedSegmentationVolume>();
         bool reimport_success = full_csgv->importFromFile(output_csgv_path, false, true);
-        if(!reimport_success) {
+        if (!reimport_success) {
             Logger(Error) << "Error re-importing exported merged Compressed Segmentation Volume from "
-                               << output_csgv_path;
+                          << output_csgv_path;
             return nullptr;
         }
 
         return full_csgv;
     }
-
 };
 
-}   // namespace volcanite
+} // namespace volcanite

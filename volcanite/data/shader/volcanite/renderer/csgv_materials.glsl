@@ -22,61 +22,61 @@
 // Shading Materials ---------------------------------------------------------------------------------------------------
 float getAttribute(uint label, uint attributeStart) {
     // attributeStart > valid buffer size means that we use the voxel label direclty (csgv_id)
-    if(attributeStart == LABEL_AS_ATTRIBUTE)
-        return float(label);
+    if (attributeStart == LABEL_AS_ATTRIBUTE)
+    return float(label);
     else
-        return g_attributes[attributeStart + label];
+    return g_attributes[attributeStart + label];
 }
 
 /// Returns the first material where the discriminator attribute falls into the discriminator interval, -1 for invisible
 int getMaterial(uint label) {
-#if CACHE_MODE == CACHE_VOXELS
+    #if CACHE_MODE == CACHE_VOXELS
     if (label == INVISIBLE_LABEL)
-        return -1;
-#endif
-    for(int m = 0; m <= g_max_active_material; m++) {
+    return -1;
+    #endif
+    for (int m = 0; m <= g_max_active_material; m++) {
         //#define HASHED_LABEL_VISIBILITY
-//        #ifdef HASHED_LABEL_VISIBILITY
-//            if (g_materials[m].discrAttributeStart == LABEL_AS_ATTRIBUTE) {
-//                if ((label %  g_materials[m].discrIntervalMax) <  g_materials[m].discrIntervalMin)
-//                    continue;
-//                else
-//                    return m;
-//            }
-//        #endif
+        //        #ifdef HASHED_LABEL_VISIBILITY
+        //            if (g_materials[m].discrAttributeStart == LABEL_AS_ATTRIBUTE) {
+        //                if ((label %  g_materials[m].discrIntervalMax) <  g_materials[m].discrIntervalMin)
+        //                    continue;
+        //                else
+        //                    return m;
+        //            }
+        //        #endif
         const float attr = getAttribute(label, g_materials[m].discrAttributeStart);
         if (attr >= g_materials[m].discrIntervalMin && attr <= g_materials[m].discrIntervalMax)
-            return m;
+        return m;
     }
     // a material fits, return "invisible" material
     return -1;
 }
 
 bool isLabelVisible(uint label) {
-#if CACHE_MODE == CACHE_VOXELS
+    #if CACHE_MODE == CACHE_VOXELS
     return label != INVISIBLE_LABEL && getMaterial(label) >= 0;
-#else
+    #else
     return getMaterial(label) >= 0;
-#endif
+    #endif
 }
 
 vec4 getColor(uint label, int material) {
     assertf(material >= 0 && material <= g_max_active_material, "material %i assigned to label is invalid", material);
-    assert(!any(isnan(vec4(g_materials[material].discrIntervalMin,  g_materials[material].discrIntervalMax,
-                      g_materials[material].tfIntervalMin, g_materials[material].tfIntervalMax))),
-           "NaN in shader attribute limits");
+    assert(!any(isnan(vec4(g_materials[material].discrIntervalMin, g_materials[material].discrIntervalMax,
+    g_materials[material].tfIntervalMin, g_materials[material].tfIntervalMax))),
+    "NaN in shader attribute limits");
 
     // read attribute, map tfInterval to [0, 1]
     float v = 0.f;
     // wrapping mode: 0 = clamp (handled by textureLoD), 1 = repeat, 2 = random
     if (g_materials[material].wrapping == 2) { // repeat
         v = fract(float(hash_pcg2d(uvec2(label, floatBitsToUint(g_materials[material].tfIntervalMin))).x % 65536) / 65536.f
-                  + g_materials[material].tfIntervalMax / 65536.f);
+        + g_materials[material].tfIntervalMax / 65536.f);
     }
     else {
         // clamp
         v = (getAttribute(label, g_materials[material].tfAttributeStart) - g_materials[material].tfIntervalMin)
-            / (g_materials[material].tfIntervalMax + 1.f - g_materials[material].tfIntervalMin);
+        / (g_materials[material].tfIntervalMax + 1.f - g_materials[material].tfIntervalMin);
 
         // repeat
         if (g_materials[material].wrapping == 1) {
@@ -93,9 +93,9 @@ vec4 getColor(uint label, int material) {
     //
     // This should not be an issue with GLSL version >= 4!
     // Anyways, here's a fix by "forcing" non-uniform control flow:
-    if(material == 0)
-        return vec4(textureLod(s_transferFunctions[0], v, 0.f).rgb, g_materials[0].opacity);
+    if (material == 0)
+    return vec4(textureLod(s_transferFunctions[0], v, 0.f).rgb, g_materials[0].opacity);
     return vec4(textureLod(s_transferFunctions[material], v, 0.f).rgb, g_materials[material].opacity);
 }
 
-#endif // VOLCANITE_MATERIALS_GLSL
+#endif// VOLCANITE_MATERIALS_GLSL

@@ -30,7 +30,7 @@ layout (local_size_x = 4, local_size_y = 4, local_size_z = 2) in;
 
 uint popFreeBlockStack(uint inv_lod) {
     uint pos = atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], uint(-1)) - 1u;
-    if(pos > g_free_stack_capacity) {
+    if (pos > g_free_stack_capacity) {
         // no element on stack for us
         //assert(false, "couldn't pop from block stack because it is empty - or the counter was invalid");
         atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], 1u);
@@ -66,10 +66,10 @@ void main() {
     // find out for which brick we compute if it is visible
     const uvec3 brick = gl_GlobalInvocationID.xyz;
     if (isHelperLane(brick, g_brick_count))
-        return;
+    return;
 
     // do some debug checks
-    if(!isHelperLane(brick, uvec3(1u))) {
+    if (!isHelperLane(brick, uvec3(1u))) {
         const uint cache_top = (LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD;
         assertf(g_assign_info[cache_top] <= g_cache_capacity, "cache counter is over capacity! cache top: %u", g_assign_info[cache_top]);
     }
@@ -80,27 +80,27 @@ void main() {
 
 
     // track how many bricks are decoded of each LOD
-#ifdef ENALBE_CSGV_DEBUGGING
-    if(bool(g_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT) && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > 0
-        && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < LOD_COUNT) {
+    #ifdef ENALBE_CSGV_DEBUGGING
+    if (bool(g_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT) && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > 0
+    && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < LOD_COUNT) {
         atomicAdd(gpu_stats.blocks_in_cache_L1_to_7[g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] - 1u], 1u);
     }
-#endif
+    #endif
 
     const uint slot = g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT];
     // not assigned to a request slot means that the brick will not allocate anything => ignore this brick
-    if(slot == INVALID) {
+    if (slot == INVALID) {
         return;
     }
 
     const uint inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
-    const uint elemSizeInCache = 1u << (3u * (inv_lod - 1u)); // number of base elements we need for storing one element of this LoD in g_cache
+    const uint elemSizeInCache = 1u << (3u * (inv_lod - 1u));// number of base elements we need for storing one element of this LoD in g_cache
     assert(0 < inv_lod && inv_lod < LOD_COUNT, "brick has slot index but requests zero or invalid lod");
 
     // now find us an index in the cache
     uint cache_idx = INVALID;
     // the first slots can directly use one of the "new" elements.
-    if(slot < g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BRICK_COUNT]) {
+    if (slot < g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BRICK_COUNT]) {
         cache_idx = g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_START] + slot * elemSizeInCache;
     }
     // the others have to grab one from the freeBlockStack

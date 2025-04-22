@@ -24,7 +24,8 @@
 
 namespace vvv {
 
-template <typename T> std::shared_ptr<Volume<T>> load_volcanite_raw_(std::string url, std::string formatLabel, size_t bitwidth, vk::Format gpuFormat) {
+template <typename T>
+std::shared_ptr<Volume<T>> load_volcanite_raw_(std::string url, std::string formatLabel, size_t bitwidth, vk::Format gpuFormat) {
     std::ifstream vraw(url, std::ios_base::in | std::ios_base::binary);
     if (!vraw.is_open()) {
         std::ostringstream err;
@@ -53,7 +54,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_volcanite_raw_(std::string
         vraw.close();
         throw std::runtime_error("unexpected end of file in " + url);
     }
-    if(line != formatLabel)
+    if (line != formatLabel)
         throw std::runtime_error("data type " + line + " does not equal to requested format " + formatLabel);
     if (line == "uint32")
         bits_per_sample = 32;
@@ -74,7 +75,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_volcanite_raw_(std::string
     float physical_size_y = static_cast<float>(img_height) / max_dim;
     float physical_size_z = static_cast<float>(img_depth) / max_dim;
 
-    if (physical_size_x <= 0.f || physical_size_y <= 0.f || physical_size_z <= 0.f || !std::isfinite(physical_size_x) || !std::isfinite(physical_size_y)|| !std::isfinite(physical_size_z)) {
+    if (physical_size_x <= 0.f || physical_size_y <= 0.f || physical_size_z <= 0.f || !std::isfinite(physical_size_x) || !std::isfinite(physical_size_y) || !std::isfinite(physical_size_z)) {
         vraw.close();
         throw std::invalid_argument("invalid Volcanite RAW physical volume size");
     }
@@ -105,31 +106,31 @@ template <typename T> std::shared_ptr<Volume<T>> load_volcanite_raw_(std::string
     return std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, img_width, img_height, img_depth, gpuFormat, payload);
 }
 
-template <typename T> std::shared_ptr<Volume<T>> load_volcanite_raw_with_cast_(std::string url, std::string formatLabel, vk::Format gpuFormat) {
+template <typename T>
+std::shared_ptr<Volume<T>> load_volcanite_raw_with_cast_(std::string url, std::string formatLabel, vk::Format gpuFormat) {
     throw std::runtime_error("load_volcanite_raw_with_cast not implemented yet!");
 }
 
-template <> std::shared_ptr<Volume<uint64_t>> Volume<uint64_t>::load_volcanite_raw(std::string path, bool allowCast) {
-    return allowCast ? load_volcanite_raw_with_cast_<uint64_t>(path, "uint64", vk::Format::eR64Uint) : load_volcanite_raw_<uint64_t>(
-            path, "uint64", 64, vk::Format::eR64Uint);
+template <>
+std::shared_ptr<Volume<uint64_t>> Volume<uint64_t>::load_volcanite_raw(std::string path, bool allowCast) {
+    return allowCast ? load_volcanite_raw_with_cast_<uint64_t>(path, "uint64", vk::Format::eR64Uint) : load_volcanite_raw_<uint64_t>(path, "uint64", 64, vk::Format::eR64Uint);
 }
-template <> std::shared_ptr<Volume<uint32_t>> Volume<uint32_t>::load_volcanite_raw(std::string path, bool allowCast) {
-    return allowCast ? load_volcanite_raw_with_cast_<uint32_t>(path, "uint32", vk::Format::eR32Uint) : load_volcanite_raw_<uint32_t>(
-            path, "uint32", 32, vk::Format::eR32Uint);
+template <>
+std::shared_ptr<Volume<uint32_t>> Volume<uint32_t>::load_volcanite_raw(std::string path, bool allowCast) {
+    return allowCast ? load_volcanite_raw_with_cast_<uint32_t>(path, "uint32", vk::Format::eR32Uint) : load_volcanite_raw_<uint32_t>(path, "uint32", 32, vk::Format::eR32Uint);
 }
-template <> std::shared_ptr<Volume<uint16_t>> Volume<uint16_t>::load_volcanite_raw(std::string path, bool allowCast) {
-    return allowCast ? load_volcanite_raw_with_cast_<uint16_t>(path, "uint16", vk::Format::eR16Uint) : load_volcanite_raw_<uint16_t>(
-            path, "uint16", 16, vk::Format::eR16Uint);
+template <>
+std::shared_ptr<Volume<uint16_t>> Volume<uint16_t>::load_volcanite_raw(std::string path, bool allowCast) {
+    return allowCast ? load_volcanite_raw_with_cast_<uint16_t>(path, "uint16", vk::Format::eR16Uint) : load_volcanite_raw_<uint16_t>(path, "uint16", 16, vk::Format::eR16Uint);
 }
-template <> std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_volcanite_raw(std::string path, bool allowCast) {
-    return allowCast ? load_volcanite_raw_with_cast_<uint8_t>(path, "uint8", vk::Format::eR8Uint) : load_volcanite_raw_<uint8_t>(
-            path, "uint8", 8, vk::Format::eR8Uint);
+template <>
+std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_volcanite_raw(std::string path, bool allowCast) {
+    return allowCast ? load_volcanite_raw_with_cast_<uint8_t>(path, "uint8", vk::Format::eR8Uint) : load_volcanite_raw_<uint8_t>(path, "uint8", 8, vk::Format::eR8Uint);
 }
-
 
 template <typename T>
-void write_volcanite_raw_(std::string url, const Volume<T>* volume, std::string formatLabel) {
-    if(volume == nullptr || volume->size() == 0)
+void write_volcanite_raw_(std::string url, const Volume<T> *volume, std::string formatLabel) {
+    if (volume == nullptr || volume->size() == 0)
         throw std::runtime_error("volume is empty or does not exist");
 
     std::ofstream vraw(url, std::ios_base::out | std::ios_base::binary);
@@ -150,13 +151,21 @@ void write_volcanite_raw_(std::string url, const Volume<T>* volume, std::string 
     vraw.close();
 }
 
-template <> void Volume<uint8_t>::write_volcanite_raw(std::string url) {
-    write_volcanite_raw_(std::move(url), this, "uint8"); }
-template <> void Volume<uint16_t>::write_volcanite_raw(std::string url) {
-    write_volcanite_raw_(std::move(url), this, "uint16"); }
-template <> void Volume<uint32_t>::write_volcanite_raw(std::string url) {
-    write_volcanite_raw_(std::move(url), this, "uint32"); }
-template <> void Volume<uint64_t>::write_volcanite_raw(std::string url) {
-    write_volcanite_raw_(std::move(url), this, "uint64"); }
+template <>
+void Volume<uint8_t>::write_volcanite_raw(std::string url) {
+    write_volcanite_raw_(std::move(url), this, "uint8");
+}
+template <>
+void Volume<uint16_t>::write_volcanite_raw(std::string url) {
+    write_volcanite_raw_(std::move(url), this, "uint16");
+}
+template <>
+void Volume<uint32_t>::write_volcanite_raw(std::string url) {
+    write_volcanite_raw_(std::move(url), this, "uint32");
+}
+template <>
+void Volume<uint64_t>::write_volcanite_raw(std::string url) {
+    write_volcanite_raw_(std::move(url), this, "uint64");
+}
 
 } // namespace vvv

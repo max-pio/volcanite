@@ -18,11 +18,11 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <memory>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
-#include "vvv/util/util.hpp"
 #include "vvv/util/Logger.hpp"
+#include "vvv/util/util.hpp"
 
 #include "volcanite/compression/memory_mapping.hpp"
 
@@ -39,7 +39,7 @@ struct MultiGridNode {
 
 class VolumeCompressionBase {
 
-public:
+  public:
     /**
      * Constructs a multigrid in out from finest to coarsest level for the given brick in the volume.
      * brick_dim must be a power of 2 but can reach to areas outside of the volume.
@@ -50,22 +50,21 @@ public:
      * @param mark_constant_regions if false, none of the nodes are flagged as constant
      * @param set_out_of_bounds_to_parent if true, nodes out of the volume bounds are set to their parent label
      */
-    static void constructMultiGrid(std::vector<MultiGridNode>& out, const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, const glm::uvec3 brick_start, const uint32_t brick_dim,
+    static void constructMultiGrid(std::vector<MultiGridNode> &out, const std::vector<uint32_t> &volume, const glm::uvec3 volume_dim, const glm::uvec3 brick_start, const uint32_t brick_dim,
                                    bool mark_constant_regions, bool set_out_of_bounds_to_parent) {
         assert(!(brick_dim & (brick_dim - 1u)) && "brick_dim must be a power of 2");
 
         bool contains_voxels_outside_of_volume = glm::any(glm::greaterThanEqual(brick_start + brick_dim, volume_dim));
 
-        out.resize(static_cast<size_t>(std::floor(brick_dim * brick_dim * brick_dim) * 8.f/7.f));
+        out.resize(static_cast<size_t>(std::floor(brick_dim * brick_dim * brick_dim) * 8.f / 7.f));
         glm::uvec3 pos;
         // fill finest level with entries from volume
         for (pos.z = 0u; pos.z < brick_dim; pos.z++) {
             for (pos.y = 0u; pos.y < brick_dim; pos.y++) {
                 for (pos.x = 0u; pos.x < brick_dim; pos.x++) {
-                    if(glm::any(glm::greaterThanEqual(brick_start + pos, volume_dim))) {
+                    if (glm::any(glm::greaterThanEqual(brick_start + pos, volume_dim))) {
                         out[voxel_pos2idx(pos, glm::uvec3(brick_dim))].label = 0xFFFFFFFF;
-                    }
-                    else {
+                    } else {
                         assert(volume[voxel_pos2idx(brick_start + pos, volume_dim)] != 0xFFFFFFFF && "Volume contains forbidden magic number to flag multigrid nodes lying outside the volume");
                         out[voxel_pos2idx(pos, glm::uvec3(brick_dim))].label = volume[voxel_pos2idx(brick_start + pos,
                                                                                                     volume_dim)];
@@ -76,12 +75,11 @@ public:
             }
         }
 
-
         // for all other levels: reduce 2x2x2 nodes form finer level to one node in current level
         // if all 8 finer nodes have constant subregions and the same label, flag this node as constant too.
         uint32_t prev_lod_start = 0u;
         uint32_t lod_start = brick_dim * brick_dim * brick_dim;
-        for(uint32_t current_dim = brick_dim/2u; current_dim >= 1u; current_dim /= 2u) {
+        for (uint32_t current_dim = brick_dim / 2u; current_dim >= 1u; current_dim /= 2u) {
             // iterate over all cells in finer level
             for (pos.z = 0u; pos.z < current_dim; pos.z++) {
                 for (pos.y = 0u; pos.y < current_dim; pos.y++) {
@@ -95,7 +93,7 @@ public:
                             for (delta.y = 0u; delta.y <= 1u; delta.y++) {
                                 for (delta.x = 0u; delta.x <= 1u; delta.x++) {
                                     child_elements[i] = &out[prev_lod_start +
-                                            voxel_pos2idx((2u * pos) + delta, glm::uvec3(current_dim * 2u))];
+                                                             voxel_pos2idx((2u * pos) + delta, glm::uvec3(current_dim * 2u))];
                                     i++;
                                 }
                             }
@@ -106,10 +104,10 @@ public:
                         uint32_t max_ocurrences = 0u;
                         uint32_t max_label = 0xFFFFFFFF;
                         bool constant = mark_constant_regions;
-                        for(i = 0; i < 8; i++) {
+                        for (i = 0; i < 8; i++) {
                             // skip children lying completely outside the volume
                             // these will be marked as constant and will be assigned to the most frequent label
-                            if(child_elements[i]->label == 0xFFFFFFFF) {
+                            if (child_elements[i]->label == 0xFFFFFFFF) {
                                 continue;
                             }
 
@@ -130,18 +128,17 @@ public:
                             }
 
                             // all children must have constant subregions (or be a single element) and the same label for this node to also be constant
-                             constant = constant && (prev_lod_start == 0u || child_elements[i]->constant_subregion); // && (child_elements[i]->label == child_elements[0]->label);
+                            constant = constant && (prev_lod_start == 0u || child_elements[i]->constant_subregion); // && (child_elements[i]->label == child_elements[0]->label);
                         }
 #else
                         // deprecated computation: use most frequent labels from finest instead of last LOD
                         glm::uvec3 volume_pos = brick_start + pos * (brick_dim / current_dim);
                         uint32_t max_label;
                         bool constant;
-                        if(glm::any(glm::greaterThanEqual(volume_pos, volume_dim))) {
+                        if (glm::any(glm::greaterThanEqual(volume_pos, volume_dim))) {
                             max_label = 0xFFFFFFFF;
                             constant = true;
-                        }
-                        else {
+                        } else {
                             max_label = maxOccurrenceInBrick(volume, volume_dim, volume_pos, glm::uvec3(brick_dim / current_dim));
                             constant = isHomogeneousBrick(volume, volume_dim, volume_pos, glm::uvec3(brick_dim / current_dim));
                         }
@@ -165,7 +162,7 @@ public:
             // iterate from second coarsest to finest level, assign invalids to parent
             prev_lod_start = out.size() - 1u;
 
-            for(uint32_t current_dim = 2; current_dim <= brick_dim; current_dim *= 2u) {
+            for (uint32_t current_dim = 2; current_dim <= brick_dim; current_dim *= 2u) {
 
                 lod_start = prev_lod_start - current_dim * current_dim * current_dim;
 
@@ -177,8 +174,8 @@ public:
                     for (pos.y = 0u; pos.y < current_dim; pos.y++) {
                         for (pos.x = 0u; pos.x < current_dim; pos.x++) {
 
-                            const auto& parent_element = out.at(prev_lod_start + voxel_pos2idx(pos / 2u, glm::uvec3(current_dim / 2u)));
-                            auto& cur_element = out.at(lod_start + voxel_pos2idx(pos, glm::uvec3(current_dim)));
+                            const auto &parent_element = out.at(prev_lod_start + voxel_pos2idx(pos / 2u, glm::uvec3(current_dim / 2u)));
+                            auto &cur_element = out.at(lod_start + voxel_pos2idx(pos, glm::uvec3(current_dim)));
                             if (cur_element.label == 0xFFFFFFFF) {
                                 cur_element.label = parent_element.label;
                             }
@@ -194,7 +191,7 @@ public:
     /**
      * Compresses the volume and stores the encoded representation as object attributes.
      */
-    virtual void compress(const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, bool verbose=false) = 0;
+    virtual void compress(const std::vector<uint32_t> &volume, const glm::uvec3 volume_dim, bool verbose = false) = 0;
 
     /**
      * Decompresses the encoded volume from this object's attribute to an uncompressed volume.
@@ -207,12 +204,11 @@ public:
      */
     virtual float getCompressionRatio() const { return -1.f; }
 
-
     /**
      * Returns the entry value with the maximum occurrence in the given brick.
      */
-    static uint32_t maxOccurrenceInBrick(const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, const glm::uvec3 brick_start, const glm::uvec3 brick_dim) {
-        if(brick_dim.x == 1 && brick_dim.y == 1 && brick_dim.z == 1)
+    static uint32_t maxOccurrenceInBrick(const std::vector<uint32_t> &volume, const glm::uvec3 volume_dim, const glm::uvec3 brick_start, const glm::uvec3 brick_dim) {
+        if (brick_dim.x == 1 && brick_dim.y == 1 && brick_dim.z == 1)
             return volume[voxel_pos2idx(brick_start, volume_dim)];
 
         // count all occurring items in a hash map
@@ -221,11 +217,11 @@ public:
         for (pos.z = 0u; pos.z < brick_dim.z; pos.z++) {
             for (pos.y = 0u; pos.y < brick_dim.y; pos.y++) {
                 for (pos.x = 0u; pos.x < brick_dim.x; pos.x++) {
-                    if(glm::any(glm::greaterThanEqual(brick_start + pos, volume_dim)))
+                    if (glm::any(glm::greaterThanEqual(brick_start + pos, volume_dim)))
                         continue;
 
                     uint32_t v = volume[voxel_pos2idx(brick_start + pos, volume_dim)];
-                    if(occurences.contains(v))
+                    if (occurences.contains(v))
                         occurences[v]++;
                     else
                         occurences[v] = 1;
@@ -235,7 +231,7 @@ public:
         // find max occurrence
         uint32_t max_occurring_id = 1337;
         int max_occurrence = -1;
-        for (const auto& n : occurences) {
+        for (const auto &n : occurences) {
             if (n.second > max_occurrence) {
                 max_occurrence = n.second;
                 max_occurring_id = n.first;
@@ -246,8 +242,8 @@ public:
         return max_occurring_id;
     }
 
-    static bool isHomogeneousBrick(const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, const glm::uvec3 brick_start, const glm::uvec3 brick_dim) {
-        if((brick_dim.x == 1 && brick_dim.y == 1 && brick_dim.z == 1) || glm::any(glm::greaterThanEqual(brick_start, volume_dim)))
+    static bool isHomogeneousBrick(const std::vector<uint32_t> &volume, const glm::uvec3 volume_dim, const glm::uvec3 brick_start, const glm::uvec3 brick_dim) {
+        if ((brick_dim.x == 1 && brick_dim.y == 1 && brick_dim.z == 1) || glm::any(glm::greaterThanEqual(brick_start, volume_dim)))
             return true;
 
         uint32_t v = volume[voxel_pos2idx(brick_start, volume_dim)];
@@ -255,10 +251,10 @@ public:
         for (pos.z = 0u; pos.z < brick_dim.z; pos.z++) {
             for (pos.y = 0u; pos.y < brick_dim.y; pos.y++) {
                 for (pos.x = 0u; pos.x < brick_dim.x; pos.x++) {
-                    if(glm::any(glm::greaterThanEqual(brick_start + pos, volume_dim)))
+                    if (glm::any(glm::greaterThanEqual(brick_start + pos, volume_dim)))
                         continue;
 
-                    if(volume[voxel_pos2idx(brick_start + pos, volume_dim)] != v)
+                    if (volume[voxel_pos2idx(brick_start + pos, volume_dim)] != v)
                         return false;
                 }
             }
@@ -266,18 +262,16 @@ public:
         return true;
     }
 
-
-
     /**
      * Compresses and decompresses the given volume, then checks for all differences.
      * @return true if output and input are the same, false if there are (de)compression errors.
      */
-    virtual bool test(const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, bool compress_first=false) {
+    virtual bool test(const std::vector<uint32_t> &volume, const glm::uvec3 volume_dim, bool compress_first = false) {
         assert(volume.size() == volume_dim.x * volume_dim.y * volume_dim.z && "volume size does not match dimension");
 
         Logger(Info) << "Running compression test ------------------------------------";
         MiniTimer timer;
-        if(compress_first) {
+        if (compress_first) {
             Logger(Info) << "Encode";
             compress(volume, volume_dim);
             Logger(Info) << " finished in " << timer.restart() << "s with compression ratio " << getCompressionRatio() << "%";
@@ -286,7 +280,7 @@ public:
         std::shared_ptr<std::vector<uint32_t>> out = decompress();
         Logger(Info) << " finished in " << timer.elapsed() << "s";
 
-        if(volume.size() != out->size()) {
+        if (volume.size() != out->size()) {
             Logger(Error) << "Compressed in and out sizes don't match";
             Logger(Info) << "-------------------------------------------------------------";
             return false;
@@ -294,7 +288,7 @@ public:
 
         static constexpr int max_error_lines = 32;
         size_t error_count = 0;
-        for(size_t i = 0; i < volume.size(); i++) {
+        for (size_t i = 0; i < volume.size(); i++) {
             if (volume[i] != (*out)[i]) {
                 if (error_count < max_error_lines)
                     Logger(Error) << "error at " << str(voxel_idx2pos(i, volume_dim)) << " in " << volume[i] << " != out " << (*out)[i];
@@ -308,9 +302,6 @@ public:
         Logger(Info) << "-------------------------------------------------------------";
         return error_count == 0;
     }
-
 };
-
-
 
 } // namespace volcanite

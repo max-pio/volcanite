@@ -70,15 +70,15 @@ namespace compress_segmentation {
 
 // Hash function for a vector.
 struct HashVector {
-  template <class T>
-  size_t operator()(const std::vector<T>& x) const {
-    std::hash<T> hasher;
-    size_t result = 0;
-    for (const auto& v : x) {
-      result ^= hasher(v) + 0x9e3779b9 + (result << 6) + (result >> 2);
+    template <class T>
+    size_t operator()(const std::vector<T> &x) const {
+        std::hash<T> hasher;
+        size_t result = 0;
+        for (const auto &v : x) {
+            result ^= hasher(v) + 0x9e3779b9 + (result << 6) + (result >> 2);
+        }
+        return result;
     }
-    return result;
-  }
 };
 
 template <class Label>
@@ -115,11 +115,11 @@ using EncodedValueCache =
 //
 //   output_vec: Vector to which output will be appended.
 template <class Label>
-void EncodeBlock(const Label* input, const ptrdiff_t input_strides[3],
+void EncodeBlock(const Label *input, const ptrdiff_t input_strides[3],
                  const ptrdiff_t block_size[3], const ptrdiff_t actual_size[3],
-                 size_t base_offset, size_t* encoded_bits_output,
-                 size_t* table_offset_output, EncodedValueCache<Label>* cache,
-                 std::vector<uint32_t>* output_vec);
+                 size_t base_offset, size_t *encoded_bits_output,
+                 size_t *table_offset_output, EncodedValueCache<Label> *cache,
+                 std::vector<uint32_t> *output_vec);
 
 // Encodes a single channel.
 //
@@ -135,10 +135,10 @@ void EncodeBlock(const Label* input, const ptrdiff_t input_strides[3],
 //
 //   output: Vector to which output will be appended.
 template <class Label>
-void CompressChannel(const Label* input, const ptrdiff_t input_strides[3],
+void CompressChannel(const Label *input, const ptrdiff_t input_strides[3],
                      const ptrdiff_t volume_size[3],
                      const ptrdiff_t block_size[3],
-                     std::vector<uint32_t>* output);
+                     std::vector<uint32_t> *output);
 
 // Encodes multiple channels.
 //
@@ -162,12 +162,12 @@ void CompressChannel(const Label* input, const ptrdiff_t input_strides[3],
 //   output: Vector where output will be stored.  Any existing content is
 //       cleared.
 template <class Label>
-void CompressChannels(const Label* input, const ptrdiff_t input_strides[4],
+void CompressChannels(const Label *input, const ptrdiff_t input_strides[4],
                       const ptrdiff_t volume_size[4],
                       const ptrdiff_t block_size[3],
-                      std::vector<uint32_t>* output);
+                      std::vector<uint32_t> *output);
 
-}  // namespace compress_segmentation
-}  // namespace neuroglancer
+} // namespace compress_segmentation
+} // namespace neuroglancer
 
-#endif  // NEUROGLANCER_COMPRESS_SEGMENTATION_H_
+#endif // NEUROGLANCER_COMPRESS_SEGMENTATION_H_

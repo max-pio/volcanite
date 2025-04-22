@@ -18,15 +18,14 @@
 #include "volcanite/compression/encoder/CSGVBrickEncoder.hpp"
 #include "volcanite/compression/pack_rans.hpp"
 
-
 namespace volcanite {
 
 /// @brief Superclass for the NibbleEncoder and RangeANSEncoder to share common functionality.
 class CSGVSerialBrickEncoder : public CSGVBrickEncoder {
 
-public:
-    CSGVSerialBrickEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask=OP_ALL)
-            : CSGVBrickEncoder(brick_size, encoding_mode, op_mask) {}
+  public:
+    CSGVSerialBrickEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask = OP_ALL)
+        : CSGVBrickEncoder(brick_size, encoding_mode, op_mask) {}
 
     // SERIAL ENCODING -------------------------------------------------------------------------------------------------
 
@@ -36,8 +35,8 @@ public:
     /// @param start the start position of the brick. Should be a multiple of the configured brick size.
     /// @param volume_dim the volume size in voxels in each dimension
     /// @return number of uint32_t elements written to out.
-    [[nodiscard]] uint32_t encodeBrick(const std::vector<uint32_t>& volume, std::vector<uint32_t>& out,
-                                               glm::uvec3 start, glm::uvec3 volume_dim) const override;
+    [[nodiscard]] uint32_t encodeBrick(const std::vector<uint32_t> &volume, std::vector<uint32_t> &out,
+                                       glm::uvec3 start, glm::uvec3 volume_dim) const override;
 
     /// Decompresses a single brick.
     /// @param brick_encoding pointer to the contiguous memory region of the brick encoding .
@@ -45,9 +44,9 @@ public:
     /// @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
     /// @param valid_brick_size is used to clamp used voxels for border bricks. Values outside are undefined.
     /// @param inv_lod the LOD until which to decompress, or rather, the decompression iterations. 0 is the coarsest and log2(brick_size) is the original / finest level.
-    virtual void decodeBrick(const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
-                             const uint32_t* brick_detail_encoding, const uint32_t brick_detail_encoding_length,
-                             uint32_t* output_brick, glm::uvec3 valid_brick_size, int inv_lod) const override;
+    virtual void decodeBrick(const uint32_t *brick_encoding, const uint32_t brick_encoding_length,
+                             const uint32_t *brick_detail_encoding, const uint32_t brick_detail_encoding_length,
+                             uint32_t *output_brick, glm::uvec3 valid_brick_size, int inv_lod) const override;
 
     /// Splits the encoding for the brick at brick_encoding into the base encoding including its palette at
     /// base_encoding_out and the encoding of the finest level-of-detail at detail_encoding_out.
@@ -56,7 +55,7 @@ public:
     /// @param detail_encoding_out target to copy the detail encoding level to. must not overlap with brick_encoding.
     /// @returns the new base encoding size in numbers of uint32
     uint32_t separateDetail(const std::span<uint32_t> brick_encoding,
-                std::span<uint32_t> base_encoding_out, std::span<uint32_t> detail_encoding_out) const override {
+                            std::span<uint32_t> base_encoding_out, std::span<uint32_t> detail_encoding_out) const override {
 
         assert(!m_separate_detail && "encoder already marks detail level as separated");
 
@@ -70,8 +69,7 @@ public:
 
         // copy the detail encoding to the detail buffer (non-overlapping)
         if (detail_encoding_size > detail_encoding_out.size())
-            throw std::runtime_error("detail_encoding_size is too small: "
-                + std::to_string(detail_encoding_size) + " vs. " + std::to_string(detail_encoding_out.size()));
+            throw std::runtime_error("detail_encoding_size is too small: " + std::to_string(detail_encoding_size) + " vs. " + std::to_string(detail_encoding_out.size()));
 
         assert(header_size + base_op_stream_length + detail_encoding_size <= brick_encoding.size() && "detail encoding read overflow in separateDetail");
         assert(detail_encoding_size <= detail_encoding_out.size() && "detail encoding write overflow in separateDetail");
@@ -82,7 +80,7 @@ public:
         //     detail_encoding_size * sizeof(uint32_t));
 
         // the header is now missing one element (start pos. of the detail layer): adjust the lod start entries.
-        for(int l = 0; l < (lod_count - 1u); l++)
+        for (int l = 0; l < (lod_count - 1u); l++)
             base_encoding_out[l] = brick_encoding[l] - 8u;
 
         // move the palette size entry in the encoding header one element to the front
@@ -107,30 +105,28 @@ public:
     }
 
     /// @returns number of uint32_t elements that will be stored for this brick's detail level after detail separation.
-    virtual uint32_t getDetailLengthBeforeSeparation(const uint32_t* brick_encoding,
-                                                     const uint32_t brick_encoding_length) const override{
+    virtual uint32_t getDetailLengthBeforeSeparation(const uint32_t *brick_encoding,
+                                                     const uint32_t brick_encoding_length) const override {
         const uint32_t palette_length = brick_encoding[getPaletteSizeHeaderIndex()];
         const uint32_t header_and_base_level_length = brick_encoding[getLodCountPerBrick() - 1u] / 8;
-        return brick_encoding_length
-                - header_and_base_level_length
-                - palette_length;
+        return brick_encoding_length - header_and_base_level_length - palette_length;
     }
 
     // VARIABLE BIT-LENGTH ENCODING ------------------------------------------------------------------------------------
 
     /// Computes operation frequencies and detail operation frequencies (the latter offset by 16) for the brick into the given brick_freq[32] array.
-    void freqEncodeBrick(const std::vector<uint32_t>& volume, size_t* brick_freq, glm::uvec3 start,
+    void freqEncodeBrick(const std::vector<uint32_t> &volume, size_t *brick_freq, glm::uvec3 start,
                          glm::uvec3 volume_dim, bool detail_freq) const override;
 
     // FILE IMPORT AND EXPORT ------------------------------------------------------------------------------------------
 
     /// Exports all specialized configuration information of this encoder (e.g. frequency tables) that are not handled
     /// by the encoder base class or CompressedSegmentationVolume class.
-    void exportToFile(std::ostream& out) override { CSGVBrickEncoder::exportToFile(out); }
+    void exportToFile(std::ostream &out) override { CSGVBrickEncoder::exportToFile(out); }
 
     /// Imports specialized configuration information from the stream.
     /// @return true on success, false otherwise.
-    bool importFromFile(std::istream& in) override {
+    bool importFromFile(std::istream &in) override {
         if (!CSGVBrickEncoder::importFromFile(in))
             return false;
         return true;
@@ -152,25 +148,25 @@ public:
 
     // DEBUGGING AND STATISTICS ----------------------------------------------------------------------------------------
 
-    void verifyBrickCompression(const uint32_t* brick_encoding, uint32_t brick_encoding_length,
-                                const uint32_t* detail_encoding, uint32_t detail_encoding_length,
+    void verifyBrickCompression(const uint32_t *brick_encoding, uint32_t brick_encoding_length,
+                                const uint32_t *detail_encoding, uint32_t detail_encoding_length,
                                 std::ostream &error) const override;
 
     /// Helper method to gather statistics for one single brick. Same as decodeBrick but also:
     /// Unpacks the encoding for the given brick at a given LOD where a value of INVALID is written to octree entries/voxels that are not encoded because a STOP label occurred in a higher level.
     /// The output_palette (if not nullptr) contains the values added by PALETTE_ADV in processed order as uvec4 {label, this_lod, voxel_in_brick_id, 0}
-    void decodeBrickWithDebugEncoding(const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
-                                      const uint32_t* brick_detail_encoding,
+    void decodeBrickWithDebugEncoding(const uint32_t *brick_encoding, const uint32_t brick_encoding_length,
+                                      const uint32_t *brick_detail_encoding,
                                       const uint32_t brick_detail_encoding_length,
-                                      uint32_t* output_brick, uint32_t* output_encoding,
-                                      std::vector<glm::uvec4>* output_palette, glm::uvec3 valid_brick_size,
+                                      uint32_t *output_brick, uint32_t *output_encoding,
+                                      std::vector<glm::uvec4> *output_palette, glm::uvec3 valid_brick_size,
                                       int inv_lod) const override;
 
-protected:
+  protected:
     struct ReadState {
-        uint32_t idxE = 0u;             // used either as 4 bit element index or byte read index for rANS
-        uint32_t rans_state = 0u;       // state of the rANS decoder (not used with NibbleEncoder)
-        bool in_detail_lod = false;     // if we are in the finest level-of-detail (only set in rANS double table mode)
+        uint32_t idxE = 0u;         // used either as 4 bit element index or byte read index for rANS
+        uint32_t rans_state = 0u;   // state of the rANS decoder (not used with NibbleEncoder)
+        bool in_detail_lod = false; // if we are in the finest level-of-detail (only set in rANS double table mode)
     };
 
     // TODO: move rANS attributes to RangeANSEncoder.hpp
@@ -181,18 +177,18 @@ protected:
     /// Returns the current value in the brick at the neighbor_i neighbor position of brick_pos at the decoding stage at the given lod_width.
     /// If the neighbor is not yet set in this level, the parent element of this neighbor is returned.
     /// If the neighbor would lie outside the brick, UNASSIGNED is returned.
-    static uint32_t valueOfNeighbor(const uint32_t* brick, const glm::uvec3& brick_pos, uint32_t local_lod_i,
+    static uint32_t valueOfNeighbor(const uint32_t *brick, const glm::uvec3 &brick_pos, uint32_t local_lod_i,
                                     uint32_t lod_width, uint32_t brick_size, int neighbor_i);
 
-    static uint32_t valueOfNeighbor(const MultiGridNode* grid, const MultiGridNode* parent_grid,
-                                    const glm::uvec3& brick_pos, uint32_t local_lod_i, uint32_t lod_width,
+    static uint32_t valueOfNeighbor(const MultiGridNode *grid, const MultiGridNode *parent_grid,
+                                    const glm::uvec3 &brick_pos, uint32_t local_lod_i, uint32_t lod_width,
                                     uint32_t brick_size, int neighbor_i) {
         return CSGVBrickEncoder::valueOfNeighbor(grid, parent_grid, brick_pos,
                                                  local_lod_i, lod_width, brick_size, neighbor_i);
     }
 
     /// Reads the next element from the brick encoding, possibly using the rANS decoder from this CompressedSegmentationVolume, and updates the state.
-    virtual uint32_t readNextLodOperationFromEncoding(const uint32_t* brick_encoding, ReadState& state) const = 0;
+    virtual uint32_t readNextLodOperationFromEncoding(const uint32_t *brick_encoding, ReadState &state) const = 0;
 
     /// returns the size of the header at the beginning of each brick measured in uint32 entries.
     [[nodiscard]] uint32_t getHeaderSize() const { return getLodCountPerBrick() + (m_separate_detail ? 0 : 1); }

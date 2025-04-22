@@ -27,13 +27,16 @@ namespace vvv {
 /// The input image should have the usage flags returned from getInputImageUsageFlags().
 /// The result is returned by renderBlur() in a RendererOutput struct.
 class PassBlur : public PassCompute {
-public:
+  public:
     enum BilateralMode : uint32_t {
-        Disabled = 0, DepthOnly, NormalOnly, DepthNormal
+        Disabled = 0,
+        DepthOnly,
+        NormalOnly,
+        DepthNormal
     };
 
-    PassBlur(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering, int radius, BilateralMode bilateralMode = Disabled,
-             vk::ImageUsageFlags outputImageUsage = {}, const std::string& label = "PassBlur");
+    PassBlur(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering> &multiBuffering, int radius, BilateralMode bilateralMode = Disabled,
+             vk::ImageUsageFlags outputImageUsage = {}, const std::string &label = "PassBlur");
 
     void allocateResources() override;
     void initSwapchainResources();
@@ -47,15 +50,18 @@ public:
     RendererOutput renderBlur(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr);
 
     /// Does nothing, use renderBlur() instead
-    [[nodiscard]] AwaitableHandle execute(AwaitableList, BinaryAwaitableList, vk::Semaphore*) override { return nullptr; }
+    [[nodiscard]] AwaitableHandle execute(AwaitableList, BinaryAwaitableList, vk::Semaphore *) override { return nullptr; }
 
-    void setKernelRadius(int radius) { m_kernelRadius = radius; m_kernelDirty = true; }
+    void setKernelRadius(int radius) {
+        m_kernelRadius = radius;
+        m_kernelDirty = true;
+    }
     [[nodiscard]] int getKernelRadius() const { return m_kernelRadius; }
 
-protected:
+  protected:
     std::vector<std::shared_ptr<Shader>> createShaders() override;
 
-private:
+  private:
     std::shared_ptr<Buffer> uploadKernelTexture(VkCommandBuffer commandBuffer);
 
     vk::ImageUsageFlags m_outputImageUsage;
@@ -77,4 +83,4 @@ private:
     std::shared_ptr<Shader> m_shader2_v = nullptr;
 };
 
-}
+} // namespace vvv

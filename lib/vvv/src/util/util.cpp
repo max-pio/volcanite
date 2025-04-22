@@ -37,51 +37,46 @@ std::string vvv::str(glm::uvec4 v) { return array_string(&v.x, 4); }
 std::string vvv::str(glm::mat3 v) { return "[" + array_string(&v[0].x, 3) + " | " + array_string(&v[1].x, 3) + " | " + array_string(&v[2].x, 3) + "]"; }
 std::string vvv::str(glm::mat4 v) { return "[" + array_string(&v[0].x, 4) + " | " + array_string(&v[1].x, 4) + " | " + array_string(&v[2].x, 4) + " | " + array_string(&v[3].x, 4) + "]"; }
 
-glm::vec3 vvv::spherical2cartesian(const glm::vec3& v) {
+glm::vec3 vvv::spherical2cartesian(const glm::vec3 &v) {
     return {v.z * glm::cos(v.y) * glm::sin(v.x),
             v.z * glm::sin(v.y) * glm::sin(v.x),
             v.z * glm::cos(v.x)};
 }
 
-
-glm::vec4 vvv::spherical2cartesian(const glm::vec4& v) {
+glm::vec4 vvv::spherical2cartesian(const glm::vec4 &v) {
     return {vvv::spherical2cartesian(static_cast<const glm::vec3>(v)), 1.f};
 }
 
-
-glm::vec3 vvv::cartesian2spherical(const glm::vec3& v) {
+glm::vec3 vvv::cartesian2spherical(const glm::vec3 &v) {
     float r = glm::length(v);
-    if(r > 0)
+    if (r > 0)
         return {glm::acos(v.z / r), glm::atan(v.y, v.x), r};
     else
         return {0.f, 0.f, 0.f};
 }
 
-glm::vec4 vvv::cartesian2spherical(const glm::vec4& v) {
+glm::vec4 vvv::cartesian2spherical(const glm::vec4 &v) {
     return {vvv::cartesian2spherical(static_cast<const glm::vec3>(v)), 1.f};
 }
 
-
-std::vector<float> vvv::computeHistogram(const std::vector<float>& values, int bins, bool interpolate, float min, float max) {
+std::vector<float> vvv::computeHistogram(const std::vector<float> &values, int bins, bool interpolate, float min, float max) {
     std::vector<float> histogram(bins, 0.f);
-    if(min >= max) {
+    if (min >= max) {
         Logger(Error) << "min must be smaller than max when computing a histogram. Returning zero.";
         return histogram;
     }
 
     // could parallelize histogram computation with OpenMP and custom "sum" reduction for histogram array
     // #pragma omp parallel for default(none) shared(values, histogram, bins, min, max)
-    for(int i = 0; i < values.size(); i++)
-    {
-        if(interpolate) {
+    for (int i = 0; i < values.size(); i++) {
+        if (interpolate) {
             double intpart;
             double pos = (values[i] - min) / (max - min) * static_cast<float>(bins);
             auto fractional = static_cast<float>(modf(pos, &intpart));
             histogram[std::clamp(static_cast<int>(std::floor(pos)), 0, bins - 1)] += (1.f - fractional);
             histogram[std::clamp(static_cast<int>(std::ceil(pos)), 0, bins - 1)] += fractional;
-        }
-        else {
-            histogram[std::clamp(static_cast<int>((values[i] - min) / (max - min) * static_cast<float>(bins)), 0, bins-1)]++;
+        } else {
+            histogram[std::clamp(static_cast<int>((values[i] - min) / (max - min) * static_cast<float>(bins)), 0, bins - 1)]++;
         }
     }
 
@@ -96,8 +91,8 @@ void vvv::logLibraryAvailabilty() {
 
 #ifdef _OPENMP
     {
-        std::unordered_map<unsigned,std::string> ver{{200505,"2.5"},{200805,"3.0"},{201107,"3.1"},{201307,"4.0"},{201511,"4.5"},{201811,"5.0"},{202011,"5.1"}};
-        if(ver.contains(_OPENMP))
+        std::unordered_map<unsigned, std::string> ver{{200505, "2.5"}, {200805, "3.0"}, {201107, "3.1"}, {201307, "4.0"}, {201511, "4.5"}, {201811, "5.0"}, {202011, "5.1"}};
+        if (ver.contains(_OPENMP))
             vvv::Logger(vvv::Debug) << "OpenMP " + ver.at(_OPENMP) + " available.";
         else
             vvv::Logger(vvv::Debug) << "OpenMP " + std::to_string(_OPENMP) + " available.";

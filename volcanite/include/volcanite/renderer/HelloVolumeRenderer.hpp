@@ -15,25 +15,24 @@
 
 #pragma once
 
+#include <glm/glm.hpp>
 #include <memory>
 #include <optional>
-#include <glm/glm.hpp>
 #include <utility>
 
 #include "vvv/core/Renderer.hpp"
 #include "vvv/core/Shader.hpp"
-#include "vvv/util/hash_memory.hpp"
-#include "vvv/reflection/UniformReflection.hpp"
 #include "vvv/passes/PassCompute.hpp"
+#include "vvv/reflection/UniformReflection.hpp"
+#include "vvv/util/hash_memory.hpp"
 
 using namespace vvv;
 
 namespace volcanite {
 
-
 class HelloVolumeRenderer : public Renderer, public WithGpuContext {
 
-public:
+  public:
     HelloVolumeRenderer() : WithGpuContext(nullptr) {}
 
     RendererOutput renderNextFrame(AwaitableList awaitBeforeExecution = {}, BinaryAwaitableList awaitBinaryAwaitableList = {}, vk::Semaphore *signalBinarySemaphore = nullptr) override;
@@ -53,23 +52,22 @@ public:
     void initSwapchainResources() override;
     void releaseSwapchain() override;
 
-    void initGui(vvv::GuiInterface * gui) override {
+    void initGui(vvv::GuiInterface *gui) override {
         auto g = gui->get("Compressed Segmentation Volume Renderer");
         g->addColor(&m_background_color_a, "Background Color A");
         g->addColor(&m_background_color_b, "Background Color B");
         g->addLabel("Debug");
         g->addBool(&m_show_model_space, "Show Model Space");
-        g->addAction([this](){getCtx()->getWsi()->getCamera()->reset();}, "Reset Camera");
+        g->addAction([this]() { getCtx()->getWsi()->getCamera()->reset(); }, "Reset Camera");
     };
 
     const std::optional<RendererOutput> &mostRecentFrame() { return m_mostRecentFrame; }
 
-private:
+  private:
     // gui parameters
     glm::vec4 m_background_color_a = glm::vec4(0.1f, 0.1f, 0.15f, 1.f);
     glm::vec4 m_background_color_b = glm::vec4(0.2f, 0.2f, 0.3f, 1.f);
     bool m_show_model_space = true;
-
 
     void updateUniformDescriptorset();
 
@@ -77,7 +75,7 @@ private:
     std::shared_ptr<MultiBufferedResource<std::shared_ptr<Texture>>> m_outColor = nullptr;
     std::shared_ptr<UniformReflected> m_urender_info = nullptr;
 
-    //std::shared_ptr<Volume<uint32_t>> m_volume;
+    // std::shared_ptr<Volume<uint32_t>> m_volume;
     bool m_data_changed;
 
     MultiBufferedResource<size_t> m_camHash;

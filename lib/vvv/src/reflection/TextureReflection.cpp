@@ -73,13 +73,13 @@ std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<c
         }
     }
 
-    if(array_dims_count > 0) {
+    if (array_dims_count > 0) {
         Logger(Warn) << "reflecting texture array for " << label << " as single texture. Use reflectTextureArray instead of reflectTexture.";
     }
 
     if (!used) {
         std::string namesStr;
-        for(int i = 0; i < names.size(); i++)
+        for (int i = 0; i < names.size(); i++)
             namesStr += ((i != 0) ? "|" : "") + names.data()[i];
         throw std::runtime_error("none of the given uniform names '" + namesStr + "' could be found in any of the shaders");
     }
@@ -127,7 +127,7 @@ std::vector<std::shared_ptr<Texture>> reflectTextureArray(vvv::GpuContextPtr ctx
             }
 
             array_dims_count = binding->array.dims_count;
-            for(int d=0; d < array_dims_count; d++)
+            for (int d = 0; d < array_dims_count; d++)
                 array_dims[d] = binding->array.dims[d];
 
             if (!format && binding->image.image_format != SpvImageFormatUnknown) {
@@ -147,13 +147,13 @@ std::vector<std::shared_ptr<Texture>> reflectTextureArray(vvv::GpuContextPtr ctx
         }
     }
 
-    if(array_dims_count == 0) {
+    if (array_dims_count == 0) {
         Logger(Warn) << "reflecting single texture " << label << " as array texture. Use reflectTexture instead of reflectTextureArray.";
     }
 
     if (!used) {
         std::string namesStr;
-        for(int i = 0; i < names.size(); i++)
+        for (int i = 0; i < names.size(); i++)
             namesStr += ((i != 0) ? "|" : "") + names.data()[i];
         throw std::runtime_error("none of the given uniform names '" + namesStr + "' could be found in any of the shaders");
     }
@@ -174,15 +174,14 @@ std::vector<std::shared_ptr<Texture>> reflectTextureArray(vvv::GpuContextPtr ctx
         std::stringstream array_label;
         array_label << label;
         uint32_t scale = 1u;
-        for(int d = 0; d < array_dims_count; d++) {
+        for (int d = 0; d < array_dims_count; d++) {
             idx[d] = (t / scale) % array_dims[d];
             scale *= array_dims[d];
             array_label << "[" << idx[d] << "]";
         }
 
-
         auto texture = std::make_shared<Texture>(ctx, format.value(), dim, opts.width, opts.height, opts.depth,
-                                                     usage, opts.queues);
+                                                 usage, opts.queues);
         texture->setName(array_label.str());
         textures[t] = texture;
     }
@@ -197,7 +196,7 @@ std::shared_ptr<Texture> reflectColorAttachment(vvv::GpuContextPtr ctx, vk::Arra
 
     // first: we check all the outputs to get attachment the texture format. Required to be found!
     for (const auto &shader : shaders) {
-        if(!(shader->reflectShaderStage() | vk::ShaderStageFlagBits::eFragment))
+        if (!(shader->reflectShaderStage() | vk::ShaderStageFlagBits::eFragment))
             continue;
 
         for (int j = 0; j < names.size(); ++j) {
@@ -270,4 +269,4 @@ std::shared_ptr<Texture> reflectColorAttachment(vvv::GpuContextPtr ctx, vk::Arra
     return std::make_shared<Texture>(ctx, format.value(), TextureDimensions::e2D, opts.width, opts.height, 1, usage, opts.queues);
 }
 
-}
+} // namespace vvv

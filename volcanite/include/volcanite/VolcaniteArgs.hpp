@@ -17,20 +17,20 @@
 
 #include <tclap/CmdLine.h>
 #ifndef HEADLESS
-    #include "portable-file-dialogs.h"
+#include "portable-file-dialogs.h"
 #endif
 
-#include "vvv/util/Logger.hpp"
 #include "CSGVPathUtils.hpp"
 #include "csgv_constants.incl"
 #include "volcanite/util/segmentation_volume_synthesis.hpp"
+#include "vvv/util/Logger.hpp"
 
+#include <fmt/core.h>
 #include <optional>
+#include <ranges>
+#include <sstream>
 #include <string>
 #include <string_view>
-#include <sstream>
-#include <ranges>
-#include <fmt/core.h>
 
 using namespace vvv;
 
@@ -38,18 +38,18 @@ namespace volcanite {
 
 struct VolcaniteArgs {
 
-public:
+  public:
     // general args
     bool verbose = false;
     bool headless = false;
-    std::string input_file;                  ///< must be .csgv if compress is false, otherwise vti / raw / hdf5
-    bool chunked = false;                    ///< if the first 3 {} in the input string should be chunk ids formatted
-    uint32_t chunk_files[3] = {0u, 0u, 0u};  ///< max. xyz index of chunk files. e.g. (1,3,0) would load 8 chunk files
-    uint32_t threads = 0;                    ///< number of CPU threads (0 = system supported concurrent threads)
-    std::filesystem::path working_dir;       ///< working directory, usually contains the .csgv. Maybe a temp directory.
+    std::string input_file;                 ///< must be .csgv if compress is false, otherwise vti / raw / hdf5
+    bool chunked = false;                   ///< if the first 3 {} in the input string should be chunk ids formatted
+    uint32_t chunk_files[3] = {0u, 0u, 0u}; ///< max. xyz index of chunk files. e.g. (1,3,0) would load 8 chunk files
+    uint32_t threads = 0;                   ///< number of CPU threads (0 = system supported concurrent threads)
+    std::filesystem::path working_dir;      ///< working directory, usually contains the .csgv. Maybe a temp directory.
 
     // rendering args
-    std::vector<std::string> rendering_configs;  ///< one or more .vcfg files (ends with .vcfg) or config strings
+    std::vector<std::string> rendering_configs; ///< one or more .vcfg files (ends with .vcfg) or config strings
     uint32_t render_resolution[2] = {1920, 1080};
     bool fullscreen = false;
     bool stream_lod = false;
@@ -57,16 +57,16 @@ public:
     uint32_t cache_mode = CACHE_BRICKS;
     bool cache_palettized = false;
     bool decode_from_shared_memory = false;
-    uint32_t empty_space_resolution = 0u;   ///< in cache mode CACHE_VOXELS, groups n³ voxels into one empty space entry
+    uint32_t empty_space_resolution = 0u; ///< in cache mode CACHE_VOXELS, groups n³ voxels into one empty space entry
     bool show_development_gui = false;
     bool enable_vsync = true;
 
     // attribute args
-    std::string attribute_database;     ///< SQlite3 file with attributes for volume labels
-    std::string attribute_table;        ///< table or view containing the attributes for the volume labels
-    std::string attribute_label;        ///< name of the label attribute
+    std::string attribute_database;            ///< SQlite3 file with attributes for volume labels
+    std::string attribute_table;               ///< table or view containing the attributes for the volume labels
+    std::string attribute_label;               ///< name of the label attribute
     std::string attribute_csv_separator = ","; //< only for csv attribute databases
-    bool label_remapping = false;       ///< if label ids in the volume should be remapped to a consecutive interval
+    bool label_remapping = false;              ///< if label ids in the volume should be remapped to a consecutive interval
 
     // compression args
     std::string compress_export_file;   ///< !empty = perform compression to file         Only one of
@@ -74,38 +74,37 @@ public:
     std::string segmented_volume_file;
     uint32_t brick_size = 32;
     EncodingMode encoding_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC;
-    uint32_t freq_subsampling = 8;      ///< n^3 factor for subsampling bricks for frequency table computation with rANS
-    uint32_t operation_mask = OP_ALL_WITHOUT_DELTA;   // enables certain CSGV operations and stop bits through OP_*_BIT
-    bool random_access = false;         ///< encode bricks so that they support random access within a brick
+    uint32_t freq_subsampling = 8;                  ///< n^3 factor for subsampling bricks for frequency table computation with rANS
+    uint32_t operation_mask = OP_ALL_WITHOUT_DELTA; // enables certain CSGV operations and stop bits through OP_*_BIT
+    bool random_access = false;                     ///< encode bricks so that they support random access within a brick
 
     // evaluation and statistics
     std::string screenshot_output_file; ///< png or jpg output file path to export the last frame from headless rendering
     std::string video_output_fmt_file;  ///< output image file path string accepted by std::format for immediate frames
     bool run_tests = false;
     bool export_stats = false;
-    std::string record_in_file = "";    ///< file that stores a previously exported camera path for replay in headless
-    uint32_t record_convergence_frames = 1; ///< number of render frames that are accumulated per output frame of a camera path
+    std::string record_in_file = "";             ///< file that stores a previously exported camera path for replay in headless
+    uint32_t record_convergence_frames = 1;      ///< number of render frames that are accumulated per output frame of a camera path
     std::vector<std::string> eval_logfiles = {}; // files into which evaluation results are exported (with 'append')
-    std::string eval_name = {};         ///< name of the evaluation run that can be accessed in the log file as "%name"
-    bool print_eval_keys = false;       ///< if true, prints all available evaluation log keys to the console on startup
-    std::string shader_defines = "";    ///< string of shader defines that will be passed on to the shader compiler
-
+    std::string eval_name = {};                  ///< name of the evaluation run that can be accessed in the log file as "%name"
+    bool print_eval_keys = false;                ///< if true, prints all available evaluation log keys to the console on startup
+    std::string shader_defines = "";             ///< string of shader defines that will be passed on to the shader compiler
 
     static std::string getHelpString() {
         std::stringstream ss;
         ss << "EXAMPLES:" << std::endl;
-        ss << "./volcanite --headless -r 1920x1080 -i screenshot.png volume.vti" << std::endl <<
-        "\tExports a render image without starting the application." << std::endl;
-        ss << "./volcanite --headless -b 64 -s 2 -c out.csgv volume.vti" << std::endl <<
-        "\tExports a strongly compressed volume." << std::endl;
-        ss << "./volcanite --headless -d out.vti volume.csgv" << std::endl <<
-        "\tDecompresses volume.csgv to out.vti." << std::endl;
-        ss << "./volcanite volume" << std::endl <<
-        "\tStarts the Volcanite renderer for the given volume." << std::endl;
-        ss << "./volcanite --config local-shading --cache-size 512 -b 32 -s 2 --freq-sampling 8 --stream-lod volume.vti" << std::endl <<
-        "\tStarts Volcanite for limited GPU capabilities." << std::endl;
-        ss << "./volcanite --headless -c out.csgv --chunked 1,3,0 vol_x{}_y{]_z{}.vti" << std::endl <<
-       "\tCompresses chunked volume vol_x0_y0_z0.vti to vol_x1_y3_z0.vti." << std::endl;
+        ss << "./volcanite --headless -r 1920x1080 -i screenshot.png volume.vti" << std::endl
+           << "\tExports a render image without starting the application." << std::endl;
+        ss << "./volcanite --headless -b 64 -s 2 -c out.csgv volume.vti" << std::endl
+           << "\tExports a strongly compressed volume." << std::endl;
+        ss << "./volcanite --headless -d out.vti volume.csgv" << std::endl
+           << "\tDecompresses volume.csgv to out.vti." << std::endl;
+        ss << "./volcanite volume" << std::endl
+           << "\tStarts the Volcanite renderer for the given volume." << std::endl;
+        ss << "./volcanite --config local-shading --cache-size 512 -b 32 -s 2 --freq-sampling 8 --stream-lod volume.vti" << std::endl
+           << "\tStarts Volcanite for limited GPU capabilities." << std::endl;
+        ss << "./volcanite --headless -c out.csgv --chunked 1,3,0 vol_x{}_y{]_z{}.vti" << std::endl
+           << "\tCompresses chunked volume vol_x0_y0_z0.vti to vol_x1_y3_z0.vti." << std::endl;
         return ss.str();
     };
 
@@ -156,7 +155,6 @@ public:
             SwitchArg evalPrintArg("", "eval-print-keys", "Print all available evaluation keys to the console and exit.", cmd);
             ValueArg<std::string> shaderDefineArg("", "shader-def", "String of ; separated definitions that will be passed on to the shader. e.g. 'MY_VAL=64;MY_DEF'. Use with care.", false, va.shader_defines, "string", cmd);
 
-
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
             ValueArg<std::string> attributeArg("a", "attribute", R"(SQLite attribute database as: "{file.sqlite}[,{table/view name}[,{label column referenced in volume}]]" or "{file.csv}[,{label column referenced in volume}[,{csv separator}]]".)", false, "", "database.sqlite[,table[,label]] or database.csv[,label[,separator]]", cmd);
@@ -205,69 +203,68 @@ public:
                 std::transform(op_codes.begin(), op_codes.end(), op_codes.begin(), ::tolower);
                 va.operation_mask = 0;
                 for (int i = 0; i < op_codes.size(); i++) {
-                    switch (const char& c = op_codes.at(i)) {
-                        case 'a':
-                            va.operation_mask |= OP_ALL;
-                        case 'o':
-                            va.operation_mask |= OP_ALL_WITHOUT_DELTA;
-                        case 'p':
-                            va.operation_mask |= OP_PARENT_BIT;
+                    switch (const char &c = op_codes.at(i)) {
+                    case 'a':
+                        va.operation_mask |= OP_ALL;
+                    case 'o':
+                        va.operation_mask |= OP_ALL_WITHOUT_DELTA;
+                    case 'p':
+                        va.operation_mask |= OP_PARENT_BIT;
                         break;
-                        case 'x':
-                            va.operation_mask |= OP_NEIGHBORX_BIT;
+                    case 'x':
+                        va.operation_mask |= OP_NEIGHBORX_BIT;
                         break;
-                        case 'y':
-                            va.operation_mask |= OP_NEIGHBORY_BIT;
+                    case 'y':
+                        va.operation_mask |= OP_NEIGHBORY_BIT;
                         break;
-                        case 'z':
-                            va.operation_mask |= OP_NEIGHBORZ_BIT;
+                    case 'z':
+                        va.operation_mask |= OP_NEIGHBORZ_BIT;
                         break;
-                        case 'n':
-                            va.operation_mask |= OP_NEIGHBOR_BITS;
+                    case 'n':
+                        va.operation_mask |= OP_NEIGHBOR_BITS;
                         break;
-                        case 'l':
-                            va.operation_mask |= OP_PALETTE_LAST_BIT;
+                    case 'l':
+                        va.operation_mask |= OP_PALETTE_LAST_BIT;
                         break;
-                        case 'd':
-                            // a "d-" instead of "d" switch enables using the old palette delta operations where only
-                            // a single entry follows the delta operations and thus only deltas of 1<D<17 are supported
-                            if (i+1 < op_codes.size() && op_codes[i+1] == '-') {
-                                va.operation_mask |= OP_USE_OLD_PAL_D_BIT;
-                                i++;
-                                Logger(Info) << " JOOO ITS HERE LELELEL";
-                            }
-                            va.operation_mask |= OP_PALETTE_D_BIT;
-                            break;
-                        case 's':
-                            va.operation_mask |= OP_STOP_BIT;
-                            break;
-                        default:
-                            throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d[-],s only", opMaskArg.longID());
+                    case 'd':
+                        // a "d-" instead of "d" switch enables using the old palette delta operations where only
+                        // a single entry follows the delta operations and thus only deltas of 1<D<17 are supported
+                        if (i + 1 < op_codes.size() && op_codes[i + 1] == '-') {
+                            va.operation_mask |= OP_USE_OLD_PAL_D_BIT;
+                            i++;
+                            Logger(Info) << " JOOO ITS HERE LELELEL";
+                        }
+                        va.operation_mask |= OP_PALETTE_D_BIT;
+                        break;
+                    case 's':
+                        va.operation_mask |= OP_STOP_BIT;
+                        break;
+                    default:
+                        throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d[-],s only", opMaskArg.longID());
                     }
                 }
             }
             va.random_access = randomAccessArg.getValue();
             // rendering arguments
             {
-                auto split_configs = renderconfigArg.getValue() | std::views::split(';')
-                                                                | std::views::transform([](auto r) -> std::string  {
-                                                                    // in C++20 this could be done in string views only
-                                                                    //std::string_view v(r.data(), r.size());
-                                                                    //v.remove_prefix(std::min(v.find_first_not_of(' '), v.size()));
-                                                                    //v.remove_suffix(r.size() - 1u - std::min(v.find_last_not_of(' '), v.size()));
-                                                                    std::string cfg;
-                                                                    for (const char& c : r)
-                                                                        cfg.push_back(c);
-                                                                    // trim
-                                                                    auto first = cfg.find_first_not_of(' ');
-                                                                    auto last = cfg.find_last_not_of(' ');
-                                                                    cfg = cfg.substr(first, last - first + 1);
-                                                                    // expand file path (if it is a vcfg file)
-                                                                    // and convert to strin
-                                                                    if (cfg.ends_with(".vcfg"))
-                                                                        return expandPathStr(cfg);
-                                                                    return cfg;
-                                                                });
+                auto split_configs = renderconfigArg.getValue() | std::views::split(';') | std::views::transform([](auto r) -> std::string {
+                                         // in C++20 this could be done in string views only
+                                         // std::string_view v(r.data(), r.size());
+                                         // v.remove_prefix(std::min(v.find_first_not_of(' '), v.size()));
+                                         // v.remove_suffix(r.size() - 1u - std::min(v.find_last_not_of(' '), v.size()));
+                                         std::string cfg;
+                                         for (const char &c : r)
+                                             cfg.push_back(c);
+                                         // trim
+                                         auto first = cfg.find_first_not_of(' ');
+                                         auto last = cfg.find_last_not_of(' ');
+                                         cfg = cfg.substr(first, last - first + 1);
+                                         // expand file path (if it is a vcfg file)
+                                         // and convert to strin
+                                         if (cfg.ends_with(".vcfg"))
+                                             return expandPathStr(cfg);
+                                         return cfg;
+                                     });
                 va.rendering_configs = {split_configs.begin(), split_configs.end()};
             }
             va.screenshot_output_file = expandPathStr(imageArg.getValue());
@@ -276,7 +273,7 @@ public:
                 try {
                     size_t test_frame_idx = 1;
                     auto f = fmt::vformat(va.video_output_fmt_file, fmt::make_format_args(test_frame_idx));
-                } catch(const fmt::format_error& err) {
+                } catch (const fmt::format_error &err) {
                     throw ArgException(videoArg.longID() + " must be a formatted image file path string containing a single {} replacement field. Example: ./out{:04}.jpg", videoArg.longID());
                 }
             }
@@ -297,29 +294,28 @@ public:
             if (va.cache_palettized && va.random_access)
                 throw ArgException(cachePalettizedArg.longID() + " can not be used in combination with " + randomAccessArg.longID(), cachePalettizedArg.longID());
             switch (cacheModeArg.getValue()) {
-                case 'n':
-                    va.cache_mode = CACHE_NOTHING;
-                    break;
-                case 'v':
-                    va.cache_mode = CACHE_VOXELS;
-                    break;
-                case 'b':
-                    va.cache_mode = CACHE_BRICKS;
-                    break;
-                default:
-                    break;
+            case 'n':
+                va.cache_mode = CACHE_NOTHING;
+                break;
+            case 'v':
+                va.cache_mode = CACHE_VOXELS;
+                break;
+            case 'b':
+                va.cache_mode = CACHE_BRICKS;
+                break;
+            default:
+                break;
             }
             va.decode_from_shared_memory = decodedSharedMemoryArg.getValue();
             if (va.decode_from_shared_memory && !va.random_access && !va.cache_mode == CACHE_BRICKS)
-                throw ArgException(decodedSharedMemoryArg.longID() + " must be used in combination with "
-                                    + randomAccessArg.longID() + " and " + cacheModeArg.longID() + " b",
-                                    decodedSharedMemoryArg.longID());
+                throw ArgException(decodedSharedMemoryArg.longID() + " must be used in combination with " + randomAccessArg.longID() + " and " + cacheModeArg.longID() + " b",
+                                   decodedSharedMemoryArg.longID());
             va.show_development_gui = devArg.getValue();
             va.enable_vsync = !noVsyncArg.getValue();
             va.empty_space_resolution = emptySpaceResolutionArg.getValue();
             if (va.cache_mode != CACHE_VOXELS && va.empty_space_resolution > 0u) {
                 Logger(Warn) << "Empty space skipping grid (" << emptySpaceResolutionArg.longID()
-                                  << " only supported in combination with " << cacheModeArg.longID() << " v. Disabling.";
+                             << " only supported in combination with " << cacheModeArg.longID() << " v. Disabling.";
                 va.empty_space_resolution = 0u;
             }
             // if no input file was specified, try to open a file dialog
@@ -340,7 +336,7 @@ public:
 
                 // Open a file dialog to choose a file
                 auto selected_file = pfd::open_file("Open Segmentation Volume", Paths::getHomeDirectory().string() + "/*",
-                                                    { "Segmentation Volumes (.csgv .vti .hdf5 .h5 .raw .vraw .nrrd .nhdr)", "*.csgv *.vti *.hdf5 *.h5 *.raw *.vraw *.nrrd *.nhdr", "All Files", "*" });
+                                                    {"Segmentation Volumes (.csgv .vti .hdf5 .h5 .raw .vraw .nrrd .nhdr)", "*.csgv *.vti *.hdf5 *.h5 *.raw *.vraw *.nrrd *.nhdr", "All Files", "*"});
                 if (selected_file.result().empty()) {
                     throw ArgException("No input file was provided. Pass " CSGV_SYNTH_PREFIX_STR " as input file to create a synthetic volume.", inputpathArg.longID(""));
                 }
@@ -360,10 +356,7 @@ public:
             }
             // .. or if we compress a volume
             else {
-                if (input_volume_required && !(input_file.starts_with(CSGV_SYNTH_PREFIX_STR) || input_file.ends_with(".vti")
-                    || input_file.ends_with(".raw") || input_file.ends_with(".vraw")
-                    || input_file.ends_with(".hdf5") || input_file.ends_with(".h5")
-                    || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {
+                if (input_volume_required && !(input_file.starts_with(CSGV_SYNTH_PREFIX_STR) || input_file.ends_with(".vti") || input_file.ends_with(".raw") || input_file.ends_with(".vraw") || input_file.ends_with(".hdf5") || input_file.ends_with(".h5") || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {
                     throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.h5|.raw|.vraw|.nrrd|.nhdr})", inputpathArg.longID(""));
                 }
 
@@ -385,14 +378,14 @@ public:
 
                     // the attribute argument string is a list of arguments itself:
 
-                    const std::string& attribute_info = attributeArg.getValue();
+                    const std::string &attribute_info = attributeArg.getValue();
                     auto comma0 = attribute_info.find(',', 0);
                     auto comma1 = attribute_info.find(',', comma0 + 1);
 
                     va.attribute_database = attribute_info.substr(0, comma0);
                     if (!std::filesystem::exists(va.attribute_database))
                         throw ArgException(attributeArg.longID() +
-                                           " attribute database file does not exists or can not be accessed.",
+                                               " attribute database file does not exists or can not be accessed.",
                                            attributeArg.longID());
                     // csv file (only contains one table so no table name is specified)
                     // -a filename.csv[,label_column_name[,csv_separator]]
@@ -409,8 +402,8 @@ public:
                             va.attribute_csv_separator = ",";
                         // the separator may be encapsulated by "" or ''
                         if (va.attribute_csv_separator.length() > 2 &&
-                             (va.attribute_database.front() == '"' && va.attribute_database.back() == '"') ||
-                             (va.attribute_database.front() == '\'' && va.attribute_database.back() == '\'')) {
+                                (va.attribute_database.front() == '"' && va.attribute_database.back() == '"') ||
+                            (va.attribute_database.front() == '\'' && va.attribute_database.back() == '\'')) {
                             va.attribute_csv_separator = va.attribute_csv_separator.substr(1, va.attribute_csv_separator.length() - 2);
                         } else if (va.attribute_csv_separator.empty()) {
                             va.attribute_csv_separator = ',';
@@ -459,7 +452,7 @@ public:
                     if (va.compress_export_file.empty())
                         throw ArgException("A csgv export path must be specified with " + compresspathArg.longID() + " when processing chunked volumes!");
 
-                    const std::string& chunk_indices = chunkedArg.getValue();
+                    const std::string &chunk_indices = chunkedArg.getValue();
                     std::stringstream ss(chunk_indices);
                     ss >> va.chunk_files[0];
                     ss.ignore();
@@ -477,7 +470,7 @@ public:
                         try {
                             uint32_t test_chunk_idx = 1;
                             auto f = fmt::vformat(va.input_file, fmt::make_format_args(test_chunk_idx, test_chunk_idx, test_chunk_idx));
-                        } catch(const fmt::format_error& err) {
+                        } catch (const fmt::format_error &err) {
                             throw ArgException("input volume must be a formatted file path string containing three {} keys to be replaced with x,y,z chunk indices. Example: ./x{}y{}z{}.hdf5", inputpathArg.longID(""));
                         }
                     }
@@ -489,14 +482,13 @@ public:
             va.record_convergence_frames = recordConvergenceArg.getValue();
             std::string comma_separated_logfiles = evalLogFilesArg.getValue();
             va.eval_logfiles.clear();
-            for (const std::string_view& logfile : comma_separated_logfiles | std::views::split(',')
-                    | std::views::transform([](const auto &&range) -> std::string {
-                        // string_view and string constructors do not accept the range iterators in C++17
-                        std::string tmp;
-                        for (const char c : range)
-                            tmp.push_back(c);
-                        return tmp;
-                    })) {
+            for (const std::string_view &logfile : comma_separated_logfiles | std::views::split(',') | std::views::transform([](const auto &&range) -> std::string {
+                                                       // string_view and string constructors do not accept the range iterators in C++17
+                                                       std::string tmp;
+                                                       for (const char c : range)
+                                                           tmp.push_back(c);
+                                                       return tmp;
+                                                   })) {
                 va.eval_logfiles.emplace_back(expandPathStr(std::string(logfile)));
                 // TODO: check if the logfiles contain valid format strings
             }
@@ -510,8 +502,7 @@ public:
             std::ranges::replace(va.shader_defines, ';', ' ');
 
             return va;
-        }
-        catch (TCLAP::ArgException &e) {
+        } catch (TCLAP::ArgException &e) {
 #ifdef _WIN32
             vvv::Logger(Error) << "argument error: " << e.error() << " for " << e.argId();
 #else

@@ -18,35 +18,35 @@
 
 // note: we assume that the bit vector word type and the flat rank word type are identical
 #ifndef BV_WORD_TYPE
-    #define BV_WORD_BIT_SIZE 64
-    #define BV_WORD_TYPE uint64_t
+#define BV_WORD_BIT_SIZE 64
+#define BV_WORD_TYPE uint64_t
 #endif
 
 #ifdef EMPTY_SPACE_UINT_SIZE
-    #define EMPTY_SPACE_BV_WORD_SIZE (EMPTY_SPACE_UINT_SIZE / (BV_WORD_BIT_SIZE / 32))
-    #define EMPTY_SPACE_BV_BIT_SIZE (EMPTY_SPACE_UINT_SIZE * 32)
+#define EMPTY_SPACE_BV_WORD_SIZE (EMPTY_SPACE_UINT_SIZE / (BV_WORD_BIT_SIZE / 32))
+#define EMPTY_SPACE_BV_BIT_SIZE (EMPTY_SPACE_UINT_SIZE * 32)
 #endif
 
 #if BV_WORD_TYPE == uint64_t
-    #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
-    #extension GL_EXT_shader_atomic_int64 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_shader_atomic_int64 : require
 #endif
 
 
 layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly restrict BitVectorRef
 {
-    BV_WORD_TYPE words[];
+BV_WORD_TYPE words[];
 };
 
 #define WORD_ACCESS(word, index) uint(((word) >> (index)) & 1u)
-#define WORD_SET0(word, index) atomicAnd((word), ~(BV_WORD_TYPE(1u) << (index)) )
+#define WORD_SET0(word, index) atomicAnd((word), ~(BV_WORD_TYPE(1u) << (index)))
 #define WORD_SET1(word, index) atomicOr((word), BV_WORD_TYPE(1u) << (index))
 #if BV_WORD_TYPE == uint64_t
-    #define WORD_RANK1(word, index) uint((index) != 0u ? bitCount64(word << (BV_WORD_BIT_SIZE - (index))) : 0u)
+#define WORD_RANK1(word, index) uint((index) != 0u ? bitCount64(word << (BV_WORD_BIT_SIZE - (index))) : 0u)
 #elif BV_WORD_TYPE uint
-    #define WORD_RANK1(word, index) uint((index) != 0u ? bitCount(word << (BV_WORD_BIT_SIZE - (index))) : 0u)
+#define WORD_RANK1(word, index) uint((index) != 0u ? bitCount(word << (BV_WORD_BIT_SIZE - (index))) : 0u)
 #else
-     #error "unkown bit vector word size"
+#error "unkown bit vector word size"
 #endif
 
 
@@ -72,9 +72,9 @@ uint word_rank1_uvec4(uvec4 word, uint index) {
     //        #error "bit vector word size must be 32 when used in uvec4 words";
     //    #endif
     const uvec4 offset[4] = { uvec4(0u, 0u, 0u, 0u),
-                              uvec4(~0u, 0u, 0u, 0u),
-                              uvec4(~0u, ~0u, 0u, 0u),
-                              uvec4(~0u, ~0u, ~0u, 0u) };
+    uvec4(~0u, 0u, 0u, 0u),
+    uvec4(~0u, ~0u, 0u, 0u),
+    uvec4(~0u, ~0u, ~0u, 0u) };
 
     uvec4 bitCounts = bitCount(word & offset[index / 32u]);
     return bitCounts.x + bitCounts.y + bitCounts.z + bitCounts.w + bitCount(word[index / 32u] << (index % 32u));
@@ -87,7 +87,7 @@ uint word_rank1_uvec4(uvec4 word, uint index) {
 #ifdef BV_STORE_L1_BITS
 
 uint _get_L1_entry(const BV_WORD_TYPE v) {
-    return uint(bitfieldExtract64(v, 0, BV_STORE_L1_BITS)); // the least significant BV_STORE_L1_BITS store the L1-information
+    return uint(bitfieldExtract64(v, 0, BV_STORE_L1_BITS));// the least significant BV_STORE_L1_BITS store the L1-information
 }
 
 uint _get_L2_entry(const BV_WORD_TYPE v, uint i) {
@@ -101,18 +101,18 @@ uint _get_L2_entry(const BV_WORD_TYPE v, uint i) {
 
 uint _fr_rank1(uint index, BitVectorRef bv, BitVectorRef fr) {
     assert(_get_L1_entry(fr.words[0]) == 0u, "corrupted flat rank: first L1 is not 0");
-//#if 1
-//    uint count = 0u;
-//    const uint words = index / BV_WORD_BIT_SIZE;
-//    for (uint i = 0; i < words; i++) {
-//        count += bitCount64(bv.words[i]);
-//    }
-//    for (uint i = words * BV_WORD_BIT_SIZE; i < index; i++) {
-//        if (BV_ACCESS(bv.words, i) == 1u)
-//            count++;
-//    }
-//    return count;
-//#endif
+    //#if 1
+    //    uint count = 0u;
+    //    const uint words = index / BV_WORD_BIT_SIZE;
+    //    for (uint i = 0; i < words; i++) {
+    //        count += bitCount64(bv.words[i]);
+    //    }
+    //    for (uint i = words * BV_WORD_BIT_SIZE; i < index; i++) {
+    //        if (BV_ACCESS(bv.words, i) == 1u)
+    //            count++;
+    //    }
+    //    return count;
+    //#endif
     // ........ ........  bits
     // ┌┐┌┐┌┐┌┐ ┌┐┌┐┌┐┌┐  words
     // └┘└┘└┘└┘ └┘└┘└┘└┘
@@ -125,28 +125,28 @@ uint _fr_rank1(uint index, BitVectorRef bv, BitVectorRef fr) {
     BV_WORD_TYPE l12 = fr.words[index / BV_L1_BIT_SIZE];
     uint rank1_res = _get_L1_entry(l12);
     assertf(rank1_res < (index == 0u ? 1u : index),
-            "FR_RANK1 _get_L1_entry return value too high. [index, rank1]: [%v2u]",
-            uvec2(index, rank1_res));
+    "FR_RANK1 _get_L1_entry return value too high. [index, rank1]: [%v2u]",
+    uvec2(index, rank1_res));
     rank1_res += _get_L2_entry(l12, (index % BV_L1_BIT_SIZE) / BV_L2_BIT_SIZE);
 
     // perform bit counts on a word level to count the remaining bits
     uint offset = ((index / BV_WORD_BIT_SIZE) / BV_L2_WORD_SIZE) * BV_L2_WORD_SIZE;
     // fill missing 'full' counted words if L2-blocks cover multiple words
     #if (BV_L2_WORD_SIZE > 1)
-        for (uint _w = 0u; _w < ((index / BV_WORD_BIT_SIZE) % BV_L2_WORD_SIZE); _w++) {
-            rank1_res += bitCount64(bv.words[offset]);
-            offset++;
-        }
+    for (uint _w = 0u; _w < ((index / BV_WORD_BIT_SIZE) % BV_L2_WORD_SIZE); _w++) {
+        rank1_res += bitCount64(bv.words[offset]);
+        offset++;
+    }
     #endif
     // if this is a rank(text_size) query, the inlining of the function lead to the potential out of bounds
     // access bv[offset] being ignored.
 
     assertf(rank1_res + WORD_RANK1(bv.words[offset], index % BV_WORD_BIT_SIZE) < (index == 0u ? 1u : index),
-            "FR_RANK1 return value too high. [index, rank1]: [%v2u]",
-            uvec2(index, rank1_res + WORD_RANK1(bv.words[offset], index % BV_WORD_BIT_SIZE)));
+    "FR_RANK1 return value too high. [index, rank1]: [%v2u]",
+    uvec2(index, rank1_res + WORD_RANK1(bv.words[offset], index % BV_WORD_BIT_SIZE)));
     return rank1_res + WORD_RANK1(bv.words[offset], index % BV_WORD_BIT_SIZE);
 }
 
-#endif // BV_STORE_L1_BITS (Flat Rank)
+#endif// BV_STORE_L1_BITS (Flat Rank)
 
-#endif // VOLCANITE_BITVECTOR_GLSL
+#endif// VOLCANITE_BITVECTOR_GLSL

@@ -18,11 +18,10 @@
 
 #pragma once
 
-
-#include <cassert>
-#include <cstring>
 #include "vvv/util/Logger.hpp"
 #include "vvv/util/util.hpp"
+#include <cassert>
+#include <cstring>
 
 #include "ryg_rans/rans_nibble.h"
 
@@ -42,10 +41,9 @@ struct SymbolStats {
     void normalize_freqs(uint32_t target_total);
 };
 
-
 class RANS {
 
-private:
+  private:
     static const uint32_t prob_bits = 14;
     static const uint32_t prob_scale = 1 << prob_bits;
 
@@ -55,19 +53,19 @@ private:
     SymbolStats stats;
     bool has_frequency_tables = false;
 
-public:
+  public:
     RANS(const uint32_t *frequency_array = nullptr) {
-        if(frequency_array)
+        if (frequency_array)
             recomputeFrequencyTables(frequency_array);
     }
 
-    void recomputeFrequencyTables(const uint32_t * frequency_array = nullptr);
+    void recomputeFrequencyTables(const uint32_t *frequency_array = nullptr);
     void recomputeFrequencyTables(std::vector<uint8_t> &in_bytes);
 
-    void copyCurrentFrequencyTableTo(uint32_t * frequency_array) const {
+    void copyCurrentFrequencyTableTo(uint32_t *frequency_array) const {
         assert(has_frequency_tables && "can't copy frequency table because it doesn't exist");
         assert(frequency_array && "invalid pointer to write buffer for frequency array");
-        for(int i = 0; i < 16; i++)
+        for (int i = 0; i < 16; i++)
             frequency_array[i] = stats.freqs[i];
     }
 
@@ -76,9 +74,9 @@ public:
      * The first 4 bit element start4bit must be the first position in a 32bit memory location.
      * @return the new end4bit endpoint measured in number of 4 bit elements
      */
-     uint32_t packRANS(std::vector<uint32_t> &in_packed, uint32_t start4bit, uint32_t end4bit) const;
+    uint32_t packRANS(std::vector<uint32_t> &in_packed, uint32_t start4bit, uint32_t end4bit) const;
 
-     uint32_t packRANS(uint32_t* in_packed, uint32_t start4bit, uint32_t end4bit) const;
+    uint32_t packRANS(uint32_t *in_packed, uint32_t start4bit, uint32_t end4bit) const;
 
     /**
      * Decodes number_of_out_elements packed half bytes to the byte array starting at out. Out will have half the size of the actual elements (since it is a vector of bytes instead of half bytes).
@@ -88,18 +86,18 @@ public:
     /**
      * Initializes iterative decoding for reading single elements from the decoding with itr_nextSymbol(). The state is carried in both of the parameters.
      */
-    void itr_initDecoding(uint32_t* rans_state, const uint8_t** rans_ptr) const;
-    void itr_initDecoding(uint32_t& rans_state, uint32_t& byte_index, const uint32_t* array) const;
+    void itr_initDecoding(uint32_t *rans_state, const uint8_t **rans_ptr) const;
+    void itr_initDecoding(uint32_t &rans_state, uint32_t &byte_index, const uint32_t *array) const;
     /**
      * Returns the next element from the decoding given the current internal state and updates the state in the two parameters.
      */
-    uint32_t itr_nextSymbol(uint32_t* rans_state, const uint8_t** rans_ptr) const;
-    uint32_t itr_nextSymbol(RansState& rans_state, uint32_t& byte_index,  const uint32_t* array) const;
+    uint32_t itr_nextSymbol(uint32_t *rans_state, const uint8_t **rans_ptr) const;
+    uint32_t itr_nextSymbol(RansState &rans_state, uint32_t &byte_index, const uint32_t *array) const;
 
     std::vector<uint32_t> getFrequencyArray() {
         assert(has_frequency_tables && "rANS instance has no frequency array");
         std::vector<uint32_t> out(16);
-        for(int i=0; i < 16; i++)
+        for (int i = 0; i < 16; i++)
             out[i] = stats.freqs[i];
         return out;
     }
@@ -117,7 +115,6 @@ public:
         // added in CompressedSegmentationVolume:  )";
         return ss.str();
     }
-
 };
 
 } // namespace volcanite

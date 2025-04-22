@@ -45,17 +45,22 @@
 namespace layer_data {
 
 #ifdef USE_ROBIN_HOOD_HASHING
-template <typename T> using hash = robin_hood::hash<T>;
+template <typename T>
+using hash = robin_hood::hash<T>;
 
-template <typename Key, typename Hash = robin_hood::hash<Key>, typename KeyEqual = std::equal_to<Key>> using unordered_set = robin_hood::unordered_set<Key, Hash, KeyEqual>;
+template <typename Key, typename Hash = robin_hood::hash<Key>, typename KeyEqual = std::equal_to<Key>>
+using unordered_set = robin_hood::unordered_set<Key, Hash, KeyEqual>;
 
-template <typename Key, typename T, typename Hash = robin_hood::hash<Key>, typename KeyEqual = std::equal_to<Key>> using unordered_map = robin_hood::unordered_map<Key, T, Hash, KeyEqual>;
+template <typename Key, typename T, typename Hash = robin_hood::hash<Key>, typename KeyEqual = std::equal_to<Key>>
+using unordered_map = robin_hood::unordered_map<Key, T, Hash, KeyEqual>;
 
-template <typename Key, typename T> using map_entry = robin_hood::pair<Key, T>;
+template <typename Key, typename T>
+using map_entry = robin_hood::pair<Key, T>;
 
 // robin_hood-compatible insert_iterator (std:: uses the wrong insert method)
-template <typename T> class insert_iterator : public std::iterator<std::output_iterator_tag, void, void, void, void> {
-public:
+template <typename T>
+class insert_iterator : public std::iterator<std::output_iterator_tag, void, void, void, void> {
+  public:
     typedef typename T::value_type value_type;
     typedef typename T::iterator iterator;
     insert_iterator(T &t, iterator i) : container(&t), iter(i) {}
@@ -80,27 +85,34 @@ public:
 
     insert_iterator &operator++(int) { return *this; }
 
-private:
+  private:
     T *container;
     typename T::iterator iter;
 };
 #else
-template <typename T> using hash = std::hash<T>;
+template <typename T>
+using hash = std::hash<T>;
 
-template <typename Key, typename Hash = std::hash<Key>, typename KeyEqual = std::equal_to<Key>> using unordered_set = std::unordered_set<Key, Hash, KeyEqual>;
+template <typename Key, typename Hash = std::hash<Key>, typename KeyEqual = std::equal_to<Key>>
+using unordered_set = std::unordered_set<Key, Hash, KeyEqual>;
 
-template <typename Key, typename T, typename Hash = std::hash<Key>, typename KeyEqual = std::equal_to<Key>> using unordered_map = std::unordered_map<Key, T, Hash, KeyEqual>;
+template <typename Key, typename T, typename Hash = std::hash<Key>, typename KeyEqual = std::equal_to<Key>>
+using unordered_map = std::unordered_map<Key, T, Hash, KeyEqual>;
 
-template <typename Key, typename T> using map_entry = std::pair<Key, T>;
+template <typename Key, typename T>
+using map_entry = std::pair<Key, T>;
 
-template <typename T> using insert_iterator = std::insert_iterator<T>;
+template <typename T>
+using insert_iterator = std::insert_iterator<T>;
 #endif
 
 #if __cplusplus < 201402L
 // Temporary workaround for c++11. Remove with std >= c++14.
-template <typename T, typename... Args> constexpr std::unique_ptr<T> make_unique(Args &&...args) { return std::unique_ptr<T>(new T(std::forward<Args>(args)...)); }
+template <typename T, typename... Args>
+constexpr std::unique_ptr<T> make_unique(Args &&...args) { return std::unique_ptr<T>(new T(std::forward<Args>(args)...)); }
 #else
-template <typename T> constexpr auto make_unique = std::make_unique<T>;
+template <typename T>
+constexpr auto make_unique = std::make_unique<T>;
 #endif
 
 } // namespace layer_data
@@ -113,8 +125,9 @@ template <typename T> constexpr auto make_unique = std::make_unique<T>;
 //       MoveAssignable and MoveConstructable
 // NOTE: Unlike std::vector, iterators are invalidated by move assignment between small_vector objects effectively the
 //       "small string" allocation functions as an incompatible allocator.
-template <typename T, size_t N, typename SizeType = uint8_t> class small_vector {
-public:
+template <typename T, size_t N, typename SizeType = uint8_t>
+class small_vector {
+  public:
     using value_type = T;
     using reference = value_type &;
     using const_reference = const value_type &;
@@ -271,7 +284,8 @@ public:
 
     bool empty() const { return size_ == 0; }
 
-    template <class... Args> void emplace_back(Args &&...args) {
+    template <class... Args>
+    void emplace_back(Args &&...args) {
         assert(size_ < kMaxCapacity);
         reserve(size_ + 1);
         new (GetWorkingStore() + size_) value_type(args...);
@@ -311,7 +325,7 @@ public:
     inline const_iterator end() const { return GetWorkingStore() + size_; }
     inline size_type size() const { return size_; }
 
-protected:
+  protected:
     inline const_pointer GetWorkingStore() const {
         const BackingStore *store = large_store_ ? large_store_.get() : small_store_;
         return reinterpret_cast<const_pointer>(store);
@@ -340,8 +354,9 @@ protected:
 // of only containing a small number of elements. The first N elements are stored
 // inline in the object and don't require hashing or memory (de)allocation.
 
-template <typename Key, typename value_type, typename inner_container_type, typename value_type_helper, int N> class small_container {
-protected:
+template <typename Key, typename value_type, typename inner_container_type, typename value_type_helper, int N>
+class small_container {
+  protected:
     bool small_data_allocated[N];
     value_type small_data[N];
 
@@ -349,7 +364,7 @@ protected:
 
     value_type_helper helper;
 
-public:
+  public:
     small_container() {
         for (int i = 0; i < N; ++i) {
             small_data_allocated[i] = false;
@@ -364,7 +379,7 @@ public:
         int index;
         inner_iterator it;
 
-    public:
+      public:
         iterator() {}
 
         iterator operator++() {
@@ -417,7 +432,7 @@ public:
         int index;
         inner_iterator it;
 
-    public:
+      public:
         const_iterator() {}
 
         const_iterator operator++() {
@@ -595,11 +610,12 @@ public:
 
 // Helper function objects to compare/assign/get keys in small_unordered_set/map.
 // This helps to abstract away whether value_type is a Key or a pair<Key, T>.
-template <typename MapType> class value_type_helper_map {
+template <typename MapType>
+class value_type_helper_map {
     using PairType = typename MapType::value_type;
     using Key = typename std::remove_const<typename PairType::first_type>::type;
 
-public:
+  public:
     bool compare_equal(const PairType &lhs, const Key &rhs) const { return lhs.first == rhs; }
     bool compare_equal(const PairType &lhs, const PairType &rhs) const { return lhs.first == rhs.first; }
 
@@ -614,8 +630,9 @@ public:
     Key get_key(const PairType &value) const { return value.first; }
 };
 
-template <typename Key> class value_type_helper_set {
-public:
+template <typename Key>
+class value_type_helper_set {
+  public:
     bool compare_equal(const Key &lhs, const Key &rhs) const { return lhs == rhs; }
 
     void assign(Key &lhs, const Key &rhs) const { lhs = rhs; }
@@ -626,7 +643,7 @@ public:
 template <typename Key, typename T, int N = 1>
 class small_unordered_map
     : public small_container<Key, typename layer_data::unordered_map<Key, T>::value_type, layer_data::unordered_map<Key, T>, value_type_helper_map<layer_data::unordered_map<Key, T>>, N> {
-public:
+  public:
     T &operator[](const Key &key) {
         for (int i = 0; i < N; ++i) {
             if (this->small_data_allocated[i] && this->helper.compare_equal(this->small_data[i], key)) {
@@ -650,10 +667,12 @@ public:
     }
 };
 
-template <typename Key, int N = 1> class small_unordered_set : public small_container<Key, Key, layer_data::unordered_set<Key>, value_type_helper_set<Key>, N> {};
+template <typename Key, int N = 1>
+class small_unordered_set : public small_container<Key, Key, layer_data::unordered_set<Key>, value_type_helper_set<Key>, N> {};
 
 // For the given data key, look up the layer_data instance from given layer_data_map
-template <typename DATA_T> DATA_T *GetLayerDataPtr(void *data_key, small_unordered_map<void *, DATA_T *, 2> &layer_data_map) {
+template <typename DATA_T>
+DATA_T *GetLayerDataPtr(void *data_key, small_unordered_map<void *, DATA_T *, 2> &layer_data_map) {
     // TODO: should lock here, or have caller lock
     DATA_T *&got = layer_data_map[data_key];
 
@@ -664,13 +683,15 @@ template <typename DATA_T> DATA_T *GetLayerDataPtr(void *data_key, small_unorder
     return got;
 }
 
-template <typename DATA_T> void FreeLayerDataPtr(void *data_key, small_unordered_map<void *, DATA_T *, 2> &layer_data_map) {
+template <typename DATA_T>
+void FreeLayerDataPtr(void *data_key, small_unordered_map<void *, DATA_T *, 2> &layer_data_map) {
     delete layer_data_map[data_key];
     layer_data_map.erase(data_key);
 }
 
 // For the given data key, look up the layer_data instance from given layer_data_map
-template <typename DATA_T> DATA_T *GetLayerDataPtr(void *data_key, std::unordered_map<void *, DATA_T *> &layer_data_map) {
+template <typename DATA_T>
+DATA_T *GetLayerDataPtr(void *data_key, std::unordered_map<void *, DATA_T *> &layer_data_map) {
     DATA_T *debug_data;
     // TODO: should lock here, or have caller lock
     auto got = layer_data_map.find(data_key);
@@ -685,7 +706,8 @@ template <typename DATA_T> DATA_T *GetLayerDataPtr(void *data_key, std::unordere
     return debug_data;
 }
 
-template <typename DATA_T> void FreeLayerDataPtr(void *data_key, std::unordered_map<void *, DATA_T *> &layer_data_map) {
+template <typename DATA_T>
+void FreeLayerDataPtr(void *data_key, std::unordered_map<void *, DATA_T *> &layer_data_map) {
     auto got = layer_data_map.find(data_key);
     assert(got != layer_data_map.end());
 
@@ -699,25 +721,28 @@ struct in_place_t {};
 static constexpr in_place_t in_place{};
 
 // A C++11 approximation of std::optional
-template <typename T> class optional {
-protected:
+template <typename T>
+class optional {
+  protected:
     union Store {
-        Store(){};  // Do nothing.  That's the point.
-        ~Store(){}; // Not safe to destroy this object outside of its stateful container to clean up T if any.
+        Store() {};  // Do nothing.  That's the point.
+        ~Store() {}; // Not safe to destroy this object outside of its stateful container to clean up T if any.
         typename std::aligned_storage<sizeof(T), alignof(T)>::type backing;
         T obj;
     };
 
-public:
+  public:
     optional() : init_(false) {}
 
-    template <typename... Args> explicit optional(in_place_t, const Args &...args) { emplace(args...); }
+    template <typename... Args>
+    explicit optional(in_place_t, const Args &...args) { emplace(args...); }
     optional(const optional &other) : init_(false) { *this = other; }
     optional(optional &&other) : init_(false) { *this = std::move(other); }
 
     ~optional() { DeInit(); }
 
-    template <typename... Args> T &emplace(const Args &...args) {
+    template <typename... Args>
+    T &emplace(const Args &...args) {
         init_ = true;
         new (&store_.backing) T(args...);
         return store_.obj;
@@ -788,7 +813,7 @@ public:
         return std::move(store_.obj);
     }
 
-protected:
+  protected:
     inline void DeInit() {
         if (init_) {
             store_.obj.~T();
@@ -822,7 +847,7 @@ protected:
  *
  */
 
-//#include "vk_layer_data.h"
+// #include "vk_layer_data.h"
 #include "vulkan/vulkan.h"
 #include <map>
 #include <set>

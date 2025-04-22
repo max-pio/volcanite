@@ -16,8 +16,8 @@
 #pragma once
 
 #include <chrono>
-#include <random>
 #include <iomanip>
+#include <random>
 
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.hpp>
@@ -59,21 +59,21 @@ static vk::Extent3D getDispatchSize(uint32_t width, uint32_t height, uint32_t de
                         roundUpPowerOfTwo(depth, workgroupSize.depth) / workgroupSize.depth);
 }
 
-
 //  ------------------------------------------------------------------------------
 //  GLSL
 
 glm::mat4 removeTranslation(glm::mat4 mat);
 
-template <typename T> size_t vectorByteSize(const typename std::vector<T> &vec) { return sizeof(T) * vec.size(); }
+template <typename T>
+size_t vectorByteSize(const typename std::vector<T> &vec) { return sizeof(T) * vec.size(); }
 
 /// Constructs a string representation of an array with n elements.
 template <typename T>
-std::string array_string(const T* v, const size_t n) {
+std::string array_string(const T *v, const size_t n) {
     std::stringstream out;
     out << "{";
-    for(size_t i = 0; i < n ; i++) {
-        if(i > 0)
+    for (size_t i = 0; i < n; i++) {
+        if (i > 0)
             out << ", ";
         out << v[i];
     }
@@ -93,28 +93,25 @@ std::string str(glm::uvec4 v);
 std::string str(glm::mat3 v);
 std::string str(glm::mat4 v);
 
-
 /// Converts cartesian coordinates to spherical coordinates.\n
 /// spherical components: (0 <= theta <= pi, -pi <= phi <= pi, r >= 0)\n
 /// cartesian: z axis points upwards
-glm::vec3 spherical2cartesian(const glm::vec3& v);
+glm::vec3 spherical2cartesian(const glm::vec3 &v);
 
 /// Converts cartesian coordinates to spherical coordinates.
 /// spherical components: (0 <= theta <= pi, -pi <= phi <= pi, r >= 0)\n
 /// cartesian: z axis points upwards, w is 1
-glm::vec4 spherical2cartesian(const glm::vec4& v);
-
+glm::vec4 spherical2cartesian(const glm::vec4 &v);
 
 /// Converts spherical coordinates to cartesian coordinates.
 /// spherical components: (0 <= theta <= pi, -pi <= phi <= pi, r >= 0)\n
 /// cartesian: z axis points upwards
-glm::vec3 cartesian2spherical(const glm::vec3& v);
+glm::vec3 cartesian2spherical(const glm::vec3 &v);
 
 /// Converts spherical coordinates to cartesian coordinates.
 /// spherical components: (0 <= theta <= pi, -pi <= phi <= pi, r >= 0)\n
 /// cartesian: z axis points upwards, w is 1
-glm::vec4 cartesian2spherical(const glm::vec4& v);
-
+glm::vec4 cartesian2spherical(const glm::vec4 &v);
 
 //  ------------------------------------------------------------------------------
 //  STATISTICS
@@ -126,8 +123,7 @@ glm::vec4 cartesian2spherical(const glm::vec4& v);
 /// @param min value in values that is mapped to the histogram start
 /// @param max value in values that is mapped to the histogram end
 /// @return a newly created vector with the histogram counts
-std::vector<float> computeHistogram(const std::vector<float>& values, int bins, bool interpolate, float min, float max);
-
+std::vector<float> computeHistogram(const std::vector<float> &values, int bins, bool interpolate, float min, float max);
 
 //  ------------------------------------------------------------------------------
 //  TIMING
@@ -138,7 +134,7 @@ std::vector<float> computeHistogram(const std::vector<float>& values, int bins, 
 /// // do stuff..\n
 /// auto seconds_since_creation = t.elapsed();
 class MiniTimer {
-public:
+  public:
     MiniTimer() : m_startTime(std::chrono::high_resolution_clock::now()) {}
     ~MiniTimer() = default;
 
@@ -157,7 +153,7 @@ public:
         return static_cast<float>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) / 1000.f;
     }
 
-    static std::string getCurrentDateTime(const std::string& format = "%Y-%m-%d %X") {
+    static std::string getCurrentDateTime(const std::string &format = "%Y-%m-%d %X") {
         auto now = std::chrono::system_clock::now();
         auto in_time_t = std::chrono::system_clock::to_time_t(now);
 
@@ -166,10 +162,9 @@ public:
         return ss.str();
     }
 
-private:
+  private:
     std::chrono::time_point<std::chrono::high_resolution_clock> m_startTime;
 };
-
 
 void logLibraryAvailabilty();
 

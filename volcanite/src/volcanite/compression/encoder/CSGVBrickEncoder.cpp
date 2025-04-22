@@ -13,7 +13,6 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-
 #include "volcanite/compression/encoder/CSGVBrickEncoder.hpp"
 #include "volcanite/compression/VolumeCompressionBase.hpp"
 #include "volcanite/compression/memory_mapping.hpp"
@@ -40,17 +39,18 @@ uint32_t CSGVBrickEncoder::valueOfNeighbor(const MultiGridNode *grid, const Mult
         glm::any(glm::greaterThanEqual(neighbor_pos, glm::ivec3(static_cast<int>(lod_dim)))))
         return INVALID;
 
-        // in case we want to access a neighbor that is not already existing on this level (neighbor_i > our_i or any element of neighbor[child_index][neighbor_i] is positive,
-        // we have to look up the parent element.
+    // in case we want to access a neighbor that is not already existing on this level (neighbor_i > our_i or any element of neighbor[child_index][neighbor_i] is positive,
+    // we have to look up the parent element.
     else if (glm::any(glm::greaterThan(neighbor[child_index][neighbor_i], glm::ivec3(0)))) {
         // technically, this computes the index on a wrong level of detail (if not in the finest one), but because Z-order is self-including, it works
         return parent_grid[voxel_pos2idx(glm::ivec3(brick_pos / 2u) + neighbor[child_index][neighbor_i],
-                                         glm::uvec3(lod_dim / 2))].label;
+                                         glm::uvec3(lod_dim / 2))]
+            .label;
     }
-        // otherwise, lookup the neighbor
+    // otherwise, lookup the neighbor
     else {
         return grid[voxel_pos2idx(neighbor_pos, glm::uvec3(lod_dim))].label;
     }
 }
 
-}
+} // namespace volcanite

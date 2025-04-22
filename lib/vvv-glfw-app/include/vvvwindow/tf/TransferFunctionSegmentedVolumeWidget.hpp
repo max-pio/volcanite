@@ -20,7 +20,7 @@
 namespace vvv {
 
 class GuiTFSegmentedVolumeData {
-public:
+  public:
     explicit GuiTFSegmentedVolumeData(GuiInterface::GuiTFSegmentedVolumeEntry &entry) : e(&entry) {
         e->initialize(false);
 
@@ -34,10 +34,10 @@ public:
     void updateVectorColormap(int material);
     void renderGui(GpuContextPtr ctx);
 
-private:
+  private:
     std::vector<std::string> discriminatorNames;
 
-    GuiInterface::GuiTFSegmentedVolumeEntry* e;
+    GuiInterface::GuiTFSegmentedVolumeEntry *e;
 };
 
 void renderGuiTFSegmentedVolume(GuiInterface::GuiTFSegmentedVolumeEntry &entry, GpuContextPtr);

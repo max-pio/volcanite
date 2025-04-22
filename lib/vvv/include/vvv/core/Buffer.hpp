@@ -27,32 +27,38 @@ struct BufferSettings {
 
 struct Buffer {
 
-    Buffer(GpuContextPtr ctx, const BufferSettings& settings) : m_ctx(ctx), m_byteSize(settings.byteSize), m_label(settings.label) { createBuffer(settings.usage, settings.memoryUsage, settings.label); }
+    Buffer(GpuContextPtr ctx, const BufferSettings &settings) : m_ctx(ctx), m_byteSize(settings.byteSize), m_label(settings.label) { createBuffer(settings.usage, settings.memoryUsage, settings.label); }
 
     vk::DeviceAddress getDeviceAddress() const;
     /// splits the 64 bit buffer device address into two 32 bit uint components. For usage with GL_EXT_buffer_reference_uvec2
-    static void deviceAddressUvec2(vk::DeviceAddress address, uint32_t xy[2]) { xy[0] = static_cast<uint32_t>(address); xy[1] = static_cast<uint32_t>(address >> 32); }
+    static void deviceAddressUvec2(vk::DeviceAddress address, uint32_t xy[2]) {
+        xy[0] = static_cast<uint32_t>(address);
+        xy[1] = static_cast<uint32_t>(address >> 32);
+    }
 
     [[nodiscard]] std::vector<uint8_t> download() const;
     void download(void *dest, size_t byteSize) const;
     void download(void *dest, size_t deviceOffset, size_t byteSize) const;
-    template <typename T> void download(std::vector<T> &dest) const { download(dest.data(), dest.size() * sizeof(T)); };
+    template <typename T>
+    void download(std::vector<T> &dest) const { download(dest.data(), dest.size() * sizeof(T)); };
 
     /// upload data directly (map, memcpy, unmap). Requires eHostVisible
     void upload(const void *rawData, size_t byteSize) const;
-    void upload( size_t device_offset, const void *rawData, size_t byteSize) const;
+    void upload(size_t device_offset, const void *rawData, size_t byteSize) const;
     /// upload data directly (map, memcpy, unmap). Requires eHostVisible
-    template <typename T> void upload(const std::vector<T> &data) const {
+    template <typename T>
+    void upload(const std::vector<T> &data) const {
         upload(reinterpret_cast<const void *>(data.data()), data.size() * sizeof(T));
     }
 
     /// upload() data to staging buffer and copy to this buffer
-    void uploadWithStagingBuffer(vk::CommandBuffer commandBuffer, const Buffer &staging, const void *rawData, size_t byteSize, size_t dstOffset=0ul) const;
+    void uploadWithStagingBuffer(vk::CommandBuffer commandBuffer, const Buffer &staging, const void *rawData, size_t byteSize, size_t dstOffset = 0ul) const;
     /// upload() data to new staging buffer and copy to this buffer using Awaitable API
-    std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> uploadWithStagingBuffer(const void * const rawData, size_t byteSize, const detail::OpenGLStyleSubmitOptions opts = {}) const;
-    std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> uploadWithStagingBuffer(const void * const rawData, size_t byteSize, size_t dstOffset, const detail::OpenGLStyleSubmitOptions opts = {}) const;
+    std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> uploadWithStagingBuffer(const void *const rawData, size_t byteSize, const detail::OpenGLStyleSubmitOptions opts = {}) const;
+    std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> uploadWithStagingBuffer(const void *const rawData, size_t byteSize, size_t dstOffset, const detail::OpenGLStyleSubmitOptions opts = {}) const;
     /// upload() data to new staging buffer and copy to this buffer using Awaitable API
-    template <typename T> std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> uploadWithStagingBuffer(const std::vector<T> &data, const detail::OpenGLStyleSubmitOptions opts = {}) const {
+    template <typename T>
+    std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> uploadWithStagingBuffer(const std::vector<T> &data, const detail::OpenGLStyleSubmitOptions opts = {}) const {
         return uploadWithStagingBuffer(data.data(), data.size() * sizeof(T), opts);
     }
 
@@ -63,12 +69,13 @@ struct Buffer {
 
     ~Buffer() { destroyBuffer(); }
 
-    template <typename T> struct uniform;
+    template <typename T>
+    struct uniform;
 
-public:
+  public:
     vk::DescriptorBufferInfo descriptor = {};
 
-private:
+  private:
     GpuContextPtr m_ctx;
     size_t m_byteSize;
     std::string m_label;
@@ -80,7 +87,8 @@ private:
     void createBuffer(vk::BufferUsageFlags usage, vk::MemoryPropertyFlags memoryUsage, const std::string &label);
 };
 
-template <typename T> struct Buffer::uniform : public Buffer {
+template <typename T>
+struct Buffer::uniform : public Buffer {
     /// Create a rgba8u texture that can be used for writing in a compute shader and blitting to the graphics queue
     explicit uniform(GpuContextPtr ctx, const std::string label = "")
         : Buffer(ctx, BufferSettings{.label = label,

@@ -82,11 +82,11 @@ set(VVV_HEADERS
 
         ../../extern/stb/stb_image.hpp
         ../../extern/stb/stb_image_write.hpp
-        )
+)
 
-if(HEADLESS)
+if (HEADLESS)
     list(APPEND VVV_HEADERS include/vvv/headless_entrypoint.hpp)
-endif()
+endif ()
 
 set(VVV_SOURCES
         src/vvv.cpp
@@ -140,11 +140,11 @@ set(VVV_SOURCES
         ../../extern/SPIRV-Reflect/spirv_reflect.cpp
 
         ../../extern/stb/stb_image.cpp
-        )
+)
 
-if(HEADLESS)
+if (HEADLESS)
     list(APPEND VVV_SOURCES src/headless_entrypoint.cpp)
-endif()
+endif ()
 
 # Target and Packages --------------------------------------------------------------------------------------------------
 
@@ -210,7 +210,7 @@ target_include_directories(libvvv
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../extern>
         PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        )
+)
 
 # add data/ folder as target_property to install() by each project
 set_target_properties(libvvv PROPERTIES INTERFACE_DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data)

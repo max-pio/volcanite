@@ -13,18 +13,18 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include <vvv/volren/Volume.hpp>
 #include <vvv/util/Logger.hpp>
+#include <vvv/volren/Volume.hpp>
 
 #include <vulkan/vulkan.hpp>
 
 #ifdef LIB_VTK
+#include <vtkCellData.h>
 #include <vtkDataArrayRange.h>
+#include <vtkImageData.h>
 #include <vtkIntArray.h>
 #include <vtkSmartPointer.h>
 #include <vtkXMLImageDataReader.h>
-#include <vtkImageData.h>
-#include <vtkCellData.h>
 #include <vtkXMLParser.h>
 #endif
 
@@ -33,7 +33,7 @@
 namespace vvv {
 
 uint32_t swapEndian(uint32_t v) {
-    uint32_t b0,b1,b2,b3;
+    uint32_t b0, b1, b2, b3;
     uint32_t res;
     b0 = (v & 0x000000ff) << 24u;
     b1 = (v & 0x0000ff00) << 8u;
@@ -54,7 +54,8 @@ std::string readParameterFromHeader(std::string line, std::string parameter) {
     return s;
 }
 
-template <typename T> std::shared_ptr<Volume<T>> load_nastja_volume_from_vti(std::string url, std::string formatLabel, vk::Format gpuFormat) {
+template <typename T>
+std::shared_ptr<Volume<T>> load_nastja_volume_from_vti(std::string url, std::string formatLabel, vk::Format gpuFormat) {
     std::ifstream file(url, std::ios_base::in | std::ios_base::binary);
     if (!file.is_open()) {
         std::ostringstream err;
@@ -92,24 +93,35 @@ template <typename T> std::shared_ptr<Volume<T>> load_nastja_volume_from_vti(std
             file.close();
             throw std::runtime_error("unexpected end of file in " + url);
         }
-    } while(line.find("VTKFile") == std::string::npos);
+    } while (line.find("VTKFile") == std::string::npos);
     std::string byteOrder = readParameterFromHeader(line, "byte_order");
-    if(readParameterFromHeader(line, "type") != "ImageData" || (byteOrder != "LittleEndian" && byteOrder != "BigEndian")) {
-        file.close(); throw std::runtime_error("Invalid .vti file header, expected type ImageData, and byte_order LittleEndian or BigEndian.");
+    if (readParameterFromHeader(line, "type") != "ImageData" || (byteOrder != "LittleEndian" && byteOrder != "BigEndian")) {
+        file.close();
+        throw std::runtime_error("Invalid .vti file header, expected type ImageData, and byte_order LittleEndian or BigEndian.");
     }
     // second line contains the ImageData header
-    if (!std::getline(file, line)) { file.close(); throw std::runtime_error("unexpected end of file in " + url); }
+    if (!std::getline(file, line)) {
+        file.close();
+        throw std::runtime_error("unexpected end of file in " + url);
+    }
     if (6 != std::sscanf(line.c_str(), "<ImageData WholeExtent=\"0 %lu 0 %lu 0 %lu\" Origin=\"0 0 0\" Spacing=\"%f %f %f\">", &img_width, &img_height, &img_depth,
                          &physical_size_x, &physical_size_y, &physical_size_z)) {
-        file.close(); throw std::runtime_error("Could not read <ImageData ..> header from second line in .vti file " + url);
+        file.close();
+        throw std::runtime_error("Could not read <ImageData ..> header from second line in .vti file " + url);
     }
 
     // fourth line contains DataArray header: <DataArray type="UInt32" Name="cells" format="appended" offset="0" NumberOfComponents="1"/>
-    if (!std::getline(file, line)) { file.close(); throw std::runtime_error("unexpected end of file in " + url); }
-    if (!std::getline(file, line)) { file.close(); throw std::runtime_error("unexpected end of file in " + url); }
-    if(readParameterFromHeader(line, "type") != formatLabel || readParameterFromHeader(line, "format") != "appended" || readParameterFromHeader(line, "offset") != "0"
-       || readParameterFromHeader(line, "NumberOfComponents") != "1") {
-        file.close(); throw std::runtime_error("Invalid DataArray header, expected type " + formatLabel + ", format appended, offset 0, and NumberOfComponents 1 in line 4 of .vti file " + url);
+    if (!std::getline(file, line)) {
+        file.close();
+        throw std::runtime_error("unexpected end of file in " + url);
+    }
+    if (!std::getline(file, line)) {
+        file.close();
+        throw std::runtime_error("unexpected end of file in " + url);
+    }
+    if (readParameterFromHeader(line, "type") != formatLabel || readParameterFromHeader(line, "format") != "appended" || readParameterFromHeader(line, "offset") != "0" || readParameterFromHeader(line, "NumberOfComponents") != "1") {
+        file.close();
+        throw std::runtime_error("Invalid DataArray header, expected type " + formatLabel + ", format appended, offset 0, and NumberOfComponents 1 in line 4 of .vti file " + url);
     }
 
     // Actually, the physical dimension would be
@@ -120,7 +132,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nastja_volume_from_vti(std
     physical_size_y = static_cast<float>(img_height) / max_dim;
     physical_size_z = static_cast<float>(img_depth) / max_dim;
 
-    if (physical_size_x <= 0.f || physical_size_y <= 0.f || physical_size_z <= 0.f || !std::isfinite(physical_size_x) || !std::isfinite(physical_size_y)|| !std::isfinite(physical_size_z)) {
+    if (physical_size_x <= 0.f || physical_size_y <= 0.f || physical_size_z <= 0.f || !std::isfinite(physical_size_x) || !std::isfinite(physical_size_y) || !std::isfinite(physical_size_z)) {
         file.close();
         throw std::invalid_argument("invalid .vti physical volume size");
     }
@@ -139,11 +151,21 @@ template <typename T> std::shared_ptr<Volume<T>> load_nastja_volume_from_vti(std
     std::vector<T> payload(voxel_count);
 
     // read binary data inline
-    if (!std::getline(file, line)) { file.close(); throw std::runtime_error("unexpected end of file in " + url); }
-    if (!std::getline(file, line)) { file.close(); throw std::runtime_error("unexpected end of file in " + url); }
-    if (!std::getline(file, line)) { file.close(); throw std::runtime_error("unexpected end of file in " + url); }
-    if(readParameterFromHeader(line, "encoding") != "raw") {
-        file.close(); throw std::runtime_error("Expected encoding 'raw' but got '" + readParameterFromHeader(line, "encoding") + "' in .vti file " + url);
+    if (!std::getline(file, line)) {
+        file.close();
+        throw std::runtime_error("unexpected end of file in " + url);
+    }
+    if (!std::getline(file, line)) {
+        file.close();
+        throw std::runtime_error("unexpected end of file in " + url);
+    }
+    if (!std::getline(file, line)) {
+        file.close();
+        throw std::runtime_error("unexpected end of file in " + url);
+    }
+    if (readParameterFromHeader(line, "encoding") != "raw") {
+        file.close();
+        throw std::runtime_error("Expected encoding 'raw' but got '" + readParameterFromHeader(line, "encoding") + "' in .vti file " + url);
     }
 
     // we have to read a single byte before the raw data starts
@@ -156,50 +178,51 @@ template <typename T> std::shared_ptr<Volume<T>> load_nastja_volume_from_vti(std
         throw std::runtime_error("only " + std::to_string(file.gcount()) + " bytes of expected " + std::to_string(byte_size) + " bytes could be read from NRRD file.");
     }
 
-    if(byteOrder == "BigEndian")
-        std::transform(std::begin(payload), std::end(payload), std::begin(payload),swapEndian);
+    if (byteOrder == "BigEndian")
+        std::transform(std::begin(payload), std::end(payload), std::begin(payload), swapEndian);
 
     file.close();
     return std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, img_width, img_height, img_depth, gpuFormat, payload);
 }
 
-
-template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::string url, std::string formatLabel, vk::Format gpuFormat) {
+template <typename T>
+std::shared_ptr<Volume<T>> load_volume_from_vti(std::string url, std::string formatLabel, vk::Format gpuFormat) {
 #ifdef LIB_VTK
     vtkSmartPointer<vtkXMLImageDataReader> reader = vtkSmartPointer<vtkXMLImageDataReader>::New();
-    if(!reader->CanReadFile(url.c_str()))
+    if (!reader->CanReadFile(url.c_str()))
         throw std::runtime_error("XML image data reader can not read file " + url);
 
     reader->SetFileName(url.c_str());
     reader->Update();
 
     vtkSmartPointer<vtkImageData> vti_image = reader->GetOutput();
-    vtkSmartPointer<vtkCellData>  vti_cell = vti_image->GetCellData();
-    if(!vti_cell)
+    vtkSmartPointer<vtkCellData> vti_cell = vti_image->GetCellData();
+    if (!vti_cell)
         throw std::runtime_error("could not load cell data from vti file");
     vtkSmartPointer<vtkDataArray> vti_data = vti_cell->GetArray(0);
-    if(!vti_data)
+    if (!vti_data)
         throw std::runtime_error("could not load cell data array from vti file");
 
     int expected_vtk_type = -1;
-    if(formatLabel == "UInt8")
+    if (formatLabel == "UInt8")
         expected_vtk_type = VTK_UNSIGNED_CHAR;
-    else if(formatLabel == "UInt16")
+    else if (formatLabel == "UInt16")
         expected_vtk_type = VTK_UNSIGNED_SHORT;
-    else if(formatLabel == "UInt32")
+    else if (formatLabel == "UInt32")
         expected_vtk_type = VTK_UNSIGNED_INT;
-    else if(formatLabel == "UInt64")
+    else if (formatLabel == "UInt64")
         expected_vtk_type = VTK_UNSIGNED_LONG;
     else
         throw std::runtime_error("Data type " + formatLabel + " not yet supported for .vti import");
 
-    if(vti_data->GetDataType() != expected_vtk_type) {
+    if (vti_data->GetDataType() != expected_vtk_type) {
         throw std::runtime_error("Expected .vti data type " + formatLabel + " (vtkType " + std::to_string(expected_vtk_type) + ") but got vtkType " + std::to_string(vti_data->GetDataType()));
     }
 
     int img_dims[3];
     vti_image->GetDimensions(img_dims);
-    for (int & img_dim : img_dims) img_dim = img_dim - 1;
+    for (int &img_dim : img_dims)
+        img_dim = img_dim - 1;
 
     // copy the data
     std::vector<T> payload(img_dims[0] * img_dims[1] * img_dims[2]);
@@ -212,7 +235,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::strin
     float physical_size_y = static_cast<float>(img_dims[1]) / max_dim;
     float physical_size_z = static_cast<float>(img_dims[2]) / max_dim;
 
-    if (physical_size_x <= 0.f || physical_size_y <= 0.f || physical_size_z <= 0.f || !std::isfinite(physical_size_x) || !std::isfinite(physical_size_y)|| !std::isfinite(physical_size_z)) {
+    if (physical_size_x <= 0.f || physical_size_y <= 0.f || physical_size_z <= 0.f || !std::isfinite(physical_size_x) || !std::isfinite(physical_size_y) || !std::isfinite(physical_size_z)) {
         throw std::invalid_argument("invalid .vti physical volume size");
     }
 
@@ -233,19 +256,23 @@ template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::strin
 #endif
 }
 
-template <> std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_vti(std::string path, bool allowCast) {
+template <>
+std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_vti(std::string path, bool allowCast) {
     assert(!allowCast && "Casting not yet supported for vti volume loaders.");
     return load_volume_from_vti<uint8_t>(path, "UInt8", vk::Format::eR8Uint);
 }
-template <> std::shared_ptr<Volume<uint16_t>> Volume<uint16_t>::load_vti(std::string path, bool allowCast) {
+template <>
+std::shared_ptr<Volume<uint16_t>> Volume<uint16_t>::load_vti(std::string path, bool allowCast) {
     assert(!allowCast && "Casting not yet supported for vti volume loaders.");
     return load_volume_from_vti<uint16_t>(path, "UInt16", vk::Format::eR16Uint);
 }
-template <> std::shared_ptr<Volume<uint32_t>> Volume<uint32_t>::load_vti(std::string path, bool allowCast) {
+template <>
+std::shared_ptr<Volume<uint32_t>> Volume<uint32_t>::load_vti(std::string path, bool allowCast) {
     assert(!allowCast && "Casting not yet supported for vti volume loaders.");
     return load_volume_from_vti<uint32_t>(path, "UInt32", vk::Format::eR32Uint);
 }
-template <> std::shared_ptr<Volume<uint64_t>> Volume<uint64_t>::load_vti(std::string path, bool allowCast) {
+template <>
+std::shared_ptr<Volume<uint64_t>> Volume<uint64_t>::load_vti(std::string path, bool allowCast) {
     assert(!allowCast && "Casting not yet supported for vti volume loaders.");
     return load_volume_from_vti<uint64_t>(path, "UInt64", vk::Format::eR64Uint);
 }

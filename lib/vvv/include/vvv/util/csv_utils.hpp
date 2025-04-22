@@ -32,35 +32,35 @@ namespace vvv {
 /// @param attribute_csv_separator the CSV file attribute seperator
 /// @param column_names a vector into which the column names of the CSV file will be written
 /// @return a vector where the i-th element contains the list of values in the i-th CSV file row
-std::vector<std::vector<float>> csv_float_import(const std::string& csv_path, const std::string &attribute_csv_separator, std::vector<std::string>& column_names);
+std::vector<std::vector<float>> csv_float_import(const std::string &csv_path, const std::string &attribute_csv_separator, std::vector<std::string> &column_names);
 
-std::vector<unsigned int> csv_label_column_import(const std::string& csv_path, const std::string &attribute_csv_separator, std::string& label_column);
+std::vector<unsigned int> csv_label_column_import(const std::string &csv_path, const std::string &attribute_csv_separator, std::string &label_column);
 
-template<typename T>
-void csv_export(const std::vector<std::map<std::string, T>>& s, const std::string& path)  {
+template <typename T>
+void csv_export(const std::vector<std::map<std::string, T>> &s, const std::string &path) {
     std::ofstream fout(path, std::ios::out);
     assert(fout.is_open());
 
     std::stringstream ss;
     std::vector<std::string> attributes;
     int i = 0;
-    for(auto const& entry: s[0]) {
+    for (auto const &entry : s[0]) {
         attributes.push_back(entry.first);
         ss << entry.first;
-        if(i++ < s[0].size()-1)
+        if (i++ < s[0].size() - 1)
             ss << ",";
     }
     ss << "\n";
     fout << ss.str();
-    for(const auto& m: s) {
+    for (const auto &m : s) {
         ss.str(std::string());
-        for(i = 0; i < attributes.size(); i++) {
+        for (i = 0; i < attributes.size(); i++) {
             T v = m.at(attributes[i]);
-            if(std::is_floating_point<T>() && v == std::floor(v))
+            if (std::is_floating_point<T>() && v == std::floor(v))
                 ss << std::to_string(static_cast<long long>(v));
             else
                 ss << v;
-            if(i < attributes.size()-1)
+            if (i < attributes.size() - 1)
                 ss << ",";
         }
         ss << "\n";
@@ -69,6 +69,5 @@ void csv_export(const std::vector<std::map<std::string, T>>& s, const std::strin
 
     fout.close();
 }
-
 
 } // namespace vvv

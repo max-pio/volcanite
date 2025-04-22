@@ -15,9 +15,9 @@
 
 #include <vvvwindow/entrypoint.hpp>
 
-#include <vvv/util/detect_debugger.hpp>
-#include <vvv/util/Paths.hpp>
 #include <vvv/util/Logger.hpp>
+#include <vvv/util/Paths.hpp>
+#include <vvv/util/detect_debugger.hpp>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -25,25 +25,25 @@
 
 #include <string>
 
-int entrypoint_main(int(*main)(int, char**), int argc, char **argv, const std::string& dataDirs) {
+int entrypoint_main(int (*main)(int, char **), int argc, char **argv, const std::string &dataDirs) {
     /* print uncaught exceptions before segmentation fault. But don't do this when a debugger is attached, otherwise the stacktrace is lost. */
     if (!vvv::debuggerIsAttached()) {
         try {
             vvv::Paths::initPaths(dataDirs);
             int ret = main(argc, argv);
 
-            #ifdef _WIN32
+#ifdef _WIN32
             std::cout << "Application exit with return code " << ret << ". Press any key to close." << std::endl;
             _getwch();
-            #endif
+#endif
 
             return ret;
         } catch (const std::exception &exc) {
             using namespace vvv;
             Logger(Error) << "An exception occurred: " << exc.what();
-            #ifdef _WIN32
+#ifdef _WIN32
             MessageBoxA(NULL, exc.what(), "An exception occurred.", MB_OK | MB_ICONERROR);
-            #endif
+#endif
 
             throw exc;
         }

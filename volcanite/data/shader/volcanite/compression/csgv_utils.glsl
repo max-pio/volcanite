@@ -28,8 +28,8 @@ uint brick_pos2idx(const uvec3 brick_idx, const uvec3 brick_count) {
 uvec3 brick_idx2pos(const uint brick_idx, const uvec3 brick_count) {
     assert(brick_idx < brick_count.x * brick_count.y * brick_count.z, "brick_idx out of bounds");
     return uvec3(brick_idx % brick_count.x,
-                 (brick_idx / brick_count.x) % brick_count.y,
-                 (brick_idx / brick_count.x / brick_count.y) % brick_count.z);
+    (brick_idx / brick_count.x) % brick_count.y,
+    (brick_idx / brick_count.x / brick_count.y) % brick_count.z);
 }
 
 // adds the element offset (one unit = 4 byte) to the 64 bit address represented in an uvec2
@@ -54,10 +54,10 @@ uvec2 bufferAddressSub(uvec2 address, const uint uint_elem_offset) {
 }
 
 uint getBrickStart(uint brick_idx) {
-    if(g_brick_starts[brick_idx] > g_brick_starts[brick_idx + 1u])
-        return 0u;
+    if (g_brick_starts[brick_idx] > g_brick_starts[brick_idx + 1u])
+    return 0u;
     else
-        return g_brick_starts[brick_idx];
+    return g_brick_starts[brick_idx];
 }
 
 uint getBrickEnd(uint brick_idx) {
@@ -82,4 +82,4 @@ EncodingRef getBrickDetailEncodingRef(uint brick_idx) {
 }
 #endif
 
-#endif // CSGV_UTILS_GLSL
+#endif// CSGV_UTILS_GLSL

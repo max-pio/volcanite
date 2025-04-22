@@ -31,4 +31,4 @@ uint brick_pos2idx(uvec3 brick_idx, uvec3 brick_count) {
     return brick_pos2idx(brick_idx, brick_count, 0u);
 }
 
-#endif // VOLCANITE_COMPRESSION_UTILS_GLSL
+#endif// VOLCANITE_COMPRESSION_UTILS_GLSL

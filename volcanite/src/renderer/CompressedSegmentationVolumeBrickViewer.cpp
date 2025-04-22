@@ -15,8 +15,8 @@
 
 #include "volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp"
 
-#include <vvv/core/Buffer.hpp>
 #include <random>
+#include <vvv/core/Buffer.hpp>
 
 #include "glm/gtc/matrix_transform.hpp"
 
@@ -27,7 +27,6 @@ using namespace vvv;
 
 namespace volcanite {
 
-
 RendererOutput CompressedSegmentationVolumeBrickViewer::renderNextFrame(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore *signalBinarySemaphore) {
     assert(m_usegmented_volume_info && m_urender_info && m_compressed_segmentation_volume && "CompressedSegmentationVolumeBrickViewer data missing!");
 
@@ -35,12 +34,12 @@ RendererOutput CompressedSegmentationVolumeBrickViewer::renderNextFrame(Awaitabl
     m_brick_id = glm::clamp(m_brick_id, {0, 0, 0},
                             glm::ivec3(m_compressed_segmentation_volume->getBrickCount()) - glm::ivec3(1, 1, 1));
 
-    if(m_data_changed) {
+    if (m_data_changed) {
         // wait until all previous frames are processed
         getCtx()->getDevice().waitIdle();
 
         assert(!m_compressed_segmentation_volume->getBrickStarts()->empty() && !m_compressed_segmentation_volume->getAllEncodings()->empty() && "CompressedSegmentationVolume not initialized!");
-        if(m_compressed_segmentation_volume->getAllEncodings()->size() != 1)
+        if (m_compressed_segmentation_volume->getAllEncodings()->size() != 1)
             throw std::runtime_error("CompressedSegmentationVolume must not contain split encodings for Volume Brick Viewer.");
         m_encoding_buffer->upload(m_compressed_segmentation_volume->getAllEncodings()->at(0));
         m_brick_starts_buffer->upload(*(m_compressed_segmentation_volume->getBrickStarts()));
@@ -50,15 +49,15 @@ RendererOutput CompressedSegmentationVolumeBrickViewer::renderNextFrame(Awaitabl
         m_data_changed = false;
     }
     // decompress all LODs of the given brick and add
-    if(!m_compressed_segmentation_volume->getAllEncodings()->empty() && glm::any(glm::notEqual(m_current_decoded_brick, m_brick_id))) {
+    if (!m_compressed_segmentation_volume->getAllEncodings()->empty() && glm::any(glm::notEqual(m_current_decoded_brick, m_brick_id))) {
         uint32_t brick_size = m_compressed_segmentation_volume->getBrickSize();
         int lod_count = static_cast<int>(log2(brick_size) + 1);
         std::vector<uint32_t> tmp(2 * lod_count * brick_size * brick_size * brick_size, 0xFFFFFFFF);
         std::vector<glm::uvec4> tmp_palette;
-        #pragma omp parallel for default(none) shared(lod_count, tmp, brick_size, tmp_palette)
-        for(int lod=0; lod < lod_count; lod++) {
-            std::vector<glm::uvec4>* pal_ptr = nullptr;
-            if(lod == lod_count - 1)
+#pragma omp parallel for default(none) shared(lod_count, tmp, brick_size, tmp_palette)
+        for (int lod = 0; lod < lod_count; lod++) {
+            std::vector<glm::uvec4> *pal_ptr = nullptr;
+            if (lod == lod_count - 1)
                 pal_ptr = &tmp_palette;
             m_compressed_segmentation_volume->decompressBrickTo(&tmp[lod * (brick_size * brick_size * brick_size)], m_brick_id, lod, &tmp[(lod_count + lod) * (brick_size * brick_size * brick_size)], pal_ptr);
         }
@@ -80,7 +79,6 @@ RendererOutput CompressedSegmentationVolumeBrickViewer::renderNextFrame(Awaitabl
     m_pass->setStorageImage("outColor", *m_outColor->getActive());
     const auto renderingFinished = m_pass->execute(awaitBeforeExecution, awaitBinaryAwaitableList);
 
-
     return vvv::RendererOutput{
         .texture = m_outColor->getActive().get(),
         .renderingComplete = {renderingFinished},
@@ -90,13 +88,13 @@ RendererOutput CompressedSegmentationVolumeBrickViewer::renderNextFrame(Awaitabl
 void CompressedSegmentationVolumeBrickViewer::initResources(GpuContext *ctx) {
     setCtx(ctx);
     // allocate GPU buffers for our data
-    const constexpr size_t MAX_VOL_SIZE = (1000 * 1024*1024); // enough for our biggest data set 1000^3 in compressed form
-    m_brick_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeBrickViewer.m_brick_start_buffer", .byteSize = (MAX_VOL_SIZE / 4096)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer});
-    m_encoding_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeBrickViewer.m_encoding_buffer", .byteSize = (MAX_VOL_SIZE / 2)*sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer});
+    const constexpr size_t MAX_VOL_SIZE = (1000 * 1024 * 1024); // enough for our biggest data set 1000^3 in compressed form
+    m_brick_starts_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeBrickViewer.m_brick_start_buffer", .byteSize = (MAX_VOL_SIZE / 4096) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer});
+    m_encoding_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeBrickViewer.m_encoding_buffer", .byteSize = (MAX_VOL_SIZE / 2) * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer});
     const constexpr size_t CACHE_SIZE_BYTE = (2 * 7 * 64 * 64 * 64 * sizeof(uint32_t)); // 8 LOD levels for 16*16*16 brick_size * 2 because after the brick values, we also store the encoding
     m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeBrickViewer.m_cache_buffer", .byteSize = CACHE_SIZE_BYTE, .usage = vk::BufferUsageFlagBits::eStorageBuffer});
     m_palette_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeBrickViewer.m_palette_buffer", .byteSize = sizeof(glm::uvec4) * 1024, .usage = vk::BufferUsageFlagBits::eStorageBuffer});
-    m_enumbrickpos_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeBrickViewer.m_enumbrickpos_buffer", .byteSize = sizeof(glm::uvec4)*32*32*32, .usage = vk::BufferUsageFlagBits::eStorageBuffer});
+    m_enumbrickpos_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeBrickViewer.m_enumbrickpos_buffer", .byteSize = sizeof(glm::uvec4) * 32 * 32 * 32, .usage = vk::BufferUsageFlagBits::eStorageBuffer});
     m_enumbrickpos_buffer->upload(CompressedSegmentationVolume::createBrickPosBuffer(16));
 }
 
@@ -110,7 +108,7 @@ void CompressedSegmentationVolumeBrickViewer::releaseResources() {
 
 void CompressedSegmentationVolumeBrickViewer::initShaderResources() {
     // compute pass for ray marching points
-    ShaderCompileErrorCallback compileErrorCallback = [](const ShaderCompileError& err) {
+    ShaderCompileErrorCallback compileErrorCallback = [](const ShaderCompileError &err) {
         Logger(Error) << err.errorText;
         return ShaderCompileErrorCallbackAction::USE_PREVIOUS_CODE;
     };
@@ -129,10 +127,10 @@ void CompressedSegmentationVolumeBrickViewer::initShaderResources() {
     int img_width, img_height, img_channels;
     auto img_path = Paths::findDataPath("csgv_codes.png");
     Logger(Info) << img_path.string();
-    unsigned char* image = stbi_load(img_path.string().c_str(), &img_width, &img_height, &img_channels, STBI_rgb_alpha);
-    m_encoding_tex = m_pass->reflectTexture("SAMPLER_encoding_icons", {.width=static_cast<uint32_t>(img_width), .height=static_cast<uint32_t>(img_height), .format=vk::Format::eR8G8B8A8Unorm});
+    unsigned char *image = stbi_load(img_path.string().c_str(), &img_width, &img_height, &img_channels, STBI_rgb_alpha);
+    m_encoding_tex = m_pass->reflectTexture("SAMPLER_encoding_icons", {.width = static_cast<uint32_t>(img_width), .height = static_cast<uint32_t>(img_height), .format = vk::Format::eR8G8B8A8Unorm});
     auto [tfUploadFinished, _stagingBuffer] = m_encoding_tex->upload(image);
-    getCtx()->sync->hostWaitOnDevice({ tfUploadFinished });
+    getCtx()->sync->hostWaitOnDevice({tfUploadFinished});
     stbi_image_free(image);
     m_pass->setImageSampler("SAMPLER_encoding_icons", *m_encoding_tex, vk::ImageLayout::eUndefined, false);
 }
@@ -140,13 +138,11 @@ void CompressedSegmentationVolumeBrickViewer::initShaderResources() {
 void CompressedSegmentationVolumeBrickViewer::releaseShaderResources() {
     m_usegmented_volume_info = nullptr;
     m_urender_info = nullptr;
-    if(m_pass)
+    if (m_pass)
         m_pass->freeResources();
     m_pass = nullptr;
     m_encoding_tex = nullptr;
 }
-
-
 
 void CompressedSegmentationVolumeBrickViewer::initSwapchainResources() {
     const auto screen = getCtx()->getWsi()->getScreenExtent();
@@ -154,7 +150,7 @@ void CompressedSegmentationVolumeBrickViewer::initSwapchainResources() {
     m_pass->setGlobalInvocationSize(screen.width, screen.height);
     m_outColor = m_pass->reflectTextures(
         "outColor", {.width = screen.width, .height = screen.height, .format = vk::Format::eR32G32B32A32Sfloat, .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage});
-   vvv::AwaitableList reinitDone;
+    vvv::AwaitableList reinitDone;
     for (auto &texture : *m_outColor) {
         texture->ensureResources();
         const auto layoutTransformDone = texture->setImageLayout(vk::ImageLayout::eGeneral, vk::PipelineStageFlagBits::eAllCommands);

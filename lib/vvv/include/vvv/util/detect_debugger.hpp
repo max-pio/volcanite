@@ -16,5 +16,5 @@
 #pragma once
 
 namespace vvv {
-    bool debuggerIsAttached();
+bool debuggerIsAttached();
 }

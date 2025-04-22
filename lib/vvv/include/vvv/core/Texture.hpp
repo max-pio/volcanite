@@ -19,18 +19,17 @@
 #include "GpuContext.hpp"
 #include "Shader.hpp"
 
-#include <vulkan/vulkan.hpp>
 #include "vvv/vk/format_utils.hpp"
 #include "vvv/vk/memory.hpp"
+#include <vulkan/vulkan.hpp>
 
 #include "stb/stb_image_write.hpp"
-//#include "tinyexr/tinyexr.hpp"
+// #include "tinyexr/tinyexr.hpp"
 #include "vvv/util/util.hpp"
 
 #include <set>
 #include <stdexcept>
 #include <string>
-
 
 namespace vvv {
 
@@ -49,7 +48,7 @@ const vk::ImageType lookupImageType[] = {vk::ImageType::e1D, vk::ImageType::e2D,
 const vk::ImageViewType lookupImageViewType[] = {vk::ImageViewType::e1D, vk::ImageViewType::e2D, vk::ImageViewType::e3D};
 
 class Texture {
-public:
+  public:
     vk::Sampler sampler = nullptr;
     vk::Image image = nullptr;
     vk::DeviceMemory deviceMemory = nullptr;
@@ -118,11 +117,11 @@ public:
     /// Add a debug label to all GPU resources associated with the texture.
     /// The GPU-side state MUST be initialized through `Texture::upload` or `Texture::initResources` prior to calling this method.
     /// @param name a label used in debuggers and log messages
-    void setName(const std::string& name);
+    void setName(const std::string &name);
     std::string getName() { return m_label; }
 
     size_t memorySize(vk::ImageAspectFlags aspectMask) const;
-    size_t memorySize() const { return memorySize(aspectMask); } //vk::ImageAspectFlagBits::eColor);
+    size_t memorySize() const { return memorySize(aspectMask); } // vk::ImageAspectFlagBits::eColor);
 
     void setImageLayout(vk::CommandBuffer const &commandBuffer, vk::ImageLayout destinationImageLayout, vk::PipelineStageFlags destinationStage = vk::PipelineStageFlags()) {
         ::vvv::setImageLayout(commandBuffer, image, format, descriptor.imageLayout, destinationImageLayout, destinationStage);
@@ -139,7 +138,7 @@ public:
     /// @param fromQueueFamilyIndex family index of the queue releasing ownership
     /// @param toQueueFamilyIndex family index of the queue acquiring ownership
     [[nodiscard]] vk::ImageMemoryBarrier queueOwnershipTransfer(uint32_t fromQueueFamilyIndex, vk::AccessFlagBits srcAccess, uint32_t toQueueFamilyIndex, vk::AccessFlagBits dstAccess,
-                                                  vk::ImageLayout transitionToLayout);
+                                                                vk::ImageLayout transitionToLayout);
     [[nodiscard]] vk::ImageMemoryBarrier queueOwnershipTransfer(uint32_t fromQueueFamilyIndex, vk::AccessFlagBits srcAccess, uint32_t toQueueFamilyIndex, vk::AccessFlagBits dstAccess) {
         return queueOwnershipTransfer(fromQueueFamilyIndex, srcAccess, toQueueFamilyIndex, dstAccess, descriptor.imageLayout);
     }
@@ -155,28 +154,27 @@ public:
     void upload(vk::CommandBuffer commandBuffer, vvv::Buffer const &stagingBuffer, const void *const rawData, vk::ImageLayout destinationImageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
                 vk::PipelineStageFlags destinationStage = vk::PipelineStageFlags());
 
-     /// This method is here for convenience. It's more performant to enqueue this directly into an existing command buffer using the other overload.
+    /// This method is here for convenience. It's more performant to enqueue this directly into an existing command buffer using the other overload.
     [[nodiscard]] std::pair<vvv::AwaitableHandle, std::shared_ptr<vvv::Buffer>> upload(const void *const rawData, vk::ImageLayout destinationImageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-                                                                         vk::PipelineStageFlags destinationStage = vk::PipelineStageFlags(), vvv::detail::OpenGLStyleSubmitOptions opts = {});
+                                                                                       vk::PipelineStageFlags destinationStage = vk::PipelineStageFlags(), vvv::detail::OpenGLStyleSubmitOptions opts = {});
 
     template <typename T>
     [[nodiscard]] std::pair<vvv::AwaitableHandle, std::shared_ptr<vvv::Buffer>> upload(const std::vector<T> &rawData, vk::ImageLayout destinationImageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-                                                                         vk::PipelineStageFlags destinationStage = vk::PipelineStageFlags(), vvv::detail::OpenGLStyleSubmitOptions opts = {}) {
+                                                                                       vk::PipelineStageFlags destinationStage = vk::PipelineStageFlags(), vvv::detail::OpenGLStyleSubmitOptions opts = {}) {
         assert(vectorByteSize(rawData) == memorySize());
         return upload(rawData.data(), destinationImageLayout, destinationStage, opts);
     }
 
-
     /// @discouraged this is a shorthand that drains the GPU pipeline and waits on the host. It allocates intermediate memory in
     /// the size of the texture.
-    std::vector<uint8_t> download(uint32_t queueFamily=0u) {
+    std::vector<uint8_t> download(uint32_t queueFamily = 0u) {
         // add full image barrier for download to host
         m_ctx->executeCommands([&](vk::CommandBuffer commandBuffer) {
             vk::ImageSubresourceRange imageSubresourceRange(aspectMask, 0, 1, 0, 1);
-            vk::ImageMemoryBarrier imageMemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eHostWrite, descriptor.imageLayout, descriptor.imageLayout, queueFamily, queueFamily,image, imageSubresourceRange);
+            vk::ImageMemoryBarrier imageMemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eHostWrite, descriptor.imageLayout, descriptor.imageLayout, queueFamily, queueFamily, image, imageSubresourceRange);
             commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eHost, {}, nullptr, nullptr, imageMemoryBarrier);
         });
-        return capture({.queueFamily=queueFamily, .hostWait = true}).second->download();
+        return capture({.queueFamily = queueFamily, .hostWait = true}).second->download();
     }
 
     /// @discouraged this is a shorthand that drains the GPU pipeline and waits on the host.
@@ -185,7 +183,7 @@ public:
     }
 
     /// @discouraged this is a shorthand that drains the GPU pipeline and waits on the host.
-    void writeHdr(const std::string path, uint32_t queueFamily=0u) {
+    void writeHdr(const std::string path, uint32_t queueFamily = 0u) {
         const auto componentCount = FormatComponentCount(static_cast<VkFormat>(format));
 
         // Note: if four channels are given, alpha channel is dropped.
@@ -209,9 +207,9 @@ public:
     }
 
     /// @discouraged this is a shorthand that drains the GPU pipeline and waits on the host.
-    void writePng(const std::string path, uint32_t queueFamily=0u) {
+    void writePng(const std::string path, uint32_t queueFamily = 0u) {
         const auto componentCount = FormatComponentCount(static_cast<VkFormat>(format));
-        assert((componentCount == 4 || componentCount == 3 || componentCount == 1)  && "expecting r, rg, rgb or rgba texture");
+        assert((componentCount == 4 || componentCount == 3 || componentCount == 1) && "expecting r, rg, rgb or rgba texture");
         const auto planeCount = FormatPlaneCount(static_cast<VkFormat>(format));
         assert(planeCount == 1);
         assert(FormatIsUInt(static_cast<VkFormat>(format)) || FormatIsUNorm(static_cast<VkFormat>(format)));
@@ -232,7 +230,7 @@ public:
         }
     }
 
-    void writeJpeg(const std::string path, int quality = 70, uint32_t queueFamily=0u) {
+    void writeJpeg(const std::string path, int quality = 70, uint32_t queueFamily = 0u) {
         const auto componentCount = FormatComponentCount(static_cast<VkFormat>(format));
 
         // Note: if four channels are given, alpha channel is dropped.
@@ -257,7 +255,7 @@ public:
 
     /// Select an export image file type based on the file ending (png, jp(e)g, hdr, exr).
     /// May throw a runtime error if filesystem or image export functionality fails or if the file type is not supported.
-    void writeFile(const std::string path, uint32_t queueFamily=0u) {
+    void writeFile(const std::string path, uint32_t queueFamily = 0u) {
         std::filesystem::path file = std::filesystem::absolute(path).lexically_normal();
         std::filesystem::path dir = file;
         std::filesystem::create_directories(dir.remove_filename());
@@ -266,23 +264,17 @@ public:
         const auto planeCount = FormatPlaneCount(static_cast<VkFormat>(format));
         const auto texelSize = FormatTexelSize(static_cast<VkFormat>(format));
         const auto componentSize = texelSize / componentCount;
-        if(path.ends_with(".png") || path.ends_with(".jpg") || path.ends_with(".jpeg")) {
-            if(!(componentCount == 4 || componentCount == 3 || componentCount == 1)
-                || planeCount != 1 || !(FormatIsUInt(static_cast<VkFormat>(format)) || FormatIsUNorm(static_cast<VkFormat>(format)))
-                || !FormatElementIsTexel(static_cast<VkFormat>(format)) || componentSize != 1)
+        if (path.ends_with(".png") || path.ends_with(".jpg") || path.ends_with(".jpeg")) {
+            if (!(componentCount == 4 || componentCount == 3 || componentCount == 1) || planeCount != 1 || !(FormatIsUInt(static_cast<VkFormat>(format)) || FormatIsUNorm(static_cast<VkFormat>(format))) || !FormatElementIsTexel(static_cast<VkFormat>(format)) || componentSize != 1)
                 throw std::runtime_error("texture format does not support png/jpg export");
-        }
-        else if(path.ends_with(".exr") || path.ends_with(".hdr")) {
-            if(!(componentCount == 4 || componentCount == 3 || componentCount == 1)
-               || planeCount != 1 || !FormatIsFloat(static_cast<VkFormat>(format))
-               || !FormatElementIsTexel(static_cast<VkFormat>(format)) || componentSize != 4)
+        } else if (path.ends_with(".exr") || path.ends_with(".hdr")) {
+            if (!(componentCount == 4 || componentCount == 3 || componentCount == 1) || planeCount != 1 || !FormatIsFloat(static_cast<VkFormat>(format)) || !FormatElementIsTexel(static_cast<VkFormat>(format)) || componentSize != 4)
                 throw std::runtime_error("texture format does not support exr/hdr export");
         } else {
-            throw std::runtime_error("unsupported image file type "
-                                     + path.substr(path.rfind("."), path.length()) + ", use png, jpg, exr or hdr");
+            throw std::runtime_error("unsupported image file type " + path.substr(path.rfind("."), path.length()) + ", use png, jpg, exr or hdr");
         }
 
-        if(path.ends_with(".png"))
+        if (path.ends_with(".png"))
             this->writePng(std::filesystem::absolute(file).lexically_normal().string(), queueFamily);
         else if (path.ends_with(".jpg") || path.ends_with(".jpeg"))
             this->writeJpeg(std::filesystem::absolute(file).lexically_normal().string(), 90, queueFamily);
@@ -305,7 +297,7 @@ public:
     }
     std::shared_ptr<vvv::Buffer> capture(vk::CommandBuffer commandBuffer) { return capture(commandBuffer, vk::PipelineStageFlagBits::eAllCommands); }
     [[nodiscard]] std::pair<vvv::AwaitableHandle, std::shared_ptr<vvv::Buffer>> capture(vvv::detail::OpenGLStyleSubmitOptions opts = {},
-                                                                          vk::PipelineStageFlags destinationStage = vk::PipelineStageFlagBits::eAllCommands) {
+                                                                                        vk::PipelineStageFlags destinationStage = vk::PipelineStageFlagBits::eAllCommands) {
         auto staging = std::make_shared<vvv::Buffer>(m_ctx, vvv::BufferSettings{
                                                                 .label = "staging" + (m_label != "" ? "(" + m_label + ")" : ""),
                                                                 .byteSize = memorySize(),
@@ -328,12 +320,11 @@ public:
     void initResources();
     bool areResourcesInitialized() { return sampler != static_cast<vk::Sampler>(nullptr); }
 
-private:
+  private:
     /// Make sure all textures are downloadable to the CPU. (performance implications?)
     static vk::ImageUsageFlags defaultUsage(vk::ImageUsageFlags usage) { return usage | vk::ImageUsageFlagBits::eTransferSrc; }
 
     void checkGpuSupport() const;
-
 
     vk::ImageCreateInfo defaultImageCreateInfo() const;
     vk::ImageViewCreateInfo defaultCreateImageViewInfo() const;
@@ -361,7 +352,7 @@ struct Texture::colorAttachmentLDR : public Texture {
 
 struct Texture::depthAttachment : public Texture {
     /// Create a rgba8u texture that can be used for writing in a compute shader and blitting to the graphics queue.
-    depthAttachment(vvv::GpuContextPtr ctx, uint32_t width, uint32_t height, vk::Format format=vk::Format::eD32Sfloat, vk::ImageUsageFlags usage={}, std::set<uint32_t> queues=TextureExclusiveQueueUsage)
+    depthAttachment(vvv::GpuContextPtr ctx, uint32_t width, uint32_t height, vk::Format format = vk::Format::eD32Sfloat, vk::ImageUsageFlags usage = {}, std::set<uint32_t> queues = TextureExclusiveQueueUsage)
         : Texture(ctx, format, width, height, usage | vk::ImageUsageFlagBits::eDepthStencilAttachment, queues) {
     }
 };
@@ -381,4 +372,4 @@ struct Texture::input1d : public Texture {
         : Texture(ctx, format, width, vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst, TextureExclusiveQueueUsage) {}
 };
 
-}
+} // namespace vvv

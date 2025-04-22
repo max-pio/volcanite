@@ -18,12 +18,11 @@
 
 namespace vvv {
 
-PassSimpleSsao::PassSimpleSsao(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering,
-               vk::ImageUsageFlags outputImageUsage, const std::string& label, Algorithm algorithm)
+PassSimpleSsao::PassSimpleSsao(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering> &multiBuffering,
+                               vk::ImageUsageFlags outputImageUsage, const std::string &label, Algorithm algorithm)
     : WithMultiBuffering(multiBuffering), WithGpuContext(ctx),
       m_ssaoPass(ctx, multiBuffering, PassBlur::getInputImageUsageFlags(), label + ".ssao", algorithm),
       m_blurPass(ctx, multiBuffering, 5, PassBlur::DepthNormal, outputImageUsage, label + ".blur") {
-
 }
 
 void PassSimpleSsao::allocateResources() {
@@ -63,20 +62,18 @@ RendererOutput PassSimpleSsao::renderSsao(AwaitableList awaitBeforeExecution, Bi
     return blurResult;
 }
 
-void PassSimpleSsao::addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int, bool)>> shaderRecompileCallback) {
+void PassSimpleSsao::addToGui(GuiInterface::GuiElementList *gui, std::optional<std::function<void(int, bool)>> shaderRecompileCallback) {
     m_ssaoPass.addToGui(gui, std::move(shaderRecompileCallback));
     gui->addInt([this](int i) { setBlurKernelRadius(i); }, [this]() { return getBlurKernelRadius(); }, "filter radius", 0, 32, 1);
 }
 
-
-PassSimpleApplySsao::PassSimpleApplySsao(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering,
-                    vk::ImageUsageFlags outputImageUsage, const std::string& label, Algorithm algorithm)
+PassSimpleApplySsao::PassSimpleApplySsao(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering> &multiBuffering,
+                                         vk::ImageUsageFlags outputImageUsage, const std::string &label, Algorithm algorithm)
     : WithGpuContext(ctx), WithMultiBuffering(multiBuffering),
       PassSimpleSsao(ctx, multiBuffering, vk::ImageUsageFlagBits::eSampled, label, algorithm),
       m_applyPass(SinglePassComputeSettings{.ctx = ctx, .label = label + ".apply", .multiBuffering = multiBuffering, .queueFamilyIndex = ctx->getQueueFamilyIndices().graphics.value()},
                   SimpleGlslShaderRequest{.filename = "passes/apply_ssao.comp", .label = label + ".apply"}),
       m_outputImageUsage(outputImageUsage) {
-
 }
 
 void PassSimpleApplySsao::allocateResources() {
@@ -95,7 +92,8 @@ void PassSimpleApplySsao::initSwapchainResources() {
     opts.usage |= m_outputImageUsage;
     m_outputTextures = m_applyPass.reflectTextures("outputTexture", opts);
 
-    for (auto& tex : *m_outputTextures) tex->initResources();
+    for (auto &tex : *m_outputTextures)
+        tex->initResources();
 }
 
 void PassSimpleApplySsao::releaseSwapchain() {
@@ -124,7 +122,7 @@ RendererOutput PassSimpleApplySsao::renderSsao(AwaitableList awaitBeforeExecutio
         return {.texture = m_inputColorTexture, .renderingComplete = {await}, .queueFamilyIndex = m_applyPass.getQueueFamilyIndex()};
     }
 
-    auto bluredSsaoResult = PassSimpleSsao::renderSsao(awaitBeforeExecution,awaitBinaryAwaitableList, signalBinarySemaphore);
+    auto bluredSsaoResult = PassSimpleSsao::renderSsao(awaitBeforeExecution, awaitBinaryAwaitableList, signalBinarySemaphore);
 
     m_applyPass.setStorageImage("outputTexture", *m_outputTextures->getActive(), vk::ImageLayout::eGeneral);
     m_applyPass.setImageSampler("ssaoTexture", *bluredSsaoResult.texture, vk::ImageLayout::eShaderReadOnlyOptimal);
@@ -142,10 +140,10 @@ RendererOutput PassSimpleApplySsao::renderSsao(AwaitableList awaitBeforeExecutio
     return {.texture = m_outputTextures->getActive().get(), .renderingComplete = {applyAwait}, .queueFamilyIndex = m_applyPass.getQueueFamilyIndex()};
 }
 
-void PassSimpleApplySsao::addToGui(GuiInterface::GuiElementList* gui, std::optional<std::function<void(int, bool)>> shaderRecompileCallback) {
+void PassSimpleApplySsao::addToGui(GuiInterface::GuiElementList *gui, std::optional<std::function<void(int, bool)>> shaderRecompileCallback) {
     gui->addFloat(&g_ssaoIntensity, "Intensity", 0, 1, 0.1f, 2);
     gui->addFloat(&g_ssaoGamma, "Gamma", 0.5, 2, 1, 2);
     PassSimpleSsao::addToGui(gui, shaderRecompileCallback);
 }
 
-}
+} // namespace vvv

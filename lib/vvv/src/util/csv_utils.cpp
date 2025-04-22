@@ -13,11 +13,10 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include <vvv/util/csv_utils.hpp>
 #include <vvv/util/Logger.hpp>
+#include <vvv/util/csv_utils.hpp>
 
-
-std::vector<std::vector<float>> vvv::csv_float_import(const std::string& csv_path, const std::string &attribute_csv_separator, std::vector<std::string>& column_names) {
+std::vector<std::vector<float>> vvv::csv_float_import(const std::string &csv_path, const std::string &attribute_csv_separator, std::vector<std::string> &column_names) {
     column_names.clear();
     std::ifstream csv(csv_path, std::ios::in);
     if (csv.is_open()) {
@@ -27,17 +26,18 @@ std::vector<std::vector<float>> vvv::csv_float_import(const std::string& csv_pat
 
         std::string first_line;
         std::getline(csv, first_line);
-        if (first_line.front() == '#') first_line.erase(0, 1); // line starts with a '#'
+        if (first_line.front() == '#')
+            first_line.erase(0, 1); // line starts with a '#'
 
         // extract attributes from first line
         size_t pos = 0;
         while ((pos = first_line.find(attribute_csv_separator)) != std::string::npos || pos == std::string::npos && !first_line.empty()) {
-            if (pos == std::string::npos) pos = first_line.size();
+            if (pos == std::string::npos)
+                pos = first_line.size();
             attribute = first_line.substr(0, pos);
             column_names.emplace_back(attribute);
             first_line.erase(0, pos + attribute_csv_separator.length());
         }
-
 
         // read the values out of each line and insert them into the return map
         std::string line;
@@ -46,7 +46,8 @@ std::vector<std::vector<float>> vvv::csv_float_import(const std::string& csv_pat
         while (std::getline(csv, line)) {
             values.clear();
             while ((pos = line.find(attribute_csv_separator)) != std::string::npos || pos == std::string::npos && !line.empty()) {
-                if (pos == std::string::npos) pos = line.size();
+                if (pos == std::string::npos)
+                    pos = line.size();
                 val = line.substr(0, pos);
                 values.emplace_back(static_cast<float>(std::stold(val)));
                 line.erase(0, pos + attribute_csv_separator.length());
@@ -54,14 +55,14 @@ std::vector<std::vector<float>> vvv::csv_float_import(const std::string& csv_pat
             csv_file.emplace_back(values);
         }
         csv.close();
-	    return csv_file;
+        return csv_file;
     } else {
         Logger(Error) << "Could not open CSV file " << csv_path;
         return {};
     }
 }
 
-std::vector<unsigned int> vvv::csv_label_column_import(const std::string& csv_path, const std::string &attribute_csv_separator, std::string& label_column) {
+std::vector<unsigned int> vvv::csv_label_column_import(const std::string &csv_path, const std::string &attribute_csv_separator, std::string &label_column) {
     std::ifstream csv(csv_path, std::ios::in);
     if (csv.is_open()) {
         std::vector<unsigned int> label_column_values;
@@ -70,19 +71,21 @@ std::vector<unsigned int> vvv::csv_label_column_import(const std::string& csv_pa
 
         std::string first_line;
         std::getline(csv, first_line);
-        if (first_line.front() == '#') first_line.erase(0, 1); // line starts with a '#'
+        if (first_line.front() == '#')
+            first_line.erase(0, 1); // line starts with a '#'
 
         // extract index of label_column column
         int label_column_idx = -1, count_rows = 0;
         size_t pos = 0;
         while ((pos = first_line.find(attribute_csv_separator)) != std::string::npos || pos == std::string::npos && !first_line.empty()) {
-            if (pos == std::string::npos) pos = first_line.size();
+            if (pos == std::string::npos)
+                pos = first_line.size();
             attribute = first_line.substr(0, pos);
-            if (attribute == label_column) label_column_idx = count_rows;
+            if (attribute == label_column)
+                label_column_idx = count_rows;
             count_rows++;
             first_line.erase(0, pos + attribute_csv_separator.length());
         }
-
 
         // read only the label_column values and ignore the rest
         std::string line;
@@ -93,7 +96,8 @@ std::vector<unsigned int> vvv::csv_label_column_import(const std::string& csv_pa
             for (int i = 0; i < count_rows; i++) {
                 pos = line.find(attribute_csv_separator);
                 val = line.substr(0, pos);
-                if (i == label_column_idx) value = std::stoul(val);
+                if (i == label_column_idx)
+                    value = std::stoul(val);
                 line.erase(0, pos + attribute_csv_separator.length());
             }
             label_column_values.emplace_back(value);

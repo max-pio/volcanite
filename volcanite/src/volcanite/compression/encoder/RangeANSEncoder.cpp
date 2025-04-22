@@ -21,8 +21,8 @@
 
 namespace volcanite {
 
-uint32_t RangeANSEncoder::readNextLodOperationFromEncoding(const uint32_t* brick_encoding, ReadState &state) const {
-    const RANS* rans = state.in_detail_lod ? &m_detail_rans : &m_rans;
+uint32_t RangeANSEncoder::readNextLodOperationFromEncoding(const uint32_t *brick_encoding, ReadState &state) const {
+    const RANS *rans = state.in_detail_lod ? &m_detail_rans : &m_rans;
     return rans->itr_nextSymbol(state.rans_state, state.idxE, brick_encoding);
 }
 

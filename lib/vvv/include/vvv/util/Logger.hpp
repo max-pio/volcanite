@@ -21,22 +21,22 @@
  * original author: Alberto Lepe <dev@alepe.com>, December 1, 2015, 6:00 PM
  */
 
-#include <chrono>
 #include <cassert>
-#include <sstream>
+#include <chrono>
 #include <iostream>
+#include <sstream>
 
 namespace vvv {
 
-template<typename T>
-std::string arrayToString(const T* data, size_t count, const std::string& delimiter=",") {
+template <typename T>
+std::string arrayToString(const T *data, size_t count, const std::string &delimiter = ",") {
     std::stringstream ss("");
     bool dots = count > 1024;
     if (dots)
         count = 1024;
     for (int i = 0; i < count; i++) {
         ss << data[i];
-        if (i < count-1)
+        if (i < count - 1)
             ss << delimiter;
     }
     if (dots)
@@ -44,12 +44,13 @@ std::string arrayToString(const T* data, size_t count, const std::string& delimi
     return ss.str();
 }
 
-
-
-enum loglevel { Debug, Info, Warn, Error };
+enum loglevel { Debug,
+                Info,
+                Warn,
+                Error };
 
 class Logger {
-public:
+  public:
     Logger() {
         m_msglevel = Info;
         m_out = &std::cout;
@@ -66,7 +67,7 @@ public:
         else
             m_out = &std::cout;
 
-        if(s_overwriteLastLine) {
+        if (s_overwriteLastLine) {
             operator<<("\r");
             s_overwriteLastLine = false;
         }
@@ -80,17 +81,17 @@ public:
         if (m_opened) {
             if (s_useColors)
                 *m_out << "\033[0m";
-            if(!m_overwriteThisLine) {
+            if (!m_overwriteThisLine) {
                 *m_out << std::endl;
-            }
-            else {
+            } else {
                 m_out->flush();
                 s_overwriteLastLine = true;
             }
         }
         m_opened = false;
     }
-    template <class T> Logger &operator<<(const T &msg) {
+    template <class T>
+    Logger &operator<<(const T &msg) {
         if (m_msglevel >= s_minLevel) {
             *m_out << msg;
             m_opened = true;
@@ -104,7 +105,7 @@ public:
 
     static loglevel s_minLevel;
 
-private:
+  private:
     bool m_opened = false;
     bool m_overwriteThisLine = false;
     loglevel m_msglevel = Debug;
@@ -153,4 +154,4 @@ private:
     static bool s_useColors;
 };
 
-}
+} // namespace vvv

@@ -15,8 +15,8 @@
 
 #pragma once
 
-#include <unordered_map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace vvv {
@@ -24,11 +24,11 @@ namespace vvv {
 class VolumeDataTypes {
     static const std::unordered_map<uint32_t, std::vector<std::string>> VOLUME_DATA_TYPES;
 
-public:
+  public:
     /// \return the size of the given unsigned type in bytes, -1 if type is not known.
-    static int byteSizeOfUnsignedType(const std::string& type_specifier) {
+    static int byteSizeOfUnsignedType(const std::string &type_specifier) {
         for (int size = 1; size <= 8; size *= 2) {
-            const auto& specifiers = VOLUME_DATA_TYPES.at(size);
+            const auto &specifiers = VOLUME_DATA_TYPES.at(size);
             if (std::find(specifiers.begin(), specifiers.end(), type_specifier) != specifiers.end())
                 return size;
         }
@@ -37,7 +37,7 @@ public:
     }
 
     /// \return all supported type descriptors for
-    static const std::vector<std::string>* getUnsignedTypesForByteSize(int byte_size) {
+    static const std::vector<std::string> *getUnsignedTypesForByteSize(int byte_size) {
         if (!VOLUME_DATA_TYPES.contains(byte_size))
             return nullptr;
         else
@@ -55,11 +55,9 @@ public:
 };
 
 const std::unordered_map<uint32_t, std::vector<std::string>> VolumeDataTypes::VOLUME_DATA_TYPES = {
-        {1, {"uint8", "uint8_t", "uchar", "unsigned char"}},
-        {2, {"uint16", "uint16_t", "ushort", "unsigned short", "unsigned short int"}},
-        {4, {"uint32", "uint32_t", "uint", "unsigned int"}},
-        {8, {"uint64", "uint64_t", "ulonglong", "unsigned long long", "unsigned long long int"}}
-};
-
+    {1, {"uint8", "uint8_t", "uchar", "unsigned char"}},
+    {2, {"uint16", "uint16_t", "ushort", "unsigned short", "unsigned short int"}},
+    {4, {"uint32", "uint32_t", "uint", "unsigned int"}},
+    {8, {"uint64", "uint64_t", "ulonglong", "unsigned long long", "unsigned long long int"}}};
 
 } // namespace vvv

@@ -91,7 +91,7 @@ void SymbolStats::normalize_freqs(uint32_t target_total) {
     }
 }
 
-void RANS::recomputeFrequencyTables(const uint32_t * frequency_array) {
+void RANS::recomputeFrequencyTables(const uint32_t *frequency_array) {
     assert(frequency_array && "no frequency array given");
     stats = SymbolStats();
     for (int s = 0; s < RANS_ALPHABET_SIZE; s++)
@@ -133,7 +133,6 @@ void RANS::recomputeFrequencyTables(std::vector<uint8_t> &in_bytes) {
     has_frequency_tables = true;
 }
 
-
 uint32_t RANS::packRANS(std::vector<uint32_t> &in_packed, uint32_t start4bit, uint32_t end4bit) const {
     assert(has_frequency_tables && "no frequency tables are given!");
 
@@ -146,7 +145,7 @@ uint32_t RANS::packRANS(std::vector<uint32_t> &in_packed, uint32_t start4bit, ui
     vvv::MiniTimer timer;
     RansState rans;
     RansEncInit(&rans);
-    uint8_t *ptr = out_buf + out_max_size;         // *end* of output buffer
+    uint8_t *ptr = out_buf + out_max_size;           // *end* of output buffer
     for (int i = end4bit - 1; i >= start4bit; i--) { // NB: working in reverse!
         // 8 half byte elements (each 4 bit large) are packed into one of the uints
         int shift = 28 - 4 * static_cast<int>(i % 8);
@@ -171,24 +170,24 @@ uint32_t RANS::packRANS(std::vector<uint32_t> &in_packed, uint32_t start4bit, ui
         uint32_t shift = 8u * (i % 4); // 4 byte in one uint32_t
         out |= static_cast<uint32_t>(rans_begin[i]) << shift;
         // every 4 elements: write out
-        if(i % 4 == 3) {
-            in_packed[start32bit + i/4] = out;
+        if (i % 4 == 3) {
+            in_packed[start32bit + i / 4] = out;
             out = 0u;
         }
     }
-    if(i % 4 > 0) {
-        in_packed[start32bit + i/4] = out;
+    if (i % 4 > 0) {
+        in_packed[start32bit + i / 4] = out;
         i += 4;
     }
     assert(new_size_in_bytes < out_max_size && "over capacity");
-    assert(start32bit + i/4 == end32bit && "didn't fill all elements in in_packed");
+    assert(start32bit + i / 4 == end32bit && "didn't fill all elements in in_packed");
 
     delete[] out_buf;
     // return the new end4bit (= end point in number of 4 bit elements)
     return end32bit * 8;
 }
 
-uint32_t RANS::packRANS(uint32_t* in_packed, uint32_t start4bit, uint32_t end4bit) const {
+uint32_t RANS::packRANS(uint32_t *in_packed, uint32_t start4bit, uint32_t end4bit) const {
     assert(has_frequency_tables && "no frequency tables are given!");
 
     size_t out_max_size = 8u + (end4bit - start4bit) * 2; // assume worst case compression rate of 100% (measured in bytes this is twice the 4bit count) 32 << 20; // 32MB
@@ -199,7 +198,7 @@ uint32_t RANS::packRANS(uint32_t* in_packed, uint32_t start4bit, uint32_t end4bi
     // rANS encode --------------------------------------------------------------
     RansState rans;
     RansEncInit(&rans);
-    uint8_t *ptr = out_buf + out_max_size;         // *end* of output buffer
+    uint8_t *ptr = out_buf + out_max_size;           // *end* of output buffer
     for (int i = end4bit - 1; i >= start4bit; i--) { // NB: working in reverse!
         // 8 half byte elements (each 4 bit large) are packed into one of the uints
         int shift = 28 - 4 * static_cast<int>(i % 8);
@@ -224,17 +223,17 @@ uint32_t RANS::packRANS(uint32_t* in_packed, uint32_t start4bit, uint32_t end4bi
         uint32_t shift = 8u * (i % 4); // 4 byte in one uint32_t
         out |= static_cast<uint32_t>(rans_begin[i]) << shift;
         // every 4 elements: write out
-        if(i % 4 == 3) {
-            in_packed[start32bit + i/4] = out;
+        if (i % 4 == 3) {
+            in_packed[start32bit + i / 4] = out;
             out = 0u;
         }
     }
-    if(i % 4 > 0) {
-        in_packed[start32bit + i/4] = out;
+    if (i % 4 > 0) {
+        in_packed[start32bit + i / 4] = out;
         i += 4;
     }
     assert(new_size_in_bytes < out_max_size && "over capacity");
-    assert(start32bit + i/4 == end32bit && "didn't fill all elements in in_packed");
+    assert(start32bit + i / 4 == end32bit && "didn't fill all elements in in_packed");
 
     delete[] out_buf;
     // return the new end4bit (= end point in number of 4 bit elements)
@@ -258,26 +257,26 @@ int RANS::unpackRANS(uint8_t *rans_begin, uint8_t *out, size_t number_of_output_
     return static_cast<int>(number_of_output_elements / 2);
 }
 
-void RANS::itr_initDecoding(uint32_t* rans_state, const uint8_t** rans_ptr) const {
+void RANS::itr_initDecoding(uint32_t *rans_state, const uint8_t **rans_ptr) const {
     RansDecInit(rans_state, rans_ptr);
 }
 
-void RANS::itr_initDecoding(uint32_t& rans_state, uint32_t& byte_index, const uint32_t* array) const {
+void RANS::itr_initDecoding(uint32_t &rans_state, uint32_t &byte_index, const uint32_t *array) const {
     RansDecInit(rans_state, byte_index, array);
 }
 
-uint32_t RANS::itr_nextSymbol(uint32_t* rans_state, const uint8_t** rans_ptr) const {
+uint32_t RANS::itr_nextSymbol(uint32_t *rans_state, const uint8_t **rans_ptr) const {
     uint32_t s = cum2sym[RansDecGet(rans_state, prob_bits)];
     RansDecAdvanceSymbol(rans_state, rans_ptr, &dsyms[s], prob_bits);
     return s;
 }
 
-uint32_t RANS::itr_nextSymbol(RansState& rans_state, uint32_t& byte_index,  const uint32_t* array) const {
+uint32_t RANS::itr_nextSymbol(RansState &rans_state, uint32_t &byte_index, const uint32_t *array) const {
     uint32_t cumulative = RansDecGet(rans_state, prob_bits);
     // uint32_t s = cum2sym[cumulative];
     uint32_t s;
-    for(s=0; s < 16; s++) {
-        if(stats.cum_freqs[s+1] > cumulative)
+    for (s = 0; s < 16; s++) {
+        if (stats.cum_freqs[s + 1] > cumulative)
             break;
     }
     RansDecAdvanceSymbol(rans_state, byte_index, array, dsyms[s].start, dsyms[s].freq, prob_bits);

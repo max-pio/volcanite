@@ -27,10 +27,9 @@ void uploadRandomFloatsToBuffer(std::shared_ptr<Buffer> buffer) {
     buffer->upload(tmp);
 }
 
-
 std::shared_ptr<Buffer> createRandomFloatBuffer(size_t elemCapacity, std::string label, GpuContextPtr ctx, bool uploadOnCreation) {
     auto buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = std::move(label), .byteSize = elemCapacity * sizeof(float), .usage = vk::BufferUsageFlagBits::eStorageBuffer});
-    if(uploadOnCreation) {
+    if (uploadOnCreation) {
         uploadRandomFloatsToBuffer(buffer);
     }
     return buffer;

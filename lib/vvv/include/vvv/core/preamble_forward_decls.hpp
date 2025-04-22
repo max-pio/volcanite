@@ -16,8 +16,8 @@
 #pragma once
 
 // and some headers that we want to be present everywhere.
+#include <cstdint>  // for `uint32_t` etc
 #include <iostream> // get cout, cerr for debugging
-#include <cstdint> // for `uint32_t` etc
 
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.hpp>

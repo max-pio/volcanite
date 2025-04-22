@@ -13,80 +13,70 @@ static int row_size = -1;
 static int sheet_size = -1;
 static int grid_size = -1;
 
-
-
 ///////////////////////////////////
 //// INTERNAL HELPER FUNCTIONS ////
 ///////////////////////////////////
 
-static int 
-IndicesToIndex(int ix, int iy, int iz)
-{
+static int
+IndicesToIndex(int ix, int iy, int iz) {
     return iz * sheet_size + iy * row_size + ix;
 }
-
-
 
 /////////////////////////////////////////
 //// UNION-FIND CLASS FOR COMPONENTS ////
 /////////////////////////////////////////
 
 class UnionFindElement {
-public:
-    UnionFindElement(unsigned long label) :
-    label(label),
-    parent(this),
-    rank(0)
-    {}
+  public:
+    UnionFindElement(unsigned long label) : label(label),
+                                            parent(this),
+                                            rank(0) {}
 
-public:
+  public:
     unsigned long label;
     UnionFindElement *parent;
     int rank;
 };
 
 UnionFindElement *
-Find(UnionFindElement *x) 
-{
+Find(UnionFindElement *x) {
     if (x->parent != x) {
         x->parent = Find(x->parent);
     }
     return x->parent;
 }
 
-void 
-Union(UnionFindElement *x, UnionFindElement *y)
-{
+void Union(UnionFindElement *x, UnionFindElement *y) {
     UnionFindElement *xroot = Find(x);
     UnionFindElement *yroot = Find(y);
 
-    if (xroot == yroot) { return; }
+    if (xroot == yroot) {
+        return;
+    }
 
     // merge teh two roots
     if (xroot->rank < yroot->rank) {
         xroot->parent = yroot;
-    }
-    else if (xroot->rank > yroot->rank) {
+    } else if (xroot->rank > yroot->rank) {
         yroot->parent = xroot;
-    }
-    else {
+    } else {
         yroot->parent = xroot;
         xroot->rank = xroot->rank + 1;
     }
 }
-
-
 
 /////////////////////////////////////////
 //// COMPRESSO COMPRESSION ALGORITHM ////
 /////////////////////////////////////////
 
 static bool *
-ExtractBoundaries(unsigned long *data, int zres, int yres, int xres)
-{
+ExtractBoundaries(unsigned long *data, int zres, int yres, int xres) {
     // create the boundaries array
     bool *boundaries = new bool[grid_size];
-    if (!boundaries) { fprintf(stderr, "Failed to allocate memory for boundaries...\n"); exit(-1); }
+    if (!boundaries) {
+        fprintf(stderr, "Failed to allocate memory for boundaries...\n");
+        exit(-1);
+    }
 
     // determine which pixels differ from east or south neighbors
     for (int iz = 0; iz < zres; ++iz) {
@@ -97,12 +87,14 @@ ExtractBoundaries(unsigned long *data, int zres, int yres, int xres)
                 boundaries[iv] = false;
 
                 // check the east neighbor
-                if (ix < xres - 1) { 
-                    if (data[iv] != data[IndicesToIndex(ix + 1, iy, iz)]) boundaries[iv] = true;
+                if (ix < xres - 1) {
+                    if (data[iv] != data[IndicesToIndex(ix + 1, iy, iz)])
+                        boundaries[iv] = true;
                 }
                 // check the south neighbor
                 if (iy < yres - 1) {
-                    if (data[iv] != data[IndicesToIndex(ix, iy + 1, iz)]) boundaries[iv] = true;
+                    if (data[iv] != data[IndicesToIndex(ix, iy + 1, iz)])
+                        boundaries[iv] = true;
                 }
             }
         }
@@ -113,12 +105,14 @@ ExtractBoundaries(unsigned long *data, int zres, int yres, int xres)
 }
 
 static unsigned long *
-ConnectedComponents(bool *boundaries, int zres, int yres, int xres)
-{
+ConnectedComponents(bool *boundaries, int zres, int yres, int xres) {
     // create the connected components
     unsigned long *components = new unsigned long[grid_size];
-    if (!components) { fprintf(stderr, "Failed to allocate memory for connected components...\n"); exit(-1); }
-    for (int iv = 0; iv < grid_size; ++iv) 
+    if (!components) {
+        fprintf(stderr, "Failed to allocate memory for connected components...\n");
+        exit(-1);
+    }
+    for (int iv = 0; iv < grid_size; ++iv)
         components[iv] = 0;
 
     // run connected components for each slice
@@ -134,17 +128,20 @@ ConnectedComponents(bool *boundaries, int zres, int yres, int xres)
                 int iv = IndicesToIndex(ix, iy, iz);
 
                 // continue if boundary
-                if (boundaries[iv]) continue;
+                if (boundaries[iv])
+                    continue;
 
                 // only consider the pixel directly to the north and west
                 int north = IndicesToIndex(ix - 1, iy, iz);
                 int west = IndicesToIndex(ix, iy - 1, iz);
 
-                int neighbor_labels[2] = { 0, 0 };
+                int neighbor_labels[2] = {0, 0};
 
                 // get the labels for the relevant neighbor
-                if (ix > 0) neighbor_labels[0] = components[north];
-                if (iy > 0) neighbor_labels[1] = components[west];
+                if (ix > 0)
+                    neighbor_labels[0] = components[north];
+                if (iy > 0)
+                    neighbor_labels[1] = components[west];
 
                 // if the neighbors are boundary, create new label
                 if (!neighbor_labels[0] && !neighbor_labels[1]) {
@@ -157,12 +154,14 @@ ConnectedComponents(bool *boundaries, int zres, int yres, int xres)
                     curlab++;
                 }
                 // the two pixels have equal non-trivial values
-                else if (neighbor_labels[0] == neighbor_labels[1]) 
+                else if (neighbor_labels[0] == neighbor_labels[1])
                     components[iv] = neighbor_labels[0];
                 // neighbors have differing values
                 else {
-                    if (!neighbor_labels[0]) components[iv] = neighbor_labels[1];
-                    else if (!neighbor_labels[1]) components[iv] = neighbor_labels[0];
+                    if (!neighbor_labels[0])
+                        components[iv] = neighbor_labels[1];
+                    else if (!neighbor_labels[1])
+                        components[iv] = neighbor_labels[0];
                     // neighbors have differing non-trivial values
                     else {
                         // take minimum value
@@ -183,7 +182,8 @@ ConnectedComponents(bool *boundaries, int zres, int yres, int xres)
             for (int ix = 0; ix < xres; ++ix) {
                 int iv = IndicesToIndex(ix, iy, iz);
 
-                if (boundaries[iv]) continue;
+                if (boundaries[iv])
+                    continue;
 
                 // get the parent for this component
                 UnionFindElement *comp = Find(union_find[components[iv] - 1]);
@@ -200,14 +200,12 @@ ConnectedComponents(bool *boundaries, int zres, int yres, int xres)
             delete union_find[iv];
     }
 
-
     // return the connected components array
     return components;
 }
 
 static std::vector<unsigned long> *
-IDMapping(unsigned long *components, unsigned long *data, int zres, int yres, int xres)
-{
+IDMapping(unsigned long *components, unsigned long *data, int zres, int yres, int xres) {
     // create a vector of the ids
     std::vector<unsigned long> *ids = new std::vector<unsigned long>();
 
@@ -233,7 +231,6 @@ IDMapping(unsigned long *components, unsigned long *data, int zres, int yres, in
                 }
             }
         }
-
     }
 
     // return the mapping
@@ -241,26 +238,26 @@ IDMapping(unsigned long *components, unsigned long *data, int zres, int yres, in
 }
 
 static unsigned long *
-EncodeBoundaries(bool *boundaries, int zres, int yres, int xres, int zstep, int ystep, int xstep) 
-{
+EncodeBoundaries(bool *boundaries, int zres, int yres, int xres, int zstep, int ystep, int xstep) {
     // determine the number of blocks in the z, y, and x dimensions
-    int nzblocks = (int) (ceil((double)zres / zstep) + 0.5);
-    int nyblocks = (int) (ceil((double)yres / ystep) + 0.5);
-    int nxblocks = (int) (ceil((double)xres / xstep) + 0.5);
+    int nzblocks = (int)(ceil((double)zres / zstep) + 0.5);
+    int nyblocks = (int)(ceil((double)yres / ystep) + 0.5);
+    int nxblocks = (int)(ceil((double)xres / xstep) + 0.5);
 
     // create an empty array for the encodings
     int nblocks = nzblocks * nyblocks * nxblocks;
     unsigned long *boundary_data = new unsigned long[nblocks];
     for (int iv = 0; iv < nblocks; ++iv)
         boundary_data[iv] = 0;
-    
+
     for (int iz = 0; iz < zres; ++iz) {
         for (int iy = 0; iy < yres; ++iy) {
             for (int ix = 0; ix < xres; ++ix) {
                 int iv = IndicesToIndex(ix, iy, iz);
 
                 // no encoding for non-boundaries
-                if (!boundaries[iv]) continue;
+                if (!boundaries[iv])
+                    continue;
 
                 // find the block from the index
                 int zblock = iz / zstep;
@@ -280,12 +277,11 @@ EncodeBoundaries(bool *boundaries, int zres, int yres, int xres, int zstep, int 
         }
     }
 
-    return boundary_data;    
+    return boundary_data;
 }
 
 static std::vector<unsigned long> *
-ValueMapping(unsigned long *boundary_data, int nblocks)
-{
+ValueMapping(unsigned long *boundary_data, int nblocks) {
     // get a list of values
     std::vector<unsigned long> *values = new std::vector<unsigned long>();
     std::set<unsigned long> hash_map = std::set<unsigned long>();
@@ -317,8 +313,7 @@ ValueMapping(unsigned long *boundary_data, int nblocks)
 }
 
 std::vector<unsigned long> *
-EncodeIndeterminateLocations(bool *boundaries, unsigned long *data, int zres, int yres, int xres)
-{
+EncodeIndeterminateLocations(bool *boundaries, unsigned long *data, int zres, int yres, int xres) {
     // update global size variables
     row_size = xres;
     sheet_size = yres * xres;
@@ -331,9 +326,12 @@ EncodeIndeterminateLocations(bool *boundaries, unsigned long *data, int zres, in
         for (int iy = 0; iy < yres; ++iy) {
             for (int ix = 0; ix < xres; ++ix, ++iv) {
 
-                if (!boundaries[iv]) continue;
-                else if (iy > 0 && !boundaries[IndicesToIndex(ix, iy - 1, iz)]) continue; //boundaries[iv] = 0;
-                else if (ix > 0 && !boundaries[IndicesToIndex(ix - 1, iy, iz)]) continue; //boundaries[iv] = 0;
+                if (!boundaries[iv])
+                    continue;
+                else if (iy > 0 && !boundaries[IndicesToIndex(ix, iy - 1, iz)])
+                    continue; // boundaries[iv] = 0;
+                else if (ix > 0 && !boundaries[IndicesToIndex(ix - 1, iy, iz)])
+                    continue; // boundaries[iv] = 0;
                 else {
                     int north = IndicesToIndex(ix - 1, iy, iz);
                     int south = IndicesToIndex(ix + 1, iy, iz);
@@ -355,7 +353,7 @@ EncodeIndeterminateLocations(bool *boundaries, unsigned long *data, int zres, in
                         locations->push_back(4);
                     else if (iz < zres - 1 && !boundaries[up] && data[up] == data[iv])
                         locations->push_back(5);
-                    else 
+                    else
                         locations->push_back(data[IndicesToIndex(ix, iy, iz)] + 6);
                 }
             }
@@ -366,23 +364,22 @@ EncodeIndeterminateLocations(bool *boundaries, unsigned long *data, int zres, in
 }
 
 unsigned long *
-compresso::Compress(unsigned long *data, int zres, int yres, int xres, int zstep, int ystep, int xstep, int& out_size)
-{
+compresso::Compress(unsigned long *data, int zres, int yres, int xres, int zstep, int ystep, int xstep, int &out_size) {
     // set global variables
     row_size = xres;
     sheet_size = yres * xres;
     grid_size = zres * yres * xres;
 
     // determine the number of blocks in the z, y, and x dimensions
-    int nzblocks = (int) (ceil((double)zres / zstep) + 0.5);
-    int nyblocks = (int) (ceil((double)yres / ystep) + 0.5);
-    int nxblocks = (int) (ceil((double)xres / xstep) + 0.5);
+    int nzblocks = (int)(ceil((double)zres / zstep) + 0.5);
+    int nyblocks = (int)(ceil((double)yres / ystep) + 0.5);
+    int nxblocks = (int)(ceil((double)xres / xstep) + 0.5);
 
     // create an empty array for the encodings
     int nblocks = nzblocks * nyblocks * nxblocks;
 
     // get boundary voxels
-    bool *boundaries = ExtractBoundaries(data, zres, yres, xres);   
+    bool *boundaries = ExtractBoundaries(data, zres, yres, xres);
 
     // get the connected components
     unsigned long *components = ConnectedComponents(boundaries, zres, yres, xres);
@@ -413,7 +410,7 @@ compresso::Compress(unsigned long *data, int zres, int yres, int xres, int zstep
     compressed_data[8] = xstep;
 
     int iv = header_size;
-    for (unsigned int ix = 0 ; ix < ids->size(); ++ix, ++iv)
+    for (unsigned int ix = 0; ix < ids->size(); ++ix, ++iv)
         compressed_data[iv] = (*ids)[ix];
     for (unsigned int ix = 0; ix < values->size(); ++ix, ++iv)
         compressed_data[iv] = (*values)[ix];
@@ -434,7 +431,7 @@ compresso::Compress(unsigned long *data, int zres, int yres, int xres, int zstep
     return compressed_data;
 }
 
-void compresso::Compress(const std::string& path, int zstep, int ystep, int xstep, Encoding lzma, float& compression_rate, float& compression_rate_lzma, double& seconds, double& lzma_seconds) {
+void compresso::Compress(const std::string &path, int zstep, int ystep, int xstep, Encoding lzma, float &compression_rate, float &compression_rate_lzma, double &seconds, double &lzma_seconds) {
     std::shared_ptr<vvv::Volume<uint32_t>> volume;
     if (path.back() == 'w')
         volume = vvv::Volume<uint32_t>::load_volcanite_raw(path);
@@ -447,23 +444,23 @@ void compresso::Compress(const std::string& path, int zstep, int ystep, int xste
     int yres = static_cast<int>(volume->dim_y);
     int zres = static_cast<int>(volume->dim_z);
     std::vector<unsigned long> labels(xres * yres * zres);
-    for(size_t i = 0; i < xres * yres * zres; i++) {
+    for (size_t i = 0; i < xres * yres * zres; i++) {
         labels[i] = static_cast<unsigned long>(volume->data()[i]);
     }
 
     int out_size;
     vvv::MiniTimer t;
-    unsigned long* out = compresso::Compress(labels.data(), zres, yres, xres, zstep, ystep, xstep, out_size);
+    unsigned long *out = compresso::Compress(labels.data(), zres, yres, xres, zstep, ystep, xstep, out_size);
     seconds = t.elapsed();
     out_size *= sizeof(unsigned long);
-    compression_rate = static_cast<float>(out_size)/static_cast<float>(xres * yres * zres * sizeof(uint32_t));
+    compression_rate = static_cast<float>(out_size) / static_cast<float>(xres * yres * zres * sizeof(uint32_t));
 
-    if(lzma > Encoding::PLAIN) {
+    if (lzma > Encoding::PLAIN) {
         lzma_action action = LZMA_RUN;
         std::vector<uint8_t> lzma_out(out_size / 10);
         lzma_stream strm = LZMA_STREAM_INIT;
         lzma_ret ret;
-        if(lzma == Encoding::LZMA_EXTREME)
+        if (lzma == Encoding::LZMA_EXTREME)
             ret = lzma_easy_encoder(&strm, 9u | LZMA_PRESET_EXTREME, LZMA_CHECK_CRC64);
         else
             ret = lzma_easy_encoder(&strm, 6u, LZMA_CHECK_CRC64);
@@ -471,21 +468,20 @@ void compresso::Compress(const std::string& path, int zstep, int ystep, int xste
             vvv::Logger(vvv::Error) << "lzma initialization error";
             return;
         }
-        strm.next_in = reinterpret_cast<uint8_t*>(out);
+        strm.next_in = reinterpret_cast<uint8_t *>(out);
         strm.avail_in = out_size;
         strm.next_out = lzma_out.data();
         strm.avail_out = lzma_out.size() * sizeof(lzma_out[0]);
         t.restart();
         ret = lzma_code(&strm, LZMA_FINISH);
         lzma_seconds = t.elapsed();
-        if(ret != LZMA_OK && ret != LZMA_STREAM_END) {
+        if (ret != LZMA_OK && ret != LZMA_STREAM_END) {
             vvv::Logger(vvv::Error) << "lzma compression error";
             return;
         }
         lzma_end(&strm);
-        compression_rate_lzma = static_cast<float>(strm.total_out)/static_cast<float>(xres * yres * zres * sizeof(uint32_t));
-    }
-    else {
+        compression_rate_lzma = static_cast<float>(strm.total_out) / static_cast<float>(xres * yres * zres * sizeof(uint32_t));
+    } else {
         lzma_seconds = 0.;
         compression_rate_lzma = 0.f;
     }
@@ -493,15 +489,12 @@ void compresso::Compress(const std::string& path, int zstep, int ystep, int xste
     delete[] out;
 }
 
-
-
 ///////////////////////////////////////////
 //// COMPRESSO DECOMPRESSION ALGORITHM ////
 ///////////////////////////////////////////
 
 static bool *
-DecodeBoundaries(unsigned long *boundary_data, std::vector<unsigned long> *values, int zres, int yres, int xres, int zstep, int ystep, int xstep)
-{
+DecodeBoundaries(unsigned long *boundary_data, std::vector<unsigned long> *values, int zres, int yres, int xres, int zstep, int ystep, int xstep) {
     int nyblocks = (int)(ceil((double)yres / ystep) + 0.5);
     int nxblocks = (int)(ceil((double)xres / xstep) + 0.5);
 
@@ -526,7 +519,8 @@ DecodeBoundaries(unsigned long *boundary_data, std::vector<unsigned long> *value
                 int offset = zoffset * (ystep * xstep) + yoffset * xstep + xoffset;
 
                 unsigned long value = (*values)[boundary_data[block]];
-                if ((value >> offset) % 2) boundaries[iv] = true;
+                if ((value >> offset) % 2)
+                    boundaries[iv] = true;
             }
         }
     }
@@ -535,8 +529,7 @@ DecodeBoundaries(unsigned long *boundary_data, std::vector<unsigned long> *value
 }
 
 static unsigned long *
-IDReverseMapping(unsigned long *components, std::vector<unsigned long> *ids, int zres, int yres, int xres)
-{
+IDReverseMapping(unsigned long *components, std::vector<unsigned long> *ids, int zres, int yres, int xres) {
     unsigned long *decompressed_data = new unsigned long[grid_size];
     for (int iv = 0; iv < grid_size; ++iv)
         decompressed_data[iv] = 0;
@@ -569,9 +562,8 @@ IDReverseMapping(unsigned long *components, std::vector<unsigned long> *ids, int
     return decompressed_data;
 }
 
-static void 
-DecodeIndeterminateLocations(bool *boundaries, unsigned long *decompressed_data, std::vector<unsigned long> *locations, int zres, int yres, int xres)
-{
+static void
+DecodeIndeterminateLocations(bool *boundaries, unsigned long *decompressed_data, std::vector<unsigned long> *locations, int zres, int yres, int xres) {
     int iv = 0;
     int index = 0;
 
@@ -582,25 +574,30 @@ DecodeIndeterminateLocations(bool *boundaries, unsigned long *decompressed_data,
                 int north = IndicesToIndex(ix - 1, iy, iz);
                 int west = IndicesToIndex(ix, iy - 1, iz);
 
-                if (!boundaries[iv]) continue;
+                if (!boundaries[iv])
+                    continue;
                 else if (ix > 0 && !boundaries[north]) {
                     decompressed_data[iv] = decompressed_data[north];
-                    //boundaries[iv] = 0;
-                }
-                else if (iy > 0 && !boundaries[west]) {
+                    // boundaries[iv] = 0;
+                } else if (iy > 0 && !boundaries[west]) {
                     decompressed_data[iv] = decompressed_data[west];
-                    //boundaries[iv] = 0;
-                }
-                else {
+                    // boundaries[iv] = 0;
+                } else {
                     int offset = (*locations)[index];
-                    if (offset == 0) decompressed_data[iv] = decompressed_data[IndicesToIndex(ix - 1, iy, iz)];
-                    else if (offset == 1) decompressed_data[iv] = decompressed_data[IndicesToIndex(ix + 1, iy, iz)];
-                    else if (offset == 2) decompressed_data[iv] = decompressed_data[IndicesToIndex(ix, iy - 1, iz)];
-                    else if (offset == 3) decompressed_data[iv] = decompressed_data[IndicesToIndex(ix, iy + 1, iz)];
-                    else if (offset == 4) decompressed_data[iv] = decompressed_data[IndicesToIndex(ix, iy, iz - 1)];
-                    else if (offset == 5) decompressed_data[iv] = decompressed_data[IndicesToIndex(ix, iy, iz + 1)];
+                    if (offset == 0)
+                        decompressed_data[iv] = decompressed_data[IndicesToIndex(ix - 1, iy, iz)];
+                    else if (offset == 1)
+                        decompressed_data[iv] = decompressed_data[IndicesToIndex(ix + 1, iy, iz)];
+                    else if (offset == 2)
+                        decompressed_data[iv] = decompressed_data[IndicesToIndex(ix, iy - 1, iz)];
+                    else if (offset == 3)
+                        decompressed_data[iv] = decompressed_data[IndicesToIndex(ix, iy + 1, iz)];
+                    else if (offset == 4)
+                        decompressed_data[iv] = decompressed_data[IndicesToIndex(ix, iy, iz - 1)];
+                    else if (offset == 5)
+                        decompressed_data[iv] = decompressed_data[IndicesToIndex(ix, iy, iz + 1)];
                     else {
-                        decompressed_data[iv] = offset - 6;                        
+                        decompressed_data[iv] = offset - 6;
                     }
                     index += 1;
                 }
@@ -609,9 +606,8 @@ DecodeIndeterminateLocations(bool *boundaries, unsigned long *decompressed_data,
     }
 }
 
-unsigned long* 
-compresso::Decompress(unsigned long *compressed_data)
-{
+unsigned long *
+compresso::Decompress(unsigned long *compressed_data) {
     // constants
     int header_size = 9;
 
@@ -636,9 +632,9 @@ compresso::Decompress(unsigned long *compressed_data)
     int xstep = compressed_data[8];
 
     // determine the number of blocks in the z, y, and x dimensions
-    int nzblocks = (int) (ceil((double)zres / zstep) + 0.5);
-    int nyblocks = (int) (ceil((double)yres / ystep) + 0.5);
-    int nxblocks = (int) (ceil((double)xres / xstep) + 0.5);
+    int nzblocks = (int)(ceil((double)zres / zstep) + 0.5);
+    int nyblocks = (int)(ceil((double)yres / ystep) + 0.5);
+    int nxblocks = (int)(ceil((double)xres / xstep) + 0.5);
 
     // create an empty array for the encodings
     int nblocks = nzblocks * nyblocks * nxblocks;
@@ -678,8 +674,7 @@ compresso::Decompress(unsigned long *compressed_data)
     return decompressed_data;
 }
 
-
-bool compresso::test(const std::string& path, int zstep, int ystep, int xstep, Encoding lzma) {
+bool compresso::test(const std::string &path, int zstep, int ystep, int xstep, Encoding lzma) {
     std::shared_ptr<vvv::Volume<uint32_t>> volume;
     if (path.back() == 'w')
         volume = vvv::Volume<uint32_t>::load_volcanite_raw(path);
@@ -688,10 +683,10 @@ bool compresso::test(const std::string& path, int zstep, int ystep, int xstep, E
     else
         assert(false && "filetype not supported!");
 
-//    volume->data().resize(128*128*128, 0);
-//    volume->dim_x = 128;
-//    volume->dim_y = 128;
-//    volume->dim_z = 128;
+    //    volume->data().resize(128*128*128, 0);
+    //    volume->dim_x = 128;
+    //    volume->dim_y = 128;
+    //    volume->dim_z = 128;
 
     int origx = static_cast<int>(volume->dim_x);
     int origy = static_cast<int>(volume->dim_y);
@@ -708,24 +703,24 @@ bool compresso::test(const std::string& path, int zstep, int ystep, int xstep, E
         for (size_t i = 0; i < xres * yres * zres; i++) {
             labels[i] = static_cast<unsigned long>(volume->data().at(i));
 
-            if(labels[i] > UINT32_MAX)
+            if (labels[i] > UINT32_MAX)
                 vvv::Logger(vvv::Error) << labels[i] << " brr";
         }
 
         int out_size;
-        unsigned long* out = compresso::Compress(labels.data(), zres, yres, xres, zstep, ystep, xstep, out_size);
+        unsigned long *out = compresso::Compress(labels.data(), zres, yres, xres, zstep, ystep, xstep, out_size);
         out_size *= sizeof(unsigned long);
-        if(lzma > Encoding::PLAIN) {
-//            // fill dummy out array with 0 to 15
-//            out_size = 16;
-//            for(int i = 0; i < out_size; i++)
-//                out[i] = i;
-//            out_size *= sizeof(unsigned long);
+        if (lzma > Encoding::PLAIN) {
+            //            // fill dummy out array with 0 to 15
+            //            out_size = 16;
+            //            for(int i = 0; i < out_size; i++)
+            //                out[i] = i;
+            //            out_size *= sizeof(unsigned long);
 
             std::vector<uint8_t> lzma_out(out_size);
             lzma_stream strm = LZMA_STREAM_INIT;
             lzma_ret ret;
-            if(lzma == Encoding::LZMA_EXTREME)
+            if (lzma == Encoding::LZMA_EXTREME)
                 ret = lzma_easy_encoder(&strm, 9u | LZMA_PRESET_EXTREME, LZMA_CHECK_CRC64);
             else
                 ret = lzma_easy_encoder(&strm, 6u, LZMA_CHECK_CRC64);
@@ -733,12 +728,12 @@ bool compresso::test(const std::string& path, int zstep, int ystep, int xstep, E
                 vvv::Logger(vvv::Error) << "lzma initialization error";
                 return false;
             }
-            strm.next_in = reinterpret_cast<uint8_t*>(out);
+            strm.next_in = reinterpret_cast<uint8_t *>(out);
             strm.avail_in = out_size;
             strm.next_out = lzma_out.data();
             strm.avail_out = lzma_out.size() * sizeof(lzma_out[0]);
             ret = lzma_code(&strm, LZMA_FINISH);
-            if(ret != LZMA_OK && ret != LZMA_STREAM_END) {
+            if (ret != LZMA_OK && ret != LZMA_STREAM_END) {
                 vvv::Logger(vvv::Error) << "lzma compression error";
                 return false;
             }
@@ -753,33 +748,32 @@ bool compresso::test(const std::string& path, int zstep, int ystep, int xstep, E
                 vvv::Logger(vvv::Error) << "lzma initialization error";
                 return false;
             }
-            strm.next_in = reinterpret_cast<uint8_t*>(lzma_out.data());
+            strm.next_in = reinterpret_cast<uint8_t *>(lzma_out.data());
             strm.avail_in = lzma_size;
             encoding = new unsigned long[out_size / sizeof(unsigned long)];
-            strm.next_out = reinterpret_cast<uint8_t*>(encoding);
+            strm.next_out = reinterpret_cast<uint8_t *>(encoding);
             strm.avail_out = out_size;
             ret = lzma_code(&strm, LZMA_FINISH);
-            if(ret != LZMA_OK && ret != LZMA_STREAM_END) {
+            if (ret != LZMA_OK && ret != LZMA_STREAM_END) {
                 vvv::Logger(vvv::Error) << "lzma compression error";
                 return false;
             }
             lzma_end(&strm);
             delete[] out;
-        }
-        else {
+        } else {
             encoding = out;
         }
     }
-    unsigned long* decode = compresso::Decompress(encoding);
+    unsigned long *decode = compresso::Decompress(encoding);
 
-    for(size_t i = 0; i < xres * yres * zres; i++) {
-        if(static_cast<uint32_t>(decode[i]) != volume->data().at(i)) {
-            vvv::Logger(vvv::Error) << UINT32_MAX << " test err " << decode[i] << " " << static_cast<unsigned long>(volume->data()[i]) << " orig " << volume->data()[i] << " at " << (i%xres) <<"," << ((i/xres)%yres) << "," << ((i/xres/yres)%zres);
-//        if(decode[i] != i) {
-//            vvv::Logger(vvv::Error) << "test err " << decode[i] << " " << i << " at " << (i%xres) <<"," << ((i/xres)%yres) << "," << ((i/xres/yres)%zres);
-//            delete[] encoding;
-//            delete[] decode;
-//            return false;
+    for (size_t i = 0; i < xres * yres * zres; i++) {
+        if (static_cast<uint32_t>(decode[i]) != volume->data().at(i)) {
+            vvv::Logger(vvv::Error) << UINT32_MAX << " test err " << decode[i] << " " << static_cast<unsigned long>(volume->data()[i]) << " orig " << volume->data()[i] << " at " << (i % xres) << "," << ((i / xres) % yres) << "," << ((i / xres / yres) % zres);
+            //        if(decode[i] != i) {
+            //            vvv::Logger(vvv::Error) << "test err " << decode[i] << " " << i << " at " << (i%xres) <<"," << ((i/xres)%yres) << "," << ((i/xres/yres)%zres);
+            //            delete[] encoding;
+            //            delete[] decode;
+            //            return false;
         }
     }
 

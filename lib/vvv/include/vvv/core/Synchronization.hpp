@@ -23,7 +23,7 @@
 
 #include <optional>
 
-//#define VVV_SYNC_DEBUG
+// #define VVV_SYNC_DEBUG
 
 #ifdef VVV_SYNC_DEBUG
 #include <fstream>
@@ -70,7 +70,6 @@
  */
 
 namespace vvv {
-
 
 /// Checkpoints the current planing state / progress of the schedule.
 /// This can be used for fast and cheap observation of execution states, which is required for semaphore reuse.
@@ -149,13 +148,24 @@ typedef std::vector<BinaryAwaitableHandle> BinaryAwaitableList;
 #ifdef VVV_SYNC_DEBUG
 namespace detail {
 const std::vector<std::string> colors{
-    "brown1", "aquamarine2", "cornflowerblue", "darkgreen", "darkgoldenrod1", "darksalmon", "dodgerblue3", "darkorchid2", "chartreuse1", "darkorange4", "dodgerblue4", "gold1",
+    "brown1",
+    "aquamarine2",
+    "cornflowerblue",
+    "darkgreen",
+    "darkgoldenrod1",
+    "darksalmon",
+    "dodgerblue3",
+    "darkorchid2",
+    "chartreuse1",
+    "darkorange4",
+    "dodgerblue4",
+    "gold1",
 };
 }; // namespace detail
 #endif
 
 class Synchronization : virtual public WithGpuContext {
-public:
+  public:
     Synchronization(GpuContextPtr ctx)
         : WithGpuContext(ctx)
 #ifdef VVV_SYNC_DEBUG
@@ -272,7 +282,7 @@ public:
 
     void destroySynchronizationPrimitives();
 
-private:
+  private:
 #ifdef VVV_SYNC_DEBUG
     mutable std::ofstream m_dotfile;
     mutable uint32_t instructionCounter;

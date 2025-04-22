@@ -21,8 +21,8 @@ namespace volcanite {
 
 class NibbleEncoder : public CSGVSerialBrickEncoder {
 
-public:
-    NibbleEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask=OP_ALL)
+  public:
+    NibbleEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask = OP_ALL)
         : CSGVSerialBrickEncoder(brick_size, encoding_mode, op_mask) {
         if (encoding_mode != NIBBLE_ENC)
             throw std::runtime_error("NibbleEncoder must be used with NIBBLE_ENC encoding mode.");
@@ -37,8 +37,8 @@ public:
     /// @param start the start position of the brick. Should be a multiple of the configured brick size.
     /// @param volume_dim the volume size in voxels in each dimension
     /// @return number of uint32_t elements written to out
-    [[nodiscard]] virtual uint32_t encodeBrickForRandomAccess(const std::vector<uint32_t>& volume,
-                                                              std::vector<uint32_t>& out, glm::uvec3 start,
+    [[nodiscard]] virtual uint32_t encodeBrickForRandomAccess(const std::vector<uint32_t> &volume,
+                                                              std::vector<uint32_t> &out, glm::uvec3 start,
                                                               glm::uvec3 volume_dim) const override;
 
     /// Decodes a single voxel from the brick encoding. Requires random_access to be enabled for random access
@@ -49,7 +49,7 @@ public:
     /// @param brick_encoding_length the length in uint32 elements of the brick encoding
     /// @returns the label of the brick voxel corresponding to the brick encoding index output_i
     virtual uint32_t decompressCSGVBrickVoxel(const uint32_t output_i, const uint32_t target_inv_lod,
-                                              const glm::uvec3 valid_brick_size, const uint32_t* brick_encoding,
+                                              const glm::uvec3 valid_brick_size, const uint32_t *brick_encoding,
                                               const uint32_t brick_encoding_length) const override;
 
     /// Decompresses a single brick in parallel.
@@ -58,13 +58,13 @@ public:
     /// @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
     /// @param valid_brick_size is used to clamp used voxels for border bricks. Values outside are undefined.
     /// @param target_inv_lod the LOD until which to decompress. 0 is the coarsest and log2(brick_size) is the original / finest level.
-    virtual void parallelDecodeBrick(const uint32_t* brick_encoding, const uint32_t brick_encoding_length,
-                                     uint32_t* output_brick, glm::uvec3 valid_brick_size,
+    virtual void parallelDecodeBrick(const uint32_t *brick_encoding, const uint32_t brick_encoding_length,
+                                     uint32_t *output_brick, glm::uvec3 valid_brick_size,
                                      int target_inv_lod) const override;
 
-protected:
+  protected:
     /// Reads the next element from the brick encoding, possibly using the rANS decoder from this CompressedSegmentationVolume, and updates the state.
-    uint32_t readNextLodOperationFromEncoding(const uint32_t* brick_encoding, ReadState& state) const override;
+    uint32_t readNextLodOperationFromEncoding(const uint32_t *brick_encoding, ReadState &state) const override;
 };
 
 } // namespace volcanite

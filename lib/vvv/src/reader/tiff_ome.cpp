@@ -26,19 +26,20 @@
 #include <tiff.h>
 #include <tiffio.h>
 
-#define TIFF_FIELD(tif, name, ref...)                                                                                                                                                                  \
-    {                                                                                                                                                                                                  \
-        if (TIFFGetField(tif, name, ref) != 1) {                                                                                                                                                       \
-            std::ostringstream err;                                                                                                                                                                    \
-            err << "unable to read TIFF field: " << #name << "\n";                                                                                                                                     \
-            throw std::runtime_error(err.str());                                                                                                                                                       \
-        }                                                                                                                                                                                              \
+#define TIFF_FIELD(tif, name, ref...)                              \
+    {                                                              \
+        if (TIFFGetField(tif, name, ref) != 1) {                   \
+            std::ostringstream err;                                \
+            err << "unable to read TIFF field: " << #name << "\n"; \
+            throw std::runtime_error(err.str());                   \
+        }                                                          \
     }
 
 bool is_valid_physical_size(float v) { return v > 0.f && std::isfinite(v); }
 #endif
 
-template<> std::shared_ptr<vvv::Volume<uint32_t>> vvv::Volume<uint32_t>::load_ome_tiff(std::string url) {
+template <>
+std::shared_ptr<vvv::Volume<uint32_t>> vvv::Volume<uint32_t>::load_ome_tiff(std::string url) {
 #if defined(LIB_TIFF) && defined(LIB_PUGIXLM)
     TIFF *tif = TIFFOpen(url.c_str(), "r");
 

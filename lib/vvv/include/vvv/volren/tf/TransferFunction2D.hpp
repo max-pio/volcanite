@@ -15,8 +15,8 @@
 
 #pragma once
 
-#include <vvv/volren/tf/TransferFunction.hpp>
 #include <utility>
+#include <vvv/volren/tf/TransferFunction.hpp>
 
 namespace vvv {
 
@@ -26,8 +26,8 @@ class UniformReflected;
 
 /// This 2D-Transfer function uses a fixed color map for x-Values and uses polygons to define regions in the plane with positive opacity.
 class TransferFunction2D : public TransferFunction {
-public:
-    TransferFunction2D(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering, uint32_t resolution, uint32_t queue = 0);
+  public:
+    TransferFunction2D(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering> &multiBuffering, uint32_t resolution, uint32_t queue = 0);
     ~TransferFunction2D();
 
     [[nodiscard]] std::pair<vvv::AwaitableHandle, std::shared_ptr<vvv::Buffer>> upload() override;
@@ -38,18 +38,20 @@ public:
     void setColormapTF(std::shared_ptr<TransferFunction1D> colormap) { m_colormapTF = std::move(colormap); }
 
     /// each polygon is specified with points in range [0-1] and can be in any order. You need to call @c upload() on @c TransferFunction2D to apply the new colormap.
-    void setPolygons(const std::vector<std::vector<glm::vec2>>& polygons) {
+    void setPolygons(const std::vector<std::vector<glm::vec2>> &polygons) {
         m_polygons = polygons;
         m_polygonOpacity.resize(m_polygons.size(), 1);
         m_polygonHasCustomColor.resize(m_polygons.size(), false);
         m_polygonCustomColor.resize(m_polygons.size(), {1, 1, 1});
     }
-    [[nodiscard]] const std::vector<std::vector<glm::vec2>>& polygons() const { return m_polygons; }
+    [[nodiscard]] const std::vector<std::vector<glm::vec2>> &polygons() const { return m_polygons; }
 
     void setFeathering(float feathering) { m_feathering = feathering; }
     [[nodiscard]] float feathering() const { return m_feathering; }
 
-    enum Direction : uint32_t { Horizontal, Vertical, Both };
+    enum Direction : uint32_t { Horizontal,
+                                Vertical,
+                                Both };
     /// Sets direction for the color map. Horizontal: color based on x-Coord. Vertical: color based on y-Coord. Both: color based on sum of x and y
     void setDirection(Direction direction) { m_direction = direction; }
     [[nodiscard]] Direction direction() { return m_direction; }
@@ -63,11 +65,10 @@ public:
 
     [[nodiscard]] uint32_t resolution() const { return m_resolution; }
 
-
-private:
+  private:
     [[nodiscard]] std::vector<glm::vec2> preparePolygonData() const;
 
-private:
+  private:
     std::vector<std::vector<glm::vec2>> m_polygons;
     std::vector<float> m_polygonOpacity;
     std::vector<bool> m_polygonHasCustomColor;
@@ -85,13 +86,9 @@ private:
 
     std::shared_ptr<TransferFunction1D> m_colormapTF;
 
-
-
     std::unique_ptr<Buffer> m_polygonStorageBuffer;
     std::unique_ptr<Buffer> m_additionalDataStorageBuffer;
     std::shared_ptr<UniformReflected> m_optionsUniform;
 };
 
-}
-
-
+} // namespace vvv

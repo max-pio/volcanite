@@ -32,11 +32,11 @@ layout (local_size_x = 8, local_size_y = 8) in;
 vec3 getAlbedoOfLabel(uint label) {
     // the G buffer stores the invalid label for rays that hit no surface
     if (label == INVALID)
-        return vec3(1.f);
+    return vec3(1.f);
 
     const int material = getMaterial(label);
     if (material < 0) {
-        assert(g_debug_vis_flags != 0u, "G-buffer must not contain labels that are invisible"); // debug modes may write strange label
+        assert(g_debug_vis_flags != 0u, "G-buffer must not contain labels that are invisible");// debug modes may write strange label
         return vec3(1.f);
     } else {
         return getColor(label, material).rgb;
@@ -48,7 +48,7 @@ vec3 getAlbedoOfLabel(uint label) {
 vec3 color_rectify(vec3 color, ivec2 pixel) {
     uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
     if (sample_count == 0u)
-            return color;
+    return color;
     vec4 prev_accum_rgba = imageLoad(accumulationOut, pixel);
     vec3 hsv = rgb2hsv(prev_accum_rgba.rgb);
     const vec3 d = vec3(0.f);
@@ -94,14 +94,14 @@ void main() {
 
     // only one thread per pixel block
     if (isHelperLane(pixel, viewport_size))
-        return;
+    return;
 
     // upsampling / denoising may be disabled or faded out
     // for n^2 samples, variance is halfed
     const float fade = g_denoise_fade_enable ? min(1.f, g_denoise_fade_sigma / sqrt(max(float(imageLoad(accuSampleCountOut, pixel).r), 1.f))) : 1.f;
     if (!g_atrous_enabled || fade < 0.1f) {
         if (pc.denoising_iteration == pc.last_denoising_iteration)
-            writeFinalFramebuffer(pixel, imageLoad(denoisingBuffer[0], pixel));
+        writeFinalFramebuffer(pixel, imageLoad(denoisingBuffer[0], pixel));
         return;
     }
 
@@ -117,7 +117,7 @@ void main() {
     uint center_label = INVALID;
     vec3 center_albedo_hsv = vec3(0.f);
     const bool center_sampled = unpackGBufferRGB16(imageLoad(gBuffer, pixel).rgb,
-                                                   center_label, center_normal, center_normalized_depth);
+    center_label, center_normal, center_normalized_depth);
     if (center_sampled) {
         center_albedo_hsv = rgb2hsv(getAlbedoOfLabel(center_label));
     } else if (pc.denoising_iteration == 0u) {
@@ -139,13 +139,13 @@ void main() {
     // weights defined for 3x3 kernel [0.5, 1, 0.5] in 1D, outer product is [1 2 1]
     //                                                                      [2 4 2]
     //                                                                      [1 2 1]
-    const vec4[4] _kernel_for_sizes = {vec4(1.f, 0.f, 0.f, 0.f),
-                                       vec4(2.f, 1.f, 0.f, 0.f),
-                                       vec4(6.f, 4.f, 1.f, 0.f),
-                                       vec4(20.f, 15.f, 6.f, 1.f)};
+    const vec4[4] _kernel_for_sizes = { vec4(1.f, 0.f, 0.f, 0.f),
+    vec4(2.f, 1.f, 0.f, 0.f),
+    vec4(6.f, 4.f, 1.f, 0.f),
+    vec4(20.f, 15.f, 6.f, 1.f) };
     const vec4 kernel_weights = pc.denoising_iteration == 0u ? vec4(1.f) :
-                                    _kernel_for_sizes[g_denoise_filter_kernel_size] * vec4(1.f, fade, fade, fade);
-    const float phi_depth = g_world_to_model_space_scaling * g_depth_sigma; // higher: more blurring above depth discontinuities
+    _kernel_for_sizes[g_denoise_filter_kernel_size] * vec4(1.f, fade, fade, fade);
+    const float phi_depth = g_world_to_model_space_scaling * g_depth_sigma;// higher: more blurring above depth discontinuities
 
     vec4 accum_rgba = vec4(0.f);
     float weight = 1.f;
@@ -159,7 +159,7 @@ void main() {
 
             // do not sample outside image plane, cast to uvec to catch values < 0
             if (isHelperLane(uvec2(filter_pixel), uvec2(viewport_size)))
-                continue;
+            continue;
 
             // do not blur if denoising is disabled
             if (!g_denoising_enabled && pixel_rgba.a >= 0.f) {
@@ -187,7 +187,7 @@ void main() {
                     accum_rgba = vec4(added_delta, dot(added_delta, added_delta), -1.f);
                     weight_sum = 0.f;
                 } else if (!sampled && pc.denoising_iteration > 0 && rgba.b > 0.f
-                           && dot(rgba_delta, rgba_delta) < old_dist) {
+                && dot(rgba_delta, rgba_delta) < old_dist) {
                     // the neighbor already stores an offset to a sampled pixel that has to
                     // be propagated further to the current pixel
                     accum_rgba = vec4(rgba_delta, dot(rgba_delta, rgba_delta), -1.f);
@@ -208,7 +208,7 @@ void main() {
             // quantized normals: either (+/-) 90 or (+/-) 180 degree angle
             // => max(cos, 0) = weightN is either 0 or 1
             if (any(notEqual(center_normal, normal)))
-                continue;
+            continue;
 
             // weight by albedo color distance (albedo demodulation would be better, but creates color noise along
             // label region edges due to alising noise in the G-buffer from TAA)
@@ -225,13 +225,13 @@ void main() {
     }
 
     if (weight_sum > 0.f)
-        accum_rgba /= weight_sum;
+    accum_rgba /= weight_sum;
 
     if (pc.denoising_iteration < pc.last_denoising_iteration) {
         // before last iteration:  À-trous feedback to next denoising iteration kernel in HDR
         // mark pixels from a filter step that did not receive a single rendered sample with a negative alpha value
         if (weight_sum <= 0.f)
-            accum_rgba.a = -1.f;
+        accum_rgba.a = -1.f;
 
         // store color for next iteration
         imageStore(denoisingBuffer[1u - (pc.denoising_iteration % 2u)], pixel, accum_rgba);

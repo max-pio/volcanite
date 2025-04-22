@@ -23,13 +23,11 @@
 
 #include "volcanite/compression/pack_nibble.hpp"
 #include "volcanite/compression/wavelet_tree/BitVector.hpp"
-#include "volcanite/compression/wavelet_tree/WaveletMatrix.hpp"
 #include "volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp"
+#include "volcanite/compression/wavelet_tree/WaveletMatrix.hpp"
 #include "volcanite/compression/wavelet_tree/bit_reversal_permutation.hpp"
 
-
 #include <array>
-
 
 void volcanite::prefix_counting(const uint32_t *op_stream_in, uint32_t start4bit, uint32_t end4bit,
                                 BitVector &bit_vector_out) {
@@ -116,9 +114,8 @@ static inline bool in_next(size_t code_length, size_t level) {
     return (code_length - 1) > level;
 }
 
-
 void volcanite::prefix_counting_huffman(const uint32_t *op_stream_in, uint32_t start4bit, uint32_t end4bit,
-                                BitVector &bit_vector_out, uint32_t level_starts_out[HWM_LEVELS+1]) {
+                                        BitVector &bit_vector_out, uint32_t level_starts_out[HWM_LEVELS + 1]) {
     assert(bit_vector_out.size() >= (end4bit - start4bit) * HWM_LEVELS && "bit vector has not enough capacity for construction");
 
     uint32_t const text_size = end4bit - start4bit;
@@ -181,14 +178,13 @@ void volcanite::prefix_counting_huffman(const uint32_t *op_stream_in, uint32_t s
             // obtain the canonical Huffman code for the current symbol in the text
             auto const symbol = volcanite::read4Bit(op_stream_in, 0, text_it);
             assert(symbol < HWM_ALPHABET_SIZE && "symbol is higher than the alphabet size");
-            const HuffmanCode& chc = HuffmanWaveletMatrix::SYMBOL2CHC[symbol];
+            const HuffmanCode &chc = HuffmanWaveletMatrix::SYMBOL2CHC[symbol];
 
             // If this Huffman code is still present at the given level, output its current bit, otherwise output nothing.
             // If this bit is 1, the code MUST end here.
             if (chc.length > level) {
                 raw_bv[position / BV_WORD_BIT_SIZE] |= ((chc.bit_code >> shift_word_for_bit) & 1ULL) << (position % BV_WORD_BIT_SIZE);
                 position++;
-
             }
         }
     }

@@ -20,9 +20,9 @@
 #include <thread>
 #include <unordered_set>
 
-#include "vvv/util/csv_utils.hpp"
 #include "vvv/util/Logger.hpp"
 #include "vvv/util/Paths.hpp"
+#include "vvv/util/csv_utils.hpp"
 #include "vvv/volren/Volume.hpp"
 
 #include "csgv_constants.incl"
@@ -35,7 +35,6 @@
 using namespace vvv;
 
 namespace volcanite {
-
 
 /// Easy to use managing class for obtaining Compressed Segmentation Volumes (CSGV).
 /// The createCompressedSegmentationVolume() method can be used to obtain a CSGV with the given parameters, e.g. for a .hdf5 or .nrrd data set.
@@ -54,10 +53,10 @@ namespace volcanite {
 /// If rANS encoding is applied when compressing, a quick pre-pass for obtaining operation frequency tables is performed.
 class CompSegVolHandler {
 
-public:
+  public:
     CompSegVolHandler() = default;
 
-       static bool relabelVoxelsFromCSV(std::string url, std::unordered_map<uint32_t, uint32_t> &type_per_id) {
+    static bool relabelVoxelsFromCSV(std::string url, std::unordered_map<uint32_t, uint32_t> &type_per_id) {
         std::ifstream nrrd(url, std::ios_base::in | std::ios_base::binary);
         if (!nrrd.is_open()) {
             return false;
@@ -85,15 +84,14 @@ public:
         return true;
     }
 
-    static void loadSegmentationVolumeFile(std::string path, std::shared_ptr<Volume<uint32_t>>& volume,
-                                           const std::shared_ptr<std::unordered_map<uint32_t, uint32_t>>& label_remapping = nullptr,
+    static void loadSegmentationVolumeFile(std::string path, std::shared_ptr<Volume<uint32_t>> &volume,
+                                           const std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> &label_remapping = nullptr,
                                            uint32_t cpu_threads = std::thread::hardware_concurrency()) {
         if (path.ends_with(".vraw") || path.ends_with(".raw")) {
-            if(path.ends_with(".raw"))
+            if (path.ends_with(".raw"))
                 Logger(Warn) << "trying to open .raw file " << path << " as Volcanite raw (.vraw).";
             volume = Volume<uint32_t>::load_volcanite_raw(path);
-        }
-        else if (path.ends_with(".hdf5") || path.ends_with(".h5"))
+        } else if (path.ends_with(".hdf5") || path.ends_with(".h5"))
             volume = Volume<uint32_t>::load_hdf5(path);
         else if (path.ends_with(".vti"))
             volume = Volume<uint32_t>::load_vti(path);
@@ -113,7 +111,7 @@ public:
             size_t volume_size = volume->size();
             uint32_t *data = reinterpret_cast<uint32_t *>(volume->getRawData());
             static constexpr uint32_t NON_EXISTING_LABEL = 0u;
-            #pragma omp parallel for default(none) shared(data, id_types, volume_size)
+#pragma omp parallel for default(none) shared(data, id_types, volume_size)
             for (int i = 0; i < volume_size; i++) {
                 if (id_types.find(data[i]) != id_types.end())
                     data[i] = id_types[data[i]];
@@ -126,12 +124,12 @@ public:
 
         // Remap all voxels to other labels. This usually happens because we computed a mapping in the attribute
         // database so that voxels are numbered in Z-order.
-        if(label_remapping) {
+        if (label_remapping) {
             MiniTimer t;
             size_t voxel_count = volume->dim_x * volume->dim_y * volume->dim_z;
             auto voxels = volume->data().data();
-            #pragma omp parallel for num_threads(cpu_threads) default(none) shared(voxels, voxel_count, label_remapping)
-            for(size_t i = 0; i < voxel_count; i++) {
+#pragma omp parallel for num_threads(cpu_threads) default(none) shared(voxels, voxel_count, label_remapping)
+            for (size_t i = 0; i < voxel_count; i++) {
                 if (!label_remapping->contains(voxels[i]))
                     throw std::runtime_error("label remapping does not contain voxel label " + std::to_string(voxels[i]));
                 voxels[i] = label_remapping->at(voxels[i]);
@@ -157,12 +155,11 @@ public:
         bool verbose = true;
     };
 
-    static std::shared_ptr<CompressedSegmentationVolume> createCompressedSegmentationVolume(const std::string& volume_input_path,
-                                                                                            const std::string& csgv_path, const CSGVCompressionConfig& cfg) {
+    static std::shared_ptr<CompressedSegmentationVolume> createCompressedSegmentationVolume(const std::string &volume_input_path,
+                                                                                            const std::string &csgv_path, const CSGVCompressionConfig &cfg) {
         uint32_t cpu_threads = cfg.cpu_threads;
         if (cpu_threads == 0u)
             cpu_threads = std::thread::hardware_concurrency();
-
 
         if (cfg.use_detail_separation && cfg.encoding_mode != DOUBLE_TABLE_RANS_ENC)
             throw std::runtime_error("Detail separation can only be used in combination with double table rANS.");
@@ -184,7 +181,7 @@ public:
         MiniTimer total_encoding_import_export_timer;
 
         // check output path for the complete volume
-        if(!csgv_path.ends_with(".csgv")) {
+        if (!csgv_path.ends_with(".csgv")) {
             throw std::runtime_error("Output file must end with .csgv!");
         }
 
@@ -194,8 +191,7 @@ public:
         // we never separate the detail level in single chunk files.
         chunk_output_path_template = CompressedSegmentationVolume::getCSGVFileName(chunk_output_path_template, cfg.brick_dim, cfg.encoding_mode, false);
 
-
-        if(cfg.verbose) {
+        if (cfg.verbose) {
             std::string op_mask_str = OperationMask_STR(cfg.op_mask);
             Logger(Info) << "Compressing " << volume_input_path
                          << (cfg.chunked_input_data ? " with chunk indices " + str(cfg.max_file_index) : "")
@@ -203,7 +199,6 @@ public:
                          << ", op=" << op_mask_str
                          << (cfg.random_access ? ", p" : "") << "]"
                          << (cfg.use_detail_separation ? " with lod separation" : "");
-
         }
 
         std::shared_ptr<CompressedSegmentationVolume> csgv = std::make_shared<volcanite::CompressedSegmentationVolume>();
@@ -220,7 +215,7 @@ public:
                     }
                 } else {
                     Logger(Warn)
-                            << "Testing not supported for pre-computed chunked data sets. Use force_recompute=true to do a full compression with a test per chunk.";
+                        << "Testing not supported for pre-computed chunked data sets. Use force_recompute=true to do a full compression with a test per chunk.";
                 }
             }
             Logger(Info) << "Imported previously compressed file " << csgv_path << ". Skipping compression.";
@@ -252,8 +247,7 @@ public:
                 Logger(Debug) << "operation frequency prepass:";
                 // note: this is a hardcoded frequency subsampling (1/8th of all chunks) on a chunk level. Ccompression
                 // time is dominated by file i/o and reading fewer chunks makes everything much faster.
-                const int chunk_skip = ((cfg.max_file_index.z + cfg.max_file_index.z + cfg.max_file_index.z) > 4
-                                         && cfg.freq_subsampling > 1) ? 2 : 1;
+                const int chunk_skip = ((cfg.max_file_index.z + cfg.max_file_index.z + cfg.max_file_index.z) > 4 && cfg.freq_subsampling > 1) ? 2 : 1;
                 for (int z = 0; z <= cfg.max_file_index.z; z += chunk_skip) {
                     for (int y = 0; y <= cfg.max_file_index.y; y += chunk_skip) {
                         for (int x = 0; x <= cfg.max_file_index.x; x += chunk_skip) {
@@ -269,7 +263,7 @@ public:
                             csgv->compressForFrequencyTable(volume->data(), volume_dim, tmp_code_frequencies, cfg.freq_subsampling, cfg.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
                             for (int i = 0; i < 16; i++) {
                                 code_frequencies[i] += tmp_code_frequencies[i];
-                                detail_code_frequencies[i] += tmp_code_frequencies[i+16];
+                                detail_code_frequencies[i] += tmp_code_frequencies[i + 16];
                             }
                             total_freq_prepass_seconds += csgv->getLastTotalFreqPrepassSeconds();
                         }
@@ -277,7 +271,7 @@ public:
                 }
 
                 // Write some general info about the chunk to a file (as of now, only the operation frequencies)
-                if(create_operation_freq_file) {
+                if (create_operation_freq_file) {
                     if (std::filesystem::exists(freq_path))
                         Logger(Warn) << "Overwriting existing file " << freq_path;
                     else if (!exists(std::filesystem::path(freq_path).parent_path()))
@@ -313,7 +307,7 @@ public:
                     std::string chunk_input_path = cfg.chunked_input_data ? formatChunkPath(volume_input_path, x, y, z) : volume_input_path;
                     std::string chunk_output_path = cfg.chunked_input_data ? formatChunkPath(chunk_output_path_template, x, y, z) : csgv_path;
 
-                    bool recompute = cfg.force_recompute || (cfg.max_file_index.x + cfg.max_file_index.y + cfg.max_file_index.z == 0u)      // if this is just one chunk, we also have to recompute at this point
+                    bool recompute = cfg.force_recompute || (cfg.max_file_index.x + cfg.max_file_index.y + cfg.max_file_index.z == 0u) // if this is just one chunk, we also have to recompute at this point
                                      || !csgv->importFromFile(chunk_output_path, false);
                     if (recompute) {
                         loadSegmentationVolumeFile(chunk_input_path, volume, cfg.label_remapping, cpu_threads);
@@ -347,7 +341,7 @@ public:
                             Logger(Info) << " reusing existing csgv file " << chunk_output_path;
                         }
 
-                        if(cfg.run_tests) {
+                        if (cfg.run_tests) {
                             if (!volume) {
                                 loadSegmentationVolumeFile(chunk_input_path, volume, cfg.label_remapping, cpu_threads);
                                 volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
@@ -359,9 +353,9 @@ public:
                         }
                     }
 
-                    if(cfg.export_stats_per_chunk) {
+                    if (cfg.export_stats_per_chunk) {
                         Logger(Debug, true) << "export brick statistics...";
-                        std::string stats_path = csgv_path.substr(0, csgv_path.find_last_of('.'))+ "_brickstats.csv";
+                        std::string stats_path = csgv_path.substr(0, csgv_path.find_last_of('.')) + "_brickstats.csv";
                         csv_export(csgv->gatherBrickStatistics(), stats_path);
                         Logger(Debug) << "export brick statistics to " << stats_path + " done";
                     }
@@ -371,12 +365,12 @@ public:
 
         // if we have multiple chunks, we have to merge them
         Logger(Info) << "Total raw compression time: " << std::setprecision(3) << total_freq_prepass_seconds << " + "
-        << total_encoding_seconds << " = " << (total_freq_prepass_seconds + total_encoding_seconds) << "s, "
-        << "including file IO: " << total_encoding_import_export_timer.elapsed() << "s.";
+                     << total_encoding_seconds << " = " << (total_freq_prepass_seconds + total_encoding_seconds) << "s, "
+                     << "including file IO: " << total_encoding_import_export_timer.elapsed() << "s.";
         if (cfg.chunked_input_data && glm::any(glm::greaterThan(cfg.max_file_index, glm::uvec3(0)))) {
             CSGVChunkMerger merger;
             csgv = merger.mergeCompressedSegmentationVolumeChunksFromFiles(csgv_path, chunk_output_path_template, cfg.max_file_index);
-            if(!csgv)
+            if (!csgv)
                 return nullptr;
             csgv->setCPUThreadCount(cpu_threads);
             csgv->m_last_total_freq_prepass_seconds = static_cast<float>(total_freq_prepass_seconds);
@@ -384,7 +378,7 @@ public:
         }
 
         // create a log file
-        if(create_log_file) {
+        if (create_log_file) {
             std::ofstream file(csgv->getCSGVFileName(csgv_path) + ".log", std::ios_base::out);
             if (!file.is_open()) {
                 Logger(Error) << "Unable to open file " << csgv_path << ".log. Skipping.";
@@ -430,15 +424,13 @@ public:
                 std::filesystem::remove(s);
         }
 
-        if(cfg.use_detail_separation) {
+        if (cfg.use_detail_separation) {
             csgv->separateDetail();
         }
 
         Logger(Info) << "Total info: " << csgv->getEncodingInfoString();
         return csgv;
     }
-
 };
 
-}
-
+} // namespace volcanite

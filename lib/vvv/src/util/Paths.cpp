@@ -15,16 +15,16 @@
 
 #include <vvv/util/Paths.hpp>
 
-#include <vvv/util/Logger.hpp>
 #include <optional>
+#include <vvv/util/Logger.hpp>
 
 #ifdef _WIN32
 #include <Windows.h>
 #include <array>
 #include <process.h>
 #else
-#include <unistd.h>
 #include <pwd.h>
+#include <unistd.h>
 #endif
 
 namespace vvv {
@@ -32,22 +32,21 @@ namespace vvv {
 std::vector<std::filesystem::path> Paths::dataPaths;
 bool Paths::useSourcePaths;
 
-std::vector<std::string> split(const std::string& s, char delimiter) {
+std::vector<std::string> split(const std::string &s, char delimiter) {
     // method from range-v3, released under the Boost Software License
     // https://github.com/ericniebler/range-v3/blob/master/test/view/split.cpp
     // released under the Boost Software License 1.0
 
-   std::vector<std::string> tokens;
-   std::string token;
-   std::istringstream tokenStream(s);
-   while (std::getline(tokenStream, token, delimiter)) {
-      tokens.push_back(token);
-   }
-   return tokens;
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(s);
+    while (std::getline(tokenStream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
 }
 
-
-void Paths::initPaths(const std::string& dataPathsStr) {
+void Paths::initPaths(const std::string &dataPathsStr) {
     auto executableDataPath = findExecutablePath() / "data";
     useSourcePaths = !std::filesystem::exists(executableDataPath);
     Logger(Debug) << (useSourcePaths ? "no data/ directory found in binary directory. Use source paths." : "use data/ directory relative to binary.");
@@ -61,13 +60,14 @@ void Paths::initPaths(const std::string& dataPathsStr) {
         dataPaths.push_back(executableDataPath);
     }
 
-    for (auto& path : dataPaths)
+    for (auto &path : dataPaths)
         Logger(Debug) << "data path: " << path.string();
 }
 
-void Paths::addDataPath(const std::string& dataPath, bool highPriority) {
+void Paths::addDataPath(const std::string &dataPath, bool highPriority) {
     // only add if we use source paths. for binary paths, this logic needs to be handled within CMake.
-    if (!useSourcePaths) return;
+    if (!useSourcePaths)
+        return;
 
     auto path = std::filesystem::path(dataPath);
     if (!std::filesystem::exists(path))
@@ -88,8 +88,10 @@ std::filesystem::path Paths::findExecutablePath() {
 #elif defined(_WIN32)
     std::array<wchar_t, 1024> buffer{};
     DWORD ret = GetModuleFileNameW(NULL, buffer.data(), buffer.size());
-    if (ret == buffer.size()) throw std::runtime_error("Executable path does not fit in buffer. Consider increasing its size.");
-    if (ret == 0) throw std::runtime_error("Finding the path of the executable failed.");
+    if (ret == buffer.size())
+        throw std::runtime_error("Executable path does not fit in buffer. Consider increasing its size.");
+    if (ret == 0)
+        throw std::runtime_error("Finding the path of the executable failed.");
     auto path = std::filesystem::path(std::wstring(buffer.data())).remove_filename();
 #else
 #error Paths::findExecutablePath() not implemented on this platform
@@ -98,21 +100,22 @@ std::filesystem::path Paths::findExecutablePath() {
 }
 
 std::filesystem::path Paths::findDataPath(const std::string &path) {
-    for(auto& dataDir : dataPaths) {
+    for (auto &dataDir : dataPaths) {
         auto absolutePath = dataDir / path;
         if (std::filesystem::exists(absolutePath))
-            return  absolutePath;
+            return absolutePath;
     }
 
     std::stringstream ss;
     ss << "file " << path << " not found in data/ directories.";
-    for(auto& dataDir : dataPaths) ss << "\nsearched in: " << dataDir.string();
+    for (auto &dataDir : dataPaths)
+        ss << "\nsearched in: " << dataDir.string();
     Logger(Error) << ss.str();
     throw std::runtime_error("Data path '" + path + "' not found.");
 }
 
 bool Paths::hasDataPath(const std::string &path) {
-    for(auto& dataDir : dataPaths) {
+    for (auto &dataDir : dataPaths) {
         auto absolutePath = dataDir / path;
         if (std::filesystem::exists(absolutePath))
             return true;
@@ -124,29 +127,29 @@ std::vector<std::filesystem::path> Paths::getDataDirectories() {
     return dataPaths;
 }
 
-std::filesystem::path Paths::findShaderPath(const std::string& filename) {
+std::filesystem::path Paths::findShaderPath(const std::string &filename) {
     return findDataPath((std::filesystem::path("shader") / filename).string());
 }
 
-std::vector<std::filesystem::path> Paths::getShaderDirectories(){
+std::vector<std::filesystem::path> Paths::getShaderDirectories() {
     static std::optional<std::vector<std::filesystem::path>> dirs;
 
     if (!dirs.has_value()) {
         dirs = std::vector<std::filesystem::path>{};
-        for (auto& dataDir : dataPaths) {
+        for (auto &dataDir : dataPaths) {
             auto shaderDir = dataDir / "shader";
             if (std::filesystem::exists(shaderDir))
                 dirs->push_back(shaderDir);
         }
 
-        for (auto& shaderDir : dirs.value())
+        for (auto &shaderDir : dirs.value())
             Logger(Debug) << "shader include path: " << shaderDir.string();
     }
 
     return dirs.value();
 }
 
-std::filesystem::path Paths::getTempFileWithName(const std::string& name) {
+std::filesystem::path Paths::getTempFileWithName(const std::string &name) {
     create_directory(std::filesystem::temp_directory_path() / "volcanite");
 #ifdef _WIN32
     return std::filesystem::temp_directory_path() / "volcanite" / (std::to_string(_getpid()) + "_" + name);
@@ -155,9 +158,9 @@ std::filesystem::path Paths::getTempFileWithName(const std::string& name) {
 #endif
 }
 
-std::filesystem::path Paths::getTempFileForDataPath(const std::filesystem::path& dataPath) {
+std::filesystem::path Paths::getTempFileForDataPath(const std::filesystem::path &dataPath) {
     std::string filename;
-    for (auto& e : std::filesystem::relative(dataPath, Paths::getDataDirectories().back()).relative_path())
+    for (auto &e : std::filesystem::relative(dataPath, Paths::getDataDirectories().back()).relative_path())
         if (e.string() != "..")
             filename += "_" + e.string();
     filename = filename.substr(1); // remove first '_'
@@ -165,9 +168,9 @@ std::filesystem::path Paths::getTempFileForDataPath(const std::filesystem::path&
     return getTempFileWithName(filename);
 }
 
-std::filesystem::path Paths::getLocalFileForDataPath(const std::filesystem::path& dataPath) {
+std::filesystem::path Paths::getLocalFileForDataPath(const std::filesystem::path &dataPath) {
     std::string filename;
-    for (auto& e : std::filesystem::relative(dataPath, Paths::getDataDirectories().back()).relative_path())
+    for (auto &e : std::filesystem::relative(dataPath, Paths::getDataDirectories().back()).relative_path())
         if (e.string() != "..")
             filename += "_" + e.string();
     filename = filename.substr(1); // remove first '_'
@@ -184,7 +187,7 @@ std::filesystem::path Paths::getHomeDirectory() {
     else
         return {drive.append(path)};
 #else
-    struct passwd* pwd = getpwuid(getuid());
+    struct passwd *pwd = getpwuid(getuid());
     if (pwd)
         return {pwd->pw_dir};
     else
@@ -192,5 +195,4 @@ std::filesystem::path Paths::getHomeDirectory() {
 #endif
 }
 
-
-}
+} // namespace vvv

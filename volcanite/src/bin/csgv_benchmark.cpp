@@ -13,18 +13,18 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include <string>
-#include "vvv/util/Logger.hpp"
-#include "vvv/util/detect_debugger.hpp"
 #include "vvv/core/HeadlessRendering.hpp"
 #include "vvv/headless_entrypoint.hpp"
+#include "vvv/util/Logger.hpp"
+#include "vvv/util/detect_debugger.hpp"
+#include <string>
 
-#include "volcanite/util/args_and_csgv_provider.hpp"
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/VolcaniteArgs.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
-#include "vvv/volren/Volume.hpp"
 #include "volcanite/eval/CSGVBenchmarkPass.hpp"
+#include "volcanite/util/args_and_csgv_provider.hpp"
+#include "vvv/volren/Volume.hpp"
 
 using namespace volcanite;
 
@@ -38,13 +38,13 @@ int volcanite_main(int argc, char *argv[]) {
         return ret;
     }
 
-    if(args.performDecompression()) {
+    if (args.performDecompression()) {
         // TODO: add decompression
         Logger(Error) << "decompression not yet supported";
         return RET_NOT_SUPPORTED;
     }
 
-    if(args.export_stats) {
+    if (args.export_stats) {
         Logger(Info, true) << "export brick statistics...";
         std::string stats_path = stripFileExtension(args.input_file) + "_brickstats.csv";
         csv_export(compressedSegmentationVolume->gatherBrickStatistics(), stats_path);
@@ -52,12 +52,11 @@ int volcanite_main(int argc, char *argv[]) {
     }
 
     // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
-    if(args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
+    if (args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
         Logger(Debug) << "separating detail level encoding.";
         compressedSegmentationVolume->separateDetail();
         Logger(Debug) << compressedSegmentationVolume->getEncodingInfoString();
     }
-
 
     Logger(Info) << "--------------------------------------------------- ";
     Logger(Info) << "Starting CSGV GPU decompression benchmark";
@@ -79,10 +78,7 @@ int volcanite_main(int argc, char *argv[]) {
         execution_time = benchmark.getExecutionTimeMS();
     } while (execution_time == 0.f);
 
-    size_t volume_size_byte = static_cast<size_t>(compressedSegmentationVolume->getVolumeDim().x)
-                              * compressedSegmentationVolume->getVolumeDim().y
-                              * compressedSegmentationVolume->getVolumeDim().z
-                              * sizeof(uint32_t);
+    size_t volume_size_byte = static_cast<size_t>(compressedSegmentationVolume->getVolumeDim().x) * compressedSegmentationVolume->getVolumeDim().y * compressedSegmentationVolume->getVolumeDim().z * sizeof(uint32_t);
     Logger(Info) << "GPU decompression time: " << execution_time << " ms ("
                  << (static_cast<double>(volume_size_byte) / 1000. / 1000. / 1000.) / (execution_time / 1000.)
                  << " GB/s).";
@@ -92,4 +88,3 @@ int volcanite_main(int argc, char *argv[]) {
 }
 
 ENTRYPOINT(volcanite_main)
-

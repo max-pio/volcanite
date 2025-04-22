@@ -32,11 +32,10 @@ void Buffer::createBuffer(vk::BufferUsageFlags bufferUsage, vk::MemoryPropertyFl
 
     // create the memory with the device address bit if required
     bool enable_device_address = (bufferUsage & (vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eShaderDeviceAddressEXT | vk::BufferUsageFlagBits::eShaderDeviceAddressKHR)) != vk::BufferUsageFlags();
-    if(enable_device_address) {
+    if (enable_device_address) {
         vk::MemoryAllocateFlagsInfo flags_info(vk::MemoryAllocateFlagBits::eDeviceAddress);
         m_bufferMemory = device.allocateMemory(vk::MemoryAllocateInfo(memoryRequirements.size, memoryTypeIndex, &flags_info));
-    }
-    else {
+    } else {
         m_bufferMemory = device.allocateMemory(vk::MemoryAllocateInfo(memoryRequirements.size, memoryTypeIndex));
     }
     device.bindBufferMemory(m_buffer, m_bufferMemory, 0);
@@ -47,7 +46,6 @@ void Buffer::createBuffer(vk::BufferUsageFlags bufferUsage, vk::MemoryPropertyFl
     }
 
     descriptor = vk::DescriptorBufferInfo(m_buffer, 0, m_byteSize);
-
 }
 
 vk::DeviceAddress Buffer::getDeviceAddress() const {
@@ -102,27 +100,29 @@ void Buffer::uploadWithStagingBuffer(vk::CommandBuffer commandBuffer, const Buff
     commandBuffer.copyBuffer(staging.getBuffer(), m_buffer, vk::BufferCopy(0, dstOffset, byteSize));
 }
 
-std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> Buffer::uploadWithStagingBuffer(const void * const rawData, size_t byteSize, const detail::OpenGLStyleSubmitOptions opts) const {
+std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> Buffer::uploadWithStagingBuffer(const void *const rawData, size_t byteSize, const detail::OpenGLStyleSubmitOptions opts) const {
     auto staging = std::make_shared<vvv::Buffer>(m_ctx, vvv::BufferSettings{
                                                             .label = "staging" + (!m_label.empty() ? "(" + m_label + ")" : ""),
                                                             .byteSize = m_byteSize,
                                                         });
-    auto awaitable = m_ctx->executeCommands([&,this](vk::CommandBuffer commandBuffer) {
+    auto awaitable = m_ctx->executeCommands([&, this](vk::CommandBuffer commandBuffer) {
         uploadWithStagingBuffer(commandBuffer, *staging, rawData, byteSize, 0ul);
-    }, opts);
+    },
+                                            opts);
     return {awaitable, staging};
 }
 
-    std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> Buffer::uploadWithStagingBuffer(const void * const rawData, size_t byteSize, size_t dstOffset, const detail::OpenGLStyleSubmitOptions opts) const {
-        auto staging = std::make_shared<vvv::Buffer>(m_ctx, vvv::BufferSettings{
-                .label = "staging" + (!m_label.empty() ? "(" + m_label + ")" : ""),
-                .byteSize = m_byteSize,
-        });
-        auto awaitable = m_ctx->executeCommands([&,this](vk::CommandBuffer commandBuffer) {
-            uploadWithStagingBuffer(commandBuffer, *staging, rawData, byteSize, dstOffset);
-        }, opts);
-        return {awaitable, staging};
-    }
+std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> Buffer::uploadWithStagingBuffer(const void *const rawData, size_t byteSize, size_t dstOffset, const detail::OpenGLStyleSubmitOptions opts) const {
+    auto staging = std::make_shared<vvv::Buffer>(m_ctx, vvv::BufferSettings{
+                                                            .label = "staging" + (!m_label.empty() ? "(" + m_label + ")" : ""),
+                                                            .byteSize = m_byteSize,
+                                                        });
+    auto awaitable = m_ctx->executeCommands([&, this](vk::CommandBuffer commandBuffer) {
+        uploadWithStagingBuffer(commandBuffer, *staging, rawData, byteSize, dstOffset);
+    },
+                                            opts);
+    return {awaitable, staging};
+}
 
 void Buffer::destroyBuffer() {
     const auto device = m_ctx->getDevice();

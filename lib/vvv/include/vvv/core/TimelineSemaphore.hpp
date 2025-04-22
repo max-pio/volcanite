@@ -29,8 +29,8 @@ namespace vvv {
 ///   Consequently M_d = M_p implies that all planned work has already executed.\n
 /// - M_p >= M_d >= M_h\n
 class TimelineSemaphore {
-public:
-     /// @param semaphoreId some arbitrary integer that can be used by external code to map this semaphore to metadata
+  public:
+    /// @param semaphoreId some arbitrary integer that can be used by external code to map this semaphore to metadata
     explicit TimelineSemaphore(size_t semaphoreId = 0) : m_semaphoreId(semaphoreId) {}
     ~TimelineSemaphore() { deallocateResources(); }
 
@@ -52,10 +52,10 @@ public:
     uint64_t incrementPlaningState() { return m_nextId++; }
 
     /// get the highest semaphore value __already in use__.
-    uint64_t getPlaningState() const { return m_nextId-1; }
+    uint64_t getPlaningState() const { return m_nextId - 1; }
     size_t getId() const { return m_semaphoreId; }
 
-private:
+  private:
     vk::Semaphore createTimelineSemaphore() {
         vk::SemaphoreCreateInfo create_info;
         vk::SemaphoreTypeCreateInfoKHR type_create_info(vk::SemaphoreType::eTimeline, 0); // generateSubmitId()

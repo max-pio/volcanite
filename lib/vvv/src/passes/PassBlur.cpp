@@ -19,12 +19,11 @@
 
 namespace vvv {
 
-PassBlur::PassBlur(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering>& multiBuffering, int radius, BilateralMode bilateralMode,
-                   vk::ImageUsageFlags outputImageUsage, const std::string& label)
+PassBlur::PassBlur(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering> &multiBuffering, int radius, BilateralMode bilateralMode,
+                   vk::ImageUsageFlags outputImageUsage, const std::string &label)
     : WithGpuContext(ctx), WithMultiBuffering(multiBuffering), m_outputImageUsage(outputImageUsage), m_bilateralMode(bilateralMode),
       PassCompute(ctx, label, multiBuffering, ctx->getQueueFamilyIndices().graphics.value()),
       m_kernelRadius(radius) {
-
 }
 
 void PassBlur::allocateResources() {
@@ -35,8 +34,8 @@ void PassBlur::allocateResources() {
 
 std::vector<std::shared_ptr<Shader>> PassBlur::createShaders() {
     std::string bilateral = "BILATERAL=" + std::to_string(static_cast<uint32_t>(m_bilateralMode));
-    m_shader1_h = std::make_shared<Shader>(SimpleGlslShaderRequest{.filename = "passes/blur.comp", .defines = {bilateral,"PASS_1"}, .label = m_label + ".shader1_h"});
-    m_shader2_v = std::make_shared<Shader>(SimpleGlslShaderRequest{.filename = "passes/blur.comp", .defines = {bilateral,"PASS_2"}, .label = m_label + ".shader2_v"});
+    m_shader1_h = std::make_shared<Shader>(SimpleGlslShaderRequest{.filename = "passes/blur.comp", .defines = {bilateral, "PASS_1"}, .label = m_label + ".shader1_h"});
+    m_shader2_v = std::make_shared<Shader>(SimpleGlslShaderRequest{.filename = "passes/blur.comp", .defines = {bilateral, "PASS_2"}, .label = m_label + ".shader2_v"});
 
     return {m_shader1_h, m_shader2_v};
 }
@@ -61,8 +60,10 @@ void PassBlur::initSwapchainResources() {
     m_internalTextures = reflectTextures("outputTexture_H", opts);
     m_outputTextures = reflectTextures("outputTexture_V", opts);
 
-    for (auto& tex : *m_internalTextures) tex->initResources();
-    for (auto& tex : *m_outputTextures)   tex->initResources();
+    for (auto &tex : *m_internalTextures)
+        tex->initResources();
+    for (auto &tex : *m_outputTextures)
+        tex->initResources();
 }
 
 void PassBlur::releaseSwapchain() {
@@ -86,8 +87,10 @@ void PassBlur::setInputTexturesBilateral(Texture *depth, Texture *normal) {
     m_bilateralDepthTexture = depth;
     m_bilateralNormalTexture = normal;
 
-    if (depth)  setImageSampler("bilateralDepthTexture", *depth, vk::ImageLayout::eDepthStencilReadOnlyOptimal);
-    if (normal) setImageSampler("bilateralNormalTexture", *normal, vk::ImageLayout::eShaderReadOnlyOptimal);
+    if (depth)
+        setImageSampler("bilateralDepthTexture", *depth, vk::ImageLayout::eDepthStencilReadOnlyOptimal);
+    if (normal)
+        setImageSampler("bilateralNormalTexture", *normal, vk::ImageLayout::eShaderReadOnlyOptimal);
 }
 
 std::shared_ptr<Buffer> PassBlur::uploadKernelTexture(VkCommandBuffer commandBuffer) {
@@ -114,9 +117,9 @@ std::shared_ptr<Buffer> PassBlur::uploadKernelTexture(VkCommandBuffer commandBuf
     Logger(Debug) << msg << "[sum:" << s << "/" << std::numeric_limits<uint16_t>::max() << " " << s / std::numeric_limits<uint16_t>::max() * 100.0 << "%]";
 
     auto usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
-    m_kernelTexture = reflectTexture("kernelTexture", {.width = static_cast<uint32_t>(kernelData.size()), .format = vk::Format::eR16Unorm, .usage = usage, .queues = { m_queueFamilyIndex }});
+    m_kernelTexture = reflectTexture("kernelTexture", {.width = static_cast<uint32_t>(kernelData.size()), .format = vk::Format::eR16Unorm, .usage = usage, .queues = {m_queueFamilyIndex}});
 
-    auto staging = std::make_shared<Buffer>(getCtx(), vvv::BufferSettings{ .label = "staging(" + m_label + ")", .byteSize = m_kernelTexture->memorySize() });
+    auto staging = std::make_shared<Buffer>(getCtx(), vvv::BufferSettings{.label = "staging(" + m_label + ")", .byteSize = m_kernelTexture->memorySize()});
     m_kernelTexture->upload(commandBuffer, *staging, kernelData.data(), vk::ImageLayout::eShaderReadOnlyOptimal, vk::PipelineStageFlagBits::eComputeShader);
 
     m_uniform->setUniform("kernelRadius", m_kernelRadius);
@@ -135,7 +138,7 @@ RendererOutput PassBlur::renderBlur(vvv::AwaitableList awaitBeforeExecution, vvv
     setImageSampler("inputTexture_V", *m_internalTextures->getActive(), vk::ImageLayout::eShaderReadOnlyOptimal);
     setStorageImage("outputTexture_V", *m_outputTextures->getActive(), vk::ImageLayout::eGeneral);
 
-    auto& commandBuffer = m_commandBuffer->getActive();
+    auto &commandBuffer = m_commandBuffer->getActive();
     commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
     if (m_kernelDirty) {
@@ -176,4 +179,4 @@ RendererOutput PassBlur::renderBlur(vvv::AwaitableList awaitBeforeExecution, vvv
     return {.texture = m_outputTextures->getActive().get(), .renderingComplete = {renderingComplete}, .queueFamilyIndex = m_queueFamilyIndex};
 }
 
-}
+} // namespace vvv

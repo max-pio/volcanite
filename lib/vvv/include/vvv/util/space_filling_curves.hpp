@@ -31,7 +31,7 @@ namespace sfc {
  * All Classes implement methods to convert positions in a brick to. */
 
 class Cartesian {
-public:
+  public:
     static size_t p2i(glm::uvec3 p, glm::uvec3 brick_size) { return static_cast<size_t>(p.x) + static_cast<size_t>(p.y) * brick_size.x + static_cast<size_t>(p.z) * brick_size.x * brick_size.y; }
     static glm::uvec3 i2p(size_t i, glm::uvec3 brick_size) { return {i % brick_size.x, (i / brick_size.x) % brick_size.y, (i / brick_size.x / brick_size.y) % brick_size.z}; }
 };
@@ -39,12 +39,12 @@ public:
 // TODO: add asserts for position / index limits that can be indexed using 2D / 3D Morton codes in 32 or 64 bit
 
 class Morton2D {
-public:
+  public:
     static uint32_t p2i(glm::uvec2 p) { return (Part1By1(p.y) << 1) + Part1By1(p.x); }
 
     static glm::uvec2 i2p(uint32_t i) { return glm::uvec2(Compact1By1(i >> 0), Compact1By1(i >> 1)); }
 
-private:
+  private:
     // "Insert" a 0 bit after each of the 16 low bits of x
     static uint32_t Part1By1(uint32_t x) {
         x &= 0x0000ffff;                 // x = ---- ---- ---- ---- fedc ba98 7654 3210
@@ -67,7 +67,7 @@ private:
 };
 
 class Morton3D {
-public:
+  public:
     // the 32 bit variants can work with up to 10 bits per positional component
     static uint32_t p2i(glm::uvec3 p) {
         assert(glm::all(glm::lessThan(p, glm::uvec3(1024u))) && "32 Bit Morton code processing only works for dimensions up to (1023, 1023, 1023) (10 bit per component)");
@@ -88,7 +88,7 @@ public:
         return glm::uvec3(Compact1By2_64(i >> 0), Compact1By2_64(i >> 1), Compact1By2_64(i >> 2));
     }
 
-private:
+  private:
     // "Insert" two 0 bits after each of the 10 low bits of x
     static uint32_t Part1By2(uint32_t x) {
         x &= 0x000003ff;                  // x = ---- ---- ---- ---- ---- --98 7654 3210
@@ -111,10 +111,10 @@ private:
 
     // "Insert" two 0 bits after each of the 20 low bits of x
     static uint64_t Part1By2_64(uint64_t x) {
-        x &= 0x1fffff;                          // take 20 bit pairs
-        x = (x | x << 32) & 0x1f00000000ffff;   // 16 bits
-        x = (x | x << 16) & 0x1f0000ff0000ff;   // 8 bits
-        x = (x | x << 8) & 0x100f00f00f00f00f;  // ...
+        x &= 0x1fffff;                         // take 20 bit pairs
+        x = (x | x << 32) & 0x1f00000000ffff;  // 16 bits
+        x = (x | x << 16) & 0x1f0000ff0000ff;  // 8 bits
+        x = (x | x << 8) & 0x100f00f00f00f00f; // ...
         x = (x | x << 4) & 0x10c30c30c30c30c3;
         x = (x | x << 2) & 0x1249249249249249;
         return x;
@@ -130,7 +130,6 @@ private:
         x = (x ^ (x >> 32)) & 0x1fffff;
         return x;
     }
-
 };
 
 } // namespace sfc

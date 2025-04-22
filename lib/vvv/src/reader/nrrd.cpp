@@ -17,16 +17,17 @@
 
 #include <vulkan/vulkan.hpp>
 
+#include "vvv/util/volume_data_types.hpp"
 #include <cmath>
 #include <fstream>
 #include <sstream>
-#include "vvv/util/volume_data_types.hpp"
 
 namespace vvv {
 
 bool is_valid_physical_size(float v) { return v > 0.f && std::isfinite(v); }
 
-template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(const std::string& url, const std::string& formatLabel, size_t bitwidth, vk::Format gpuFormat) {
+template <typename T>
+std::shared_ptr<Volume<T>> load_nrrd_(const std::string &url, const std::string &formatLabel, size_t bitwidth, vk::Format gpuFormat) {
 
     std::ifstream nrrd(url, std::ios_base::in | std::ios_base::binary);
     if (!nrrd.is_open()) {
@@ -67,7 +68,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(const std::string& u
 
         // optionally accept the header, required per standard but optional in our impl...
         if (lineNum == 1) {
-            if(line != "NRRD0004")
+            if (line != "NRRD0004")
                 throw std::runtime_error("invalid NRRD magic not matchin xpected NRRD format NRRD0004: " + line);
             continue;
         }
@@ -81,7 +82,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(const std::string& u
         const std::string sepStrings[2] = {": ", ":"};
         auto sep = std::string::npos;
         auto sepStrLength = 0;
-        for (const auto& s : sepStrings) {
+        for (const auto &s : sepStrings) {
             sep = line.find(s);
             if (sep != std::string::npos) {
                 sepStrLength = s.size();
@@ -110,7 +111,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(const std::string& u
             } else {
                 nrrd.close();
                 std::string allowed_types = "expected type {";
-                for(const auto& t : *VolumeDataTypes::getUnsignedTypesForByteSize(sizeof(T)))
+                for (const auto &t : *VolumeDataTypes::getUnsignedTypesForByteSize(sizeof(T)))
                     allowed_types.append(t + ", ");
                 allowed_types.pop_back();
                 allowed_types.pop_back();
@@ -180,8 +181,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(const std::string& u
         nrrd = std::ifstream(detachedPayload.value(), std::ios_base::in | std::ios_base::binary);
 
         if (!nrrd.is_open()) {
-            throw std::runtime_error("unable to open detached payload of NRRD file <" + url
-                                     + "> at <" + detachedPayload.value() + ">");
+            throw std::runtime_error("unable to open detached payload of NRRD file <" + url + "> at <" + detachedPayload.value() + ">");
         }
     }
 
@@ -190,15 +190,15 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_(const std::string& u
 
     if (!nrrd) {
         nrrd.close();
-        throw std::runtime_error("only " + std::to_string(nrrd.gcount()) + " bytes of expected "
-                                 + std::to_string(byte_size) + " bytes could be read from NRRD file.");
+        throw std::runtime_error("only " + std::to_string(nrrd.gcount()) + " bytes of expected " + std::to_string(byte_size) + " bytes could be read from NRRD file.");
     }
 
     nrrd.close();
     return std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, img_width, img_height, img_depth, gpuFormat, payload);
 }
 
-template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(const std::string& url, const std::string& formatLabel, vk::Format gpuFormat) {
+template <typename T>
+std::shared_ptr<Volume<T>> load_nrrd_with_cast_(const std::string &url, const std::string &formatLabel, vk::Format gpuFormat) {
 
     std::ifstream nrrd(url, std::ios_base::in | std::ios_base::binary);
     if (!nrrd.is_open()) {
@@ -254,7 +254,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(const std:
         const std::string sepStrings[2] = {": ", ":"};
         auto sep = std::string::npos;
         auto sepStrLength = 0;
-        for (const auto& s : sepStrings) {
+        for (const auto &s : sepStrings) {
             sep = line.find(s);
             if (sep != std::string::npos) {
                 sepStrLength = s.size();
@@ -278,30 +278,30 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(const std:
                 throw std::runtime_error("expected 3 dimensions, got " + std::to_string(dim));
             }
         } else if (fieldName == "type") {
-            switch(VolumeDataTypes::byteSizeOfUnsignedType(fieldValue)) {
-                case 8:
-                    payloadComponentSize = 8;
-                    minVal = std::numeric_limits<uint64_t>::min();
-                    maxVal = static_cast<float>(std::numeric_limits<uint64_t>::max());
-                    break;
-                case 4:
-                    payloadComponentSize = 4;
-                    minVal = std::numeric_limits<uint32_t>::min();
-                    maxVal = static_cast<float>(std::numeric_limits<uint32_t>::max());
-                    break;
-                case 2:
-                    payloadComponentSize = 2;
-                    minVal = std::numeric_limits<uint16_t>::min();
-                    maxVal = std::numeric_limits<uint16_t>::max();
-                    break;
-                case 1:
-                    payloadComponentSize = 1;
-                    minVal = std::numeric_limits<uint8_t>::min();
-                    maxVal = std::numeric_limits<uint8_t>::max();
-                    break;
-                default:
-                    nrrd.close();
-                    throw std::runtime_error("expected uint8, uint16, or uint32 data type, got: " + fieldValue);
+            switch (VolumeDataTypes::byteSizeOfUnsignedType(fieldValue)) {
+            case 8:
+                payloadComponentSize = 8;
+                minVal = std::numeric_limits<uint64_t>::min();
+                maxVal = static_cast<float>(std::numeric_limits<uint64_t>::max());
+                break;
+            case 4:
+                payloadComponentSize = 4;
+                minVal = std::numeric_limits<uint32_t>::min();
+                maxVal = static_cast<float>(std::numeric_limits<uint32_t>::max());
+                break;
+            case 2:
+                payloadComponentSize = 2;
+                minVal = std::numeric_limits<uint16_t>::min();
+                maxVal = std::numeric_limits<uint16_t>::max();
+                break;
+            case 1:
+                payloadComponentSize = 1;
+                minVal = std::numeric_limits<uint8_t>::min();
+                maxVal = std::numeric_limits<uint8_t>::max();
+                break;
+            default:
+                nrrd.close();
+                throw std::runtime_error("expected uint8, uint16, or uint32 data type, got: " + fieldValue);
             }
         } else if (fieldName == "encoding") {
             if (fieldValue != "raw") {
@@ -370,8 +370,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(const std:
         nrrd = std::ifstream(detachedPayload.value(), std::ios_base::in | std::ios_base::binary);
 
         if (!nrrd.is_open()) {
-            throw std::runtime_error("unable to open detached payload of NRRD file <" + url
-                                     + "> at <" + detachedPayload.value() + ">");
+            throw std::runtime_error("unable to open detached payload of NRRD file <" + url + "> at <" + detachedPayload.value() + ">");
         }
     }
 
@@ -436,30 +435,32 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(const std:
                     payload[j] = val;
                 }
             }
-        }
-        else {
+        } else {
             throw std::runtime_error("Unknown componenent byte size in NRRD file.");
         }
 
         return std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, img_width, img_height, img_depth, gpuFormat, payload);
     } else {
-        const auto first = reinterpret_cast<T*>(payloadRaw.data());
+        const auto first = reinterpret_cast<T *>(payloadRaw.data());
         return std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, img_width, img_height, img_depth, gpuFormat, first, first + voxel_count);
     }
 }
 
-template <> std::shared_ptr<Volume<uint32_t>> Volume<uint32_t>::load_nrrd(std::string path, bool allowCast) {
+template <>
+std::shared_ptr<Volume<uint32_t>> Volume<uint32_t>::load_nrrd(std::string path, bool allowCast) {
     return allowCast ? load_nrrd_with_cast_<uint32_t>(path, "uint32", vk::Format::eR32Uint) : load_nrrd_<uint32_t>(path, "uint32", 32, vk::Format::eR32Uint);
 };
-template <> std::shared_ptr<Volume<uint16_t>> Volume<uint16_t>::load_nrrd(std::string path, bool allowCast) {
+template <>
+std::shared_ptr<Volume<uint16_t>> Volume<uint16_t>::load_nrrd(std::string path, bool allowCast) {
     return allowCast ? load_nrrd_with_cast_<uint16_t>(path, "uint16", vk::Format::eR16Uint) : load_nrrd_<uint16_t>(path, "uint16", 16, vk::Format::eR16Uint);
 };
-template <> std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_nrrd(std::string path, bool allowCast) {
+template <>
+std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_nrrd(std::string path, bool allowCast) {
     return allowCast ? load_nrrd_with_cast_<uint8_t>(path, "uint8", vk::Format::eR8Uint) : load_nrrd_<uint8_t>(path, "uint8", 8, vk::Format::eR8Uint);
 };
 
-
-template <typename T> void write_nrrd_(Volume<T>* volume, const std::string& path, bool separatePayloadFile) {
+template <typename T>
+void write_nrrd_(Volume<T> *volume, const std::string &path, bool separatePayloadFile) {
     const std::string pathmeta = path + (separatePayloadFile ? ".nhdr" : ".nrrd");
     const std::string formatLabel = VolumeDataTypes::getUnsignedTypeForByteSize(sizeof(T));
 
@@ -502,14 +503,17 @@ template <typename T> void write_nrrd_(Volume<T>* volume, const std::string& pat
     meta.close();
 }
 
-template <> void Volume<uint32_t>::write_nrrd(const std::string& path, bool separatePayloadFile) {
+template <>
+void Volume<uint32_t>::write_nrrd(const std::string &path, bool separatePayloadFile) {
     write_nrrd_(this, path, separatePayloadFile);
 }
-template <> void Volume<uint16_t>::write_nrrd(const std::string& path, bool separatePayloadFile) {
+template <>
+void Volume<uint16_t>::write_nrrd(const std::string &path, bool separatePayloadFile) {
     write_nrrd_(this, path, separatePayloadFile);
 }
-template <> void Volume<uint8_t>::write_nrrd(const std::string& path, bool separatePayloadFile) {
+template <>
+void Volume<uint8_t>::write_nrrd(const std::string &path, bool separatePayloadFile) {
     write_nrrd_(this, path, separatePayloadFile);
 }
 
-}
+} // namespace vvv

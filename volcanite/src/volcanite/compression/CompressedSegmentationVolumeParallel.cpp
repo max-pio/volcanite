@@ -17,15 +17,15 @@
 
 #include <map>
 #include <sstream>
-#include <unordered_set>
 #include <thread>
+#include <unordered_set>
 
 #include "volcanite/compression/pack_nibble.hpp"
 #include "volcanite/compression/pack_wavelet_matrix.hpp"
 
 namespace volcanite {
 
-void CompressedSegmentationVolume::parallelDecompressLOD(int target_lod, std::vector<uint32_t>& out) const {
+void CompressedSegmentationVolume::parallelDecompressLOD(int target_lod, std::vector<uint32_t> &out) const {
     if (!m_random_access)
         throw std::runtime_error("Parallel decompression requires previous compression with random access enabled.");
 
@@ -35,7 +35,7 @@ void CompressedSegmentationVolume::parallelDecompressLOD(int target_lod, std::ve
 
     glm::uvec3 brick_pos;
 #ifndef NO_BRICK_DECODE_INDEX_REMAP
-    std::vector<uint32_t> brick_cache(m_brick_size * m_brick_size * m_brick_size);  // brick output in morton order
+    std::vector<uint32_t> brick_cache(m_brick_size * m_brick_size * m_brick_size); // brick output in morton order
 #endif
 
     // we iterate over all bricks and decompress brick voxels in parallel
@@ -48,7 +48,8 @@ void CompressedSegmentationVolume::parallelDecompressLOD(int target_lod, std::ve
                 m_encoder->parallelDecodeBrick(getBrickEncoding(brick_idx), getBrickEncodingLength(brick_idx),
                                                brick_cache.data(),
                                                glm::clamp(m_volume_dim - brick_pos * m_brick_size,
-                                               glm::uvec3(0u), glm::uvec3(m_brick_size)), inv_lod);
+                                                          glm::uvec3(0u), glm::uvec3(m_brick_size)),
+                                               inv_lod);
                 // fill output array with decoded brick entries
                 for (uint32_t i = 0; i < m_brick_size * m_brick_size * m_brick_size; i++) {
                     glm::uvec3 out_pos = brick_pos * m_brick_size + enumBrickPos(i);
@@ -64,4 +65,4 @@ void CompressedSegmentationVolume::parallelDecompressLOD(int target_lod, std::ve
     }
 }
 
-} // namespace vvv
+} // namespace volcanite
