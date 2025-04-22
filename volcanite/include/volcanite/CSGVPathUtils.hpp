@@ -19,6 +19,7 @@
 
 #include <string>
 #include <filesystem>
+#include <utility>
 #include <fmt/core.h>
 
 using namespace vvv;
@@ -37,6 +38,10 @@ namespace volcanite {
             path.replace(path.find('~'), 1, Paths::getHomeDirectory().string());
         // make path absolute and canonical
         return absolute(std::filesystem::weakly_canonical(path)).make_preferred();
+    }
+
+    static std::string expandPathStr(std::string path) {
+        return expandPath(std::move(path)).generic_string();
     }
 
     static std::string formatChunkPath(const std::string& formatted_path, int x, int y, int z) {

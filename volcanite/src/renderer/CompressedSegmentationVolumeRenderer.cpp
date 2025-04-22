@@ -1260,7 +1260,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
                             // how many frames have to be accumulated so that each pixel received one sample
                             if (i >= 0 && i < m_data_vcfg_presets.size())
-                                readParameterFile(m_data_vcfg_presets[i].second);
+                                readParameterFile(m_data_vcfg_presets[i].second.generic_string());
 
                             // compute min. required number of total accumulation samples per pixel
                             if (m_target_accum_frames > 0) {
@@ -1510,7 +1510,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
     // import initial config (if requested)
     if (m_init_vcfg_file.has_value())
-        CompressedSegmentationVolumeRenderer::readParameterFile(m_init_vcfg_file.value());
+        CompressedSegmentationVolumeRenderer::readParameterFile(m_init_vcfg_file.value().generic_string());
 }
 
     void CompressedSegmentationVolumeRenderer::updateDeviceMemoryUsage() {

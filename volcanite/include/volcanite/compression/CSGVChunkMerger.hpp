@@ -158,7 +158,7 @@ public:
         glm::uvec3 complete_volume_dim = chunk_dimension * glm::uvec3(max_input_csgv_index) + chunks[sfc::Cartesian::p2i(max_input_csgv_index, chunk_count)].getVolumeDim();
         brick_count = (glm::uvec3(chunk_count - glm::ivec3(1)) * chunk_dimension + chunks[sfc::Cartesian::p2i(max_input_csgv_index, chunk_count)].getVolumeDim() - glm::uvec3(1)) / chunks[0].m_brick_size + 1u;
         total_brick_count = brick_count.x * brick_count.y * brick_count.z;
-        if(total_brick_count > (1ul << 32) - 1ul) {
+        if(total_brick_count > (1ull << 32) - 1ull) {
             Logger(ERROR)
                     << "Merging Compressed Segmentation Volume chunk files failed. Brick count exceeds 32 bit range. Use a larger brick size.";
             return nullptr;

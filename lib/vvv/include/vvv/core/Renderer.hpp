@@ -142,7 +142,7 @@ public:
         if(!m_gui_interface->readParameters(in, m_camera.get())) {
             if (backup_parameters) {
                 // error parsing parameters: re-import old parameters
-                if (!readParameterFile(path_backup_config, expected_version_string, false)) {
+                if (!readParameterFile(path_backup_config.generic_string(), expected_version_string, false)) {
                     Logger(DEBUG) << "Could not import backup rendering parameters from " << path_backup_config;
                 } else {
                     Logger(DEBUG) << "Imported backup rendering parameters after parsing error.";

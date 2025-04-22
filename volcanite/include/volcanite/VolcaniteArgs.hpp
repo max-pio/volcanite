@@ -198,8 +198,8 @@ public:
                 throw ArgException("Volcanite was build with CMake option HEADLESS set. volcanite must be run with --headless option and can not use interactive windows.", headlessArg.longID());
             }
 #endif
-            va.decompress_export_file = expandPath(decompresspathArg.getValue());
-            va.compress_export_file = expandPath(compresspathArg.getValue());
+            va.decompress_export_file = expandPathStr(decompresspathArg.getValue());
+            va.compress_export_file = expandPathStr(compresspathArg.getValue());
             {
                 std::string op_codes = opMaskArg.getValue();
                 std::transform(op_codes.begin(), op_codes.end(), op_codes.begin(), ::tolower);
@@ -265,13 +265,13 @@ public:
                                                                     // expand file path (if it is a vcfg file)
                                                                     // and convert to strin
                                                                     if (cfg.ends_with(".vcfg"))
-                                                                        return expandPath(cfg);
+                                                                        return expandPathStr(cfg);
                                                                     return cfg;
                                                                 });
                 va.rendering_configs = {split_configs.begin(), split_configs.end()};
             }
-            va.screenshot_output_file = expandPath(imageArg.getValue());
-            va.video_output_fmt_file = expandPath(videoArg.getValue());
+            va.screenshot_output_file = expandPathStr(imageArg.getValue());
+            va.video_output_fmt_file = expandPathStr(videoArg.getValue());
             if (!va.video_output_fmt_file.empty()) {
                 try {
                     size_t test_frame_idx = 1;
@@ -325,7 +325,7 @@ public:
             // if no input file was specified, try to open a file dialog
             std::string input_file = inputpathArg.getValue();
             if (!input_file.starts_with(CSGV_SYNTH_PREFIX_STR))
-                input_file = expandPath(input_file);
+                input_file = expandPathStr(input_file);
             else
                 Logger(DEBUG) << getDummySegmentationVolumeHelpStr();
             input_volume_required = input_volume_required && !evalPrintArg.getValue();
@@ -485,7 +485,7 @@ public:
                 va.run_tests = testArg.getValue();
             }
             va.export_stats = statsArg.getValue();
-            va.record_in_file = expandPath(recordInFileArg.getValue());
+            va.record_in_file = expandPathStr(recordInFileArg.getValue());
             va.record_convergence_frames = recordConvergenceArg.getValue();
             std::string comma_separated_logfiles = evalLogFilesArg.getValue();
             va.eval_logfiles.clear();
@@ -497,7 +497,7 @@ public:
                             tmp.push_back(c);
                         return tmp;
                     })) {
-                va.eval_logfiles.emplace_back(expandPath(std::string(logfile)));
+                va.eval_logfiles.emplace_back(expandPathStr(std::string(logfile)));
                 // TODO: check if the logfiles contain valid format strings
             }
             va.eval_name = evalNameArg.getValue();

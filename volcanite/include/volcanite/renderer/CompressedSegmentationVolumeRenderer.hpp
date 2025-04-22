@@ -195,7 +195,7 @@ public:
         m_target_accum_frames = count;
      }
     /// Will save the renderer state to the path when the renderer is shut down
-    void saveConfigOnShutdown(const std::string& path) { m_save_config_on_shutdown_path = expandPath(path); }
+    void saveConfigOnShutdown(const std::string& path) { m_save_config_on_shutdown_path = expandPathStr(path); }
 
     /// Returns a pair of the tag and file path of a parameter preset if it matches the given path string.
     /// If not rendering preset exists for the path string, returns a nullptr.
@@ -221,9 +221,9 @@ public:
 
     bool readParameterFile(const std::string& path, const std::string& version_string="", bool backup_parameters=true) override {
         if (const auto preset = getParameterPreset(path))
-            return Renderer::readParameterFile(Paths::findDataPath("vcfg") / preset->second, version_string, backup_parameters);
+            return Renderer::readParameterFile((Paths::findDataPath("vcfg") / preset->second).generic_string(), version_string, backup_parameters);
         else
-            return Renderer::readParameterFile(expandPath(path), version_string, backup_parameters);
+            return Renderer::readParameterFile(expandPathStr(path), version_string, backup_parameters);
     }
 
     struct CSGVRenderingConfig {
@@ -289,7 +289,7 @@ public:
            && !image_path.ends_with(".jpeg")) {
             image_path.append(".png");
         }
-        m_download_frame_to_image_file = expandPath(image_path);
+        m_download_frame_to_image_file = expandPathStr(image_path);
     }
 
     /// Returns statistics about frame times and GPU memory consumption. Frame times are only available if tracking was
