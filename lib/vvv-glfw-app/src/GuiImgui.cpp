@@ -43,7 +43,7 @@ void GuiImgui::renderGui() {
     if(updateGuiScaling || m_firstCall) {
         // if this is called a second time, i.e. a second font is rasterized, some Vulkan image object is not destroyed
         if(!m_firstCall)
-            vvv::Logger(vvv::WARN) << "Rescaling the GUI leads to undestroyed Vulkan objects from ImGUI font rasterization!";
+            vvv::Logger(vvv::Warn) << "Rescaling the GUI leads to undestroyed Vulkan objects from ImGUI font rasterization!";
         ImGuiIO& io = ImGui::GetIO(); (void)io;
         io.Fonts->Clear();
 
@@ -90,7 +90,7 @@ void GuiImgui::renderGui() {
                 const std::string& loc = l.second;
 
                 if(!m_windows.contains(window)) {
-                    vvv::Logger(vvv::WARN) << "can not dock non-existing window " << window;
+                    vvv::Logger(vvv::Warn) << "can not dock non-existing window " << window;
                     continue;
                 }
 
@@ -99,7 +99,7 @@ void GuiImgui::renderGui() {
                     if(parents.contains(loc)) {
                         ImGui::DockBuilderDockWindow(window.c_str(), parents[loc]);
                     } else {
-                        vvv::Logger(vvv::WARN) << "cannot dock to windows that were not already docked elsewhere (cannot dock " << window << " to " << loc << ")";
+                        vvv::Logger(vvv::Warn) << "cannot dock to windows that were not already docked elsewhere (cannot dock " << window << " to " << loc << ")";
                         // would have to create a new docking node as parent for both window and loc..
                     }
                 }
@@ -152,7 +152,7 @@ void GuiImgui::renderGui() {
                             parents[window] = dock_id_right;
                         }
                     } else {
-                        vvv::Logger(vvv::WARN) << "Unkown window docking location " << loc;
+                        vvv::Logger(vvv::Warn) << "Unkown window docking location " << loc;
                         continue;
                     }
                 }
@@ -444,7 +444,7 @@ void GuiImgui::renderGui() {
                     break;
                 }
                 default: {
-                    vvv::Logger(vvv::ERROR) << "GuiImgui: cannot render GuiType " << be->type << " for entry " << be->label;
+                    vvv::Logger(vvv::Error) << "GuiImgui: cannot render GuiType " << be->type << " for entry " << be->label;
                     break;
                 }
                 }

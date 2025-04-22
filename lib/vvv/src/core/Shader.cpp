@@ -112,7 +112,7 @@ Shader::Shader(const SimpleGlslShaderRequest& req, const ShaderCompileErrorCallb
     auto local_spirv = getPrecompiledLocalSpirvPath(req);
     if(local_spirv.has_value()) {
         loadSpirvFromFile(local_spirv.value());
-        Logger(INFO) << "Loaded " << local_spirv.value().string();
+        Logger(Info) << "Loaded " << local_spirv.value().string();
         reflectShader();
         return;
     }
@@ -133,7 +133,7 @@ Shader::Shader(const SimpleGlslShaderRequest& req, const ShaderCompileErrorCallb
 
 Shader::Shader(const GlslShaderRequest& req, const ShaderCompileErrorCallback& compileErrorCallback) {
 #ifdef USE_PRECOMPILED_LOCAL_SPIRV
-    Logger(WARN) << "Cannot load precompiled shaders for non-simple GlslShaderRequests";
+    Logger(Warn) << "Cannot load precompiled shaders for non-simple GlslShaderRequests";
 #endif
     createShader(req, compileErrorCallback);
 }
@@ -175,7 +175,7 @@ void Shader::createShader(const GlslShaderRequest& request, const ShaderCompileE
         std::filesystem::path spirvPath;
 
         label = request.shader_file_path.filename().string();
-        Logger(DEBUG) << "Compiling " << request.shader_file_path;
+        Logger(Debug) << "Compiling " << request.shader_file_path;
         try {
 #ifdef USE_SYSTEM_GLSLANG_COMPILER
             // call glslang on the commandline
@@ -188,7 +188,7 @@ void Shader::createShader(const GlslShaderRequest& request, const ShaderCompileE
         catch(ShaderCompileError& e) {
 
             auto callback = compileErrorCallback ? compileErrorCallback : ShaderCompileErrorCallback([](const ShaderCompileError& e) {
-                Logger(ERROR) << "Compilation of shader " << e.request.shader_file_path.filename() << " failed.\n\n"
+                Logger(Error) << "Compilation of shader " << e.request.shader_file_path.filename() << " failed.\n\n"
                               << "Command line: " << e.cmd << "\n"
                               << "Return value: " << e.returnValue << "\n"
                               << "\n" << e.errorText;
@@ -423,7 +423,7 @@ std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderR
             spirv_file.close();
             alreadyCompilesSpirvFiles[request] = spirv_path.value();
         } else {
-            Logger(WARN) << "Could not write SPIRV shader file " << spirv_path.value();
+            Logger(Warn) << "Could not write SPIRV shader file " << spirv_path.value();
         }
     }
 

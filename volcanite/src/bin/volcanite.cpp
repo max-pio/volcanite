@@ -39,11 +39,11 @@ using namespace volcanite;
 
 int export_texture(Texture* tex, const std::string& export_file_path) {
     try {
-        Logger(INFO) << "Exporting render output to " << export_file_path;
+        Logger(Info) << "Exporting render output to " << export_file_path;
         tex->writeFile(export_file_path);
     }
     catch(const std::runtime_error& e) {
-        Logger(ERROR) << "Render export error: " << e.what();
+        Logger(Error) << "Render export error: " << e.what();
         return RET_IO_ERROR;
     }
     return 0;
@@ -65,7 +65,7 @@ int tryImportRenderConfigs(VolcaniteArgs& args, std::shared_ptr<CompressedSegmen
             long label_name_end = static_cast<long>(config.find(':'));
             if (!config.starts_with('[') || window_name_end == std::string::npos
                 || label_name_end == std::string::npos || label_name_end <= window_name_end) {
-                Logger(WARN) << "Invalid config '" << config << "'. Configs must be in the form [{window}] {label}: {values}";
+                Logger(Warn) << "Invalid config '" << config << "'. Configs must be in the form [{window}] {label}: {values}";
                 continue;
             }
             std::stringstream vcfg_stream;
@@ -96,29 +96,29 @@ int volcanite_main(int argc, char *argv[]) {
         vvv::Volume<uint32_t> decompressed_volume{static_cast<float>(dim.x), static_cast<float>(dim.y), static_cast<float>(dim.z),
                                                   dim.x, dim.y, dim.z, vk::Format::eUndefined, *payload};
         if (!decompressed_volume.write(args.decompress_export_file))
-            Logger(ERROR) << "volume could not be decompressed";
+            Logger(Error) << "volume could not be decompressed";
         else
-            Logger(INFO) << "volume decompressed to " << args.decompress_export_file;
+            Logger(Info) << "volume decompressed to " << args.decompress_export_file;
     }
 
     if(args.export_stats) {
-        Logger(INFO, true) << "export brick statistics...";
+        Logger(Info, true) << "export brick statistics...";
         std::string stats_path = stripFileExtension(args.input_file) + "_brickstats.csv";
         csv_export(compressedSegmentationVolume->gatherBrickStatistics(), stats_path);
-        Logger(INFO) << "export brick statistics to " << stats_path + " done";
+        Logger(Info) << "export brick statistics to " << stats_path + " done";
     }
 
     if (bool run_headless_pass = !args.screenshot_output_file.empty() || !args.video_output_fmt_file.empty();
         !args.headless || run_headless_pass) {
 
-        Logger(INFO) << "--------------------------------------------------- ";
-        Logger(INFO) << "initializing Volcanite renderer";
+        Logger(Info) << "--------------------------------------------------- ";
+        Logger(Info) << "initializing Volcanite renderer";
 
         // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
         if(args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
-            Logger(DEBUG) << "separating detail level encoding for streaming";
+            Logger(Debug) << "separating detail level encoding for streaming";
             compressedSegmentationVolume->separateDetail();
-            Logger(DEBUG) << compressedSegmentationVolume->getEncodingInfoString();
+            Logger(Debug) << compressedSegmentationVolume->getEncodingInfoString();
         }
 
         // if the attribute database is a dummy, we update the min/max attribute values for the volume labels
@@ -171,7 +171,7 @@ int volcanite_main(int argc, char *argv[]) {
             // export final frame
             if (!args.screenshot_output_file.empty()
                 && (texture == nullptr || export_texture(texture.get(), args.screenshot_output_file))) {
-                Logger(ERROR) << "could not export final render frame to " << args.screenshot_output_file;
+                Logger(Error) << "could not export final render frame to " << args.screenshot_output_file;
                 return RET_RENDER_ERROR;
             }
             for (const auto& eval_logfile : args.eval_logfiles) {
@@ -179,9 +179,9 @@ int volcanite_main(int argc, char *argv[]) {
                                        compressedSegmentationVolume->getLastEvaluationResults(),
                                        {}, // TODO: decompression benchmark
                                        renderer->getLastEvaluationResults())) {
-                    Logger(INFO) << "exported evaluation results to " << eval_logfile;
+                    Logger(Info) << "exported evaluation results to " << eval_logfile;
                                        } else {
-                                           Logger(WARN) << "could not export evaluation results to " << eval_logfile;
+                                           Logger(Warn) << "could not export evaluation results to " << eval_logfile;
                                            return RET_IO_ERROR;
                                        }
             }
@@ -224,9 +224,9 @@ int volcanite_main(int argc, char *argv[]) {
                                    compressedSegmentationVolume->getLastEvaluationResults(),
                                    {}, // TODO: decompression benchmark
                                    {})) {
-                Logger(INFO) << "exported evaluation results to " << eval_logfile;
+                Logger(Info) << "exported evaluation results to " << eval_logfile;
                                    } else {
-                                       Logger(WARN) << "could not export evaluation results to " << eval_logfile;
+                                       Logger(Warn) << "could not export evaluation results to " << eval_logfile;
                                        return RET_IO_ERROR;
                                    }
         }

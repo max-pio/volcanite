@@ -111,7 +111,7 @@ void CompressedSegmentationVolumeBrickViewer::releaseResources() {
 void CompressedSegmentationVolumeBrickViewer::initShaderResources() {
     // compute pass for ray marching points
     ShaderCompileErrorCallback compileErrorCallback = [](const ShaderCompileError& err) {
-        Logger(ERROR) << err.errorText;
+        Logger(Error) << err.errorText;
         return ShaderCompileErrorCallbackAction::USE_PREVIOUS_CODE;
     };
     m_pass = std::make_unique<SinglePassCompute>(SinglePassComputeSettings{.ctx = getCtx(), .label = "CompressedSegmentationVolumeBrickViewer", .multiBuffering = getCtx()->getWsi()->stateInFlight()},
@@ -128,7 +128,7 @@ void CompressedSegmentationVolumeBrickViewer::initShaderResources() {
     // upload encoding icon texture
     int img_width, img_height, img_channels;
     auto img_path = Paths::findDataPath("csgv_codes.png");
-    Logger(INFO) << img_path.string();
+    Logger(Info) << img_path.string();
     unsigned char* image = stbi_load(img_path.string().c_str(), &img_width, &img_height, &img_channels, STBI_rgb_alpha);
     m_encoding_tex = m_pass->reflectTexture("SAMPLER_encoding_icons", {.width=static_cast<uint32_t>(img_width), .height=static_cast<uint32_t>(img_height), .format=vk::Format::eR8G8B8A8Unorm});
     auto [tfUploadFinished, _stagingBuffer] = m_encoding_tex->upload(image);

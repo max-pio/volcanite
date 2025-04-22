@@ -63,11 +63,11 @@ public:
                             }
                         }
                         if (init_file.fail() || init_file.bad())
-                            Logger(WARN) << "Error reading vcfg preset initialization file " << init_file_path;
+                            Logger(Warn) << "Error reading vcfg preset initialization file " << init_file_path;
                         else
                             imported_from_init_file = true;
                     } else {
-                        Logger(WARN) << "Could not open vcfg preset initialization file " << init_file_path;
+                        Logger(Warn) << "Could not open vcfg preset initialization file " << init_file_path;
                     }
                 }
                 if (!imported_from_init_file) {
@@ -173,7 +173,7 @@ public:
         // save rendering parameters on GUI shutdown if requested
         if(!m_save_config_on_shutdown_path.empty()) {
             if (writeParameterFile(m_save_config_on_shutdown_path, VOLCANITE_VERSION)) {
-                Logger(DEBUG) << "exported parameters to " << m_save_config_on_shutdown_path;
+                Logger(Debug) << "exported parameters to " << m_save_config_on_shutdown_path;
             }
         }
 
@@ -249,7 +249,7 @@ public:
         // TODO: instead of copying all CSGVRenderingConfig parameters, simply store such a struct as member
         m_target_cache_size_MB = config.cache_size_MB;
         if(m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
-            Logger(WARN) << "Cache size is currently limited to 4 GB maximum.";
+            Logger(Warn) << "Cache size is currently limited to 4 GB maximum.";
             m_target_cache_size_MB = 4294967295ul / 1024ul / 1024ul;
         }
         m_use_palette_cache = config.palettized_cache;

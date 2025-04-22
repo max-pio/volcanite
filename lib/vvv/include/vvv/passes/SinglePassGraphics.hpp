@@ -162,7 +162,7 @@ public:
         if(opts.format.has_value()) {
             for (const auto &n : names) {
                 if (m_graphicsPassConfig.colorAttachmentFormats.contains(n) && m_graphicsPassConfig.colorAttachmentFormats.at(n) != opts.format.value())
-                    Logger(WARN) << "Color attachment format " << to_string(opts.format.value()) << " does not equal format " << to_string(m_graphicsPassConfig.colorAttachmentFormats.at(n)) << " for "
+                    Logger(Warn) << "Color attachment format " << to_string(opts.format.value()) << " does not equal format " << to_string(m_graphicsPassConfig.colorAttachmentFormats.at(n)) << " for "
                                  << n << " from creation time!";
             }
         }
@@ -174,7 +174,7 @@ public:
         assert(m_graphicsPassConfig.depthAttachmentFormat.has_value() && "You must set depthAttachmentFormat to a depth texture format to enable depth buffering for this pass!");
         
         if(opts.format.has_value() && opts.format.value() != vk::Format::eUndefined && m_graphicsPassConfig.depthAttachmentFormat.value() != opts.format.value()) {
-            Logger(WARN) << "Queried depth texture format " << to_string(opts.format.value()) << " differs from render pass attachment format " << to_string(m_graphicsPassConfig.depthAttachmentFormat.value())
+            Logger(Warn) << "Queried depth texture format " << to_string(opts.format.value()) << " differs from render pass attachment format " << to_string(m_graphicsPassConfig.depthAttachmentFormat.value())
                          << "! Returning texture with " << to_string(m_graphicsPassConfig.depthAttachmentFormat.value());
         }
 
@@ -255,7 +255,7 @@ protected:
             const auto& name = shaderColorAttachmentFormats[i].first;
             // if no format was specified for the output attachment at all, we use the refleted format
             if(!m_graphicsPassConfig.colorAttachmentFormats.contains(name)) {
-                Logger(WARN) << "No format was specified for color attachment " << name << "! Using reflected format " << to_string(shaderColorAttachmentFormats[i].second);
+                Logger(Warn) << "No format was specified for color attachment " << name << "! Using reflected format " << to_string(shaderColorAttachmentFormats[i].second);
                 m_graphicsPassConfig.colorAttachmentFormats[name] = shaderColorAttachmentFormats[i].second;
             }
             // if the format was specified as undefined, we also use the reflected format

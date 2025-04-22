@@ -92,12 +92,12 @@ protected:
             pipelineCacheCreateInfo.initialDataSize = pipeline_data.size();
             pipelineCacheCreateInfo.pInitialData = pipeline_data.data();
         } catch (std::runtime_error &ex) {
-            Logger(ERROR) << "Pipeline cache create info failed: " << ex.what();
+            Logger(Error) << "Pipeline cache create info failed: " << ex.what();
         }
 
         m_pipelineCache = device.createPipelineCache(pipelineCacheCreateInfo);
         if (m_pipelineCache == VK_NULL_HANDLE) {
-            Logger(WARN) << "Error reading vulkan pipeline cache from " << getPipelineCachePath() << ". Resetting file.";
+            Logger(Warn) << "Error reading vulkan pipeline cache from " << getPipelineCachePath() << ". Resetting file.";
             std::filesystem::remove(getPipelineCachePath());
             m_pipelineCache = device.createPipelineCache(pipelineCacheCreateInfo);
             if (m_pipelineCache == VK_NULL_HANDLE)

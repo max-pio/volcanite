@@ -36,7 +36,7 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegment
 
     const size_t number_of_areas = static_cast<size_t>(cfg.dim[0] * cfg.dim[1] * cfg.dim[2] + cfg.voxels_per_label - 1u) / cfg.voxels_per_label;
 
-    Logger(INFO) << "Creating synthetic segmentation volume with dimension " << str(cfg.dim)
+    Logger(Info) << "Creating synthetic segmentation volume with dimension " << str(cfg.dim)
                       << " and approx. " << number_of_areas << " label regions, " << cfg.voxels_per_label << " voxels/label.";
     for (size_t i = 0; i < number_of_areas; i++) {
         const uint32_t label = V_RND_UINT();

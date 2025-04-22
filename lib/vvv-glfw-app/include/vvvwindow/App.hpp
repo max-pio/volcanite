@@ -47,7 +47,7 @@ private:
 
             auto video_directory = Paths::getHomeDirectory().append("volcanite_video");
             if(!std::filesystem::exists(video_directory) && !std::filesystem::create_directory(video_directory)) {
-                Logger(WARN) << "Could not create non-existing video export directory " << video_directory;
+                Logger(Warn) << "Could not create non-existing video export directory " << video_directory;
             }
             else {
                 m_record_file_path = video_directory.generic_string() + "/volcanite_record_file.rec";

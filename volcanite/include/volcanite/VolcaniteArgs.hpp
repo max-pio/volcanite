@@ -234,7 +234,7 @@ public:
                             if (i+1 < op_codes.size() && op_codes[i+1] == '-') {
                                 va.operation_mask |= OP_USE_OLD_PAL_D_BIT;
                                 i++;
-                                Logger(INFO) << " JOOO ITS HERE LELELEL";
+                                Logger(Info) << " JOOO ITS HERE LELELEL";
                             }
                             va.operation_mask |= OP_PALETTE_D_BIT;
                             break;
@@ -318,7 +318,7 @@ public:
             va.enable_vsync = !noVsyncArg.getValue();
             va.empty_space_resolution = emptySpaceResolutionArg.getValue();
             if (va.cache_mode != CACHE_VOXELS && va.empty_space_resolution > 0u) {
-                Logger(WARN) << "Empty space skipping grid (" << emptySpaceResolutionArg.longID()
+                Logger(Warn) << "Empty space skipping grid (" << emptySpaceResolutionArg.longID()
                                   << " only supported in combination with " << cacheModeArg.longID() << " v. Disabling.";
                 va.empty_space_resolution = 0u;
             }
@@ -327,7 +327,7 @@ public:
             if (!input_file.starts_with(CSGV_SYNTH_PREFIX_STR))
                 input_file = expandPathStr(input_file);
             else
-                Logger(DEBUG) << getDummySegmentationVolumeHelpStr();
+                Logger(Debug) << getDummySegmentationVolumeHelpStr();
             input_volume_required = input_volume_required && !evalPrintArg.getValue();
             if (input_file.empty() && input_volume_required) {
 #ifdef HEADLESS
@@ -442,11 +442,11 @@ public:
                     // Nibble encoding does not support PALETTE_DELTA and STOP_BITS
                     if (va.operation_mask & OP_PALETTE_D_BIT) {
                         va.operation_mask = va.operation_mask & ~OP_PALETTE_D_BIT;
-                        Logger(WARN) << "Encoding with random access does not support palette delta operation. Disabling.";
+                        Logger(Warn) << "Encoding with random access does not support palette delta operation. Disabling.";
                     }
                     if (va.encoding_mode == NIBBLE_ENC && va.operation_mask & OP_STOP_BIT) {
                         va.operation_mask = va.operation_mask & ~OP_STOP_BIT;
-                        Logger(WARN) << "Nibble encoding with random access does not support stop bits. Disabling.";
+                        Logger(Warn) << "Nibble encoding with random access does not support stop bits. Disabling.";
                     }
                 } else {
                     constexpr EncodingMode _strengths[] = {NIBBLE_ENC, SINGLE_TABLE_RANS_ENC, DOUBLE_TABLE_RANS_ENC};
@@ -515,7 +515,7 @@ public:
 #ifdef _WIN64
             vvv::Logger(ERROR) << "argument error: " << e.error() << " for " << e.argId();
 #else
-            vvv::Logger(vvv::ERROR) << "argument error: " << e.error() << " for " << e.argId();
+            vvv::Logger(vvv::Error) << "argument error: " << e.error() << " for " << e.argId();
 #endif
         }
 

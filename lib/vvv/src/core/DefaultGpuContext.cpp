@@ -94,7 +94,7 @@ bool is_instance_extension_supported(std::string name) {
 
 bool log_supported_instance_extensions() {
     const auto extensions = vk::enumerateInstanceExtensionProperties(); //get number of extensions
-    auto logline = vvv::Logger(vvv::DEBUG);
+    auto logline = vvv::Logger(vvv::Debug);
     logline << "supported instance extensions: ";
     for (auto const& extension : extensions) {
         logline << extension.extensionName << ", ";
@@ -113,7 +113,7 @@ bool is_instance_layer_supported(std::string name) {
 
 void log_supported_instance_layers() {
     const auto layers = vk::enumerateInstanceLayerProperties();
-    auto logline = vvv::Logger(vvv::DEBUG);
+    auto logline = vvv::Logger(vvv::Debug);
     logline << "supported instance layers: ";
     for (auto const& layer : layers) {
         logline << layer.layerName << ", ";
@@ -134,7 +134,7 @@ bool vvv::DefaultGpuContext::hasInstanceExtension(const char *name) const { retu
 
 bool log_supported_device_extensions(vk::PhysicalDevice device) {
     const auto extensions = device.enumerateDeviceExtensionProperties(); //get number of extensions
-    auto logline = vvv::Logger(vvv::DEBUG);
+    auto logline = vvv::Logger(vvv::Debug);
     logline << "supported device extensions: ";
     for (auto const& extension : extensions) {
         logline << extension.extensionName << ", ";
@@ -162,10 +162,10 @@ void vvv::DefaultGpuContext::createInstance() {
     }
 
     log_supported_instance_extensions();
-    Logger(DEBUG) << "enabling instance extensions:";
+    Logger(Debug) << "enabling instance extensions:";
 
     for(const auto& ext : extensions) {
-        Logger(DEBUG) << "    " << (is_instance_extension_supported(ext) ? "[x] " : "[ ] ") << ext;
+        Logger(Debug) << "    " << (is_instance_extension_supported(ext) ? "[x] " : "[ ] ") << ext;
     }
 
     std::vector<const char *> instanceLayers;
@@ -176,11 +176,11 @@ void vvv::DefaultGpuContext::createInstance() {
 
 
     log_supported_instance_layers();
-    Logger(DEBUG) << "enabling instance layers:";
+    Logger(Debug) << "enabling instance layers:";
 
     const auto allLayers = vk::enumerateInstanceLayerProperties();
     for(const auto& layer : instanceLayers) {
-        Logger(DEBUG) << (is_instance_layer_supported(layer) ? "    [x] " : "    [ ] ") << layer;
+        Logger(Debug) << (is_instance_layer_supported(layer) ? "    [x] " : "    [ ] ") << layer;
     }
 
     vk::ApplicationInfo applicationInfo(m_builder.appName.c_str(), 1, m_builder.appName.c_str(), 1, VK_API_VERSION_1_3);
@@ -204,8 +204,8 @@ void vvv::DefaultGpuContext::createInstance() {
     try {
         m_gpu.instance = vk::createInstance(instanceCreateInfo);
     } catch (std::runtime_error& e) {
-        Logger(ERROR) << "Error encountered in vk::createInstance(): " << e.what();
-        Logger(INFO) << "Try running with VK_LOADER_DEBUG=all to see errors from broken layers.";
+        Logger(Error) << "Error encountered in vk::createInstance(): " << e.what();
+        Logger(Info) << "Try running with VK_LOADER_DEBUG=all to see errors from broken layers.";
         throw e;
     }
 
@@ -273,9 +273,9 @@ void vvv::DefaultGpuContext::destroyInstance() { VK_DESTROY(m_gpu.instance) }
         // "Validation Information: [ WARNING-DEBUG-PRINTF ] | MessageID = 0x76589099 | vkQueueSubmit():
         const size_t pos = std::string(pCallbackData->pMessage).find("MessageID =");
         if (pos == std::string::npos) {
-            vvv::Logger(vvv::DEBUG) << "[shader] " << pCallbackData->pMessage;
+            vvv::Logger(vvv::Debug) << "[shader] " << pCallbackData->pMessage;
         } else {
-            vvv::Logger(vvv::DEBUG) << "[shader] " << (pCallbackData->pMessage + pos + 24);
+            vvv::Logger(vvv::Debug) << "[shader] " << (pCallbackData->pMessage + pos + 24);
         }
 
         shouldAbort = VK_FALSE;
@@ -283,11 +283,11 @@ void vvv::DefaultGpuContext::destroyInstance() { VK_DESTROY(m_gpu.instance) }
     }
 
     auto severity = static_cast<vk::DebugUtilsMessageSeverityFlagBitsEXT>(messageSeverity);
-    vvv::loglevel level = vvv::INFO;
-    if      (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose) level = vvv::DEBUG;
-    else if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo)    level = vvv::INFO;
-    else if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning) level = vvv::WARN;
-    else if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)   level = vvv::ERROR;
+    vvv::loglevel level = vvv::Info;
+    if      (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose) level = vvv::Debug;
+    else if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo)    level = vvv::Info;
+    else if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning) level = vvv::Warn;
+    else if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)   level = vvv::Error;
     auto err = vvv::Logger(level);
 
     // color validation message if it fits this known pattern
@@ -392,11 +392,11 @@ void vvv::DefaultGpuContext::createPhysicalDevice() {
             int selection = std::stoi(std::string(envStr));
             if (selection >= 0 && selection < devices.size())
                 envSelection = selection;
-            else Logger(WARN) << "Environment variable VOLCANITE_DEVICE is out of range. VOLCANITE_DEVICE will be ignored.";
+            else Logger(Warn) << "Environment variable VOLCANITE_DEVICE is out of range. VOLCANITE_DEVICE will be ignored.";
         } catch(std::invalid_argument& e) {
-            Logger(WARN) << "Environment variable VOLCANITE_DEVICE is not a valid number. VOLCANITE_DEVICE will be ignored.";
+            Logger(Warn) << "Environment variable VOLCANITE_DEVICE is not a valid number. VOLCANITE_DEVICE will be ignored.";
         } catch(std::out_of_range& e) {
-            Logger(WARN) << "Environment variable VOLCANITE_DEVICE is not a valid number. VOLCANITE_DEVICE will be ignored.";
+            Logger(Warn) << "Environment variable VOLCANITE_DEVICE is not a valid number. VOLCANITE_DEVICE will be ignored.";
         }
     }
 
@@ -421,7 +421,7 @@ void vvv::DefaultGpuContext::createPhysicalDevice() {
     for (int i = 0; i < devices.size(); i++) {
         bool selected = devices[i] == m_gpu.physicalDevice;
         auto deviceType = devices[i].getProperties2().properties.deviceType;
-        Logger(INFO) << "Physical Device " << i << ": " << devices[i].getProperties2().properties.deviceName << (selected ? " (selected)" : "") << " (" + to_string(deviceType) + ")";
+        Logger(Info) << "Physical Device " << i << ": " << devices[i].getProperties2().properties.deviceName << (selected ? " (selected)" : "") << " (" + to_string(deviceType) + ")";
     }
 }
 
@@ -445,10 +445,10 @@ void vvv::DefaultGpuContext::createLogicalDevice() {
 
     std::vector<char const *> enabledDeviceExtensions = {};
 
-    Logger(DEBUG) << "enabling device layers:";
+    Logger(Debug) << "enabling device layers:";
 
     for(const auto& layer : enabledDeviceLayers) {
-        Logger(DEBUG) << "    " << layer;
+        Logger(Debug) << "    " << layer;
     }
 
     enabledDeviceExtensions.reserve(m_builder.deviceExtensions.size());
@@ -457,10 +457,10 @@ void vvv::DefaultGpuContext::createLogicalDevice() {
         enabledDeviceExtensions.push_back(const_cast<char *>(m_builder.deviceExtensions[i].c_str()));
 
     log_supported_device_extensions(getPhysicalDevice());
-    Logger(DEBUG) << "enabling device extensions:";
+    Logger(Debug) << "enabling device extensions:";
 
     for(const auto& ext : enabledDeviceExtensions) {
-        Logger(DEBUG) << "    "  << (is_device_extension_supported(getPhysicalDevice(), ext) ? "[x] " : "[ ] ") << ext;
+        Logger(Debug) << "    " << (is_device_extension_supported(getPhysicalDevice(), ext) ? "[x] " : "[ ] ") << ext;
     }
 
     vk::DeviceCreateInfo deviceCreateInfo({}, queueCreateInfo, enabledDeviceLayers, enabledDeviceExtensions, nullptr);

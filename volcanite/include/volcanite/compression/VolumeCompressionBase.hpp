@@ -275,20 +275,20 @@ public:
     virtual bool test(const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, bool compress_first=false) {
         assert(volume.size() == volume_dim.x * volume_dim.y * volume_dim.z && "volume size does not match dimension");
 
-        Logger(INFO) << "Running compression test ------------------------------------";
+        Logger(Info) << "Running compression test ------------------------------------";
         MiniTimer timer;
         if(compress_first) {
-            Logger(INFO) << "Encode";
+            Logger(Info) << "Encode";
             compress(volume, volume_dim);
-            Logger(INFO) << " finished in " << timer.restart() << "s with compression ratio " << getCompressionRatio() << "%";
+            Logger(Info) << " finished in " << timer.restart() << "s with compression ratio " << getCompressionRatio() << "%";
         }
-        Logger(INFO) << "Decode";
+        Logger(Info) << "Decode";
         std::shared_ptr<std::vector<uint32_t>> out = decompress();
-        Logger(INFO) << " finished in " << timer.elapsed() << "s";
+        Logger(Info) << " finished in " << timer.elapsed() << "s";
 
         if(volume.size() != out->size()) {
-            Logger(ERROR) << "Compressed in and out sizes don't match";
-            Logger(INFO) << "-------------------------------------------------------------";
+            Logger(Error) << "Compressed in and out sizes don't match";
+            Logger(Info) << "-------------------------------------------------------------";
             return false;
         }
 
@@ -297,15 +297,15 @@ public:
         for(size_t i = 0; i < volume.size(); i++) {
             if (volume[i] != (*out)[i]) {
                 if (error_count < max_error_lines)
-                    Logger(ERROR) << "error at " << str(voxel_idx2pos(i, volume_dim)) << " in " << volume[i] << " != out " << (*out)[i];
+                    Logger(Error) << "error at " << str(voxel_idx2pos(i, volume_dim)) << " in " << volume[i] << " != out " << (*out)[i];
                 else if (error_count == max_error_lines)
-                    Logger(ERROR) << "[...] skipping additional errors";
+                    Logger(Error) << "[...] skipping additional errors";
                 error_count++;
             }
         }
 
-        Logger(INFO) << "finished with " << error_count << " errors (" << (100.f*static_cast<float>(error_count)/static_cast<float>(volume.size())) << "%)";
-        Logger(INFO) << "-------------------------------------------------------------";
+        Logger(Info) << "finished with " << error_count << " errors (" << (100.f * static_cast<float>(error_count) / static_cast<float>(volume.size())) << "%)";
+        Logger(Info) << "-------------------------------------------------------------";
         return error_count == 0;
     }
 

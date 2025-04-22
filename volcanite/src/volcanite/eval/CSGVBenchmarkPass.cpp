@@ -21,7 +21,7 @@ namespace volcanite {
 
     AwaitableHandle CSGVBenchmarkPass::execute(AwaitableList awaitBeforeExecution, BinaryAwaitableList awaitBinaryAwaitableList, vk::Semaphore* signalBinarySemaphore) {
 
-        Logger(INFO) << "GPU decompression with a cache size of " << m_cache_bytes / 1000 / 1000 << "MB in "
+        Logger(Info) << "GPU decompression with a cache size of " << m_cache_bytes / 1000 / 1000 << "MB in "
                      << m_execution_iterations << " iterations (with " << m_cache_heat_up_iterations
                      << " cache heat up iterations each)";
 
@@ -217,10 +217,10 @@ namespace volcanite {
             ss << "Shader Definitions: ";
             for (const auto &s: m_shader_defines)
                 ss << s << " ";
-            Logger(DEBUG) << ss.str();
+            Logger(Debug) << ss.str();
         }
         ShaderCompileErrorCallback compileErrorCallback = [](const ShaderCompileError &err) {
-            Logger(ERROR) << err.errorText;
+            Logger(Error) << err.errorText;
             return ShaderCompileErrorCallbackAction::THROW;
         };
         if (m_csgv->isUsingRandomAccess()) {

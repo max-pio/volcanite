@@ -110,7 +110,7 @@ std::string EvaluationLogExport::format_evaluation_string(std::string format_str
     try {
         return fmt::vformat(format_string, fmt_args);
     } catch (const fmt::format_error& err)  {
-        Logger(ERROR) << "evaluation output format error: " << format_string;
+        Logger(Error) << "evaluation output format error: " << format_string;
         throw err;
     }
 }
@@ -151,7 +151,7 @@ int EvaluationLogExport::write_eval_logfile(const std::string& eval_logfile, con
                 format_string.pop_back(); // remove trailing '\n'
             file.close();
         } else {
-            Logger(ERROR) << "Could not open pre-existing evaluation log file " << eval_logfile;
+            Logger(Error) << "Could not open pre-existing evaluation log file " << eval_logfile;
             return 5;
         }
     }
@@ -176,7 +176,7 @@ int EvaluationLogExport::write_eval_logfile(const std::string& eval_logfile, con
     }
     std::ofstream output_file = std::ofstream(eval_logfile, std::ios_base::app);
     if (!output_file.is_open()) {
-        Logger(ERROR) << "Could not open evaluation log file " << eval_logfile;
+        Logger(Error) << "Could not open evaluation log file " << eval_logfile;
         return 5;
     }
 

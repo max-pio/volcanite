@@ -57,28 +57,28 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
     {
         auto _args = VolcaniteArgs::parseArguments(argc, argv);
         if (!_args.has_value()) {
-            Logger(ERROR) << "Exiting because of invalid arguments. See volcanite --help for available commands.";
+            Logger(Error) << "Exiting because of invalid arguments. See volcanite --help for available commands.";
             return RET_INVALID_ARG;
         }
         args = _args.value();
         if (args.print_eval_keys) {
-            Logger(INFO) << "Available evaluation log keys (used with --eval-log):";
+            Logger(Info) << "Available evaluation log keys (used with --eval-log):";
             const auto keys = EvaluationLogExport::get_all_evaluation_keys();
             for (const auto& key : keys) {
-                Logger(INFO) << " " << key;
+                Logger(Info) << " " << key;
             }
             return RET_SUCCESS;
         }
     }
 
     if (!vvv::debuggerIsAttached() && !args.verbose)
-        Logger::s_minLevel = INFO;
+        Logger::s_minLevel = Info;
 
     // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
     if(args.performCompression()) {
         glm::uvec3 max_chunk_id = glm::uvec3(args.chunk_files[0], args.chunk_files[1], args.chunk_files[2]);
         if(!args.verbose) {
-            Logger(INFO) << "compressing segmentation volume " << args.input_file
+            Logger(Info) << "compressing segmentation volume " << args.input_file
                          << (args.chunked ? " with max. chunks " + str(max_chunk_id) : "");
         }
 
@@ -114,7 +114,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
 
 
         if(!args.label_remapping && !args.attribute_database.empty()) {
-            Logger(ERROR) << "Attribute database can not be used without label remapping. Aborting.";
+            Logger(Error) << "Attribute database can not be used without label remapping. Aborting.";
             return RET_INVALID_ARG;
         }
 
@@ -127,7 +127,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
                 std::filesystem::remove(database_path);
 
             MiniTimer t;
-            Logger(INFO) << "Initializing attribute database " << database_path;
+            Logger(Info) << "Initializing attribute database " << database_path;
             csgvDatabase->importOrProcessChunkedVolume(args.input_file, database_path,
                                                        args.attribute_database, args.attribute_table,
                                                        args.attribute_label, args.attribute_csv_separator,
@@ -135,7 +135,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
             // obtain the label re-mapping from the database
             label_remapping = csgvDatabase->getLabelRemapping();
             if (args.verbose)
-                Logger(INFO) << "  finished in " << t.elapsed() << " seconds";
+                Logger(Info) << "  finished in " << t.elapsed() << " seconds";
         } else {
             csgvDatabase->createDummy();
         }
@@ -178,7 +178,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
     else {
         compressedSegmentationVolume = std::make_shared<CompressedSegmentationVolume>();
         if(!compressedSegmentationVolume->importFromFile(args.input_file, args.verbose)) {
-            Logger(ERROR) << "could not load Compressed Segmentation Volume. Aborting.";
+            Logger(Error) << "could not load Compressed Segmentation Volume. Aborting.";
             return RET_COMPR_ERROR;
         }
 
@@ -190,16 +190,16 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
             MiniTimer t;
             csgvDatabase->importFromSqlite(database_path);
             if (args.verbose)
-                Logger(DEBUG) << "Imported attribute database " << database_path << " in " << t.elapsed() << " seconds";
+                Logger(Debug) << "Imported attribute database " << database_path << " in " << t.elapsed() << " seconds";
         }
         else {
             csgvDatabase->createDummy();
             if (args.verbose)
-                Logger(DEBUG) << "No attribute database " << database_path << " found. Using dummy database.";
+                Logger(Debug) << "No attribute database " << database_path << " found. Using dummy database.";
         }
 
         if(args.verbose) {
-            Logger(DEBUG) << compressedSegmentationVolume->getEncodingInfoString();
+            Logger(Debug) << compressedSegmentationVolume->getEncodingInfoString();
         }
 
         // if no config file was specified, use a previous config next to the volume input or .csgv file, if it exists
@@ -211,7 +211,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs& args,
     }
 
     if (compressedSegmentationVolume == nullptr) {
-        Logger(ERROR) << "could not create or load Compressed Segmentation Volume. Aborting.";
+        Logger(Error) << "could not create or load Compressed Segmentation Volume. Aborting.";
         return RET_COMPR_ERROR;
     }
 

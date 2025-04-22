@@ -40,27 +40,27 @@ int volcanite_main(int argc, char *argv[]) {
 
     if(args.performDecompression()) {
         // TODO: add decompression
-        Logger(ERROR) << "decompression not yet supported";
+        Logger(Error) << "decompression not yet supported";
         return RET_NOT_SUPPORTED;
     }
 
     if(args.export_stats) {
-        Logger(INFO, true) << "export brick statistics...";
+        Logger(Info, true) << "export brick statistics...";
         std::string stats_path = stripFileExtension(args.input_file) + "_brickstats.csv";
         csv_export(compressedSegmentationVolume->gatherBrickStatistics(), stats_path);
-        Logger(INFO) << "export brick statistics to " << stats_path + " done";
+        Logger(Info) << "export brick statistics to " << stats_path + " done";
     }
 
     // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
     if(args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
-        Logger(DEBUG) << "separating detail level encoding.";
+        Logger(Debug) << "separating detail level encoding.";
         compressedSegmentationVolume->separateDetail();
-        Logger(DEBUG) << compressedSegmentationVolume->getEncodingInfoString();
+        Logger(Debug) << compressedSegmentationVolume->getEncodingInfoString();
     }
 
 
-    Logger(INFO) << "--------------------------------------------------- ";
-    Logger(INFO) << "Starting CSGV GPU decompression benchmark";
+    Logger(Info) << "--------------------------------------------------- ";
+    Logger(Info) << "Starting CSGV GPU decompression benchmark";
 
     DefaultGpuContext ctx;
     ctx.enableDeviceExtension("VK_EXT_memory_budget");
@@ -83,7 +83,7 @@ int volcanite_main(int argc, char *argv[]) {
                               * compressedSegmentationVolume->getVolumeDim().y
                               * compressedSegmentationVolume->getVolumeDim().z
                               * sizeof(uint32_t);
-    Logger(INFO) << "GPU decompression time: " << execution_time << " ms ("
+    Logger(Info) << "GPU decompression time: " << execution_time << " ms ("
                  << (static_cast<double>(volume_size_byte) / 1000. / 1000. / 1000.) / (execution_time / 1000.)
                  << " GB/s).";
 

@@ -54,7 +54,7 @@ std::vector<std::string> split(const std::string& s, char delimiter) {
 void Paths::initPaths(const std::string& dataPathsStr) {
     auto executableDataPath = findExecutablePath() / "data";
     useSourcePaths = !std::filesystem::exists(executableDataPath);
-    Logger(DEBUG) << (useSourcePaths ? "no data/ directory found in binary directory. Use source paths." : "use data/ directory relative to binary.");
+    Logger(Debug) << (useSourcePaths ? "no data/ directory found in binary directory. Use source paths." : "use data/ directory relative to binary.");
 
     if (useSourcePaths) {
         auto paths = split(dataPathsStr, ';');
@@ -66,7 +66,7 @@ void Paths::initPaths(const std::string& dataPathsStr) {
     }
 
     for (auto& path : dataPaths)
-        Logger(DEBUG) << "data path: " << path.string();
+        Logger(Debug) << "data path: " << path.string();
 }
 
 void Paths::addDataPath(const std::string& dataPath, bool highPriority) {
@@ -81,7 +81,7 @@ void Paths::addDataPath(const std::string& dataPath, bool highPriority) {
         dataPaths.insert(dataPaths.begin(), {path});
     else
         dataPaths.push_back(path);
-    Logger(DEBUG) << "data path: " << path.string();
+    Logger(Debug) << "data path: " << path.string();
 }
 
 std::filesystem::path Paths::findExecutablePath() {
@@ -111,7 +111,7 @@ std::filesystem::path Paths::findDataPath(const std::string &path) {
     std::stringstream ss;
     ss << "file " << path << " not found in data/ directories.";
     for(auto& dataDir : dataPaths) ss << "\nsearched in: " << dataDir.string();
-    Logger(ERROR) << ss.str();
+    Logger(Error) << ss.str();
     throw std::runtime_error("Data path '" + path + "' not found.");
 }
 
@@ -144,7 +144,7 @@ std::vector<std::filesystem::path> Paths::getShaderDirectories(){
         }
 
         for (auto& shaderDir : dirs.value())
-            Logger(DEBUG) << "shader include path: " << shaderDir.string();
+            Logger(Debug) << "shader include path: " << shaderDir.string();
     }
 
     return dirs.value();

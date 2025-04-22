@@ -59,7 +59,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nastja_volume_from_vti(std
     if (!file.is_open()) {
         std::ostringstream err;
         err << "unable to open vti file at: " << url << "\n";
-        Logger(ERROR) << err.str();
+        Logger(Error) << err.str();
         throw std::runtime_error(err.str());
     }
 
@@ -218,17 +218,17 @@ template <typename T> std::shared_ptr<Volume<T>> load_volume_from_vti(std::strin
 
     return std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, img_dims[0], img_dims[1], img_dims[2], gpuFormat, payload);
 #else
-    Logger(WARN) << "VTK library not found. Using hardcoded vti import, expecting file layout:\n";
-    Logger(WARN) << "<VTKFile type=\"ImageData\" version=\"0.1\" byte_order=\"LittleEndian\" header_type=\"UInt64\">";
-    Logger(WARN) << "<ImageData WholeExtent=\"0 [WIDTH] 0 [HEIGHT] 0 [DEPTH]\" Origin=\"0 0 0\" Spacing=\"1.000000e+00 1.000000e+00 1.000000e+00\">";
-    Logger(WARN) << "<CellData Scalars=\"[...]\">";
-    Logger(WARN) << "<DataArray type=\"UInt32\" Name=\"[...]\" format=\"appended\" offset=\"0\" NumberOfComponents=\"1\"/>";
-    Logger(WARN) << "</CellData>";
-    Logger(WARN) << "</ImageData>";
-    Logger(WARN) << "<AppendedData encoding=\"raw\">";
-    Logger(WARN) << "[[[RAW ARRAY INPUT]]]";
-    Logger(WARN) << "</AppendedData>";
-    Logger(WARN) << "</VTKFile>";
+    Logger(Warn) << "VTK library not found. Using hardcoded vti import, expecting file layout:\n";
+    Logger(Warn) << "<VTKFile type=\"ImageData\" version=\"0.1\" byte_order=\"LittleEndian\" header_type=\"UInt64\">";
+    Logger(Warn) << "<ImageData WholeExtent=\"0 [WIDTH] 0 [HEIGHT] 0 [DEPTH]\" Origin=\"0 0 0\" Spacing=\"1.000000e+00 1.000000e+00 1.000000e+00\">";
+    Logger(Warn) << "<CellData Scalars=\"[...]\">";
+    Logger(Warn) << "<DataArray type=\"UInt32\" Name=\"[...]\" format=\"appended\" offset=\"0\" NumberOfComponents=\"1\"/>";
+    Logger(Warn) << "</CellData>";
+    Logger(Warn) << "</ImageData>";
+    Logger(Warn) << "<AppendedData encoding=\"raw\">";
+    Logger(Warn) << "[[[RAW ARRAY INPUT]]]";
+    Logger(Warn) << "</AppendedData>";
+    Logger(Warn) << "</VTKFile>";
     return load_nastja_volume_from_vti<T>(url, formatLabel, gpuFormat);
 #endif
 }

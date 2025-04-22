@@ -336,10 +336,10 @@ protected:
                 }
                 if (!consumed) {
                     parameter_label.pop_back();
-                    Logger(WARN) << "Read unknown parameter " << parameter_label << " in window " << m_name;
+                    Logger(Warn) << "Read unknown parameter " << parameter_label << " in window " << m_name;
                 }
                 if ((!parameter_stream.eof() && parameter_stream.fail()) || (!in.eof() && in.fail())) {
-                    Logger(WARN) << "Error reading parameter " << parameter_label << " in window " << m_name;
+                    Logger(Warn) << "Error reading parameter " << parameter_label << " in window " << m_name;
                     return false;
                 }
             }
@@ -384,7 +384,7 @@ public:
     bool removeColumn(std::string windowName, int column) {
         if(!m_windows.contains(windowName))
         {
-            Logger(WARN) << "removeColumn: GUI Window " << windowName << " does not exist";
+            Logger(Warn) << "removeColumn: GUI Window " << windowName << " does not exist";
             return false;
         }
         return m_windows[windowName].removeColumn(column);
@@ -422,7 +422,7 @@ public:
                 while((line.empty() || line.front() != '[' || line.back() != ']') && in.good()) {
                     // skip any empty lines
                     if (!std::ranges::all_of(line, [](const unsigned char& c) { return std::isspace(c); })) {
-                        Logger(WARN) << "Parameter import skipping non-key line " << line;
+                        Logger(Warn) << "Parameter import skipping non-key line " << line;
                     }
                     std::getline(in, line);
                 }
@@ -436,7 +436,7 @@ public:
             // TODO: camera should be registered in one of the windows?
             if (window_name == "Camera") {
                 if (!camera) {
-                    Logger(WARN) << "Parameter import error: Reading [Camera] but camera is not set!";
+                    Logger(Warn) << "Parameter import error: Reading [Camera] but camera is not set!";
                     return false;
                 }
                 window_name = "";
@@ -454,13 +454,13 @@ public:
                     }
                 }
                 if (!found) {
-                    Logger(WARN) << "Parameter import read unknown window " << window_name << ".";
+                    Logger(Warn) << "Parameter import read unknown window " << window_name << ".";
                     window_name = "";
                 }
             }
 
             if (!in.eof() && in.fail()) {
-                Logger(WARN) << "Parameter import error after reading parameters for [" << window_name << "].";
+                Logger(Warn) << "Parameter import error after reading parameters for [" << window_name << "].";
                 return false;
             }
         }

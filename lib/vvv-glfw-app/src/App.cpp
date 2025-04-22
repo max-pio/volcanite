@@ -42,7 +42,7 @@ namespace vvv {
 
     static void check_vk_result(VkResult err) {
         if (err != 0) {
-            vvv::Logger(vvv::ERROR) << "Vulkan error " << vk::to_string(static_cast<vk::Result>(err));
+            vvv::Logger(vvv::Error) << "Vulkan error " << vk::to_string(static_cast<vk::Result>(err));
             if (err < 0) {
                 abort();
             }
@@ -98,7 +98,7 @@ namespace vvv {
             case vk::Result::eSuccess:
                 break;
             case vk::Result::eSuboptimalKHR:
-                vvv::Logger(vvv::WARN)
+                vvv::Logger(vvv::Warn)
                         << "VK_SUBOPTIMAL_KHR: A swapchain no longer matches the surface properties exactly (returned from vkAcquireNextImageKHR)";
                 break;
             case vk::Result::eErrorOutOfDateKHR:
@@ -430,7 +430,7 @@ namespace vvv {
             glfwSetWindowIcon(m_window, 1, &icon);
             stbi_image_free(icon.pixels);
         } else {
-            Logger(WARN) << "Unable to load volcanite_icon_256.png application icon.";
+            Logger(Warn) << "Unable to load volcanite_icon_256.png application icon.";
         }
     }
 
@@ -825,7 +825,7 @@ namespace vvv {
 
         // shader reload
         if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
-            vvv::Logger(vvv::INFO) << "reloading shaders";
+            vvv::Logger(vvv::Info) << "reloading shaders";
             recreateShaderResources();
             writePipelineCacheToDisk(getDevice());
         }
@@ -856,21 +856,21 @@ namespace vvv {
                 if (m_video_timing.has_value()) {
                     m_video_timing->close();
                     m_video_timing = {};
-                    vvv::Logger(vvv::INFO) << "compute video file from frames in " << m_video_file_path << " with:";
-                    vvv::Logger(vvv::INFO) << " ffmpeg -f concat -safe 0 -i video_timing.txt video.mp4";
+                    vvv::Logger(vvv::Info) << "compute video file from frames in " << m_video_file_path << " with:";
+                    vvv::Logger(vvv::Info) << " ffmpeg -f concat -safe 0 -i video_timing.txt video.mp4";
                 }
 
                 // output timing of path
                 avg_ms /= static_cast<double>(avg_ms_samples);
                 var_ms /= static_cast<double>(avg_ms_samples);
-                vvv::Logger(vvv::INFO) << "min / avg (std.dev.) / max [ms/frame]";
-                vvv::Logger(vvv::INFO) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms << " ("
+                vvv::Logger(vvv::Info) << "min / avg (std.dev.) / max [ms/frame]";
+                vvv::Logger(vvv::Info) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms << " ("
                                        << std::sqrt(var_ms - (avg_ms * avg_ms)) << ") " << " / " << max_ms
                                        << " | " << avg_ms_samples << " frames rendered.";
             } else {
                 m_record_out = std::ofstream(m_record_file_path, std::ios::out | std::ios::binary);
                 if (!m_record_out->is_open()) {
-                    vvv::Logger(vvv::WARN) << "could not open recording output file " << m_record_file_path;
+                    vvv::Logger(vvv::Warn) << "could not open recording output file " << m_record_file_path;
                     m_record_out = {};
                     return;
                 }
@@ -878,7 +878,7 @@ namespace vvv {
                 // create an output file for our timings
                 m_video_timing = std::ofstream(m_video_file_path + "_timing.txt", std::ios::out);
                 if (!m_video_timing->is_open()) {
-                    vvv::Logger(vvv::WARN) << "could not open video timing file " << m_video_file_path << "_timing.txt";
+                    vvv::Logger(vvv::Warn) << "could not open video timing file " << m_video_file_path << "_timing.txt";
                     m_video_timing = {};
                 }
                 m_video_last_timestamp = glfwGetTime();
@@ -901,7 +901,7 @@ namespace vvv {
                 // output timing of path
                 avg_ms /= static_cast<double>(avg_ms_samples);
                 var_ms /= static_cast<double>(avg_ms_samples);
-                vvv::Logger(vvv::WARN) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms
+                vvv::Logger(vvv::Warn) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms
                                        << " ($\\sigma=" << std::sqrt(var_ms - (avg_ms * avg_ms)) << "$) " << " / "
                                        << max_ms << " total avg ms " << avg_ms << " | " << avg_ms_samples << " frames rendered.";
             }
@@ -909,7 +909,7 @@ namespace vvv {
             else {
                 m_record_in = std::ifstream(m_record_file_path, std::ios::in | std::ios::binary);
                 if (!m_record_in->is_open()) {
-                    vvv::Logger(vvv::WARN) << "could not open recording input file " << m_record_file_path;
+                    vvv::Logger(vvv::Warn) << "could not open recording input file " << m_record_file_path;
                     m_record_in = {};
                 }
 
@@ -927,7 +927,7 @@ namespace vvv {
             // open the camera path file
             m_record_in = std::ifstream(m_record_file_path, std::ios::in | std::ios::binary);
             if (!m_record_in->is_open()) {
-                vvv::Logger(vvv::WARN) << "could not open recording input file " << m_record_file_path;
+                vvv::Logger(vvv::Warn) << "could not open recording input file " << m_record_file_path;
                 m_record_in = {};
                 return;
             }
@@ -988,7 +988,7 @@ namespace vvv {
                 // output timing of path
                 avg_ms /= static_cast<double>(avg_ms_samples);
                 var_ms /= static_cast<double>(avg_ms_samples);
-                vvv::Logger(vvv::WARN) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms
+                vvv::Logger(vvv::Warn) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms
                                        << " ($\\sigma=" << std::sqrt(var_ms - (avg_ms * avg_ms)) << "$) " << " / "
                                        << max_ms  << " | " << avg_ms_samples << " frames rendered.";
             }
@@ -1109,7 +1109,7 @@ namespace vvv {
     void Application::logLibraryAvailabilty() {
         vvv::logLibraryAvailabilty();
 #ifdef IMGUI
-        vvv::Logger(vvv::DEBUG) << "ImGUI " + std::string(ImGui::GetVersion()) << +" available.";
+        vvv::Logger(vvv::Debug) << "ImGUI " + std::string(ImGui::GetVersion()) << +" available.";
 #endif
     }
 

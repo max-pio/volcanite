@@ -30,11 +30,11 @@ int main() {
     vvv::Paths::initPaths(DATA_DIRS);
 
     // create GPU context
-    Logger(INFO, true) << "Create GPU context..";
+    Logger(Info, true) << "Create GPU context..";
     DefaultGpuContext ctx;
     CSGVBenchmarkPass::configureExtensionsAndLayersAndFeatures(&ctx);
     ctx.createGpuContext();
-    Logger(INFO) << "Create GPU context (ok)";
+    Logger(Info) << "Create GPU context (ok)";
 
     // create dummy segmentation volume
     glm::uvec3 dim = {100, 80, 95};
@@ -42,7 +42,7 @@ int main() {
 
     CompressedSegmentationVolume csgv;
     {
-        Logger(INFO) << "Nibble";
+        Logger(Info) << "Nibble";
         csgv.setCompressionOptions64(32, NIBBLE_ENC, OP_ALL, false);
         csgv.compress(volume->dataConst(), dim, false);
         {
@@ -53,7 +53,7 @@ int main() {
         }
         csgv.clear();
 
-        Logger(INFO) << "Range ANS with Palettized Cache";
+        Logger(Info) << "Range ANS with Palettized Cache";
         size_t freq[32];
         csgv.setCompressionOptions64(64, NIBBLE_ENC, OP_ALL, false);
         csgv.compressForFrequencyTable(volume->dataConst(), dim, freq, 2, false, false);
@@ -67,7 +67,7 @@ int main() {
         }
         csgv.clear();
 
-        Logger(INFO) << "Double Table Range ANS";
+        Logger(Info) << "Double Table Range ANS";
         csgv.setCompressionOptions64(16, NIBBLE_ENC, OP_ALL, false);
         csgv.compressForFrequencyTable(volume->dataConst(), dim, freq, 2, true, false);
         csgv.setCompressionOptions64(16, DOUBLE_TABLE_RANS_ENC, OP_ALL, false, freq, freq + 16);
@@ -82,7 +82,7 @@ int main() {
 
     // Random Access Decoding
     {
-        Logger(INFO) << "Random Access Nibble";
+        Logger(Info) << "Random Access Nibble";
         csgv.setCompressionOptions64(32, NIBBLE_ENC, OP_ALL_WITHOUT_STOP & OP_ALL_WITHOUT_DELTA, true);
         csgv.compress(volume->dataConst(), dim, false);
         {
@@ -91,7 +91,7 @@ int main() {
             ctx.sync->hostWaitOnDevice({awaitable});
             benchmark.freeResources();
         }
-        Logger(INFO) << "Random Access Nibble (Shared Memory)";
+        Logger(Info) << "Random Access Nibble (Shared Memory)";
         {
             CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, false, true);
             std::shared_ptr<Awaitable> awaitable = benchmark.execute();
@@ -100,7 +100,7 @@ int main() {
         }
         csgv.clear();
 
-        Logger(INFO) << "Random Access Huffman Shaped Wavelet Matrix";
+        Logger(Info) << "Random Access Huffman Shaped Wavelet Matrix";
         csgv.setCompressionOptions64(16, HUFFMAN_WM_ENC, OP_ALL_WITHOUT_DELTA, true);
         csgv.compress(volume->dataConst(), dim, false);
         {
@@ -109,7 +109,7 @@ int main() {
             ctx.sync->hostWaitOnDevice({awaitable});
             benchmark.freeResources();
         }
-        Logger(INFO) << "Random Access Huffman Shaped Wavelet Matrix (Shared Memory)";
+        Logger(Info) << "Random Access Huffman Shaped Wavelet Matrix (Shared Memory)";
         {
             CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, false, true);
             std::shared_ptr<Awaitable> awaitable = benchmark.execute();

@@ -52,7 +52,7 @@ public:
     /// will keep the resource alive until this copy is done. Make sure that the owner of this MultiBuffering is calling cleanKeepAlives() in the correct place.
     void keepAlive(std::shared_ptr<void> resource) {
         if (m_resourcesToKeepAlive[m_currIdx].size() >= 50)
-            Logger(WARN) << "MultiBuffering::keepAlive(): more than 50 resources are kept alive for this frame. Please check that cleanKeepAlives() is called on this MultiBuffering!";
+            Logger(Warn) << "MultiBuffering::keepAlive(): more than 50 resources are kept alive for this frame. Please check that cleanKeepAlives() is called on this MultiBuffering!";
         m_resourcesToKeepAlive[m_currIdx].emplace_back(std::move(resource));
     }
 

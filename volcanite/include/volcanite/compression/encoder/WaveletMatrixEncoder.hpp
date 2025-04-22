@@ -143,7 +143,7 @@ public:
         uint32_t compile_constant_hash;
         in.read(reinterpret_cast<char *>(&compile_constant_hash), sizeof(uint32_t));
         if (compile_constant_hash != getCompileConstantsHash()) {
-            Logger(ERROR) << "WaveletMatrixEncoder import error: file was encoded with different compile constants.";
+            Logger(Error) << "WaveletMatrixEncoder import error: file was encoded with different compile constants.";
             return false;
         }
         return true;

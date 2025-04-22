@@ -179,7 +179,7 @@ public:
     void setCPUThreadCount(uint32_t thread_count = 0u) {
         uint32_t hardware_concurrency = std::thread::hardware_concurrency();
         if(thread_count > hardware_concurrency)
-            Logger(WARN) << "setting thread count of " << thread_count << " > hardware concurrency of " << hardware_concurrency;
+            Logger(Warn) << "setting thread count of " << thread_count << " > hardware concurrency of " << hardware_concurrency;
 
         if(thread_count == 0u)
             m_cpu_threads = hardware_concurrency;
@@ -235,8 +235,8 @@ public:
     /// @param compress_first if true, the volume is compressed before testing.
     [[nodiscard]] bool test(const std::vector<uint32_t>& volume, const glm::uvec3 volume_dim, bool compress_first=false) override {
         if(!VolumeCompressionBase::test(volume, volume_dim, compress_first)) {
-            Logger(ERROR) << "skipping coarser levels of detail...";
-            Logger(INFO) << "-------------------------------------------------------------";
+            Logger(Error) << "skipping coarser levels of detail...";
+            Logger(Info) << "-------------------------------------------------------------";
             return false;
         }
         return testLOD(volume, volume_dim);
@@ -569,7 +569,7 @@ public:
         return shader_defines;
     }
 
-    void printBrickInfo(glm::uvec3 brick, loglevel log_level = INFO) const;
+    void printBrickInfo(glm::uvec3 brick, loglevel log_level = Info) const;
 
     void printBrickEncoding(uint32_t brick_idx) const;
 

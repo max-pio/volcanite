@@ -38,11 +38,11 @@ constexpr int RET_EXPORT_ERROR = 5;
 
 int export_texture(Texture* tex, const std::string& export_file_path) {
     try {
-        Logger(INFO) << "Exporting render output to " << export_file_path;
+        Logger(Info) << "Exporting render output to " << export_file_path;
         tex->writeFile(export_file_path);
     }
     catch(const std::runtime_error& e) {
-        Logger(ERROR) << "Render export error: " << e.what();
+        Logger(Error) << "Render export error: " << e.what();
         return RET_EXPORT_ERROR;
     }
     return 0;
@@ -74,11 +74,11 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
     int accumulation_frames = renderer->getTargetAccumulationFrames();
     auto texture = renderEngine->renderFrames({.accumulation_samples=static_cast<size_t>(accumulation_frames > 0 ? accumulation_frames : 300)});
     if(texture == nullptr) {
-        Logger(ERROR) << "internal rendering error";
+        Logger(Error) << "internal rendering error";
         return RET_RENDER_ERROR;
     }
     if(export_texture(texture.get(), args.screenshot_output_file) != RET_SUCCESS) {
-        Logger(ERROR) << "image export error";
+        Logger(Error) << "image export error";
         return RET_EXPORT_ERROR;
     }
     texture.reset();
@@ -156,7 +156,7 @@ double computeImageRMSE(const std::string& path1, const std::string& path2, floa
         diff_image_out.erase(diff_image_out.rfind('.'), 4);
         diff_image_out.append("_DIFF_");
         diff_image_out.append(path2.substr(path2.rfind('/')+1));
-        Logger(DEBUG) << "writing difference image " << absolute(std::filesystem::path(diff_image_out));
+        Logger(Debug) << "writing difference image " << absolute(std::filesystem::path(diff_image_out));
         stbi_write_png(diff_image_out.c_str(), w1, h1, c1,
                        reinterpret_cast<const void*>(image1), w1 * c1);
     }
@@ -189,10 +189,10 @@ int main() {
     // for all test configurations: export one render image each
     for (const auto& args : RENDERING_TEST_CONFIGS) {
         if(!args.screenshot_output_file.ends_with(".png")) {
-            Logger(ERROR) << "must provide export file path for render test run as '*.png'";
+            Logger(Error) << "must provide export file path for render test run as '*.png'";
             return RET_INVALID_ARG;
         }
-        Logger(INFO) << "Rendering output " << args.screenshot_output_file;
+        Logger(Info) << "Rendering output " << args.screenshot_output_file;
 
         // compress the volume
         csgv->clear();
@@ -224,37 +224,37 @@ int main() {
         error_count[args.screenshot_output_file] = 0;
         max_id_string_length = glm::max(static_cast<int>(args.screenshot_output_file.length()), max_id_string_length);
     }
-    Logger(DEBUG) << "----------------";
+    Logger(Debug) << "----------------";
     int result = RET_SUCCESS;
     for (int img_a = 0; img_a < RENDERING_TEST_CONFIGS.size(); img_a++) {
         for (int img_b = img_a + 1; img_b < RENDERING_TEST_CONFIGS.size(); img_b++) {
             double rmse = computeImageRMSE(RENDERING_TEST_CONFIGS[img_a].screenshot_output_file,
                                            RENDERING_TEST_CONFIGS[img_b].screenshot_output_file, 0.01);
             if (rmse < 0.) {
-                Logger(ERROR) << "Image loading error for "
+                Logger(Error) << "Image loading error for "
                               << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                               << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file;
                 error_count[RENDERING_TEST_CONFIGS[img_a].screenshot_output_file]++;
                 error_count[RENDERING_TEST_CONFIGS[img_b].screenshot_output_file]++;
                 result = RET_RENDER_ERROR;
             } else if (rmse >= 0.01) {
-                Logger(ERROR) << "Rendering differences with RMSE of " << rmse
+                Logger(Error) << "Rendering differences with RMSE of " << rmse
                               << " for images " << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                               << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file;
                 result = RET_RENDER_ERROR;
                 error_count[RENDERING_TEST_CONFIGS[img_a].screenshot_output_file]++;
                 error_count[RENDERING_TEST_CONFIGS[img_b].screenshot_output_file]++;
             } else {
-                Logger(DEBUG) << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
+                Logger(Debug) << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
                                         << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file << " ok (RMSE " << rmse << ")";
             }
         }
     }
 
-    Logger(DEBUG) << "Pair-Wise Comparison Error Counts:";
+    Logger(Debug) << "Pair-Wise Comparison Error Counts:";
     for (const auto& args : RENDERING_TEST_CONFIGS)
-        Logger(DEBUG) << fmt::vformat("{:" + std::to_string(max_id_string_length) + "}", fmt::make_format_args(args.screenshot_output_file))
+        Logger(Debug) << fmt::vformat("{:" + std::to_string(max_id_string_length) + "}", fmt::make_format_args(args.screenshot_output_file))
                            << "  " << error_count[args.screenshot_output_file];
-    Logger(DEBUG) << ((result == RET_SUCCESS) ? "  success" : "  errors");
+    Logger(Debug) << ((result == RET_SUCCESS) ? "  success" : "  errors");
     return result;
 }

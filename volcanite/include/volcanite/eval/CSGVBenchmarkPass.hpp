@@ -129,7 +129,7 @@ class CSGVBenchmarkPass : public PassCompute {
                                                       time_stamp_avail.size() * sizeof(uint64_t), time_stamp_avail.data(),
                                                       2 * sizeof(uint64_t), vk::QueryResultFlagBits::e64 | vk::QueryResultFlagBits::eWithAvailability);
             if (query_res != vk::Result::eSuccess) {
-                Logger(WARN) << "Could not query time stamp.";
+                Logger(Warn) << "Could not query time stamp.";
                 return -1.f;
             }
 

@@ -199,7 +199,7 @@ namespace vvv {
 
             switch (be->type) {
                 case GuiTF1D: {
-                    Logger(WARN) << "Exporting transfer functions not yet supported!";
+                    Logger(Warn) << "Exporting transfer functions not yet supported!";
                     break;
                 }
                 case GuiBool: {
@@ -310,7 +310,7 @@ namespace vvv {
                 case GuiCustomCode:
                     break;
                 default: {
-                    Logger(WARN) << "Could not export parameter type " << be->type << " for entry " << be->label;
+                    Logger(Warn) << "Could not export parameter type " << be->type << " for entry " << be->label;
                     break;
                 }
             }
@@ -330,7 +330,7 @@ namespace vvv {
         in >> label;
         std::string expected = sanitizeExportString(be->label, be->id) + ":";
         if(label != expected) {
-            Logger(WARN) << "Reading parameter for " << label << " instead of expected " << expected;
+            Logger(Warn) << "Reading parameter for " << label << " instead of expected " << expected;
             return false;
         }
         return true;
@@ -360,7 +360,7 @@ namespace vvv {
                     break;
 
                 case GuiTF1D: {
-                    Logger(WARN) << "Importing transfer functions not yet supported.";
+                    Logger(Warn) << "Importing transfer functions not yet supported.";
                     break;
                 }
                 case GuiBool: {
@@ -446,7 +446,7 @@ namespace vvv {
                         }
                     }
                     if(option < 0 ) {
-                        Logger(WARN) << "Could not set option " << v << " for parameter " << e->label;
+                        Logger(Warn) << "Could not set option " << v << " for parameter " << e->label;
                         return false;
                     }
                     *e->selection = option;
@@ -470,7 +470,7 @@ namespace vvv {
                     size_t matCount;
                     parameter_stream >> matCount;
                     if(e->materials->size() != matCount) {
-                        Logger(ERROR) << "Material count does not match imported file material count";
+                        Logger(Error) << "Material count does not match imported file material count";
                         return false;
                     }
 
@@ -497,7 +497,7 @@ namespace vvv {
                         size_t colormap_control_points = 0;
                         parameter_stream >> colormap_control_points;
                         if (colormap_control_points > 65536) {
-                            Logger(ERROR) << "Invalid color map control point count " << colormap_control_points;
+                            Logger(Error) << "Invalid color map control point count " << colormap_control_points;
                             return false;
                         }
                         cm.color.resize(colormap_control_points);
@@ -511,7 +511,7 @@ namespace vvv {
                         int type;
                         parameter_stream >> type;
                         if(type < 0 || type > 3) {
-                            Logger(ERROR) << "Unsupported color map type " << type;
+                            Logger(Error) << "Unsupported color map type " << type;
                             return false;
                         }
 
@@ -521,7 +521,7 @@ namespace vvv {
                     break;
                 }
                 default: {
-                    Logger(WARN) << "Could not import parameter type " << be->type << " for entry " << be->label;
+                    Logger(Warn) << "Could not import parameter type " << be->type << " for entry " << be->label;
                     break;
                 }
             }

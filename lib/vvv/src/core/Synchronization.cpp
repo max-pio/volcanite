@@ -281,7 +281,7 @@ AwaitableHandle Synchronization::createAwaitable(AwaitableList predecessors, vk:
 size_t Synchronization::createAnotherSemaphore() {
     const auto semaphoreId = m_semaphore.size();
     if (semaphoreId == 501)
-        Logger(WARN) << "vvv::Synchronization already created 500 timeline semaphores. You probably did something wrong.";
+        Logger(Warn) << "vvv::Synchronization already created 500 timeline semaphores. You probably did something wrong.";
 
     m_semaphore.emplace_back(std::make_unique<TimelineSemaphore>(semaphoreId));
     m_executionState.emplace_back(0);

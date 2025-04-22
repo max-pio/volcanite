@@ -87,8 +87,8 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         camera_auto_rotate_frames = 1;
     }
 
-    Logger(INFO) << "rendering " << (camera_auto_rotate_frames == 0u ? (" camera poses from " + cfg.record_file_in)
-                                                    : (std::to_string(camera_auto_rotate_frames) +" camera pose(s)"))
+    Logger(Info) << "rendering " << (camera_auto_rotate_frames == 0u ? (" camera poses from " + cfg.record_file_in)
+                                                                     : (std::to_string(camera_auto_rotate_frames) +" camera pose(s)"))
                    << " with " + std::to_string(cfg.accumulation_samples) << " frame(s) each";
 
     // interpolation start and end values (rotation around Y axis and zoom)
@@ -180,11 +180,11 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     if (!cfg.video_fmt_file_out.empty()) {
         frame_idx--; // frame_idx is now the number of frames, but the last index is one before
         std::string last_output_image_path = fmt::vformat(cfg.video_fmt_file_out, fmt::make_format_args(frame_idx));
-        Logger(INFO) << "exporting screenshot to " << last_output_image_path;
+        Logger(Info) << "exporting screenshot to " << last_output_image_path;
         ret_tex->writeFile(last_output_image_path);
     }
 
-    Logger(INFO) << "rendering of " << (frame_idx * cfg.accumulation_samples)
+    Logger(Info) << "rendering of " << (frame_idx * cfg.accumulation_samples)
                       << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
     return ret_tex;
 }

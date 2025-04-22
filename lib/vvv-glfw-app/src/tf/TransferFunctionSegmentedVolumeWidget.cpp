@@ -184,7 +184,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                         ImGui::PushID(id++);
                         if (ImGui::Button("Choose Colormap File")) {
                             if (!pfd::settings::available()) {
-                                Logger(WARN)
+                                Logger(Warn)
                                         << "Can not open file dialog for import PNG. Choose other segmentation volume transfer function colormap";
                                 break;
                             }
@@ -210,7 +210,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                                     stbi_image_free(image);
                                     colormapChanged = true;
                                 } else {
-                                    Logger(ERROR) << "Failed to load png colormap: " << stbi_failure_reason();
+                                    Logger(Error) << "Failed to load png colormap: " << stbi_failure_reason();
                                 }
                             }
                         }
@@ -219,7 +219,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                         break;
                     }
                     default:
-                        Logger(WARN) << "unknown segmentation volume transfer function colormap " << colormap_config.type;
+                        Logger(Warn) << "unknown segmentation volume transfer function colormap " << colormap_config.type;
                 }
 
                 if (colormapChanged) {

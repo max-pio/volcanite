@@ -358,7 +358,7 @@ namespace volcanite {
         }
         fout.close();
 
-        Logger(INFO) << "exported csgv operations of center brick as hex codes to" << path;
+        Logger(Info) << "exported csgv operations of center brick as hex codes to" << path;
     }
 
     void CompressedSegmentationVolume::exportAllBrickOperations(const std::string& path) const {
@@ -391,7 +391,7 @@ namespace volcanite {
                 uint32_t end4bit = (getBrickEncodingLength(brick_idx) - getBrickPaletteLength(brick_idx)) * 8; // (total brick size - palette size) * 8
 
                 if(static_cast<size_t>(top_pointer) + (end4bit - start4bit) >= UINT32_MAX) {
-                    Logger(ERROR) << "exceeding 32 bit index limit for operation export. Stopping export before brick " << brick_idx << " out of " << getBrickIndexCount();
+                    Logger(Error) << "exceeding 32 bit index limit for operation export. Stopping export before brick " << brick_idx << " out of " << getBrickIndexCount();
                     break;
                 }
 
@@ -422,7 +422,7 @@ namespace volcanite {
                 uint32_t end32bit = (getBrickEncodingLength(brick_idx) - getBrickPaletteLength(brick_idx)); // (total brick size - palette size) * 8
 
                 if(static_cast<size_t>(top_pointer) + (end32bit - start32bit) >= UINT32_MAX) {
-                    Logger(ERROR) << "exceeding 32 bit index limit for operation export. Stopping export before brick " << brick_idx << " out of " << getBrickIndexCount();
+                    Logger(Error) << "exceeding 32 bit index limit for operation export. Stopping export before brick " << brick_idx << " out of " << getBrickIndexCount();
                     break;
                 }
 
@@ -447,7 +447,7 @@ namespace volcanite {
         fout.close();
         bs_out.close();
 
-        Logger(INFO) << "exported " << (DUMMY_DATA_OUTPUT ? "DUMMY " : "")
+        Logger(Info) << "exported " << (DUMMY_DATA_OUTPUT ? "DUMMY " : "")
                             << "csgv operations as " << ((m_encoding_mode == NIBBLE_ENC) ? " 4 bit codes " : " rANS stream")
                             <<  "to " << path << "_op.raw and [*]_op_starts.raw";
 

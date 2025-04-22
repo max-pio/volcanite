@@ -65,7 +65,7 @@ glm::vec4 vvv::cartesian2spherical(const glm::vec4& v) {
 std::vector<float> vvv::computeHistogram(const std::vector<float>& values, int bins, bool interpolate, float min, float max) {
     std::vector<float> histogram(bins, 0.f);
     if(min >= max) {
-        Logger(ERROR) << "min must be smaller than max when computing a histogram. Returning zero.";
+        Logger(Error) << "min must be smaller than max when computing a histogram. Returning zero.";
         return histogram;
     }
 
@@ -90,24 +90,24 @@ std::vector<float> vvv::computeHistogram(const std::vector<float>& values, int b
 
 void vvv::logLibraryAvailabilty() {
     if (system(":") >= 0)
-        vvv::Logger(vvv::DEBUG) << "System calls available.";
+        vvv::Logger(vvv::Debug) << "System calls available.";
     else
-        vvv::Logger(vvv::WARN) << "System calls not available.";
+        vvv::Logger(vvv::Warn) << "System calls not available.";
 
 #ifdef _OPENMP
     {
         std::unordered_map<unsigned,std::string> ver{{200505,"2.5"},{200805,"3.0"},{201107,"3.1"},{201307,"4.0"},{201511,"4.5"},{201811,"5.0"},{202011,"5.1"}};
         if(ver.contains(_OPENMP))
-            vvv::Logger(vvv::DEBUG) << "OpenMP " + ver.at(_OPENMP) + " available.";
+            vvv::Logger(vvv::Debug) << "OpenMP " + ver.at(_OPENMP) + " available.";
         else
-            vvv::Logger(vvv::DEBUG) << "OpenMP " + std::to_string(_OPENMP) + " available.";
+            vvv::Logger(vvv::Debug) << "OpenMP " + std::to_string(_OPENMP) + " available.";
     }
 #else
     vvv::Logger(vvv::WARN) << "OpenMP not available.";
 #endif
 
 #ifdef LIB_HIGHFIVE
-    vvv::Logger(vvv::DEBUG) << "HDF5 library available.";
+    vvv::Logger(vvv::Debug) << "HDF5 library available.";
 #else
     vvv::Logger(vvv::WARN) << "HDF5 library not available.";
 #endif

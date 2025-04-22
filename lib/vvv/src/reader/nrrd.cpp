@@ -326,7 +326,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_nrrd_with_cast_(const std:
         } else if (fieldName == "kinds") {
             // TODO 'kinds' field not applied when reading NRRD volume
         } else {
-            Logger(WARN) << "ignoring unknown NRRD header field: " << fieldName;
+            Logger(Warn) << "ignoring unknown NRRD header field: " << fieldName;
         }
     }
 

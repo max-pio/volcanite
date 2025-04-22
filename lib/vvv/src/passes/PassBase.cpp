@@ -72,7 +72,7 @@ DescriptorBinding PassBase::findDescriptorBindingByName(const std::string &name)
         }
     }
 
-    Logger(ERROR) << "unknown binding '" + name + "' in pass '" + m_label + "'";
+    Logger(Error) << "unknown binding '" + name + "' in pass '" + m_label + "'";
     throw std::runtime_error("unknown binding '" + name + "' in pass '" + m_label + "'");
 }
 

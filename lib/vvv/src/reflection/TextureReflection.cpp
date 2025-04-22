@@ -74,7 +74,7 @@ std::shared_ptr<Texture> reflectTexture(vvv::GpuContextPtr ctx, vk::ArrayProxy<c
     }
 
     if(array_dims_count > 0) {
-        Logger(WARN) << "reflecting texture array for " << label << " as single texture. Use reflectTextureArray instead of reflectTexture.";
+        Logger(Warn) << "reflecting texture array for " << label << " as single texture. Use reflectTextureArray instead of reflectTexture.";
     }
 
     if (!used) {
@@ -148,7 +148,7 @@ std::vector<std::shared_ptr<Texture>> reflectTextureArray(vvv::GpuContextPtr ctx
     }
 
     if(array_dims_count == 0) {
-        Logger(WARN) << "reflecting single texture " << label << " as array texture. Use reflectTexture instead of reflectTextureArray.";
+        Logger(Warn) << "reflecting single texture " << label << " as array texture. Use reflectTexture instead of reflectTextureArray.";
     }
 
     if (!used) {

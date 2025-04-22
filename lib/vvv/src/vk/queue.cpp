@@ -221,7 +221,7 @@ vvv::QueueFamilyIndices findQueueFamilyIndices(vk::PhysicalDevice physicalDevice
 
     for(int i = 0; i < queueFamilyProperties.size(); i++) {
         auto flags = queueFamilyProperties[i].queueFlags;
-        vvv::Logger(vvv::DEBUG) << "Queue Family " << i << ": "
+        vvv::Logger(vvv::Debug) << "Queue Family " << i << ": "
             << (flags & vk::QueueFlagBits::eGraphics ? "graphics ":"") << (flags & vk::QueueFlagBits::eCompute ? "compute ":"")
             << (flags & vk::QueueFlagBits::eTransfer ? "transfer ":"") << (flags & vk::QueueFlagBits::eSparseBinding ? "sparse_binding ":"")
             << (flags & vk::QueueFlagBits::eProtected ? "protected ":"")

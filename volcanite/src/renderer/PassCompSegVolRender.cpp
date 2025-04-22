@@ -39,7 +39,7 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
                                       vk::PipelineStageFlagBits::eComputeShader, {},
                                       {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite,
                                                          vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
-        Logger(DEBUG) << "hard reset brick cache";
+        Logger(Debug) << "hard reset brick cache";
     }
 
     // block request and visibility classification
@@ -151,10 +151,10 @@ std::vector<std::shared_ptr<Shader>> PassCompSegVolRender::createShaders() {
         ss << "Shader Definitions: ";
         for (const auto &s: m_shader_defines)
             ss << s << " ";
-        Logger(DEBUG) << ss.str();
+        Logger(Debug) << ss.str();
     }
     ShaderCompileErrorCallback compileErrorCallback = [](const ShaderCompileError& err) {
-        Logger(ERROR) << err.errorText;
+        Logger(Error) << err.errorText;
         return ShaderCompileErrorCallbackAction::USE_PREVIOUS_CODE;
     };
     return {std::make_shared<Shader>(SimpleGlslShaderRequest{.filename="volcanite/renderer/csgv_cacheclear.comp", .defines= m_shader_defines, .label="csgv_cacheclear.comp"}, compileErrorCallback),

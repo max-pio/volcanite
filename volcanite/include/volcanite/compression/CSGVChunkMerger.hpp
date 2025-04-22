@@ -81,17 +81,17 @@ public:
         // target a size of ~2GB per split encoding vector
         uint32_t target_uints_per_split_encoding = 536870912u;
 
-        Logger(INFO, true) << "Merging Compressed Segmentation Volume chunk files 0%";
+        Logger(Info, true) << "Merging Compressed Segmentation Volume chunk files 0%";
 
         // our final filename
         if (std::filesystem::exists(output_csgv_path)) {
-            Logger(WARN) << "File " << output_csgv_path << " already exists! Will be overwritten.";
+            Logger(Warn) << "File " << output_csgv_path << " already exists! Will be overwritten.";
         }
 
         // 1. load all chunk CSGV files into memory
         chunk_count = max_input_csgv_index + glm::ivec3(1);
         total_chunk_count = chunk_count.x * chunk_count.y * chunk_count.z;
-        Logger(INFO, true) << "Merging Compressed Segmentation Volume chunk files 0% (import " << total_chunk_count << " chunk csgv files)";
+        Logger(Info, true) << "Merging Compressed Segmentation Volume chunk files 0% (import " << total_chunk_count << " chunk csgv files)";
         chunks = new CompressedSegmentationVolume[total_chunk_count];
         for(uint32_t c = 0; c < total_chunk_count; c++) {
             glm::ivec3 chunk_index = sfc::Cartesian::i2p(c, chunk_count);
@@ -99,7 +99,7 @@ public:
 
             // double check here as verifying the compression is cheap
             if (!chunks[c].verifyCompression()) {
-                Logger(ERROR) << "Verification error when importing compressed chunk "
+                Logger(Error) << "Verification error when importing compressed chunk "
                             << formatChunkPath(input_csgv_template_path, chunk_index.x, chunk_index.y, chunk_index.z)
                             << " during merging.";
                 return nullptr;
@@ -109,7 +109,7 @@ public:
             max_brick_palette_count = glm::max(max_brick_palette_count, chunks[c].getMaxBrickPaletteCount());
 
             if(chunks[c].isUsingSeparateDetail()) {
-                Logger(ERROR) << "Detail separation can only be applied AFTER merging Compressed Segmentation Volumes. Import CSGV chunks must not use detail separation.";
+                Logger(Error) << "Detail separation can only be applied AFTER merging Compressed Segmentation Volumes. Import CSGV chunks must not use detail separation.";
                 return nullptr;
             }
             if(c == 0) {
@@ -119,7 +119,7 @@ public:
                 if((chunk_count.x > 1 && chunk_dimension.x % chunks[0].m_brick_size != 0)
                    || (chunk_count.y > 1 && chunk_dimension.y % chunks[0].m_brick_size != 0)
                    || (chunk_count.z > 1 && chunk_dimension.z % chunks[0].m_brick_size != 0)) {
-                    Logger(ERROR) << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunk dimension must be multiple of brick size.";
+                    Logger(Error) << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunk dimension must be multiple of brick size.";
                     return nullptr;
                 }
                 bricks_in_chunk = (chunk_dimension + chunks[0].m_brick_size - glm::uvec3(1u)) / chunks[0].m_brick_size;
@@ -131,14 +131,14 @@ public:
             } else {
                 // check if chunk CSGV use the same compression parameters
                 if (chunks[0].m_encoding_mode != chunks[c].getEncodingMode()) {
-                    Logger(ERROR)
+                    Logger(Error)
                             << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunks must use same encoding mode.";
                     return nullptr;
                 }
                 if ((!reference_frequency_table.empty() && reference_frequency_table != chunks[c].getCurrentFrequencyTable()) ||
                     (!reference_detail_frequency_table.empty() &&
                      reference_detail_frequency_table != chunks[c].getCurrentDetailFrequencyTable())) {
-                    Logger(ERROR)
+                    Logger(Error)
                             << "Merging Compressed Segmentation Volume chunk files failed. Input CSGV chunks must use same rANS frequency tables.";
                     return nullptr;
                 }
@@ -148,7 +148,7 @@ public:
                     && (chunk_dimension.x != chunks[c].getVolumeDim().x
                         || chunk_dimension.y != chunks[c].getVolumeDim().y
                         || chunk_dimension.z != chunks[c].getVolumeDim().z)) {
-                    Logger(ERROR)
+                    Logger(Error)
                             << "Merging Compressed Segmentation Volume chunk files failed. Inner CSGV chunks must have the same volume dimensions.";
                     return nullptr;
                 }
@@ -159,27 +159,27 @@ public:
         brick_count = (glm::uvec3(chunk_count - glm::ivec3(1)) * chunk_dimension + chunks[sfc::Cartesian::p2i(max_input_csgv_index, chunk_count)].getVolumeDim() - glm::uvec3(1)) / chunks[0].m_brick_size + 1u;
         total_brick_count = brick_count.x * brick_count.y * brick_count.z;
         if(total_brick_count > (1ull << 32) - 1ull) {
-            Logger(ERROR)
+            Logger(Error)
                     << "Merging Compressed Segmentation Volume chunk files failed. Brick count exceeds 32 bit range. Use a larger brick size.";
             return nullptr;
         }
-        Logger(INFO, true) << "Merging Compressed Segmentation Volume chunk files 0% (chunk import for " << str(complete_volume_dim) << " volume complete)";
+        Logger(Info, true) << "Merging Compressed Segmentation Volume chunk files 0% (chunk import for " << str(complete_volume_dim) << " volume complete)";
 
         // 2. start by creating two tmp files where we construct the combined brickstarts and encoding buffers
         std::string brickstarts_path = output_csgv_path.substr(0, output_csgv_path.length() - 5) + "_brickstarts.tmp";
         if (std::filesystem::exists(brickstarts_path))
-            Logger(WARN) << "Overwriting existing file " << brickstarts_path;
+            Logger(Warn) << "Overwriting existing file " << brickstarts_path;
         std::ofstream brickstarts_file(brickstarts_path, std::ios_base::out | std::ios::binary);
         if (!brickstarts_file.is_open()) {
-            Logger(ERROR) << "Unable to open file " << brickstarts_path << ". Skipping.";
+            Logger(Error) << "Unable to open file " << brickstarts_path << ". Skipping.";
             return nullptr;
         }
         std::string encoding_path = output_csgv_path.substr(0, output_csgv_path.length() - 5) + "_encoding.tmp";
         if (std::filesystem::exists(encoding_path))
-            Logger(WARN) << "Overwriting existing file " << encoding_path;
+            Logger(Warn) << "Overwriting existing file " << encoding_path;
         std::ofstream encoding_file(encoding_path, std::ios_base::out | std::ios::binary);
         if (!encoding_file.is_open()) {
-            Logger(ERROR) << "Unable to open file " << encoding_path << ". Skipping.";
+            Logger(Error) << "Unable to open file " << encoding_path << ". Skipping.";
             brickstarts_file.close();
             return nullptr;
         }
@@ -223,7 +223,7 @@ public:
             // Otherwise, the old split may become invalid.
             if(split_encoding_count == 1u && encoding_size + brick_encoding_size > target_uints_per_split_encoding) {
                 if(brick_idx == 0u) {
-                    Logger(WARN) << "Requested split encoding size is too small. Using minimal size.";
+                    Logger(Warn) << "Requested split encoding size is too small. Using minimal size.";
                 }
                 else {
                     brick_idx_to_enc_vector = brick_idx;
@@ -232,11 +232,11 @@ public:
             // Check if we have to start a new split encoding "vector" before writing the next brick's encoding.
             if(brick_idx / brick_idx_to_enc_vector >= split_encoding_count) {
                 if (encoding_size != encoding_size_uint32_t) {
-                    Logger(ERROR) << "Split encoding size overflow for array " << (split_encoding_count - 1)
+                    Logger(Error) << "Split encoding size overflow for array " << (split_encoding_count - 1)
                                        << ", uint size " << encoding_size;
                     return nullptr;
                 } else if(encoding_size > target_uints_per_split_encoding) {
-                    Logger(DEBUG) << "Brick index to encoding array mapping is underestimating sizes: "
+                    Logger(Debug) << "Brick index to encoding array mapping is underestimating sizes: "
                                       << "Split array " << (split_encoding_count - 1) << " with "
                                       << (static_cast<size_t>(encoding_size) * sizeof(uint32_t)) << " bytes.";
                 }
@@ -260,7 +260,7 @@ public:
             encoding_size += brick_encoding_size;
 
             if((static_cast<long>(brick_idx) * 100l / total_brick_count) * total_brick_count == static_cast<long>(brick_idx) * 100l) {
-                Logger(INFO, true) << "Merging Compressed Segmentation Volume chunk files " << std::fixed
+                Logger(Info, true) << "Merging Compressed Segmentation Volume chunk files " << std::fixed
                                    << std::setprecision(0)
                                    << 95.f * static_cast<float>(brick_idx) / static_cast<float>(total_brick_count)
                                    << "% (writing brick encodings)";
@@ -272,7 +272,7 @@ public:
             // final dummy brick_starts entry to denote the length of the last brick encoding
             uint32_t encoding_size_uint32_t = static_cast<uint32_t>(encoding_size);
             if (encoding_size_uint32_t != encoding_size) {
-                Logger(ERROR) << "Split encoding size overflow for array " << (split_encoding_count - 1) << ", size " << encoding_size;
+                Logger(Error) << "Split encoding size overflow for array " << (split_encoding_count - 1) << ", size " << encoding_size;
                 return nullptr;
             }
             brickstarts_file.write(reinterpret_cast<const char *>(&encoding_size_uint32_t), sizeof(uint32_t));
@@ -297,7 +297,7 @@ public:
 
         // 5. append tmp files together to form one valid csgv file
         {
-            Logger(INFO, true) << "Merging Compressed Segmentation Volume chunk files 95% (creating single file with complete volume)";
+            Logger(Info, true) << "Merging Compressed Segmentation Volume chunk files 95% (creating single file with complete volume)";
             if (std::filesystem::exists(output_csgv_path)) {
                 std::filesystem::remove(output_csgv_path);
             }
@@ -305,7 +305,7 @@ public:
             // open output and input file streams
             std::ofstream file(output_csgv_path, std::ios_base::out | std::ios::binary);
             if (!file.is_open()) {
-                Logger(ERROR) << "Unable to open file " << output_csgv_path << " for writing. Skipping.";
+                Logger(Error) << "Unable to open file " << output_csgv_path << " for writing. Skipping.";
                 return nullptr;
             }
 
@@ -339,13 +339,13 @@ public:
             size_t complete_brickstarts_size = total_brick_count + 1;
             file.write(reinterpret_cast<const char*>(&complete_brickstarts_size), sizeof(size_t));
             if (complete_brickstarts_size * sizeof(uint32_t) != std::filesystem::file_size(brickstarts_path)) {
-                Logger(ERROR) << "Brickstarts size " << std::filesystem::file_size(brickstarts_path) << " does not match the expected size " << (complete_brickstarts_size * sizeof(uint32_t));
+                Logger(Error) << "Brickstarts size " << std::filesystem::file_size(brickstarts_path) << " does not match the expected size " << (complete_brickstarts_size * sizeof(uint32_t));
                 file.close();
                 return nullptr;
             }
             std::ifstream brickstarts_file_in(brickstarts_path, std::ios_base::in | std::ios::binary);
             if (!brickstarts_file_in.is_open()) {
-                Logger(ERROR) << "Unable to open file " << brickstarts_path << " for read. Skipping.";
+                Logger(Error) << "Unable to open file " << brickstarts_path << " for read. Skipping.";
                 file.close();
                 return nullptr;
             }
@@ -355,7 +355,7 @@ public:
             // write number of split encoding buffers, all split encodings, and index to split array mapping
             std::ifstream encoding_file_in(encoding_path, std::ios_base::in | std::ios::binary);
             if (!encoding_file_in.is_open()) {
-                Logger(ERROR) << "Unable to open file " << encoding_path << " for read. Skipping.";
+                Logger(Error) << "Unable to open file " << encoding_path << " for read. Skipping.";
                 file.close();
                 return nullptr;
             }
@@ -371,7 +371,7 @@ public:
 
 
         // reimport complete CSGV file
-        Logger(INFO) << "Merging Compressed Segmentation Volume chunk files 100%. complete volume size " << str(complete_volume_dim) << "                ";
+        Logger(Info) << "Merging Compressed Segmentation Volume chunk files 100%. complete volume size " << str(complete_volume_dim) << "                ";
 
         // TODO: only if detail separation takes too long to perform on every import of the merged volume,
         //  perform detail separation here if requested and overwrite output file with separated detail.
@@ -385,7 +385,7 @@ public:
         std::shared_ptr<CompressedSegmentationVolume> full_csgv = std::make_shared<volcanite::CompressedSegmentationVolume>();
         bool reimport_success = full_csgv->importFromFile(output_csgv_path, false, true);
         if(!reimport_success) {
-            Logger(ERROR) << "Error re-importing exported merged Compressed Segmentation Volume from "
+            Logger(Error) << "Error re-importing exported merged Compressed Segmentation Volume from "
                                << output_csgv_path;
             return nullptr;
         }

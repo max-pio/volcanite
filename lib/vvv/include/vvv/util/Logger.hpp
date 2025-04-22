@@ -46,12 +46,12 @@ std::string arrayToString(const T* data, size_t count, const std::string& delimi
 
 
 
-enum loglevel { DEBUG, INFO, WARN, ERROR };
+enum loglevel { Debug, Info, Warn, Error };
 
 class Logger {
 public:
     Logger() {
-        m_msglevel = INFO;
+        m_msglevel = Info;
         m_out = &std::cout;
         m_overwriteThisLine = false;
         if (s_printHeader) {
@@ -59,33 +59,9 @@ public:
         }
     }
 
-#ifdef _WIN64
-    // TODO: not a great work around for the ERROR = 0 define in wingdi.h (windows.h)
-    explicit Logger(int level, bool overwriteWithNextLine = false) {
-        if(level == 0)
-            m_msglevel = ERROR;
-        else
-            m_msglevel = INFO;
-        if (m_msglevel > WARN)
-            m_out = &std::cerr;
-        else
-            m_out = &std::cout;
-
-        if(s_overwriteLastLine) {
-            operator<<("\r");
-            s_overwriteLastLine = false;
-        }
-        m_overwriteThisLine = overwriteWithNextLine;
-
-        if (s_printHeader) {
-            operator<<(getLabel(m_msglevel));
-        }
-    }
-#endif
-
     explicit Logger(loglevel type, bool overwriteWithNextLine = false) {
         m_msglevel = type;
-        if (m_msglevel > WARN)
+        if (m_msglevel > Warn)
             m_out = &std::cerr;
         else
             m_out = &std::cout;
@@ -131,7 +107,7 @@ public:
 private:
     bool m_opened = false;
     bool m_overwriteThisLine = false;
-    loglevel m_msglevel = DEBUG;
+    loglevel m_msglevel = Debug;
     std::ostream *m_out = &std::cout;
 
     static bool s_overwriteLastLine;
@@ -140,32 +116,32 @@ private:
         std::string label;
         if (s_useColors) {
             switch (type) {
-            case DEBUG:
+            case Debug:
                 label = "\033[32m[DEBUG] ";
                 break;
-            case INFO:
+            case Info:
                 label = "\033[0m[INFO]  ";
                 break;
-            case WARN:
+            case Warn:
                 label = "\033[33m[WARN]  ";
                 break;
-            case ERROR:
+            case Error:
                 label = "\033[31m[ERROR] ";
                 break;
             }
             return label;
         } else {
             switch (type) {
-            case DEBUG:
+            case Debug:
                 label = "[DEBUG] ";
                 break;
-            case INFO:
+            case Info:
                 label = "[INFO]  ";
                 break;
-            case WARN:
+            case Warn:
                 label = "[WARN]  ";
                 break;
-            case ERROR:
+            case Error:
                 label = "[ERROR] ";
                 break;
             }

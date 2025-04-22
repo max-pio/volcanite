@@ -56,7 +56,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         const size_t brick_size = m_compressed_segmentation_volume->getBrickSize();
         const size_t output_voxels_per_brick = brick_size * brick_size * brick_size;
         const size_t cache_bricks = static_cast<uint32_t>(m_cache_capacity * m_cache_base_element_uints / output_voxels_per_brick);
-        Logger(DEBUG) << "new data set with " << str(m_compressed_segmentation_volume->getBrickCount())
+        Logger(Debug) << "new data set with " << str(m_compressed_segmentation_volume->getBrickCount())
                       << " bricks added. Cache fits " << cache_bricks << " = "
                       << static_cast<uint32_t>(std::pow(static_cast<double>(cache_bricks), 1./3.))
                       << "^3 bricks on finest LoD. Need " << m_cache_palette_idx_bits
@@ -156,12 +156,12 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
     // if a screenshot export was requested, we do this here (not timed)
     if(m_download_frame_to_image_file.has_value() && m_mostRecentFrame.has_value()) {
-        Logger(INFO) << "exporting screenshot to " << m_download_frame_to_image_file.value();
+        Logger(Info) << "exporting screenshot to " << m_download_frame_to_image_file.value();
         try {
             m_mostRecentFrame->texture->writeFile(m_download_frame_to_image_file.value(), m_queue_family_index);
         }
         catch(const std::runtime_error& e) {
-            Logger(ERROR) << "image export error: " << e.what();
+            Logger(Error) << "image export error: " << e.what();
         }
         m_download_frame_to_image_file = {};
     }
@@ -265,7 +265,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             }
             cache_state << " in total: " << static_cast<double>(decoded_bytes_total) * BYTE_TO_MB << " MB";
             if (decoded_bytes_in_frame > 0)
-                Logger(INFO) << cache_state.str();
+                Logger(Info) << cache_state.str();
         }
     }
 
@@ -414,7 +414,7 @@ void CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers() {
             const uint32_t *detail_encoding = m_compressed_segmentation_volume->getBrickDetailEncoding(brick_idx);
             uint32_t detail_length = m_compressed_segmentation_volume->getBrickDetailEncodingLength(brick_idx);
             if(reserved_size != detail_length)
-                Logger(ERROR) << reserved_size << " vs " << detail_length << " for brick " << brick_idx;
+                Logger(Error) << reserved_size << " vs " << detail_length << " for brick " << brick_idx;
             assert(reserved_size == detail_length && "did not reserve fitting detail encoding area for brick.");
             memcpy(m_constructed_detail.data() + m_constructed_detail_starts[brick_idx], detail_encoding, reserved_size * sizeof(uint32_t));
         }
@@ -444,8 +444,8 @@ void CompressedSegmentationVolumeRenderer::setCompressedSegmentationVolume(
 
 
     if(csgv->getBrickCount().x < csgv->getLodCountPerBrick()) {
-        Logger(DEBUG) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
-                     ") in one dimension than there are brick level-of-details (" << csgv->getLodCountPerBrick() <<
+        Logger(Debug) << "CompressedSegmentationVolume has fewer bricks (" << csgv->getBrickCount().x <<
+                      ") in one dimension than there are brick level-of-details (" << csgv->getLodCountPerBrick() <<
                      "). This may break some shaders. Advice: Re-Compress with a smaller brick-size.";
     }
     m_compressed_segmentation_volume = std::move(csgv);
@@ -567,7 +567,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
         m_constructed_detail_starts.resize(bricks_in_volume + 1u, 0u);
         m_constructed_detail.resize(m_detail_capacity, 0u);
         if(detail_buffer_fits_whole_detail) {
-            Logger(WARN) << "GPU detail buffer fits the whole detail level. Performing full upload, effectively disabling detail streaming. Consider to not use detail streaming for better performance!";
+            Logger(Warn) << "GPU detail buffer fits the whole detail level. Performing full upload, effectively disabling detail streaming. Consider to not use detail streaming for better performance!";
 
             size_t offset = 0ul;
             size_t brick_idx = 0ul;
@@ -619,14 +619,14 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
         cache_uint_size = 1ul; // minimal size as the cache is not used regardless
     } else if (m_cache_mode == CACHE_VOXELS) {
         cache_uint_size = m_target_cache_size_MB * 1024 * 1024 / sizeof(uint32_t);
-        Logger(INFO) << "Allocating cache with size " << m_target_cache_size_MB << " MB";
+        Logger(Info) << "Allocating cache with size " << m_target_cache_size_MB << " MB";
     } else if (m_cache_mode == CACHE_BRICKS) {
         // limit cache size to maximum available GPU memory
         auto heap_budget_and_usage = getMemoryHeapBudgetAndUsage(*ctx);
         size_t free_heap_size_byte = heap_budget_and_usage.first - heap_budget_and_usage.second;
         if (m_target_cache_size_MB * 1024 * 1024 > free_heap_size_byte) {
             updateDeviceMemoryUsage();
-            Logger(WARN) << "not enough GPU memory available to provide target cache size of " << m_target_cache_size_MB
+            Logger(Warn) << "not enough GPU memory available to provide target cache size of " << m_target_cache_size_MB
                          << " MB. Using smaller cache. " << m_gui_device_mem_text;
             m_target_cache_size_MB = 0;
         }
@@ -660,7 +660,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
             // TODO: include m_cache_base_element_uints and/or m_cache_indices_per_uint when computing required cache size
         }
         if (m_target_cache_size_MB > maximum_req_cache_size_MB) {
-            Logger(DEBUG)
+            Logger(Debug)
                     << "Target cache size is bigger than required to store all LoDs of all bricks. Limitting size.";
             m_target_cache_size_MB = maximum_req_cache_size_MB;
         }
@@ -674,14 +674,14 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
 
         m_cache_capacity = (m_target_cache_size_MB * 1024 * 1024) / (m_cache_base_element_uints * sizeof(uint32_t));
         cache_uint_size = m_cache_capacity * m_cache_base_element_uints;
-        Logger(INFO) << "Allocating cache with size " << m_target_cache_size_MB << " MB at " << (m_cache_base_element_uints * 32u / 8u) << " bits per label";
+        Logger(Info) << "Allocating cache with size " << m_target_cache_size_MB << " MB at " << (m_cache_base_element_uints * 32u / 8u) << " bits per label";
     }
     size_t maxGPUBufferSize = getCtx()->getPhysicalDevice().getProperties().limits.maxStorageBufferRange;
     m_cache_buffer = std::make_shared<Buffer>(ctx, BufferSettings{.label = "CompressedSegmentationVolumeRenderer.m_cache_buffer", .byteSize = cache_uint_size * sizeof(uint32_t), .usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress, .memoryUsage = vk::MemoryPropertyFlagBits::eDeviceLocal});
     Buffer::deviceAddressUvec2(m_cache_buffer->getDeviceAddress(), &m_cache_buffer_address.x);
 
     updateDeviceMemoryUsage();
-    Logger(INFO) << "Device memory after initialization: " << m_gui_device_mem_text;
+    Logger(Info) << "Device memory after initialization: " << m_gui_device_mem_text;
 
 
     // UPLOAD TO GPU BUFFERS ----------------------------------
@@ -722,7 +722,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
 void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     setCtx(ctx);
     updateDeviceMemoryUsage();
-    Logger(INFO) << "Device memory on startup: " << m_gui_device_mem_text;
+    Logger(Info) << "Device memory on startup: " << m_gui_device_mem_text;
 
     // TODO: all rendering should happen on the compute queue, + queue ownership transfer to present for the Application
     m_queue_family_index = getCtx()->getQueueFamilyIndices().graphics.value();
@@ -1279,7 +1279,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         exportCurrentFrameToImage("./volcanite_output.png");
 #else
         if (!pfd::settings::available()) {
-            Logger(WARN) << "Can not open file dialog for screenshot export. Using default file ./volcanite_output.png";
+            Logger(Warn) << "Can not open file dialog for screenshot export. Using default file ./volcanite_output.png";
             exportCurrentFrameToImage("./volcanite_output.png");
             return;
         }
@@ -1297,7 +1297,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_gen->addAction([this]() {
         std::string file;
         if (!pfd::settings::available()) {
-            Logger(WARN) << "Can not open file dialog. Using default file ./parameters.vcfg";
+            Logger(Warn) << "Can not open file dialog. Using default file ./parameters.vcfg";
             file = "./parameters.vcfg";
         }
 
@@ -1314,7 +1314,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_gen->addAction([this]() {
         std::string file;
         if (!pfd::settings::available()) {
-            Logger(WARN) << "Can not open file dialog. Using default file ./parameters.vcfg";
+            Logger(Warn) << "Can not open file dialog. Using default file ./parameters.vcfg";
             file = "./parameters.vcfg";
         }
 
@@ -1609,7 +1609,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                     }
                 }
                 if(m_attribute_start_position[a] < 0)
-                    Logger(WARN) << "could not find an attribute slot for attribute " << m_csgv_db->getAttributeNames()[a] << " in " << numberOfSlots << " slots";
+                    Logger(Warn) << "could not find an attribute slot for attribute " << m_csgv_db->getAttributeNames()[a] << " in " << numberOfSlots << " slots";
             }
             // copy attribute to buffer
             if(m_attribute_start_position[a] >= 0) {
@@ -1711,7 +1711,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                         }
                         else {
                             if (!m_req_limit.random_area_pixel)
-                                Logger(WARN) << "Cache insufficient: unable to render all pixels under current request"
+                                Logger(Warn) << "Cache insufficient: unable to render all pixels under current request"
                                                      " limitation configuration. Increase cache size with --cache-size [MB]";
                             //m_req_limit.random_area_pixel = true;
                             m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x;
@@ -1748,7 +1748,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     void CompressedSegmentationVolumeRenderer::printGPUMemoryUsage() {
         CSGVRenderEvaluationResults res = getLastEvaluationResults();
         double available_vram_bytes = static_cast<double>(getMemoryHeapBudgetAndUsage(*getCtx()).first);
-        Logger(INFO)  << "[GPU Memory] " << std::fixed << std::setprecision(3)
+        Logger(Info) << "[GPU Memory] " << std::fixed << std::setprecision(3)
                 << "Framebuffers: " << res.mem_framebuffers_bytes * BYTE_TO_GB << " GB | "
                 << "Uniform Buffers: " << res.mem_ubos_bytes * BYTE_TO_GB << " GB | "
                 << "Materials: " << res.mem_materials_bytes * BYTE_TO_GB << " GB | "
@@ -1827,7 +1827,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 
         // frame times are only available if tracking was enabled via setEvalTracking(true)
         if (m_enable_frame_time_tracking) {
-            Logger(WARN) << "Querying rendering results before frame time tracking was stopped";
+            Logger(Warn) << "Querying rendering results before frame time tracking was stopped";
         }
         if (!m_last_frame_times.empty()) {
             double total = 0.f;
@@ -1858,7 +1858,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             results.frame_max_ms = max;
             results.total_ms = total;
             results.accumulated_frames = m_last_frame_times.size();
-            Logger(DEBUG) << "CSGV rendering evaluation: "
+            Logger(Debug) << "CSGV rendering evaluation: "
                                << results.frame_min_ms << " / " << results.frame_avg_ms << " / " << results.frame_max_ms
                                << " [ms/frame] (min/avg/max) | " << results.accumulated_frames << " total frames";
         }

@@ -29,7 +29,7 @@ template <typename T> std::shared_ptr<Volume<T>> load_volcanite_raw_(std::string
     if (!vraw.is_open()) {
         std::ostringstream err;
         err << "unable to open Volcanite RAW file at: " << url << "\n";
-        Logger(ERROR) << err.str();
+        Logger(Error) << err.str();
         throw std::runtime_error(err.str());
     }
 
@@ -136,7 +136,7 @@ void write_volcanite_raw_(std::string url, const Volume<T>* volume, std::string 
     if (!vraw.is_open()) {
         std::ostringstream err;
         err << "unable to open Volcanite RAW file at: " << url << "\n";
-        Logger(ERROR) << err.str();
+        Logger(Error) << err.str();
         throw std::runtime_error(err.str());
     }
 

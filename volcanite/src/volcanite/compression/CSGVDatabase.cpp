@@ -28,7 +28,7 @@ namespace volcanite {
                                              const std::string& attribute_csv_separator,
                                              std::string label_column) {
         if(m_db) {
-            Logger(WARN) << "closing existing csgv database " << m_db->getFilename() << " before creation";
+            Logger(Warn) << "closing existing csgv database " << m_db->getFilename() << " before creation";
             close();
         }
 
@@ -44,7 +44,7 @@ namespace volcanite {
                 SQLite::bind(query, volume_dimension[0], volume_dimension[1], volume_dimension[2],
                              chunk_dimension[0], chunk_dimension[1], chunk_dimension[2], csgv_label_name);
                 if (query.exec() != 1)
-                    Logger(WARN) << "Could not export " + CSGV_INFO_TABLE + " to sqlite";
+                    Logger(Warn) << "Could not export " + CSGV_INFO_TABLE + " to sqlite";
             }
 
             // store mapping of original volume label <> packed csgv ids in a temporary table [CSGV_ATTRIBUTE_TABLE]_tmp
@@ -57,13 +57,13 @@ namespace volcanite {
                 for (uint32_t i = 0u; i < index_to_label.size(); i++) {
                     SQLite::bind(query, i, index_to_label[i]);
                     if (query.exec() != 1)
-                        Logger(WARN) << "Could not insert entry for label into sqlite database";
+                        Logger(Warn) << "Could not insert entry for label into sqlite database";
                     query.reset();
                 }
                 transaction.commit();
             }
 
-            Logger(DEBUG) << "  exported label remapping to database " << sqlite_path << " in " << t.restart() << " seconds";
+            Logger(Debug) << "  exported label remapping to database " << sqlite_path << " in " << t.restart() << " seconds";
 
             // There are no attributes so we just use the label remapping table (2 columns) without any additional data
             if(attribute_database.empty()) {
@@ -145,7 +145,7 @@ namespace volcanite {
                             }
 
                             if (query.exec() != 1)
-                                Logger(WARN) << "Could not insert entry for label into sqlite database";
+                                Logger(Warn) << "Could not insert entry for label into sqlite database";
                             query.reset();
                         }
                         transaction_csv.commit();
@@ -170,7 +170,7 @@ namespace volcanite {
                         throw std::runtime_error("Could not find any primary key in table '" + attribute_table + "'. Provide attribute table and label column name with the attribute database.");
                     }
                     label_column = pk_query.getColumn(0).getString();
-                    Logger(DEBUG) << "  using attribute table '" << attribute_table << "' with primary key label column '" << label_column << "'";
+                    Logger(Debug) << "  using attribute table '" << attribute_table << "' with primary key label column '" << label_column << "'";
                 }
 
                 // 0. check if the provide label column only contains unique elements
@@ -214,9 +214,9 @@ namespace volcanite {
                                     label_column + ")");
                             created_index_on_attached_db = true;
                         } catch (SQLite::Exception &e) {
-                            Logger(WARN) << "  could not create index on attached database " << attribute_database;
+                            Logger(Warn) << "  could not create index on attached database " << attribute_database;
                         }
-                        Logger(DEBUG) << "  created indices on databases in " << t.restart() << " seconds";
+                        Logger(Debug) << "  created indices on databases in " << t.restart() << " seconds";
                     }
 
                     std::stringstream create_table_ss;
@@ -257,13 +257,13 @@ namespace volcanite {
                         try {
                             db.exec("DROP INDEX IF EXISTS attr_db.csgv_label_index");
                         } catch (SQLite::Exception &e) {
-                            Logger(WARN) << "Could not drop index csgv_label_index from attached database "
+                            Logger(Warn) << "Could not drop index csgv_label_index from attached database "
                                          << attribute_database;
                         }
                     }
                 }
 
-                Logger(DEBUG) << "  import attributes from existing database " << attribute_database << " in " << t.restart() << " seconds";
+                Logger(Debug) << "  import attributes from existing database " << attribute_database << " in " << t.restart() << " seconds";
                 db.exec("DETACH DATABASE attr_db");
             }
         }
@@ -326,7 +326,7 @@ namespace volcanite {
                                                                                     static_cast<int>(chunk_index.z))
                                                                   : volume_input_path;
                 // load chunk volume
-                Logger(DEBUG, true) << "  label preprocessing " << chunk_input_path << " "
+                Logger(Debug, true) << "  label preprocessing " << chunk_input_path << " "
                                     << (1 + sfc::Cartesian::p2i(chunk_index, max_file_index + glm::uvec3(1))) << "/" << (1 + sfc::Cartesian::p2i(max_file_index, max_file_index + glm::uvec3(1)));
 
                 CompSegVolHandler::loadSegmentationVolumeFile(chunk_input_path, volume);
@@ -400,7 +400,7 @@ namespace volcanite {
 
 
                         if(i % (last_i / 100) == 0u)
-                            Logger(INFO, true) << " re-labelling map computation " << static_cast<int>(static_cast<float>(i)/static_cast<float>(last_i) * 100.f) << "%";
+                            Logger(Info, true) << " re-labelling map computation " << static_cast<int>(static_cast<float>(i) / static_cast<float>(last_i) * 100.f) << "%";
                     }
 
                     if(index_to_label.size() != label_set.size())
@@ -412,9 +412,9 @@ namespace volcanite {
         } while(chunked_input_data && glm::any(glm::lessThanEqual(chunk_index, max_file_index)));
 
         if(chunk_dimensions_vary)
-            Logger(WARN) << "  chunk dimensions vary and can differ from expected dimension " << str(chunk_dimension);
+            Logger(Warn) << "  chunk dimensions vary and can differ from expected dimension " << str(chunk_dimension);
 
-        Logger(DEBUG) << "  computed label remapping in " << t.elapsed() << " seconds with " << index_to_label.size() << " unique labels";
+        Logger(Debug) << "  computed label remapping in " << t.elapsed() << " seconds with " << index_to_label.size() << " unique labels";
 
         // create new SQLite database, export all data and then re-import as read only
         databaseExportAndOpen(sqlite_export_path, index_to_label, volume_dimension, chunk_dimension,

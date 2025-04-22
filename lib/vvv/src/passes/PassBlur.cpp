@@ -111,7 +111,7 @@ std::shared_ptr<Buffer> PassBlur::uploadKernelTexture(VkCommandBuffer commandBuf
         msg += std::to_string(val) + " ";
         s += val;
     }
-    Logger(DEBUG) << msg << "[sum:" << s << "/" << std::numeric_limits<uint16_t>::max() << " " << s / std::numeric_limits<uint16_t>::max() * 100.0 << "%]";
+    Logger(Debug) << msg << "[sum:" << s << "/" << std::numeric_limits<uint16_t>::max() << " " << s / std::numeric_limits<uint16_t>::max() * 100.0 << "%]";
 
     auto usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
     m_kernelTexture = reflectTexture("kernelTexture", {.width = static_cast<uint32_t>(kernelData.size()), .format = vk::Format::eR16Unorm, .usage = usage, .queues = { m_queueFamilyIndex }});

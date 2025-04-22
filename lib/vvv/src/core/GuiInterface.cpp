@@ -93,7 +93,7 @@ namespace vvv {
             }
                 break;
             default:
-                Logger(WARN) << "unknown segmentation volume transfer function colormap " << d.type;
+                Logger(Warn) << "unknown segmentation volume transfer function colormap " << d.type;
         }
     }
 
@@ -127,7 +127,7 @@ namespace vvv {
                     colormapConfig[matId].color[0] = glm::vec3(1.f);
                     break;
                 default:
-                    Logger(WARN) << "unknown segmentation volume transfer function colormap " << colormapConfig[matId].type;
+                    Logger(Warn) << "unknown segmentation volume transfer function colormap " << colormapConfig[matId].type;
             }
         }
         updateVectorColormap(matId);
@@ -136,12 +136,12 @@ namespace vvv {
 
         // safeguard attribute IDs
         if (materials->at(matId).discrAttribute >= static_cast<int>(attributeNames.size())) {
-            Logger(WARN) << "discriminator attribute index " << materials->at(matId).discrAttribute
+            Logger(Warn) << "discriminator attribute index " << materials->at(matId).discrAttribute
                          << " of material " << matId << " references a non existing attribute. Resetting.";
             materials->at(matId).discrAttribute = 0;
         }
         if (materials->at(matId).tfAttribute >= static_cast<int>(attributeNames.size())) {
-            Logger(WARN) << "attribute index of material " << matId
+            Logger(Warn) << "attribute index of material " << matId
                          << " references a non existing attribute. Resetting.";
             materials->at(matId).tfAttribute = 0;
         }

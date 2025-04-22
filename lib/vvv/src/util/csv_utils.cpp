@@ -56,7 +56,7 @@ std::vector<std::vector<float>> vvv::csv_float_import(const std::string& csv_pat
         csv.close();
 	    return csv_file;
     } else {
-        Logger(ERROR) << "Could not open CSV file " << csv_path;
+        Logger(Error) << "Could not open CSV file " << csv_path;
         return {};
     }
 }
@@ -101,7 +101,7 @@ std::vector<unsigned int> vvv::csv_label_column_import(const std::string& csv_pa
         csv.close();
         return label_column_values;
     } else {
-        Logger(ERROR) << "Could not open CSV file " << csv_path;
+        Logger(Error) << "Could not open CSV file " << csv_path;
         return {};
     }
 }

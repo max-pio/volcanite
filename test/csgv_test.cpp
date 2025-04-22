@@ -28,7 +28,7 @@ int main() {
     CompressedSegmentationVolume csgv;
     // Plain 4 bit per operation encoding
     {
-        Logger(INFO) << "Nibble";
+        Logger(Info) << "Nibble";
         csgv.setCompressionOptions64(16, NIBBLE_ENC, OP_ALL, false);
         if (!csgv.test(volume->dataConst(), dim, true))
             return 1;
@@ -42,7 +42,7 @@ int main() {
     csgv.clear();
     // Single table rANS
     {
-        Logger(INFO) << "Range ANS";
+        Logger(Info) << "Range ANS";
         size_t freq[32];
         csgv.setCompressionOptions64(32, NIBBLE_ENC, OP_ALL, false);
         csgv.compressForFrequencyTable(volume->dataConst(), dim, freq, 2, false, false);
@@ -59,7 +59,7 @@ int main() {
     csgv.clear();
     // Double table rANS with detail separation
     {
-        Logger(INFO) << "Double Table Range ANS with Detail Separation";
+        Logger(Info) << "Double Table Range ANS with Detail Separation";
         size_t freq[32];
         csgv.setCompressionOptions64(64, NIBBLE_ENC, OP_ALL, false);
         csgv.compressForFrequencyTable(volume->dataConst(), dim, freq, 2, true, false);
@@ -75,7 +75,7 @@ int main() {
     {
         // Wavelet Matrix
         {
-            Logger(INFO) << "Wavelet Matrix";
+            Logger(Info) << "Wavelet Matrix";
             csgv.setCompressionOptions64(32, WAVELET_MATRIX_ENC, OP_ALL_WITHOUT_STOP & OP_ALL_WITHOUT_DELTA, true);
             if (!csgv.test(volume->dataConst(), dim, true))
                 return 4;
@@ -88,7 +88,7 @@ int main() {
         }
         // Huffman Wavelet Matrix
         {
-            Logger(INFO) << "Wavelet Matrix";
+            Logger(Info) << "Wavelet Matrix";
             csgv.setCompressionOptions64(16, HUFFMAN_WM_ENC, OP_ALL_WITHOUT_DELTA, true);
             if (!csgv.test(volume->dataConst(), dim, true))
                 return 5;
@@ -101,7 +101,7 @@ int main() {
         }
         // Huffman Wavelet Matrix with Stop Bits
         {
-            Logger(INFO) << "Wavelet Matrix";
+            Logger(Info) << "Wavelet Matrix";
             csgv.setCompressionOptions64(64, HUFFMAN_WM_ENC, OP_ALL_WITHOUT_DELTA, true);
             if (!csgv.test(volume->dataConst(), dim, true))
                 return 6;

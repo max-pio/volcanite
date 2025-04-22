@@ -61,7 +61,7 @@ public:
 
     [[nodiscard]] std::vector<std::shared_ptr<Shader>> getShaders() const {
         if (!isPipelineCreated()) {
-            Logger(WARN) << "calling getShaders of pass before allocateResources() was called / pipeline was created!";
+            Logger(Warn) << "calling getShaders of pass before allocateResources() was called / pipeline was created!";
         }
 
         return m_shaders;
