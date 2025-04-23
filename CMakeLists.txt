@@ -15,7 +15,7 @@
 
 cmake_minimum_required(VERSION 3.21)
 
-project(volcanite VERSION 0.5.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES C CXX)
+project(volcanite VERSION 0.6.0 DESCRIPTION "Volcanite Segmentation Volume Rendering Framework" LANGUAGES C CXX)
 
 set(PROJECT_COMPANY_NAME "Karlsruhe Institute of Technology")
 set(PROJECT_COMPANY_NAMESPACE "edu.kit.ivd.cg")

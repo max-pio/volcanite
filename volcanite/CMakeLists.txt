@@ -14,7 +14,7 @@
 #  along with this program.  If not, see <https:#www.gnu.org/licenses/>.
 
 cmake_minimum_required(VERSION 3.16)
-project(volcanite-renderer VERSION 0.5.0 DESCRIPTION "Volcanite Renderer Compression" LANGUAGES CXX)
+project(volcanite-renderer VERSION 0.6.0 DESCRIPTION "Volcanite Renderer Compression" LANGUAGES CXX)
 
 # set all sources and headers
 set(VOLCANITE_HEADERS
