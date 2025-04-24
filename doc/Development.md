@@ -46,11 +46,10 @@ cmake -H. -BDebug -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=YES
 ln -s Debug/compile_commands.json .
 ```
 
-* This research renderer currently lacks a clear formatting guideline.
-  However, a `.clang-format` file is located in the project root.
+* The project contains a `.clang-format` file following a LLVM-like code style. It is located in the project root.
   To format the whole codebase try the following command:
 ```
-find . -not -path '*/\.*' -not -path 'Debug/*' -not -path 'build/*' -regex '.*\.\(cpp\|hpp\|cc\|cxx\)' -exec clang-format -verbose -style=file -i {} \;
+find . -regex './\(volcanite\|test\|lib\)/.*\.\(cpp\|hpp\|cc\|cxx\)' -exec clang-format -verbose -style=file -i {} \;
 ```
 
 *Note: If the above command-lines seem to be out of date, its always worthwhile to check the CI file since these commands
@@ -66,7 +65,10 @@ or your dependency is out of date?*
 | volcanite
 |   \_ volcanite renderer (*/renderer)
 |   \_ CSGV segmentation volume compression (*/compression) 
-|   \_ python utility scripts (python)
+| python
+|   \_ python utility scripts and dummy package
+| test
+|   \_ encoding and rendering CTest tests
 | lib
 |   \_ vulkan backend (vvv)
 |   \_ windowing application libraries (vvv-glfw-app)
