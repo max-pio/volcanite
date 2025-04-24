@@ -105,8 +105,9 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
         // otherwise, we just use a tmp file
         if (use_temporary_output_file) {
             if (args.working_dir.empty())
-                create_directory(args.working_dir);
-            complete_csgv_path = (std::filesystem::temp_directory_path() / "volcanite" / "tmp.csgv").string();
+                args.working_dir = std::filesystem::temp_directory_path() / "volcanite";
+            create_directory(args.working_dir);
+            complete_csgv_path = (args.working_dir / "tmp.csgv").string();
             if (std::filesystem::exists(complete_csgv_path))
                 std::filesystem::remove(complete_csgv_path);
         }

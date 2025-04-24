@@ -86,7 +86,7 @@ struct VolcaniteArgs {
     std::string record_in_file = "";             ///< file that stores a previously exported camera path for replay in headless
     uint32_t record_convergence_frames = 1;      ///< number of render frames that are accumulated per output frame of a camera path
     std::vector<std::string> eval_logfiles = {}; // files into which evaluation results are exported (with 'append')
-    std::string eval_name = {};                  ///< name of the evaluation run that can be accessed in the log file as "%name"
+    std::string eval_name = {};                  ///< name of the evaluation run that can be accessed in the log file as "{name}"
     bool print_eval_keys = false;                ///< if true, prints all available evaluation log keys to the console on startup
     std::string shader_defines = "";             ///< string of shader defines that will be passed on to the shader compiler
 
@@ -144,23 +144,23 @@ struct VolcaniteArgs {
             ValueArg<uint32_t> bricksizeArg("b", "brick-size", "Compress with given brick size.", false, va.brick_size, &allowedBrickSize);
             cmd.add(bricksizeArg);
             ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits. Quick: [a]ll or [o]ptimized.", false, "o", "(a|o|p|n|x|y|z|l|d[-]|s)*", cmd);
-            SwitchArg randomAccessArg("p", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
+            SwitchArg randomAccessArg("", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
             // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
-            ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path. Must be used with -i or -v.", false, va.record_in_file, "file", cmd);
+            ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path for replay on startup. Must be used with -i or -v.", false, va.record_in_file, "file", cmd);
             ValueArg<uint32_t> recordConvergenceArg("", "record-frames", "How many render frames are accumulated per output frame of a camera path. Must be used with --record-in or -v.", false, va.record_convergence_frames, "int", cmd);
             ValueArg<std::string> evalLogFilesArg("", "eval-logfiles", "Comma separated files into which evaluation results are appended.", false, "", "file", cmd);
-            ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"%name\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
+            ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"{name}\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
             SwitchArg evalPrintArg("", "eval-print-keys", "Print all available evaluation keys to the console and exit.", cmd);
             ValueArg<std::string> shaderDefineArg("", "shader-def", "String of ; separated definitions that will be passed on to the shader. e.g. 'MY_VAL=64;MY_DEF'. Use with care.", false, va.shader_defines, "string", cmd);
 
             // attribute arguments
             SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
-            ValueArg<std::string> attributeArg("a", "attribute", R"(SQLite attribute database as: "{file.sqlite}[,{table/view name}[,{label column referenced in volume}]]" or "{file.csv}[,{label column referenced in volume}[,{csv separator}]]".)", false, "", "database.sqlite[,table[,label]] or database.csv[,label[,separator]]", cmd);
+            ValueArg<std::string> attributeArg("a", "attribute", R"(SQLite or CSV Attribute database: "{file.sqlite}[,{table/view name}[,{label column referenced in volume}]]" or "{file.csv}[,{label column referenced in volume}[,{csv separator}]]".)", false, "", "database.sqlite[,table[,label]] or database.csv[,label[,separator]]", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal development GUI and enable shader debug outputs.", cmd);
-            SwitchArg noVsyncArg("", "no-vsync", "Disable VSync in renderer.", cmd);
+            SwitchArg noVsyncArg("", "no-vsync", "Disable vertical synchronization in renderer.", cmd);
             ValueArg<uint32_t> cacheSizeMBArg("", "cache-size", "Size in MB of the renderer's brick cache. 0 to allocate all available.", false, va.cache_size_MB, "size", cmd);
             SwitchArg cachePalettizedArg("", "cache-palette", "Store palette indices in brick cache instead of labels.", cmd);
             std::vector<char> _allowedCacheUnits = {'n', 'v', 'b'};
@@ -174,10 +174,10 @@ struct VolcaniteArgs {
             cmd.add(emptySpaceResolutionArg);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
-            ValueArg<std::string> videoArg("v", "video", "Formatted file path with single {} placeholder to export intermediate images when rendering -i. Example: ./out{:04}.jpg", false, va.video_output_fmt_file, "formatted file", cmd);
+            ValueArg<std::string> videoArg("v", "video", "Video output with one image output file per frame. The formatted file path must contain a single {} placeholder which will be replaced with frame index. Example: ./out{:04}.jpg", false, va.video_output_fmt_file, "formatted file", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
             SwitchArg fullscreenArg("", "fullscreen", "Start renderer in fullscreen mode.", cmd);
-            ValueArg<std::string> renderconfigArg("", "config", "List of .vcfg files or config strings, separated by ;", false, "", "config files or strings", cmd);
+            ValueArg<std::string> renderconfigArg("", "config", "List of .vcfg files, rendering presets, or direct config strings '[{GUI window}] {parameter label}: {parameter value(s)}', separated by ;", false, "", "{(.vcfg file | rendering preset | string);}*", cmd);
             // general arguments
             SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
             SwitchArg verboseArg("", "verbose", "Verbose debug output.", cmd);
@@ -206,8 +206,10 @@ struct VolcaniteArgs {
                     switch (const char &c = op_codes.at(i)) {
                     case 'a':
                         va.operation_mask |= OP_ALL;
+                        break;
                     case 'o':
                         va.operation_mask |= OP_ALL_WITHOUT_DELTA;
+                        break;
                     case 'p':
                         va.operation_mask |= OP_PARENT_BIT;
                         break;

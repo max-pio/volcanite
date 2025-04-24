@@ -224,9 +224,9 @@ int EvaluationLogExport::write_eval_logfile(const std::string &eval_logfile, con
 
     /* All first lines starting with #fmt: are concatenated into the format string
      *   #fmt:#title,time
-     *   #fmt:%name,%time
+     *   #fmt:{name},{time}
      * becomes:
-     *   #title,time\n%name,%time
+     *   #title,time\n{name},{time}
      * which will be written out as:
      *   #title,time
      *   my_name,XX-XX-XXTXX:XX:XX

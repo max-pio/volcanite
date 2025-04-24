@@ -1393,7 +1393,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
     g_dis->addProgress([this]() { return m_target_accum_frames > 0u ? static_cast<float>(m_accumulated_frames) / static_cast<float>(m_target_accum_frames)
                                                                     : -static_cast<float>(m_accumulated_frames); }, "Progress");
     g_dis->addLabel("Performance Optimization");
-    g_dis->addInt(&m_subsampling, "Resolution Subsampling Factor ", 0, 3, 1);
+    g_dis->addInt(&m_subsampling, "Resolution Subsampling", 0, 3, 1);
     g_dis->addInt(&m_max_request_path_length_pow2, "Decompression Path Length", 0, 5, 1);
     g_dis->addFloat(&m_lod_bias, "Decompression LOD Bias", -8.f, 8.f, 0.1f, 1.f);
 
