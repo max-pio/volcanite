@@ -9,7 +9,7 @@ libraries are not available, you can build the Volcanite project with the CMake 
 See [Headless Builds](#headless-builds).
 
 ## Ubuntu / Debian
-*Tested on Ubuntu 22.04*
+*Tested on Ubuntu 24.04*
 
 1. Install recent GPU drivers. Under Ubuntu, you can select recent proprietary drivers in the "Additional Drivers" GUI.
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
@@ -47,18 +47,19 @@ git clone https://github.com/microsoft/vcpkg.git
 cd vcpkg; .\bootstrap-vcpkg.bat
 .\vcpkg install hdf5 vtk tiff --triplet=x64-windows
 ```
-5. Build the project. Choose one of the following, depending on your development environment:
+5. Build the project using MinGW. Choose one of the following, depending on your development environment:
 
 
 **CMake** Build either using the CMake GUI or by running the following commands in the project root directory:
 ```
 mkdir cmake-build-release && cd cmake-build-release
-cmake -DCMAKE_BUILD_TYPE=Release && cmake --build . -j --target volcanite
+cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release ..
+cmake --build . -j --target volcanite
 ```
 
 If you use vkpcg, you have to pass the toolchain file to CMake with:
 ```
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]/scripts/buildsystems/vcpkg.cmake ..
+cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]/scripts/buildsystems/vcpkg.cmake ..
 cmake --build . -j --target volcanite
 ```
 
