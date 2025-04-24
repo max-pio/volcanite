@@ -2,12 +2,13 @@
 
 Currently, directly using Volcanite through python is not supported, but python bindings are planned for future releases.
 The only way of visualizing python data (e.g. from numpy arrays) with Volcanite is to export the data to a file from which Volcanite can read it.
-The [converter.py](../volcanite/python/converter.py) file offers import and export for multiple supported file formats.
+For convenience, a minimal dummy python package and example code is provided in the [python](../python) directory.
+See the [ReadMe](../python/README.md) for more details.
 
-Voxel byte arrays are in little endian C-order meaning that the X dimension of the array is contiguous in memory.
-For a numpy array, the first index of the volume's shape is denoting the Z dimension of the volume.
+If you simply wish to export your python numpy array volumes for usage with Volcanite, you can include the following code snippets in your python scripts.
+The [converter.py](../python/volcanite/src/volcanite/converter.py) python file contains snippets for additional formats.
 
-To export a numpy segmentation volume `volume` to an NRRD file, use the following code:
+The following example exports a volume into a [NRRD0004](https://teem.sourceforge.net/nrrd/format.html) file:
 
 ```python
 import numpy as np
@@ -60,7 +61,7 @@ def read_from_vraw(vraw_path):
 ```
 
 To split a large volume into smaller chunk files, use the following code.
-The chunk size must be a multiple of the brick size (usually 32) that will be used by Volcanite later:
+The chunk size must be a multiple of the brick size (usually 32 or 64) that will be used by Volcanite later:
 
 ```python
 def export_chunk_split_vraw(volume, path_prefix, chunk_size):
