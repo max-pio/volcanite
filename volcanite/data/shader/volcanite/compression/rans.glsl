@@ -21,7 +21,7 @@
 #include "volcanite/compression/csgv_utils.glsl"
 
 #define RANS_PROB_BITS 14
-#define RANS_BYTE_L (1u << 23)// lower bound of our normalization interval
+#define RANS_BYTE_L (1u << 23)  // lower bound of our normalization interval
 
 // for both the base encoding + for the detail back to back:
 // decoding info for all 16 possible symbols: (dsyms.start, dsyms.freq, stats.cum_freq) + a 17th dummy entry with (0, 0, total stats.cum_freq)
@@ -64,8 +64,8 @@ void rans_itr_initDecoding(inout uint rans_state, in EncodingRef enc_start, inou
 uint rans_itr_nextSymbol(inout uint rans_state, in EncodingRef enc_start, inout uint byte_index, uint freq_table_offset) {
     uint cumulative = _RansDecGet(rans_state);
     uint s;
-    for (s=freq_table_offset; s < (freq_table_offset + 16); s++) {
-        if (_RANS_STATS[s+1].z > cumulative)
+    for(s=freq_table_offset; s < (freq_table_offset + 16); s++) {
+        if(_RANS_STATS[s+1].z > cumulative)
         break;
     }
     _RansDecAdvanceSymbol(rans_state, enc_start, byte_index, _RANS_STATS[s].x, _RANS_STATS[s].y);

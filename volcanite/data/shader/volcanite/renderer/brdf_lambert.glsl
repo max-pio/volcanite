@@ -50,4 +50,4 @@ bool brdf_eval_indirect(vec3 diffuseReflectance, vec3 normal, vec3 dir_in, vec2 
     return dot(normal, dir_out) * dot(throughput, vec3(1.f)) >= 0.f;
 }
 
-#endif// VOLDANITE_BRDF_LAMBERT_GLSL
+#endif // VOLDANITE_BRDF_LAMBERT_GLSL

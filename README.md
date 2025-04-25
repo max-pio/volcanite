@@ -1,5 +1,5 @@
 # Volcanite Segmentation Volume Renderer
-[![version](https://img.shields.io/badge/version-0.5.0-blue)](https://gitlab.kit.edu/max.piochowiak/volcanite/-/tags/0.5.0)
+[![version](https://img.shields.io/badge/version-0.6.0-blue)](https://gitlab.kit.edu/max.piochowiak/volcanite/-/tags/0.6.0)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 <!--[![doi](https://img.shields.io/badge/doi-10.1109/TVCG.2023.3326573-blue?logo=ieee&logoColor=white)](https://www.doi.org/10.1109/TVCG.2023.3326573)-->
 
@@ -93,5 +93,5 @@ You can cite the following publication if you use the Volcanite CSGV compression
 
 ### Funding
 This work has been supported by the Helmholtz Association (HGF) under the joint research school
-“HIDSS4Health – Helmholtz Information and Data Science School for Health” and through the Pilot Program
+“HIDSS4Health – Helmholtz Information and Data Science School for Health” and through the Pilot Project
 Core Informatics.

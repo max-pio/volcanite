@@ -73,8 +73,8 @@ vec3 colormap_turbo(float t) {
     const vec2 kGreenVec2 = vec2(4.27729857, 2.82956604);
     const vec2 kBlueVec2 = vec2(-89.90310912, 27.34824973);
 
-    t = clamp(t, 0.0, 1.0);
-    vec4 v4 = vec4(1.0, t, t * t, t * t * t);
+    t = clamp(t,0.0,1.0);
+    vec4 v4 = vec4( 1.0, t, t * t, t * t * t);
     vec2 v2 = v4.zw * v4.z;
     return vec3(
     dot(v4, kRedVec4)   + dot(v2, kRedVec2),
@@ -83,4 +83,4 @@ vec3 colormap_turbo(float t) {
     );
 }
 
-#endif// DEBUG_COLORMAPS_H
+#endif // DEBUG_COLORMAPS_H

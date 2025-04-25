@@ -47,4 +47,4 @@ vec4 blend_back_to_front_postmultiplied(vec4 accumulator, vec4 new_sample) {
     );
 }
 
-#endif// BLENDING_H
+#endif // BLENDING_H
