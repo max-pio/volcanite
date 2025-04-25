@@ -42,32 +42,32 @@ void main() {
     // obtain pixel and fragment coordinates
     const ivec2 viewport_size = imageSize(inpaintedOutColor);
     const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
-    if (isHelperLane(pixel, viewport_size))
-    return;
+    if(isHelperLane(pixel, viewport_size))
+        return;
 
     // rgb stores radiance sum, alpha stores number of samples
     vec4 accum_color = imageLoad(accumulationOut, pixel);
 
-    if (accum_color.a == 0.f) {
+    if(accum_color.a == 0.f) {
         accum_color = vec4(0.f);
-        if (g_subsampling > 1) {
+        if(g_subsampling > 1) {
             ivec2 block = (pixel / g_subsampling);
             ivec2 block_pixel;
-            for (block_pixel.y = block.y * g_subsampling; block_pixel.y < (block.y + 1) * g_subsampling; block_pixel.y++) {
-                for (block_pixel.x = block.x * g_subsampling; block_pixel.x < (block.x + 1) * g_subsampling; block_pixel.x++) {
-                    if (any(greaterThanEqual(block_pixel, viewport_size)))
-                    continue;
+            for(block_pixel.y = block.y * g_subsampling; block_pixel.y < (block.y + 1) * g_subsampling; block_pixel.y++) {
+                for(block_pixel.x = block.x * g_subsampling; block_pixel.x < (block.x + 1) * g_subsampling; block_pixel.x++) {
+                    if(any(greaterThanEqual(block_pixel, viewport_size)))
+                        continue;
                     accum_color += imageLoad(accumulationOut, block_pixel);
                 }
             }
         }
     }
-    if (accum_color.a > 0.f)
-    accum_color.rgb /= accum_color.a;
+    if(accum_color.a > 0.f)
+        accum_color.rgb /= accum_color.a;
 
     // perform tonemapping and color space conversion
-    //    accum_color.rgb = tonemap_ACES(accum_color.rgb);
-    //    accum_color.rgb = rgb2srgb(accum_color.rgb);
+//    accum_color.rgb = tonemap_ACES(accum_color.rgb);
+//    accum_color.rgb = rgb2srgb(accum_color.rgb);
 
     // output to display image
     imageStore(inpaintedOutColor, pixel, vec4(accum_color.rgb, 1.f));

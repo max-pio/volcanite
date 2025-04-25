@@ -85,7 +85,7 @@ vec3 sampleCosineWeightedHemisphereVoxel(const in vec2 u, in vec3 normal) {
     return normalize(r * sin(theta) * bitangent + sqrt(1.0 - u.x) * normal + r * cos(theta) * tangent);;
 }
 
-float pdfCosineWeightedHemisphere(const in vec3 dir, const in vec3 normal) {
+float pdfCosineWeightedHemisphere( const in vec3 dir, const in vec3 normal) {
     return dot(dir, normal) * ONE_OVER_PI;
 }
 
@@ -189,28 +189,28 @@ int _packedBlueNoise32x32[1024] = {
 0xB5, 0x1D, 0x45, 0xBC, 0x0D, 0xA4, 0xFF, 0xB3, 0x96, 0xCD, 0x7D, 0x0B, 0xA9, 0x62, 0x33, 0xE3,
 0x48, 0xB4, 0xEE, 0x6E, 0x87, 0xFB, 0x48, 0x93, 0xA2, 0x81, 0x59, 0xE4, 0x7A, 0x9C, 0xDF, 0x6D,
 0xCA, 0x03, 0x80, 0x66, 0x22, 0x3E, 0x5C, 0x2F, 0x00, 0x66, 0xB7, 0x4D, 0xC5, 0x16, 0x9E, 0xCA,
-0x58, 0x27, 0xD2, 0x9C, 0x0E, 0xAC, 0x65, 0x02, 0xBA, 0xD2, 0xF8, 0x2E, 0xAE, 0x21, 0xF1, 0x32 };
+0x58, 0x27, 0xD2, 0x9C, 0x0E, 0xAC, 0x65, 0x02, 0xBA, 0xD2, 0xF8, 0x2E, 0xAE, 0x21, 0xF1, 0x32};
 #endif
 
 /// returns a [0,1] value of tileable 32x32 blue noise
 float blueNoise32x32(ivec2 xy) {
-    #ifdef USE_PACKED_BLUE_NOISE
+#ifdef USE_PACKED_BLUE_NOISE
     int index1D = (xy.x % 32) + (xy.y % 32)*32;
     int val = (_packedBlueNoise32x32[index1D / 4] >> ((index1D % 4)*8)) & 0xFF;
     return float(val)/255.f;
-    #else
+#else
     return float(_packedBlueNoise32x32[(xy.x % 32) + (xy.y % 32)*32])/255.f;
-    #endif
+#endif
 }
 
 /// returns a [0,255] value of tileable 32x32 blue noise
 uint blueNoise32x32_uint8(uvec2 xy) {
-    #ifdef USE_PACKED_BLUE_NOISE
+#ifdef USE_PACKED_BLUE_NOISE
     uint index1D = (xy.x % 32u) + (xy.y % 32u)*32u;
     return uint(_packedBlueNoise32x32[index1D / 4u] >> ((index1D % 4u) * 8u)) & 0xFF;
-    #else
+#else
     return uint(_packedBlueNoise32x32[(xy.x % 32u) + (xy.y % 32u)*32u]);
-    #endif
+#endif
 }
 
 float _perlinFade(float v) {
@@ -224,7 +224,7 @@ float _perlinNoise(vec2 uv, uint repeat_freq) {
     const vec2 ofst[] = vec2[](vec2(0.f, 0.f), vec2(1.f, 0.f), vec2(0.f, 1.f), vec2(1.f, 1.f));
     float v[4];
     for (int i = 0; i < 4; i++)
-    v[i] = dot(randomDirection2((cell + uvec2(ofst[i])) % repeat_freq), ab - ofst[i]);
+        v[i] = dot(randomDirection2((cell + uvec2(ofst[i])) % repeat_freq), ab - ofst[i]);
 
     return mix(mix(v[0], v[1], _perlinFade(ab.x)), mix(v[2], v[3], _perlinFade(ab.x)), _perlinFade(ab.y));
 }
@@ -246,4 +246,4 @@ float perlinNoise(vec2 uv, int octaves) {
 }
 
 
-#endif// RANDOM_GLSL
+#endif // RANDOM_GLSL

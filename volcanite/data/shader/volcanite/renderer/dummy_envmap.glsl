@@ -47,4 +47,4 @@ vec4 get_background_color(vec2 fragCoord, vec3 rayDirection) {
     return bgColor;
 }
 
-#endif// VOLCANITE_DUMMY_ENVMAP_GLSL
+#endif // VOLCANITE_DUMMY_ENVMAP_GLSL
