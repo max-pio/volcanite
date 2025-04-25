@@ -93,5 +93,5 @@ You can cite the following publication if you use the Volcanite CSGV compression
 
 ### Funding
 This work has been supported by the Helmholtz Association (HGF) under the joint research school
-“HIDSS4Health – Helmholtz Information and Data Science School for Health” and through the Pilot Program
+“HIDSS4Health – Helmholtz Information and Data Science School for Health” and through the Pilot Project
 Core Informatics.
