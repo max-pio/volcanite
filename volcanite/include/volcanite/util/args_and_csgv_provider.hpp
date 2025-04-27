@@ -155,6 +155,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
                                                         .verbose = args.verbose};
         compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
                                                                                              complete_csgv_path, cfg);
+        compressedSegmentationVolume->checkContiguousLabels();
 
         if (use_temporary_output_file) {
             if (std::filesystem::exists(complete_csgv_path))
@@ -205,6 +206,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
             if (std::filesystem::exists(config_path))
                 args.rendering_configs = {config_path};
         }
+        compressedSegmentationVolume->checkContiguousLabels();
     }
 
     if (compressedSegmentationVolume == nullptr) {

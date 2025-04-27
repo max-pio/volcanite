@@ -238,6 +238,14 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
         return testLOD(volume, volume_dim);
     }
 
+    [[nodiscard]] bool hasContiguousLabels() const {
+        return m_contiguous_labels;
+    }
+
+    void checkContiguousLabels() {
+        m_contiguous_labels = (getMaxLabelInVolume() == getNumberOfUniqueLabelsInVolume()-1);
+    }
+
     // ACCESSING FULL BUFFERS: -----------------------------------------------------------------------------------------
     /// @return vector containing all split encoding arrays.
     [[nodiscard]] const std::vector<std::vector<uint32_t>> *getAllEncodings() const {
@@ -606,6 +614,37 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
         return label_set[0].size();
     }
 
+    uint32_t getMaxLabelInVolume() const {
+        std::vector<uint32_t> label_set(m_cpu_threads);
+        // process the next m_cpu_threads bricks in parallel
+#pragma omp parallel num_threads(m_cpu_threads) default(none) shared(label_set)
+        {
+            unsigned int thread_id = omp_get_thread_num();
+            for (size_t n = thread_id; n < getBrickIndexCount(); n += m_cpu_threads) {
+
+                if (n < getBrickIndexCount()) {
+                    auto brick_encoding = getBrickEncoding(n);
+                    uint32_t brick_encoding_length = getBrickEncodingLength(n);
+                    uint32_t palette_size = getBrickPaletteLength(n);
+
+                    for (int p = 1; p <= palette_size; p++) {
+                        uint32_t label = brick_encoding[brick_encoding_length - p];
+                        if (label_set[thread_id] < label) {
+                            label_set[thread_id] = label;
+                        }
+                    }
+                }
+            }
+        }
+
+        // gather all thread-private label sets into one global set (the first one)
+        for (int thread_id = 1; thread_id < m_cpu_threads; thread_id++) {
+            if (label_set[0] < label_set[thread_id])
+                label_set[0] = label_set[thread_id];
+        }
+        return label_set[0];
+    }
+
   private:
     uint32_t m_cpu_threads; ///< number of CPU threads to parallelize computations
 
@@ -631,6 +670,8 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
     float m_last_total_encoding_seconds = 0.f;
     float m_last_total_freq_prepass_seconds = 0.f;
     std::string m_label = "";
+
+    bool m_contiguous_labels = false; ///< if the provided labels are contiguous
 };
 
 } // namespace volcanite

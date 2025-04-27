@@ -24,6 +24,7 @@
 
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/VolcaniteArgs.hpp"
+#include "volcanite/compression/CSGVAttributeExtractor.hpp"
 #include "volcanite/compression/CSGVDatabase.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/eval/EvaluationLogExport.hpp"
@@ -134,6 +135,12 @@ int volcanite_main(int argc, char *argv[]) {
                                          .shader_defines = args.shader_defines});
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
         renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
+
+
+        if (args.attribute_database.empty() && args.label_remapping) {
+            CSGVAttributeExtractor csgvAttributeExtractor(compressedSegmentationVolume);
+
+        }
 
         // if a screenshot file, video file, or evaluation log file path is given, run the headless mode first
         if (run_headless_pass) {
