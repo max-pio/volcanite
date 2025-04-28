@@ -1,0 +1,72 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+layout (local_size_x = 4, local_size_y = 4, local_size_z = 2) in;
+
+
+#include "volcanite/renderer/csgv_bindings.glsl"
+
+#include "util.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
+#define CSGV_DECODING_ARRAY g_cache
+#include "volcanite/compression/compressed_segmentation_volume.glsl"
+
+// executed for each brick
+void main() {
+    uvec3 brick = gl_GlobalInvocationID.xyz;
+
+    if (isHelperLane(brick, g_brick_count))
+        return;
+
+    const uint brick_idx = brick_pos2idx(brick, g_brick_count);
+    const uint brick_info_pos = brick_idx * 4u;
+    // obtain requested inv_lod and reset it. the renderer will have to flag everything visible again
+    const uint inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
+    g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = max(LOD_COUNT, g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]);
+
+    // if this brick has a valid request slot, it requests decompression. Otherwise, it can be ignored.
+    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] == INVALID) {
+        return;
+    }
+
+    assert(0 < inv_lod && inv_lod < LOD_COUNT, "brick has slot index but requests zero or invalid lod");
+
+    // decompression requested for brick, but brick could not receive a free cache region
+    const uint cache_idx = g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX];
+    if (cache_idx == INVALID) {
+        g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = INVALID;
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = INVALID;
+        return;
+    }
+
+#ifdef VERIFY_BRICK_BEFORE_DECODING
+    if (!verifyBrickCompression(brick_idx)) {
+        // fill cache regions for bricks with broken encodings with INVALID
+        fillCSGVBrick(cache_idx * g_cache_base_element_uints, inv_lod, INVALID);
+        g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = inv_lod;
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = INVALID;
+        return;
+    }
+#endif
+
+    // perform the decompression of the brick into the previously assigned cache region
+#if 1
+    #ifdef SEPARATE_DETAIL
+        assert(!(inv_lod == LOD_COUNT - 1U && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_idx] == g_detail_starts[brick_idx+1])), "detail buffers marked dirty but the provision shader requested detail decoding");
+    #endif
+    resetCSGVBrick(cache_idx * g_cache_base_element_uints, inv_lod);
+    uvec3 valid_brick_size = clamp(g_vol_dim.xyz - brick * BRICK_SIZE, uvec3(0u), uvec3(BRICK_SIZE));
+    decompressCSGVBrick(brick_idx, valid_brick_size, 0u, inv_lod, cache_idx * g_cache_base_element_uints);
+#else
+    // fill the cache with "random" indices into the brick's palette
+    fillCSGVBrick(cache_idx * g_cache_base_element_uints, inv_lod, brick_idx % getBrickPaletteSize(brick_idx));
+#endif
+
+    // the brick was successfuly decompressed into the cache into the requested inverse LOD, the request can be removed.
+    g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = inv_lod;
+    g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = INVALID;
+}

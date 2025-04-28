@@ -1,0 +1,836 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_shader_atomic_int64 : enable
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+// includes
+#include "cpp_glsl_include/csgv_constants.incl"
+#include "volcanite/renderer/csgv_bindings.glsl"
+
+#include "util.glsl"
+#include "ray_box_intersection.glsl"
+#include "morton.glsl"
+#include "random.glsl"
+#include "volcanite/renderer/framebuffer.glsl"
+
+#include "debug_colormaps.glsl"
+#include "volcanite/renderer/csgv_materials.glsl"
+#include "volcanite/renderer/brdf_lambert.glsl"
+#include "volcanite/renderer/dummy_envmap.glsl"
+
+// Compressed Segmentation Volume specific: define array containing the encoding (input) as well as the decoding (output)
+#define CSGV_DECODING_ARRAY g_cache
+#if CACHE_MODE == CACHE_BRICKS
+    #define CSGV_READ_ONLY
+#endif
+#include "volcanite/compression/compressed_segmentation_volume.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
+
+// ray will request a brick for decompression if it is not available
+#define REQUEST_ENABLE_BIT 1u
+// ray will be set to invalid if brick is not available
+#define INVALIDATE_ENABLE_BIT 2u
+
+
+#ifdef EMPTY_SPACE_UINT_SIZE
+    #include "volcanite/bit_vector.glsl"
+#endif
+
+uint get_inv_lod(ivec3 voxel) {
+    // Ensure the same level-of-detail for all bricks by computing it from the brick's center.
+    // Otherwise, different levels-of-detail would be requested for decompression of the same brick.
+    vec3 brick_center_world_space = (g_model_to_world_space * vec4((vec3(0.5f) + vec3(voxel / int(BRICK_SIZE))) * BRICK_SIZE, 1.f)).xyz;
+    float dist = length(brick_center_world_space - g_camera_position_world_space) + (float(BRICK_SIZE)/g_world_to_model_space_scaling);
+
+    // use the MSB as a fast log2 (rounding down to int anyways)
+    int voxels_per_pixel_at_hit = int(g_voxels_per_pixel_per_dist * dist);
+    // clamp with a potential user specified max inverse. LoD
+    return min(LOD_COUNT - 1u - uint(clamp(g_lod_bias + findMSB(voxels_per_pixel_at_hit), 0, LOD_COUNT - 1u)), g_max_inv_lod);
+}
+
+#if CACHE_MODE == CACHE_NOTHING
+    // returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
+    uint get_volume_label(ivec3 voxel, inout float depth_valid) {
+        assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
+
+        const uvec3 brick = uvec3(voxel) / BRICK_SIZE;
+        const uvec3 brick_voxel = uvec3(voxel) - (brick * BRICK_SIZE);
+        const uint brick_idx = brick_pos2idx(brick, g_brick_count);
+        const uint req_inv_lod = get_inv_lod(voxel);
+
+        return decompressCSGVVoxel(brick_idx, brick_voxel, req_inv_lod);
+    }
+#elif CACHE_MODE == CACHE_VOXELS
+
+//    #undef CACHE_UVEC2_SIZE
+//    #define CACHE_UVEC2_SIZE 134217728
+// voxel cache sizes > 1 GB significantly decrese the performance
+#if CACHE_UVEC2_SIZE > 134217728
+    #define TARGET_CACHE_BLOCK_SIZE 134217728
+    #define CACHE_BLOCK_COUNT ((CACHE_UVEC2_SIZE + TARGET_CACHE_BLOCK_SIZE - 1) / TARGET_CACHE_BLOCK_SIZE)
+    #define CACHE_BLOCK_SIZE (CACHE_UVEC2_SIZE / CACHE_BLOCK_COUNT)
+    #if CACHE_BLOCK_COUNT == 1
+        #undef CACHE_BLOCK_COUNT
+    #endif
+#else
+    #define CACHE_BLOCK_SIZE CACHE_UVEC2_SIZE
+#endif
+
+
+    uint _hash(uint a, uint x) {
+        const uint bits = findMSB(CACHE_BLOCK_SIZE);
+        // (ax mod 2^w) / 2^(w-bits)
+        return (a * x) >> (31 - bits); // mod 2^32 implicit
+    }
+
+    uvec3 _hash(uvec3 a, uvec3 x) {
+        const uint bits = findMSB(CACHE_BLOCK_SIZE);
+        // (ax mod 2^w) / 2^(w-bits)
+        return (a * x) >> (31 - bits); // mod 2^32 implicit
+    }
+
+    uvec4 _hash(uvec4 a, uvec4 x) {
+        const uint bits = findMSB(CACHE_BLOCK_SIZE);
+        // (ax mod 2^w) / 2^(w-bits)
+        return (a * x) >> (31 - bits); // mod 2^32 implicit
+    }
+
+    // Cuckoo Hashing
+    // use three xor-combined (c,k) hash functions to construct the two hash functions:
+    // see: "Rasmus Pagh and Flemming Friche Rodler. Cuckoo Hashing. In Journal of Algorithms, pages 122–144 (2004)
+    // and: "An Overview of Cuckoo Hashing" by Charles Chen
+
+    // use a component-wise xor as in Hoskins 2014, Quilez 2017a cf. "Hash Functions for GPU Rendering" JCGT 9(3) (2020)
+    uint hash1(uvec3 lod_voxel) {
+        lod_voxel = _hash(uvec3(19u, 47u, 101u), hash_pcg3d(lod_voxel));
+        return (lod_voxel.x ^ lod_voxel.y ^ lod_voxel.z + 131u) % CACHE_BLOCK_SIZE;
+        // return (_hash(19u, voxel_id) ^ _hash(3u, voxel_id) ^ _hash(115u, voxel_id)) % CACHE_UVEC2_SIZE;
+    }
+
+    uint key(uvec4 lod_voxel_and_lod) {
+        lod_voxel_and_lod = _hash(uvec4(5u, 149u, 61u, 2887u), hash_pcg4d(lod_voxel_and_lod));
+        return lod_voxel_and_lod.x ^ lod_voxel_and_lod.y ^ lod_voxel_and_lod.z ^ lod_voxel_and_lod.w + 171u;
+    }
+
+    // obtains a key and a position in table 1 and maps it to a new position in table 2
+    uint hash2(uvec2 key1_pos1) {
+        key1_pos1 = hash_pcg2d(key1_pos1);
+        uvec4 h = _hash(uvec4(7u, 31u, 97u, 173u), key1_pos1.xyxy);
+        return (h.x ^ h.y ^ h.z ^ h.w) % CACHE_BLOCK_SIZE;
+        //return (_hash(31u, voxel_id) ^ _hash(7u, voxel_id) ^ _hash(97u, voxel_id)) % CACHE_UVEC2_SIZE;
+    }
+
+
+    // returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
+    uint get_volume_label(ivec3 voxel, inout float depth_valid) {
+        assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
+
+        const uint req_inv_lod = get_inv_lod(voxel);
+        
+        // if (req_inv_lod < g_max_inv_lod) {
+        //     const uvec3 brick = uvec3(voxel) / BRICK_SIZE;
+        //     const uvec3 brick_voxel = uvec3(voxel) - (brick * BRICK_SIZE);
+        //     const uint brick_idx = brick_pos2idx(brick, g_brick_count);
+        //     return decompressCSGVVoxel(brick_idx, brick_voxel, req_inv_lod);
+        // }
+
+        // check if the voxel is flagged as empty space
+        // the empty space bit vector index is the morton index of the voxel divided by the set size.
+        // the empty space set size is a power of two <= the brick size. all voxels in the same set belong to the same
+        // brick and are thus always accessed in the same LOD
+#ifdef EMPTY_SPACE_UINT_SIZE
+        uvec3 empty_space_base_voxel = uvec3(voxel) / g_empty_space_block_dim;
+        const uint empty_space_idx = empty_space_base_voxel.x  // * g_empty_space_dot_map.x is always 1
+                                    + empty_space_base_voxel.y * g_empty_space_dot_map.y
+                                    + empty_space_base_voxel.z * g_empty_space_dot_map.z;
+        assertf(empty_space_idx < EMPTY_SPACE_BV_BIT_SIZE,
+                "accessing empty space idx out of bounds (idx, bound): %v2u",
+                uvec2(empty_space_idx, EMPTY_SPACE_BV_BIT_SIZE));
+        BitVectorRef empty_space_bv = BitVectorRef(g_empty_space_bv_address);
+        if (BV_ACCESS(empty_space_bv.words, empty_space_idx) > 0u)
+            return INVISIBLE_LABEL;
+#endif
+
+        // map voxels from different LODs at the same area to identical indices.
+        const uvec3 lod_voxel = (uvec3(voxel) >> (g_max_inv_lod - req_inv_lod)) << (g_max_inv_lod - req_inv_lod);
+        const uvec3 brick = uvec3(voxel) / BRICK_SIZE;
+        const uint brick_idx = brick_pos2idx(brick, g_brick_count);
+
+        #define KEY_KEY_BITS 0x7FFFFFFFu
+        #define KEY_TABLE2_BIT 0x80000000u
+
+        // the 1D cache_key identifies cache collisions between different voxel positions.
+        // the MSB of the key is 1 if and only if the element it belongs to is stored at its second position (table 2)
+        // the cache position is not directly dependent on the cache_key.
+        const uint cache_key = key(uvec4(lod_voxel, req_inv_lod)) & KEY_KEY_BITS;
+
+        // cache is split into multiple smaller hash tables (blocks)
+#ifdef CACHE_BLOCK_COUNT
+        const uint cache_block_pos = (brick_idx * CACHE_BLOCK_COUNT / g_brick_idx_count) * CACHE_BLOCK_SIZE;
+#else
+        const uint cache_block_pos = 0u;
+#endif
+        const uint cache_pos = hash1(lod_voxel) + cache_block_pos;
+        assertf(cache_pos < CACHE_UVEC2_SIZE, "invalid cache_pos %u", cache_pos);
+
+        // check if the cache contains the voxel at the first or second lookup pos
+        uvec2 cache_elem = unpack32(CSGV_DECODING_ARRAY[cache_pos]);
+        // at the first position, the key should have its MSB set to 0
+        if (cache_elem.x == cache_key) {
+            return cache_elem.y;
+        }
+        else {
+            uvec2 cache_elem2 = unpack32(CSGV_DECODING_ARRAY[hash2(uvec2(cache_key, cache_pos)) + cache_block_pos]);
+            // at the second positoin, the key should have its MSB set to 1
+            if (cache_elem2.x == (cache_key | KEY_TABLE2_BIT)) {
+                return cache_elem2.y;
+            }
+        }
+
+        // otherwise, decode the element..
+        const uvec3 brick_voxel = uvec3(voxel) - (brick * BRICK_SIZE);
+        const uint label = decompressCSGVVoxel(brick_idx, brick_voxel, req_inv_lod); // this is extremely expensive!
+
+//    #define CACHE_EJECT_PROB ((~0u) / 8u)
+//    #define CACHE_EJECT_PROB 0
+    #ifdef CACHE_EJECT_PROB
+        {
+            const uvec2 rnd = hash_pcg2d(uvec2(cache_key, g_frame));
+            // only one work item in the subgroup is allowed to write to the cache
+//            if (gl_WorkGroupID.x + gl_WorkGroupID.y * gl_WorkGroupSize.x != (rnd.x % (gl_WorkGroupSize.x * gl_WorkGroupSize.y))) {
+//                return label;
+//            }
+            // if an element would be ejected by inserting the new label, only insert with a certain probability
+            if (cache_elem.x != INVALID && rnd.y >= CACHE_EJECT_PROB) {
+                return label;
+            }
+        }
+    #endif
+
+        // if the label is not visible, check if all other labels from the same set are not visible as well
+#ifdef EMPTY_SPACE_UINT_SIZE
+        if (!isLabelVisible(label)) {
+            bool all_invisible = true;
+            // the base voxel is now the first (lowest coordinate component-wise) local voxel in the brick
+            empty_space_base_voxel = (empty_space_base_voxel * g_empty_space_block_dim) % BRICK_SIZE;
+            for (uint set_i = 0u; set_i < g_empty_space_set_size; set_i++) {
+                const uvec3 s_brick_voxel = empty_space_base_voxel
+                                      + uvec3(set_i / (g_empty_space_block_dim * g_empty_space_block_dim),
+                                              (set_i / (g_empty_space_block_dim)) % g_empty_space_block_dim,
+                                              set_i % g_empty_space_block_dim);
+
+                // empty space set voxels outside of the volume always count as "invisible"
+                if (any(greaterThanEqual(brick * BRICK_SIZE + s_brick_voxel, g_vol_dim)))
+                    continue;
+                // the brick voxel itself was already decoded
+                if (all(equal(brick_voxel, s_brick_voxel)))
+                    continue;
+
+                // for the empty-space info: decode all voxels in this empty sapce set on the finest LOD.
+                // this is extremely expensive!
+                if (isLabelVisible(decompressCSGVVoxel(brick_idx, s_brick_voxel, g_max_inv_lod))) {
+                    // TODO: it would be possible to add the label to the cache here
+                    all_invisible = false;
+                    break;
+                }
+            }
+            if (all_invisible) {
+                BV_SET1(empty_space_bv.words, empty_space_idx);
+                return INVISIBLE_LABEL;
+            }
+        }
+#endif
+
+        // insert the element at its 1st cache position and obtain the (possibly) replaced element
+        cache_elem = unpack32(atomicExchange(CSGV_DECODING_ARRAY[cache_pos], pack64(uvec2(cache_key, label))));
+
+        if (cache_elem.x != INVALID && (cache_elem.x & KEY_TABLE2_BIT) == 0u) {
+            // only if the ejected element is not already at its second location:
+            // insert the ejected element to its 2nd cache position, possibly forcing another element out
+            atomicExchange(CSGV_DECODING_ARRAY[hash2(uvec2(cache_elem.x, cache_pos)) + cache_block_pos], pack64(uvec2(cache_elem.x | KEY_TABLE2_BIT, cache_elem.y)));
+
+            // if the element already was at its second location, it will be re-inserted at its first position if it is
+            // accessed again. this results in the cuckoo ping-pong loop between first and second position of elements.
+        }
+
+        return label;
+    }
+#elif CACHE_MODE == CACHE_BRICKS
+    /// returns a label for this voxel but sets valid to invalid if it was read from a brick that was not decoded up to the requested level
+    /// if REQUEST_ENABLE_BIT is set in request_invalid_bits, the brick is requested for decompression if not available
+    /// if INVALIDATE_ENABLE_BIT is set in request_invalid_bits, depth_valid is set to INVALID_DEPTH if birkc is not available
+    uint get_volume_label(const ivec3 voxel, inout float depth_valid, const uint request_invalid_bits) {
+        assert(all(greaterThanEqual(voxel.xyz, ivec3(0))) && all(lessThan(voxel.xyz, ivec3(g_vol_dim))), "trying to read volume label for out of bounds voxel!");
+
+        const uvec3 brick = uvec3(voxel) / BRICK_SIZE;
+        const uvec3 brick_voxel = uvec3(voxel) - (brick * BRICK_SIZE);
+        const uint brick_idx = brick_pos2idx(brick, g_brick_count);
+        const uint brick_info_pos = brick_idx * 4u;
+
+        // TODO: a lot of these computations would only be required when entering a *new* brick. store lod + last_brick_idx in the state?
+        // compute optimal LOD for the center of this brick
+        // all threads that access this brick are guaranteed to compute the same LOD for this brick
+        uint req_inv_lod = get_inv_lod(voxel);
+
+        // the coarsest LOD will never be computed
+        if (req_inv_lod == 0u) {
+            // return the first palette entry = coarsests compressed representation of the brick for inv_lod 0
+            // we could alternatively perform a small linear search for the first *visible* label here
+            return getBrickEncodingRef(brick_idx).buf[getBrickEncodingLength(brick_idx) - 1u];
+        }
+
+        const uint old_req_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
+        assert(old_req_inv_lod <= LOD_COUNT, "trying to access a brick that's flagged as invisible");
+        if (old_req_inv_lod != req_inv_lod  //LOD_COUNT // brick is not yet requested
+            #ifdef VALID_RAY_REQUEST_ONLY
+                    // without checking for validity, may (rarely) request bricks that are actually obscured by bricks
+                    // in front of them. limiting requests to valid rays, however, creates popping artifacts at
+                    // interfaces between LODs when the camera moves: bricks behind other bricks are not flagged as
+                    // visible (because the brick in front is an out-of-date LOD)
+                    // TODO: this may currently be a source for normal vector artifacts from DDA traversal
+                && isDepthValid(depth_valid)
+            #else
+                // by default: request bricks with invalid rays as well, except if brick request limitation is enabled
+                && (isDepthValid(depth_valid) || g_req_limit_area_size == 0u)
+            #endif
+                && (request_invalid_bits & REQUEST_ENABLE_BIT) > 0u) { // this path may still request new brick
+
+                atomicCompSwap(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], old_req_inv_lod, req_inv_lod);
+        }
+
+        // find the current LOD
+        const uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
+        assert(cur_inv_lod != 0u, "BRICK_INFO_CUR_INV_LOD should never be zero");
+
+        // invalidate the sample if the brick is not decoded up to the requested LOD
+        if (cur_inv_lod != req_inv_lod && bool(request_invalid_bits & INVALIDATE_ENABLE_BIT))
+            depth_valid = INVALID_DEPTH;
+
+        // if the brick is not yet decoded: return a palette label
+        if (cur_inv_lod >= LOD_COUNT) {
+            EncodingRef encoding_address = getBrickEncodingRef(brick_idx);
+            const uint encoding_size = getBrickEncodingLength(brick_idx);
+            const uint palette_size = getBrickPaletteLength(brick_idx);
+
+            // read a "random" palette entry or return the first label (coarsest LOD)
+            #ifdef CSGV_UNDECODED_RANDOM_LABEL
+                const uint random_palette_index = hash_pcg3d(uvec3(gl_GlobalInvocationID.xy, g_frame)).r % palette_size;
+            #else
+                const uint random_palette_index = 0u;
+            #endif
+            return  encoding_address.buf[encoding_size - 1u - random_palette_index];
+        }
+        // read the voxel from the brick in the cache (with the currently decoded LOD)
+        else {
+    #ifdef PALETTE_CACHE
+            return readCSGVPaletteBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * g_cache_base_element_uints, brick_idx);
+    #else
+            return readCSGVBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * g_cache_base_element_uints);
+    #endif
+        }
+    }
+#endif
+
+
+bool isEmptySpace(ivec3 voxel) {
+    assertf(all(greaterThanEqual(voxel, ivec3(0))) && all(lessThan(voxel, g_vol_dim)), "empty space request for invalid voxel %v3i", voxel);
+
+    const uvec3 brick = uvec3(voxel / BRICK_SIZE);
+    const uint brick_info_pos = brick_pos2idx(brick, g_brick_count) * 4u;
+
+    // if the brick contains nothing visible, it is empty space
+    return g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > LOD_COUNT;  // marked "invisible" by request shader
+}
+
+
+// all ray marching happens in the same loop to minimize thread divergence
+struct RayMarchState {
+    uint rng;          ///< random number generator state
+    int step;           ///< how many ray marching steps where done so far
+
+    // DDA traversal parameter
+    ivec3 step_sign;    ///< voxel step direction per axis, either -1 or 1
+    vec3 inv_ray_dir;   ///< t distance required for one unit voxel step along each axis
+    // the DDA position is split into integer voxel and sub-voxel position to avoid numerical floating point problems
+    ivec3 voxel;        ///< current voxel of the DDA ray marching position
+    vec3 pos_in_voxel;  ///< sub-voxel position of the DDA position in [0,1)^3
+
+    // shading and G-Buffer
+    float depth_valid;  ///< depth to be written to the depth buffer. negative depth indicates an invalid sample
+    vec3 normal;        ///< normal at the current position
+    uint label;         ///< label at the current position
+    uint last_label;    ///< label of the previous position
+    uvec3 packedGBuffer;///< G-Buffer containing validity, label on hit, depth, and normal
+
+    // path tracing
+    vec4 out_color;     ///< (radiance) color to be written to the color buffer
+    vec3 throughput;    ///< accumulated throughput (albedo/pi * 2pi * geometry term * brdf [+ volumetric attenuation])
+    int path_length;    ///< number of path segments (= bounces), initialized with 0 for the view ray
+};
+
+#define SHADOW_RAY_PATH_LENGTH -1
+
+#include "volcanite/renderer/csgv_debug.glsl"
+
+void dda_step_multilevel(inout RayMarchState state, const Ray ray, int voxel_size) {
+    // Round down to do the traversal in one pseudo-voxel with a size of [voxel_size] many fine-resolution voxels
+    // To avoid handling negative voxels, assume normal voxel size 1 in that case. Altneratively, we would have to use
+    // floating point and floor the coarse position. e.g. integer div. maps (-1, 0, 0) with voxel_size 2 to (0, 0, 0)
+    assert(voxel_size == 1 || !any(lessThan(state.voxel, ivec3(0))), "multi-level DDA voxel size must be 1 for voxel positions < 0");
+
+    ivec3 big_voxel = state.voxel / voxel_size;
+    vec3 pos_in_big_voxel = (vec3(state.voxel % voxel_size) + state.pos_in_voxel) / float(voxel_size);
+
+    // determine distances that t has to change until the ray hits the next voxel edge
+    // note: if a ray direction axis is 0, inv_ray_dir is INFTY and step_sign is 1 to yield INFTY which is > all others
+    // note: side_dist_t is always positive as inv_ray_dir is negative if and only if step_sign is negative
+    vec3 side_dist_t = state.inv_ray_dir * ( max(state.step_sign, vec3(0.f)) - pos_in_big_voxel );
+
+    assertf(all(greaterThanEqual(side_dist_t, vec3(0.f))) || !any(isnan(side_dist_t)), "next_t nan/negative: %v3f", side_dist_t);
+
+    // get axis along which to step as mask[argmin(next_t)] = 1
+    // note: lessThanEqual(min(side_dist.yzx)..) computations can produce masks with multiple 1 entries.
+    int axis = 0;
+    if (side_dist_t.z < side_dist_t.x && side_dist_t.z < side_dist_t.y)
+        axis = 2;
+    else if (side_dist_t.y < side_dist_t.x && side_dist_t.y < side_dist_t.z)
+        axis = 1;
+
+    assertf(ray.direction[axis] != 0.f && !isinf(side_dist_t[axis]), "step along invalid axis. side_dist_t: %v3f", side_dist_t);
+
+    // advance voxel along the selcted axis
+    big_voxel[axis] += state.step_sign[axis];
+
+    // update sub-voxel position
+    pos_in_big_voxel = fract(pos_in_big_voxel + (side_dist_t[axis] * ray.direction));
+    const float ONE_MINUS_EPSILON = 0.9999999f;
+    pos_in_big_voxel[axis] = max(-state.step_sign[axis], 0.f) * ONE_MINUS_EPSILON;
+
+    state.voxel = big_voxel * voxel_size + ivec3(floor(pos_in_big_voxel * voxel_size));
+    state.pos_in_voxel = fract(pos_in_big_voxel * voxel_size);
+
+    // update normal
+    state.normal = vec3(0.f);
+    state.normal[axis] = float(-state.step_sign[axis]);
+
+    // DEBUG_check_state_and_ray(state, ray, __LINE__);
+}
+
+void dda_step(inout RayMarchState state, const Ray ray) {
+    // determine distances that t has to change until the ray hits the next voxel edge
+    // note: if a ray direction axis is 0, inv_ray_dir is INFTY and step_sign is 1 to yield INFTY which is > all others
+    // note: side_dist_t is always positive as inv_ray_dir is negative if and only if step_sign is negative
+    vec3 side_dist_t = state.inv_ray_dir * ( max(state.step_sign, vec3(0.f)) - state.pos_in_voxel );
+
+    assertf(all(greaterThanEqual(side_dist_t, vec3(0.f))) || !any(isnan(side_dist_t)), "next_t nan/negative: %v3f", side_dist_t);
+
+    // get axis along which to step as mask[argmin(next_t)] = 1
+    // note: lessThanEqual(min(side_dist.yzx)..) computations can produce masks with multiple 1 entries.
+    int axis = 0;
+    if (side_dist_t.z < side_dist_t.x && side_dist_t.z < side_dist_t.y)
+        axis = 2;
+    else if (side_dist_t.y < side_dist_t.x && side_dist_t.y < side_dist_t.z)
+        axis = 1;
+
+    assertf(ray.direction[axis] != 0.f && !isinf(side_dist_t[axis]), "step along invalid axis. side_dist_t: %v3f", side_dist_t);
+
+    // advance voxel along the selcted axis
+    state.voxel[axis] += state.step_sign[axis];
+
+    // update sub-voxel position
+    state.pos_in_voxel = fract(state.pos_in_voxel + (side_dist_t[axis] * ray.direction));
+    const float ONE_MINUS_EPSILON = 0.9999999f;
+    state.pos_in_voxel[axis] = max(-state.step_sign[axis], 0.f) * ONE_MINUS_EPSILON;
+
+    // update normal
+    state.normal = vec3(0.f);
+    state.normal[axis] = float(-state.step_sign[axis]);
+
+    // DEBUG_check_state_and_ray(state, ray, __LINE__);
+}
+
+void dda_init(inout RayMarchState state, const Ray ray, float t_0) {
+    vec3 init_raypos = ray.origin + t_0 * ray.direction;
+    state.voxel = ivec3(floor(init_raypos));
+    state.pos_in_voxel = init_raypos - state.voxel;
+
+    state.step_sign = ivec3(ray.direction.x >= 0.f ? 1 : -1,
+                            ray.direction.y >= 0.0 ? 1 : -1,
+                            ray.direction.z >= 0.0 ? 1 : -1);
+
+    // ray.direction may be zero somewhere. set inv_ray_dir and step_sign so that dda_step will yield positive infinity
+    // for side_dist_t in the respective axis. This way, the traversal will never step into that direction.
+    state.inv_ray_dir = 1.f / ray.direction;
+    const float INFINITY = 1.f / 0.f;
+    if (ray.direction.x == 0.f) {
+        state.inv_ray_dir.x = INFINITY;
+        state.step_sign.x = 1;
+    }
+    if (ray.direction.y == 0.f) {
+        state.inv_ray_dir.y = INFINITY;
+        state.step_sign.y = 1;
+    }
+    if (ray.direction.z == 0.f) {
+        state.inv_ray_dir.z = INFINITY;
+        state.step_sign.z = 1;
+    }
+
+    // DEBUG_check_state_and_ray(state, ray, __LINE__);
+}
+
+// called for each frame buffer pixel
+void main() {
+    // obtain pixel and fragment coordinates
+    ivec2 viewport_size = imageSize(accumulationOut);
+
+    // contains thread to pixel mapping for optional subsampling
+    ivec2 pixel = pixelFromInvocationID();
+    if (isHelperLane(pixel, viewport_size))
+        return;
+
+    // Add a subpixel offset in [0, 1) to perform temporal anti-aliasing
+    vec2 subpixel_offset = subpixelOffset(pixel);
+    vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(viewport_size);
+
+    // create view ray in model space
+    Ray ray = Ray(g_camera_position_world_space, normalize((g_pixel_to_ray_direction_world_space * vec3(pixel + subpixel_offset, 1.0f)).xyz));
+    ray.origin = (g_world_to_model_space * vec4(ray.origin, 1.f)).xyz;
+    ray.direction = normalize(g_world_to_model_space_dir * ray.direction);
+
+//    if (g_dof_enable) {
+//        const vec2 pixelN = fragCoord * 2.f - 1; // map pixel in [-1, 1]^2
+//        ray = generate_thin_lens_ray(ray, ivec2(pixel + subpixel_offset), pixelN, randomVec3(pixel, g_camera_still_frames).xy); // in camera space -> transform to model space
+//
+//        ray.origin = (g_world_to_model_space * vec4(ray.origin + g_camera_position_world_space, 1.f)).xyz;
+//        ray.direction = normalize(g_world_to_model_space_dir * ray.direction);
+//    }
+
+    // In world space, we hit a small cuboid (largest dimension is 1) centered around the origin.
+    // We transform this AABB to model space, where each voxel has unit size:
+    float t_0, t_1;
+    AABB bounding_box = AABB(g_bboxMin.xyz, g_bboxMax.xyz);
+    ray_box_intersection(ray, bounding_box, t_0, t_1);
+
+    // if the ray does not hit the data set, directly output the background
+    if (t_0 >= t_1) {
+        ray.direction = normalize(g_model_to_world_space_dir * ray.direction);
+        writePixel(pixel, vec4(0.f), BACKGROUND_DEPTH, noHitGBufferRGB16());
+        return;
+    }
+
+    if (DEBUG_vis_model_space(ray, t_0, pixel, bool(g_debug_vis_flags & VDEB_MODEL_SPACE_BIT))) return;
+
+    // the number of (valid) samples that were accumulated for this pixel up to this frame
+    const uint prev_sample_count = imageLoad(accuSampleCountIn, pixelFromInvocationID()).r;
+
+    // the RayMarchState will contain all information necessary for the ray marching loop
+    RayMarchState state;
+    #ifndef UNBIASED_RNG
+        // the RNG state is initialized from the number of samples accumulated so far but always changes after 256 frames
+        state.rng = hash_pcg2d(uvec2(uint(blueNoise32x32_uint8(pixel)),
+                               ((g_camera_still_frames / 256u) << 8u) ^ (prev_sample_count << 31u) ^ prev_sample_count)).x;
+    #else
+        state.rng = hash_pcg3d(uvec3(pixel, g_frame)).x;
+    #endif
+    state.label = INVALID;
+    state.last_label = INVALID;
+    state.path_length = 0;
+    state.throughput = vec3(1.f);
+    state.out_color = vec4(0.f);
+    state.depth_valid = BACKGROUND_DEPTH;
+    state.normal = vec3(0.f);
+    state.packedGBuffer = noHitGBufferRGB16();
+
+    // initialize DDA traversal with t_0  offset to prevent aliasing
+    dda_init(state, ray, t_0 - 0.01f);
+
+    // if the cache is not large enough to fit all visible bricks, brick requestes are limited to some pixels:
+    //  (1) only if request limitation is enabled,
+    //  (2) limit to pixels that did not receive enough samples yet, and
+    //  (3) limit to pixels that are within a certain area of the screen.
+    // by default, all pixels set the INVALIDATE_ENABLE_BIT that will invalidate rays if they access uncompressed bricks
+    const uint request_invalid_bits = INVALIDATE_ENABLE_BIT |
+                            ((g_req_limit_area_size > 0
+                                && (any(lessThan(pixel, g_req_limit_area_pos))
+                                    || any(greaterThanEqual(pixel, g_req_limit_area_pos + ivec2(g_req_limit_area_size)))))
+                                ? 0u : REQUEST_ENABLE_BIT);
+    if (prev_sample_count >= 0xFFFF) {
+        // Force direct ray termination if this pixel already accumulated the maximum number of samples.
+        // (The sample count frame buffer is in 16 bit and can thus only accumulate 2^16-1 valid samples.)
+        state.depth_valid = INVALID_DEPTH;
+        state.throughput = vec3(0.f);
+    }
+
+    // ray marching loop
+    for(state.step = 0; state.step < g_maxSteps; state.step++) {
+
+        // TODO: move DDA step to the bottom of this loop. Reuse LOD and emptySpace information, remove t_0 offset, pass LOD to get_volume_label
+        // single-level DDA traversal step
+        // dda_step(state, ray);
+        // multi-level DDA traversal step
+        {
+            // determine size of the coarse traversal voxel in 2^n number of fine-resolution voxels
+            uint dda_voxel_size;
+
+            // edge cases not handled in multi-level DDA:
+            //  - internal integer division does not handle negative voxel coordinates
+            //  - upper volume borders may lie in the middle of a coarse voxel
+            if (any(lessThan(state.voxel, g_bboxMin.xyz))
+                || any(greaterThanEqual(state.voxel,g_bboxMax.xyz)))
+                dda_voxel_size = 1u;
+            // empty space skipping: directly step into the next brick
+            else if (isEmptySpace(state.voxel))
+                dda_voxel_size = BRICK_SIZE;
+            // default traversal: step into next voxel in current level-of-detail
+            else
+                dda_voxel_size = BRICK_SIZE >> get_inv_lod(state.voxel);
+
+            dda_step_multilevel(state, ray, int(dda_voxel_size));
+        }
+
+#ifndef NDEBUG
+        DEBUG_check_state_and_ray(state, ray, __LINE__);
+#endif
+
+        // out of bounds check
+        if (any(lessThan(state.voxel, g_bboxMin.xyz))
+            || any(greaterThanEqual(state.voxel, g_bboxMax.xyz))) {
+            if (state.path_length == 0 && state.step < 16)
+                continue;
+            else
+                break;
+        }
+
+        // empty space check
+        if (isEmptySpace(state.voxel)) {
+            DEBUG_vis_empty_space_brick(state, bool(g_debug_vis_flags & VDEB_EMPTY_SPACE_BIT));
+            continue;
+        } else {
+            DEBUG_vis_empty_space_voxel(state, bool(g_debug_vis_flags & VDEB_EMPTY_SPACE_BIT));
+        }
+
+
+        // Rread the label at the voxel from previously decoded volume segments in the brick cache or return a
+        // placeholder label if not yet decoded, in which case the depth_valid will be set to INVALID_DEPTH.
+        // An sample marked as invalid this way may not alter the framebuffer and skip certain cmoputation steps.
+        // request_invalid_bits always has the invalidate bit set, and the request conditionally set when brick
+        // request limitation is enabled. If the path length is > g_max_request_path_length, bricks are neither
+        // requested nor do undecoded bricks invalidate rays
+        state.last_label = state.label;
+        #if CACHE_MODE == CACHE_BRICKS
+            state.label = get_volume_label(state.voxel, state.depth_valid, request_invalid_bits);
+        #else
+            state.label = get_volume_label(state.voxel, state.depth_valid);
+        #endif
+
+#ifndef NDEBUG
+        DEBUG_vis_invalid_label(state);
+#endif
+
+        // obtain material at the current position
+        int material = getMaterial(state.label);
+
+        // continue traversal if this is not a visible label
+        // material < 0 <=> !isLabelVisible(state.label)
+        if (material < 0) {
+            continue;
+        }
+
+        DEBUG_vis_brick_cache(state, pixel, bool(g_debug_vis_flags & VDEB_CACHE_VOXEL_BIT));
+
+        // obtain surface albedo / volume emission and opacity
+        vec4 surface_albedo_opacity = getColor(state.label, material);
+
+        // ENTER SEMI-TRANSPARENT VOLUME
+        // TODO: integrate this into the correct path tracing interaction with fresnel term, simplify BRDF sampling e.g. https://boksajak.github.io/files/CrashCourseBRDF.pdf
+        if (surface_albedo_opacity.a < 1.f) {
+            if (state.last_label != state.label) {
+                // add the contribution of a semi-transparent surface (local shading only)
+                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_light_intensity * surface_albedo_opacity.a;
+
+                // throughput is reduced by the opacity of the surface
+                state.throughput *= 1.f - surface_albedo_opacity.a;
+                // update pixel alpha
+                state.out_color.a = max(state.out_color.a, surface_albedo_opacity.a);
+            }
+
+            // emission and absorption from homogeneous volume (ignoring scattering!)
+//            // find distance the ray will travel in the next step
+//            float next_t = dot(vec3(lessThanEqual(state.next_t.xyz, min(state.next_t.yzx, state.next_t.zxy))), state.next_t);
+//            // compute transmittance of homogeneous voluem segment
+//            vec3 transmittance = exp(-surface_albedo_opacity.a * abs(next_t - state.t) * (1.f - surface_albedo_opacity.rgb));
+//            // update opacity (computed over inverse opacity = transmittance)
+//            state.out_color.a = max(state.out_color.a, 1.f - ((1.f - state.out_color.a) * (transmittance.r + transmittance.g + transmittance.b)/3.f));
+//            // add volume emission
+//            state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * (1.f - transmittance);
+//            state.throughput *= transmittance;
+        }
+        // HIT OPAQUE SURFACE
+        else {
+            // break if this was a shadow ray
+            if (state.path_length == SHADOW_RAY_PATH_LENGTH) {
+                state.throughput = vec3(0.f);
+                break;
+            }
+
+            DEBUG_vis_brick_idx(state, bool(g_debug_vis_flags & VDEB_BRICK_IDX_BIT));
+            DEBUG_vis_lod(state, surface_albedo_opacity, bool(g_debug_vis_flags & VDEB_LOD_BIT));
+
+            // The first surface hit is the only point for which we want to store our t value in the depth buffer
+            // but if we previously stored an INVALID_DEPTH (< 0) at any point, it must not be overwritten.
+            // This is also the point where the G-buffer state is set.
+            if (state.path_length == 0) {
+                vec3 model_space_pos = (state.voxel + state.pos_in_voxel);
+                vec3 world_space_pos = (g_model_to_world_space * vec4(model_space_pos, 1.f)).xyz;
+                // In world space, the data set goes from [-0.5, 0.5] along its longest axis
+                // The maximum distance of a unit cube edge of this size to the origin (0,0,0) is sqrt(3)/2
+                // = 0.8660254037. The depth distance is computed to the projected position of the camera on a sphere of
+                // of this size. The maximum possible distance (between two edges) is sqrt(3) = 1.73205080757.
+                // The depth value is therefore normalized by this value before writing to the depth buffer.
+                float depth = length(world_space_pos - g_camera_position_world_space)
+                              - (length(g_camera_position_world_space) - 0.8660254037f);
+                // TODO: directly write these values to the g-buffer instead of tracking them
+                state.depth_valid = min(state.depth_valid, depth);
+                state.packedGBuffer = packGBufferRGB16(state.label, state.normal, depth / 1.73205080757f);
+            }
+            // opacity is always 1 on surface hit
+            state.out_color.a = 1.f;
+
+            // include ambient lighting factor - not physically based but interpolates between non-shaded and shaded
+            if (state.path_length == 0) {
+                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_factor_ambient;
+                state.throughput *= 1.f - g_factor_ambient;
+            }
+
+            // emission
+            if (g_materials[material].emission > 0.f) {
+                state.out_color.rgb += state.throughput * surface_albedo_opacity.rgb * g_materials[material].emission * dot(state.normal, -ray.direction);
+            }
+
+            // early ray termination if throughput is zero
+            if (dot(state.throughput, vec3(1.f)) <= 0.f) {
+                break;
+            }
+
+            // advance the path and obtain a new random number for sampling a new direction
+            state.path_length++;
+            vec3 u = nextRNG(pixel, state.rng);
+
+            // store previous direction as the incoming direction for the brdf evaluation
+            vec3 brdf_dir_in = -ray.direction;
+
+            // either: local shading only: break the loop here and do not trace further bounces
+            //     or: g_shadow_pathtracing_ratio allows to blend between rendering with shadow rays and path tracing
+            //         over the full hemisphere. (this is not real NEE).
+            if (!g_global_illumination_enable || u.z > g_shadow_pathtracing_ratio) {
+
+                // sample directly to directional light
+                ray.direction = g_light_direction;
+                state.throughput /= ONE_OVER_TWO_PI;
+
+                // check for self shadowing of the current voxel
+                if (dot(state.normal, ray.direction) < 0) {
+                    state.throughput = vec3(0.f);
+                    break;
+                }
+
+                // mark this ray as a shadow ray
+                state.path_length = SHADOW_RAY_PATH_LENGTH;
+
+                // apply surface albedo, geometry term and brdf
+                state.throughput *= brdf_eval(surface_albedo_opacity.rgb, state.normal, brdf_dir_in, ray.direction);
+            } else {
+                // sample a new direction and apply brdf to throughtput
+                if (!brdf_eval_indirect(surface_albedo_opacity.rgb, state.normal, brdf_dir_in, u.xy,
+                                        ray.direction, state.throughput)) {
+                    state.throughput = vec3(0.f);
+                    break;
+                }
+            }
+
+            // DEBUG_check_state_and_ray(state, ray, __LINE__);
+
+            // path termination: local shading traces no further rays, or terminate at max. number of bounces
+            if (!g_global_illumination_enable || state.path_length > g_max_path_length)
+                break;
+
+            // Russian Roulette (only when this is not a ray to the light source / NEE)
+            if (state.path_length != SHADOW_RAY_PATH_LENGTH && state.path_length > 1u) {
+                float survival_probability = max(state.throughput.r, max(state.throughput.g, state.throughput.b));
+                if (nextRNG(pixel, state.rng).x > survival_probability) {
+                    state.throughput = vec3(0.f);
+                    break;
+                }
+                state.throughput /= survival_probability;
+            }
+
+            // re-init DDA traversal for the ray
+            ray.origin = state.voxel + state.pos_in_voxel;
+            dda_init(state, ray, 0.f);
+        }
+    }
+
+    // block all contributions if no light source was found
+    if (state.step >= g_maxSteps || state.path_length > g_max_path_length) {
+        state.throughput = vec3(0.f);
+    }
+
+    // apply incoming radiance from environment
+    ray.direction = normalize(g_model_to_world_space_dir * ray.direction);
+    // to reduce variance in the first frame (when the camera is moved), the envmap is disabled until the second frame
+    if (g_envmap_enable) {
+        state.out_color.rgb += state.throughput * vec3(g_light_intensity) * dummy_envmap(ray.direction);
+    }
+    else {
+        state.out_color.rgb += state.throughput * vec3(g_light_intensity);
+    }
+
+
+    // only if this pixel had a chance to render:
+        // update min / max samples per pixel in stats buffer
+        const uint sample_count_out = imageLoad(accuSampleCountIn, pixelFromInvocationID()).r + (isDepthValid(state.depth_valid) ? 1u : 0u);
+    #ifdef GL_EXT_shader_atomic_int64
+        // TODO: reading here from a buffer (gpu_stats) that should be writeonly
+        assertf(sample_count_out < (1u << 16u), "Pixel sample count exceeds 16 bit domain (%u)", sample_count_out);
+        assertf(pixel.x < (1u << 16u) && pixel.y < (1u << 16u), "Pixel coordinate exceeds 16 bit domain (%v2i)", pixel);
+        // MSB ...                                                                            ... LSB
+        // 16 bit sample count | (16 bit unused) | 16 bit y coordinate | 16 bit x coordinate of pixel
+        const uint64_t samples_pixel_yx = (uint64_t(sample_count_out) << 48) | (uint64_t(pixel.y) << 16) | (uint64_t(pixel.x));
+        if (samples_pixel_yx < gpu_stats.min_spp_and_pixel) {
+            // the min_spp contains the min. number of valid samples any pixel received and coordinate of such a pixel
+            atomicMin(gpu_stats.min_spp_and_pixel, samples_pixel_yx);
+        }
+        if (samples_pixel_yx > gpu_stats.max_spp_and_pixel) {
+            // the max_spp contains the max. number of valid samples any pixel received and coordinate of such a pixel
+            atomicMax(gpu_stats.max_spp_and_pixel, samples_pixel_yx);
+        }
+    #endif
+        if (all(equal(pixel, g_req_limit_area_pixel))) {
+           // track the progress of the pixel that previously had the minimum number of samples in the request area
+            gpu_stats.limit_area_pixel_spp = sample_count_out;
+        }
+
+        DEBUG_count_bbox_hits(bool(g_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT));
+
+    writePixel(pixel, state.out_color, state.depth_valid, state.packedGBuffer);
+}

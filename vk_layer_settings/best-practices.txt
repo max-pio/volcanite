@@ -1,0 +1,5 @@
+# Enables the best practices layer with some tips. Beware, generates a lot of output.
+# Documentation for further configuration of this feature see:
+# https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/master/docs/best_practices.md
+# usage: VK_LAYER_SETTINGS_PATH=best-practices.txt ./volcanite
+khronos_validation.enables = VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT

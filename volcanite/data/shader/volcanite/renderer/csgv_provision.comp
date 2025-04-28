@@ -1,0 +1,155 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_buffer_reference2 : require
+
+layout (local_size_x = 16) in;
+
+
+#include "volcanite/renderer/csgv_bindings.glsl"
+
+// includes
+#include "cpp_glsl_include/csgv_constants.incl"
+#include "util.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
+
+// called for each level-of-detail
+void main() {
+    // at the beginning of this shader:
+    // cache element ownership
+    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick still owns a cache element
+    // - REQ_SLOT < INVALID <=> the brick needs a cache element <=> the REQ_SLOT is a valid entry for its REQ_LOD
+    // - REQ_SLOT < INVALID => BRICK_INFO_INDEX == INVALID
+    // - the ASSIGN_REQUESTED_BRICKS for each LoD contains the number of requested bricks for this LoD.
+    // - all SLOT indices < ASSIGN_REQUESTED_BRICKS are uniquely assigned to one brick each
+    // visibility
+    // - BRICK_INFO_REQ_INV_LOD < LOD_COUNT means the brick is visible in renderer AND had visible palette entries in the frame before
+    // - BRICK_INFO_REQ_INV_LOD = LOD_COUNT means the brick contains visible labels in its palette
+    // - (BRICK_INFO_REQ_INV_LOD > g_loc_count) means that the brick is guaranteed to be invisible
+    // stacks
+    // - if a brick is no longer visible but held an element in cache, it was freed and added to the free_block_stack
+
+    // find out for which lod we compute everything
+    // invocation 0 = LoD 1 which is the coarsest that we handle and uses stores 2x2x2 output voxels in cache (= one base element)
+    const uint inv_lod = gl_GlobalInvocationID.x + 1u;
+    if (isHelperLane(inv_lod, LOD_COUNT))
+        return;
+
+    // for gpu stats download
+#ifdef ENALBE_CSGV_DEBUGGING
+    if (bool(g_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT)) {
+        gpu_stats.bbox_hits = 0u;
+        gpu_stats.blocks_in_cache_L1_to_7[inv_lod - 1u] = 0u;
+    }
+#endif
+    // number of requests
+    gpu_stats.bricks_requested_L1_to_7[(inv_lod - 1u)] = g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_REQUESTED_BRICKS];;
+    // number of free blocks
+    gpu_stats.bricks_on_freestack_L1_to_7[(inv_lod - 1u)] = g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)];
+
+    // compute how many new elements we need because more elements for this LoD are
+    const uint number_of_requests = g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_REQUESTED_BRICKS];
+    if(number_of_requests == 0u) {
+        g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_START] = INVALID;
+        g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BRICK_COUNT] = 0u;
+
+        // send cache usage to CPU to trigger cache clears
+        atomicMax(gpu_stats.used_cache_base_elements, g_assign_info[ASSIGN_CACHE_TOP_IDX]);
+        gpu_stats.blocks_decoded_L1_to_7[inv_lod - 1u] = 0u;
+        return;
+    }
+
+    // number of elements that are available on the free stack for this LoD
+    const uint number_of_free_blocks = g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)];
+    // find out how many elements for this LoD can not be aquired from the free stack
+    const int number_of_new_blocks = int(number_of_requests) - int(number_of_free_blocks);
+
+    // .. all of the reuqests fulfilled from the free stack
+    if(number_of_new_blocks < 0) {
+        g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_START] = INVALID;
+        g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BRICK_COUNT] = 0u;
+        // reset the request slot counter for the next frame
+        g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_REQUESTED_BRICKS] = 0u;
+
+        // send cache usage to CPU to cache clears
+        atomicMax(gpu_stats.used_cache_base_elements, g_assign_info[ASSIGN_CACHE_TOP_IDX]);
+        gpu_stats.blocks_decoded_L1_to_7[inv_lod - 1u] = number_of_requests;
+        return;
+    }
+
+    // .. we need to aquire new elements from the cache top
+    const int brick_elem_size_in_cache = 1 << (3 * (int(inv_lod) - 1)); // number of base elements we need for storing one element of this LoD in g_cache
+    const uint new_base_elements_to_request = uint(number_of_new_blocks * brick_elem_size_in_cache);
+
+    const uint start_idx = atomicAdd(g_assign_info[ASSIGN_CACHE_TOP_IDX], new_base_elements_to_request);
+    if(start_idx >= g_cache_capacity) {
+        // we can't create ANY new elements. revert and store the info in our ASSIGN_ location
+        atomicAdd(g_assign_info[ASSIGN_CACHE_TOP_IDX], uint(-int(new_base_elements_to_request)));
+        g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_START] = INVALID;
+        g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BRICK_COUNT] = 0u;
+#ifdef PRINT_CACHE_USAGE
+        debugPrintfEXT("for inv. LoD %u we couldn't aquired any of the %u new elements in addition to the %u free stack blocks for %u requests. Cache usage at %u / %u. (100%%)", inv_lod, new_base_elements_to_request, number_of_free_blocks, number_of_requests, (start_idx), g_cache_capacity);
+#endif
+        gpu_stats.blocks_decoded_L1_to_7[inv_lod - 1u] = number_of_free_blocks;
+    }
+    else if (start_idx + new_base_elements_to_request >= g_cache_capacity) {
+        // we can't create ALL new base elements. revert as necessary and allocate the rest.
+        uint possible_number_of_bricks = (g_cache_capacity - start_idx) / brick_elem_size_in_cache;
+        atomicAdd(g_assign_info[ASSIGN_CACHE_TOP_IDX], uint(-(new_base_elements_to_request - possible_number_of_bricks * brick_elem_size_in_cache)));
+        g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_START] = start_idx;
+        g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BRICK_COUNT] = possible_number_of_bricks; // can be zero!
+#ifdef PRINT_CACHE_USAGE
+        debugPrintfEXT("for inv. LoD %u we partially aquired %u / %u new elements in addition to the %u free stack blocks for %u requests. Cache usage at %u / %u. (%3.1f%%)", inv_lod, possible_number_of_bricks, new_base_elements_to_request, number_of_free_blocks, number_of_requests, (start_idx + possible_number_of_bricks * brick_elem_size_in_cache), g_cache_capacity, 100.f*float(start_idx + possible_number_of_bricks * brick_elem_size_in_cache)/float(g_cache_capacity));
+#endif
+
+        gpu_stats.blocks_decoded_L1_to_7[inv_lod - 1u] = possible_number_of_bricks + number_of_free_blocks;
+    }
+    else {
+        // we could create everything and have now a consecutive space in g_cache for all the new elements
+        // that can't be obtained from the freeBlockStack
+        g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_START] = start_idx;
+        g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BRICK_COUNT] = uint(number_of_new_blocks);
+#ifdef PRINT_CACHE_USAGE
+        debugPrintfEXT("for inv. LoD %u we aquired all %u new elements in addition to the %u free stack blocks to fullfill %u requests. Cache usage at %u / %u. (%3.1f%%)", inv_lod, new_base_elements_to_request, number_of_free_blocks, number_of_requests, (start_idx + new_base_elements_to_request), g_cache_capacity, 100.f*float((start_idx + new_base_elements_to_request))/float(g_cache_capacity));
+#endif
+        gpu_stats.blocks_decoded_L1_to_7[inv_lod - 1u] = uint(number_of_new_blocks) + number_of_free_blocks;
+    }
+
+    // reset the request slot counter for the next frame
+    //THE ASSIGN_REQUESTED_BRICKS COUNTER IS NOT RESET IF THE CACHE_STAGES ARE NOT ENABLED! IF THEY ARE RE-ENABLED THIS MAY BE FAULTY!!
+    #ifdef ENALBE_CSGV_DEBUGGING
+        gpu_stats.bricks_requested_L1_to_7[(inv_lod - 1u)] = number_of_requests;
+        gpu_stats.bricks_on_freestack_L1_to_7[(inv_lod - 1u)] = number_of_free_blocks;
+    #endif
+    g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_REQUESTED_BRICKS] = 0u;
+
+    // send cache usage to CPU to trigger cache hard resets
+    atomicMax(gpu_stats.used_cache_base_elements, g_assign_info[ASSIGN_CACHE_TOP_IDX]);
+
+    // after this shader execution:
+    // assign info
+    // - ASSIGN_NEW_BLOCK_START contains the first index (measured in base_elements) in g_cache where the new elements for this LoD start
+    // - ASSIGN_NEW_BRICK_COUNT contains the number of elements (measured in LxLxL elements) in g_cache for this LoD available from there
+    // - START and COUNT are guaranteed to remain within g_cache_capacity
+    // stacks
+    // - if a brick is no longer visible but held an element in cache, it was freed and added to the free_block_stack
+    // - the lod_counter elements at the end of the free_block_stack are all reset to zero
+    //
+    // basically this shader trys to provide as much new space in g_cache as we need in addition to the freeBlockStack for all LoDs
+}

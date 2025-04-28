@@ -1,0 +1,244 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+
+#include "volcanite/renderer/csgv_bindings.glsl"
+
+#include "cpp_glsl_include/csgv_constants.incl"
+#include "util.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
+#include "volcanite/renderer/csgv_materials.glsl"
+
+#ifdef EMPTY_SPACE_UINT_SIZE
+    #include "volcanite/bit_vector.glsl"
+#endif
+
+#include "pcg_hash.glsl"
+
+bool pushFreeBlockStack(uint inv_lod, uint value) {
+    uint pos = atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], 1u);
+    if(pos > g_free_stack_capacity) {
+        // no free index for us
+        // assert(false, "couldn't push to free block stack because it is full");
+        atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], uint(-1));
+        return false;
+    }
+    else {
+        g_free_block_stacks[(inv_lod - 1u) * g_free_stack_capacity + pos] = value;
+        return true;
+    }
+}
+
+// called for each brick
+void main() {
+    // at the beginning of this shader:
+    // cache element ownership
+    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick owns a cache element
+    // - if BRICK_INFO_INDEX < INVALID, the brick owns a cache element in this position with size BRICK_INFO_CUR_INV_LOD
+    // visibility
+    // - BRICK_INFO_REQ_INV_LOD < LOD_COUNT means the brick is visible in renderer AND had visible palette entries in the frame before
+    // stacks
+    // - ASSIGN_REQUESTED_BRICKS was reset to zero before the shader execution started
+    // - the top pointers in the g_free_block_stacks point to the next free location in the LoD stack
+
+    // find out for which brick we compute if it is visible
+    uvec3 brick = gl_GlobalInvocationID.xyz;
+    if (isHelperLane(brick, g_brick_count))
+        return;
+
+    // iterate over the whole palette in this brick (read the palette size from the header)
+    uint brick_idx = brick_pos2idx(brick, g_brick_count);
+    uint brick_info_pos = brick_idx * 4u;
+    // either none or both must be true: the brick has a position in the cache and the brick has a decoded LOD
+    assertf(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)), "brick CUR_INV_LOD or INDEX are corrupted (csgv_request) cache_idx, cur_lod: %v2u", uvec2(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX], g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD]));
+
+
+    //    // check if brick is already decoded (if anything changes, the decoder will release it)
+    //    if(g_brick_info[brick_idx * 4u + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)
+    //        return;
+
+#ifdef NO_EMPTY_BRICK_SKIPPING
+    bool potentially_visible = true;
+#else
+    bool potentially_visible = false;
+#endif
+
+    const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
+    EncodingRef brick_address = getBrickEncodingRef(brick_idx);
+    // read total palette size from brick header
+    const uint palette_size = brick_address.buf[PALETTE_SIZE_HEADER_INDEX];
+    assert(palette_size > 0u, "palette size 0 should not be possible");
+    assert(palette_size < bitfieldExtract(~0u, 0, int(g_cache_palette_idx_bits)), "palette size exceeds available bits for cache palette indices");
+    // check all entries in the palette if anything is visible (> 0)
+    for (uint i = 1; i <= palette_size; i++) {
+        if (isLabelVisible(brick_address.buf[brick_encoding_length - i])) {
+            potentially_visible = true;
+            break;
+        }
+    }
+
+#if CACHE_MODE == CACHE_VOXELS
+//    // evict random elements from the cache
+//    {
+//        const uint evict_count = 0;
+//        uvec2 rnd = uvec2(brick_idx ^ (~g_frame), g_frame << 8);
+//        for (int i = 0; i < evict_count; i++) {
+//            rnd = hash_pcg2d(rnd);
+//            g_cache[(rnd.x % (CACHE_UINT_SIZE / 2)) * 2] = INVALID;
+//        }
+//    }
+#endif
+
+#ifdef EMPTY_SPACE_UINT_SIZE
+    // reset empty space buffer
+    // TODO: add bit masks for g_changed_flags (camera 1, rendering 2, material 4, postprocess 8..)
+    if (g_camera_still_frames == 0u) {
+        // fill the whole cache with INVALID information
+        BitVectorRef empty_space_bv = BitVectorRef(g_empty_space_bv_address);
+        for (uint id = brick_idx; id < EMPTY_SPACE_BV_WORD_SIZE; id += g_brick_idx_count) {
+            empty_space_bv.words[id] = BV_WORD_TYPE(0u);
+        }
+    }
+#endif
+
+#if CACHE_MODE != CACHE_BRICKS
+    // all following cache management is only necessary when caching bricks (and decoding them in the decompression stage).
+    // for other caching modes, all we care about is the empty space flagging of invisible bricks
+    // a value > lod_count is empty space, value == lod_count is potentially visible
+    g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT + uint(!potentially_visible);
+    return;
+#endif
+
+#ifndef NDEBUG
+    // the coarsest LoD 0 must not be requested! we can just read it from the first palette entry during rendering so
+    // we don't do anything here.
+    // TODO: could assign the label from palette to brick directly to not be required to read g_encoding in the renderer
+    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == 0u) {
+        assert(false, "requesting LoD 0 is not allowed!");
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT;
+    }
+#endif
+
+#ifdef SEPARATE_DETAIL
+    // if the detail for this brick is not available and it is currently not decoded, we can only decode it with the base levels
+    // in this case, we request the detail level of the brick to be decoded
+    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == (LOD_COUNT - 1u)  // finest LoD (detail) requested for brick
+    && g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != (LOD_COUNT - 1u)  // brick is not yet decoded up to the finest LoD
+    && (g_detail_buffer_dirty == 1u || (g_detail_starts[brick_idx + 1u] - g_detail_starts[brick_idx]) == 0u)) {  // but the detail encoding is not available
+
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT - 2u;
+        if(g_detail_requests[g_request_buffer_capacity] < g_request_buffer_capacity) {
+            const uint pos = atomicAdd(g_detail_requests[g_request_buffer_capacity], 1u);
+            if (pos < g_request_buffer_capacity)
+                g_detail_requests[pos] = brick_idx;
+        }
+    }
+#endif
+
+    // we deallocate if we hold a cache element.
+    // only chance to not deallocate is that the brick is potentially_visible, flagged as visible in the last render
+    // frame, AND decoded to the LoD requested by the renderer (this is the last else block below).
+    bool deallocate = g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] != INVALID;
+    bool allocate = false;
+    // no visible palette entries: brick is empty space
+    if (!potentially_visible) {
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT + 1u; // > lod_count is empty space
+    }
+    // bricks visibility status is unknown, we don't decode it yet since it isn't visible in the renderer currently
+    else if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT) {
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT;      // = lod_count is potentially visible
+    }
+    // brick is already flagged as visible (REQ_INV_LOD < LOD_COUNT) but not decoded to the requested LoD
+    else if(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]){
+        allocate = true;
+    }
+    // brick is visilbe and already decoded to its requeste level: it should remain in cache.
+    else {
+        assert(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT, "visible brick is not decoded");
+        assert(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < g_cache_capacity, "visible brick has no cache index");
+        deallocate = false;
+    }
+
+    // we can refuse to deallocate elements if the cache is filled below 75%, but only if it does not have to switch LOD
+#ifndef NO_CACHE_LAZY_EJECT
+    const uint cache_top = (LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD;
+    if (!allocate && g_assign_info[cache_top] < g_cache_capacity / 4u * 3u) {
+        deallocate = false;
+    }
+#endif
+
+    // note: if we switch the LoD, both allocate and deallocate have to be carried out
+    if (deallocate) {
+        assert(g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID, "trying to deallocate an INVALID brick");
+        bool push_successful = pushFreeBlockStack(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD], g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX]);
+        // assert(push_successful, "freeStack is full preventing correct deallocate");
+
+        // if a brick must be deallocated to switch its LOD but the free stack is full it remains in its old LOD.
+        // we now let it switch to its new LOD nevertheless even though this means that its previous memory location
+        // cannot be reused anymore (it is not on any free stack) => cache fragmentation => resolved by a cache reset.
+//        if (push_successful) {
+        if (push_successful || allocate) {
+            g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] = INVALID;
+            g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = INVALID;
+        }
+//        else {
+//            // debugPrintfEXT("push not successful for brick %u lod %u", brick_idx, g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD]);
+//            // never allocate a new slot if the current slot cannot be released
+//            // this would lead to a brick being decoded in two different LODs and the brick_info would be corrupted
+//            allocate = false;
+//        }
+    }
+
+    // every brick that needs to allocate a new element gets one uniqe index in [0, 1, ..] in its requested LOD
+    // TODO: the assert for the BRICK_INFO_REQ_SLOT reset is (1) not necessary as it is overwritten here anyways, and (2) if the render update flags are not UPDATE_RENDER, the cache stages are not called. after reactivation the slots may not have been reset yet.
+    // BUT THE g_assign_info + ASSIGN_REQUESTED_BRICKS MUST be reset before assigning slots again!!
+    // assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] == INVALID, "brick req. slot was not set to invalid before new frame");
+    if (allocate) {
+        // get us a unique slot index within our requested LoD
+        uint lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
+        assertf(0u < lod && lod < LOD_COUNT, "lod=%u is not 0 < lod < lod_count while trying to allocate cache slot", lod);
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = atomicAdd(g_assign_info[(lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_REQUESTED_BRICKS], 1u);
+    }
+    else {
+        assert(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT
+              || g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD]
+              || g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT, "we don't try to allocate even though we would need to!");
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT] = INVALID;
+    }
+
+    // after this shader execution:
+    // cache element ownership
+    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick still owns a cache element
+    // - REQ_SLOT < INVALID <=> the brick needs a cache element <=> the REQ_SLOT is a valid entry for its REQ_LOD
+    // - REQ_SLOT < INVALID => BRICK_INFO_INDEX == INVALID
+    // - the ASSIGN_REQUESTED_BRICKS for each LoD contains the number of requested blocks for this LoD.
+    // - all SLOT indices < ASSIGN_REQUESTED_BRICKS are uniquely assigned to one block each
+    // visibility
+    // - BRICK_INFO_REQ_INV_LOD < LOD_COUNT means the brick is visible in renderer AND had visible palette entries in the frame before
+    // - BRICK_INFO_REQ_INV_LOD = LOD_COUNT means the brick contains visible labels in its palette
+    // - (BRICK_INFO_REQ_INV_LOD > g_loc_count) means that the brick is guaranteed to be invisible
+    // stacks
+    // - if a brick is no longer visible but held an element in cache, it was freed and added to the free_block_stack
+    // - the lod_counter elements at the end of the free_block_stack contain the number of requested elements per LoD
+}

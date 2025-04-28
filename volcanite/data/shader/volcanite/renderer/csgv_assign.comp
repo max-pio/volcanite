@@ -1,0 +1,111 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_buffer_reference2 : require
+
+layout (local_size_x = 4, local_size_y = 4, local_size_z = 2) in;
+
+
+#include "volcanite/renderer/csgv_bindings.glsl"
+
+// includes
+#include "util.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
+
+uint popFreeBlockStack(uint inv_lod) {
+    uint pos = atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], uint(-1)) - 1u;
+    if(pos > g_free_stack_capacity) {
+        // no element on stack for us
+        //assert(false, "couldn't pop from block stack because it is empty - or the counter was invalid");
+        atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], 1u);
+        return INVALID;
+    }
+    else {
+        return g_free_block_stacks[(inv_lod - 1u) * g_free_stack_capacity + pos];
+    }
+}
+
+// executed for every brick
+void main() {
+    // at the beginning of this shader execution:
+    // ASSIGN_NEW_BLOCK_START contains the first index (measured in base elements) in g_cache where the new elements for this LoD can start
+    // ASSIGN_NEW_BRICK_COUNT contains the number of elements (measured in LxLxL elements) in g_cache for this LoD available from there
+    // (the other elements we will try to fetch from the freeBlockStack)
+    //
+    // cache element ownership
+    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick still owns a cache element
+    // - REQ_SLOT < INVALID <=> the brick needs a cache element <=> the REQ_SLOT is a valid entry for its REQ_LOD
+    // - REQ_SLOT < INVALID => BRICK_INFO_INDEX == INVALID
+    // - the ASSIGN_REQUESTED_BRICKS for each LoD contains the number of requested blocks for this LoD.
+    // - all SLOT indices < ASSIGN_REQUESTED_BRICKS are uniquely assigned to one block each
+    // visibility
+    // - BRICK_INFO_REQ_INV_LOD < LOD_COUNT means the brick is visible in renderer AND had visible palette entries in the frame before
+    // - BRICK_INFO_REQ_INV_LOD = LOD_COUNT means the brick contains visible labels in its palette
+    // - (BRICK_INFO_REQ_INV_LOD > g_loc_count) means that the brick is guaranteed to be invisible
+    //
+    // after this shader execution:
+    // BRICK_INFO_REQ_SLOT != INVALID <=> this brick needs to be decompressed in the next shader
+    // BRICK_INFO_CACHE_INDEX != INVALID <=> this brick has a valid location in the cache
+
+    // find out for which brick we compute if it is visible
+    const uvec3 brick = gl_GlobalInvocationID.xyz;
+    if (isHelperLane(brick, g_brick_count))
+        return;
+
+    // do some debug checks
+    if(!isHelperLane(brick, uvec3(1u))) {
+        const uint cache_top = (LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD;
+        assertf(g_assign_info[cache_top] <= g_cache_capacity, "cache counter is over capacity! cache top: %u", g_assign_info[cache_top]);
+    }
+
+    const uint brick_idx = brick_pos2idx(brick, g_brick_count);
+    const uint brick_info_pos = brick_idx * 4u;
+    assert(!((g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] < INVALID) ^^ (g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT)), "brick CUR_INV_LOD or INDEX are corrupted (csgv_assign)");
+
+
+    // track how many bricks are decoded of each LOD
+#ifdef ENALBE_CSGV_DEBUGGING
+    if(bool(g_debug_vis_flags & VDEB_STATS_DOWNLOAD_BIT) && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > 0
+        && g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < LOD_COUNT) {
+        atomicAdd(gpu_stats.blocks_in_cache_L1_to_7[g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] - 1u], 1u);
+    }
+#endif
+
+    const uint slot = g_brick_info[brick_info_pos + BRICK_INFO_REQ_SLOT];
+    // not assigned to a request slot means that the brick will not allocate anything => ignore this brick
+    if(slot == INVALID) {
+        return;
+    }
+
+    const uint inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
+    const uint elemSizeInCache = 1u << (3u * (inv_lod - 1u)); // number of base elements we need for storing one element of this LoD in g_cache
+    assert(0 < inv_lod && inv_lod < LOD_COUNT, "brick has slot index but requests zero or invalid lod");
+
+    // now find us an index in the cache
+    uint cache_idx = INVALID;
+    // the first slots can directly use one of the "new" elements.
+    if(slot < g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BRICK_COUNT]) {
+        cache_idx = g_assign_info[(inv_lod - 1u) * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_START] + slot * elemSizeInCache;
+    }
+    // the others have to grab one from the freeBlockStack
+    else {
+        cache_idx = popFreeBlockStack(inv_lod);
+    }
+    g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] = cache_idx;
+}

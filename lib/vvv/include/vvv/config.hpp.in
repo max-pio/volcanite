@@ -1,0 +1,47 @@
+//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#pragma once
+
+#include <string>
+#include <cstdint>
+
+#define STRINGIFY(x) #x
+#define MACRO_STRINGIFY(x) STRINGIFY(x)
+
+// TODO: remove SHADER_COMPILER_EXECUTABLE cmake macros. everything should use the internal shaderc compiler now.
+#cmakedefine SHADER_COMPILER_EXECUTABLE "@SHADER_COMPILER_EXECUTABLE@"
+#cmakedefine SHADER_INCLUDE_DIR "@SHADER_INCLUDE_DIR@"
+#cmakedefine DATA_INCLUDE_DIR "@DATA_INCLUDE_DIR@"
+#cmakedefine VVV_BUILD_TIME_ISO8601 "@VVV_BUILD_TIME_ISO8601@"
+
+#ifndef SHADER_COMPILER_EXECUTABLE
+#define SHADER_COMPILER_EXECUTABLE "glslangValidator"
+#endif
+
+#ifndef SHADER_INCLUDE_DIR 
+#define SHADER_INCLUDE_DIR "./"
+#endif
+
+namespace vvv {
+    const std::string shader_compiler_executable = SHADER_COMPILER_EXECUTABLE;
+    const std::string default_shader_include_dir = SHADER_INCLUDE_DIR "/";
+    const std::string build_time_iso8601 = VVV_BUILD_TIME_ISO8601;
+
+    const std::string project_version = MACRO_STRINGIFY(PROJECT_VERSION);
+    const uint32_t project_version_major = PROJECT_VERSION_MAJOR;
+    const uint32_t project_version_minor = PROJECT_VERSION_MINOR;
+    const uint32_t project_version_patch = PROJECT_VERSION_PATCH;
+}

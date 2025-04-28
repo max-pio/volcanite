@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "volcanite"
+version = "0.6.0"
+authors = [
+  { name="Max Piochowiak", email="max.piochowiak@kit.edu" },
+]
+description = "Volcanite python interface and utility functions."
+readme = "README.md"
+keywords = ["segmentation", "volume", "rendering", "connectomics"]
+
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+]
+license = "GPL-3.0-or-later"
+
+[project.optional-dependencies]
+convert = [
+    "numpy>=2.2",
+    "vtk>=9.3.2",
+    "h5py>=3.12",
+    "pillow>=11.1",
+    "nibabel>=5.3",
+    "matplotlib>=3.10",
+]
+cloud = [
+    "tensorstore>=0.1",
+    "cloud-volume>=11.1",
+    "intern[cloud-volume]>=1.4",
+    "volcanite[convert]"
+]
+test = ["pytest>=8.0.0"]
+all = ["volcanite[cloud,test]"]
+
+[project.urls]
+Homepage = "https://cg.ivd.kit.edu/staff/research/piochowiak/mitarbeiter_piochowiak.php"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q"
+testpaths = ["tests"]

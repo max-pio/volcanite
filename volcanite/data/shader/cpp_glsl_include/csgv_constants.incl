@@ -1,0 +1,255 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#ifndef CSGV_CONSTANTS_INCL
+#define CSGV_CONSTANTS_INCL
+
+// This header contains compile time CompressedSegmentationVolume constants to be included in the
+// CPU encoding/decoding C++ classes as well as in the GLSL shaders for GPU decoding.
+
+#define KB_TO_BYTE 1000.
+#define MB_TO_BYTE (KB_TO_BYTE*KB_TO_BYTE)
+#define GB_TO_BYTE (KB_TO_BYTE*KB_TO_BYTE * KB_TO_BYTE)
+#define BYTE_TO_KB (1./KB_TO_BYTE)
+#define BYTE_TO_MB (BYTE_TO_KB*BYTE_TO_KB)
+#define BYTE_TO_GB (BYTE_TO_KB*BYTE_TO_KB*BYTE_TO_KB)
+
+// Compressed Segmentation Volume Constants ----------------------------------------------------------------------------
+
+// stream compression mode bit flags
+#define DOUBLE_ENCODING_BIT 1u
+#define RANS_BIT 2u
+#define WT_BIT 4u
+#define HUFFMAN_WT_BIT 8u
+
+#ifdef GL_core_profile
+    // require 64 bit types
+    #extension GL_ARB_gpu_shader_int64 : require
+
+    #define CSGV_UINT uint
+    #define NIBBLE_ENC 0
+    #define SINGLE_TABLE_RANS_ENC 1
+    #define DOUBLE_TABLE_RANS_ENC 2
+    #define WAVELET_MATRIX_ENC 4
+    #define HUFFMAN_WM_ENC 8
+#else
+    #include <stdint.h>
+    #include <stdexcept>
+
+    #define CSGV_UINT uint32_t
+
+    #define CSGV_SYNTH_PREFIX_STR "+synth"
+
+    namespace volcanite {
+        enum EncodingMode {NIBBLE_ENC=0,
+                           SINGLE_TABLE_RANS_ENC=1, DOUBLE_TABLE_RANS_ENC=2,
+                           WAVELET_MATRIX_ENC=4, HUFFMAN_WM_ENC=8};
+
+        // Bit Flags
+        //
+        // config:
+        // double encoder (start new encoder for the finest LOD): bit 0 (1)
+        //
+        // mutually exclusive:
+        // rANS: bit 1 (2)
+        // wavelet matrix: bit 2 (4)
+        // Huffman wavelet matrix: bit 3 (8)
+
+        static constexpr const char* EncodingMode_STR(EncodingMode e) {
+            switch (e) {
+                case NIBBLE_ENC:
+                    return "Nibble";
+                case SINGLE_TABLE_RANS_ENC:
+                    return "rANS";
+                case DOUBLE_TABLE_RANS_ENC:
+                    return "rANS-DT";
+                case WAVELET_MATRIX_ENC:
+                    return "WaveletMatrix";
+                case HUFFMAN_WM_ENC:
+                    return "HuffmanWaveletMatrix";
+                default:
+                    throw std::runtime_error("Unknown encoding mode");
+            }
+        }
+
+        static constexpr const char* EncodingMode_DefineSTR(EncodingMode e) {
+            switch (e) {
+                case NIBBLE_ENC:
+                    return "NIBBLE_ENC";
+                case SINGLE_TABLE_RANS_ENC:
+                    return "SINGLE_TABLE_RANS_ENC";
+                case DOUBLE_TABLE_RANS_ENC:
+                    return "DOUBLE_TABLE_RANS_ENC";
+                case WAVELET_MATRIX_ENC:
+                    return "WAVELET_MATRIX_ENC";
+                case HUFFMAN_WM_ENC:
+                    return "HUFFMAN_WM_ENC";
+                default:
+                    throw std::runtime_error("Unknown encoding mode");
+            }
+        }
+
+        static constexpr const char* EncodingMode_ShortSTR(EncodingMode e) {
+            switch (e) {
+                case NIBBLE_ENC:
+                    return "nb";
+                case SINGLE_TABLE_RANS_ENC:
+                    return "r1";
+                case DOUBLE_TABLE_RANS_ENC:
+                    return "r2";
+                case WAVELET_MATRIX_ENC:
+                    return "wm";
+                case HUFFMAN_WM_ENC:
+                    return "w1";
+                default:
+                    throw std::runtime_error("Unknown encoding mode");
+            }
+        }
+    }
+#endif
+
+// 1000 most significant bit stores stop bit:
+#define STOP_BIT 8u     ///< 1000 MSB bit, stops the hierarchical traversal into finer nodes as they are all constant
+// #XXX least significant 3 bits store operation:
+#define PARENT 0u       ///< copy label from parent node
+// the following must be true: neighbor_z = neighbor_y+1 = neighbor_x+2
+#define NEIGHBOR_X 1u   ///< copy label from x-axis neighbor with different parent node or its parent if not decoded
+#define NEIGHBOR_Y 2u   ///< copy label from x-axis neighbor with different parent node or its parent if not decoded
+#define NEIGHBOR_Z 3u   ///< copy label from x-axis neighbor with different parent node or its parent if not decoded
+#define PALETTE_ADV 4u  ///< read palette label at the palette top pointer and advance the top pointer by 1
+#define PALETTE_LAST 5u ///< re-read palette last palette label, located 1 entry before the top pointer, again
+#define PALETTE_D 6u    ///< re-read palette label from D+2 entries before the top pointer. D follows in encoding stream.
+
+// operation bit masks to enable / disable certain operations in the encoding
+// note: defined as signed because GLSL preprocessors do not support uint arithmetic
+#define OP_PARENT_BIT 1
+#define OP_NEIGHBORX_BIT 2
+#define OP_NEIGHBORY_BIT 4
+#define OP_NEIGHBORZ_BIT 8
+#define OP_NEIGHBOR_BITS 14
+// PALETTE_ADV must always be enabled
+#define OP_PALETTE_LAST_BIT 32
+/// if OP_USE_OLD_PAL_D_BIT and OP_PALETTE_D_BIT are set, delta is only one 4 bit element after the operation (old variant)
+#define OP_USE_OLD_PAL_D_BIT 64
+#define OP_PALETTE_D_BIT 128
+#define OP_STOP_BIT 256
+#define OP_ALL 0x1AF
+#define OP_ALL_WITHOUT_STOP (OP_ALL & (~OP_STOP_BIT))
+#define OP_ALL_WITHOUT_DELTA (OP_ALL & (~OP_PALETTE_D_BIT))
+
+#ifndef GL_core_profile
+    namespace volcanite {
+     static const std::string OperationMask_STR(uint32_t op_mask) {
+            // in C++20 the function could be constexpr const char* but C++17 does not support std::string in costexpr.
+            std::string op_mask_str;
+            if (op_mask == OP_ALL)
+                op_mask_str = "ALL";
+            else if (op_mask == OP_ALL_WITHOUT_DELTA)
+                op_mask_str = "OPT";
+            else {
+                if (op_mask & OP_PARENT_BIT)
+                    op_mask_str.push_back('p');
+                if (op_mask & OP_NEIGHBORY_BIT)
+                    op_mask_str.push_back('x');
+                if (op_mask & OP_NEIGHBORY_BIT)
+                    op_mask_str.push_back('y');
+                if (op_mask & OP_NEIGHBORZ_BIT)
+                    op_mask_str.push_back('z');
+                if (op_mask & OP_PALETTE_LAST_BIT)
+                    op_mask_str.push_back('l');
+                if (op_mask & OP_PALETTE_D_BIT) {
+                    op_mask_str.push_back('d');
+                    if (op_mask & OP_USE_OLD_PAL_D_BIT)
+                        op_mask_str.push_back('-');
+                }
+                if (op_mask & OP_STOP_BIT)
+                    op_mask_str.push_back('s');
+            }
+            return op_mask_str;
+        }
+    }
+#endif
+
+
+#define INVALID 0xFFFFFFFFu    ///< UINT32_MAX all bits set to 1. Denotes undecoded values, invalid labels, errors..
+#define INVISIBLE_LABEL 0xFFFFFFFEu ///< UINT32_MAX-1. Denotes a voxel label that is invisible in the current config
+
+// Rendering Parameter Flags -------------------------------------------------------------------------------------------
+
+// used in a bit mask to denote certain renderering parameter updates and resets
+#define UPDATE_PCAMERA 1
+#define UPDATE_PRENDER 2
+#define UPDATE_PMATERIAL 4
+#define UPDATE_PRESOLVE 8
+#define UPDATE_CLEAR_CACHE 16
+#define UPDATE_CLEAR_ACCUM 32
+// triggers rendering the next frame
+#define UPDATE_RENDER_FRAME 64
+
+
+// Material Constants --------------------------------------------------------------------------------------------------
+#define LABEL_AS_ATTRIBUTE 0xFFFFFFFFu
+
+struct GPUSegmentedVolumeMaterial {
+    CSGV_UINT discrAttributeStart;  ///< start attribute read location in g_attributes. a value < 0 means to use the label directly (csgv_id)
+    float discrIntervalMin;         ///< discrAttribute values within the interval [min, max) assign the label to this material
+    float discrIntervalMax;         ///< discrAttribute values within the interval [min, max) assign the label to this material
+    CSGV_UINT tfAttributeStart;     ///< start attribute read location in g_attributes
+    float tfIntervalMin;            ///< attribute min / max values mapped to the TF interval [0, 1]
+    float tfIntervalMax;            ///< attribute min / max values mapped to the TF interval [0, 1]
+    float opacity;                  ///< opacity of the material, < 1 is a semi-transparent volume, >= 1 is a surface
+    float emission;                 ///< how much radiance the material emits, must be >= 0
+    int wrapping;                   ///< wrapping mode to map labels to transfer function values: 0 = clamp, 1 = repeat
+};
+
+// Cache Modes
+#define CACHE_NOTHING 0
+#define CACHE_VOXELS 1
+#define CACHE_BRICKS 2
+
+// GPU / CPU transfer information --------------------------------------------------------------------------------------
+
+struct GPUStats {
+    uint64_t min_spp_and_pixel;             ///< 16 MSB: min. #valid samples any pixel received, pixel x coordinate in 16 LSB, y in between
+    uint64_t max_spp_and_pixel;             ///< 16 MSB: max. #valid samples any pixel received, pixel x coordinate in 16 LSB, y in between
+    CSGV_UINT limit_area_pixel_spp;         ///< number of valid samples that the g_req_limit_area_pixel received (used to check sampling progress)
+    CSGV_UINT used_cache_base_elements;     ///< top pointer of the cache: number of occupied 2x2x2 base elements
+    // optional: only available if show_gpu_stats is true
+    CSGV_UINT bbox_hits;                    ///< total number of pixels that hit the volume bounding box
+    CSGV_UINT blocks_decoded_L1_to_7[6];    ///< number of base elements per LOD 1 .. 7 that were acquired in frame
+    CSGV_UINT blocks_in_cache_L1_to_7[6];   ///< number of base elements per LOD 1 .. 7 currently present in the cache
+    CSGV_UINT bricks_requested_L1_to_7[6];  ///< number of bricks per LOD 1 .. 7 that were requested in the last frame
+    CSGV_UINT bricks_on_freestack_L1_to_7[6];  ///< number of bricks per LOD 1 .. 7 that were on the free stack in the last frame
+};
+
+// Debug Visualiation --------------------------------------------------------------------------------------------------
+
+#define VDEB_MODEL_SPACE_BIT 1
+#define VDEB_LOD_BIT 2
+#define VDEB_EMPTY_SPACE_BIT 4
+#define VDEB_CACHE_VOXEL_BIT 8
+#define VDEB_NO_POSTPROCESS_BIT 16
+#define VDEB_CACHE_ARRAY_BIT 32
+#define VDEB_EMPTY_SPACE_ARRAY_BIT 64
+#define VDEB_G_BUFFER_BIT 128
+#define VDEB_BRICK_IDX_BIT 256
+#define VDEB_STATS_DOWNLOAD_BIT 512
+#define VDEB_ENVMAP_BIT 1024
+#define VDEB_SPP_BIT 2048
+#define VDEB_REQUEST_LIMIT_BIT 4096
+#define VDEB_BRICK_INFO_BIT 8192
+
+#undef CSGV_UINT
+#endif // CSGV_CONSTANTS_INCL

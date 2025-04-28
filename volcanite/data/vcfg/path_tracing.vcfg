@@ -1,0 +1,14 @@
+Version 0.6.0
+
+[Rendering]
+Constant_Color: 0.000000
+Light_Intensity: 1.000000
+Global_Illumination: 1
+Directional_<>_Ambient: 1.000000
+Environment_Map: 1
+Path_Length: 32
+Denoising: 1
+
+[Display]
+Accumulation_Frames: 1024
+

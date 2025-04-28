@@ -1,0 +1,59 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_shader_atomic_int64 : enable
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+// includes
+#include "cpp_glsl_include/csgv_constants.incl"
+#include "volcanite/renderer/csgv_bindings.glsl"
+
+#include "volcanite/renderer/framebuffer.glsl"
+
+#include "util.glsl"
+
+void main() {
+    ivec2 viewport_size = imageSize(accumulationOut);
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (isHelperLane(pixel, viewport_size))
+        return;
+
+    // everything this shader does is copying the framebuffers of the last frame to the current frame
+    // this is necessary because some of the buffers are ping-pong buffers that alter between frames
+
+    if (g_frame == 0u) {
+        // first frame: reset, should usually not happen
+        // initialize RGBA accumulation with 0 and invalid G-Buffer, set 0 SPP
+        imageStore(accumulationOut, pixel, vec4(0.f));
+        imageStore(accuSampleCountOut, pixel, uvec4(0u));
+        imageStore(gBuffer, pixel, uvec4(invalidGBufferRGB16(), 0u));
+        imageStore(denoisingBuffer[0], pixel, vec4(0.f));
+    }
+    else {
+        vec4 prev_rgba = imageLoad(accumulationIn, pixel);
+        uvec4 prev_valid_samples = imageLoad(accuSampleCountIn, pixel);
+
+        imageStore(accumulationOut, pixel, prev_rgba);
+        imageStore(accuSampleCountOut, pixel, prev_valid_samples);
+        imageStore(denoisingBuffer[0], pixel, prev_rgba);
+    }
+}

@@ -1,0 +1,179 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_KHR_shader_subgroup_basic : require
+
+#ifndef SUBGROUP_SIZE
+    #define SUBGROUP_SIZE 64
+#endif
+
+// TODO: instead of invoking brick_idx_count * SUBGROUP_SIZE for .x, invoke .x=SUBGROUP_SIZE, .y=brick_idx_count?
+// brick_idx_count * SUBGROUP_SIZE invocations: one subgroup is responsible for decompressing one brick
+layout (local_size_x = SUBGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+
+#include "volcanite/benchmark/bench_bindings.glsl"
+
+#include "util.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
+#define CSGV_DECODING_ARRAY g_cache
+
+// if DECODE_FROM_SHARED_MEMORY is set, the encoding is copied to shared memory before decoding
+#ifdef DECODE_FROM_SHARED_MEMORY
+
+    #if ENCODING_MODE == NIBBLE_ENC
+        #ifndef MAX_BRICK_ENCODING_32BIT_LENGTH
+            #define MAX_BRICK_ENCODING_32BIT_LENGTH 12288
+        #endif
+        shared uint[MAX_BRICK_ENCODING_32BIT_LENGTH] s_brick_encoding;
+        #define SHARED_BRICK_ENCODING s_brick_encoding
+    #elif ENCODING_MODE == HUFFMAN_WM_ENC
+        #include "volcanite/compression/decoder/HuffmanWMDecoder_types.glsl"
+
+        #ifndef MAX_BIT_VECTOR_WORD_LENGTH
+            #define MAX_BIT_VECTOR_WORD_LENGTH 1024
+        #endif
+        #define MAX_FLAT_RANK_WORD_LENGTH (BV_WORD_BIT_SIZE * MAX_BIT_VECTOR_WORD_LENGTH / BV_L1_BIT_SIZE + 1u)
+        // each WMHBrickHeader is 12x4x8=384 bits in size: allocate enough WMHBrickHeader entries to fit any flat rank at the end
+        shared BV_WORD_TYPE s_bit_vector[MAX_BIT_VECTOR_WORD_LENGTH];
+        #define MAX_WM_HEADER_ARRAY_LENGTH (2 + (MAX_FLAT_RANK_WORD_LENGTH / ((384 + BV_WORD_BIT_SIZE - 1) / BV_WORD_BIT_SIZE)))
+        shared WMHBrickHeader s_wm_header[MAX_WM_HEADER_ARRAY_LENGTH];
+        #define SHARED_BIT_VECTOR s_bit_vector
+        #define SHARED_WM_HEADER s_wm_header[0]
+        shared uvec4 s_stop_bits_ref;
+        #define SHARED_STOP_BITS_REF s_stop_bits_ref
+    #else
+        #error "unsupported encoding mode"
+    #endif
+
+#endif
+
+#include "volcanite/compression/compressed_segmentation_volume.glsl"
+
+void main() {
+    assert(gl_NumSubgroups == 1, "decompression assumes exactly one subgroup per workgroup");
+    assert(gl_SubgroupSize == SUBGROUP_SIZE && gl_WorkGroupSize.x == SUBGROUP_SIZE && gl_WorkGroupSize.y == 1u
+    && gl_WorkGroupSize.z == 1u, "decompression assumes workgroup size equal to the subgroup size");
+
+    // one workgroup decompresses one brick
+    const uint workgroup_thread_id = gl_LocalInvocationID.x;
+    const uint workgroup_size = gl_WorkGroupSize.x;
+
+    const uint brick_idx = gl_WorkGroupID.x + pc.brick_idx_offset;
+    if (isHelperLane(brick_idx, g_brick_idx_count))
+        return;
+    const uvec3 brick = brick_idx2pos(brick_idx, g_brick_count);
+
+    // TODO: could also configure LOD via push constants
+    assert(pc.target_inv_lod <= g_max_inv_lod, "target_inv_lod must be <= the maximum possible inv. lod.");
+
+    // obtain the bricks start index in the cache buffer
+    const uint decoded_brick_start_uint = gl_GlobalInvocationID.x * g_cache_uints_per_brick;
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //                  perform the decompression of the brick into the previously assigned cache region              //
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    #ifdef SEPARATE_DETAIL
+        #error "Subgroup parallelized decoding does not support detail separation"
+    #endif
+
+#ifndef NDEBUG
+    if (workgroup_thread_id == 0u) {
+        verifyBrickCompression(brick_idx);
+    }
+#endif
+
+    EncodingRef global_brick_encoding = getBrickEncodingRef(brick_idx);
+    const uint brick_encoding_length = getBrickEncodingLength(brick_idx);
+#if ENCODING_MODE == HUFFMAN_WM_ENC
+    WMHBrickHeaderRef global_wm_header = getWMHBrickHeaderFromEncoding(global_brick_encoding);
+    BitVectorRef global_bit_vector = getWMHBitVectorFromEncoding(global_brick_encoding);
+#endif
+
+    // 1. copy brick encoding to shared memory
+#ifdef DECODE_FROM_SHARED_MEMORY
+    // TODO: care about detail encoding! should be glued to the back of the same region
+    #if ENCODING_MODE == NIBBLE_ENC
+        assert(brick_encoding_length <= MAX_BRICK_ENCODING_32BIT_LENGTH, "shared memory brick encoding buffer is too small");
+        // TODO: copying one uvec4 with each thread is still coalescing and much faster!
+        for (uint e = workgroup_thread_id; e < brick_encoding_length; e += workgroup_size) {
+            s_brick_encoding[e] = global_brick_encoding.buf[e];
+        }
+    #elif ENCODING_MODE == HUFFMAN_WM_ENC
+        // copy the wavelet matrix header to shared memory
+        uint flat_rank_size =  getFlatRankEntries(global_wm_header.bit_vector_size);
+        if (workgroup_thread_id == 0u) {
+            s_wm_header[0].bit_vector_size = global_wm_header.bit_vector_size;
+            s_stop_bits_ref = getWMHStopBitsFromEncoding(global_brick_encoding,
+                                                         brick_encoding_length,
+                                                         global_brick_encoding.buf[PALETTE_SIZE_HEADER_INDEX]);
+        }
+        if (workgroup_thread_id < 5u)
+            s_wm_header[0].ones_before_level[workgroup_thread_id] = global_wm_header.ones_before_level[workgroup_thread_id];
+        if (workgroup_thread_id < 4u)
+            s_wm_header[0].level_starts_1_to_4[workgroup_thread_id] = global_wm_header.level_starts_1_to_4[workgroup_thread_id];
+        assert(flat_rank_size <= MAX_FLAT_RANK_WORD_LENGTH, "shared memory too small to fit full flat rank");
+        for (uint e = workgroup_thread_id; e < flat_rank_size; e += workgroup_size) {
+            s_wm_header[0].fr[e] = global_wm_header.fr[e];
+        }
+        // copy the bit vector to shared memory
+        uint bit_vector_word_size = (global_wm_header.bit_vector_size + BV_WORD_BIT_SIZE - 1u) / BV_WORD_BIT_SIZE;
+        assert(bit_vector_word_size <= MAX_BIT_VECTOR_WORD_LENGTH, "shared memory too small to fit full bit vector");
+        for (uint e = workgroup_thread_id; e < bit_vector_word_size; e += workgroup_size) {
+            s_bit_vector[e] = global_bit_vector.words[e];
+        }
+    #endif
+
+    memoryBarrierShared();
+    barrier();
+    // from here on, the respective decoder can access the valid brick encoding in shared memory
+#endif
+
+    // 2. iterate over output voxels of brick (cache positions) for the requested LOD and decompress each one in parallel
+    const uint output_voxel_count = 1u << (3u * pc.target_inv_lod);
+
+    // The workgroup_size many work items iterate through the Morton indexing order from front to back.
+    // The threads work on the next following items in parallel.
+    //
+    // If workgroup_size >= number_of_output_voxels: each thread computes ONE output element
+    // If workgroup_size <  number_of_output_voxels: each thread computes multiple output elements
+    // With a workgroup_size equal to the subgroup size, optimization like vulkan subgroup operations are posssible.
+    uint output_i = workgroup_thread_id;
+    while (output_i < output_voxel_count) {
+        #if ENCODING_MODE == NIBBLE_ENC
+            decompressCSGVVoxelToCache(output_i, pc.target_inv_lod, uvec3(BRICK_SIZE),
+                        #ifndef DECODE_FROM_SHARED_MEMORY
+                                global_brick_encoding,
+                        #endif
+                                brick_encoding_length, decoded_brick_start_uint);
+        #elif ENCODING_MODE == HUFFMAN_WM_ENC
+            decompressCSGVVoxelToCache(output_i, pc.target_inv_lod, uvec3(BRICK_SIZE),
+                                global_brick_encoding, brick_encoding_length,
+                        #ifndef DECODE_FROM_SHARED_MEMORY
+                                global_wm_header, global_bit_vector,
+                        #endif
+                                decoded_brick_start_uint);
+        #endif
+
+        // barrier() // more cache coherence by barrier? probalby not
+        output_i += workgroup_size;
+    }
+}

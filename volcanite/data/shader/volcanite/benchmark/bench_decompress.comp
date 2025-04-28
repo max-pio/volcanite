@@ -1,0 +1,47 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+layout (local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+
+#include "volcanite/benchmark/bench_bindings.glsl"
+
+#include "util.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
+#define CSGV_DECODING_ARRAY g_cache
+#include "volcanite/compression/compressed_segmentation_volume.glsl"
+
+#ifdef RANDOM_ACCESS
+    STATIC_ASSERT(serial_decoding_cannot_be_used_with_RANDOM_ACCESS);
+#endif
+
+void main() {
+    const uint brick_idx = gl_GlobalInvocationID.x + pc.brick_idx_offset;
+    if (isHelperLane(brick_idx, g_brick_idx_count))
+        return;
+
+    // TODO: could also configure LOD via push constants
+    const uint target_inv_lod = g_max_inv_lod;
+    const uint output_voxel_count = 1u << (3u * target_inv_lod);
+
+    // obtain the bricks start index in the cache buffer
+    uint decoded_brick_start_uint = gl_GlobalInvocationID.x * g_cache_uints_per_brick;
+
+    // perform the decompression of the brick into the previously assigned cache region
+#if 1
+    #ifdef SEPARATE_DETAIL
+        assert(!(target_inv_lod == LOD_COUNT - 1U && (g_detail_buffer_dirty == 1u || g_detail_starts[brick_idx] == g_detail_starts[brick_idx+1])), "detail buffers marked dirty but the provision shader requested detail decoding");
+    #endif
+    resetCSGVBrick(decoded_brick_start_uint, target_inv_lod);
+    uvec3 brick = brick_idx2pos(brick_idx, g_brick_count);
+    uvec3 valid_brick_size = clamp(g_vol_dim.xyz - brick * BRICK_SIZE, uvec3(0u), uvec3(BRICK_SIZE));
+    decompressCSGVBrick(brick_idx, valid_brick_size, 0u, target_inv_lod, decoded_brick_start_uint);
+#else
+    // fill the cache with "random" indices into the brick's palette
+    fillCSGVBrick(decoded_brick_start_uint, target_inv_lod, brick_idx % getBrickPaletteSize(brick_idx));
+#endif
+}

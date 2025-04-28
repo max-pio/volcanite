@@ -1,0 +1,247 @@
+//  Copyright (C) 2024, Fabian Schiekel and Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+#include "util.glsl"
+#include "volcanite/renderer/csgv_bindings.glsl"
+#define VOLCANITE_FRAMEBUFFER_READONLY
+#include "volcanite/renderer/framebuffer.glsl"
+#include "volcanite/renderer/csgv_materials.glsl"
+#include "volcanite/renderer/dummy_envmap.glsl"
+
+#include "debug_colormaps.glsl"
+
+vec3 getAlbedoOfLabel(uint label) {
+    // the G buffer stores the invalid label for rays that hit no surface
+    if (label == INVALID)
+        return vec3(1.f);
+
+    const int material = getMaterial(label);
+    if (material < 0) {
+        assert(g_debug_vis_flags != 0u, "G-buffer must not contain labels that are invisible"); // debug modes may write strange label
+        return vec3(1.f);
+    } else {
+        return getColor(label, material).rgb;
+    }
+}
+
+#include "volcanite/renderer/csgv_debug_resolve.glsl"
+
+vec3 color_rectify(vec3 color, ivec2 pixel) {
+    uint sample_count = max(imageLoad(accuSampleCountOut, pixel).r, 1u);
+    if (sample_count == 0u)
+            return color;
+    vec4 prev_accum_rgba = imageLoad(accumulationOut, pixel);
+    vec3 hsv = rgb2hsv(prev_accum_rgba.rgb);
+    const vec3 d = vec3(0.f);
+    return hsv2rgb(clamp(rgb2hsv(color), hsv - d, hsv + d));
+}
+
+// inplace alpha blending of pixel_rgba with the background color that is visible for the primary ray through block_pixel
+vec4 blendWithBackground(ivec2 pixel, vec4 pixel_rgba) {
+    vec2 subpixel_offset = subpixelOffset(pixel);
+    vec2 fragCoord = (vec2(pixel) + subpixel_offset) / vec2(imageSize(inpaintedOutColor));
+    vec3 viewRayDirection = normalize((g_pixel_to_ray_direction_world_space * vec3(pixel + subpixel_offset, 1.0f)).xyz);
+    // blend with background
+    vec4 bgColor = get_background_color(fragCoord, viewRayDirection);
+
+    DEBUG_img_envmap(fragCoord, viewRayDirection, bgColor, bool(g_debug_vis_flags & VDEB_ENVMAP_BIT));
+    return vec4((pixel_rgba.a * pixel_rgba + (1.f - pixel_rgba.a) * bgColor).rgb, 1.f);
+}
+
+void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {
+
+    // expore correction, tonemapping, color space conversion
+    accum_rgba.rgb *= g_exposure;
+    if (g_tonemap_enable) {
+        accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb);
+    }
+    accum_rgba.rgb = rgb2srgb(clamp((accum_rgba.rgb + vec3(g_brightness - 0.5f)) * g_contrast + vec3(0.5f), vec3(0.f), vec3(1.f)), g_gamma);
+
+    DEBUG_img_g_buffer(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_G_BUFFER_BIT));
+    DEBUG_img_no_postprocess(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_NO_POSTPROCESS_BIT));
+    DEBUG_img_spp(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_SPP_BIT));
+    DEBUG_img_cache_array(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_CACHE_ARRAY_BIT));
+    DEBUG_img_request_limit(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_REQUEST_LIMIT_BIT));
+    DEBUG_img_brick_info(pixel, accum_rgba, bool(g_debug_vis_flags & VDEB_BRICK_INFO_BIT));
+
+    // blend with background and output to display image
+    imageStore(inpaintedOutColor, pixel, blendWithBackground(pixel, accum_rgba));
+}
+
+void main() {
+    // obtain pixel and fragment coordinates
+    const ivec2 viewport_size = imageSize(inpaintedOutColor);
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+
+    // only one thread per pixel block
+    if (isHelperLane(pixel, viewport_size))
+        return;
+
+    // upsampling / denoising may be disabled or faded out
+    // for n^2 samples, variance is halfed
+    const float fade = g_denoise_fade_enable ? min(1.f, g_denoise_fade_sigma / sqrt(max(float(imageLoad(accuSampleCountOut, pixel).r), 1.f))) : 1.f;
+    if (!g_atrous_enabled || fade < 0.1f) {
+        if (pc.denoising_iteration == pc.last_denoising_iteration)
+            writeFinalFramebuffer(pixel, imageLoad(denoisingBuffer[0], pixel));
+        return;
+    }
+
+    // read RGB radiance + alpha that was accumulated for this pixel so far.
+    // it was already normalized by the sample count
+    // an alpha value < 0 indicates that this pixel did not receive a single sample yet
+    vec4 pixel_rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel);
+
+    // unpack the G-Buffer for the current output pixel (center)
+    // center_sampled is false if the pixel did not receive a sample yet -> requires upsampling!
+    float center_normalized_depth = 1.f;
+    vec3 center_normal = vec3(0.f);
+    uint center_label = INVALID;
+    vec3 center_albedo_hsv = vec3(0.f);
+    const bool center_sampled = unpackGBufferRGB16(imageLoad(gBuffer, pixel).rgb,
+                                                   center_label, center_normal, center_normalized_depth);
+    if (center_sampled) {
+        center_albedo_hsv = rgb2hsv(getAlbedoOfLabel(center_label));
+    } else if (pc.denoising_iteration == 0u) {
+        // marking non-sampled pixels for the first iteration must happen here. Otherwise, the renderer shader
+        // would have to read from gBuffer to check if the pixel received a sample in an earlier frame.
+        pixel_rgba = vec4(0.f, 0.f, 0.f, -1.f);
+    }
+
+    // MULTI-PASS À-TROUS FILTER -----------------------------------------------------------------------------------
+    // if necessary, this could become a more complex filter like SVGF, see:
+    // https://github.com/NVIDIAGameWorks/Falcor/blob/master/Source/RenderPasses/SVGFPass/SVGFAtrous.ps.slang
+    // for now, this is only an À-Trous filter without any variance estimation or temporal projection
+    const int step_size = 1 << pc.denoising_iteration;
+
+
+    // Filter Weight Control Parameters:
+    // Uses a Gaussian instead of B-spline kernels and overlburs in the first iteration to reduce grid artifacts from
+    // undersampled pixels (see Dolp et al. "A Fast GPU Schedule For À-Trous Wavelet-Based Denoisers").
+    // weights defined for 3x3 kernel [0.5, 1, 0.5] in 1D, outer product is [1 2 1]
+    //                                                                      [2 4 2]
+    //                                                                      [1 2 1]
+    const vec4[4] _kernel_for_sizes = {vec4(1.f, 0.f, 0.f, 0.f),
+                                       vec4(2.f, 1.f, 0.f, 0.f),
+                                       vec4(6.f, 4.f, 1.f, 0.f),
+                                       vec4(20.f, 15.f, 6.f, 1.f)};
+    const vec4 kernel_weights = pc.denoising_iteration == 0u ? vec4(1.f) :
+                                    _kernel_for_sizes[g_denoise_filter_kernel_size] * vec4(1.f, fade, fade, fade);
+    const float phi_depth = g_world_to_model_space_scaling * g_depth_sigma; // higher: more blurring above depth discontinuities
+
+    vec4 accum_rgba = vec4(0.f);
+    float weight = 1.f;
+    float weight_sum  = 0.f;
+
+    // Could change the order from these loops to radially iterate from the center pixel outwards.
+    // This would allow optimizations like early breaking out of the upsampling search.
+    for (int dy = -g_denoise_filter_kernel_size; dy <= g_denoise_filter_kernel_size; dy++) {
+        for (int dx = -g_denoise_filter_kernel_size; dx <= g_denoise_filter_kernel_size; dx++) {
+            ivec2 filter_pixel = pixel + (ivec2(dx, dy) * step_size);
+
+            // do not sample outside image plane, cast to uvec to catch values < 0
+            if (isHelperLane(uvec2(filter_pixel), uvec2(viewport_size)))
+                continue;
+
+            // do not blur if denoising is disabled
+            if (!g_denoising_enabled && pixel_rgba.a >= 0.f) {
+                accum_rgba = pixel_rgba;
+                weight_sum = 1.f;
+                break;
+            }
+
+            // unpack filter pixel
+            float normalized_depth;
+            vec3 normal;
+            uint label;
+            bool sampled = unpackGBufferRGB16(imageLoad(gBuffer, filter_pixel).rgb, label, normal, normalized_depth);
+            vec4 rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], filter_pixel);
+
+            // UPSAMPLING
+            if (!center_sampled) {
+                vec2 added_delta = vec2(dx, dy) * step_size;
+                vec2 rgba_delta = vec2(rgba.rg) + added_delta;
+
+                float old_dist = accum_rgba.b > 0.f ? accum_rgba.b : 9999999.f;
+
+                if (sampled && dot(added_delta, added_delta) < old_dist) {
+                    // found a neighbor pixel that received a sample: store offset to that neighbor in .rg, mark .b=1
+                    accum_rgba = vec4(added_delta, dot(added_delta, added_delta), -1.f);
+                    weight_sum = 0.f;
+                } else if (!sampled && pc.denoising_iteration > 0 && rgba.b > 0.f
+                           && dot(rgba_delta, rgba_delta) < old_dist) {
+                    // the neighbor already stores an offset to a sampled pixel that has to
+                    // be propagated further to the current pixel
+                    accum_rgba = vec4(rgba_delta, dot(rgba_delta, rgba_delta), -1.f);
+                    weight_sum = 0.f;
+                }
+
+                continue;
+            }
+
+            // DENOISING
+            // filter pixels that did not receive a sample yet are skipped for denoising:
+            // - in the first iteration, these are marked by the !sampled return value of the G-Buffer query
+            // - in later queries, these are marked with an rgba alpha value < 0
+            if ((pc.denoising_iteration == 0 && !sampled) || (pc.denoising_iteration > 0 && rgba.a < 0.f)) {
+                continue;
+            }
+
+            // quantized normals: either (+/-) 90 or (+/-) 180 degree angle
+            // => max(cos, 0) = weightN is either 0 or 1
+            if (any(notEqual(center_normal, normal)))
+                continue;
+
+            // weight by albedo color distance (albedo demodulation would be better, but creates color noise along
+            // label region edges due to alising noise in the G-buffer from TAA)
+            // cheaper alternative: compare label
+            const vec3 albedo_distance = (rgb2hsv(getAlbedoOfLabel(label)) - center_albedo_hsv) * 8.f;
+            const float albedo_weight = 1.f / (1.f + dot(albedo_distance, albedo_distance));
+            const float depth_weight = exp(-abs(normalized_depth - center_normalized_depth) * phi_depth);
+
+            const float kernel = kernel_weights[abs(dx)] * kernel_weights[abs(dy)];
+            weight = kernel * depth_weight * albedo_weight;
+            accum_rgba += rgba * weight;
+            weight_sum += weight;
+        }
+    }
+
+    if (weight_sum > 0.f)
+        accum_rgba /= weight_sum;
+
+    if (pc.denoising_iteration < pc.last_denoising_iteration) {
+        // before last iteration:  À-trous feedback to next denoising iteration kernel in HDR
+        // mark pixels from a filter step that did not receive a single rendered sample with a negative alpha value
+        if (weight_sum <= 0.f)
+            accum_rgba.a = -1.f;
+
+        // store color for next iteration
+        imageStore(denoisingBuffer[1u - (pc.denoising_iteration % 2u)], pixel, accum_rgba);
+    } else {
+        if (!center_sampled) {
+            // accum_rgba stores the offset to the neighbor (.rg) from which the color is copied for upsampling
+            ivec2 offset = ivec2(accum_rgba.rg);
+            accum_rgba = imageLoad(denoisingBuffer[pc.denoising_iteration % 2], pixel + offset);
+            // assert(g_debug_vis_flags != 0u || accum_rgba.a >= 0.f, "copying non-rendered pixel for upsampling");
+        }
+        writeFinalFramebuffer(pixel, accum_rgba);
+    }
+}

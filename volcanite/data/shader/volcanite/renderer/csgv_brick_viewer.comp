@@ -1,0 +1,306 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+#define INFINITY 1.f/0.f
+#include "cpp_glsl_include/csgv_constants.incl"
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+layout (set = 0, binding = 0, rgba8) uniform restrict writeonly image2D outColor;
+layout (set = 0, binding = 7) uniform sampler2D SAMPLER_encoding_icons;
+
+#include "util.glsl"
+#include "pcg_hash.glsl"
+#include "debug_colormaps.glsl"
+#include "morton.glsl"
+
+layout (std140, set = 0, binding = 1) uniform render_info {
+    vec4 g_background_color_a;
+    vec4 g_background_color_b;
+    float g_transferFunction_limits_min;
+    float g_transferFunction_limits_max;
+    uvec3 g_brick;
+    int g_brick_slice;
+    int g_show_label_bits;
+    int g_show_code_mode;       // 0 = all, 1 = only palette, 2 = none (flat)
+    int g_label_color_mult;     // label color multiplicator to cycle through colors
+    vec4 iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+    float iTime;                // shader playback time (in seconds)
+};
+
+layout(std140, set=0, binding=2) uniform segmented_volume_info {
+    uvec4 g_vol_dim;            // xyz dimension of the original volume
+    vec4 g_normalized_volume_size;   // world space size of the volume (usually ~1m^3)
+    uint g_vol_max_label;       // maximum label in the segmented volume
+    uint g_brick_size;          // power of 2 size along one axis of the bricks
+    uvec4 g_brick_count;        // number of bricks in each xyz dimension for the encoded volume
+    uint g_lod_count;           // number of lod levels per brick
+    uint g_brick_cache_count;   // number of bricks that are held in cache at the same time
+    uint g_cache_element_size;  // size of one entry in the cache = header + g_brick_size^3
+};
+
+
+layout(std430, set = 0, binding = 3) buffer readonly brick_starts
+{
+    uint g_brick_starts[];  // start points of each brick in g_encoding. Ends with dummy entry one after g_encoding
+};
+layout(std430, set = 0, binding = 4) buffer readonly encoding
+{
+    uint g_encoding[];      // encoding of all bricks where each brick contains all its LODs
+};
+
+layout(std430, set = 0, binding = 5) buffer readonly decoded
+{
+    uint g_decoded[];      // g_lod_count bricks from lod_max to lod_0 decoded back to back
+};
+
+layout(std430, set = 0, binding = 8) buffer readonly palette
+{
+                            // first (1 + g_lod_count) values are #start_entries_lod0, #start_entries_lod0, ..., #entries_lod_n with yzw = 0
+    uvec4 g_palette[];      // all palette values in order of decompression {label, in_lod, voxel_id_in_lod, occurrence_of_this_label}
+};
+
+layout(std430, set = 0, binding = 6) buffer readonly brickPos
+{
+    uvec4 g_enumBrickPos[];   // enumeration of all brick_size^3 positions inside a brick
+};
+
+const ivec3 neighbor[8][3] = {{ivec3(-1, 0, 0), ivec3(0, -1, 0), ivec3(0, 0, -1)},
+                             {ivec3(1, 0, 0), ivec3(0, -1, 0), ivec3(0, 0, -1)},
+                             {ivec3(-1, 0, 0), ivec3(0, 1, 0), ivec3(0, 0, -1)},
+                             {ivec3(1, 0, 0), ivec3(0, 1, 0), ivec3(0, 0, -1)},
+                             {ivec3(-1, 0, 0), ivec3(0, -1, 0), ivec3(0, 0, 1)},
+                             {ivec3(1, 0, 0), ivec3(0, -1, 0), ivec3(0, 0, 1)},
+                             {ivec3(-1, 0, 0), ivec3(0, 1, 0), ivec3(0, 0, 1)},
+                             {ivec3(1, 0, 0), ivec3(0, 1, 0), ivec3(0, 0, 1)}};
+
+
+
+uvec3 enumBrickPos(uint i) {
+    return morton3Di2p(i);
+}
+
+uint indexOfBrickPos(const uvec3 p) {
+    return morton3Dp2i(p);
+}
+
+
+vec4 get_color(uint label, vec2 uv) {
+    float v1 = float(hash_pcg2d(uvec2(label, uint(g_label_color_mult))).x % 512u) / 512.f;
+    return vec4(colormap_plasma(v1), 1.f);
+}
+
+
+vec4 get_background_color(vec2 fragCoord) {
+    float bgWeight = (fragCoord.x*2.f + (1.f-fragCoord.y)) / 3.f;
+    bgWeight *= bgWeight;
+    vec4 bgColor = g_background_color_a * (1.f - bgWeight) + g_background_color_b * bgWeight;
+    bgColor.rgb *= bgColor.a;
+    return bgColor;
+}
+
+bool uv_border(vec2 uv, vec2 border) {
+    return any(lessThanEqual(uv, border)) || any(greaterThanEqual(uv, vec2(1.f) - border));
+}
+
+const int inv_border_width = 36;
+const vec2 draw_pos[] = {vec2(0.1f, 0.05f), vec2(0.05f, 0.35f), vec2(0.0f, 0.65f)};
+const int draw_slice_offsets[] = {1, 0, -1};
+const vec2 palette_pos = vec2(0.05f, 0.95f);
+const vec2 _palette_dim = vec2(0.01f, 0.01f);
+const uint max_code = 16u;
+
+
+void main() {
+    // obtain pixel and fragment coordinates
+    const ivec2 viewport_size = imageSize(outColor);
+    const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if(isHelperLane(pixel, viewport_size))
+        return;
+    const vec2 fragCoord = (vec2(pixel) + vec2(0.5)) / vec2(viewport_size);
+    const vec2 ndc = fragCoord * 2.f - vec2(1.f);
+
+    // access info for our pixel area
+    vec4 color = get_background_color(fragCoord);
+    vec2 local = vec2(0.f);
+    int lod_hit = -1; // if our pixel area is any LOD this is >= 0
+    int slice_offset = 0;
+    vec2 localMousePos = vec2(-1.f); // mouse pos within a brick
+    int mouse_lod_hit = -1;
+    bool can_be_neighbor = true;
+
+    const vec2 mouseCoord = iMouse.xy / vec2(viewport_size);
+    const float x_to_y = float(viewport_size.x) / float(viewport_size.y);
+    const vec2 palette_dim = vec2(_palette_dim.x, _palette_dim.y * x_to_y);
+    const float brick_width = 1.f / (1.5f * float(0.5f + g_lod_count));
+
+    // determine if we have to draw any slice of a brick LOD at our pixel position (and which one)
+    for(int i = 0; i < 3; i++) {
+        if (fragCoord.y >= draw_pos[i].y && fragCoord.y < (draw_pos[i].y + x_to_y * brick_width)) {
+            for (int lod = 0; lod < g_lod_count; lod++) {
+                float start = draw_pos[i].x + lod * (1.5f * brick_width);
+                if (fragCoord.x > start && fragCoord.x < start + brick_width) {
+                    local.x = (fragCoord.x - start) / brick_width;
+                    local.y = (fragCoord.y - draw_pos[i].y) / (x_to_y * brick_width);
+
+                    lod_hit = lod;
+                    slice_offset = draw_slice_offsets[i];
+                    break;
+                }
+            }
+        }
+    }
+    // determine mouse local pos
+    ivec3 mouse_brick_voxel = ivec3(0, 0, 0);
+    if (mouseCoord.y >= draw_pos[1].y && mouseCoord.y < (draw_pos[1].y + x_to_y * brick_width)) {
+        for (int lod = 0; lod < g_lod_count; lod++) {
+            float start = draw_pos[1].x + lod * (1.5f * brick_width);
+            if (mouseCoord.x > start && mouseCoord.x < start + brick_width) {
+                localMousePos.x = (mouseCoord.x - start) / brick_width;
+                localMousePos.y = (mouseCoord.y - draw_pos[1].y) / (x_to_y * brick_width);
+                mouse_lod_hit = lod;
+                mouse_brick_voxel = ivec3(localMousePos * g_brick_size, g_brick_slice);
+                break;
+            }
+        }
+    }
+
+    const uint lod_width = g_brick_size >> lod_hit;
+    const uint lod_width3 = lod_width * lod_width * lod_width;
+    const ivec3 brick_voxel = ivec3(local * g_brick_size, g_brick_slice + slice_offset * lod_width);
+
+    // we can't draw offsets outside of our brick
+    if(brick_voxel.z < 0 || brick_voxel.z >= g_brick_size || (slice_offset != 0 && brick_voxel.z / lod_width == g_brick_slice / lod_width)) {
+        lod_hit = -1;
+    }
+    // we only highlight z-neighbors that can be relevant for neighbor labels in this slice
+    else if(slice_offset == 0 || (g_brick_slice) / (lod_width << 1) == brick_voxel.z / (lod_width << 1)) {
+        can_be_neighbor = false;
+    }
+
+
+    // draw the slice (if we have to)
+    if(lod_hit >= 0) {
+        uint label = g_decoded[lod_hit * (g_brick_size * g_brick_size * g_brick_size) + (indexOfBrickPos(brick_voxel) / lod_width3) * lod_width3];
+        vec2 voxel_uv = fract(local * float(g_brick_size) / float(lod_width));
+        color = get_color(label, voxel_uv);
+
+        // get the encoding code for this LODs voxel and draw a nice 2.5D icon if there is any
+        uint code = g_decoded[(g_lod_count + lod_hit) * (g_brick_size * g_brick_size * g_brick_size) + (indexOfBrickPos(brick_voxel) / lod_width3) * lod_width3];
+
+        // border colors
+        float bot_weight = 0.6f;
+        float top_weight = 1.2f;
+
+        // "push down"" bricks selected by mouse
+        //if (mouse_lod_hit >= 0 && (mouse_lod_hit <= lod_hit) && all(equal(ivec2(localMousePos * g_brick_size) / lod_width, ivec2(local * g_brick_size) / lod_width))) {
+        if (mouse_lod_hit >= 0 && all(equal(ivec2(localMousePos * g_brick_size) / (g_brick_size >> min(mouse_lod_hit, lod_hit)), ivec2(local * g_brick_size) / (g_brick_size >> min(mouse_lod_hit, lod_hit))))) {
+            if((slice_offset == 0 && (lod_hit >= mouse_lod_hit - 1u)) || (lod_hit == mouse_lod_hit) || (lod_hit > mouse_lod_hit && !can_be_neighbor))
+            color *= (fract(iTime / 1.f) < 0.5f) ? 1.5f : 2.f;
+            if(slice_offset == 0 && lod_hit == mouse_lod_hit) {
+                bot_weight = 1.f;
+                top_weight = 0.5f;
+                color *= 0.7f;
+            }
+        }
+
+        // make everything flat if different display modes are selected
+        if ((g_show_code_mode == 1 && code != 5) || g_show_code_mode == 2)
+            code = max_code;
+        if (code < max_code) {
+            vec2 tex_uv = fract(local * (float(g_brick_size) / float(lod_width)));
+            vec4 icon = texture(SAMPLER_encoding_icons, vec2((float(code) + tex_uv.x)/16.f, tex_uv.y));
+            color.rgb = icon.rgb * icon.a + (1.f - icon.a) * color.rgb;
+
+
+            // draw voxel borders
+            if (any(equal(ivec2(local * g_brick_size * inv_border_width / float(lod_width)) % (inv_border_width), ivec2(inv_border_width - 1)))) {
+                color *= bot_weight;
+            }
+            if (any(equal(ivec2(local * g_brick_size * inv_border_width / float(lod_width)) % (inv_border_width), ivec2(0)))) {
+                color *= top_weight;
+            }
+            // draw thick border around 2x2 box
+            if (any(equal(ivec2(local * g_brick_size * (inv_border_width/2) / float(lod_width << 1)) % (inv_border_width / 2), ivec2(inv_border_width / 2 - 1)))) {
+                color *= bot_weight;
+            }
+            if (any(equal(ivec2(local * g_brick_size * (inv_border_width/2) / float(lod_width << 1)) % (inv_border_width / 2), ivec2(0)))) {
+                color *= top_weight;
+            }
+        }
+
+        if (can_be_neighbor)
+            color = vec4(0.4f) + 0.6f * color;
+
+        // code the bits of the label into the color
+        if (g_show_label_bits > 0 && voxel_uv.y > 0.85f && voxel_uv.y < 0.9f)
+            color = vec4(1.f) - 0.9f * ((label & (1u << int(voxel_uv.x * 32))) >> int(voxel_uv.x * 32));
+    }
+
+    // draw palette markers
+    else if(all(greaterThanEqual(fragCoord, vec2(palette_pos.x, palette_pos.y - palette_dim.y*2.f))) && all(lessThan(fragCoord, vec2(1.f - palette_pos.x, palette_pos.y)))) {
+        uint entry = uint((fragCoord.x - palette_pos.x) / palette_dim.x) + g_lod_count + 1u;
+        vec2 voxel_uv = fract((fragCoord - vec2(palette_pos.x, palette_pos.y - palette_dim.y*2.f)) / vec2(palette_dim.x, palette_dim.y * 2.f));
+
+        // mark duplicate palette entries with a red-black bar plot
+        if (entry < g_palette[g_lod_count].x && g_palette[entry].w > 0u && voxel_uv.y > 1.f - float(g_palette[entry].w)/8.f) {
+            color = vec4(1.f, 0.f, 0.f, 1.f) * (1.f - 0.8f / floor(voxel_uv.y*8.f));
+        }
+        // mark lod starts in palette with a black line
+        if(voxel_uv.x < 0.3f) {
+            for (int lod = 0; lod < g_lod_count; lod++) {
+                if (entry == g_palette[lod].x) {
+                    color = vec4(0.f);
+                }
+            }
+        }
+    }
+    // draw palette
+    else if(all(greaterThanEqual(fragCoord, palette_pos)) && all(lessThan(fragCoord, vec2(1.f - palette_pos.x, palette_pos.y + palette_dim.y)))) {
+        uint entry = uint((fragCoord.x - palette_pos.x) / palette_dim.x) + g_lod_count + 1u;
+        vec2 voxel_uv = fract((fragCoord - palette_pos) / palette_dim);
+        if(entry < g_palette[g_lod_count].x) {
+            color = get_color(g_palette[entry].x, voxel_uv);
+
+            // highlight if mouse selected a palette value
+            uint mouse_lod_width3 = (g_brick_size >> mouse_lod_hit);
+            mouse_lod_width3 = mouse_lod_width3 * mouse_lod_width3 * mouse_lod_width3;
+            uint mouse_voxel_id = (indexOfBrickPos(mouse_brick_voxel) / mouse_lod_width3) * mouse_lod_width3;
+            //if(g_palette[entry].y == mouse_lod_hit && g_palette[entry].z >= indexOfBrickPos(mouse_brick_voxel) && g_palette[entry].z < indexOfBrickPos(mouse_brick_voxel) + mouse_lod_width3*3) {
+            if(g_palette[entry].y == mouse_lod_hit && mouse_voxel_id  == g_palette[entry].z) {//  {
+                color *= (fract(iTime / 1.f) < 0.5f) ? 0.5f : 2.f;
+            }
+        }
+        if (uv_border(voxel_uv, vec2(0.05f, 0.025f)))
+            color = vec4(0.f);
+    }
+
+    // draw a border around the slice that was selected in the GUI (in finest LOD of the brick)
+    if (lod_hit < 0) {
+        const float border_width = 0.005f;
+        float start = draw_pos[1].x + (g_lod_count - 1u) * (1.5f * brick_width);
+        if (fragCoord.y >= draw_pos[1].y - border_width * x_to_y && fragCoord.y < (draw_pos[1].y + x_to_y * brick_width) + border_width * x_to_y) {
+            if (fragCoord.x > start - border_width && fragCoord.x < start + brick_width + border_width) {
+                color.rgb = vec3(0.f);
+            }
+        }
+    }
+
+    // write to iamge
+    imageStore(outColor, pixel, color);
+}

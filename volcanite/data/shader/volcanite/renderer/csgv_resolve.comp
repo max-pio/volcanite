@@ -1,0 +1,74 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
+
+layout (local_size_x = 8, local_size_y = 8) in;
+
+
+#include "volcanite/renderer/csgv_bindings.glsl"
+
+#include "util.glsl"
+
+vec3 rgb2srgb(vec3 x) {
+    return pow(x, vec3(2.2f));
+}
+
+vec3 tonemap_ACES(vec3 x)
+{
+    float a = 2.51f;
+    float b = 0.03f;
+    float c = 2.43f;
+    float d = 0.59f;
+    float e = 0.14f;
+    return clamp((x*(a*x+b))/(x*(c*x+d)+e), vec3(0.f), vec3(1.f));
+}
+
+void main() {
+    // obtain pixel and fragment coordinates
+    const ivec2 viewport_size = imageSize(inpaintedOutColor);
+    const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if(isHelperLane(pixel, viewport_size))
+        return;
+
+    // rgb stores radiance sum, alpha stores number of samples
+    vec4 accum_color = imageLoad(accumulationOut, pixel);
+
+    if(accum_color.a == 0.f) {
+        accum_color = vec4(0.f);
+        if(g_subsampling > 1) {
+            ivec2 block = (pixel / g_subsampling);
+            ivec2 block_pixel;
+            for(block_pixel.y = block.y * g_subsampling; block_pixel.y < (block.y + 1) * g_subsampling; block_pixel.y++) {
+                for(block_pixel.x = block.x * g_subsampling; block_pixel.x < (block.x + 1) * g_subsampling; block_pixel.x++) {
+                    if(any(greaterThanEqual(block_pixel, viewport_size)))
+                        continue;
+                    accum_color += imageLoad(accumulationOut, block_pixel);
+                }
+            }
+        }
+    }
+    if(accum_color.a > 0.f)
+        accum_color.rgb /= accum_color.a;
+
+    // perform tonemapping and color space conversion
+//    accum_color.rgb = tonemap_ACES(accum_color.rgb);
+//    accum_color.rgb = rgb2srgb(accum_color.rgb);
+
+    // output to display image
+    imageStore(inpaintedOutColor, pixel, vec4(accum_color.rgb, 1.f));
+}

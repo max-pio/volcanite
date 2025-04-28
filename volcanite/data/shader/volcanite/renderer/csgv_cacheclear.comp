@@ -1,0 +1,83 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_buffer_reference2 : require
+
+layout (local_size_x = 8, local_size_y = 4, local_size_z = 4) in;
+
+
+#include "volcanite/renderer/csgv_bindings.glsl"
+
+// includes
+#include "cpp_glsl_include/csgv_constants.incl"
+#include "util.glsl"
+#include "volcanite/compression/csgv_utils.glsl"
+
+void main() {
+#if CACHE_MODE == CACHE_NOTHING
+    return;
+#endif
+
+    uvec3 brick = gl_GlobalInvocationID.xyz;
+    if(isHelperLane(brick, g_brick_count))
+        return;
+    uint brick_idx = brick_pos2idx(brick, g_brick_count);
+
+    if(brick.x == 0 && brick.y == 0 && brick.z == 0) {
+        // clear per-LoD info buffers (that all start at inv. LoD 1, so we need lod-count-1 workers for this)
+        for(uint inv_lod_minus_one = 0u; inv_lod_minus_one < LOD_COUNT - 1; inv_lod_minus_one++) {
+            // clear all free_block_stacks
+            g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + inv_lod_minus_one] = 0u;
+            // clear all assign_info
+            g_assign_info[inv_lod_minus_one * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BLOCK_START] = INVALID;
+            g_assign_info[inv_lod_minus_one * ASSIGN_ELEMS_PER_LOD + ASSIGN_NEW_BRICK_COUNT] = 0u;
+            g_assign_info[inv_lod_minus_one * ASSIGN_ELEMS_PER_LOD + ASSIGN_REQUESTED_BRICKS] = 0u;
+        }
+
+        // reset the cache top counter (= free all cache elements)
+        g_assign_info[(LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD] = 0u;
+        #ifdef SEPARATE_DETAIL
+            // reset the atomic counter for the detail request buffer
+            g_detail_requests[g_request_buffer_capacity] = 0u;
+        #endif
+    }
+
+    #ifdef SEPARATE_DETAIL
+        // clear the request buffer
+        uint total_workers = g_brick_count.x * g_brick_count.y * g_brick_count.z;
+        uint elems_per_worker = (g_request_buffer_capacity + total_workers - 1u) / total_workers;
+        for(uint i = elems_per_worker * brick_idx; i < elems_per_worker * (brick_idx + 1); i++) {
+            if(i < g_request_buffer_capacity)
+            g_detail_requests[i] = INVALID;
+        }
+    #endif
+
+    // reset cache info
+    g_brick_info[brick_idx * 4u + BRICK_INFO_REQ_INV_LOD] = INVALID; // for a "garbage collection" we would overwrite this to directly re-assign all required blocks
+    g_brick_info[brick_idx * 4u + BRICK_INFO_CUR_INV_LOD] = INVALID;
+    g_brick_info[brick_idx * 4u + BRICK_INFO_CACHE_INDEX] = INVALID;
+    g_brick_info[brick_idx * 4u + BRICK_INFO_REQ_SLOT] = INVALID;
+
+    #if (CACHE_MODE == CACHE_VOXELS)
+        // reset all cache elements
+        for (uint id = brick_idx; id < CACHE_UVEC2_SIZE; id += g_brick_idx_count) {
+            g_cache[id] = ~uint64_t(0);
+        }
+    #endif
+}

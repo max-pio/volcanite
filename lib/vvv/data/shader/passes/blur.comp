@@ -1,0 +1,91 @@
+#version 450
+
+// horizontal pass: #define PASS_1
+// vertical   pass: #define PASS_2
+
+// Bilateral Modes:
+// BILATERAL=0: Disabled
+// BILATERAL=1: DepthOnly
+// BILATERAL=2: NormalOnly
+// BILATERAL=3: DepthNormal
+
+#ifndef BILATERAL
+#define BILATERAL 0
+#endif
+
+layout (local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 0)        uniform sampler2D inputTexture_H;
+layout(set = 0, binding = 1, rgba8) uniform image2D   outputTexture_H;
+layout(set = 0, binding = 2)        uniform sampler2D inputTexture_V;
+layout(set = 0, binding = 3, rgba8) uniform image2D   outputTexture_V;
+layout(set = 0, binding = 4)        uniform sampler2D bilateralDepthTexture;
+layout(set = 0, binding = 5)        uniform sampler2D bilateralNormalTexture;
+layout(set = 1, binding = 0)        uniform sampler1D kernelTexture;
+layout(set = 1, binding = 1)        uniform options {
+    int kernelRadius;
+};
+
+void main() {
+    ivec2 P = ivec2(gl_GlobalInvocationID.xy);
+
+    vec4 centerColor = texelFetch(inputTexture_H, P, 0);
+#if BILATERAL == 1
+    float centerDepth = texelFetch(bilateralDepthTexture, P, 0).r;
+#elif BILATERAL == 2
+    vec3 centerNormal = texelFetch(bilateralNormalTexture, P, 0).rgb;
+#elif BILATERAL == 3
+    float centerDepth = texelFetch(bilateralDepthTexture, P, 0).r;
+    vec3 centerNormal = texelFetch(bilateralNormalTexture, P, 0).rgb;
+#endif
+
+    vec4 sum = vec4(0);
+    float bilateralWeightsSum = 0;
+
+    for (int i = -kernelRadius; i <= kernelRadius; i++) {
+
+#if   defined(PASS_1)
+        ivec2 Q = P + ivec2(i, 0);
+         vec4 inputColor = texelFetch(inputTexture_H, Q, 0);
+#elif defined(PASS_2)
+        ivec2 Q = P + ivec2(0, i);
+        vec4 inputColor = texelFetch(inputTexture_V, Q, 0);
+#endif
+
+        float kernel = texelFetch(kernelTexture, i + kernelRadius, 0).r;
+
+#if BILATERAL == 0
+        sum += kernel * inputColor;
+#else
+        float depthVariance = 0.0001;
+        float normalVariance = 0.05;
+#   if BILATERAL == 1
+        float inputDepth = texelFetch(bilateralDepthTexture, Q, 0).r;
+        float diff = depthAmount * abs(inputDepth - centerDepth);
+#   elif BILATERAL == 2
+        vec3 inputNormal = texelFetch(bilateralNormalTexture, Q, 0).rgb;
+        float diff = max(max(abs(inputNormal.x - centerNormal.x), abs(inputNormal.y - centerNormal.y)), abs(inputNormal.z - centerNormal.z)) / normalVariance;
+#   elif BILATERAL == 3
+        float inputDepth = texelFetch(bilateralDepthTexture, Q, 0).r;
+        float depthDiff = abs(inputDepth - centerDepth) / depthVariance;
+        vec3 inputNormal = texelFetch(bilateralNormalTexture, Q, 0).rgb;
+        float normalDiff = max(max(abs(inputNormal.x - centerNormal.x), abs(inputNormal.y - centerNormal.y)), abs(inputNormal.z - centerNormal.z)) / normalVariance;
+        float diff = max(depthDiff, normalDiff);
+#   endif
+
+        float weight = exp(-diff * diff);
+        sum += kernel * weight * inputColor;
+        bilateralWeightsSum += kernel * weight;
+#endif
+    }
+# if BILATERAL != 0
+    sum = (sum / bilateralWeightsSum);
+#endif
+
+
+#if   defined(PASS_1)
+    imageStore(outputTexture_H, P, sum);
+#elif defined(PASS_2)
+    imageStore(outputTexture_V, P, sum);
+#endif
+}
