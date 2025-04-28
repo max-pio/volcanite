@@ -1,0 +1,42 @@
+# files created by the build process or recommended workflows in the docs
+/Debug
+/build*
+compile_commands.json
+.ipynb_checkpoints/
+*.pkl
+
+# gitlab merge conflict backups
+**/**.orig
+
+# ignore shaders generated during application execution
+*.spv
+
+# python tmp files
+**/__pycache__/*
+**/python/config/*
+**/.idea/*
+**/python/internal/*
+**/.venv/*
+**/.env/*
+
+# large evaluation files
+/demo/**
+/vid/**
+/*.mp4
+
+# operating system and IDE specific ignores
+/.idea*
+/cmake-build-*
+/.ccls-cache
+/.cache
+/.vscode
+/.vs
+/out
+/CMakeSettings.json
+**/**.code-workspace
+
+# vulkan, volcanite and imgui specific ignores
+/imgui.ini
+/vulkan_pipeline_cache.data
+/extern/shaderc/third_party/spirv-tools/build_overrides/*
+
