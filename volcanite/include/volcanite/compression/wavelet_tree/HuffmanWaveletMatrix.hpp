@@ -102,8 +102,8 @@ class HuffmanWaveletMatrix : public WaveletMatrixBase {
 
     [[nodiscard]] size_t getByteSize() const override {
         const size_t bytes = (4 + 3 * HWM_LEVELS) * sizeof(uint32_t)             // ones_bef, zeros_on_lvl, lvl_starts, text_size
-                       + m_bv.getRawDataSize() * sizeof(BV_WordType)       // bit vector(s) for all levels
-                       + m_fr->getRawDataSize() * sizeof(BV_L12Type) + 12; // FlatRank incl. size and data pointer
+                             + m_bv.getRawDataSize() * sizeof(BV_WordType)       // bit vector(s) for all levels
+                             + m_fr->getRawDataSize() * sizeof(BV_L12Type) + 12; // FlatRank incl. size and data pointer
         return bytes;
     }
 };

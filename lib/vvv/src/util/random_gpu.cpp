@@ -17,7 +17,7 @@
 
 namespace vvv {
 
-void uploadRandomFloatsToBuffer(const std::shared_ptr<Buffer>& buffer) {
+void uploadRandomFloatsToBuffer(const std::shared_ptr<Buffer> &buffer) {
     size_t elemCapacity = buffer->getByteSize() / sizeof(float);
     std::vector<float> tmp(elemCapacity);
     std::mt19937 rnd(std::time(nullptr));

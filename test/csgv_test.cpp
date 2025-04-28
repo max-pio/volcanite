@@ -13,9 +13,9 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include "vvv/volren/Volume.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/util/segmentation_volume_synthesis.hpp"
+#include "vvv/volren/Volume.hpp"
 
 using namespace volcanite;
 
@@ -23,7 +23,7 @@ int main() {
 
     // create dummy segmentation volume
     glm::uvec3 dim = {100, 80, 95};
-    const auto volume = createDummySegmentationVolume({.dim=dim});
+    const auto volume = createDummySegmentationVolume({.dim = dim});
 
     CompressedSegmentationVolume csgv;
     // Plain 4 bit per operation encoding
@@ -69,7 +69,6 @@ int main() {
         if (!csgv.test(volume->dataConst(), dim, false))
             return 3;
     }
-
 
     // Random Access Encoding
     {

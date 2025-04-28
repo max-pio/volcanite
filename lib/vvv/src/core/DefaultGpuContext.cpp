@@ -452,7 +452,7 @@ void vvv::DefaultGpuContext::createLogicalDevice() {
 
     enabledDeviceLayers.reserve(m_builder.deviceLayers.size());
 
-    for (const auto & deviceLayer : m_builder.deviceLayers)
+    for (const auto &deviceLayer : m_builder.deviceLayers)
         enabledDeviceLayers.push_back(const_cast<char *>(deviceLayer.c_str()));
 
     std::vector<char const *> enabledDeviceExtensions = {};
@@ -465,7 +465,7 @@ void vvv::DefaultGpuContext::createLogicalDevice() {
 
     enabledDeviceExtensions.reserve(m_builder.deviceExtensions.size());
 
-    for (const auto & deviceExtension : m_builder.deviceExtensions)
+    for (const auto &deviceExtension : m_builder.deviceExtensions)
         enabledDeviceExtensions.push_back(const_cast<char *>(deviceExtension.c_str()));
 
     log_supported_device_extensions(getPhysicalDevice());

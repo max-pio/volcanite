@@ -483,13 +483,13 @@ struct VolcaniteArgs {
             va.record_convergence_frames = recordConvergenceArg.getValue();
             std::string comma_separated_logfiles = evalLogFilesArg.getValue();
             va.eval_logfiles.clear();
-            for (const auto& logfile : comma_separated_logfiles | std::views::split(',') | std::views::transform([](const auto &&range) -> std::string {
-                                                       // string_view and string constructors do not accept the range iterators in C++17
-                                                       std::string tmp;
-                                                       for (const char c : range)
-                                                           tmp.push_back(c);
-                                                       return tmp;
-                                                   })) {
+            for (const auto &logfile : comma_separated_logfiles | std::views::split(',') | std::views::transform([](const auto &&range) -> std::string {
+                                           // string_view and string constructors do not accept the range iterators in C++17
+                                           std::string tmp;
+                                           for (const char c : range)
+                                               tmp.push_back(c);
+                                           return tmp;
+                                       })) {
                 va.eval_logfiles.emplace_back(expandPathStr(std::string(logfile)));
                 // TODO: check if the logfiles contain valid format strings
             }

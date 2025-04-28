@@ -133,7 +133,7 @@ struct OpenGLStyleSubmitOptions {
 /// that only announce change for data within the stable class reference.
 class GpuContext : public GpuPipelineCache {
   public:
-    GpuContext(const std::shared_ptr<DebugUtilities>& debugUtilities);
+    GpuContext(const std::shared_ptr<DebugUtilities> &debugUtilities);
 
     virtual void destroyGpuContext() {
         const auto device = getDevice();

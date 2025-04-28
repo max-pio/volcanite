@@ -13,15 +13,15 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include "vvv/util/util.hpp"
-#include "volcanite/compression/wavelet_tree/BitVector.hpp"
 #include "volcanite/compression/pack_nibble.hpp"
+#include "volcanite/compression/wavelet_tree/BitVector.hpp"
 #include "volcanite/compression/wavelet_tree/WaveletMatrix.hpp"
+#include "vvv/util/util.hpp"
 
-#include <iostream>
-#include <string>
-#include <random>
 #include <iomanip>
+#include <iostream>
+#include <random>
+#include <string>
 
 using namespace volcanite;
 
@@ -32,7 +32,7 @@ std::uniform_real_distribution<double> dist(0., 1.);
 #define STR_BITS_FRONT_BACK 64
 #define STR_PLACEHOLDER " ...   "
 
-std::string str(const std::vector<bool>& bv) {
+std::string str(const std::vector<bool> &bv) {
     std::stringstream ss;
     bool wrote_dots = false;
     for (uint32_t i = 0; i < bv.size(); i++) {
@@ -52,7 +52,7 @@ std::string str(const std::vector<bool>& bv) {
     return ss.str();
 }
 
-std::string str(const BitVector& bv) {
+std::string str(const BitVector &bv) {
     bool wrote_dots = false;
     std::stringstream ss;
     for (uint32_t i = 0; i < bv.size(); i++) {
@@ -71,7 +71,7 @@ std::string str(const BitVector& bv) {
     return ss.str();
 }
 
-std::string rankStrTicks(const BitVector& bv) {
+std::string rankStrTicks(const BitVector &bv) {
     bool wrote_dots = false;
     std::stringstream ss;
     for (uint32_t i = 0; i < bv.size(); i += 4u) {
@@ -85,12 +85,13 @@ std::string rankStrTicks(const BitVector& bv) {
 
         ss << "|   ";
 
-        if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 4u && i < bv.size() - 4u) ss << " ";
+        if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 4u && i < bv.size() - 4u)
+            ss << " ";
     }
     return ss.str();
 }
 
-std::string rankStrReference(const BitVector& bv) {
+std::string rankStrReference(const BitVector &bv) {
     bool wrote_dots = false;
     std::stringstream ss;
     ss << std::setfill(' ') << std::left;
@@ -102,21 +103,22 @@ std::string rankStrReference(const BitVector& bv) {
                 wrote_dots = true;
             }
 
-            for (uint32_t n = i; n < i+4; n++)
+            for (uint32_t n = i; n < i + 4; n++)
                 ref_rank += bv.access(n);
             continue;
         }
 
         ss << std::setw(4) << ref_rank;
-        for (uint32_t n = i; n < i+4; n++)
+        for (uint32_t n = i; n < i + 4; n++)
             ref_rank += bv.access(n);
 
-        if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 4u && i < bv.size() - 4u) ss << " ";
+        if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 4u && i < bv.size() - 4u)
+            ss << " ";
     }
     return ss.str();
 }
 
-std::string rankStrFlatRank(const FlatRank& f, const BitVector& bv) {
+std::string rankStrFlatRank(const FlatRank &f, const BitVector &bv) {
     bool wrote_dots = false;
     std::stringstream ss;
     ss << std::setfill(' ') << std::left;
@@ -132,7 +134,8 @@ std::string rankStrFlatRank(const FlatRank& f, const BitVector& bv) {
         uint32_t rank = f.rank1(i);
         ss << std::setw(4) << rank;
 
-        if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 4u && i < bv.size() - 4u) ss << " ";
+        if (i % BV_WORD_BIT_SIZE == BV_WORD_BIT_SIZE - 4u && i < bv.size() - 4u)
+            ss << " ";
     }
     return ss.str();
 }
@@ -151,7 +154,7 @@ BitVector createRandomBitVector(uint32_t size = 4000) {
     return bitVector;
 }
 
-BitVector createBitVectorFromBoolVector(std::vector<bool>& boolVector) {
+BitVector createBitVectorFromBoolVector(std::vector<bool> &boolVector) {
     BitVector bitVector = BitVector(boolVector.size());
     for (uint32_t i = 0; i < boolVector.size(); i++)
         bitVector.set(i, boolVector[i]);
@@ -166,15 +169,14 @@ std::vector<uint32_t> createRandomNibbleVector(uint32_t size = 4000) {
     return v;
 }
 
-
 int test_bv_set_access(uint32_t size = 4000) {
     std::vector<bool> boolVector = createRandomBoolVector(size);
     BitVector bitVector = BitVector(boolVector);
 
     // test initial creation from bool vector (linear access)
     for (uint32_t i = 0u; i < size; i++) {
-        if(boolVector[i] != bitVector.access(i))
-            return static_cast<int>(i)+1;
+        if (boolVector[i] != bitVector.access(i))
+            return static_cast<int>(i) + 1;
     }
 
     // test after switching bits at random positions (random access)
@@ -185,8 +187,8 @@ int test_bv_set_access(uint32_t size = 4000) {
         bitVector.set(random_pos, boolVector[random_pos]);
     }
     for (uint32_t i = 0u; i < size; i++) {
-        if(boolVector[i] != bitVector.access(i))
-            return static_cast<int>(i)+1;
+        if (boolVector[i] != bitVector.access(i))
+            return static_cast<int>(i) + 1;
     }
 
     return 0;
@@ -202,11 +204,11 @@ int test_bv_rank(uint32_t size = 4000) {
 
         // compute reference
         uint32_t ref_rank = 0u;
-        for(int n=0; n < i; n++)
+        for (int n = 0; n < i; n++)
             ref_rank += bitVector.access(n);
 
         if (ref_rank != rank)
-            return static_cast<int>(i)+1;
+            return static_cast<int>(i) + 1;
     }
 
     return 0;
@@ -215,7 +217,6 @@ int test_bv_rank(uint32_t size = 4000) {
 int test_wm() {
     auto v4bit = createRandomNibbleVector();
     WaveletMatrix m(v4bit.data(), 0, v4bit.size() * 8);
-
 
     for (int i = 0; i < v4bit.size() * 8; i++) {
         // access
@@ -233,16 +234,14 @@ int test_wm() {
                     ref_rank++;
             }
             if (ref_rank != m.rank(i, s))
-                return -(i+1);
-
+                return -(i + 1);
         }
-
     }
     return 0;
 }
 
 void printWMTest() {
-    constexpr uint32_t size = 32*32*32 + 16*16*16 + 8*8*8 + 4*4*4 + 2*2*2 + 1;
+    constexpr uint32_t size = 32 * 32 * 32 + 16 * 16 * 16 + 8 * 8 * 8 + 4 * 4 * 4 + 2 * 2 * 2 + 1;
     auto v4bit = createRandomNibbleVector(size);
     WaveletMatrix m(v4bit.data(), 0, size);
 
@@ -281,7 +280,7 @@ void printWMTest() {
 }
 
 void printBVTest() {
-    constexpr uint32_t size = 64*64*64;
+    constexpr uint32_t size = 64 * 64 * 64;
     auto bv = createRandomBitVector(size);
     std::cout << "     Bit Vector: " << str(bv) << std::endl;
     std::cout << "                 " << rankStrTicks(bv) << std::endl;
@@ -300,21 +299,19 @@ void printBVTest() {
     }
     e /= 10000.f;
     uint32_t max_bv_size = FlatRank::maximumBitVectorSize();
-    std::cout << "FlatRank rank1() in " << e/static_cast<double>(size)*1000.*1000.*1000. << " ns, space overhead is "
+    std::cout << "FlatRank rank1() in " << e / static_cast<double>(size) * 1000. * 1000. * 1000. << " ns, space overhead is "
               << FlatRank::overhead() * 100.f << "%, maximum bit vector size is "
               << FlatRank::maximumBitVectorSize() << " (64³ brick has 299593 entries)"
               << (x & 1u ? " " : "") // dependency to ensure that f.rank1(i) is not optimized away
               << std::endl;
-//    // L2_PER_L1,L1_BITS,L2_BITS,L2_BIT_SIZE,timing,space
-//    std::cout << BV_STORE_L2_PER_L1 << "," << BV_STORE_L1_BITS << "," << BV_STORE_L2_BITS << ","
-//              << BV_L2_BIT_SIZE << "," << e/static_cast<double>(size)*1000.*1000.*1000. << ","
-//              << FlatRank::overhead() << std::endl;
+    //    // L2_PER_L1,L1_BITS,L2_BITS,L2_BIT_SIZE,timing,space
+    //    std::cout << BV_STORE_L2_PER_L1 << "," << BV_STORE_L1_BITS << "," << BV_STORE_L2_BITS << ","
+    //              << BV_L2_BIT_SIZE << "," << e/static_cast<double>(size)*1000.*1000.*1000. << ","
+    //              << FlatRank::overhead() << std::endl;
     std::cout << std::endl;
-
-
 }
 
-int main (int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
 
     // printBVTest();
     // printWMTest();

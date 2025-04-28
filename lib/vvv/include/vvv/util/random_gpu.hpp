@@ -23,7 +23,7 @@
 
 namespace vvv {
 
-void uploadRandomFloatsToBuffer(const std::shared_ptr<Buffer>& buffer);
+void uploadRandomFloatsToBuffer(const std::shared_ptr<Buffer> &buffer);
 std::shared_ptr<Buffer> createRandomFloatBuffer(size_t elemCapacity, std::string label, GpuContextPtr ctx, bool uploadOnCreation = true);
 
 } // namespace vvv

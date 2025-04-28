@@ -78,14 +78,14 @@ class BitVector {
   public:
     BitVector() : m_size(0u), m_data() {}
     explicit BitVector(const std::vector<bool> &boolVector) : m_size(boolVector.size()),
-                                                     m_data(words_for_size(boolVector.size())) {
+                                                              m_data(words_for_size(boolVector.size())) {
         for (uint32_t i = 0; i < boolVector.size(); i++)
             set(i, boolVector[i]);
     }
     explicit BitVector(const uint32_t size) : m_size(size), m_data(words_for_size(size)) {}
 
     BitVector(const uint32_t size, const uint8_t bit) : m_size(size),
-                                            m_data(words_for_size(size), bit ? ~0ull : 0ull) {}
+                                                        m_data(words_for_size(size), bit ? ~0ull : 0ull) {}
 
     [[nodiscard]] uint8_t access(const uint32_t index) const {
         assert(index / BV_WORD_BIT_SIZE < m_data.size() && "bit vector access out of bounds");

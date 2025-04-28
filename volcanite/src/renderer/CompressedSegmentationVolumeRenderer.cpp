@@ -19,9 +19,9 @@
 #include <chrono>
 #include <memory>
 
+#include "volcanite/StratifiedPixelSequence.hpp"
 #include "vvv/core/Buffer.hpp"
 #include "vvv/util/hash_memory.hpp"
-#include "volcanite/StratifiedPixelSequence.hpp"
 
 #include "glm/gtc/matrix_transform.hpp"
 #include "vvvwindow/App.hpp"
@@ -394,8 +394,8 @@ void CompressedSegmentationVolumeRenderer::updateCPUDetailBuffers() {
                 next_requested_id++;
         }
     }
-    // 3. in parallel: copy all detail encodings to the m_detail_encodings
-    #pragma omp parallel for default(none) shared(detail_request_count, m_detail_requests, m_constructed_detail_starts, m_constructed_detail)
+// 3. in parallel: copy all detail encodings to the m_detail_encodings
+#pragma omp parallel for default(none) shared(detail_request_count, m_detail_requests, m_constructed_detail_starts, m_constructed_detail)
     for (int i = 0; i < detail_request_count; i++) {
         uint32_t brick_idx = m_detail_requests[i];
         uint32_t reserved_size = m_constructed_detail_starts[brick_idx + 1] - m_constructed_detail_starts[brick_idx];
@@ -939,8 +939,9 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     // shading
     HASHP(m_factor_ambient)
     HASHP(m_light_intensity)
-        HASHP(m_global_illumination_enabled) HASHP(m_shadow_pathtracing_ratio) HASHP(m_light_direction)
-            HASHP(m_ambient_occlusion_dist_strength) HASHP(m_envmap_enabled) HASHP(m_max_path_length)
+    HASHP(m_global_illumination_enabled)
+    HASHP(m_shadow_pathtracing_ratio) HASHP(m_light_direction)
+        HASHP(m_ambient_occlusion_dist_strength) HASHP(m_envmap_enabled) HASHP(m_max_path_length)
         // volume transformations
         HASHP(m_voxel_size) HASHP(m_bboxMin) HASHP(m_bboxMax) HASHP(m_axis_transpose_mat) HASHP(m_axis_flip[0])
             HASHP(m_axis_flip[1]) HASHP(m_axis_flip[2])
@@ -973,11 +974,12 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_background_color_a)
     HASHP(m_background_color_b)
     HASHP(m_tonemap_enabled)
-    HASHP(m_exposure) HASHP(m_brightness) HASHP(m_contrast) HASHP(m_gamma)
-    HASHP(m_atrous_iterations)
-    HASHP(m_denoising_enabled) HASHP(m_atrous_enabled) HASHP(m_depth_sigma) HASHP(m_denoise_fade_sigma)
-    HASHP(m_denoise_filter_kernel_size) HASHP(m_denoise_fade_enabled) HASHP(m_mouse_pos)
-    const uint32_t resolve_debug_bits = m_debug_vis_flags & (VDEB_NO_POSTPROCESS_BIT | VDEB_CACHE_ARRAY_BIT | VDEB_EMPTY_SPACE_ARRAY_BIT | VDEB_SPP_BIT | VDEB_G_BUFFER_BIT | VDEB_ENVMAP_BIT | VDEB_REQUEST_LIMIT_BIT | VDEB_BRICK_INFO_BIT);
+    HASHP(m_exposure)
+    HASHP(m_brightness) HASHP(m_contrast) HASHP(m_gamma)
+        HASHP(m_atrous_iterations)
+            HASHP(m_denoising_enabled) HASHP(m_atrous_enabled) HASHP(m_depth_sigma) HASHP(m_denoise_fade_sigma)
+                HASHP(m_denoise_filter_kernel_size) HASHP(m_denoise_fade_enabled) HASHP(m_mouse_pos)
+                    const uint32_t resolve_debug_bits = m_debug_vis_flags & (VDEB_NO_POSTPROCESS_BIT | VDEB_CACHE_ARRAY_BIT | VDEB_EMPTY_SPACE_ARRAY_BIT | VDEB_SPP_BIT | VDEB_G_BUFFER_BIT | VDEB_ENVMAP_BIT | VDEB_REQUEST_LIMIT_BIT | VDEB_BRICK_INFO_BIT);
     HASHP(resolve_debug_bits)
     if (new_hash != m_presolve_hash) {
         m_render_update_flags |= UPDATE_PRESOLVE;

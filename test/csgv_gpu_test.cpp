@@ -13,12 +13,12 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include "vvv/volren/Volume.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/util/segmentation_volume_synthesis.hpp"
+#include "vvv/volren/Volume.hpp"
 
-#include "vvv/core/DefaultGpuContext.hpp"
 #include "volcanite/eval/CSGVBenchmarkPass.hpp"
+#include "vvv/core/DefaultGpuContext.hpp"
 
 using namespace volcanite;
 using namespace vvv;
@@ -38,7 +38,7 @@ int main() {
 
     // create dummy segmentation volume
     glm::uvec3 dim = {100, 80, 95};
-    const auto volume = createDummySegmentationVolume({.dim=dim});
+    const auto volume = createDummySegmentationVolume({.dim = dim});
 
     CompressedSegmentationVolume csgv;
     {

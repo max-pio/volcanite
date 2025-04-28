@@ -262,8 +262,8 @@ class GuiInterface {
         virtual gui_id addAction(void (*callback)(), const std::string &name);
         virtual gui_id addAction(std::function<void()> callback, const std::string &name);
         virtual gui_id addCustomCode(std::function<void()> callback, const std::string &name);
-        virtual gui_id addLabel(const std::string& name);
-        virtual gui_id addDynamicText(std::string *text, const std::string& name = "");
+        virtual gui_id addLabel(const std::string &name);
+        virtual gui_id addDynamicText(std::string *text, const std::string &name = "");
         virtual gui_id addProgress(std::function<float()> getter, const std::string &name = "") { return add<float>(nullptr, getter, name, GuiProgress); }
         virtual gui_id addSeparator();
 

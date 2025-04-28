@@ -595,7 +595,7 @@ std::optional<DescriptorBinding> Shader::reflectBindingByName(const std::string 
     // `struct SOME_IDENTIFIER {} NAME;`
     const std::string enclosed_name = "(" + name + ")";
 
-    for (auto & i_set : sets) {
+    for (auto &i_set : sets) {
         const auto &[set, binding_count, bindings] = *i_set;
         for (uint32_t i_binding = 0; i_binding < binding_count; ++i_binding) {
             const SpvReflectDescriptorBinding &refl_binding = *(bindings[i_binding]);
@@ -630,7 +630,7 @@ vk::Extent3D Shader::reflectWorkgroupSize() const {
 
 vk::ShaderStageFlagBits Shader::reflectShaderStage() const { return static_cast<vk::ShaderStageFlagBits>(m_reflection->GetShaderStage()); }
 
-const char* Shader::reflectEntryPointName() const { return m_reflection->GetEntryPointName(); }
+const char *Shader::reflectEntryPointName() const { return m_reflection->GetEntryPointName(); }
 
 std::string _shader_include_dir = vvv::default_shader_include_dir;
 

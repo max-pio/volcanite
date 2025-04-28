@@ -17,7 +17,7 @@
 
 namespace vvv {
 
-GpuContext::GpuContext(const std::shared_ptr<DebugUtilities>& debugUtilities)
+GpuContext::GpuContext(const std::shared_ptr<DebugUtilities> &debugUtilities)
     : debugMarker(debugUtilities == nullptr ? createDefaultDebugUtilities() : debugUtilities), sync(std::make_unique<Synchronization>(this)) {}
 
 std::shared_ptr<DebugUtilities> createDefaultDebugUtilities() {

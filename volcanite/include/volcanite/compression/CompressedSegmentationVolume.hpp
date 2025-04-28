@@ -561,7 +561,7 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
         return shader_defines;
     }
 
-    static void printBrickInfo(glm::uvec3 brick, loglevel log_level = Info) ;
+    static void printBrickInfo(glm::uvec3 brick, loglevel log_level = Info);
 
     void printBrickEncoding(uint32_t brick_idx) const;
 

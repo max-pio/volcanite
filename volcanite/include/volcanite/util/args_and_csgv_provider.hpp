@@ -15,11 +15,9 @@
 
 #pragma once
 
-
 #include "volcanite/VolcaniteArgs.hpp"
 #include "volcanite/compression/CSGVDatabase.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
-
 
 using namespace vvv;
 

@@ -760,7 +760,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
     m_encodings.resize(size);
     // read all single split encoding arrays
-    for (auto & m_encoding : m_encodings) {
+    for (auto &m_encoding : m_encodings) {
         fin.read(reinterpret_cast<char *>(&size), sizeof(size_t));
         m_encoding.resize(size);
         fin.read(reinterpret_cast<char *>(&m_encoding[0]), static_cast<long>(size * sizeof(uint32_t)));

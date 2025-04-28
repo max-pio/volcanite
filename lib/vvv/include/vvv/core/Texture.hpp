@@ -71,7 +71,7 @@ class Texture {
     ///
     /// @param queues if the texture is used in multiple queues, the queue indices of the queues the texture will be used in concurrently. If the texture is only
     /// used in a single queue, this parameter can be left empty. See exclusive and concurrent sharing modes in the Vulkan specification for details.
-    Texture(vvv::GpuContextPtr ctx, vk::Format format, uint32_t width, uint32_t height, uint32_t depth, vk::ImageUsageFlags usage, const std::set<uint32_t>& queues = TextureExclusiveQueueUsage)
+    Texture(vvv::GpuContextPtr ctx, vk::Format format, uint32_t width, uint32_t height, uint32_t depth, vk::ImageUsageFlags usage, const std::set<uint32_t> &queues = TextureExclusiveQueueUsage)
         : m_ctx(ctx), dims(TextureDimensions::e3D), format(format), width(width), height(height), depth(depth), usage(Texture::defaultUsage(usage)),
           aspectMask(FormatHasDepth(static_cast<VkFormat>(format)) ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor), queues(queues.begin(), queues.end()) {}
 

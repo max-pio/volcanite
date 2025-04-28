@@ -13,14 +13,14 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include "vvv/volren/Volume.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/util/segmentation_volume_synthesis.hpp"
+#include "vvv/volren/Volume.hpp"
 
 using namespace volcanite;
 
-#include "volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp"
 #include "volcanite/compression/pack_nibble.hpp"
+#include "volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp"
 #include "volcanite/compression/wavelet_tree/WaveletMatrix.hpp"
 
 std::vector<uint32_t> random4BitOperationStream(uint32_t length) {
@@ -41,7 +41,7 @@ std::vector<uint32_t> cycle4BitOperationStream(uint32_t length) {
     return v;
 }
 
-uint32_t rank_scan(std::vector<uint32_t>& v, uint32_t pos, uint32_t op) {
+uint32_t rank_scan(std::vector<uint32_t> &v, uint32_t pos, uint32_t op) {
     uint32_t count = 0;
     for (uint32_t i = 0; i < pos; i++) {
         if (read4Bit(v, 0, i) == op)
@@ -71,7 +71,6 @@ int main() {
             got = wmh.access(i);
             if (expected != got)
                 return 20;
-
 
             // rank
             for (int op = 0; op < 6; op++) {
@@ -104,7 +103,6 @@ int main() {
             got = wmh.access(i);
             if (expected != got)
                 return 120;
-
 
             // rank
             for (int op = 0; op < 6; op++) {

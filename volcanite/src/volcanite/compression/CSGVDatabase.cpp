@@ -97,7 +97,7 @@ bool CSGVDatabase::databaseExportAndOpen(const std::string &sqlite_path, const s
                         // check what data type the column has by looking at all values
                         bool is_float = false;
 #pragma omp parallel for default(none) shared(csv_database, attribute_idx, attribute_names, is_float)
-                        for (auto & i : csv_database) {
+                        for (auto &i : csv_database) {
                             if (is_float)
                                 continue;
                             float val_temp = i[attribute_idx];

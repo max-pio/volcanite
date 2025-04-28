@@ -15,15 +15,15 @@
 
 #define HEADLESS
 
-#include "vvv/volren/Volume.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/util/segmentation_volume_synthesis.hpp"
+#include "vvv/volren/Volume.hpp"
 
-#include "volcanite/eval/CSGVBenchmarkPass.hpp"
+#include "stb/stb_image.hpp"
 #include "volcanite/VolcaniteArgs.hpp"
+#include "volcanite/eval/CSGVBenchmarkPass.hpp"
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "vvv/core/HeadlessRendering.hpp"
-#include "stb/stb_image.hpp"
 #include <fmt/core.h>
 #include <string>
 
@@ -36,32 +36,31 @@ constexpr int RET_COMPR_ERROR = 3;
 constexpr int RET_RENDER_ERROR = 4;
 constexpr int RET_EXPORT_ERROR = 5;
 
-int export_texture(Texture* tex, const std::string& export_file_path) {
+int export_texture(Texture *tex, const std::string &export_file_path) {
     try {
         Logger(Info) << "Exporting render output to " << export_file_path;
         tex->writeFile(export_file_path);
-    }
-    catch(const std::runtime_error& e) {
+    } catch (const std::runtime_error &e) {
         Logger(Error) << "Render export error: " << e.what();
         return RET_EXPORT_ERROR;
     }
     return 0;
 }
 
-int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
-                      const std::shared_ptr<CSGVDatabase>& csgvDatabase,
-                      const VolcaniteArgs& args) {
+int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume> &csgv,
+                      const std::shared_ptr<CSGVDatabase> &csgvDatabase,
+                      const VolcaniteArgs &args) {
     // if the attribute database is a dummy, update the min/max attribute values for the volume labels
-    if(csgvDatabase->isDummy())
+    if (csgvDatabase->isDummy())
         csgvDatabase->updateDummyMinMax(*csgv);
 
     const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
-    renderer->setDecodingParameters({.cache_size_MB=args.cache_size_MB,
-                                     .palettized_cache=args.cache_palettized,
-                                     .decode_from_shared_memory=false,
-                                     .cache_mode=args.cache_mode,
-                                     .empty_space_resolution=args.empty_space_resolution,
-                                     .shader_defines=args.shader_defines});
+    renderer->setDecodingParameters({.cache_size_MB = args.cache_size_MB,
+                                     .palettized_cache = args.cache_palettized,
+                                     .decode_from_shared_memory = false,
+                                     .cache_mode = args.cache_mode,
+                                     .empty_space_resolution = args.empty_space_resolution,
+                                     .shader_defines = args.shader_defines});
     renderer->setCompressedSegmentationVolume(csgv, csgvDatabase);
     // not setting render config: use default values
     renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
@@ -72,12 +71,12 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
     renderEngine->acquireResources();
     // let the rendering converge for some frames (if specified in the rendering config, we use that number)
     int accumulation_frames = renderer->getTargetAccumulationFrames();
-    auto texture = renderEngine->renderFrames({.accumulation_samples=static_cast<size_t>(accumulation_frames > 0 ? accumulation_frames : 300)});
-    if(texture == nullptr) {
+    auto texture = renderEngine->renderFrames({.accumulation_samples = static_cast<size_t>(accumulation_frames > 0 ? accumulation_frames : 300)});
+    if (texture == nullptr) {
         Logger(Error) << "internal rendering error";
         return RET_RENDER_ERROR;
     }
-    if(export_texture(texture.get(), args.screenshot_output_file) != RET_SUCCESS) {
+    if (export_texture(texture.get(), args.screenshot_output_file) != RET_SUCCESS) {
         Logger(Error) << "image export error";
         return RET_EXPORT_ERROR;
     }
@@ -89,17 +88,17 @@ int renderImageToFile(const std::shared_ptr<CompressedSegmentationVolume>& csgv,
 
 static const std::string OUT_DIR = "./render_test/";
 static const std::vector<VolcaniteArgs> RENDERING_TEST_CONFIGS = {
-        {.brick_size=32, .encoding_mode=NIBBLE_ENC, .screenshot_output_file=OUT_DIR + "nibble_32.png"},
-           {.brick_size=64, .encoding_mode=DOUBLE_TABLE_RANS_ENC, .operation_mask=(OP_ALL | OP_USE_OLD_PAL_D_BIT), .screenshot_output_file=OUT_DIR + "rANSd_64_old-delta.png"},
-        {.cache_palettized=true, .brick_size=64, .encoding_mode=SINGLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANSd_64_cache-palette.png"},
-        {.stream_lod=true, .brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC, .screenshot_output_file=OUT_DIR + "rANS_16_stream-lod.png"},
-        {.cache_mode=CACHE_NOTHING, .brick_size=16, .encoding_mode=NIBBLE_ENC, .operation_mask=(OP_ALL_WITHOUT_STOP & OP_ALL_WITHOUT_DELTA), .random_access=true, .screenshot_output_file=OUT_DIR + "nibble_16_ra.png"},
-        {.cache_mode=CACHE_BRICKS, .decode_from_shared_memory=true, .brick_size=64, .encoding_mode=HUFFMAN_WM_ENC, .operation_mask=OP_ALL_WITHOUT_DELTA, .random_access=true,  .screenshot_output_file=OUT_DIR + "hWM_64_ra_cache-brck-sm.png"},
-        {.cache_mode=CACHE_VOXELS, .empty_space_resolution=2u, .brick_size=16, .encoding_mode=HUFFMAN_WM_ENC, .operation_mask=OP_ALL_WITHOUT_DELTA, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_16_ra_cache-voxl_ess.png"},
-        {.cache_mode=CACHE_NOTHING, .brick_size=32, .encoding_mode=HUFFMAN_WM_ENC, .operation_mask=OP_ALL_WITHOUT_DELTA, .random_access=true, .screenshot_output_file=OUT_DIR + "hWM_32_ra_cache-none.png"},
-    };
+    {.brick_size = 32, .encoding_mode = NIBBLE_ENC, .screenshot_output_file = OUT_DIR + "nibble_32.png"},
+    {.brick_size = 64, .encoding_mode = DOUBLE_TABLE_RANS_ENC, .operation_mask = (OP_ALL | OP_USE_OLD_PAL_D_BIT), .screenshot_output_file = OUT_DIR + "rANSd_64_old-delta.png"},
+    {.cache_palettized = true, .brick_size = 64, .encoding_mode = SINGLE_TABLE_RANS_ENC, .screenshot_output_file = OUT_DIR + "rANSd_64_cache-palette.png"},
+    {.stream_lod = true, .brick_size = 16, .encoding_mode = DOUBLE_TABLE_RANS_ENC, .screenshot_output_file = OUT_DIR + "rANS_16_stream-lod.png"},
+    {.cache_mode = CACHE_NOTHING, .brick_size = 16, .encoding_mode = NIBBLE_ENC, .operation_mask = (OP_ALL_WITHOUT_STOP & OP_ALL_WITHOUT_DELTA), .random_access = true, .screenshot_output_file = OUT_DIR + "nibble_16_ra.png"},
+    {.cache_mode = CACHE_BRICKS, .decode_from_shared_memory = true, .brick_size = 64, .encoding_mode = HUFFMAN_WM_ENC, .operation_mask = OP_ALL_WITHOUT_DELTA, .random_access = true, .screenshot_output_file = OUT_DIR + "hWM_64_ra_cache-brck-sm.png"},
+    {.cache_mode = CACHE_VOXELS, .empty_space_resolution = 2u, .brick_size = 16, .encoding_mode = HUFFMAN_WM_ENC, .operation_mask = OP_ALL_WITHOUT_DELTA, .random_access = true, .screenshot_output_file = OUT_DIR + "hWM_16_ra_cache-voxl_ess.png"},
+    {.cache_mode = CACHE_NOTHING, .brick_size = 32, .encoding_mode = HUFFMAN_WM_ENC, .operation_mask = OP_ALL_WITHOUT_DELTA, .random_access = true, .screenshot_output_file = OUT_DIR + "hWM_32_ra_cache-none.png"},
+};
 
-glm::vec4 CIE_rgb2xyz(const glm::vec4& rgba) {
+glm::vec4 CIE_rgb2xyz(const glm::vec4 &rgba) {
     static const glm::mat3 rgb2xyz = glm::mat3(0.4887180f, 0.1762044f, 0.0000000f,
                                                0.3106803f, 0.8129847f, 0.0102048f,
                                                0.2006017f, 0.0108109f, 0.9897952f);
@@ -111,10 +110,10 @@ glm::vec4 CIE_rgb2xyz(const glm::vec4& rgba) {
 /// \param path2 second image
 /// \param threshold average absolute error below which a pixel is ignored in the RMSE in [0,1]
 /// \return 0 for equality, negative values for image loading errors, otherwise the RMSE of the images.
-double computeImageRMSE(const std::string& path1, const std::string& path2, float threshold = 0.f) {
+double computeImageRMSE(const std::string &path1, const std::string &path2, float threshold = 0.f) {
     int w1, h1, c1, w2, h2, c2;
-    unsigned char* image1 = stbi_load(path1.c_str(), &w1, &h1, &c1, STBI_rgb_alpha);
-    unsigned char* image2 = stbi_load(path2.c_str(), &w2, &h2, &c2, STBI_rgb_alpha);
+    unsigned char *image1 = stbi_load(path1.c_str(), &w1, &h1, &c1, STBI_rgb_alpha);
+    unsigned char *image2 = stbi_load(path2.c_str(), &w2, &h2, &c2, STBI_rgb_alpha);
     if (image1 == nullptr || image2 == nullptr)
         return -2ll;
     if (w1 != w2 || h1 != h2 || c1 != c2 || c1 != 4) {
@@ -123,10 +122,10 @@ double computeImageRMSE(const std::string& path1, const std::string& path2, floa
 
     size_t element_count = w1 * h1 * c1;
     double rmse = 0.;
-    #pragma omp parallel for default(none) shared(element_count, image1, image2, threshold) reduction(+ : rmse)
+#pragma omp parallel for default(none) shared(element_count, image1, image2, threshold) reduction(+ : rmse)
     for (size_t i = 0; i < element_count; i += 4) {
-        glm::vec4 rgba1 = glm::vec4{image1[i], image1[i+1], image1[i+2], image1[i+3]} / 255.f;
-        glm::vec4 rgba2 = glm::vec4{image2[i], image2[i+1], image2[i+2], image2[i+3]} / 255.f;
+        glm::vec4 rgba1 = glm::vec4{image1[i], image1[i + 1], image1[i + 2], image1[i + 3]} / 255.f;
+        glm::vec4 rgba2 = glm::vec4{image2[i], image2[i + 1], image2[i + 2], image2[i + 3]} / 255.f;
 
         // convert to CIE XYZ and compute component differences
         glm::vec4 error = glm::abs(CIE_rgb2xyz(rgba1) - CIE_rgb2xyz(rgba2));
@@ -155,17 +154,16 @@ double computeImageRMSE(const std::string& path1, const std::string& path2, floa
         std::string diff_image_out = path1;
         diff_image_out.erase(diff_image_out.rfind('.'), 4);
         diff_image_out.append("_DIFF_");
-        diff_image_out.append(path2.substr(path2.rfind('/')+1));
+        diff_image_out.append(path2.substr(path2.rfind('/') + 1));
         Logger(Debug) << "writing difference image " << absolute(std::filesystem::path(diff_image_out));
         stbi_write_png(diff_image_out.c_str(), w1, h1, c1,
-                       reinterpret_cast<const void*>(image1), w1 * c1);
+                       reinterpret_cast<const void *>(image1), w1 * c1);
     }
 
     stbi_image_free(image1);
     stbi_image_free(image2);
     return rmse;
 }
-
 
 /// Renders one image with the same rendering config for different CSGV encoding and decoding modes using the Headless
 /// renderer. All output images are compared for differences. The encoding and decoding properties should not change
@@ -178,7 +176,7 @@ int main() {
 
     // create dummy segmentation volume
     glm::uvec3 dim = {133, 70, 194};
-    const auto volume = createDummySegmentationVolume({.dim=dim, .seed=0xABCDE12345});
+    const auto volume = createDummySegmentationVolume({.dim = dim, .seed = 0xABCDE12345});
 
     // create compressed segmentation volume
     std::shared_ptr<CompressedSegmentationVolume> csgv = std::make_shared<CompressedSegmentationVolume>();
@@ -187,8 +185,8 @@ int main() {
     size_t freq[32];
 
     // for all test configurations: export one render image each
-    for (const auto& args : RENDERING_TEST_CONFIGS) {
-        if(!args.screenshot_output_file.ends_with(".png")) {
+    for (const auto &args : RENDERING_TEST_CONFIGS) {
+        if (!args.screenshot_output_file.ends_with(".png")) {
             Logger(Error) << "must provide export file path for render test run as '*.png'";
             return RET_INVALID_ARG;
         }
@@ -204,7 +202,7 @@ int main() {
         csgv->setCompressionOptions64(args.brick_size, args.encoding_mode, args.operation_mask, args.random_access, freq, freq + 16);
         csgv->compress(volume->dataConst(), dim, false);
         // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
-        if(args.stream_lod && !csgv->isUsingSeparateDetail()) {
+        if (args.stream_lod && !csgv->isUsingSeparateDetail()) {
             csgv->separateDetail();
         }
 
@@ -220,7 +218,7 @@ int main() {
     // check output image files for pair-wise equality
     std::map<std::string, int> error_count;
     int max_id_string_length = 0;
-    for (const auto& args : RENDERING_TEST_CONFIGS) {
+    for (const auto &args : RENDERING_TEST_CONFIGS) {
         error_count[args.screenshot_output_file] = 0;
         max_id_string_length = glm::max(static_cast<int>(args.screenshot_output_file.length()), max_id_string_length);
     }
@@ -246,15 +244,15 @@ int main() {
                 error_count[RENDERING_TEST_CONFIGS[img_b].screenshot_output_file]++;
             } else {
                 Logger(Debug) << RENDERING_TEST_CONFIGS[img_a].screenshot_output_file << " and "
-                                        << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file << " ok (RMSE " << rmse << ")";
+                              << RENDERING_TEST_CONFIGS[img_b].screenshot_output_file << " ok (RMSE " << rmse << ")";
             }
         }
     }
 
     Logger(Debug) << "Pair-Wise Comparison Error Counts:";
-    for (const auto& args : RENDERING_TEST_CONFIGS)
+    for (const auto &args : RENDERING_TEST_CONFIGS)
         Logger(Debug) << fmt::vformat("{:" + std::to_string(max_id_string_length) + "}", fmt::make_format_args(args.screenshot_output_file))
-                           << "  " << error_count[args.screenshot_output_file];
+                      << "  " << error_count[args.screenshot_output_file];
     Logger(Debug) << ((result == RET_SUCCESS) ? "  success" : "  errors");
     return result;
 }

@@ -142,7 +142,7 @@ gui_id GuiInterface::GuiElementList::addCustomCode(std::function<void()> callbac
     m_entries.push_back(entry);
     return entry->id;
 }
-gui_id GuiInterface::GuiElementList::addLabel(const std::string& name) {
+gui_id GuiInterface::GuiElementList::addLabel(const std::string &name) {
     auto entry = new BaseGuiEntry();
     entry->id = m_id_counter++;
     entry->type = GuiLabel;
@@ -150,7 +150,7 @@ gui_id GuiInterface::GuiElementList::addLabel(const std::string& name) {
     m_entries.push_back(entry);
     return entry->id;
 }
-gui_id GuiInterface::GuiElementList::addDynamicText(std::string *text, const std::string& name) {
+gui_id GuiInterface::GuiElementList::addDynamicText(std::string *text, const std::string &name) {
     auto entry = new GuiEntry<std::string>();
     entry->id = m_id_counter++;
     entry->value = text;

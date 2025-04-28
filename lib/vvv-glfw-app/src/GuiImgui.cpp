@@ -185,7 +185,7 @@ void GuiImgui::renderGui() {
                     else
                         return *e->value;
                 };
-                auto gui_set = []<class T>(GuiEntry<T> *e, bool changed, const T& value) {
+                auto gui_set = []<class T>(GuiEntry<T> *e, bool changed, const T &value) {
                     if (changed) {
                         if (e->setter)
                             e->setter(value);
