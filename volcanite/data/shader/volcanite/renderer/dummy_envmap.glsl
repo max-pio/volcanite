@@ -35,7 +35,7 @@ vec3 dummy_envmap(vec3 dir) {
     c += vec3(0.3f);
 
     // TODO: use a proper HDR environment map and tone mapping
-    return c * 1.4f
+    return c * 1.4f;
 }
 
 /// The background is a tilted interpolation between two colors g_background_color_a and g_background_color_b
