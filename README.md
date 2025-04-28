@@ -34,7 +34,7 @@ Start Volcanite, either providing a path to a segmentation volume as a commandli
 ```
 or by using the file dialog to select a volume file.
 If you have no segmentation volume at hand, you can create a synthetic dummy volume by passing `+synth` as input volume.
-If your segmentation volume format is not supported by Volcanite, have a look at the [converter.py](../volcanite/python/converter.py) script to 
+If your segmentation volume format is not supported by Volcanite, have a look at the [converter.py](python/volcanite/src/volcanite/converter.py) script to 
 convert it into one of the supported file formats.
 
 Run `./volcanite --help` for a complete list of arguments and commands.
@@ -53,7 +53,7 @@ The `doc` directory of this repository contains further information on how to us
 
 ## Python Module
 
-The project contains a rudimentary python package to run volcanite confgiratuions through system calls, to download
+The project contains a rudimentary python package to run volcanite configurations through system calls, to download
 large data sets from cloud storages, or to convert segmentation volumes between different file formats.
 To install the package in a virtual environment, run
 ```bash
