@@ -78,36 +78,6 @@ or your dependency is out of date?*
 
 The Volcanite project directory has its own [ReadMe](../volcanite/ReadMe.md) with development information about the renderer.
 
-
-## Git Branching Strategy
-
-* Each developer starts own branch names with a prefix `ab/<branch>`. Usually, `ab` are your initials.
-* Each developer has their own development branch from which additional branches for features can be created.
-* Merging happens to the `staging` branch first where merging bugs can be fixed. We do not rebase here.
-* Ideally, we test the `staging` branch with different builds (Ubuntu, Windows, headless, ..) before release.
-* If the `staging` branch feels complete and bug free, it can be merged into `main` by the repository maintainer.
-
-```
-  ab/feature   ab/development   cd/development   staging      main
-      .              ┌─┐              .             .           .
-      .              └┬┘             ┌─┐            .           .
-      .               │              └┬┘            .           .
-      .              ┌▼┐              │             .           .
-      ┌──────────────┴┬┘             ┌▼┐            .           .
-      │               │              └┬┘            .           .
-     ┌▼┐              │               └───────────►┌─┐          .
-     └┬┘ feature     ┌▼┐              .            └┬┘          .
-      │  branch      └┬┘              .             │           .
-     ┌▼┐              │               .            ┌▼┐          .
-     └─┴────────────►┌▼┐              .            └┬┘ bugfix   .
-      .              └┬┘              .             │           .
-      .               │               .             │           .
-      .               └───────────────────────────►┌▼┐          .
-      .               .               .            └┬┘          .
-      .               .               .             └─────────►┌─┐
-      .               .               .                        └─┘ tag 0.1
-```
-
 ## Open Source Libraries and Licenses
 
 For a full list of directly included dependencies and their licenses
