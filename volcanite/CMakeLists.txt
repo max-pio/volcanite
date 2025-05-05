@@ -50,23 +50,23 @@ set(VOLCANITE_HEADERS
 )
 
 set(VOLCANITE_SOURCES
-        src/volcanite/eval/CSGVBenchmarkPass.cpp
-        src/volcanite/eval/EvaluationLogExport.cpp
-        src/volcanite/compression/encoder/CSGVBrickEncoder.cpp
-        src/volcanite/compression/encoder/CSGVSerialBrickEncoder.cpp
-        src/volcanite/compression/encoder/NibbleEncoder.cpp
-        src/volcanite/compression/encoder/RangeANSEncoder.cpp
-        src/volcanite/compression/encoder/WaveletMatrixEncoder.cpp
-        src/volcanite/compression/CompressedSegmentationVolume.cpp
-        src/volcanite/compression/CompressedSegmentationVolumeStats.cpp
-        src/volcanite/compression/CompressedSegmentationVolumeParallel.cpp
-        src/volcanite/compression/CSGVDatabase.cpp
-        src/volcanite/compression/pack_nibble.cpp
-        src/volcanite/compression/pack_rans.cpp
-        src/volcanite/compression/pack_wavelet_matrix.cpp
-        src/volcanite/compression/wavelet_tree/prefix_counting.cpp
-        src/volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.cpp
-        src/volcanite/compression/wavelet_tree/WaveletMatrix.cpp
+        src/eval/CSGVBenchmarkPass.cpp
+        src/eval/EvaluationLogExport.cpp
+        src/compression/encoder/CSGVBrickEncoder.cpp
+        src/compression/encoder/CSGVSerialBrickEncoder.cpp
+        src/compression/encoder/NibbleEncoder.cpp
+        src/compression/encoder/RangeANSEncoder.cpp
+        src/compression/encoder/WaveletMatrixEncoder.cpp
+        src/compression/CompressedSegmentationVolume.cpp
+        src/compression/CompressedSegmentationVolumeStats.cpp
+        src/compression/CompressedSegmentationVolumeParallel.cpp
+        src/compression/CSGVDatabase.cpp
+        src/compression/pack_nibble.cpp
+        src/compression/pack_rans.cpp
+        src/compression/pack_wavelet_matrix.cpp
+        src/compression/wavelet_tree/prefix_counting.cpp
+        src/compression/wavelet_tree/HuffmanWaveletMatrix.cpp
+        src/compression/wavelet_tree/WaveletMatrix.cpp
         src/util/args_and_csgv_provider.cpp
         src/util/segmentation_volume_synthesis.cpp
         src/renderer/CompressedSegmentationVolumeRenderer.cpp
