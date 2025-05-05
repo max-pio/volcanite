@@ -32,6 +32,25 @@ instead of `xorg-dev`.
 | PugiXML             | 1.12.1       | parse XML data                          | `libpugixml-dev`              |
 | OpenMP              | 4.5          | CPU parallelization                     | included in compiler          |
 
+A note on **compile times**:
+Volcanite is currently build and used on specialized hardware (e.g. HPC clusters) where users have only limited rights
+to install modules and packages.
+For that reason, most libraries are included at *compile time*, leaving only the optional libraries and the Vulkan SDK as
+external dependencies.
+
+You can reduce compile times by setting the CMake option `USE_SYSTEM_GLSLANG=ON` to exclude the large shaderc library.
+Note that you must not install or pacakge Volcanite with this option set as the resulting binary would only work on
+systems where the glslangValidator is present at the given hardcoded path from development.
+
+## Packaging
+
+After creating a Release build of Volcanite, it can be packaged for distribution on Linux or Windodws systems.
+We use CPack for packaging which will create .exe, .deb, zip, or tar.gz installers or packages depending on your current build system:
+```bash
+cd cmake-build-release
+cpack --config CPackConfig.cmake
+```
+
 
 ## Development Tools
 
