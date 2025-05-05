@@ -147,10 +147,18 @@ function(makeVolcaniteLibrary name)
     target_compile_definitions(${name} PRIVATE "-DDATA_DIRS=\"${data_dirs_escaped}\"")
 endfunction()
 
-# This will add install()-definitions for this executable. This includes copying all dependent data/-Folders upon `ninja install` or packaging the data/-Files with `cpack`.
+# This will add install()-definitions for this executable. This includes copying all dependent data/-Folders upon
+# ninja install` or packaging the data/-Files with `cpack`.
 # Also, required variables for finding the data/-Folders at runtime is passed as compile definitions.
 # Ensure that target_link_libraries() is executed before this function as these libraries are searched for data/-Directories.
 function(installVolcaniteExecutable name)
+    # check if Volcanite is installed and if a shader compiler is included at compile time
+    if(CMAKE_INSTALL_COMPONENT OR (CMAKE_INSTALL_PREFIX AND (CMAKE_INSTALL_DO_STRIP OR CMAKE_INSTALL_DO_INSTALL)))
+        if(USE_SYSTEM_GLSLANG)
+            message(FATAL_ERROR "USE_SYSTEM_GLSLANG is ON. Installing targets is forbidden with this option as
+                    the resulting binary might not be able to compile shaders on other systems.")
+        endif()
+    endif()
     set(data_dirs "")
 
     # get all INTERFACE_DATA_DIR properties to copy those data dirs into the project install directory
