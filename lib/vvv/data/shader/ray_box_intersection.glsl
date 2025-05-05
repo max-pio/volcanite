@@ -52,4 +52,4 @@ void ray_box_intersection(const Ray ray, const AABB box, out float t_0, out floa
     t_1 = min(t.x, t.y);
 }
 
-#endif// VVV_RAY_BOX_INTERSECTION_GLSL
+#endif // VVV_RAY_BOX_INTERSECTION_GLSL

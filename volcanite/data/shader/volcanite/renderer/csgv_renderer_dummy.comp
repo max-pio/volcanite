@@ -35,7 +35,7 @@ void main() {
     ivec2 viewport_size = imageSize(accumulationOut);
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
     if (isHelperLane(pixel, viewport_size))
-    return;
+        return;
 
     // everything this shader does is copying the framebuffers of the last frame to the current frame
     // this is necessary because some of the buffers are ping-pong buffers that alter between frames

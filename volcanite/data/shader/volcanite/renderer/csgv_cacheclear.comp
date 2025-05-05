@@ -30,18 +30,18 @@ layout (local_size_x = 8, local_size_y = 4, local_size_z = 4) in;
 #include "volcanite/compression/csgv_utils.glsl"
 
 void main() {
-    #if CACHE_MODE == CACHE_NOTHING
+#if CACHE_MODE == CACHE_NOTHING
     return;
-    #endif
+#endif
 
     uvec3 brick = gl_GlobalInvocationID.xyz;
-    if (isHelperLane(brick, g_brick_count))
-    return;
+    if(isHelperLane(brick, g_brick_count))
+        return;
     uint brick_idx = brick_pos2idx(brick, g_brick_count);
 
-    if (brick.x == 0 && brick.y == 0 && brick.z == 0) {
+    if(brick.x == 0 && brick.y == 0 && brick.z == 0) {
         // clear per-LoD info buffers (that all start at inv. LoD 1, so we need lod-count-1 workers for this)
-        for (uint inv_lod_minus_one = 0u; inv_lod_minus_one < LOD_COUNT - 1; inv_lod_minus_one++) {
+        for(uint inv_lod_minus_one = 0u; inv_lod_minus_one < LOD_COUNT - 1; inv_lod_minus_one++) {
             // clear all free_block_stacks
             g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + inv_lod_minus_one] = 0u;
             // clear all assign_info
@@ -53,31 +53,31 @@ void main() {
         // reset the cache top counter (= free all cache elements)
         g_assign_info[(LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD] = 0u;
         #ifdef SEPARATE_DETAIL
-        // reset the atomic counter for the detail request buffer
-        g_detail_requests[g_request_buffer_capacity] = 0u;
+            // reset the atomic counter for the detail request buffer
+            g_detail_requests[g_request_buffer_capacity] = 0u;
         #endif
     }
 
     #ifdef SEPARATE_DETAIL
-    // clear the request buffer
-    uint total_workers = g_brick_count.x * g_brick_count.y * g_brick_count.z;
-    uint elems_per_worker = (g_request_buffer_capacity + total_workers - 1u) / total_workers;
-    for (uint i = elems_per_worker * brick_idx; i < elems_per_worker * (brick_idx + 1); i++) {
-        if (i < g_request_buffer_capacity)
-        g_detail_requests[i] = INVALID;
-    }
+        // clear the request buffer
+        uint total_workers = g_brick_count.x * g_brick_count.y * g_brick_count.z;
+        uint elems_per_worker = (g_request_buffer_capacity + total_workers - 1u) / total_workers;
+        for(uint i = elems_per_worker * brick_idx; i < elems_per_worker * (brick_idx + 1); i++) {
+            if(i < g_request_buffer_capacity)
+            g_detail_requests[i] = INVALID;
+        }
     #endif
 
     // reset cache info
-    g_brick_info[brick_idx * 4u + BRICK_INFO_REQ_INV_LOD] = INVALID;// for a "garbage collection" we would overwrite this to directly re-assign all required blocks
+    g_brick_info[brick_idx * 4u + BRICK_INFO_REQ_INV_LOD] = INVALID; // for a "garbage collection" we would overwrite this to directly re-assign all required blocks
     g_brick_info[brick_idx * 4u + BRICK_INFO_CUR_INV_LOD] = INVALID;
     g_brick_info[brick_idx * 4u + BRICK_INFO_CACHE_INDEX] = INVALID;
     g_brick_info[brick_idx * 4u + BRICK_INFO_REQ_SLOT] = INVALID;
 
     #if (CACHE_MODE == CACHE_VOXELS)
-    // reset all cache elements
-    for (uint id = brick_idx; id < CACHE_UVEC2_SIZE; id += g_brick_idx_count) {
-        g_cache[id] = ~uint64_t(0);
-    }
+        // reset all cache elements
+        for (uint id = brick_idx; id < CACHE_UVEC2_SIZE; id += g_brick_idx_count) {
+            g_cache[id] = ~uint64_t(0);
+        }
     #endif
 }

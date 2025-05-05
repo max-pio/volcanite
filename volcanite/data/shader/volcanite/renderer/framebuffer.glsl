@@ -25,7 +25,7 @@
 vec2 subpixelOffset(const ivec2 pixel) {
     // TODO: code duplication with initialization of the random state. the
     const uint prev_sample_count = imageLoad(accuSampleCountIn, pixel).r;
-    const vec2 u = randomVec3(pixel, ((g_camera_still_frames / 256u) << 8u) ^ (prev_sample_count << 31u) ^ prev_sample_count).xy;
+    const vec2 u = randomVec3(pixel,((g_camera_still_frames / 256u) << 8u) ^ (prev_sample_count << 31u) ^ prev_sample_count).xy;
 
     // blackman harris filter with a width of 1.5 pixels
     return vec2(0.5f) + (g_blue_noise_enable ? sampleBlackmanHarris(u) : vec2(0.f));
@@ -44,8 +44,8 @@ ivec2 pixelFromInvocationID() {
         // offset the subsampling pixel with some blue noise
         // g_subsampling_pixel is actually just morton_idx2pos(bitfieldReverse(idx % g_subsampling * g_subsampling))
         return ivec2(gl_GlobalInvocationID.xy * g_subsampling)
-        + ivec2(mod(vec2(g_subsampling_pixel + pixelOffsetInBlock()), vec2(g_subsampling)));
-        //        return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + g_subsampling_pixel;
+             + ivec2(mod(vec2(g_subsampling_pixel + pixelOffsetInBlock()), vec2(g_subsampling)));
+//        return ivec2(gl_GlobalInvocationID.xy * g_subsampling) + g_subsampling_pixel;
     }
 }
 
@@ -136,7 +136,7 @@ bool unpackGBufferRGB16(uvec3 g_buffer_packed, inout uint label, inout vec3 norm
     // 3 bits for normal, if the first two bits are both set, it is undefined (no-hit ray)
     normal = vec3(0.f);
     if (isSurfaceHitGBufferRGB16(g_buffer_packed))
-    normal[(g_buffer_packed.x & 0x3u)] = 1.f - 2.f * float((g_buffer_packed.x >> 2) & 0x1u);
+        normal[(g_buffer_packed.x & 0x3u)] = 1.f - 2.f * float((g_buffer_packed.x >> 2) & 0x1u);
 
     // 13 bits normalized depth between 0 and 1
     normalized_depth = float(g_buffer_packed.x >> 3) / 8192.f;
@@ -228,6 +228,6 @@ void writePixel(ivec2 pixel, vec4 new_rgba, float depth_valid, uvec3 g_buffer_pa
         }
     }
 }
-#endif// VOLCANITE_FRAMEBUFFER_READONLY
+#endif // VOLCANITE_FRAMEBUFFER_READONLY
 
-#endif// VOLCANITE_FRAMEBUFFER_GLSL
+#endif // VOLCANITE_FRAMEBUFFER_GLSL
