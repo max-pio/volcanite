@@ -65,6 +65,8 @@ if (ENABLE_ADDRESS_SANITIZER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -g -DLSAN_OPTIONS=verbosity=1:log_threads=1")
 endif()
 
+option(USE_SYSTEM_GLSLANG "Use the system glslangValidator binary for shader compilation instead of shaderc to reduce build times." OFF)
+
 # In headless mode, no windowing system integration is build.
 option(HEADLESS "Build without GUI and windowing functionality to run only in --headless mode." OFF)
 
