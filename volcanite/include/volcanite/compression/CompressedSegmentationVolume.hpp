@@ -365,7 +365,7 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
     [[nodiscard]] bool isUsingWaveletMatrix() const { return m_encoding_mode == WAVELET_MATRIX_ENC; }
 
     /// returns the maximum number of uint32 palette entries that any brick in the volume contains.
-    [[nodiscard]] uint32_t getMaxBrickPaletteCount() const { return m_max_brick_palette_count; };
+    [[nodiscard]] uint32_t getMaxBrickPaletteCount() const { return m_volume_info.max_brick_palette_size; };
 
     /// Sets the options for the compression step. If using rANS, a frequency table as a uint32_t[16] array must be given for the base.
     /// If using detail separation (use_detail) and rANS, an additional frequency table must be given for the detail buffer.

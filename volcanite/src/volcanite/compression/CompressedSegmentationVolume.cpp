@@ -618,20 +618,21 @@ void CompressedSegmentationVolume::computeVolumeInfo() {
     {
         std::vector<std::unordered_set<uint32_t>> label_set(m_cpu_threads);
         // process the next m_cpu_threads bricks in parallel
-#pragma omp parallel num_threads(m_cpu_threads) default(none) shared(label_set) reduction(max:m_volume_info.max_brick_palette_size) reduction(max:m_volume_info.max_label_in_volume)
+        uint32_t max_label = 0u;
+        uint32_t max_palette_size = 0u;
+#pragma omp parallel num_threads(m_cpu_threads) default(none) shared(label_set) reduction(max : max_label) reduction(max : max_palette_size)
         {
-            unsigned int thread_id = omp_get_thread_num();
+            const unsigned int thread_id = omp_get_thread_num();
             for (size_t n = thread_id; n < getBrickIndexCount(); n += m_cpu_threads) {
 
                 if (n < getBrickIndexCount()) {
-                    auto brick_encoding = getBrickEncoding(n);
-                    uint32_t brick_encoding_length = getBrickEncodingLength(n);
-                    uint32_t palette_size = getBrickPaletteLength(n);
+                    const auto brick_encoding = getBrickEncoding(n);
+                    const uint32_t brick_encoding_length = getBrickEncodingLength(n);
+                    const uint32_t palette_size = getBrickPaletteLength(n);
 
                     // track maximum palette size
-                    if (palette_size > m_volume_info.max_brick_palette_size) {
-                        m_volume_info.max_brick_palette_size = palette_size;
-                    }
+                    if (palette_size > max_palette_size)
+                        max_palette_size = palette_size;
 
                     for (int p = 1; p <= palette_size; p++) {
                         uint32_t label = brick_encoding[brick_encoding_length - p];
@@ -640,12 +641,14 @@ void CompressedSegmentationVolume::computeVolumeInfo() {
                         }
 
                         // track maximum label in volume
-                        if (label > m_volume_info.max_label_in_volume)
-                            m_volume_info.max_label_in_volume = label;
+                        if (label > max_label)
+                            max_label = label;
                     }
                 }
             }
         }
+        m_volume_info.max_label_in_volume = max_label;
+        m_volume_info.max_brick_palette_size = max_palette_size;
 
         // gather all thread-private label sets into one global set (the first one)
         for (int thread_id = 1; thread_id < m_cpu_threads; thread_id++) {
@@ -704,8 +707,8 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
     // write general info
     file.write(reinterpret_cast<char *>(&m_brick_size), sizeof(uint32_t));
     file.write(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
-    file.write(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode));       // since 0011
-    file.write(reinterpret_cast<char *>(&m_random_access), sizeof(bool));               // since 015
+    file.write(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode)); // since 0011
+    file.write(reinterpret_cast<char *>(&m_random_access), sizeof(bool));         // since 015
     // TODO: exporting max. palette size is deprecated. It will be computed in computeVolumeInfo() after import.
     file.write(reinterpret_cast<char *>(&m_volume_info.max_brick_palette_size), sizeof(uint32_t)); // since 012
 

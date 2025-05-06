@@ -18,6 +18,7 @@
 
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/VolcaniteArgs.hpp"
+#include "volcanite/compression/CSGVAttributeExtractor.hpp"
 #include "volcanite/compression/CSGVDatabase.hpp"
 #include "volcanite/compression/CompSegVolHandler.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
@@ -212,10 +213,10 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
         return RET_COMPR_ERROR;
     }
 
-    // optionally, add additional attributes from the
+    // optionally, add additional attributes from the attribute extraction
     if (args.compute_attributes) {
         CSGVAttributeExtractor csgvAttributeExtractor(compressedSegmentationVolume);
-        csgvDatabase->addAttributesIfNotExist(csgvAttributeExtractor);
+        csgvDatabase->addAttributesIfNotExist(&csgvAttributeExtractor);
 
         // (optionally), export the connectivity information, i.e. which labels are neighboring each other in the volume
         csgvAttributeExtractor.exportNeighborsPerLabel(stripFileExtension(args.input_file) + "_connectivity.csv");

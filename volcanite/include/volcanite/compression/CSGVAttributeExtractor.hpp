@@ -73,7 +73,7 @@ class CSGVAttributeExtractor {
 
     std::shared_ptr<const CompressedSegmentationVolume> m_csgv;
     std::vector<NeighborList *> m_neighbors_per_label;
-    std::vector<const std::string> m_attribute_names = {"Volume", "Surface", "Center X", "Center Y", "Center Z", "Neighbor Count"};
+    std::vector<std::string> m_attribute_names = {"Volume", "Surface", "Center X", "Center Y", "Center Z", "Neighbor Count"};
     std::vector<std::vector<float>> m_attribute_values = {};
 
     // TODO: the negative neighbors are not required as all operations are symmetric:
@@ -240,7 +240,7 @@ class CSGVAttributeExtractor {
         return m_attribute_values;
     }
 
-    const std::vector<const std::string> &getAttributeNames() const {
+    const std::vector<std::string> &getAttributeNames() const {
         return m_attribute_names;
     }
 };
