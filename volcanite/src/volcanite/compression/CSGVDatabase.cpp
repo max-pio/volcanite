@@ -15,9 +15,10 @@
 
 #include "volcanite/compression/CSGVDatabase.hpp"
 
+#include "volcanite/compression/CSGVAttributeExtractor.hpp"
+
 #include "SQLiteCpp/VariadicBind.h"
 #include <SQLiteCpp/SQLiteCpp.h>
-#include <SQLiteCpp/VariadicBind.h>
 
 namespace volcanite {
 
@@ -457,6 +458,15 @@ size_t CSGVDatabase::getAttribute(int attributeIndex, float *begin, size_t maxSi
     }
     assert((it == begin + m_label_count) && "Did not write expected number of attribute values");
     return (it - begin);
+}
+
+void CSGVDatabase::addAttributesIfNotExist(const CSGVAttributeExtractor * attribute_extractor) {
+    if (!m_db)
+        throw std::runtime_error("No CSGV attribute database present.");
+
+    // TODO: add all the attributes attribute_extractor->getAttributeNames() to the database IF no attribute with this name exists yet
+
+    // TODO: update m_attribute_names, m_attribute_minmax ..
 }
 
 void CSGVDatabase::close() {

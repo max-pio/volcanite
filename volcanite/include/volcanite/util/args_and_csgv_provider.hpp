@@ -155,7 +155,6 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
                                                         .verbose = args.verbose};
         compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
                                                                                              complete_csgv_path, cfg);
-        compressedSegmentationVolume->checkContiguousLabels();
 
         if (use_temporary_output_file) {
             if (std::filesystem::exists(complete_csgv_path))
@@ -206,12 +205,20 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
             if (std::filesystem::exists(config_path))
                 args.rendering_configs = {config_path};
         }
-        compressedSegmentationVolume->checkContiguousLabels();
     }
 
     if (compressedSegmentationVolume == nullptr) {
         Logger(Error) << "could not create or load Compressed Segmentation Volume. Aborting.";
         return RET_COMPR_ERROR;
+    }
+
+    // optionally, add additional attributes from the
+    if (args.compute_attributes) {
+        CSGVAttributeExtractor csgvAttributeExtractor(compressedSegmentationVolume);
+        csgvDatabase->addAttributesIfNotExist(csgvAttributeExtractor);
+
+        // (optionally), export the connectivity information, i.e. which labels are neighboring each other in the volume
+        csgvAttributeExtractor.exportNeighborsPerLabel(stripFileExtension(args.input_file) + "_connectivity.csv");
     }
 
     return RET_SUCCESS;

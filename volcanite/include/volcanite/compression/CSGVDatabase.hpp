@@ -15,7 +15,6 @@
 
 #pragma once
 
-#include "vvv/util/space_filling_curves.hpp"
 #include "vvv/volren/Volume.hpp"
 
 #include "volcanite/CSGVPathUtils.hpp"
@@ -25,7 +24,6 @@
 
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
 // forward decl
@@ -36,6 +34,8 @@ class Database;
 using namespace vvv;
 
 namespace volcanite {
+
+class CSGVAttributeExtractor;
 
 class CSGVDatabase {
 
@@ -144,6 +144,8 @@ class CSGVDatabase {
     /// to fit getLabelCount() elements. If maxSize > getLabelCount(), only getLabelCount() elements are written.
     /// @return the number of written elements
     size_t getAttribute(int attributeIndex, float *begin, size_t maxSize);
+
+    void addAttributesIfNotExist(const CSGVAttributeExtractor*);
 
   private:
     SQLite::Database *m_db = nullptr; // sqlite database

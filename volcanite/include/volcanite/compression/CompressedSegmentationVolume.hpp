@@ -157,6 +157,10 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
         return m_detail_starts[brick_idx + 1u];
     }
 
+    /// Computes general volume information (number of unique labels and maximum label in volume) for later use.
+    /// Called after importVolume() or compress(), i.e. anytime the volume is changed.
+    void computeVolumeInfo();
+
   public:
     /// Moves the detail encoding stream from each brick to the detail buffer. The detail starts buffer contains the start positions of such detail encodings afterwards.
     /// This has no effect on compression rates, but is usually only necessary when using detail level CPU to GPU streaming for rendering very large data sets.
@@ -167,7 +171,7 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
 
   public:
     explicit CompressedSegmentationVolume() : VolumeCompressionBase(), m_brick_size(0u), m_encodings(), m_brick_idx_to_enc_vector(~0u), m_brick_starts(), m_detail_encodings(), m_detail_starts(), m_volume_dim(-1),
-                                              m_encoding_mode(NIBBLE_ENC), m_separate_detail(false), m_cpu_threads(std::thread::hardware_concurrency()), m_max_brick_palette_count(0) {}
+                                              m_encoding_mode(NIBBLE_ENC), m_separate_detail(false), m_cpu_threads(std::thread::hardware_concurrency()), m_volume_info() {}
 
     ~CompressedSegmentationVolume() { clear(); }
 
@@ -239,11 +243,15 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
     }
 
     [[nodiscard]] bool hasContiguousLabels() const {
-        return m_contiguous_labels;
+        return (getMaxLabelInVolume() == getNumberOfUniqueLabelsInVolume() - 1);
     }
 
-    void checkContiguousLabels() {
-        m_contiguous_labels = (getMaxLabelInVolume() == getNumberOfUniqueLabelsInVolume()-1);
+    uint32_t getNumberOfUniqueLabelsInVolume() const {
+        return m_volume_info.unique_labels_in_volume;
+    }
+
+    uint32_t getMaxLabelInVolume() const {
+        return m_volume_info.max_label_in_volume;
     }
 
     // ACCESSING FULL BUFFERS: -----------------------------------------------------------------------------------------
@@ -404,8 +412,8 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
         m_op_mask = OP_ALL;
         m_separate_detail = false;
         m_brick_idx_to_enc_vector = ~0u;
-        m_max_brick_palette_count = 0u;
         m_encoder = {};
+        m_volume_info = {};
     }
 
     size_t getCompressedSizeInBytes() const {
@@ -456,7 +464,7 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
            << (brick_starts_memory + encoding_memory + detail_starts_memory + detail_memory) << "MB / " << volume_memory
            << "MB original size (" << (static_cast<double>(brick_starts_memory + encoding_memory + detail_starts_memory + detail_memory) / volume_memory * 100.f) << "%) "
            << str(m_volume_dim) << " voxels (" << bytes_per_voxel << " byte/voxel) for " << label_count << " labels."
-           << " max. brick palette size " << m_max_brick_palette_count << ".";
+           << " max. brick palette size " << m_volume_info.max_brick_palette_size << ".";
         if (m_encodings.size() > 1) {
             ss << "\n        Split encoding buffers (" << m_encodings.size() << "):";
             uint32_t brick_index_count = getBrickCount().x * getBrickCount().y * getBrickCount().z;
@@ -579,72 +587,6 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
     /// @return true if no errors are found, false otherwise.
     bool verifyCompression() const;
 
-    uint32_t getNumberOfUniqueLabelsInVolume() const {
-        std::vector<std::unordered_set<uint32_t>> label_set(m_cpu_threads);
-// process the next m_cpu_threads bricks in parallel
-#pragma omp parallel num_threads(m_cpu_threads) default(none) shared(label_set)
-        {
-            unsigned int thread_id = omp_get_thread_num();
-            for (size_t n = thread_id; n < getBrickIndexCount(); n += m_cpu_threads) {
-
-                if (n < getBrickIndexCount()) {
-                    auto brick_encoding = getBrickEncoding(n);
-                    uint32_t brick_encoding_length = getBrickEncodingLength(n);
-                    uint32_t palette_size = getBrickPaletteLength(n);
-
-                    for (int p = 1; p <= palette_size; p++) {
-                        uint32_t label = brick_encoding[brick_encoding_length - p];
-                        if (!label_set[thread_id].contains(label)) {
-                            label_set[thread_id].insert(label);
-                        }
-                    }
-                }
-            }
-        }
-
-        // gather all thread-private label sets into one global set (the first one)
-        for (int thread_id = 1; thread_id < m_cpu_threads; thread_id++) {
-            for (const auto &label : label_set[thread_id]) {
-                if (!label_set[0].contains(label)) {
-                    label_set[0].insert(label);
-                }
-            }
-            label_set[thread_id].clear();
-        }
-        return label_set[0].size();
-    }
-
-    uint32_t getMaxLabelInVolume() const {
-        std::vector<uint32_t> label_set(m_cpu_threads);
-        // process the next m_cpu_threads bricks in parallel
-#pragma omp parallel num_threads(m_cpu_threads) default(none) shared(label_set)
-        {
-            unsigned int thread_id = omp_get_thread_num();
-            for (size_t n = thread_id; n < getBrickIndexCount(); n += m_cpu_threads) {
-
-                if (n < getBrickIndexCount()) {
-                    auto brick_encoding = getBrickEncoding(n);
-                    uint32_t brick_encoding_length = getBrickEncodingLength(n);
-                    uint32_t palette_size = getBrickPaletteLength(n);
-
-                    for (int p = 1; p <= palette_size; p++) {
-                        uint32_t label = brick_encoding[brick_encoding_length - p];
-                        if (label_set[thread_id] < label) {
-                            label_set[thread_id] = label;
-                        }
-                    }
-                }
-            }
-        }
-
-        // gather all thread-private label sets into one global set (the first one)
-        for (int thread_id = 1; thread_id < m_cpu_threads; thread_id++) {
-            if (label_set[0] < label_set[thread_id])
-                label_set[0] = label_set[thread_id];
-        }
-        return label_set[0];
-    }
-
   private:
     uint32_t m_cpu_threads; ///< number of CPU threads to parallelize computations
 
@@ -664,14 +606,18 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
     bool m_random_access = false; ///< encoding supports random access within a brick
 
     bool m_separate_detail;
-    uint32_t m_max_brick_palette_count; ///< max. palette length of any brick as a number of label entries
 
     // timings [s] of the last compression run (without freq. pre-pass) and the frequency pre-pass
     float m_last_total_encoding_seconds = 0.f;
     float m_last_total_freq_prepass_seconds = 0.f;
     std::string m_label = "";
 
-    bool m_contiguous_labels = false; ///< if the provided labels are contiguous
+    struct VolumeInfo {
+        bool initialized = false;
+        uint32_t max_brick_palette_size = ~0u; ///< max. palette length of any brick as a number of label entries
+        uint32_t max_label_in_volume = ~0u;       ///< the highest existing label in the volume
+        uint32_t unique_labels_in_volume = ~0u;   ///< the number of unique labels in the volume
+    } m_volume_info;
 };
 
 } // namespace volcanite

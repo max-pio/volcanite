@@ -65,8 +65,9 @@ struct VolcaniteArgs {
     std::string attribute_database;            ///< SQlite3 file with attributes for volume labels
     std::string attribute_table;               ///< table or view containing the attributes for the volume labels
     std::string attribute_label;               ///< name of the label attribute
-    std::string attribute_csv_separator = ","; //< only for csv attribute databases
+    std::string attribute_csv_separator = ","; ///< only for csv attribute databases
     bool label_remapping = false;              ///< if label ids in the volume should be remapped to a consecutive interval
+    bool compute_attributes = false;           ///< if additional attributes are computed from the segmentation volume
 
     // compression args
     std::string compress_export_file;   ///< !empty = perform compression to file         Only one of
@@ -156,7 +157,8 @@ struct VolcaniteArgs {
             ValueArg<std::string> shaderDefineArg("", "shader-def", "String of ; separated definitions that will be passed on to the shader. e.g. 'MY_VAL=64;MY_DEF'. Use with care.", false, va.shader_defines, "string", cmd);
 
             // attribute arguments
-            SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
+            SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used. Enables --gen-attributes if no database is used.", cmd);
+            SwitchArg computeAttributesArg("", "gen-attributes", "Generate common attributes from the volume and add them to the attribute database.", cmd);
             ValueArg<std::string> attributeArg("a", "attribute", R"(SQLite or CSV Attribute database: "{file.sqlite}[,{table/view name}[,{label column referenced in volume}]]" or "{file.csv}[,{label column referenced in volume}[,{csv separator}]]".)", false, "", "database.sqlite[,table[,label]] or database.csv[,label[,separator]]", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal development GUI and enable shader debug outputs.", cmd);
@@ -428,6 +430,7 @@ struct VolcaniteArgs {
                     if (!std::filesystem::exists(va.attribute_database))
                         throw ArgException(attributeArg.longID() + " attribute database file does not exists or can not be accessed.", attributeArg.longID());
                 }
+                va.compute_attributes = (va.attribute_database.empty() && va.label_remapping) || computeAttributesArg.getValue();
 
                 // compression arguments
                 va.brick_size = bricksizeArg.getValue();

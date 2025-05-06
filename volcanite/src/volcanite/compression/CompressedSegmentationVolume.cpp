@@ -288,7 +288,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     m_brick_starts.resize(brick_index_count + 1, INVALID);
     // reset brick to split encoding vector mapping, and max. palette entry count
     m_brick_idx_to_enc_vector = ~0u;
-    m_max_brick_palette_count = 0u;
+    m_volume_info = {};
 
     // detail buffers can only be filled with a subsequent call to separateDetail()
     m_separate_detail = false;
@@ -396,13 +396,6 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
             m_brick_starts[brick_index] = static_cast<uint32_t>(m_encodings[m_encodings.size() - 2].size());
         }
 
-        // update the maximum palette size
-        for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
-            if (encoded_element_count[thread_id] > 0u && encodedBrick[thread_id][m_encoder->getPaletteSizeHeaderIndex()] > m_max_brick_palette_count) {
-                m_max_brick_palette_count = encodedBrick[thread_id][m_encoder->getPaletteSizeHeaderIndex()];
-            }
-        }
-
         // output a progress update
         if (verbose) {
             bricks_since_last_update += m_cpu_threads;
@@ -435,6 +428,9 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     Logger(Info) << getLabel() << " Compression Progress 100% in " << std::fixed << std::setprecision(3) << m_last_total_encoding_seconds << "s (" << (static_cast<float>(volume.size()) / m_last_total_encoding_seconds / 1000000.f) << " million voxels/second) " << getEncodingInfoString();
 
     assert(verifyCompression() && "Compression did produce invalid encodings.");
+
+    // update general volume information
+    computeVolumeInfo();
 }
 
 // #define NO_BRICK_DECODE_INDEX_REMAP
@@ -614,6 +610,56 @@ bool CompressedSegmentationVolume::testLOD(const std::vector<uint32_t> &volume, 
     Logger(Info) << "-------------------------------------------------------------";
     return error_count == 0;
 }
+void CompressedSegmentationVolume::computeVolumeInfo() {
+    // computes and stores for later use:
+    // * the maximum label in the volume
+    // * the maximum palette size of any brick
+    // * the number of unique labels in the volume
+    {
+        std::vector<std::unordered_set<uint32_t>> label_set(m_cpu_threads);
+        // process the next m_cpu_threads bricks in parallel
+#pragma omp parallel num_threads(m_cpu_threads) default(none) shared(label_set) reduction(max:m_volume_info.max_brick_palette_size) reduction(max:m_volume_info.max_label_in_volume)
+        {
+            unsigned int thread_id = omp_get_thread_num();
+            for (size_t n = thread_id; n < getBrickIndexCount(); n += m_cpu_threads) {
+
+                if (n < getBrickIndexCount()) {
+                    auto brick_encoding = getBrickEncoding(n);
+                    uint32_t brick_encoding_length = getBrickEncodingLength(n);
+                    uint32_t palette_size = getBrickPaletteLength(n);
+
+                    // track maximum palette size
+                    if (palette_size > m_volume_info.max_brick_palette_size) {
+                        m_volume_info.max_brick_palette_size = palette_size;
+                    }
+
+                    for (int p = 1; p <= palette_size; p++) {
+                        uint32_t label = brick_encoding[brick_encoding_length - p];
+                        if (!label_set[thread_id].contains(label)) {
+                            label_set[thread_id].insert(label);
+                        }
+
+                        // track maximum label in volume
+                        if (label > m_volume_info.max_label_in_volume)
+                            m_volume_info.max_label_in_volume = label;
+                    }
+                }
+            }
+        }
+
+        // gather all thread-private label sets into one global set (the first one)
+        for (int thread_id = 1; thread_id < m_cpu_threads; thread_id++) {
+            for (const auto &label : label_set[thread_id]) {
+                if (!label_set[0].contains(label)) {
+                    label_set[0].insert(label);
+                }
+            }
+            label_set[thread_id].clear();
+        }
+        m_volume_info.unique_labels_in_volume = label_set[0].size();
+    }
+    m_volume_info.initialized = true;
+}
 
 void CompressedSegmentationVolume::exportToFile(const std::string &path, bool verbose) {
     if (m_encodings.empty()) {
@@ -660,7 +706,8 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
     file.write(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
     file.write(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode));       // since 0011
     file.write(reinterpret_cast<char *>(&m_random_access), sizeof(bool));               // since 015
-    file.write(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t)); // since 012
+    // TODO: exporting max. palette size is deprecated. It will be computed in computeVolumeInfo() after import.
+    file.write(reinterpret_cast<char *>(&m_volume_info.max_brick_palette_size), sizeof(uint32_t)); // since 012
 
     file.write(reinterpret_cast<char *>(&m_op_mask), sizeof(uint32_t)); // since 015
     m_encoder->exportToFile(file);
@@ -735,7 +782,8 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     fin.read(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
     fin.read(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode));
     fin.read(reinterpret_cast<char *>(&m_random_access), sizeof(bool));
-    fin.read(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t));
+    // TODO: exporting max. palette size is deprecated. It will be computed in computeVolumeInfo() after import.
+    fin.read(reinterpret_cast<char *>(&m_volume_info.max_brick_palette_size), sizeof(uint32_t));
 
     // update encoder
     fin.read(reinterpret_cast<char *>(&m_op_mask), sizeof(uint32_t));
@@ -813,6 +861,10 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
             return true;
         }
     }
+
+    // update the general information about the volume
+    computeVolumeInfo();
+
     return true;
 }
 

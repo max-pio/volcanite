@@ -136,12 +136,6 @@ int volcanite_main(int argc, char *argv[]) {
         renderer->setCompressedSegmentationVolume(compressedSegmentationVolume, csgvDatabase);
         renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
 
-
-        if (args.attribute_database.empty() && args.label_remapping) {
-            CSGVAttributeExtractor csgvAttributeExtractor(compressedSegmentationVolume);
-
-        }
-
         // if a screenshot file, video file, or evaluation log file path is given, run the headless mode first
         if (run_headless_pass) {
 
