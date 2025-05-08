@@ -494,6 +494,8 @@ class VolcaniteExec:
 
     @classmethod
     def __run_with_log(cls, call_args: list[str], cwd: str | PathLike | None = None, print_log=True, *args, **kwargs):
+        # remove empty argument strings ""
+        call_args = list(filter(None, call_args))
         if print_log:
             print(str(cwd) + "> " + " ".join(call_args))
         return subp.run(call_args, cwd=cwd, *args, **kwargs)
