@@ -15,12 +15,13 @@
 from pathlib import Path
 from time import sleep
 
-from h5py.h5t import convert
-from volcanite import converter as vc, clouddata as vcd, volcaniteeval as ve
 import argparse
-
 import requests
 import shutil
+import zipfile
+
+from volcanite import converter as vc, converter_chunked as vcc, clouddata as vcd, volcaniteeval as ve
+import numpy as np
 
 def download_file(url: str, directory: Path, file_name: str | None = None, log: bool = True) -> Path:
     # taken from https://stackoverflow.com/questions/16694907/download-large-file-in-python-with-requests
@@ -58,17 +59,60 @@ Haubold, Johannes; Kleesiek, Jens; Stiefelhagen, Rainer (2024). Towards Unifying
 #
 "h01": ('''Alexander Shapson-Coe et al., A petavoxel fragment of human cerebral cortex reconstructed at nanoscale resolution.
 Science384,eadk4858(2024).DOI:10.1126/science.adk4858
-https://h01-release.storage.googleapis.com/''', "https://creativecommons.org/licenses/by/4.0/legalcode.txt"),
+https://h01-release.storage.googleapis.com/
+Data Set: gs://h01-release/data/20210601/c3/''', "https://creativecommons.org/licenses/by/4.0/legalcode.txt"),
 #
-"Motta2019": ('''Motta A, Berning M, Boergens KM, Staffler B, Beining M, Loomba S, Hennig Ph, Wissler H, Helmstaedter M (2019).
+"motta2019": ('''Motta A, Berning M, Boergens KM, Staffler B, Beining M, Loomba S, Hennig Ph, Wissler H, Helmstaedter M (2019).
 Dense connectomic reconstruction in layer 4 of the somatosensory cortex. Science. DOI: 10.1126/science.aay3134
 https://l4dense2019.brain.mpg.de/''', ""),
+#
+"liconn": ('''Tavakoli, M.R., Lyudchik, J., Januszewski, M. et al.
+Light-microscopy-based connectomic reconstruction of mammalian brain tissue. Nature (2025).
+https://doi.org/10.1038/s41586-025-08985-1
+
+Data Set: gs://liconn-public/ExPID82_1/segmentation/231030_agg_240123''', "https://creativecommons.org/licenses/by/4.0/legalcode.txt"),
+#
+"wolny2020": ('''Adrian Wolny, Lorenzo Cerrone, Athul Vijayan, Rachele Tofanelli, Amaya Vilches Barro, Marion Louveaux, Christian Wenzl, Sören Strauss, David Wilson-Sánchez,
+Rena Lymbouridou, Susanne S Steigleder, Constantin Pape, Alberto Bailoni, Salva Duran-Nebreda, George W Bassel, Jan U Lohmann, Miltos Tsiantis,
+Fred A Hamprecht, Kay Schneitz, Alexis Maizel, Anna Kreshuk (2020)
+Accurate and versatile 3D segmentation of plant tissues at cellular resolution
+eLife 9:e57613  https://doi.org/10.7554/eLife.57613
+
+Data Set: Ovules/train/N_428_ds2x.h5 https://osf.io/x9yns/files/osfstorage''', ""),
+#
+"griesser2022-validation": ('''Griesser A., Westerteiger R., Glatt E., Hagen H., and Wiegmann A., 2022:
+Fiber identification validation - ground truth and results of fiber identification for generated samples, Math2Market GmbH, Validation,
+https://doi.org/10.30423/Data.Math2Market-2022-02.Validation.FiberFind
+
+Data Set: data.math2market-2022-02.validation.fiberfind/FiberFindValidation1/FiberFindVali1_Truth_labeled_2um_32bu_600x600x200.raw
+
+https://www.math2market.com/showroom/scandata/fiberfind-nonwoven-2022-01.html
+                       
+Article:
+Grießer, A., Westerteiger, R., Glatt, E., Hagen, H., & Wiegmann, A. (2022).
+Identification and analysis of fibers in ultra-large micro-CT scans of nonwoven textiles using deep learning.
+The Journal of The Textile Institute, 114(11), 1647-1657.
+https://doi.org/10.1080/00405000.2022.2145429
+''', "https://opendatacommons.org/licenses/by/odc_by_1.0_public_text.txt"),
+#
+"griesser2022-sample": ('''Griesser A., Westerteiger R., Glatt E., De Boever W., Hagen H., and Wiegmann A., 2022:
+SampleC - micro-CT and fiber identification of a nonwoven sample, Math2Market GmbH, Sample-C,
+https://doi.org/10.30423/Data.Math2Market-2022-02.Sample-C.FiberFind
+                       
+https://www.math2market.com/showroom/scandata/fiberfind-nonwoven-2022-01.html
+                       
+Article:
+Grießer, A., Westerteiger, R., Glatt, E., Hagen, H., & Wiegmann, A. (2022).
+Identification and analysis of fibers in ultra-large micro-CT scans of nonwoven textiles using deep learning.
+The Journal of The Textile Institute, 114(11), 1647-1657.
+https://doi.org/10.1080/00405000.2022.2145429
+''', "https://opendatacommons.org/licenses/by/odc_by_1.0_public_text.txt"),
 }
 
-    if not name in citations:
+    if not name.lower() in citations:
         raise ValueError("No citation found for {name}")
-    ref = citations[name][0]
-    url = citations[name][1]
+    ref = citations[name.lower()][0]
+    url = citations[name.lower()][1]
     license_text = ""
 
     if url:
@@ -83,8 +127,10 @@ def download_cloud_data(dataset: str, directory: Path, output_name: str | None =
                         size: tuple[int, int, int] | None = None, origin: tuple[int, int, int] = None,
                         chunk_size: tuple[int, int, int] = (1024, 1024, 1024)) -> tuple[int, int, int]:
     example_data = {"h01": ("gs://h01-release/data/20210601/c3/", {"axis_order": "xyz"}),
+                    "h01-class": ("gs://h01-release/data/20210601/c3/subcompartments", {"axis_order": "xyz"}),
                     "witvliet2020": ("bossdb://witvliet2020/Dataset_8/segmentation", {"axis_order": "zyx"}),
-                    "ara2016": ("bossdb://ara_2016/sagittal_10um/annotation_10um_2017", {"axis_order": "zyx"})}
+                    "ara2016": ("bossdb://ara_2016/sagittal_10um/annotation_10um_2017", {"axis_order": "zyx"}),
+                    "liconn": ("gs://liconn-public/ExPID82_1/segmentation/231030_agg_240123", {"axis_order": "xyz"})}
     if dataset not in example_data:
         raise ValueError(f"Unkown cloud data set {dataset}.")
     data_set_url, data_set_cfg = example_data[dataset]
@@ -117,8 +163,8 @@ if __name__ == '__main__':
     parser.add_argument("--big-data", action="store_true", help="Download large (~1TB) data sets as well. Use with care!")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing volumes.")
     parser.add_argument("--preview", action="store_true", help="Render a preview image for each data set.")
-    parser.add_argument("--abort-on-error", action="store_true", help="Aborts the script when creating any data set fails.")
-    parser.add_argument("--only", help="Only download a single data set from [azba|ara2016|pa66|motta2019].")
+    parser.add_argument("--no-abort", action="store_true", help="Continue the script even when creating a data set fails.")
+    parser.add_argument("--only", help="Only download a single data set from [azba|ara2016|pa66|wolny2020|griesser2022-validation|motta2019|h01-wm|liconn|griesser2022-sample].")
     args = parser.parse_args()
 
     csgv_directory = Path(args.directory)
@@ -167,7 +213,7 @@ if __name__ == '__main__':
     f" {cur_dir / "azba.hdf5"}")
             if ret.returncode != 0:
                 print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
-                if args.abort_on_error:
+                if not args.no_abort:
                     exit(ret.returncode)
             # cleanup
             if not args.keep:
@@ -187,11 +233,11 @@ if __name__ == '__main__':
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                 f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
-                                                f" '{cur_dir / (name + "_x{}y{}z{}.hdf5")}'")
+                                                f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
 
             if ret.returncode != 0:
                 print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
-                if args.abort_on_error:
+                if not args.no_abort:
                     exit(ret.returncode)
             # cleanup
             if not args.keep:
@@ -215,7 +261,7 @@ if __name__ == '__main__':
 
             if ret.returncode != 0:
                 print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
-                if args.abort_on_error:
+                if not args.no_abort:
                     exit(ret.returncode)
             # cleanup
             if not args.keep:
@@ -223,13 +269,73 @@ if __name__ == '__main__':
         else:
             print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
 
+    if not args.only or args.only.lower() == "wolny2020":
+        print("----------- Wolny2020 ----------- ")
+        name = "wolyn2020"
+        cur_dir = csgv_directory / Path(name)
+        if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+            write_citation(csgv_directory, name)
+            # data set: Ovules N_428_ds2x
+            download_file("https://osf.io/download/ghpjq/", cur_dir, "N_428_ds2x.h5")
+            vc.write_volume(vc.read_volume(cur_dir / "N_428_ds2x.h5", "xyz"), cur_dir / (name + ".hdf5"))
+            ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                                f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                f" {cur_dir / (name + ".hdf5")}")
+
+            if ret.returncode != 0:
+                print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+                if not args.no_abort:
+                    exit(ret.returncode)
+            # cleanup
+            if not args.keep:
+                shutil.rmtree(cur_dir)
+        else:
+            print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
+
+
+    if not args.only or args.only.lower() == "griesser2022-validation":
+        print("----------- Griesser2022 small (validation) ----------- ")
+        name = "Griesser2022-validation"
+        cur_dir = csgv_directory / Path(name)
+        if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+            write_citation(csgv_directory, name)
+            download_file("https://doi.math2market.de/s/oYGLcs8SYkLTFtS/download/data.math2market-2022-02.validation.fiberfind.zip", cur_dir, "griesser2022-validation.zip")
+            
+            # unzip a single data set
+            with zipfile.ZipFile(cur_dir / "griesser2022-validation.zip", 'r') as zf:
+                zf.extract("data.math2market-2022-02.validation.fiberfind/FiberFindValidation1/FiberFindVali1_Truth_labeled_2um_32bu_600x600x200.raw", cur_dir)
+            shutil.move(cur_dir / "data.math2market-2022-02.validation.fiberfind/FiberFindValidation1/FiberFindVali1_Truth_labeled_2um_32bu_600x600x200.raw",
+                       cur_dir / "FiberFindVali1_Truth_labeled_2um_32bu_600x600x200.raw")
+
+            # memory map the .raw file
+            volume_mm = np.memmap(cur_dir / "FiberFindVali1_Truth_labeled_2um_32bu_600x600x200.raw", dtype=np.uint32, mode='r', shape=(200,600,600))
+            last_chunk = vcc.write_chunked_volume(volume_mm, f'{cur_dir / (name + "_x{}y{}z{}.hdf5")}', (512,512,512))
+
+            ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                                f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld -b 64"
+                                                f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
+                                                f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
+
+            if ret.returncode != 0:
+                print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+                if not args.no_abort:
+                    exit(ret.returncode)
+            # cleanup
+            if not args.keep:
+                shutil.rmtree(cur_dir)
+        else:
+            print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
+
+
     # DOWNLOADING AND COMPRESSING BIG DATA -----------------------------------------------------------------------------
-    if args.big_data:
+    if args.big_data or args.only:
         if not args.only or args.only.lower() == "motta2019":
             print("----------- Motta2019 -----------")
             name = "Motta2019"
             cur_dir = csgv_directory / Path(name)
-            last_chunk = (1,0,0)
+            last_chunk = (5,8,3)
             if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
                 write_citation(csgv_directory, name)
                 motta_chunk_files = [f"{name}_x{x}y{y}z{z}.hdf5" for x in range(0,last_chunk[0]) for y in range(0,last_chunk[1]) for z in range(0,last_chunk[2])]
@@ -243,7 +349,7 @@ if __name__ == '__main__':
 
                 if ret.returncode != 0:
                     print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
-                    if args.abort_on_error:
+                    if not args.no_abort:
                         exit(ret.returncode)
                 # cleanup
                 if not args.keep:
@@ -253,13 +359,84 @@ if __name__ == '__main__':
 
         if not args.only or args.only.lower() == "h01-wm":
             print("----------- H01 [WM] ----------- ")
-            name = "h01"
-            cur_dir = csgv_directory / Path(name + "-wm")
-            write_citation(csgv_directory, name)
-            # dataset: str, directory: Path, output_name: str | None = None, filetype: str = "hdf5",
-            #             size: tuple[int, int, int] | None = None, origin: tuple[int, int, int] = None,
-            #             chunk_size: tuple[int, int, int] = (1024, 1024, 1024)) -> tuple[int, int, int]:
+            name = "H01-wm"
+            cur_dir = csgv_directory / Path(name)
+            if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+                write_citation(csgv_directory, "h01")
+                last_chunk = download_cloud_data("h01", directory=cur_dir, output_name=name, size=(8192, 6144, 5294), origin=(133300, 262000, 0))
+                ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                    f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                    f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
+                                                    f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
+
+                if ret.returncode != 0:
+                    print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+                    if not args.no_abort:
+                        exit(ret.returncode)
+                # cleanup
+                if not args.keep:
+                    shutil.rmtree(cur_dir)
+            else:
+                print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
+
+
+        if not args.only or args.only.lower() == "liconn":
+            print("----------- LICONN ----------- ")
+            name = "LICONN"
+            cur_dir = csgv_directory / Path(name)
+            if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+                write_citation(csgv_directory, name)
+                last_chunk = download_cloud_data("liconn", directory=cur_dir, output_name=name)
+                ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                    f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                    f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
+                                                    f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
+
+                if ret.returncode != 0:
+                    print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+                    if not args.no_abort:
+                        exit(ret.returncode)
+                # cleanup
+                if not args.keep:
+                    shutil.rmtree(cur_dir)
+            else:
+                print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
         
+
+        if not args.only or args.only.lower() == "griesser2022-sample":
+            print("----------- Griesser2022 [nonwoven sample] ----------- ")
+            name = "Griesser2022-sample"
+            cur_dir = csgv_directory / Path(name)
+            if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+                write_citation(csgv_directory, name)
+                # LARGE ONE:
+                download_file("https://doi.math2market.de/s/tYj87SXPgXT26zS/download/data.math2market-2022-02.sample-c.fiberfind.zip", cur_dir, "griesser2022-sample.zip")
+                
+                # unzip a single data set
+                with zipfile.ZipFile(cur_dir / "griesser2022-sample.zip", 'r') as zf:
+                    zf.extract("/data.math2market-2022-02.sample-c.fiberfind/FiberFindSampleC_labeled_2.4um_32bu_15363x3960x2112.raw", cur_dir)
+
+                # memory map the .raw file
+                volume_mm = np.memmap(cur_dir / "data.math2market-2022-02.sample-c.fiberfind/FiberFindSampleC_labeled_2.4um_32bu_15363x3960x2112.raw", dtype=np.uint32, mode='r', shape=(2112,3960,15363))
+                last_chunk = vcc.write_chunked_volume(volume_mm, f'{cur_dir / (name + "_x{}y{}z{}.hdf5")}', (1024,1024,1024))
+
+                ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld -b 64"
+                                                    f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                    f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
+                                                    f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
+
+                if ret.returncode != 0:
+                    print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+                    if not args.no_abort:
+                        exit(ret.returncode)
+                # cleanup
+                if not args.keep:
+                    shutil.rmtree(cur_dir)
+            else:
+                print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
 
     print("------------------------------- ")
     print(f"done! csgv data sets are available at {csgv_directory}")

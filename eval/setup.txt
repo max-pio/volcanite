@@ -1,0 +1,3 @@
+volcanite_src: /home/maxpio/code/volcanite
+config_dir: /home/maxpio/code/volcanite/eval/config
+csgv_dir: /home/maxpio/eval_data
