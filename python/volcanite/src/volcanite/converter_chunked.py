@@ -13,7 +13,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import converter as vc
+import volcanite.converter as vc
 import re
 
 import numpy as np
@@ -276,8 +276,8 @@ def write_chunked_volume(volume: np.ndarray, path_out_format: str, chunk_size: t
     output format is selected based on the file extension of path_out_format. path_out_format must contain exactly
      three python string format keys that will be replaced with x y z chunk indices. e.g. 'my_volume_x{}y{}z{}.raw'."""
 
-    if vc.__get_format_key_count(path_out_format) != 1:
-        raise Exception("File path must contain exactly 1 python string format key")
+    if vc.__get_format_key_count(path_out_format) != 3:
+        raise Exception("File path must contain exactly 3 python string format keys")
 
     for z in range(0, volume.shape[0], chunk_size[0]):
         for y in range(0, volume.shape[1], chunk_size[1]):
@@ -287,6 +287,8 @@ def write_chunked_volume(volume: np.ndarray, path_out_format: str, chunk_size: t
                              y:(min(volume.shape[1], y + chunk_size[1])),
                              x:(min(volume.shape[2], x + chunk_size[2]))],
                              path_out_format.format(x // chunk_size[2], y // chunk_size[1], z // chunk_size[0]))
+                
+    return ((volume.shape[2] - 1) // chunk_size[2], (volume.shape[1] - 1) // chunk_size[1], (volume.shape[0] - 1) // chunk_size[0])
 
 
 def read_chunked_volume(path_out_format: str, chunk_count) -> np.ndarray:
