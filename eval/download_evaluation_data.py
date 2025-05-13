@@ -18,12 +18,14 @@ from time import sleep
 import argparse
 import requests
 import shutil
-import zipfile
+import zipfile_deflate64 as zipfile
 
 from volcanite import converter as vc, converter_chunked as vcc, clouddata as vcd, volcaniteeval as ve
 import numpy as np
 
 def download_file(url: str, directory: Path, file_name: str | None = None, log: bool = True) -> Path:
+    if log:
+        print(f"Downloading {url} to {directory / Path(file_name)}")
     # taken from https://stackoverflow.com/questions/16694907/download-large-file-in-python-with-requests
     if file_name is None:
         file_name = url.split('/')[-1]
@@ -78,7 +80,20 @@ Fred A Hamprecht, Kay Schneitz, Alexis Maizel, Anna Kreshuk (2020)
 Accurate and versatile 3D segmentation of plant tissues at cellular resolution
 eLife 9:e57613  https://doi.org/10.7554/eLife.57613
 
-Data Set: Ovules/train/N_428_ds2x.h5 https://osf.io/x9yns/files/osfstorage''', ""),
+https://www.biorxiv.org/content/early/2020/01/18/2020.01.17.910562
+
+Data Set: Ovules/train/N_428_ds2x.h5 https://osf.io/x9yns/files/osfstorage
+Ovules - confocal volumetric stacks with voxel size: (0.235x0.075x0.075 µm^3) (ZYX).
+Courtesy of Kay Schneitz lab, School of Life Sciences, Technical University of Munich, Germany''', ""),
+#
+"xtm-battery": ('''Müller, S., Sauter, C., Shunmugasundaram, R. et al. Deep learning-based segmentation of
+lithium-ion battery microstructures enhanced by artificially generated electrodes. Nat Commun 12, 6205 (2021).
+https://doi.org/10.1038/s41467-021-26480-9
+
+Data Set:
+https://doi.org/10.3929/ethz-b-000505935
+8Cycles/Electrode1/Segmentation
+''', "https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt"),
 #
 "griesser2022-validation": ('''Griesser A., Westerteiger R., Glatt E., Hagen H., and Wiegmann A., 2022:
 Fiber identification validation - ground truth and results of fiber identification for generated samples, Math2Market GmbH, Validation,
@@ -157,14 +172,14 @@ if __name__ == '__main__':
         description='Downloads several segmentation volumes for the Volcanite evaluation scripts.',
         epilog='')
 
-    parser.add_argument("directory", help="Base directory in which the data set subfolders will be downloaded.")
+    parser.add_argument("directory", help="Base directory into which the data sets will be downloaded.")
     parser.add_argument("--keep", action="store_true", help="Keep the original volume files after creating the CSGV volumes.")
     parser.add_argument("--volcanite-src", help="Location of the Volcanite source directory (git repository base).")
     parser.add_argument("--big-data", action="store_true", help="Download large (~1TB) data sets as well. Use with care!")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing volumes.")
     parser.add_argument("--preview", action="store_true", help="Render a preview image for each data set.")
     parser.add_argument("--no-abort", action="store_true", help="Continue the script even when creating a data set fails.")
-    parser.add_argument("--only", help="Only download a single data set from [azba|ara2016|pa66|wolny2020|griesser2022-validation|motta2019|h01-wm|liconn|griesser2022-sample].")
+    parser.add_argument("--only", help="Only download a single data set from [azba|ara2016|pa66|wolny2020|griesser2022-validation|xtm-battery|motta2019|h01-wm|liconn|griesser2022-sample].")
     args = parser.parse_args()
 
     csgv_directory = Path(args.directory)
@@ -253,7 +268,7 @@ if __name__ == '__main__':
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, name)
             download_file("https://zenodo.org/records/4587827/files/pa66_volumes.h5", cur_dir, "pa66.h5")
-            vc.write_volume(vc.read_hdf5(cur_dir / "pa66.h5", ['pa66']), cur_dir / "pa66_segm.hdf5")
+            vc.write_volume(vc.reshape_memory_order(vc.read_hdf5(cur_dir / "pa66.h5", ['pa66', 'ground_truth']), 'xyz', 'zyx'), cur_dir / "pa66_segm.hdf5")
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
@@ -271,7 +286,7 @@ if __name__ == '__main__':
 
     if not args.only or args.only.lower() == "wolny2020":
         print("----------- Wolny2020 ----------- ")
-        name = "wolyn2020"
+        name = "wolny2020"
         cur_dir = csgv_directory / Path(name)
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, name)
@@ -317,6 +332,32 @@ if __name__ == '__main__':
                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                 f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                 f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
+
+            if ret.returncode != 0:
+                print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+                if not args.no_abort:
+                    exit(ret.returncode)
+            # cleanup
+            if not args.keep:
+                shutil.rmtree(cur_dir)
+        else:
+            print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
+
+    if not args.only or args.only.lower() == "xtm-battery":
+        print("----------- Mueller2021 XTM Battery ----------- ")
+        name = "xtm-battery"
+        cur_dir = csgv_directory / Path(name)
+        if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+            write_citation(csgv_directory, name)
+            # download_file("https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/505935/8Cycles.zip?sequence=9&isAllowed=y", cur_dir, "8Cycles.zip")
+            #with zipfile.ZipFile(cur_dir / "8Cycles.zip", 'r') as zf:
+            #    zf.extract("8Cycles.h5", cur_dir)
+
+            vc.write_volume(vc.reshape_memory_order(vc.read_hdf5(cur_dir / "8Cycles.h5", ['Electrode1', 'Segmentation']), 'xyz', 'zyx'), cur_dir / "xtm-battery.hdf5")
+            ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                 f" {cur_dir / "xtm-battery.hdf5"}")
 
             if ret.returncode != 0:
                 print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
