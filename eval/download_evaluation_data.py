@@ -25,7 +25,7 @@ import numpy as np
 
 def download_file(url: str, directory: Path, file_name: str | None = None, log: bool = True) -> Path:
     if log:
-        print(f"Downloading {url} to {directory / Path(file_name)}")
+        print(f"Downloading {url} to {directory / Path(file_name)}", end="")
     # taken from https://stackoverflow.com/questions/16694907/download-large-file-in-python-with-requests
     if file_name is None:
         file_name = url.split('/')[-1]
@@ -34,7 +34,7 @@ def download_file(url: str, directory: Path, file_name: str | None = None, log: 
         with open(directory / Path(file_name), 'wb') as local_file:
             shutil.copyfileobj(req.raw, local_file)
     if log:
-        print(f"Downloaded {url} to {directory / Path(file_name)}")
+        print(" done.")
     return directory / Path(file_name)
 
 def write_citation(directory: Path, name: str) -> None:
@@ -168,7 +168,7 @@ def __preview_arg(enable: bool, directory: Path, dataset: str):
         return ""
     arg = "-i " + str(directory / Path(dataset + ".jpg"))
     if config_dir and (config_dir / (dataset + ".vcfg")).exists():
-        arg.append(" --config " + str((config_dir / (dataset + ".vcfg"))).absolute())
+        arg += " --config " + str((config_dir / (dataset + ".vcfg")).absolute())
     return arg
 
 if __name__ == '__main__':
@@ -348,15 +348,41 @@ if __name__ == '__main__':
         else:
             print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
 
+    # if not args.only or args.only.lower() == "xtm-battery-pristine":
+    #     print("----------- Mueller2021 XTM Battery [Pristine] ----------- ")
+    #     name = "xtm-battery-pristine"
+    #     cur_dir = csgv_directory / Path(name)
+    #     if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+    #         write_citation(csgv_directory, "xtm-battery")
+    #         download_file("https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/505935/Pristine.zip?sequence=5&isAllowed=y", cur_dir, "Pristine.zip")
+    #         with zipfile.ZipFile(cur_dir / "Pristine.zip", 'r') as zf:
+    #             zf.extract("Pristine.h5", cur_dir)
+    #
+    #         vc.write_volume(vc.reshape_memory_order(vc.read_hdf5(cur_dir / "Pristine.h5", ['Electrode1', 'Segmentation']), 'xyz', 'zyx'), cur_dir / "xtm-battery-pristine.hdf5")
+    #         ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+    #                                              f"--headless -c {csgv_directory / (name + ".csgv")}"
+    #                                              f" {__preview_arg(args.preview, csgv_directory, name)}"
+    #                                              f" {cur_dir / "xtm-battery-pristine.hdf5"}")
+    #
+    #         if ret.returncode != 0:
+    #             print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+    #             if not args.no_abort:
+    #                 exit(ret.returncode)
+    #         # cleanup
+    #         if not args.keep:
+    #             shutil.rmtree(cur_dir)
+    #     else:
+    #         print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
+
     if not args.only or args.only.lower() == "xtm-battery":
-        print("----------- Mueller2021 XTM Battery ----------- ")
+        print("----------- Mueller2021 XTM Battery [8Cycles] ----------- ")
         name = "xtm-battery"
         cur_dir = csgv_directory / Path(name)
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, name)
-            # download_file("https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/505935/8Cycles.zip?sequence=9&isAllowed=y", cur_dir, "8Cycles.zip")
-            #with zipfile.ZipFile(cur_dir / "8Cycles.zip", 'r') as zf:
-            #    zf.extract("8Cycles.h5", cur_dir)
+            download_file("https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/505935/8Cycles.zip?sequence=9&isAllowed=y", cur_dir, "8Cycles.zip")
+            with zipfile.ZipFile(cur_dir / "8Cycles.zip", 'r') as zf:
+                zf.extract("8Cycles.h5", cur_dir)
 
             vc.write_volume(vc.reshape_memory_order(vc.read_hdf5(cur_dir / "8Cycles.h5", ['Electrode1', 'Segmentation']), 'xyz', 'zyx'), cur_dir / "xtm-battery.hdf5")
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,

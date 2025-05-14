@@ -50,7 +50,7 @@ Background_Color_A: 1.000000 1.000000 1.000000 1.000000
 Background_Color_B: 1.000000 1.000000 1.000000 1.000000
 Resizable_Window: 1
 GUI_9: [1920~x~1080]
-Accumulation_Frames: 1024
+Accumulation_Frames: 128
 Resolution_Subsampling: 0
 Decompression_Path_Length: 1
 Decompression_LOD_Bias: 0.000000
