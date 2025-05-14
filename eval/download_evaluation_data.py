@@ -44,7 +44,7 @@ def write_citation(directory: Path, name: str) -> None:
 ('''Kenney, Justin W.; Steadman, Patrick E.; Young, Olivia et al. (2021).
 A 3D Adult Zebrafish Brain Atlas (AZBA) for the Digital Age [Dataset]. Dryad.
 https://doi.org/10.5061/dryad.dfn2z351g''', "https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt"),
-#
+# TODO: atlas data set is stored on google drive. could download with gdown python package.
 "atlas": ('''Jaus, Alexander; Seibold, Constantin; Hermann, Kelsey; Shahamiri, Negar; Walter, Alexandra; Giske, Kristina;
 Haubold, Johannes; Kleesiek, Jens; Stiefelhagen, Rainer (2024). Towards Unifying Anatomy Segmentation: Automated
  Generation of a Full-Body CT Dataset. 2024 IEEE International Conference on Image Processing (ICIP),
@@ -164,7 +164,12 @@ def download_cloud_data(dataset: str, directory: Path, output_name: str | None =
                          volume_size=size, origin=origin, chunk_size=chunk_size, continue_download=True)
 
 def __preview_arg(enable: bool, directory: Path, dataset: str):
-    return "-i " + str(directory / Path(dataset + ".jpg")) if enable else ""
+    if not enable:
+        return ""
+    arg = "-i " + str(directory / Path(dataset + ".jpg"))
+    if config_dir and (config_dir / (dataset + ".vcfg")).exists():
+        arg.append(" --config " + str((config_dir / (dataset + ".vcfg"))).absolute())
+    return arg
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -179,7 +184,7 @@ if __name__ == '__main__':
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing volumes.")
     parser.add_argument("--preview", action="store_true", help="Render a preview image for each data set.")
     parser.add_argument("--no-abort", action="store_true", help="Continue the script even when creating a data set fails.")
-    parser.add_argument("--only", help="Only download a single data set from [azba|ara2016|pa66|wolny2020|griesser2022-validation|xtm-battery|motta2019|h01-wm|liconn|griesser2022-sample].")
+    parser.add_argument("--only", help="Only download a single data set from [azba|ara2016|pa66|wolny2020|griesser2022-validation|xtm-battery|motta2019-small|motta2019|h01-wm|liconn|griesser2022-sample].")
     args = parser.parse_args()
 
     csgv_directory = Path(args.directory)
@@ -369,6 +374,29 @@ if __name__ == '__main__':
         else:
             print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
 
+    if not args.only or args.only.lower() == "motta2019-small":
+        print("----------- Motta2019 [small] -----------")
+        name = "Motta2019-small"
+        cur_dir = csgv_directory / Path(name)
+        if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+            write_citation(csgv_directory, "Motta2019")
+            download_file("https://l4dense2019.brain.mpg.de/webdav/mapped-segmentation-volume/x2y3z2.hdf5", cur_dir, "Motta2019_x2y3z2.hdf5")
+            ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                                f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                f" {cur_dir / "Motta2019_x2y3z2.hdf5"}")
+
+            if ret.returncode != 0:
+                print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+                if not args.no_abort:
+                    exit(ret.returncode)
+            # cleanup
+            if not args.keep:
+                shutil.rmtree(cur_dir)
+        else:
+            print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
+
+
 
     # DOWNLOADING AND COMPRESSING BIG DATA -----------------------------------------------------------------------------
     if args.big_data or args.only:
@@ -386,7 +414,7 @@ if __name__ == '__main__':
                                                     f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld -b 64"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
-                                                    f" '{cur_dir / (name + "_x{}y{}z{}.hdf5")}'")
+                                                    f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
 
                 if ret.returncode != 0:
                     print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
@@ -404,9 +432,9 @@ if __name__ == '__main__':
             cur_dir = csgv_directory / Path(name)
             if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
                 write_citation(csgv_directory, "h01")
-                last_chunk = download_cloud_data("h01", directory=cur_dir, output_name=name, size=(8192, 6144, 5294), origin=(133300, 262000, 0))
+                last_chunk = download_cloud_data("h01", directory=cur_dir, output_name=name, size=(10112, 10112, 5294), origin=(133300, 262000, 0))
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                    f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld -b 64"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
@@ -430,7 +458,7 @@ if __name__ == '__main__':
                 write_citation(csgv_directory, name)
                 last_chunk = download_cloud_data("liconn", directory=cur_dir, output_name=name)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                    f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld -b 64"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
@@ -452,7 +480,7 @@ if __name__ == '__main__':
             cur_dir = csgv_directory / Path(name)
             if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
                 write_citation(csgv_directory, name)
-                # LARGE ONE:
+                # LARGE ONE: will create a single 500 GB raw file
                 download_file("https://doi.math2market.de/s/tYj87SXPgXT26zS/download/data.math2market-2022-02.sample-c.fiberfind.zip", cur_dir, "griesser2022-sample.zip")
                 
                 # unzip a single data set

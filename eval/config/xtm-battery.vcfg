@@ -1,0 +1,70 @@
+Version 0.6.0
+
+[Camera]
+orbital: 1
+position: -0.797677 0.667312 -0.762549
+lookat: 0.088425 -0.203422 -0.0515561
+rotation: 0.653937 10.101 1.43139
+
+[Materials]
+Materials: 8 # 0 85.000000 85.000000 0 0.000000 255.000000 1.000000 0.000000 2 1 0.474610 0.730605 0.863109 5 0 # 0 170.000000 170.000000 0 0.000000 255.000000 1.000000 0.642000 2 1 0.800464 0.684734 0.334301 5 0 # 0 255.000000 255.000000 0 0.000000 255.000000 1.000000 0.000000 2 1 0.821346 0.334037 0.236304 5 0 # -2 1.000000 340282346638528859811704183484516925440.000000 0 0.000000 255.000000 1.000000 0.000000 2 2 0.229800 0.298700 0.753700 0.705700 0.015560 0.150200 5 1 # -2 1.000000 340282346638528859811704183484516925440.000000 0 0.000000 255.000000 1.000000 0.000000 2 2 0.229800 0.298700 0.753700 0.705700 0.015560 0.150200 5 1 # -2 1.000000 340282346638528859811704183484516925440.000000 0 0.000000 255.000000 1.000000 0.000000 2 2 0.229800 0.298700 0.753700 0.705700 0.015560 0.150200 5 1 # -2 1.000000 340282346638528859811704183484516925440.000000 0 0.000000 255.000000 1.000000 0.000000 2 2 0.229800 0.298700 0.753700 0.705700 0.015560 0.150200 5 1 # -2 1.000000 340282346638528859811704183484516925440.000000 0 0.000000 255.000000 1.000000 0.000000 2 2 0.229800 0.298700 0.753700 0.705700 0.015560 0.150200 5 1
+
+[Development]
+Enable_À-Trous_Post-Processing: 1
+Post-Process_Iterations: 4
+Post-Process_Kernel_Size: 2
+Denoise_Depth_Sigma: 1.000000
+Denoise_Fade_Out: 1
+Denoise_Fade_Sigma: 2.000000
+Blue_Noise_Shift: 1
+Max._DDA_Steps: 16384
+Max._Decoding_LoD: 8
+Debug_View: 0
+Auto_Cache_Request_Limitation: 1
+Allowed_SPP_Difference: 8
+Area_Min._Size: 8
+Area_Min._Duration: 8 64
+Auto_Cache_Defragmentation: 1
+Freeze_Cache: 0
+Every_Frame##cache: 0
+Every_Frame##framebuffer: 0
+Step_Accumulation: 0
+
+[Rendering]
+Constant_Color: 0.250000
+Light_Intensity: 1.000000
+Light_Direction: -0.381953 0.420757 -0.822846
+Global_Illumination: 1
+Environment_Map: 0
+Directional_<>_Ambient: 0.000000
+Path_Length: 32
+Denoising: 0
+Tone_Mapping: 0
+Exposure: 1.000000
+Brightness: 1.000000
+Contrast: 1.000000
+Gamma: 1.000000
+
+[Display]
+Background_Color_A: 1.000000 1.000000 1.000000 1.000000
+Background_Color_B: 1.000000 1.000000 1.000000 1.000000
+Resizable_Window: 1
+GUI_9: [1920~x~1080]
+Accumulation_Frames: 1024
+Resolution_Subsampling: 0
+Decompression_Path_Length: 1
+Decompression_LOD_Bias: 0.000000
+
+[General]
+Rendering_Preset: Global~Shadows
+Voxel_Size: 1.000000 1.000000 1.000000
+Splitting_Plane_X: 0 700
+Splitting_Plane_Y: 0 560
+Splitting_Plane_Z: 0 560
+X_Axis: 0
+Y_Axis: 0
+Z_Axis: 0
+Axis_Order: XYZ
+GUI_25: GPU~Memory:~1.268/13.03/16.23~GB~(used/avail/total)
+GUI_26: Cache~Usage:~763.494~/~1068.5~MB~(71.4549%)~71.4551~|~SPP~min/max:~838~/~838
+
