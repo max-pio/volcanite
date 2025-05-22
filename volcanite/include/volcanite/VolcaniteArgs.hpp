@@ -233,7 +233,6 @@ struct VolcaniteArgs {
                         if (i + 1 < op_codes.size() && op_codes[i + 1] == '-') {
                             va.operation_mask |= OP_USE_OLD_PAL_D_BIT;
                             i++;
-                            Logger(Info) << " JOOO ITS HERE LELELEL";
                         }
                         va.operation_mask |= OP_PALETTE_D_BIT;
                         break;
