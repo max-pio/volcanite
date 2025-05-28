@@ -73,26 +73,14 @@ class CSGVAttributeExtractor {
 
     std::shared_ptr<const CompressedSegmentationVolume> m_csgv;
     std::vector<NeighborList *> m_neighbors_per_label;
-    std::vector<std::string> m_attribute_names = {"Volume", "Surface", "Center X", "Center Y", "Center Z", "Neighbor Count"};
-    std::vector<std::vector<float>> m_attribute_values = {};
+    std::vector<std::string> m_attribute_names = {"Volume", "Surface", "CenterX", "CenterY", "CenterZ", "Neighbor_Count"};
+    std::vector<std::vector<float>> m_attribute_values = {m_csgv->getNumberOfUniqueLabelsInVolume(), std::vector<float>(6)};
 
-    // TODO: the negative neighbors are not required as all operations are symmetric:
-    //       if x is added as a neighbor to y, we can directly add y as a neighbor to x as well.
-    const int neighbor_offset[14][3] = {
-        {0, -1, 0},   // left
-        {0, 1, 0},    // right
-        {-1, 0, 0},   // behind
-        {1, 0, 0},    // front
-        {0, 0, -1},   // bottom
-        {0, 0, 1},    // top
-        {-1, -1, -1}, // bottom behind left
-        {-1, 1, -1},  // bottom behind right
-        {-1, -1, 1},  // top behind left
-        {-1, 1, 1},   // top behind right
-        {1, -1, -1},  // bottom front left
-        {1, 1, -1},   // bottom front right
-        {1, -1, 1},   // top front left
-        {1, 1, 1},    // top front right
+    const int neighbor_offset[4][3] = {
+        {0, 1, 0}, // right
+        {1, 0, 0}, // front
+        {0, 0, 1}, // top
+        {1, 1, 1}, // top front right
     };
 
     void computeAttributesPerLabel(bool diagonal) {
@@ -110,9 +98,9 @@ class CSGVAttributeExtractor {
         const auto volume_dim = m_csgv->getVolumeDim();
 
         const unsigned int cpu_threads = std::thread::hardware_concurrency();
-        const int offset_loop_end = diagonal ? 14 : 6;
-        // TODO: replace the vector<unordered_set> in thread_label_list with a vector<LabelAttributeTracking> for tracking more than the neighbors
-        std::vector<std::vector<std::unordered_set<uint32_t>>> thread_label_list(cpu_threads, std::vector<std::unordered_set<uint32_t>>(m_neighbors_per_label.size()));
+        const int offset_loop_end = diagonal ? 4 : 3;
+
+        std::vector<std::vector<LabelAttributeTracking>> thread_tracking(cpu_threads, std::vector<LabelAttributeTracking>(m_neighbors_per_label.size()));
 
         MiniTimer t;
         // compute attribute tracking information for the labels of multiple voxels in parallel
@@ -142,19 +130,24 @@ class CSGVAttributeExtractor {
                                 uint32_t neighbor_label;
                                 uint32_t neighbor_idx = voxel_pos2idx({nx, ny, nz}, volume_dim);
                                 if ((neighbor_label = decompressed_voxels->at(neighbor_idx)) != current_label) {
-                                    // TODO: thread_tracking[thread_id][current_label].neighbor.contains(neighbor_label) etc..
-                                    if (!thread_label_list[thread_id][current_label].contains(neighbor_label))
-                                        thread_label_list[thread_id][current_label].insert(neighbor_label);
+                                    // check for neighbors is symmetrical
+                                    if (!thread_tracking[thread_id][current_label].neighbors.contains(neighbor_label))
+                                        thread_tracking[thread_id][current_label].neighbors.insert(neighbor_label);
 
-                                    // TODO: directly add current_label to the list of neighbor_label here as well.
-                                    //       saves half the checks as -1 neighbors must no longer be checked
+                                    if (!thread_tracking[thread_id][neighbor_label].neighbors.contains(current_label))
+                                        thread_tracking[thread_id][neighbor_label].neighbors.insert(current_label);
+
+                                    thread_tracking[thread_id][current_label].surface_count += 1;
+                                    thread_tracking[thread_id][neighbor_label].surface_count += 1;
                                 }
-
-                                // TODO: compute surface tracking information for the voxel and the neighbor here as well
                             }
                         }
-
-                        // TODO: compute other tracking information (voxel count, positions, ..) for (x,y,z) here as well
+                        thread_tracking[thread_id][current_label].voxel_count += 1;
+                        thread_tracking[thread_id][current_label].sum_pos_x += x;
+                        thread_tracking[thread_id][current_label].sum_pos_y += y;
+                        thread_tracking[thread_id][current_label].sum_pos_z += z;
+                        thread_tracking[thread_id][current_label].min_voxel = glm::min(thread_tracking[thread_id][current_label].min_voxel, glm::uvec3(x, y, z));
+                        thread_tracking[thread_id][current_label].max_voxel = glm::max(thread_tracking[thread_id][current_label].max_voxel, glm::uvec3(x, y, z));
                     }
                 }
             }
@@ -162,19 +155,38 @@ class CSGVAttributeExtractor {
 
         // gather all thread results and merge them together
         for (int thread_id = 1; thread_id < cpu_threads; thread_id++) {
-            assert(thread_label_list[thread_id].size() == m_csgv->getNumberOfUniqueLabelsInVolume());
-            for (int label = 0; label < thread_label_list[thread_id].size(); label++) {
-                auto current_neighbor = thread_label_list[thread_id][label];
+            assert(thread_tracking[thread_id].size() == m_csgv->getNumberOfUniqueLabelsInVolume());
+            for (int label = 0; label < thread_tracking[thread_id].size(); label++) {
+                // label tracking information
+                auto current_neighbor = thread_tracking[thread_id][label].neighbors;
                 for (auto neighbor_label : current_neighbor) {
-                    if (!thread_label_list[0][label].contains(neighbor_label))
-                        thread_label_list[0][label].insert(neighbor_label);
+                    if (!thread_tracking[0][label].neighbors.contains(neighbor_label))
+                        thread_tracking[0][label].neighbors.insert(neighbor_label);
+                }
+                if (thread_tracking[thread_id][label].voxel_count > 0) {
+                    // other tracking information
+                    thread_tracking[0][label].min_voxel = glm::min(thread_tracking[0][label].min_voxel, thread_tracking[thread_id][label].min_voxel);
+                    thread_tracking[0][label].max_voxel = glm::max(thread_tracking[0][label].max_voxel, thread_tracking[thread_id][label].max_voxel);
+                    thread_tracking[0][label].voxel_count += thread_tracking[thread_id][label].voxel_count;
+                    thread_tracking[0][label].surface_count += thread_tracking[thread_id][label].surface_count;
+
+                    // Welford's algorithm
+                    auto current_mean_pos = thread_tracking[0][label];
+                    auto pos_to_add = thread_tracking[thread_id][label];
+
+                    size_t delta0 = pos_to_add.sum_pos_x < current_mean_pos.sum_pos_x ? (current_mean_pos.sum_pos_x - pos_to_add.sum_pos_x) : (pos_to_add.sum_pos_x - current_mean_pos.sum_pos_x);
+                    size_t delta1 = pos_to_add.sum_pos_y < current_mean_pos.sum_pos_y ? (current_mean_pos.sum_pos_y - pos_to_add.sum_pos_y) : (pos_to_add.sum_pos_y - current_mean_pos.sum_pos_y);
+                    size_t delta2 = pos_to_add.sum_pos_z < current_mean_pos.sum_pos_z ? (current_mean_pos.sum_pos_z - pos_to_add.sum_pos_z) : (pos_to_add.sum_pos_z - current_mean_pos.sum_pos_z);
+                    current_mean_pos.sum_pos_x += current_mean_pos.sum_pos_x + delta0 / (pos_to_add.voxel_count);
+                    current_mean_pos.sum_pos_y += current_mean_pos.sum_pos_y + delta1 / pos_to_add.voxel_count;
+                    current_mean_pos.sum_pos_z += current_mean_pos.sum_pos_z + delta2 / pos_to_add.voxel_count;
                 }
             }
         }
 
         // write neighbor lists to m_neighbors_per_label
-        for (int label = 0; label < thread_label_list[0].size(); label++) {
-            auto current_neighbor = thread_label_list[0][label];
+        for (int label = 0; label < thread_tracking[0].size(); label++) {
+            auto current_neighbor = thread_tracking[0][label].neighbors;
             NeighborList *neighbor_list = nullptr;
             NeighborList *current_element = nullptr;
             for (const auto neighbor_label : current_neighbor) {
@@ -189,14 +201,20 @@ class CSGVAttributeExtractor {
             m_neighbors_per_label[label] = neighbor_list;
         }
 
-        // TODO: for all labels l, compute their final attributes (as listed in m_attribute_names) into m_attribute_values[l]
-#pragma omp parallel for default(none) shared(m_attribute_values)
+#pragma omp parallel for default(none) shared(m_attribute_values, thread_tracking)
         for (int label = 0; label <= m_csgv->getMaxLabelInVolume(); label++) {
             // Volume
-            // m_attribute_values[label][0] = label_tracking.voxel_count;
-            // ...
+            m_attribute_values[label][0] = static_cast<float>(thread_tracking[0][label].voxel_count);
+            // Surface
+            m_attribute_values[label][1] = static_cast<float>(thread_tracking[0][label].surface_count);
+            // Center X
+            m_attribute_values[label][2] = static_cast<float>(thread_tracking[0][label].sum_pos_x) / thread_tracking[0][label].voxel_count;
+            // Center Y
+            m_attribute_values[label][3] = static_cast<float>(thread_tracking[0][label].sum_pos_y) / thread_tracking[0][label].voxel_count;
+            // Center Z
+            m_attribute_values[label][4] = static_cast<float>(thread_tracking[0][label].sum_pos_z) / thread_tracking[0][label].voxel_count;
             // Neighbor Count
-            // m_attribute_values[label][5] = length(neighbor list);
+            m_attribute_values[label][5] = static_cast<float>(thread_tracking[0][label].neighbors.size());
         }
 
         Logger(Debug) << "finished label attribute extraction in " << t.elapsed() << " seconds";
