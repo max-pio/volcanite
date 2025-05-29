@@ -283,7 +283,7 @@ bool CSGVDatabase::databaseExportAndOpen(const std::string &sqlite_path, const s
 }
 
 void CSGVDatabase::importFromSqlite(const std::string &sqlite_path) {
-    m_db = new SQLite::Database(sqlite_path, SQLite::OPEN_READONLY);
+    m_db = new SQLite::Database(sqlite_path, SQLite::OPEN_READWRITE);
 
     // read label count, attribute names, and min/max values from columns
     m_label_count = m_db->execAndGet("SELECT COUNT(*) FROM " + CSGV_ATTRIBUTE_TABLE).getInt64();
@@ -460,13 +460,78 @@ size_t CSGVDatabase::getAttribute(int attributeIndex, float *begin, size_t maxSi
     return (it - begin);
 }
 
-void CSGVDatabase::addAttributesIfNotExist(const CSGVAttributeExtractor * attribute_extractor) {
+void CSGVDatabase::addAttributesIfNotExist(const CSGVAttributeExtractor *attribute_extractor) {
     if (!m_db)
         throw std::runtime_error("No CSGV attribute database present.");
 
-    // TODO: add all the attributes attribute_extractor->getAttributeNames() to the database IF no attribute with this name exists yet
+    // extract column names from existing attribute database
+    auto extracted_attribute_names = attribute_extractor->getAttributeNames();
 
-    // TODO: update m_attribute_names, m_attribute_minmax ..
+    std::vector<std::string> attribute_names;
+    try {
+        SQLite::Statement query(*m_db, "PRAGMA table_info(" + CSGV_ATTRIBUTE_TABLE + ");");
+
+        while (query.executeStep()) {
+            std::string columnName = query.getColumn(1).getText();
+            attribute_names.push_back(columnName);
+        }
+    } catch (const SQLite::Exception &e) {
+        std::cerr << "SQLite exception: " << e.what() << std::endl;
+    }
+
+    // compare db attribute with extracted attributes
+    int i = 0;
+    std::vector<int> missing_attribute_indices; // store only indices of missing attribute names to enable better access to the extracted attribute values
+    for (const std::string &extracted_attribute_name : extracted_attribute_names) {
+        if (std::find(attribute_names.begin(), attribute_names.end(), extracted_attribute_name) == attribute_names.end())
+            missing_attribute_indices.emplace_back(i);
+        i++;
+    }
+
+    // add columns for every missing attribute and prepare sql insert statement
+    std::string sql_insert = "UPDATE '" + CSGV_ATTRIBUTE_TABLE + "' SET ";
+    for (int j = 0; j < missing_attribute_indices.size(); j++) {
+        auto attribute_name = extracted_attribute_names[missing_attribute_indices[j]];
+        std::string addColum = "ALTER TABLE '" + CSGV_ATTRIBUTE_TABLE + "' ADD COLUMN '" + attribute_name + "' REAL";
+        m_db->exec(addColum);
+
+        sql_insert += "'" + attribute_name + "' = ?";
+        if (j < missing_attribute_indices.size() - 1)
+            sql_insert += ", ";
+
+        m_attribute_names.emplace_back(attribute_name);
+    }
+
+    // add values for each missing attribute to database
+    if (!missing_attribute_indices.empty()) {
+        sql_insert += " WHERE rowid = ?";
+        SQLite::Statement insertValues(*m_db, sql_insert);
+        const auto &extracted_values = attribute_extractor->getAttributeValues();
+        for (size_t rowID = 1; rowID <= extracted_values.size(); rowID++) {
+            SQLite::Transaction transaction(*m_db);
+            const auto &attribute_values = extracted_values[rowID - 1];
+
+            int idx_insert = 1; // rowID starts from 1
+            for (int missing_attribute_index : missing_attribute_indices) {
+                insertValues.bind(idx_insert, attribute_values[missing_attribute_index]);
+                idx_insert++;
+            }
+
+            insertValues.bind(idx_insert, static_cast<int>(rowID));
+            insertValues.exec();
+            insertValues.reset();
+            insertValues.clearBindings();
+
+            transaction.commit();
+        }
+    }
+
+    // calculate min/max for new added attributes
+    for (int attribute_index : missing_attribute_indices) {
+        const auto &attribute_name = extracted_attribute_names[attribute_index];
+        m_attribute_minmax.emplace_back(static_cast<float>(m_db->execAndGet("SELECT MIN(" + attribute_name + ") FROM " + CSGV_ATTRIBUTE_TABLE).getDouble()),
+                                        static_cast<float>(m_db->execAndGet("SELECT MAX(" + attribute_name + ") FROM " + CSGV_ATTRIBUTE_TABLE).getDouble()));
+    }
 }
 
 void CSGVDatabase::close() {
