@@ -18,7 +18,6 @@
 #include "volcanite/compression/CSGVAttributeExtractor.hpp"
 
 #include "SQLiteCpp/VariadicBind.h"
-#include <SQLiteCpp/SQLiteCpp.h>
 
 namespace volcanite {
 
@@ -532,6 +531,7 @@ void CSGVDatabase::addAttributesIfNotExist(const CSGVAttributeExtractor *attribu
         m_attribute_minmax.emplace_back(static_cast<float>(m_db->execAndGet("SELECT MIN(" + attribute_name + ") FROM " + CSGV_ATTRIBUTE_TABLE).getDouble()),
                                         static_cast<float>(m_db->execAndGet("SELECT MAX(" + attribute_name + ") FROM " + CSGV_ATTRIBUTE_TABLE).getDouble()));
     }
+    Logger(Debug) << extracted_attribute_names.size() << " extracted attributes are added to existing database " << m_db->getFilename();
 }
 
 void CSGVDatabase::close() {

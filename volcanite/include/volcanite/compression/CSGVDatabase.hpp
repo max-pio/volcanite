@@ -1,4 +1,4 @@
-//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//  Copyright (C) 2024, Max Piochowiak and Fabian Schiekel, Karlsruhe Institute of Technology
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -25,6 +25,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+
+#include <SQLiteCpp/SQLiteCpp.h>
 
 // forward decl
 namespace SQLite {
@@ -90,6 +92,21 @@ class CSGVDatabase {
         m_attribute_minmax.at(0) = {static_cast<float>(min_id), static_cast<float>(max_id)};
     }
 
+    /// Creates a sql database from a dummy db, i.e. for adding extracted attributes later
+    void createDBfromDummyDB(const std::string &database_path, const CompressedSegmentationVolume &csgv) {
+        m_db = new SQLite::Database(database_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
+        m_db->exec("DROP TABLE IF EXISTS " + CSGV_ATTRIBUTE_TABLE);
+        m_db->exec("CREATE TABLE " + CSGV_ATTRIBUTE_TABLE + " (csgv_id INTEGER PRIMARY KEY)");
+
+        m_label_count = csgv.getNumberOfUniqueLabelsInVolume();
+
+        SQLite::Statement insertStmt(*m_db, "INSERT INTO " + CSGV_ATTRIBUTE_TABLE + " DEFAULT VALUES");
+        for (int i = 1; i <= csgv.getNumberOfUniqueLabelsInVolume(); i++) {
+            insertStmt.exec();
+            insertStmt.reset();
+        }
+    }
+
     /// If a precomputed CSGV database exists already, it is openend.
     /// If not, the given (possibly chunked) volume at input_path is preprocessed and the result is stored in a new database.
     /// In that case, either all three or none of the attribute_* parameters must be provided.
@@ -145,7 +162,7 @@ class CSGVDatabase {
     /// @return the number of written elements
     size_t getAttribute(int attributeIndex, float *begin, size_t maxSize);
 
-    void addAttributesIfNotExist(const CSGVAttributeExtractor*);
+    void addAttributesIfNotExist(const CSGVAttributeExtractor *);
 
   private:
     SQLite::Database *m_db = nullptr; // sqlite database

@@ -215,8 +215,11 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
 
     // optionally, add additional attributes from the attribute extraction
     if (args.compute_attributes) {
-        if (compressedSegmentationVolume->hasContiguousLabels() && csgvDatabase->isDummy())
-            throw std::runtime_error("Generate attributes on a volume with continuous labels and a dummy database without relabeling the volume first is not supported yet");
+        if (compressedSegmentationVolume->hasContiguousLabels() && csgvDatabase->isDummy()) {
+            // convert dummy db to a sql db to insert extracted attributes
+            csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
+            csgvDatabase->createDBfromDummyDB(stripFileExtension(args.input_file) + "_csgv.db3", *compressedSegmentationVolume);
+        }
 
         CSGVAttributeExtractor csgvAttributeExtractor(compressedSegmentationVolume);
         csgvDatabase->addAttributesIfNotExist(&csgvAttributeExtractor);
