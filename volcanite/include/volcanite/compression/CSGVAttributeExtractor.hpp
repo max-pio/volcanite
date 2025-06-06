@@ -83,6 +83,16 @@ class CSGVAttributeExtractor {
         {1, 1, 1}, // top front right
     };
 
+    /// returns label for given position
+    uint32_t getLabelFromBrick(const glm::uvec3 &global_pos, const uint32_t brick_size, const glm::uvec3 start_current_brick, const std::vector<uint32_t> decompressed_bricks[2][2][2]) {
+        // global_pos in (XYZ), brick_pos in (XYZ), decompressed_bricks in (ZYX),
+        glm::uvec3 brick_idx = {global_pos.x >= brick_size * start_current_brick.x + brick_size ? 1 : 0,
+                                global_pos.y >= brick_size * start_current_brick.y + brick_size ? 1 : 0,
+                                global_pos.z >= brick_size * start_current_brick.z + brick_size ? 1 : 0};
+        const uint32_t idx = voxel_pos2idx({global_pos.x % brick_size, global_pos.y % brick_size, global_pos.z % brick_size}, {brick_size, brick_size, brick_size});
+        return decompressed_bricks[brick_idx[2]][brick_idx[1]][brick_idx[0]][idx];
+    }
+
     void computeAttributesPerLabel(bool diagonal) {
         assert(m_neighbors_per_label.empty() && "Attributes were already computed.");
 
@@ -94,8 +104,15 @@ class CSGVAttributeExtractor {
         // all computations happen for the current voxel and its top/right/left neighbor voxel that may be in another brick than [0][0][0]
         // if the "thread voxel" (x,y,z) moves to another brick, copy the re-usable bricks to the left/bottom/.. decompressed_bricks[..] and decompress the new bricks at the top/right/.. border.
 
-        const auto decompressed_voxels = m_csgv->decompress();
+        /*
+         * iterate over voxel
+         * get brick with current voxel (potentially copy front/back/top/diag brick into current brick, if current voxel is inside one of them)
+         * check if top/right/front/diag voxel are in another brick
+         * compute informations
+         */
+
         const auto volume_dim = m_csgv->getVolumeDim();
+        const uint32_t brick_size = m_csgv->getBrickSize();
 
         const unsigned int cpu_threads = std::thread::hardware_concurrency();
         const int offset_loop_end = diagonal ? 4 : 3;
@@ -106,6 +123,15 @@ class CSGVAttributeExtractor {
         // compute attribute tracking information for the labels of multiple voxels in parallel
 #pragma omp parallel num_threads(cpu_threads) default(shared)
         {
+            glm::uvec3 start_current_brick(0); // (XYZ)
+            /* 0,0,0 is current
+             * 1,0,0 is top
+             * 0,1,0 is right
+             * 0,0,1 is front
+             * 1,1,1 is diag
+             */
+            std::vector<uint32_t> decompressed_bricks[2][2][2]; // (ZYX)
+            bool init_decompression = true;
             unsigned int thread_id = omp_get_thread_num();
             for (uint32_t z = thread_id; z < volume_dim.z; z += cpu_threads) {
                 if (z >= volume_dim.z)
@@ -114,10 +140,103 @@ class CSGVAttributeExtractor {
                 uint32_t current_label = INVALID;
                 for (uint32_t y = 0; y < volume_dim.y; y++) {
                     for (uint32_t x = 0; x < volume_dim.x; x++) {
-                        const uint32_t current_idx = voxel_pos2idx({x, y, z}, volume_dim);
-                        current_label = decompressed_voxels->at(current_idx);
+                        // check if current voxel is in new brick and decompress new bricks if needed
+                        {
+                            glm::uvec3 start_new_brick = {x / brick_size,
+                                                          y / brick_size,
+                                                          z / brick_size};
 
-                        // compute neighbors of the label at voxel (x,y,z)
+                            if (start_current_brick != start_new_brick | init_decompression) {
+                                std::vector<glm::uvec3> bricks_to_decompress_offset; // offsets of brick that can't be reused and needs to be decompressed (ZYX)
+                                if (init_decompression || glm::any(glm::greaterThan(start_current_brick, start_new_brick))) {
+                                    // need to decompress all blocks again, because end of volume reached in one dimension
+                                    bricks_to_decompress_offset.emplace_back(0, 0, 0);
+                                    bricks_to_decompress_offset.emplace_back(0, 0, 1);
+                                    bricks_to_decompress_offset.emplace_back(0, 1, 0);
+                                    bricks_to_decompress_offset.emplace_back(1, 0, 0);
+                                    bricks_to_decompress_offset.emplace_back(0, 1, 1);
+                                    bricks_to_decompress_offset.emplace_back(1, 0, 1);
+                                    bricks_to_decompress_offset.emplace_back(1, 1, 0);
+                                    bricks_to_decompress_offset.emplace_back(1, 1, 1);
+                                    init_decompression = false;
+                                }
+                                // current voxel is in another brick
+                                else if (diagonal && (start_current_brick.x != start_new_brick.x && start_current_brick.y != start_new_brick.y && start_current_brick.z != start_new_brick.z)) {
+                                    // copy diag brick
+                                    decompressed_bricks[0][0][0] = decompressed_bricks[1][1][1];
+                                    bricks_to_decompress_offset.emplace_back(0, 0, 1);
+                                    bricks_to_decompress_offset.emplace_back(0, 1, 0);
+                                    bricks_to_decompress_offset.emplace_back(1, 0, 0);
+                                    bricks_to_decompress_offset.emplace_back(0, 1, 1);
+                                    bricks_to_decompress_offset.emplace_back(1, 0, 1);
+                                    bricks_to_decompress_offset.emplace_back(1, 1, 0);
+                                    bricks_to_decompress_offset.emplace_back(1, 1, 1);
+                                } else if (start_current_brick.x != start_new_brick.x) {
+                                    // copy front block
+                                    decompressed_bricks[0][0][0] = decompressed_bricks[0][0][1];
+                                    decompressed_bricks[0][1][0] = decompressed_bricks[0][1][1];
+                                    decompressed_bricks[1][1][0] = decompressed_bricks[1][1][1];
+                                    decompressed_bricks[1][0][0] = decompressed_bricks[1][0][1];
+
+                                    bricks_to_decompress_offset.emplace_back(0, 0, 1);
+                                    bricks_to_decompress_offset.emplace_back(0, 1, 1);
+                                    bricks_to_decompress_offset.emplace_back(1, 0, 1);
+                                    bricks_to_decompress_offset.emplace_back(1, 1, 1);
+                                } else if (start_current_brick.y != start_new_brick.y) {
+                                    // copy right block
+                                    decompressed_bricks[0][0][0] = decompressed_bricks[0][1][0];
+                                    decompressed_bricks[0][0][1] = decompressed_bricks[0][1][1];
+                                    decompressed_bricks[1][0][1] = decompressed_bricks[1][1][1];
+                                    decompressed_bricks[1][0][0] = decompressed_bricks[1][1][0];
+
+                                    bricks_to_decompress_offset.emplace_back(0, 1, 0);
+                                    bricks_to_decompress_offset.emplace_back(0, 1, 1);
+                                    bricks_to_decompress_offset.emplace_back(1, 1, 1);
+                                    bricks_to_decompress_offset.emplace_back(1, 1, 0);
+                                } else if (start_current_brick.z != start_new_brick.z) {
+                                    // copy top block
+                                    decompressed_bricks[0][0][0] = decompressed_bricks[1][0][0];
+                                    decompressed_bricks[0][1][0] = decompressed_bricks[1][1][0];
+                                    decompressed_bricks[0][1][1] = decompressed_bricks[1][1][1];
+                                    decompressed_bricks[0][0][1] = decompressed_bricks[1][0][1];
+
+                                    bricks_to_decompress_offset.emplace_back(1, 0, 0);
+                                    bricks_to_decompress_offset.emplace_back(1, 1, 0);
+                                    bricks_to_decompress_offset.emplace_back(1, 1, 1);
+                                    bricks_to_decompress_offset.emplace_back(1, 0, 1);
+                                }
+
+                                // decompress new top/right/front/diag
+                                for (int i = 0; i < bricks_to_decompress_offset.size(); i++) {
+                                    auto offset = bricks_to_decompress_offset[i];
+                                    // brick_pos_to_decompress needs to be in (XYZ) because m_csgv->decompressBrickTo expects it to be
+                                    glm::uvec3 brick_pos_to_decompress = {start_new_brick[0] + offset[2],
+                                                                          start_new_brick[1] + offset[1],
+                                                                          start_new_brick[2] + offset[0]};
+                                    if (glm::any(glm::greaterThanEqual(brick_pos_to_decompress, m_csgv->getBrickCount())))
+                                        // outside of volume
+                                        continue;
+
+                                    std::vector<uint32_t> decompressed_brick(brick_size * brick_size * brick_size, INVALID);
+                                    std::vector<uint32_t> tmp(brick_size * brick_size * brick_size, INVALID);
+                                    m_csgv->decompressBrickTo(tmp.data(), brick_pos_to_decompress, m_csgv->getLodCountPerBrick() - 1u);
+                                    // fill output array with decoded brick entries
+                                    for (uint32_t j = 0; j < brick_size * brick_size * brick_size; j++) {
+                                        glm::uvec3 out_pos = enumBrickPos(j);
+                                        auto linearized_idx_debug = brick_pos2idx(out_pos, {brick_size, brick_size, brick_size});
+                                        if (glm::all(glm::lessThan(out_pos, {brick_size, brick_size, brick_size}))) {
+                                            decompressed_brick[brick_pos2idx(out_pos, {brick_size, brick_size, brick_size})] = tmp[j];
+                                        }
+                                    }
+                                    decompressed_bricks[offset[0]][offset[1]][offset[2]] = decompressed_brick;
+                                }
+                                start_current_brick = start_new_brick;
+                            }
+                        }
+
+                        current_label = getLabelFromBrick({x, y, z}, brick_size, start_current_brick, decompressed_bricks);
+
+                        // compute neighbors of voxel (x,y,z)
                         for (int i = 0; i < offset_loop_end; i++) {
                             auto offset = neighbor_offset[i];
                             int64_t nx = static_cast<int64_t>(x) + offset[0];
@@ -128,8 +247,7 @@ class CSGVAttributeExtractor {
                                 ny >= 0 && ny < volume_dim.y &&
                                 nz >= 0 && nz < volume_dim.z) {
                                 uint32_t neighbor_label;
-                                uint32_t neighbor_idx = voxel_pos2idx({nx, ny, nz}, volume_dim);
-                                if ((neighbor_label = decompressed_voxels->at(neighbor_idx)) != current_label) {
+                                if ((neighbor_label = getLabelFromBrick({nx, ny, nz}, brick_size, start_current_brick, decompressed_bricks)) != current_label) {
                                     // check for neighbors is symmetrical
                                     if (!thread_tracking[thread_id][current_label].neighbors.contains(neighbor_label))
                                         thread_tracking[thread_id][current_label].neighbors.insert(neighbor_label);
