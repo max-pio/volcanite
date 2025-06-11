@@ -25,21 +25,18 @@ using namespace vvv;
 
 namespace volcanite {
 
-void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, EncodingMode encoding_mode,
-                                                         uint32_t op_mask, bool random_access,
-                                                         const uint32_t *code_frequencies,
-                                                         const uint32_t *detail_code_frequencies) {
-    if (!(brick_size > 0 && !(brick_size & (brick_size - 1))))
+void CompressedSegmentationVolume::setCompressionOptions(const CSGVOptions& options) {
+    if (!(options.brick_size > 0 && !(options.brick_size & (options.brick_size - 1))))
         throw std::runtime_error("Brick size must be a power of two greater than zero.");
     if (!m_encodings.empty()) {
         Logger(Warn) << "CompressedSegmentationVolume was already compressed. Clearing old data on new config.";
         clear();
     }
 
-    m_brick_size = brick_size;
-    m_encoding_mode = encoding_mode;
-    m_op_mask = op_mask;
-    m_random_access = random_access;
+    m_brick_size = options.brick_size;
+    m_encoding_mode = options.encoding_mode;
+    m_op_mask = options.op_mask;
+    m_random_access = options.random_access;
 
     // TODO: replace with switch / case
     // set up the respective brick encoder
@@ -50,16 +47,16 @@ void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, En
             throw std::runtime_error("Nibble random access encoding does not support stop bits.");
         m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     } else if (m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
-        if (code_frequencies == nullptr)
+        if (options.code_frequencies == nullptr)
             throw std::runtime_error("Operation frequencies must be given if using rANS.");
-        if (random_access)
+        if (m_random_access)
             throw std::runtime_error("Random access encoding is not compatible with rANS.");
 
         // normalize the symbol frequencies and setup encoder
         m_encoder = std::make_unique<RangeANSEncoder>(m_brick_size, m_encoding_mode, m_op_mask,
-                                                      normalizeCodeFrequencies(code_frequencies).data(),
+                                                      normalizeCodeFrequencies(options.code_frequencies).data(),
                                                       (m_encoding_mode == DOUBLE_TABLE_RANS_ENC)
-                                                          ? normalizeCodeFrequencies(detail_code_frequencies).data()
+                                                          ? normalizeCodeFrequencies(options.detail_code_frequencies).data()
                                                           : nullptr);
     } else if (m_encoding_mode == WAVELET_MATRIX_ENC || m_encoding_mode == HUFFMAN_WM_ENC) {
         if (m_random_access && (m_op_mask & OP_PALETTE_D_BIT))

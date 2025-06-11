@@ -137,7 +137,7 @@ class CompSegVolHandler {
     }
 
     struct CSGVCompressionConfig {
-        int brick_dim = 32;
+        uint32_t brick_dim = 32;
         EncodingMode encoding_mode = DOUBLE_TABLE_RANS_ENC;
         uint32_t op_mask = OP_ALL;
         bool random_access = false;
@@ -256,7 +256,7 @@ class CompSegVolHandler {
 
                             size_t tmp_code_frequencies[32];
                             csgv->setLabel(std::filesystem::path(chunk_input_path).stem().string());
-                            csgv->setCompressionOptions(cfg.brick_dim, NIBBLE_ENC, cfg.op_mask, cfg.random_access);
+                            csgv->setCompressionOptions({.brick_size=cfg.brick_dim, .encoding_mode=NIBBLE_ENC, .op_mask=cfg.op_mask, .random_access=cfg.random_access});
                             csgv->compressForFrequencyTable(volume->data(), volume_dim, tmp_code_frequencies, cfg.freq_subsampling, cfg.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
                             for (int i = 0; i < 16; i++) {
                                 code_frequencies[i] += tmp_code_frequencies[i];
@@ -317,8 +317,8 @@ class CompSegVolHandler {
                         // perform the actual compression
                         csgv->clear();
                         csgv->setLabel(chunk_input_path);
-                        csgv->setCompressionOptions64(cfg.brick_dim, cfg.encoding_mode, cfg.op_mask, cfg.random_access,
-                                                      code_frequencies.data(), detail_code_frequencies.data());
+                        csgv->setCompressionOptions({.brick_size=cfg.brick_dim, .encoding_mode=cfg.encoding_mode, .op_mask=cfg.op_mask, .random_access=cfg.random_access,
+                                                    .code_frequencies=code_frequencies.data(), .detail_code_frequencies=detail_code_frequencies.data()});
                         csgv->compress(volume->data(), volume_dim, cfg.verbose);
                         total_encoding_seconds += csgv->getLastTotalEncodingSeconds();
                         if (std::filesystem::exists(chunk_output_path)) {

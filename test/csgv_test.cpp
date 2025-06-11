@@ -29,7 +29,7 @@ int main() {
     // Plain 4 bit per operation encoding
     {
         Logger(Info) << "Nibble";
-        csgv.setCompressionOptions64(16, NIBBLE_ENC, OP_ALL, false);
+        csgv.setCompressionOptions({.brick_size=16, .encoding_mode=NIBBLE_ENC, .op_mask=OP_ALL, .random_access=false});
         if (!csgv.test(volume->dataConst(), dim, true))
             return 1;
 
@@ -44,9 +44,9 @@ int main() {
     {
         Logger(Info) << "Range ANS";
         size_t freq[32];
-        csgv.setCompressionOptions64(32, NIBBLE_ENC, OP_ALL, false);
+        csgv.setCompressionOptions({.brick_size=32, .encoding_mode=NIBBLE_ENC, .op_mask=OP_ALL, .random_access=false});
         csgv.compressForFrequencyTable(volume->dataConst(), dim, freq, 2, false, false);
-        csgv.setCompressionOptions64(32, SINGLE_TABLE_RANS_ENC, OP_ALL, false, freq, freq + 16);
+        csgv.setCompressionOptions({.brick_size=32, .encoding_mode=SINGLE_TABLE_RANS_ENC, .op_mask=OP_ALL, .random_access=false, .code_frequencies=freq, .detail_code_frequencies=(freq + 16)});
         if (!csgv.test(volume->dataConst(), dim, true))
             return 2;
 
@@ -61,9 +61,9 @@ int main() {
     {
         Logger(Info) << "Double Table Range ANS with Detail Separation";
         size_t freq[32];
-        csgv.setCompressionOptions64(64, NIBBLE_ENC, OP_ALL, false);
+        csgv.setCompressionOptions({.brick_size=64, .encoding_mode=NIBBLE_ENC, .op_mask=OP_ALL, .random_access=false});
         csgv.compressForFrequencyTable(volume->dataConst(), dim, freq, 2, true, false);
-        csgv.setCompressionOptions64(64, DOUBLE_TABLE_RANS_ENC, OP_ALL, false, freq, freq + 16);
+        csgv.setCompressionOptions({.brick_size=64, .encoding_mode=DOUBLE_TABLE_RANS_ENC, .op_mask=OP_ALL, .random_access=false, .code_frequencies=freq, .detail_code_frequencies=(freq + 16)});
         csgv.compress(volume->dataConst(), dim, false);
         csgv.separateDetail();
         if (!csgv.test(volume->dataConst(), dim, false))
@@ -75,7 +75,7 @@ int main() {
         // Wavelet Matrix
         {
             Logger(Info) << "Wavelet Matrix";
-            csgv.setCompressionOptions64(32, WAVELET_MATRIX_ENC, OP_ALL_WITHOUT_STOP & OP_ALL_WITHOUT_DELTA, true);
+            csgv.setCompressionOptions({.brick_size=32, .encoding_mode=WAVELET_MATRIX_ENC, .op_mask=(OP_ALL_WITHOUT_STOP & OP_ALL_WITHOUT_DELTA), .random_access=true});
             if (!csgv.test(volume->dataConst(), dim, true))
                 return 4;
 
@@ -88,7 +88,7 @@ int main() {
         // Huffman Wavelet Matrix
         {
             Logger(Info) << "Wavelet Matrix";
-            csgv.setCompressionOptions64(16, HUFFMAN_WM_ENC, OP_ALL_WITHOUT_DELTA, true);
+            csgv.setCompressionOptions({.brick_size=16, .encoding_mode=HUFFMAN_WM_ENC, .op_mask=OP_ALL_WITHOUT_DELTA, .random_access=true});
             if (!csgv.test(volume->dataConst(), dim, true))
                 return 5;
 
@@ -101,7 +101,7 @@ int main() {
         // Huffman Wavelet Matrix with Stop Bits
         {
             Logger(Info) << "Wavelet Matrix";
-            csgv.setCompressionOptions64(64, HUFFMAN_WM_ENC, OP_ALL_WITHOUT_DELTA, true);
+            csgv.setCompressionOptions({.brick_size=64, .encoding_mode=HUFFMAN_WM_ENC, .op_mask=OP_ALL_WITHOUT_DELTA, .random_access=true});
             if (!csgv.test(volume->dataConst(), dim, true))
                 return 6;
 

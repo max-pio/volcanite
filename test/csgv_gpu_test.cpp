@@ -43,7 +43,7 @@ int main() {
     CompressedSegmentationVolume csgv;
     {
         Logger(Info) << "Nibble";
-        csgv.setCompressionOptions64(32, NIBBLE_ENC, OP_ALL, false);
+        csgv.setCompressionOptions({.brick_size=32, .encoding_mode=NIBBLE_ENC, .op_mask=OP_ALL, .random_access=false});
         csgv.compress(volume->dataConst(), dim, false);
         {
             CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, false, false);
@@ -55,9 +55,9 @@ int main() {
 
         Logger(Info) << "Range ANS with Palettized Cache";
         size_t freq[32];
-        csgv.setCompressionOptions64(64, NIBBLE_ENC, OP_ALL, false);
+        csgv.setCompressionOptions({.brick_size=64, .encoding_mode=NIBBLE_ENC, .op_mask=OP_ALL, .random_access=false});
         csgv.compressForFrequencyTable(volume->dataConst(), dim, freq, 2, false, false);
-        csgv.setCompressionOptions64(64, SINGLE_TABLE_RANS_ENC, OP_ALL, false, freq, freq + 16);
+        csgv.setCompressionOptions({.brick_size=64, .encoding_mode=SINGLE_TABLE_RANS_ENC, .op_mask=OP_ALL, .random_access=false, .code_frequencies=freq, .detail_code_frequencies=(freq + 16)});
         csgv.compress(volume->dataConst(), dim, false);
         {
             CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, true, false);
@@ -68,9 +68,9 @@ int main() {
         csgv.clear();
 
         Logger(Info) << "Double Table Range ANS";
-        csgv.setCompressionOptions64(16, NIBBLE_ENC, OP_ALL, false);
+        csgv.setCompressionOptions({.brick_size=16, .encoding_mode=NIBBLE_ENC, .op_mask=OP_ALL, .random_access=false});
         csgv.compressForFrequencyTable(volume->dataConst(), dim, freq, 2, true, false);
-        csgv.setCompressionOptions64(16, DOUBLE_TABLE_RANS_ENC, OP_ALL, false, freq, freq + 16);
+        csgv.setCompressionOptions({.brick_size=16, .encoding_mode=DOUBLE_TABLE_RANS_ENC, .op_mask=OP_ALL, .random_access=false, .code_frequencies=freq, .detail_code_frequencies=(freq + 16)});
         csgv.compress(volume->dataConst(), dim, false);
         {
             CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, false, false);
@@ -84,7 +84,7 @@ int main() {
     // Random Access Decoding
     {
         Logger(Info) << "Random Access Nibble";
-        csgv.setCompressionOptions64(32, NIBBLE_ENC, OP_ALL_WITHOUT_STOP & OP_ALL_WITHOUT_DELTA, true);
+        csgv.setCompressionOptions({.brick_size=32, .encoding_mode=NIBBLE_ENC, .op_mask=(OP_ALL_WITHOUT_STOP & OP_ALL_WITHOUT_DELTA), .random_access=true});
         csgv.compress(volume->dataConst(), dim, false);
         {
             CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, false, false);
@@ -102,7 +102,7 @@ int main() {
         csgv.clear();
 
         Logger(Info) << "Random Access Huffman Shaped Wavelet Matrix";
-        csgv.setCompressionOptions64(16, HUFFMAN_WM_ENC, OP_ALL_WITHOUT_DELTA, true);
+        csgv.setCompressionOptions({.brick_size=16, .encoding_mode=HUFFMAN_WM_ENC, .op_mask=OP_ALL_WITHOUT_DELTA, .random_access=true});
         csgv.compress(volume->dataConst(), dim, false);
         {
             CSGVBenchmarkPass benchmark(&csgv, &ctx, cache_size_mb, false, false);
