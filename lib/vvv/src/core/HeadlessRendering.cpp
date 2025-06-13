@@ -19,6 +19,8 @@
 #include <vvv/util/util.hpp>
 
 #include "glm/ext/scalar_constants.hpp"
+#include "vvv/util/video_encoding.hpp"
+
 #include <fmt/core.h>
 
 namespace vvv {
@@ -105,12 +107,10 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         anim.roty_0 = anim.roty_1 = camera->rotation_y;
         anim.dist_0 = anim.dist_1 = camera->orbital_radius;
         if (video_frames > 1) {
-            constexpr float pi2 = (2.f * glm::pi<float>());
-            constexpr float pi = (glm::pi<float>());
-            anim.roty_0 = glm::fract((camera->rotation_y + pi2 + cfg.cam_rot_start) / pi2) * pi2;
-            anim.roty_1 = glm::fract((camera->rotation_y + pi2 + cfg.cam_rot_end) / pi2) * pi2;
-            anim.dist_0 = glm::max(0.001f, camera->orbital_radius + cfg.cam_rot_start);
-            anim.dist_1 = glm::max(0.001f, camera->orbital_radius + cfg.cam_rot_end);
+            anim.roty_0 = camera->rotation_y + (cfg.cam_rot_start * glm::pi<float>() / 180.f);
+            anim.roty_1 = camera->rotation_y + (cfg.cam_rot_end * glm::pi<float>() / 180.f);
+            anim.dist_0 = glm::max(0.001f, camera->orbital_radius + cfg.cam_zoom_start);
+            anim.dist_1 = glm::max(0.001f, camera->orbital_radius + cfg.cam_zoom_end);
         }
     }
 
@@ -132,7 +132,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
             }
         } else if (video_frames > 0) {
             // if an automated video is rendered, animate the parameters based on the config
-            auto camera = getCamera();
+            Camera* const camera = getCamera();
 
             float v = glm::clamp((static_cast<float>(frame_idx) / static_cast<float>(video_frames) - cfg.edge_start) / (cfg.edge_end - cfg.edge_start), 0.f, 1.f);
             switch (cfg.interpolation) {
@@ -142,13 +142,14 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
                 case HeadlessRenderingConfig::Interpolant::Smoother:
                     v = v * v * v * (v * (6.f * v - 15.f) + 10.f);
                     break;
+                default:;
             }
-            camera->rotation_y = glm::mix(anim.roty_0, anim.roty_1, v);
-            camera->orbital_radius = glm::mix(anim.dist_0, anim.roty_1, v);
+            camera->rotation_y  = glm::fract(glm::mix(anim.roty_0, anim.roty_1, v) / (2.f * glm::pi<float>())) * (2.f * glm::pi<float>());
+            camera->orbital_radius = glm::mix(anim.dist_0, anim.dist_1, v);
             camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
-                                                                                      camera->orbital_radius * glm::cos(camera->rotation_y) * glm::cos(camera->rotation_x),
-                                                                                      camera->orbital_radius * glm::sin(camera->rotation_x),
-                                                                                      camera->orbital_radius * glm::sin(camera->rotation_y) * glm::cos(camera->rotation_x));
+                                                                      camera->orbital_radius * glm::cos(camera->rotation_y) * glm::cos(camera->rotation_x),
+                                                                      camera->orbital_radius * glm::sin(camera->rotation_x),
+                                                                      camera->orbital_radius * glm::sin(camera->rotation_y) * glm::cos(camera->rotation_x));
 
             camera->onCameraUpdate();
         }
@@ -196,6 +197,12 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         std::string last_output_image_path = fmt::vformat(cfg.video_fmt_file_out, fmt::make_format_args(frame_idx));
         Logger(Info) << "exporting screenshot to " << last_output_image_path;
         ret_tex->writeFile(last_output_image_path);
+
+        // prevent the renderer from screenshotting the frame again, if more frames are rendered
+        m_renderer->exportCurrentFrameToImage("");
+
+        // try creating a video from the files using ffmpeg
+        try_ffmpeg_video_encoding(cfg.video_fmt_file_out);
     }
 
     Logger(Info) << "rendering of " << (frame_idx * cfg.accumulation_samples)

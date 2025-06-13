@@ -42,10 +42,10 @@ struct HeadlessRenderingConfig {
     float cam_rot_end = 360.f;      ///< end camera rotation angle relative to the init config
     float cam_zoom_start = 5.f;     ///< start camera zoom relative to the init config
     float cam_zoom_end = 0.f;       ///< end camera zoom relative to the init config
-    enum Interpolant {Linear, Smooth, Smoother};
-    Interpolant interpolation;
-    float edge_start = 0.f;
-    float edge_end = 1.f;
+    enum Interpolant {Linear=0, Smooth=1, Smoother=2};
+    Interpolant interpolation = Smooth;
+    float edge_start = 0.01f;
+    float edge_end = 0.99f;
 };
 
 class HeadlessRendering : public DefaultGpuContext, public std::enable_shared_from_this<HeadlessRendering> {

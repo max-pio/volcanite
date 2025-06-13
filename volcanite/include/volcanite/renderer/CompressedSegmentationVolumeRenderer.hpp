@@ -288,6 +288,10 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
     }
 
     void exportCurrentFrameToImage(std::string image_path) override {
+        if (image_path.empty()) {
+            m_download_frame_to_image_file = {};
+            return;
+        }
         if (!image_path.ends_with(".png") && !image_path.ends_with(".jpg") && !image_path.ends_with(".jpeg")) {
             image_path.append(".png");
         }

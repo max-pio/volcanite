@@ -38,6 +38,135 @@ namespace volcanite {
 
 struct VolcaniteArgs {
 
+  private:
+    static bool parseVideoConfigString(HeadlessRenderingConfig& hr_cfg, const std::string& video_cfg_str) {
+        if (video_cfg_str.empty())
+            return true;
+        std::stringstream ss(video_cfg_str);
+        while (ss.good()) {
+            unsigned char c;
+            ss >> c;
+            switch (c) {
+            case 'f':
+                ss >> hr_cfg.video_frames;
+                break;
+            case 's':
+                ss >> hr_cfg.accumulation_samples;
+                break;
+            case 'r':
+                ss >> hr_cfg.cam_rot_start;
+                if (ss.good() && ss.peek() == ':') {
+                    ss >> c;
+                    ss >> hr_cfg.cam_rot_end;
+                } else {
+                    hr_cfg.cam_rot_end = hr_cfg.cam_rot_start;
+                    hr_cfg.cam_rot_start = 0.f;
+                }
+                break;
+            case 'd':
+                ss >> hr_cfg.cam_zoom_start;
+                if (ss.good() && ss.peek() == ':') {
+                    ss >> c;
+                    ss >> hr_cfg.cam_zoom_end;
+                } else {
+                    hr_cfg.cam_zoom_end = hr_cfg.cam_zoom_start;
+                    hr_cfg.cam_zoom_start = 0.f;
+                }
+                break;
+            case 'i':
+                int i;
+                ss >> i;
+                if (i < 0 || i > 2)
+                    return false;
+                hr_cfg.interpolation = static_cast<HeadlessRenderingConfig::Interpolant>(i);
+            case 'e':
+                ss >> hr_cfg.edge_start;
+                if (ss.good() && ss.peek() == ':') {
+                    ss >> c;
+                    ss >> hr_cfg.edge_end;
+                } else {
+                    hr_cfg.edge_end = hr_cfg.edge_start;
+                }
+                break;
+            default:
+                return false;
+            }
+        }
+        return !ss.fail();
+    }
+
+    static bool parseOperationMaskString(uint32_t& operation_mask, std::string op_codes_str) {
+        std::transform(op_codes_str.begin(), op_codes_str.end(), op_codes_str.begin(), ::tolower);
+        for (int i = 0; i < op_codes_str.size(); i++) {
+            switch (op_codes_str.at(i)) {
+            case 'a':
+                operation_mask |= OP_ALL;
+                break;
+            case 'o':
+                operation_mask |= OP_ALL_WITHOUT_DELTA;
+                break;
+            case 'p':
+                operation_mask |= OP_PARENT_BIT;
+                break;
+            case 'x':
+                operation_mask |= OP_NEIGHBORX_BIT;
+                break;
+            case 'y':
+                operation_mask |= OP_NEIGHBORY_BIT;
+                break;
+            case 'z':
+                operation_mask |= OP_NEIGHBORZ_BIT;
+                break;
+            case 'n':
+                operation_mask |= OP_NEIGHBOR_BITS;
+                break;
+            case 'l':
+                operation_mask |= OP_PALETTE_LAST_BIT;
+                break;
+            case 'd':
+                // a "d-" instead of "d" switch enables using the old palette delta operations where only
+                // a single entry follows the delta operations and thus only deltas of 1<D<17 are supported
+                if (i + 1 < op_codes_str.size() && op_codes_str[i + 1] == '-') {
+                    operation_mask |= OP_USE_OLD_PAL_D_BIT;
+                    i++;
+                }
+                operation_mask |= OP_PALETTE_D_BIT;
+                break;
+            case 's':
+                operation_mask |= OP_STOP_BIT;
+                break;
+            default:
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static bool parseRenderingConfigsString(std::vector<std::string>& rendering_configs, const std::string& renderconfig_str) {
+        auto split_configs = renderconfig_str | std::views::split(';') | std::views::transform([](auto r) -> std::string {
+                               // in C++20 this could be done in string views only
+                               // std::string_view v(r.data(), r.size());
+                               // v.remove_prefix(std::min(v.find_first_not_of(' '), v.size()));
+                               // v.remove_suffix(r.size() - 1u - std::min(v.find_last_not_of(' '), v.size()));
+                               std::string cfg;
+                               for (const char &c : r)
+                                   cfg.push_back(c);
+                               // trim
+                               auto first = cfg.find_first_not_of(' ');
+                               auto last = cfg.find_last_not_of(' ');
+                               cfg = cfg.substr(first, last - first + 1);
+                               // expand file path (if it is a vcfg file)
+                               // and convert to strin
+                               if (cfg.ends_with(".vcfg"))
+                                   return expandPathStr(cfg);
+                               return cfg;
+                           });
+        rendering_configs = {split_configs.begin(), split_configs.end()};
+        return true;
+    }
+
+
+
   public:
     // general args
     bool verbose = false;
@@ -174,6 +303,7 @@ struct VolcaniteArgs {
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
             ValueArg<std::string> videoArg("v", "video", "Video output with one image output file per frame. The formatted file path must contain a single {} placeholder which will be replaced with frame index. Example: ./out{:04}.jpg", false, va.hr_cfg.video_fmt_file_out, "formatted file", cmd);
+            ValueArg<std::string> videoCfgArg("", "video-cfg", "Video output configuration string for rendering animations. Must be used with -v.", false, "", "<animation string>", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
             SwitchArg fullscreenArg("", "fullscreen", "Start renderer in fullscreen mode.", cmd);
             ValueArg<std::string> renderconfigArg("", "config", "List of .vcfg files, rendering presets, or direct config strings '[{GUI window}] {parameter label}: {parameter value(s)}', separated by ;", false, "", "{(.vcfg file | rendering preset | string);}*", cmd);
@@ -197,78 +327,16 @@ struct VolcaniteArgs {
 #endif
             va.decompress_export_file = expandPathStr(decompresspathArg.getValue());
             va.compress_export_file = expandPathStr(compresspathArg.getValue());
-            {
-                std::string op_codes = opMaskArg.getValue();
-                std::transform(op_codes.begin(), op_codes.end(), op_codes.begin(), ::tolower);
-                va.operation_mask = 0;
-                for (int i = 0; i < op_codes.size(); i++) {
-                    switch (op_codes.at(i)) {
-                    case 'a':
-                        va.operation_mask |= OP_ALL;
-                        break;
-                    case 'o':
-                        va.operation_mask |= OP_ALL_WITHOUT_DELTA;
-                        break;
-                    case 'p':
-                        va.operation_mask |= OP_PARENT_BIT;
-                        break;
-                    case 'x':
-                        va.operation_mask |= OP_NEIGHBORX_BIT;
-                        break;
-                    case 'y':
-                        va.operation_mask |= OP_NEIGHBORY_BIT;
-                        break;
-                    case 'z':
-                        va.operation_mask |= OP_NEIGHBORZ_BIT;
-                        break;
-                    case 'n':
-                        va.operation_mask |= OP_NEIGHBOR_BITS;
-                        break;
-                    case 'l':
-                        va.operation_mask |= OP_PALETTE_LAST_BIT;
-                        break;
-                    case 'd':
-                        // a "d-" instead of "d" switch enables using the old palette delta operations where only
-                        // a single entry follows the delta operations and thus only deltas of 1<D<17 are supported
-                        if (i + 1 < op_codes.size() && op_codes[i + 1] == '-') {
-                            va.operation_mask |= OP_USE_OLD_PAL_D_BIT;
-                            i++;
-                        }
-                        va.operation_mask |= OP_PALETTE_D_BIT;
-                        break;
-                    case 's':
-                        va.operation_mask |= OP_STOP_BIT;
-                        break;
-                    default:
-                        throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d[-],s only", opMaskArg.longID());
-                    }
-                }
-            }
+            if (!parseOperationMaskString(va.operation_mask, opMaskArg.getValue()))
+                throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d[-],s only", opMaskArg.longID());
             va.random_access = randomAccessArg.getValue();
             // rendering arguments
-            {
-                auto split_configs = renderconfigArg.getValue() | std::views::split(';') | std::views::transform([](auto r) -> std::string {
-                                         // in C++20 this could be done in string views only
-                                         // std::string_view v(r.data(), r.size());
-                                         // v.remove_prefix(std::min(v.find_first_not_of(' '), v.size()));
-                                         // v.remove_suffix(r.size() - 1u - std::min(v.find_last_not_of(' '), v.size()));
-                                         std::string cfg;
-                                         for (const char &c : r)
-                                             cfg.push_back(c);
-                                         // trim
-                                         auto first = cfg.find_first_not_of(' ');
-                                         auto last = cfg.find_last_not_of(' ');
-                                         cfg = cfg.substr(first, last - first + 1);
-                                         // expand file path (if it is a vcfg file)
-                                         // and convert to strin
-                                         if (cfg.ends_with(".vcfg"))
-                                             return expandPathStr(cfg);
-                                         return cfg;
-                                     });
-                va.rendering_configs = {split_configs.begin(), split_configs.end()};
-            }
+            if (!parseRenderingConfigsString(va.rendering_configs, renderconfigArg.getValue()))
+                throw ArgException(renderconfigArg.longID() + " must be a ; separated list of .vcfg files or config strings.", renderconfigArg.longID());
             va.screenshot_output_file = expandPathStr(imageArg.getValue());
             va.hr_cfg.video_fmt_file_out = expandPathStr(videoArg.getValue());
+            if (!parseVideoConfigString(va.hr_cfg, videoCfgArg.getValue()))
+                throw ArgException(videoCfgArg.longID() + " must be a list of valid animation parameters: f{i} s{i} r{f}:{f} d{f}:{f} i{0|1|2} e{0-1}:{0-1}", videoCfgArg.longID());
             if (!va.hr_cfg.video_fmt_file_out.empty()) {
                 try {
                     size_t test_frame_idx = 1;

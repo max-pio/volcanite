@@ -23,6 +23,8 @@
 #define GLFW_INCLUDE_NONE
 #endif
 #include "stb/stb_image.hpp"
+#include "vvv/util/video_encoding.hpp"
+
 #include <GLFW/glfw3.h>
 
 #ifdef IMGUI
@@ -162,7 +164,7 @@ void Application::renderFrame() {
             m_video_frame = {};
         } else {
             ldrRendererOutput.texture->writePng(
-                m_video_file_path + "_" + std::to_string(m_video_frame.value()) + ".png");
+                m_video_file_path + "_" + std::to_string(m_video_frame.value()) + ".jpg");
             m_video_frame = m_video_frame.value() + 1;
         }
     }
@@ -844,16 +846,17 @@ void Application::processHotKeys() {
     }
 
     // record camera path and time stamps
-    if (!m_record_in.has_value() && !m_video_frame.has_value() && ImGui::IsKeyPressed(ImGuiKey_F9)) {
-        // stop recording of camera path
+    if (!m_record_in.has_value() && !m_video_frame.has_value() &&
+        (ImGui::IsKeyPressed(ImGuiKey_F10) || ImGui::IsKeyPressed(ImGuiKey_F9))) {
+        // both F9 and F10 stop the recording of a camera path
         if (m_record_out.has_value()) {
             m_record_out->close();
             m_record_out = {};
             if (m_video_timing.has_value()) {
                 m_video_timing->close();
                 m_video_timing = {};
-                vvv::Logger(vvv::Info) << "compute video file from frames in " << m_video_file_path << " with:";
-                vvv::Logger(vvv::Info) << " ffmpeg -f concat -safe 0 -i video_timing.txt video.mp4";
+                // Logger(Info) << "compute video file from frames in " << m_video_file_path << " with:";
+                // Logger(Info) << " ffmpeg -f concat -safe 0 -i " << m_video_file_path << "_timing.txt " << m_video_file_path;
             }
 
             // output timing of path
@@ -863,7 +866,9 @@ void Application::processHotKeys() {
             vvv::Logger(vvv::Info) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms << " ("
                                    << std::sqrt(var_ms - (avg_ms * avg_ms)) << ") " << " / " << max_ms
                                    << " | " << avg_ms_samples << " frames rendered.";
-        } else {
+        }
+        // F9 starts recording camera positions into a .rec file and frame timings into a timings.txt file
+        else if (ImGui::IsKeyPressed(ImGuiKey_F9)) {
             m_record_out = std::ofstream(m_record_file_path, std::ios::out | std::ios::binary);
             if (!m_record_out->is_open()) {
                 vvv::Logger(vvv::Warn) << "could not open recording output file " << m_record_file_path;
@@ -889,7 +894,7 @@ void Application::processHotKeys() {
     // replay camera path
     else if (!m_record_out.has_value() && !m_video_timing.has_value() && !m_video_frame.has_value() &&
              (ImGui::IsKeyPressed(ImGuiKey_F10) || ImGui::IsKeyPressed(ImGuiKey_F11))) {
-        // stop replay
+        // both F10 and F11 stop replay
         if (m_record_in.has_value()) {
             m_record_in->close();
             m_record_in = {};
@@ -901,8 +906,8 @@ void Application::processHotKeys() {
                                    << " ($\\sigma=" << std::sqrt(var_ms - (avg_ms * avg_ms)) << "$) " << " / "
                                    << max_ms << " total avg ms " << avg_ms << " | " << avg_ms_samples << " frames rendered.";
         }
-        // start replay
-        else {
+        // only F11 starts replay
+        else if (ImGui::IsKeyPressed(ImGuiKey_F11)) {
             m_record_in = std::ifstream(m_record_file_path, std::ios::in | std::ios::binary);
             if (!m_record_in->is_open()) {
                 vvv::Logger(vvv::Warn) << "could not open recording input file " << m_record_file_path;
@@ -917,7 +922,7 @@ void Application::processHotKeys() {
         }
         m_video_frame_count = 0u;
     }
-    // output images for camera path
+    // F12 outputs rendered images along pre-recorded camera path
     else if (!m_record_out.has_value() && !m_record_in.has_value() && !m_video_frame.has_value() &&
              !m_video_timing.has_value() && ImGui::IsKeyPressed(ImGuiKey_F12)) {
         // open the camera path file
@@ -987,6 +992,13 @@ void Application::processParameterRecording() {
             vvv::Logger(vvv::Warn) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms
                                    << " ($\\sigma=" << std::sqrt(var_ms - (avg_ms * avg_ms)) << "$) " << " / "
                                    << max_ms << " | " << avg_ms_samples << " frames rendered.";
+
+            // if rendered frames were written to disk: try to encode video file
+            if (m_video_frame.has_value()) {
+                try_ffmpeg_video_encoding_with_timing(m_video_file_path + "_timing.txt",
+                                                      m_video_file_path + (m_video_file_path.back() == '/' || m_video_file_path.back() == '\\' ? "video" : "") + ".mp4");
+                m_video_frame = {};
+            }
         }
     }
 }
@@ -994,7 +1006,7 @@ void Application::processParameterRecording() {
 void Application::processVideoRecording() {
     // write time stamps
     if (m_video_timing.has_value()) {
-        *m_video_timing << "file '" << m_video_file_path << "_" << m_video_frame_count << ".png'" << std::endl;
+        *m_video_timing << "file '" << m_video_file_path << "_" << m_video_frame_count << ".jpg'" << std::endl;
         double new_time = glfwGetTime();
         *m_video_timing << "duration " << (new_time - m_video_last_timestamp) << std::endl;
         m_video_frame_count++;

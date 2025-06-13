@@ -153,7 +153,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     }
 
     // if a screenshot export was requested, we do this here (not timed)
-    if (m_download_frame_to_image_file.has_value() && m_mostRecentFrame.has_value()) {
+    if (m_download_frame_to_image_file.has_value() && m_mostRecentFrame.has_value() && m_mostRecentFrame->texture) {
         Logger(Info) << "exporting screenshot to " << m_download_frame_to_image_file.value();
         try {
             m_mostRecentFrame->texture->writeFile(m_download_frame_to_image_file.value(), m_queue_family_index);
