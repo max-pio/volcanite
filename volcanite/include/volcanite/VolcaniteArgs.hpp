@@ -248,6 +248,10 @@ struct VolcaniteArgs {
         return !decompress_export_file.empty();
     }
 
+    bool performHeadlessRendering() const {
+        return !eval_logfiles.empty() || !screenshot_output_file.empty() || !hr_cfg.video_fmt_file_out.empty();
+    }
+
     static std::optional<VolcaniteArgs> parseArguments(int argc, char *argv[], bool input_volume_required = true) {
         VolcaniteArgs va;
 

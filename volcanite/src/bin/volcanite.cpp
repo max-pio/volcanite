@@ -108,8 +108,7 @@ int volcanite_main(int argc, char *argv[]) {
         Logger(Info) << "export brick statistics to " << stats_path + " done";
     }
 
-    if (bool run_headless_pass = !args.screenshot_output_file.empty() || !args.hr_cfg.video_fmt_file_out.empty();
-        !args.headless || run_headless_pass) {
+    if (!args.headless || args.performHeadlessRendering()) {
 
         Logger(Info) << "--------------------------------------------------- ";
         Logger(Info) << "initializing Volcanite renderer";
@@ -136,7 +135,7 @@ int volcanite_main(int argc, char *argv[]) {
         renderer->setRenderResolution({args.render_resolution[0], args.render_resolution[1]});
 
         // if a screenshot file, video file, or evaluation log file path is given, run the headless mode first
-        if (run_headless_pass) {
+        if (args.performHeadlessRendering()) {
 
             // obtain a headless rendering engine
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
@@ -155,6 +154,10 @@ int volcanite_main(int argc, char *argv[]) {
                 if (renderer->getTargetAccumulationFrames() > 0u && renderer->getTargetAccumulationFrames() < args.hr_cfg.accumulation_samples)
                     renderer->setTargetAccumulationFrames(static_cast<int>(args.hr_cfg.accumulation_samples));
             }
+
+            // in some cases, it is not necessary to render all video frames. Screenshots only need a single frame.
+            if (args.eval_logfiles.empty() && args.hr_cfg.video_fmt_file_out.empty() && args.hr_cfg.frame_time_file_out.empty())
+                args.hr_cfg.video_frames = 1;
 
             if (!args.eval_logfiles.empty())
                 renderer->startFrameTimeTracking();

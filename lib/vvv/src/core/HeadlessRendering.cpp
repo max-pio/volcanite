@@ -72,6 +72,8 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     // TODO: decouple HeadlessRendering::exec in an initialization method and multiple render calls, respect m_pendingRecreation
     // e.g.: hr.init(); hr.setRenderResolution(400, 400); hr.renderToFile(120); hr.setRenderParametersFromFile(path); auto output = hr.render(60);
 
+    // TODO: add behaviour for frame_time_file_out export if it is given. Obtain frame time from renderer, write to array. export frame times + video output file names to *_timings.txt in the end.
+
     int video_frames; ///< how many frames to render. 0: exit when the camera file reached its end
     // pre-recorded camera path playback
     std::optional<std::ifstream> m_record_in = {};
@@ -83,18 +85,14 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         video_frames = 0;
     }
     // rendering video images but no camera playback file is specified: animate camera
-    else if (!cfg.video_fmt_file_out.empty()) {
-        video_frames = cfg.video_frames;
-    }
-    // no video output: render a single frame
     else {
-        video_frames = 1;
+        video_frames = cfg.video_frames;
     }
 
     Logger(Info) << "rendering " << (video_frames == 0u ? (" camera poses from " + cfg.record_file_in) : (std::to_string(video_frames) + " frame(s)"))
                  << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
 
-    // TODO: replace headless camera naimation with real parameter animation class that operates with the GUIInterface
+    // TODO: replace headless camera animation with real parameter animation class that operates with the GUIInterface
     // interpolation start and end values (rotation around Y axis and zoom)
     struct VideoKeyFrames {
         float roty_0 = 0.f; ///< camera rotation start
@@ -202,7 +200,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         m_renderer->exportCurrentFrameToImage("");
 
         // try creating a video from the files using ffmpeg
-        try_ffmpeg_video_encoding(cfg.video_fmt_file_out);
+        try_ffmpeg_video_encoding(cfg.video_fmt_file_out, cfg.video_out_frame_rate);
     }
 
     Logger(Info) << "rendering of " << (frame_idx * cfg.accumulation_samples)
