@@ -42,7 +42,7 @@ struct SyntheticSegmentationVolumeCfg {
 std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegmentationVolumeCfg cfg);
 
 static constexpr const char *getDummySegmentationVolumeHelpStr() {
-    return "        " CSGV_SYNTH_PREFIX_STR
+    return "" CSGV_SYNTH_PREFIX_STR
            "[_arg]* with arg in\n"
            "          d[x]x[y]x[z]: volume dimension [x,y,z]\n"
            "          l[v]: voxels per label [v] (higher values produce fewer labels)\n"

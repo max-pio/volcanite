@@ -458,10 +458,11 @@ if __name__ == '__main__':
             cur_dir = csgv_directory / Path(name)
             if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
                 write_citation(csgv_directory, "h01")
-                last_chunk = download_cloud_data("h01", directory=cur_dir, output_name=name, size=(10112, 10112, 5294), origin=(133300, 262000, 0))
+                # last_chunk = download_cloud_data("h01", directory=cur_dir, output_name=name, size=(9216, 9216, 5294), origin=(133300, 262000, 0))
+                last_chunk = (6,6,5)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld -b 64"
-                                                    f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld- -b 64"
+                                                    f" {__preview_arg(args.preview, csgv_directory, name)} --cache-palette"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
 
@@ -511,7 +512,7 @@ if __name__ == '__main__':
                 
                 # unzip a single data set
                 with zipfile.ZipFile(cur_dir / "griesser2022-sample.zip", 'r') as zf:
-                    zf.extract("/data.math2market-2022-02.sample-c.fiberfind/FiberFindSampleC_labeled_2.4um_32bu_15363x3960x2112.raw", cur_dir)
+                    zf.extract("data.math2market-2022-02.sample-c.fiberfind/FiberFindSampleC_labeled_2.4um_32bu_15363x3960x2112.raw", cur_dir)
 
                 # memory map the .raw file
                 volume_mm = np.memmap(cur_dir / "data.math2market-2022-02.sample-c.fiberfind/FiberFindSampleC_labeled_2.4um_32bu_15363x3960x2112.raw", dtype=np.uint32, mode='r', shape=(2112,3960,15363))

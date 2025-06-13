@@ -364,9 +364,6 @@ class CSGVChunkMerger {
         // reimport complete CSGV file
         Logger(Info) << "Merging Compressed Segmentation Volume chunk files 100%. complete volume size " << str(complete_volume_dim) << "                ";
 
-        // TODO: only if detail separation takes too long to perform on every import of the merged volume,
-        //  perform detail separation here if requested and overwrite output file with separated detail.
-
         // everything is complete. we can clean up the tmp files and return the merged compressed segmentation volume after loading it from the hard drive
         std::filesystem::remove(brickstarts_path);
         std::filesystem::remove(encoding_path);

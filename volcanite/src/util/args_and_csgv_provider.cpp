@@ -125,7 +125,9 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
                                                         .random_access = args.random_access,
                                                         .label_remapping = label_remapping,
                                                         .cpu_threads = args.threads,
-                                                        .use_detail_separation = args.stream_lod,
+                                                        // this could be args.stream_lod but exported volumes should never have a separated detail.
+                                                        // detail separation will be performed right before rendering (after file import):
+                                                        .use_detail_separation = false,
                                                         .force_recompute = !args.chunked,
                                                         .chunked_input_data = args.chunked,
                                                         .max_file_index = max_chunk_id,
