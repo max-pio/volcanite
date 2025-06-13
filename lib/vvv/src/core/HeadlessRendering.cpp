@@ -64,14 +64,13 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         throw std::runtime_error("GPU context not available. You must call acquireResources() before rendering.");
     if (cfg.accumulation_samples == 0)
         throw std::runtime_error("Accumulation frames must be greater then zero.");
-    // if (cfg.camera_auto_rotate_frames > 0 && !cfg.record_file_in.empty())
-    //     throw std::runtime_error("Cannot specify both camera_auto_rotate_frames and record_file_in.");
+    // if (cfg.video_frames > 0 && !cfg.record_file_in.empty())
+    //     throw std::runtime_error("Cannot specify both video_frames and record_file_in.");
 
     // TODO: decouple HeadlessRendering::exec in an initialization method and multiple render calls, respect m_pendingRecreation
     // e.g.: hr.init(); hr.setRenderResolution(400, 400); hr.renderToFile(120); hr.setRenderParametersFromFile(path); auto output = hr.render(60);
 
-    constexpr int MAX_CAMERA_AUTO_FRAMES = 256; // 1800 frames would be 1 min at 30 fps
-    int camera_auto_rotate_frames;
+    int video_frames; ///< how many frames to render. 0: exit when the camera file reached its end
     // pre-recorded camera path playback
     std::optional<std::ifstream> m_record_in = {};
     if (!cfg.record_file_in.empty()) {
@@ -79,37 +78,48 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         if (!m_record_in->is_open()) {
             throw std::runtime_error("could not open recording input file " + cfg.record_file_in);
         }
-        camera_auto_rotate_frames = 0; // exit when the camera file reached its end
+        video_frames = 0;
     }
-    // rendering video images but no camera playback is specified: rotate camera around
+    // rendering video images but no camera playback file is specified: animate camera
     else if (!cfg.video_fmt_file_out.empty()) {
-        camera_auto_rotate_frames = MAX_CAMERA_AUTO_FRAMES;
-    } else {
-        camera_auto_rotate_frames = 1;
+        video_frames = cfg.video_frames;
+    }
+    // no video output: render a single frame
+    else {
+        video_frames = 1;
     }
 
-    Logger(Info) << "rendering " << (camera_auto_rotate_frames == 0u ? (" camera poses from " + cfg.record_file_in) : (std::to_string(camera_auto_rotate_frames) + " camera pose(s)"))
-                 << " with " + std::to_string(cfg.accumulation_samples) << " frame(s) each";
+    Logger(Info) << "rendering " << (video_frames == 0u ? (" camera poses from " + cfg.record_file_in) : (std::to_string(video_frames) + " frame(s)"))
+                 << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
 
+    // TODO: replace headless camera naimation with real parameter animation class that operates with the GUIInterface
     // interpolation start and end values (rotation around Y axis and zoom)
-    float roty_0, roty_1;
-    float rad_0, rad_1;
+    struct VideoKeyFrames {
+        float roty_0 = 0.f; ///< camera rotation start
+        float roty_1 = 0.f; ///< camera rotation end
+        float dist_0 = 0.f; ///< camera distance start
+        float dist_1 = 0.f; ///< camera distance end
+    } anim;
     {
         auto camera = getCamera();
-        roty_0 = roty_1 = camera->rotation_y;
-        rad_0 = rad_1 = camera->orbital_radius;
-        if (camera_auto_rotate_frames > 0) {
-            roty_1 = roty_0 + (2.f * glm::pi<float>());
-            rad_1 = 1.f;
+        anim.roty_0 = anim.roty_1 = camera->rotation_y;
+        anim.dist_0 = anim.dist_1 = camera->orbital_radius;
+        if (video_frames > 1) {
+            constexpr float pi2 = (2.f * glm::pi<float>());
+            constexpr float pi = (glm::pi<float>());
+            anim.roty_0 = glm::fract((camera->rotation_y + pi2 + cfg.cam_rot_start) / pi2) * pi2;
+            anim.roty_1 = glm::fract((camera->rotation_y + pi2 + cfg.cam_rot_end) / pi2) * pi2;
+            anim.dist_0 = glm::max(0.001f, camera->orbital_radius + cfg.cam_rot_start);
+            anim.dist_1 = glm::max(0.001f, camera->orbital_radius + cfg.cam_rot_end);
         }
     }
 
     RendererOutput rendererOutput = {nullptr, {}};
     size_t frame_idx = 0u;
     MiniTimer timer;
-    // either render all camera poses from the record_in file or render camera_auto_rotate_frames images with
+    // either render all camera poses from the record_in file or render video_frames images with
     // accumulation_samples each. he camera is rotated around the Y axis after each camera_auto_rotate_frame
-    for (frame_idx = 0u; (m_record_in.has_value() && !m_record_in->eof()) || frame_idx < camera_auto_rotate_frames; frame_idx++) {
+    for (frame_idx = 0u; (m_record_in.has_value() && !m_record_in->eof()) || frame_idx < video_frames; frame_idx++) {
         if (m_record_in.has_value()) {
             getCamera()->readFrom(m_record_in.value());
             if (m_record_in->eof()) {
@@ -120,18 +130,21 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
             if (m_record_in->fail()) {
                 throw std::runtime_error("Error reading camera pose from " + cfg.record_file_in);
             }
-        } else if (camera_auto_rotate_frames > 0) {
+        } else if (video_frames > 0) {
+            // if an automated video is rendered, animate the parameters based on the config
             auto camera = getCamera();
 
-            // constexpr float smootherstep(float s_min, float s_max, float x) {
-            //     x = glm::clamp((x - s_min) / (s_max - s_min), 0.f, 1.f);
-            //     return x * x * x * (x * (6.f * x - 15.f) + 10.f);
-            // }
-
-            // TODO: camera auto rotation in headless rendering could become a (configurable) camera controller
-            const float v = glm::smoothstep(0.01f, 0.99f, static_cast<float>(frame_idx) / static_cast<float>(camera_auto_rotate_frames));
-            camera->rotation_y = glm::mix(roty_0, roty_1, v);
-            camera->orbital_radius = glm::mix(rad_0, rad_1, v);
+            float v = glm::clamp((static_cast<float>(frame_idx) / static_cast<float>(video_frames) - cfg.edge_start) / (cfg.edge_end - cfg.edge_start), 0.f, 1.f);
+            switch (cfg.interpolation) {
+                case HeadlessRenderingConfig::Interpolant::Smooth:
+                    v = glm::smoothstep(0.f, 1.f, v);
+                    break;
+                case HeadlessRenderingConfig::Interpolant::Smoother:
+                    v = v * v * v * (v * (6.f * v - 15.f) + 10.f);
+                    break;
+            }
+            camera->rotation_y = glm::mix(anim.roty_0, anim.roty_1, v);
+            camera->orbital_radius = glm::mix(anim.dist_0, anim.roty_1, v);
             camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
                                                                                       camera->orbital_radius * glm::cos(camera->rotation_y) * glm::cos(camera->rotation_x),
                                                                                       camera->orbital_radius * glm::sin(camera->rotation_x),

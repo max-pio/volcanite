@@ -108,7 +108,7 @@ int volcanite_main(int argc, char *argv[]) {
         Logger(Info) << "export brick statistics to " << stats_path + " done";
     }
 
-    if (bool run_headless_pass = !args.screenshot_output_file.empty() || !args.video_output_fmt_file.empty();
+    if (bool run_headless_pass = !args.screenshot_output_file.empty() || !args.hr_cfg.video_fmt_file_out.empty();
         !args.headless || run_headless_pass) {
 
         Logger(Info) << "--------------------------------------------------- ";
@@ -143,25 +143,22 @@ int volcanite_main(int argc, char *argv[]) {
             renderEngine->acquireResources();
             tryImportRenderConfigs(args, renderer);
 
-            size_t accumulation_frames = args.record_convergence_frames;
             // if no video is rendered (neither a camera path input nor a video output is given)
             // render accumulation_frames (given by vcfg file) many frames for the single perspective
-            if (args.video_output_fmt_file.empty() && args.record_in_file.empty()) {
-                accumulation_frames = renderer->getTargetAccumulationFrames();
-                if (accumulation_frames == 0)
-                    accumulation_frames = 60;
+            if (args.hr_cfg.video_fmt_file_out.empty() && args.hr_cfg.record_file_in.empty()) {
+                args.hr_cfg.accumulation_samples = renderer->getTargetAccumulationFrames();
+                if (args.hr_cfg.accumulation_samples == 0)
+                    args.hr_cfg.accumulation_samples = 60;
             } else {
                 // if a video is rendered, ensure that the render will converge for at least the number
                 // of internal frames renderered for each output frame.
-                if (renderer->getTargetAccumulationFrames() > 0u && renderer->getTargetAccumulationFrames() < accumulation_frames)
-                    renderer->setTargetAccumulationFrames(static_cast<int>(accumulation_frames));
+                if (renderer->getTargetAccumulationFrames() > 0u && renderer->getTargetAccumulationFrames() < args.hr_cfg.accumulation_samples)
+                    renderer->setTargetAccumulationFrames(static_cast<int>(args.hr_cfg.accumulation_samples));
             }
 
             if (!args.eval_logfiles.empty())
                 renderer->startFrameTimeTracking();
-            auto texture = renderEngine->renderFrames({.record_file_in = args.record_in_file,
-                                                       .video_fmt_file_out = args.video_output_fmt_file,
-                                                       .accumulation_samples = accumulation_frames});
+            auto texture = renderEngine->renderFrames(args.hr_cfg);
             if (!args.eval_logfiles.empty()) {
                 renderer->stopFrameTimeTracking({}); // stopFrameTimeTracking is already called by renderEngine
                 if (!renderer->writeParameterFile(stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg"))

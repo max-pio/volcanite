@@ -119,7 +119,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
             csgvDatabase->createDummy();
         }
 
-        CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),
+        CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = args.brick_size,
                                                         .encoding_mode = args.encoding_mode,
                                                         .op_mask = args.operation_mask,
                                                         .random_access = args.random_access,

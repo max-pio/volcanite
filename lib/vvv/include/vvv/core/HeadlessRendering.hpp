@@ -32,10 +32,20 @@ class DummyGuiInterface : public GuiInterface {
 };
 
 struct HeadlessRenderingConfig {
-    const std::string &record_file_in = "";                    ///< if set, replays pre-recorded camera positions from this file
-    const std::string &video_fmt_file_out = "";                ///< if set, outputs video frames to file path with an integer fmt placeholder , e.g.
+    std::string record_file_in = "";                    ///< if set, replays pre-recorded camera positions from this file
+    std::string video_fmt_file_out = "";                ///< if set, outputs video frames to file path with an integer fmt placeholder , e.g.
     size_t accumulation_samples = 1;                           ///< number of frames after which a new camera position is read and a video frame is exported
     void (*frameFinishedCallback)(RendererOutput *) = nullptr; ///< will be called each time a frame finished rendering after accumulation_samples
+    // if no record_file_in pre-recorded path is given:
+    int video_frames = 256;         ///< how many video frames are rendered if a video output file and no record_file_in is given
+    float cam_rot_start = 0.f;      ///< start camera rotation angle relative to the init config
+    float cam_rot_end = 360.f;      ///< end camera rotation angle relative to the init config
+    float cam_zoom_start = 5.f;     ///< start camera zoom relative to the init config
+    float cam_zoom_end = 0.f;       ///< end camera zoom relative to the init config
+    enum Interpolant {Linear, Smooth, Smoother};
+    Interpolant interpolation;
+    float edge_start = 0.f;
+    float edge_end = 1.f;
 };
 
 class HeadlessRendering : public DefaultGpuContext, public std::enable_shared_from_this<HeadlessRendering> {

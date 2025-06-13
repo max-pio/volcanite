@@ -23,6 +23,7 @@
 #include "CSGVPathUtils.hpp"
 #include "csgv_constants.incl"
 #include "volcanite/util/segmentation_volume_synthesis.hpp"
+#include "vvv/core/HeadlessRendering.hpp"
 #include "vvv/util/Logger.hpp"
 
 #include <fmt/core.h>
@@ -78,16 +79,15 @@ struct VolcaniteArgs {
     bool random_access = false;                     ///< encode bricks so that they support random access within a brick
 
     // evaluation and statistics
-    std::string screenshot_output_file; ///< png or jpg output file path to export the last frame from headless rendering
-    std::string video_output_fmt_file;  ///< output image file path string accepted by std::format for immediate frames
+    HeadlessRenderingConfig hr_cfg;              ///< configuration parameters for the automated headless rendering pass
+    std::string screenshot_output_file;          ///< png or jpg output file path to export the last frame from headless rendering
     bool run_tests = false;
     bool export_stats = false;
-    std::string record_in_file = {};             ///< file that stores a previously exported camera path for replay in headless
-    uint32_t record_convergence_frames = 1;      ///< number of render frames that are accumulated per output frame of a camera path
-    std::vector<std::string> eval_logfiles = {}; // files into which evaluation results are exported (with 'append')
+    std::vector<std::string> eval_logfiles = {}; ///< files into which evaluation results are exported (with 'append')
     std::string eval_name = {};                  ///< name of the evaluation run that can be accessed in the log file as "{name}"
     bool print_eval_keys = false;                ///< if true, prints all available evaluation log keys to the console on startup
     std::string shader_defines = {};             ///< string of shader defines that will be passed on to the shader compiler
+
 
     static std::string getHelpString() {
         std::stringstream ss;
@@ -147,8 +147,8 @@ struct VolcaniteArgs {
             // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
-            ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path for replay on startup. Must be used with -i or -v.", false, va.record_in_file, "file", cmd);
-            ValueArg<uint32_t> recordConvergenceArg("", "record-frames", "How many render frames are accumulated per output frame of a camera path. Must be used with --record-in or -v.", false, va.record_convergence_frames, "int", cmd);
+            ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path for replay on startup. Must be used with -i or -v.", false, va.hr_cfg.record_file_in, "file", cmd);
+            ValueArg<uint32_t> recordAccumSamplesArg("", "record-frames", "How many render frames are accumulated per output frame of a camera path. Must be used with --record-in or -v.", false, va.hr_cfg.accumulation_samples, "int", cmd);
             ValueArg<std::string> evalLogFilesArg("", "eval-logfiles", "Comma separated files into which evaluation results are appended.", false, "", "file", cmd);
             ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"{name}\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
             SwitchArg evalPrintArg("", "eval-print-keys", "Print all available evaluation keys to the console and exit.", cmd);
@@ -173,7 +173,7 @@ struct VolcaniteArgs {
             cmd.add(emptySpaceResolutionArg);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
-            ValueArg<std::string> videoArg("v", "video", "Video output with one image output file per frame. The formatted file path must contain a single {} placeholder which will be replaced with frame index. Example: ./out{:04}.jpg", false, va.video_output_fmt_file, "formatted file", cmd);
+            ValueArg<std::string> videoArg("v", "video", "Video output with one image output file per frame. The formatted file path must contain a single {} placeholder which will be replaced with frame index. Example: ./out{:04}.jpg", false, va.hr_cfg.video_fmt_file_out, "formatted file", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
             SwitchArg fullscreenArg("", "fullscreen", "Start renderer in fullscreen mode.", cmd);
             ValueArg<std::string> renderconfigArg("", "config", "List of .vcfg files, rendering presets, or direct config strings '[{GUI window}] {parameter label}: {parameter value(s)}', separated by ;", false, "", "{(.vcfg file | rendering preset | string);}*", cmd);
@@ -268,11 +268,11 @@ struct VolcaniteArgs {
                 va.rendering_configs = {split_configs.begin(), split_configs.end()};
             }
             va.screenshot_output_file = expandPathStr(imageArg.getValue());
-            va.video_output_fmt_file = expandPathStr(videoArg.getValue());
-            if (!va.video_output_fmt_file.empty()) {
+            va.hr_cfg.video_fmt_file_out = expandPathStr(videoArg.getValue());
+            if (!va.hr_cfg.video_fmt_file_out.empty()) {
                 try {
                     size_t test_frame_idx = 1;
-                    auto f = fmt::vformat(va.video_output_fmt_file, fmt::make_format_args(test_frame_idx));
+                    auto f = fmt::vformat(va.hr_cfg.video_fmt_file_out, fmt::make_format_args(test_frame_idx));
                 } catch (const fmt::format_error) {
                     throw ArgException(videoArg.longID() + " must be a formatted image file path string containing a single {} replacement field. Example: ./out{:04}.jpg", videoArg.longID());
                 }
@@ -478,8 +478,8 @@ struct VolcaniteArgs {
                 va.run_tests = testArg.getValue();
             }
             va.export_stats = statsArg.getValue();
-            va.record_in_file = expandPathStr(recordInFileArg.getValue());
-            va.record_convergence_frames = recordConvergenceArg.getValue();
+            va.hr_cfg.record_file_in = expandPathStr(recordInFileArg.getValue());
+            va.hr_cfg.accumulation_samples = recordAccumSamplesArg.getValue();
             std::string comma_separated_logfiles = evalLogFilesArg.getValue();
             va.eval_logfiles.clear();
             for (const auto &logfile : comma_separated_logfiles | std::views::split(',') | std::views::transform([](const auto &&range) -> std::string {
