@@ -136,6 +136,8 @@ void vvv::setImageLayout(vk::CommandBuffer const &commandBuffer, vk::Image image
     vk::PipelineStageFlags sourceStage;
     switch (oldImageLayout) {
     case vk::ImageLayout::eGeneral:
+        sourceStage = vk::PipelineStageFlagBits::eComputeShader;
+        break;
     case vk::ImageLayout::ePreinitialized:
         sourceStage = vk::PipelineStageFlagBits::eHost;
         break;
