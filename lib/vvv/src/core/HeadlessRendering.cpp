@@ -74,16 +74,20 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     // TODO: add behaviour for frame_time_file_out export if it is given. Obtain frame time from renderer, write to array. export frame times + video output file names to *_timings.txt in the end.
 
     // pre-recorded camera path playback
-    std::optional<std::ifstream> m_record_in = {};
+    std::optional<std::ifstream> record_in = {};
     if (!cfg.record_file_in.empty()) {
-        m_record_in = std::ifstream(cfg.record_file_in, std::ios::in | std::ios::binary);
-        if (!m_record_in->is_open()) {
+        record_in = std::ifstream(cfg.record_file_in, std::ios::in | std::ios::binary);
+        if (!record_in->is_open()) {
             throw std::runtime_error("could not open recording input file " + cfg.record_file_in);
         }
     }
 
-    Logger(Info) << "rendering " << (!cfg.record_file_in.empty() ? (" camera poses from " + cfg.record_file_in) : (std::to_string(cfg.video_frames) + " frame(s)"))
-                 << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+    if (!cfg.record_file_in.empty())
+        Logger(Info) << "rendering camera poses from " + cfg.record_file_in << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+    else if (cfg.video_frames > 0)
+        Logger(Info) << "rendering " << cfg.video_frames << " frame(s) animation with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+    else if (cfg.video_frames < 0)
+        Logger(Info) << "rendering " << -cfg.video_frames << " second(s) animation with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
 
     // TODO: replace headless camera animation with real parameter animation class that operates with the GUIInterface
     // interpolation start and end values (rotation around Y axis and zoom)
@@ -97,7 +101,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         auto camera = getCamera();
         anim.roty_0 = anim.roty_1 = camera->rotation_y;
         anim.dist_0 = anim.dist_1 = camera->orbital_radius;
-        if (cfg.video_frames > 1) {
+        if (!record_in.has_value()) {
             anim.roty_0 = camera->rotation_y + (cfg.cam_rot_start * glm::pi<float>() / 180.f);
             anim.roty_1 = camera->rotation_y + (cfg.cam_rot_end * glm::pi<float>() / 180.f);
             anim.dist_0 = glm::max(0.001f, camera->orbital_radius + cfg.cam_zoom_start);
@@ -105,27 +109,60 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         }
     }
 
+    if (cfg.video_frames < 0 && cfg.accumulation_samples > 1) {
+        Logger(Warn) << "Rendering real-time video output must not use cfg.accumulation_samples != 1";
+    }
+
     RendererOutput rendererOutput = {nullptr, {}};
     size_t frame_idx = 0u;
     MiniTimer timer;
-    // either render all camera poses from the record_in file or render video_frames images with
-    // accumulation_samples each. he camera is rotated around the Y axis after each camera_auto_rotate_frame
-    for (frame_idx = 0u; (m_record_in.has_value() && !m_record_in->eof()) || frame_idx < cfg.video_frames; frame_idx++) {
-        if (m_record_in.has_value()) {
-            getCamera()->readFrom(m_record_in.value());
-            if (m_record_in->eof()) {
-                m_record_in->close();
-                m_record_in = {};
+    double elapsed_s = 0.;
+    // if record_in is given (pre-recorded): render all camera poses from the record_in file
+    // else, render a camera path animation:
+    // if video_frames > 0 (target frame count): render video_frames images
+    // if video_frames < 0 (target real-time duration): render until abs(video_frames) seconds passed
+    //
+    // Each frame is rendered with accumulation_samples each.
+    for (frame_idx = 0u; (record_in.has_value() && !record_in->eof()) || (cfg.video_frames > 0 && frame_idx < cfg.video_frames) || (cfg.video_frames < 0 && elapsed_s < static_cast<double>(-cfg.video_frames)); frame_idx++) {
+        if (record_in.has_value()) {
+            getCamera()->readFrom(record_in.value());
+            if (record_in->eof()) {
+                record_in->close();
+                record_in = {};
                 break;
             }
-            if (m_record_in->fail()) {
+            if (record_in->fail()) {
                 throw std::runtime_error("Error reading camera pose from " + cfg.record_file_in);
             }
-        } else if (cfg.video_frames > 0) {
+        } else {
             // if an automated video is rendered, animate the parameters based on the config
             Camera *const camera = getCamera();
 
-            float v = glm::clamp((static_cast<float>(frame_idx) / static_cast<float>(cfg.video_frames) - cfg.edge_start) / (cfg.edge_end - cfg.edge_start), 0.f, 1.f);
+            float v = 0.f;
+            if (cfg.video_frames > 0)   // equidistant interpolation based on frame index
+                v = static_cast<float>(frame_idx) / static_cast<float>(cfg.video_frames);
+            else if (cfg.video_frames < 0) { // "real-time" interpolation based on passed duration
+                if (frame_idx == 0u) {
+                    elapsed_s = 0.f;
+                } else {
+                    // either use pre-recorded timings or measure the timings as given
+                    if (cfg.video_frame_times) {
+                        if (frame_idx >= cfg.video_frame_times->size())
+                            break;
+                        elapsed_s += cfg.video_frame_times->at(frame_idx - 1u) / 1000.;
+                    }
+                    else {
+                        elapsed_s = timer.elapsed();
+                    }
+                    if (elapsed_s > static_cast<double>(-cfg.video_frames))
+                        break;
+                    v = static_cast<float>(elapsed_s);
+                    Logger(Info) << v << "," << timer.elapsed() << " / " << static_cast<double>(-cfg.video_frames) << " " << (cfg.video_frame_times ? cfg.video_frame_times->size() : 0);
+                }
+            }
+            // add edges for interpolation
+            v = glm::clamp((v - cfg.edge_start) / (cfg.edge_end - cfg.edge_start), 0.f, 1.f);
+
             switch (cfg.interpolation) {
             case HeadlessRenderingConfig::Interpolant::Smooth:
                 v = glm::smoothstep(0.f, 1.f, v);
@@ -163,7 +200,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     m_renderer->stopFrameTimeTracking(rendererOutput.renderingComplete);
 
     const double endTime = timer.elapsed();
-    const double frame_time = endTime / static_cast<double>((frame_idx * cfg.accumulation_samples));
+    const double frame_time = endTime / static_cast<double>(((frame_idx + 1) * cfg.accumulation_samples));
 
     // copy the last output texture to a new texture that we can return.
     // this way the original rendering texture could be overwritten or destroyed without affecting the return texture.

@@ -267,7 +267,7 @@ struct VolcaniteArgs {
     [[nodiscard]] bool performHeadlessEvaluationPrepass() const {
         // either correct evaluation results are directly required, or a video with "real" frame times should be created
         return !eval_logfiles.empty() || !hr_cfg.frame_time_file_out.empty()
-                || (!hr_cfg.video_fmt_file_out.empty() && hr_cfg.video_out_frame_rate == 0u);
+                || (!hr_cfg.video_fmt_file_out.empty() && hr_cfg.video_out_frame_rate == 0u) || hr_cfg.video_frames < 0;
     }
 
     [[nodiscard]] bool performHeadlessRendering() const {
@@ -327,7 +327,7 @@ struct VolcaniteArgs {
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
             ValueArg<std::string> videoArg("v", "video", "Video output with one image output file per frame. The formatted file path must contain a single {} placeholder which will be replaced with frame index. Example: ./out{:04}.jpg", false, va.hr_cfg.video_fmt_file_out, "formatted file", cmd);
-            ValueArg<std::string> videoCfgArg("", "video-cfg", "Video output configuration string for rendering animations. Must be used with -v.", false, "", "video config string", cmd);
+            ValueArg<std::string> videoCfgArg("", "video-cfg", "Video output configuration string for rendering animations. Must be used with -v.", false, "", "options string", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
             SwitchArg fullscreenArg("", "fullscreen", "Start renderer in fullscreen mode.", cmd);
             ValueArg<std::string> renderconfigArg("", "config", "List of .vcfg files, rendering presets, or direct config strings '[{GUI window}] {parameter label}: {parameter value(s)}', separated by ;", false, "", "{(.vcfg file | rendering preset | string);}*", cmd);

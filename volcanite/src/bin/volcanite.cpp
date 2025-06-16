@@ -189,17 +189,22 @@ int volcanite_main(int argc, char *argv[]) {
             // if a video export is rendered, do a separate pass for it since the frame downloads may affect frame timings
             if (args.performHeadlessVideoRendering()) {
                 Logger(Info) << "Video Export Pass:";
+                auto hr_cfg = args.hr_cfg;
+                if (hr_cfg.video_frames < 0)
+                    hr_cfg.video_frame_times = &renderer->getLastTrackingFrameTimes();
                 // ensure that the render will converge for at least the number
                 // of requested accumulation frames rendered for each output frame.
                 if (renderer->getTargetAccumulationFrames() > 0u && renderer->getTargetAccumulationFrames() < args.hr_cfg.accumulation_samples)
                     renderer->setTargetAccumulationFrames(static_cast<int>(args.hr_cfg.accumulation_samples));
-                renderEngine->renderFrames(args.hr_cfg);
+                renderEngine->renderFrames(hr_cfg);
 
                 // try creating a video from the files using ffmpeg system calls
                 if (args.hr_cfg.video_out_frame_rate == 0u) {
-                    assert(renderer->getLastTrackingFrameTimes().size() == args.hr_cfg.video_frames && "missing correct frame time tracking for video frames.");
+                    assert((args.hr_cfg.video_frames < 0 || renderer->getLastTrackingFrameTimes().size() == args.hr_cfg.video_frames) && "missing correct frame time tracking for video frames.");
                     try_ffmpeg_video_encoding_with_timing(args.hr_cfg.video_fmt_file_out, renderer->getLastTrackingFrameTimes());
                 } else {
+                    if (args.hr_cfg.video_frames >= 0)
+                        Logger(Warn) << "Video export with real-time frame rate should be used with animation duration instead of frame count (--video-cfg f<-duration>)";
                     try_ffmpeg_video_encoding(args.hr_cfg.video_fmt_file_out, args.hr_cfg.video_out_frame_rate);
                 }
             }
