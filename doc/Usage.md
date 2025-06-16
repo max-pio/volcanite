@@ -240,10 +240,11 @@ The general usage of Volcanite is
   Video output with one image output file per frame. The formatted file path must contain a single {} placeholder
   which will be replaced with frame index. Example: ./out{:04}.jpg
 
-* `--video-cfg <animation string>`
+* `--video-cfg <options string>`
 
   Camera animation configuration when using `-v` given as `{param}*` where `{param}` is one of:
-  * `f<int>` how many video frame are exported to the output
+  * `f<int>` how many video frame are exported to the output. value < 0 renders until (-value) seconds elapsed  
+  * `o<int>` frame rate of the output video (0 to use real frame times)
   * `s<int>` how many rendering frames are accumluated for each output video frame
   * `r[<float>:]<float>` start:end camera rotation angle offsets in degrees in [-360;+360]
   * `d[<float>:]<float>` start:end camera distance offsets relative to initial configuration
@@ -253,11 +254,6 @@ The general usage of Volcanite is
 * `--record-in <file>`
 
   File that stores a previously exported camera path for replay on startup. Must be used with `-i` or `-v`.
-
-* `--record-frames <int>`
-
-  How many render frames are accumulated per output frame, or viewpoint respectively, of a camera path.
-  Must be used with `--record-in` or `-v`.
 
 #### Rendering
 
