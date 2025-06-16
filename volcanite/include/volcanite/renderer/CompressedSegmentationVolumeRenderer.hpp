@@ -276,16 +276,18 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
         if (awaitLastFrameFinished.has_value()) {
             getCtx()->sync->hostWaitOnDevice(awaitLastFrameFinished.value(), 60 * 1000000000ull);
             if (m_enable_frame_time_tracking && m_last_frame_start_time.has_value()) {
-                m_last_frame_times.emplace_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                m_last_frame_times.emplace_back(static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                                                         std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value())
                                                                         .count()) /
-                                                1000000.);
+                                                1000000.f);
                 m_last_frame_start_time.reset();
             }
         }
         m_enable_frame_time_tracking = false;
         m_last_frame_start_time.reset();
     }
+
+    const std::vector<float>& getLastTrackingFrameTimes() { return m_last_frame_times; }
 
     void exportCurrentFrameToImage(std::string image_path) override {
         if (image_path.empty()) {
@@ -496,7 +498,7 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 
     bool m_enable_frame_time_tracking = false;
     std::optional<std::chrono::high_resolution_clock::time_point> m_last_frame_start_time = {};
-    std::vector<double> m_last_frame_times = {};
+    std::vector<float> m_last_frame_times = {};
 };
 
 } // namespace volcanite

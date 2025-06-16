@@ -32,22 +32,26 @@ class DummyGuiInterface : public GuiInterface {
 };
 
 struct HeadlessRenderingConfig {
-    std::string record_file_in = "";                            ///< if set, replays pre-recorded camera positions from this file
-    std::string video_fmt_file_out = "";                        ///< if set, outputs video frames to file path with an integer fmt placeholder , e.g.
-    int video_out_frame_rate = 30;                              ///< when a video file is created it uses this frame rate
-    std::string frame_time_file_out = "";                       ///< if set, exports frame timings without video output to the given file before running a full video output
-    size_t accumulation_samples = 1;                            ///< number of frames after which a new camera position is read and a video frame is exported
-    void (*frameFinishedCallback)(RendererOutput *) = nullptr;  ///< will be called each time a frame finished rendering after accumulation_samples
+    std::string record_file_in = "";                           ///< if set, replays pre-recorded camera positions from this file
+    std::string video_fmt_file_out = "";                       ///< if set, outputs video frames to file path with an integer fmt placeholder , e.g.
+    int video_out_frame_rate = 30;                             ///< when a video file is created it uses this frame rate
+    std::string frame_time_file_out = "";                      ///< if set, exports frame timings without video output to the given file before running a full video output
+    size_t accumulation_samples = 1;                           ///< number of frames after which a new camera position is read and a video frame is exported
+    void (*frameFinishedCallback)(RendererOutput *) = nullptr; ///< will be called each time a frame finished rendering after accumulation_samples
     // if no record_file_in pre-recorded path is given:
-    int video_frames = 256;         ///< how many video frames are rendered if a video output file and no record_file_in is given
-    float cam_rot_start = 0.f;      ///< start camera rotation angle relative to the init config
-    float cam_rot_end = 360.f;      ///< end camera rotation angle relative to the init config
-    float cam_zoom_start = 5.f;     ///< start camera zoom relative to the init config
-    float cam_zoom_end = 0.f;       ///< end camera zoom relative to the init config
-    enum Interpolant {Linear=0, Smooth=1, Smoother=2};
-    Interpolant interpolation = Smooth;
-    float edge_start = 0.01f;
-    float edge_end = 0.99f;
+    int video_frames = 300;     ///< how many video frames are rendered if a video output file and no record_file_in is given
+    float cam_rot_start = 0.f;  ///< start camera rotation angle relative to the init config
+    float cam_rot_end = 0.f;    ///< end camera rotation angle relative to the init config
+    float cam_zoom_start = 0.f; ///< start camera zoom relative to the init config
+    float cam_zoom_end = 0.f;   ///< end camera zoom relative to the init config
+    enum Interpolant { Linear = 0,
+                       Smooth = 1,
+                       Smoother = 2 };
+    Interpolant interpolation = Linear;
+    float edge_start = 0.f;
+    float edge_end = 1.f;
+
+    [[nodiscard]] bool isAnimated() const { return !record_file_in.empty() || cam_rot_start != cam_rot_end || cam_zoom_start != cam_zoom_end; }
 };
 
 class HeadlessRendering : public DefaultGpuContext, public std::enable_shared_from_this<HeadlessRendering> {
@@ -72,6 +76,7 @@ class HeadlessRendering : public DefaultGpuContext, public std::enable_shared_fr
     void releaseResources();
 
     /// Run the renderloop for number_of_frames taking ownership of the current thread.
+    /// The render engine will start and stop frame time tracking of the renderer.
     /// @param cfg the rendeirng configuration
     /// number_of_frames number of frames to render. can be zero if record_file_in is given to use record length.
     /// record_file_in a previously recorded camera path that is played when rendering the frames. "" for none.

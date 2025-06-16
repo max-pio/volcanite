@@ -1791,7 +1791,7 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
     }
     if (!m_last_frame_times.empty()) {
         double total = 0.f;
-        double min = std::numeric_limits<double>::max();
+        double min = std::numeric_limits<float>::max();
         double m1 = 0.;
         double m2 = 0.;
         double max = -1.;
@@ -1799,8 +1799,8 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
             const auto &ms = m_last_frame_times[i];
             if (i < 16)
                 results.frame_ms[i] = ms;
-            min = std::min(min, ms);
-            max = std::max(max, ms);
+            min = std::min(min, static_cast<double>(ms));
+            max = std::max(max, static_cast<double>(ms));
             m1 += ms;
             m2 += ms * ms;
             total += ms;

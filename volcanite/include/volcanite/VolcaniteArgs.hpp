@@ -42,6 +42,14 @@ struct VolcaniteArgs {
     static bool parseVideoConfigString(HeadlessRenderingConfig& hr_cfg, const std::string& video_cfg_str) {
         if (video_cfg_str.empty())
             return true;
+        // the video configuration can be a pre-recorded camera path
+        if (video_cfg_str.ends_with(".rec")) {
+            hr_cfg.record_file_in = expandPathStr(video_cfg_str);
+            // hr_cfg.video_out_frame_rate = 0; // 0: video output should use actual frame timings as frame rate
+            hr_cfg.accumulation_samples = 1;    // only one frame per input camera pose from .rec file
+            return true;
+        }
+        // otherwise the given string describes the camera animation
         std::stringstream ss(video_cfg_str);
         while (ss.good()) {
             unsigned char c;
@@ -79,6 +87,7 @@ struct VolcaniteArgs {
                 if (i < 0 || i > 2)
                     return false;
                 hr_cfg.interpolation = static_cast<HeadlessRenderingConfig::Interpolant>(i);
+                break;
             case 'e':
                 ss >> hr_cfg.edge_start;
                 if (ss.good() && ss.peek() == ':') {
@@ -240,16 +249,20 @@ struct VolcaniteArgs {
         return VOLCANITE_VERSION;
     }
 
-    bool performCompression() const {
+    [[nodiscard]] bool performCompression() const {
         return !input_file.ends_with(".csgv");
     }
 
-    bool performDecompression() const {
+    [[nodiscard]] bool performDecompression() const {
         return !decompress_export_file.empty();
     }
 
-    bool performHeadlessRendering() const {
-        return !eval_logfiles.empty() || !screenshot_output_file.empty() || !hr_cfg.video_fmt_file_out.empty();
+    [[nodiscard]] bool performHeadlessVideoRendering() const {
+        return !eval_logfiles.empty() || !hr_cfg.video_fmt_file_out.empty() || !hr_cfg.frame_time_file_out.empty();
+    }
+
+    [[nodiscard]] bool performHeadlessRendering() const {
+        return performHeadlessVideoRendering() || !screenshot_output_file.empty();
     }
 
     static std::optional<VolcaniteArgs> parseArguments(int argc, char *argv[], bool input_volume_required = true) {
@@ -280,8 +293,6 @@ struct VolcaniteArgs {
             // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
-            ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path for replay on startup. Must be used with -i or -v.", false, va.hr_cfg.record_file_in, "file", cmd);
-            ValueArg<uint32_t> recordAccumSamplesArg("", "record-frames", "How many render frames are accumulated per output frame of a camera path. Must be used with --record-in or -v.", false, va.hr_cfg.accumulation_samples, "int", cmd);
             ValueArg<std::string> evalLogFilesArg("", "eval-logfiles", "Comma separated files into which evaluation results are appended.", false, "", "file", cmd);
             ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"{name}\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
             SwitchArg evalPrintArg("", "eval-print-keys", "Print all available evaluation keys to the console and exit.", cmd);
@@ -307,7 +318,7 @@ struct VolcaniteArgs {
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
             ValueArg<std::string> videoArg("v", "video", "Video output with one image output file per frame. The formatted file path must contain a single {} placeholder which will be replaced with frame index. Example: ./out{:04}.jpg", false, va.hr_cfg.video_fmt_file_out, "formatted file", cmd);
-            ValueArg<std::string> videoCfgArg("", "video-cfg", "Video output configuration string for rendering animations. Must be used with -v.", false, "", "<animation string>", cmd);
+            ValueArg<std::string> videoCfgArg("", "video-cfg", "Video output configuration string for rendering animations. Must be used with -v.", false, "", "video config string", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
             SwitchArg fullscreenArg("", "fullscreen", "Start renderer in fullscreen mode.", cmd);
             ValueArg<std::string> renderconfigArg("", "config", "List of .vcfg files, rendering presets, or direct config strings '[{GUI window}] {parameter label}: {parameter value(s)}', separated by ;", false, "", "{(.vcfg file | rendering preset | string);}*", cmd);
@@ -550,8 +561,6 @@ struct VolcaniteArgs {
                 va.run_tests = testArg.getValue();
             }
             va.export_stats = statsArg.getValue();
-            va.hr_cfg.record_file_in = expandPathStr(recordInFileArg.getValue());
-            va.hr_cfg.accumulation_samples = recordAccumSamplesArg.getValue();
             std::string comma_separated_logfiles = evalLogFilesArg.getValue();
             va.eval_logfiles.clear();
             for (const auto &logfile : comma_separated_logfiles | std::views::split(',') | std::views::transform([](const auto &&range) -> std::string {

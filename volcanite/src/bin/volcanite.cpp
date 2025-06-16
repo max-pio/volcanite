@@ -142,50 +142,48 @@ int volcanite_main(int argc, char *argv[]) {
             renderEngine->acquireResources();
             tryImportRenderConfigs(args, renderer);
 
-            // if no video is rendered (neither a camera path input nor a video output is given)
-            // render accumulation_frames (given by vcfg file) many frames for the single perspective
-            if (args.hr_cfg.video_fmt_file_out.empty() && args.hr_cfg.record_file_in.empty()) {
+            args.hr_cfg.frame_time_file_out = expandPath("~/vvideo/frame_time_test.csv");
+
+            // in some cases, it is not necessary to render video frames. Screenshots only need a single frame.
+            if (!args.performHeadlessVideoRendering()) {
+                args.hr_cfg.video_frames = 1;
+                // ensure that a high quality screenshot is rendered in this case
                 args.hr_cfg.accumulation_samples = renderer->getTargetAccumulationFrames();
                 if (args.hr_cfg.accumulation_samples == 0)
                     args.hr_cfg.accumulation_samples = 60;
-            } else {
+            }
+            else {
                 // if a video is rendered, ensure that the render will converge for at least the number
-                // of internal frames renderered for each output frame.
+                // of requested accumulation frames rendered for each output frame.
                 if (renderer->getTargetAccumulationFrames() > 0u && renderer->getTargetAccumulationFrames() < args.hr_cfg.accumulation_samples)
                     renderer->setTargetAccumulationFrames(static_cast<int>(args.hr_cfg.accumulation_samples));
             }
 
-            // in some cases, it is not necessary to render all video frames. Screenshots only need a single frame.
-            if (args.eval_logfiles.empty() && args.hr_cfg.video_fmt_file_out.empty() && args.hr_cfg.frame_time_file_out.empty())
-                args.hr_cfg.video_frames = 1;
-
-            if (!args.eval_logfiles.empty())
-                renderer->startFrameTimeTracking();
+            // let the render engine render all frames
             auto texture = renderEngine->renderFrames(args.hr_cfg);
+
+            // export evaluation results and final image frame as screenshot, if requested
             if (!args.eval_logfiles.empty()) {
-                renderer->stopFrameTimeTracking({}); // stopFrameTimeTracking is already called by renderEngine
                 if (!renderer->writeParameterFile(stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg"))
                     Logger(Warn) << "could not write vcfg file " << (stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg");
+                for (const auto &eval_logfile : args.eval_logfiles) {
+                    if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
+                                                                 compressedSegmentationVolume->getLastEvaluationResults(),
+                                                                 {}, // TODO: add decompression benchmark
+                                                                 renderer->getLastEvaluationResults())) {
+                        Logger(Info) << "exported evaluation results to " << eval_logfile;
+                    } else {
+                        Logger(Warn) << "could not export evaluation results to " << eval_logfile;
+                        return RET_IO_ERROR;
+                    }
+                }
             }
-
-            // export final frame
             if (!args.screenshot_output_file.empty() && (texture == nullptr || export_texture(texture.get(), args.screenshot_output_file))) {
+                // TODO: the behaviour of the screenshot_output_file is different depending if a video is rendered (save last frame) or not (save converged first frame)
                 Logger(Error) << "could not export final render frame to " << args.screenshot_output_file;
                 return RET_RENDER_ERROR;
             }
-            for (const auto &eval_logfile : args.eval_logfiles) {
-                if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
-                                                             compressedSegmentationVolume->getLastEvaluationResults(),
-                                                             {}, // TODO: add decompression benchmark
-                                                             renderer->getLastEvaluationResults())) {
-                    Logger(Info) << "exported evaluation results to " << eval_logfile;
-                } else {
-                    Logger(Warn) << "could not export evaluation results to " << eval_logfile;
-                    return RET_IO_ERROR;
-                }
-            }
-            texture.reset();
-            texture = nullptr;
+            texture = {};
             renderEngine->releaseResources();
         }
 

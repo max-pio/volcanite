@@ -115,6 +115,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     RendererOutput rendererOutput = {nullptr, {}};
     size_t frame_idx = 0u;
     MiniTimer timer;
+    m_renderer->startFrameTimeTracking();
     // either render all camera poses from the record_in file or render video_frames images with
     // accumulation_samples each. he camera is rotated around the Y axis after each camera_auto_rotate_frame
     for (frame_idx = 0u; (m_record_in.has_value() && !m_record_in->eof()) || frame_idx < video_frames; frame_idx++) {
@@ -130,24 +131,24 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
             }
         } else if (video_frames > 0) {
             // if an automated video is rendered, animate the parameters based on the config
-            Camera* const camera = getCamera();
+            Camera *const camera = getCamera();
 
             float v = glm::clamp((static_cast<float>(frame_idx) / static_cast<float>(video_frames) - cfg.edge_start) / (cfg.edge_end - cfg.edge_start), 0.f, 1.f);
             switch (cfg.interpolation) {
-                case HeadlessRenderingConfig::Interpolant::Smooth:
-                    v = glm::smoothstep(0.f, 1.f, v);
-                    break;
-                case HeadlessRenderingConfig::Interpolant::Smoother:
-                    v = v * v * v * (v * (6.f * v - 15.f) + 10.f);
-                    break;
-                default:;
+            case HeadlessRenderingConfig::Interpolant::Smooth:
+                v = glm::smoothstep(0.f, 1.f, v);
+                break;
+            case HeadlessRenderingConfig::Interpolant::Smoother:
+                v = v * v * v * (v * (6.f * v - 15.f) + 10.f);
+                break;
+            default:;
             }
-            camera->rotation_y  = glm::fract(glm::mix(anim.roty_0, anim.roty_1, v) / (2.f * glm::pi<float>())) * (2.f * glm::pi<float>());
+            camera->rotation_y = glm::fract(glm::mix(anim.roty_0, anim.roty_1, v) / (2.f * glm::pi<float>())) * (2.f * glm::pi<float>());
             camera->orbital_radius = glm::mix(anim.dist_0, anim.dist_1, v);
             camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
-                                                                      camera->orbital_radius * glm::cos(camera->rotation_y) * glm::cos(camera->rotation_x),
-                                                                      camera->orbital_radius * glm::sin(camera->rotation_x),
-                                                                      camera->orbital_radius * glm::sin(camera->rotation_y) * glm::cos(camera->rotation_x));
+                                                                                      camera->orbital_radius * glm::cos(camera->rotation_y) * glm::cos(camera->rotation_x),
+                                                                                      camera->orbital_radius * glm::sin(camera->rotation_x),
+                                                                                      camera->orbital_radius * glm::sin(camera->rotation_y) * glm::cos(camera->rotation_x));
 
             camera->onCameraUpdate();
         }
@@ -188,6 +189,19 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         rendererOutput.texture->setImageLayout(cmd, originalLayout);
     },
                                                   {.queueFamily = rendererOutput.queueFamilyIndex, .await = rendererOutput.renderingComplete})});
+
+    // export rendering time for each frame to a .csv file
+    if (!cfg.frame_time_file_out.empty()) {
+        if (auto frame_time_file = std::ofstream(cfg.frame_time_file_out);
+            frame_time_file.is_open()) {
+            // for more detailed frame timings: csv_utils::csv_export
+            for (const float &v : m_renderer->getLastTrackingFrameTimes())
+                frame_time_file << v << "\n";
+            frame_time_file.close();
+        } else {
+            Logger(Warn) << "Could not export frame timings to " << cfg.frame_time_file_out;
+        }
+    }
 
     // export the final frame to the video path
     if (!cfg.video_fmt_file_out.empty()) {
