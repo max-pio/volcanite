@@ -58,6 +58,9 @@ struct VolcaniteArgs {
             case 'f':
                 ss >> hr_cfg.video_frames;
                 break;
+            case 'o':
+                ss >> hr_cfg.video_out_frame_rate;
+                break;
             case 's':
                 ss >> hr_cfg.accumulation_samples;
                 break;
@@ -261,6 +264,12 @@ struct VolcaniteArgs {
         return !eval_logfiles.empty() || !hr_cfg.video_fmt_file_out.empty() || !hr_cfg.frame_time_file_out.empty();
     }
 
+    [[nodiscard]] bool performHeadlessEvaluationPrepass() const {
+        // either correct evaluation results are directly required, or a video with "real" frame times should be created
+        return !eval_logfiles.empty() || !hr_cfg.frame_time_file_out.empty()
+                || (!hr_cfg.video_fmt_file_out.empty() && hr_cfg.video_out_frame_rate == 0u);
+    }
+
     [[nodiscard]] bool performHeadlessRendering() const {
         return performHeadlessVideoRendering() || !screenshot_output_file.empty();
     }
@@ -351,7 +360,7 @@ struct VolcaniteArgs {
             va.screenshot_output_file = expandPathStr(imageArg.getValue());
             va.hr_cfg.video_fmt_file_out = expandPathStr(videoArg.getValue());
             if (!parseVideoConfigString(va.hr_cfg, videoCfgArg.getValue()))
-                throw ArgException(videoCfgArg.longID() + " must be a list of valid animation parameters: f{i} s{i} r{f}:{f} d{f}:{f} i{0|1|2} e{0-1}:{0-1}", videoCfgArg.longID());
+                throw ArgException(videoCfgArg.longID() + " must be a list of valid animation parameters: f{i} o{i} s{i} r{f}:{f} d{f}:{f} i{0|1|2} e{0-1}:{0-1}", videoCfgArg.longID());
             if (!va.hr_cfg.video_fmt_file_out.empty()) {
                 try {
                     size_t test_frame_idx = 1;

@@ -29,6 +29,7 @@
 #include "volcanite/eval/EvaluationLogExport.hpp"
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "volcanite/util/args_and_csgv_provider.hpp"
+#include "vvv/util/video_encoding.hpp"
 #include "vvv/volren/Volume.hpp"
 
 #include <string>
@@ -141,49 +142,86 @@ int volcanite_main(int argc, char *argv[]) {
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
             renderEngine->acquireResources();
             tryImportRenderConfigs(args, renderer);
+            int prev_renderer_target_accumulation_frames = renderer->getTargetAccumulationFrames();
 
+            // TODO: add a cmd arg for frame_time_file_out
             args.hr_cfg.frame_time_file_out = expandPath("~/vvideo/frame_time_test.csv");
 
-            // in some cases, it is not necessary to render video frames. Screenshots only need a single frame.
-            if (!args.performHeadlessVideoRendering()) {
-                args.hr_cfg.video_frames = 1;
-                // ensure that a high quality screenshot is rendered in this case
-                args.hr_cfg.accumulation_samples = renderer->getTargetAccumulationFrames();
-                if (args.hr_cfg.accumulation_samples == 0)
-                    args.hr_cfg.accumulation_samples = 60;
-            }
-            else {
-                // if a video is rendered, ensure that the render will converge for at least the number
-                // of requested accumulation frames rendered for each output frame.
-                if (renderer->getTargetAccumulationFrames() > 0u && renderer->getTargetAccumulationFrames() < args.hr_cfg.accumulation_samples)
-                    renderer->setTargetAccumulationFrames(static_cast<int>(args.hr_cfg.accumulation_samples));
-            }
+            // perform a dry evaluation run first, gathering frame times etc., if required
+            if (args.performHeadlessEvaluationPrepass()) {
+                Logger(Info) << "Rendering Evaluation Pass:";
+                auto hr_cfg = args.hr_cfg;
+                hr_cfg.video_fmt_file_out = ""; // disable any video export
+                renderer->startFrameTimeTracking();
+                renderEngine->renderFrames(hr_cfg);
+                // the renderEngine stops the frame time tracking
 
-            // let the render engine render all frames
-            auto texture = renderEngine->renderFrames(args.hr_cfg);
-
-            // export evaluation results and final image frame as screenshot, if requested
-            if (!args.eval_logfiles.empty()) {
-                if (!renderer->writeParameterFile(stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg"))
-                    Logger(Warn) << "could not write vcfg file " << (stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg");
-                for (const auto &eval_logfile : args.eval_logfiles) {
-                    if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
-                                                                 compressedSegmentationVolume->getLastEvaluationResults(),
-                                                                 {}, // TODO: add decompression benchmark
-                                                                 renderer->getLastEvaluationResults())) {
-                        Logger(Info) << "exported evaluation results to " << eval_logfile;
-                    } else {
-                        Logger(Warn) << "could not export evaluation results to " << eval_logfile;
-                        return RET_IO_ERROR;
+                // export rendering time for each frame to a .csv file if requested
+                if (!args.hr_cfg.frame_time_file_out.empty()) {
+                    if (auto frame_time_file = std::ofstream(args.hr_cfg.frame_time_file_out);
+                        frame_time_file.is_open()) {
+                        // for more detailed frame timings: csv_utils::csv_export
+                        for (const float &v : renderer->getLastTrackingFrameTimes())
+                            frame_time_file << v << "\n";
+                        frame_time_file.close();
+                        } else {
+                            Logger(Warn) << "Could not export frame timings to " << args.hr_cfg.frame_time_file_out;
+                        }
+                }
+                // add new results to evaluation log files
+                if (!args.eval_logfiles.empty()) {
+                    if (!renderer->writeParameterFile(stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg"))
+                        Logger(Warn) << "could not write vcfg file " << (stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg");
+                    for (const auto &eval_logfile : args.eval_logfiles) {
+                        if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
+                                                                     compressedSegmentationVolume->getLastEvaluationResults(),
+                                                                     {}, // TODO: add decompression benchmark for evaluation logging
+                                                                     renderer->getLastEvaluationResults())) {
+                            Logger(Info) << "exported evaluation results to " << eval_logfile;
+                                                                     } else {
+                                                                         Logger(Warn) << "could not export evaluation results to " << eval_logfile;
+                                                                         return RET_IO_ERROR;
+                                                                     }
                     }
                 }
             }
-            if (!args.screenshot_output_file.empty() && (texture == nullptr || export_texture(texture.get(), args.screenshot_output_file))) {
-                // TODO: the behaviour of the screenshot_output_file is different depending if a video is rendered (save last frame) or not (save converged first frame)
-                Logger(Error) << "could not export final render frame to " << args.screenshot_output_file;
-                return RET_RENDER_ERROR;
+
+            // if a video export is rendered, do a separate pass for it since the frame downloads may affect frame timings
+            if (args.performHeadlessVideoRendering()) {
+                Logger(Info) << "Video Export Pass:";
+                // ensure that the render will converge for at least the number
+                // of requested accumulation frames rendered for each output frame.
+                if (renderer->getTargetAccumulationFrames() > 0u && renderer->getTargetAccumulationFrames() < args.hr_cfg.accumulation_samples)
+                    renderer->setTargetAccumulationFrames(static_cast<int>(args.hr_cfg.accumulation_samples));
+                renderEngine->renderFrames(args.hr_cfg);
+
+                // try creating a video from the files using ffmpeg system calls
+                if (args.hr_cfg.video_out_frame_rate == 0u) {
+                    assert(renderer->getLastTrackingFrameTimes().size() == args.hr_cfg.video_frames && "missing correct frame time tracking for video frames.");
+                    try_ffmpeg_video_encoding_with_timing(args.hr_cfg.video_fmt_file_out, renderer->getLastTrackingFrameTimes());
+                } else {
+                    try_ffmpeg_video_encoding(args.hr_cfg.video_fmt_file_out, args.hr_cfg.video_out_frame_rate);
+                }
             }
-            texture = {};
+
+            // if a screenshot export is requested, render a new high quality frame output
+            // let the render engine render all frames
+            if (!args.screenshot_output_file.empty()) {
+                Logger(Info) << "Screenshot (High Quality) Export Pass:";
+                // ensure that a high quality screenshot is rendered (enough accumulation frames)
+                args.hr_cfg.video_frames = 1;
+                args.hr_cfg.accumulation_samples = renderer->getTargetAccumulationFrames();
+                if (args.hr_cfg.accumulation_samples == 0)
+                    args.hr_cfg.accumulation_samples = 60;
+                if (auto texture = renderEngine->renderFrames(args.hr_cfg);
+                    (texture != nullptr && export_texture(texture.get(), args.screenshot_output_file))) {
+                    texture = {};
+                } else {
+                    Logger(Error) << "could not export final render frame to " << args.screenshot_output_file;
+                    return RET_RENDER_ERROR;
+                }
+            }
+
             renderEngine->releaseResources();
         }
 

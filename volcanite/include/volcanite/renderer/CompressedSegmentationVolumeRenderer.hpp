@@ -280,7 +280,6 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
                                                                         std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value())
                                                                         .count()) /
                                                 1000000.f);
-                m_last_frame_start_time.reset();
             }
         }
         m_enable_frame_time_tracking = false;

@@ -19,7 +19,6 @@
 #include <vvv/util/util.hpp>
 
 #include "glm/ext/scalar_constants.hpp"
-#include "vvv/util/video_encoding.hpp"
 
 #include <fmt/core.h>
 
@@ -74,7 +73,6 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
 
     // TODO: add behaviour for frame_time_file_out export if it is given. Obtain frame time from renderer, write to array. export frame times + video output file names to *_timings.txt in the end.
 
-    int video_frames; ///< how many frames to render. 0: exit when the camera file reached its end
     // pre-recorded camera path playback
     std::optional<std::ifstream> m_record_in = {};
     if (!cfg.record_file_in.empty()) {
@@ -82,14 +80,9 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         if (!m_record_in->is_open()) {
             throw std::runtime_error("could not open recording input file " + cfg.record_file_in);
         }
-        video_frames = 0;
-    }
-    // rendering video images but no camera playback file is specified: animate camera
-    else {
-        video_frames = cfg.video_frames;
     }
 
-    Logger(Info) << "rendering " << (video_frames == 0u ? (" camera poses from " + cfg.record_file_in) : (std::to_string(video_frames) + " frame(s)"))
+    Logger(Info) << "rendering " << (!cfg.record_file_in.empty() ? (" camera poses from " + cfg.record_file_in) : (std::to_string(cfg.video_frames) + " frame(s)"))
                  << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
 
     // TODO: replace headless camera animation with real parameter animation class that operates with the GUIInterface
@@ -104,7 +97,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         auto camera = getCamera();
         anim.roty_0 = anim.roty_1 = camera->rotation_y;
         anim.dist_0 = anim.dist_1 = camera->orbital_radius;
-        if (video_frames > 1) {
+        if (cfg.video_frames > 1) {
             anim.roty_0 = camera->rotation_y + (cfg.cam_rot_start * glm::pi<float>() / 180.f);
             anim.roty_1 = camera->rotation_y + (cfg.cam_rot_end * glm::pi<float>() / 180.f);
             anim.dist_0 = glm::max(0.001f, camera->orbital_radius + cfg.cam_zoom_start);
@@ -115,10 +108,9 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     RendererOutput rendererOutput = {nullptr, {}};
     size_t frame_idx = 0u;
     MiniTimer timer;
-    m_renderer->startFrameTimeTracking();
     // either render all camera poses from the record_in file or render video_frames images with
     // accumulation_samples each. he camera is rotated around the Y axis after each camera_auto_rotate_frame
-    for (frame_idx = 0u; (m_record_in.has_value() && !m_record_in->eof()) || frame_idx < video_frames; frame_idx++) {
+    for (frame_idx = 0u; (m_record_in.has_value() && !m_record_in->eof()) || frame_idx < cfg.video_frames; frame_idx++) {
         if (m_record_in.has_value()) {
             getCamera()->readFrom(m_record_in.value());
             if (m_record_in->eof()) {
@@ -129,11 +121,11 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
             if (m_record_in->fail()) {
                 throw std::runtime_error("Error reading camera pose from " + cfg.record_file_in);
             }
-        } else if (video_frames > 0) {
+        } else if (cfg.video_frames > 0) {
             // if an automated video is rendered, animate the parameters based on the config
             Camera *const camera = getCamera();
 
-            float v = glm::clamp((static_cast<float>(frame_idx) / static_cast<float>(video_frames) - cfg.edge_start) / (cfg.edge_end - cfg.edge_start), 0.f, 1.f);
+            float v = glm::clamp((static_cast<float>(frame_idx) / static_cast<float>(cfg.video_frames) - cfg.edge_start) / (cfg.edge_end - cfg.edge_start), 0.f, 1.f);
             switch (cfg.interpolation) {
             case HeadlessRenderingConfig::Interpolant::Smooth:
                 v = glm::smoothstep(0.f, 1.f, v);
@@ -155,7 +147,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
 
         // render one frame after the other = wait for the last renderingComplete to finish
         for (size_t accumulation_idx = 0; accumulation_idx < cfg.accumulation_samples; accumulation_idx++) {
-            rendererOutput = renderFrame({rendererOutput.renderingComplete});
+            rendererOutput = renderFrame(rendererOutput.renderingComplete);
         }
 
         if (!cfg.video_fmt_file_out.empty()) {
@@ -167,7 +159,9 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         }
     }
 
+    // stop the frame time tracking here with an awaitable (to get the last timing)
     m_renderer->stopFrameTimeTracking(rendererOutput.renderingComplete);
+
     const double endTime = timer.elapsed();
     const double frame_time = endTime / static_cast<double>((frame_idx * cfg.accumulation_samples));
 
@@ -190,34 +184,18 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     },
                                                   {.queueFamily = rendererOutput.queueFamilyIndex, .await = rendererOutput.renderingComplete})});
 
-    // export rendering time for each frame to a .csv file
-    if (!cfg.frame_time_file_out.empty()) {
-        if (auto frame_time_file = std::ofstream(cfg.frame_time_file_out);
-            frame_time_file.is_open()) {
-            // for more detailed frame timings: csv_utils::csv_export
-            for (const float &v : m_renderer->getLastTrackingFrameTimes())
-                frame_time_file << v << "\n";
-            frame_time_file.close();
-        } else {
-            Logger(Warn) << "Could not export frame timings to " << cfg.frame_time_file_out;
-        }
-    }
-
     // export the final frame to the video path
     if (!cfg.video_fmt_file_out.empty()) {
         frame_idx--; // frame_idx is now the number of frames, but the last index is one before
         std::string last_output_image_path = fmt::vformat(cfg.video_fmt_file_out, fmt::make_format_args(frame_idx));
-        Logger(Info) << "exporting screenshot to " << last_output_image_path;
+        Logger(Info, true) << "exporting screenshot to " << last_output_image_path;
         ret_tex->writeFile(last_output_image_path);
 
         // prevent the renderer from screenshotting the frame again, if more frames are rendered
         m_renderer->exportCurrentFrameToImage("");
-
-        // try creating a video from the files using ffmpeg
-        try_ffmpeg_video_encoding(cfg.video_fmt_file_out, cfg.video_out_frame_rate);
     }
 
-    Logger(Info) << "rendering of " << (frame_idx * cfg.accumulation_samples)
+    Logger(Info) << "rendering of " << ((frame_idx + 1) * cfg.accumulation_samples)
                  << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
     return ret_tex;
 }

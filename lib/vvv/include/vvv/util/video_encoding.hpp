@@ -15,6 +15,7 @@
 
 #pragma once
 #include <string>
+#include <vector>
 
 namespace vvv {
 
@@ -29,6 +30,13 @@ void try_ffmpeg_video_encoding(const std::string& video_fmt_file_in, int frame_r
 /// If ffmpeg system calls are not available, the function will have no effect.
 /// @param frame_timing_file must contain an ffmpeg compatible frame image file and timing list
 /// @param video_output_file output video file
-void try_ffmpeg_video_encoding_with_timing(const std::string& frame_timing_file, const std::string &video_output_file = "");
+void try_ffmpeg_video_encoding_with_timing(const std::string& frame_timing_file, const std::string &video_output_file);
+
+/// Performs a system call to the ffmpeg command to encode the input frame files file_names_{frame_index}.type into a video file.
+/// If ffmpeg system calls are not available, the function will have no effect.
+/// @param video_fmt_file_in path template to input image files with * placeholder for the frame index
+/// @param frame_times_ms a vector of render times per frame in [ms] for all rendered frames in order
+/// @param video_output_file output video file
+void try_ffmpeg_video_encoding_with_timing(const std::string& video_fmt_file_in, const std::vector<float> & frame_times_ms, std::string video_output_file = "");
 
 }
