@@ -102,11 +102,10 @@ int volcanite_main(int argc, char *argv[]) {
             Logger(Info) << "volume decompressed to " << args.decompress_export_file;
     }
 
-    if (args.export_stats) {
-        Logger(Info, true) << "export brick statistics...";
-        std::string stats_path = stripFileExtension(args.input_file) + "_brickstats.csv";
-        csv_export(compressedSegmentationVolume->gatherBrickStatistics(), stats_path);
-        Logger(Info) << "export brick statistics to " << stats_path + " done";
+    if (!args.brickstats_file.empty()) {
+        Logger(Info, true) << "export brick statistics to " << args.brickstats_file;
+        csv_export(compressedSegmentationVolume->gatherBrickStatistics(), args.brickstats_file);
+        Logger(Info) << "export brick statistics to " << args.brickstats_file << " done";
     }
 
     if (!args.headless || args.performHeadlessRendering()) {
@@ -142,10 +141,6 @@ int volcanite_main(int argc, char *argv[]) {
             auto renderEngine = HeadlessRendering::create("Volcanite", renderer, std::make_shared<DebugUtilsExt>());
             renderEngine->acquireResources();
             tryImportRenderConfigs(args, renderer);
-            int prev_renderer_target_accumulation_frames = renderer->getTargetAccumulationFrames();
-
-            // TODO: add a cmd arg for frame_time_file_out
-            args.hr_cfg.frame_time_file_out = expandPath("~/vvideo/frame_time_test.csv");
 
             // perform a dry evaluation run first, gathering frame times etc., if required
             if (args.performHeadlessEvaluationPrepass()) {
@@ -157,15 +152,15 @@ int volcanite_main(int argc, char *argv[]) {
                 // the renderEngine stops the frame time tracking
 
                 // export rendering time for each frame to a .csv file if requested
-                if (!args.hr_cfg.frame_time_file_out.empty()) {
-                    if (auto frame_time_file = std::ofstream(args.hr_cfg.frame_time_file_out);
+                if (!args.rendertimes_file.empty()) {
+                    if (auto frame_time_file = std::ofstream(args.rendertimes_file);
                         frame_time_file.is_open()) {
                         // for more detailed frame timings: csv_utils::csv_export
                         for (const float &v : renderer->getLastTrackingFrameTimes())
                             frame_time_file << v << "\n";
                         frame_time_file.close();
                         } else {
-                            Logger(Warn) << "Could not export frame timings to " << args.hr_cfg.frame_time_file_out;
+                            Logger(Warn) << "Could not export frame timings to " << args.rendertimes_file;
                         }
                 }
                 // add new results to evaluation log files
@@ -194,9 +189,11 @@ int volcanite_main(int argc, char *argv[]) {
                     hr_cfg.video_frame_times = &renderer->getLastTrackingFrameTimes();
                 // ensure that the render will converge for at least the number
                 // of requested accumulation frames rendered for each output frame.
+                int prev_renderer_target_accumulation_frames = renderer->getTargetAccumulationFrames();
                 if (renderer->getTargetAccumulationFrames() > 0u && renderer->getTargetAccumulationFrames() < args.hr_cfg.accumulation_samples)
                     renderer->setTargetAccumulationFrames(static_cast<int>(args.hr_cfg.accumulation_samples));
                 renderEngine->renderFrames(hr_cfg);
+                renderer->setTargetAccumulationFrames(prev_renderer_target_accumulation_frames);
 
                 // try creating a video from the files using ffmpeg system calls
                 if (args.hr_cfg.video_out_frame_rate == 0u) {

@@ -223,7 +223,8 @@ struct VolcaniteArgs {
     HeadlessRenderingConfig hr_cfg;              ///< configuration parameters for the automated headless rendering pass
     std::string screenshot_output_file;          ///< png or jpg output file path to export the last frame from headless rendering
     bool run_tests = false;
-    bool export_stats = false;
+    std::string brickstats_file = {};
+    std::string rendertimes_file = {};
     std::vector<std::string> eval_logfiles = {}; ///< files into which evaluation results are exported (with 'append')
     std::string eval_name = {};                  ///< name of the evaluation run that can be accessed in the log file as "{name}"
     bool print_eval_keys = false;                ///< if true, prints all available evaluation log keys to the console on startup
@@ -261,12 +262,12 @@ struct VolcaniteArgs {
     }
 
     [[nodiscard]] bool performHeadlessVideoRendering() const {
-        return !eval_logfiles.empty() || !hr_cfg.video_fmt_file_out.empty() || !hr_cfg.frame_time_file_out.empty();
+        return !eval_logfiles.empty() || !hr_cfg.video_fmt_file_out.empty() || !rendertimes_file.empty();
     }
 
     [[nodiscard]] bool performHeadlessEvaluationPrepass() const {
         // either correct evaluation results are directly required, or a video with "real" frame times should be created
-        return !eval_logfiles.empty() || !hr_cfg.frame_time_file_out.empty()
+        return !eval_logfiles.empty() || !rendertimes_file.empty()
                 || (!hr_cfg.video_fmt_file_out.empty() && hr_cfg.video_out_frame_rate == 0u) || hr_cfg.video_frames < 0;
     }
 
@@ -301,7 +302,8 @@ struct VolcaniteArgs {
             SwitchArg randomAccessArg("", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
             // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
-            SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
+            ValueArg<std::string> brickStatsArg("", "brickstats-logfile", "File into which statistics per brick are exported", false, "", "file", cmd);
+            ValueArg<std::string> renderTimesArg("", "timings-logfile", "File into which frame render timings [ms] are exported", false, "", "file", cmd);
             ValueArg<std::string> evalLogFilesArg("", "eval-logfiles", "Comma separated files into which evaluation results are appended.", false, "", "file", cmd);
             ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"{name}\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
             SwitchArg evalPrintArg("", "eval-print-keys", "Print all available evaluation keys to the console and exit.", cmd);
@@ -569,7 +571,8 @@ struct VolcaniteArgs {
                 }
                 va.run_tests = testArg.getValue();
             }
-            va.export_stats = statsArg.getValue();
+            va.brickstats_file = expandPath(brickStatsArg.getValue());
+            va.rendertimes_file = expandPath(renderTimesArg.getValue());
             std::string comma_separated_logfiles = evalLogFilesArg.getValue();
             va.eval_logfiles.clear();
             for (const auto &logfile : comma_separated_logfiles | std::views::split(',') | std::views::transform([](const auto &&range) -> std::string {

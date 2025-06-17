@@ -42,11 +42,10 @@ int volcanite_main(int argc, char *argv[]) {
         return RET_NOT_SUPPORTED;
     }
 
-    if (args.export_stats) {
-        Logger(Info, true) << "export brick statistics...";
-        std::string stats_path = stripFileExtension(args.input_file) + "_brickstats.csv";
-        csv_export(compressedSegmentationVolume->gatherBrickStatistics(), stats_path);
-        Logger(Info) << "export brick statistics to " << stats_path + " done";
+    if (!args.brickstats_file.empty()) {
+        Logger(Info, true) << "export brick statistics to " << args.brickstats_file;
+        csv_export(compressedSegmentationVolume->gatherBrickStatistics(), args.brickstats_file);
+        Logger(Info) << "export brick statistics to " << args.brickstats_file + " done";
     }
 
     // possibly separate the detail level-of-detail in the csgv if detail streaming is requested

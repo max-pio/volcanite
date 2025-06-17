@@ -351,8 +351,8 @@ class CompSegVolHandler {
                     }
 
                     if (cfg.export_stats_per_chunk) {
-                        Logger(Debug, true) << "export brick statistics...";
                         std::string stats_path = csgv_path.substr(0, csgv_path.find_last_of('.')) + "_brickstats.csv";
+                        Logger(Debug, true) << "export brick statistics to " << stats_path;
                         csv_export(csgv->gatherBrickStatistics(), stats_path);
                         Logger(Debug) << "export brick statistics to " << stats_path + " done";
                     }
