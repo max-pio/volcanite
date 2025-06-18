@@ -770,11 +770,13 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     shader_defines.emplace_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if (getCtx()->getWsi())
-        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), m_queue_family_index, shader_defines,
-                                                        m_compressed_segmentation_volume->isUsingRandomAccess(), m_cache_mode == CACHE_BRICKS);
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), m_queue_family_index,
+            PassCompSegVolRenderCfg{.shader_defines=shader_defines, .parallel_decode=m_compressed_segmentation_volume->isUsingRandomAccess(),
+             .enable_cache_stages=(m_cache_mode == CACHE_BRICKS)});
     else
-        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, m_queue_family_index, shader_defines,
-                                                        m_compressed_segmentation_volume->isUsingRandomAccess(), m_cache_mode == CACHE_BRICKS);
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, m_queue_family_index,
+            PassCompSegVolRenderCfg{.shader_defines=shader_defines, .parallel_decode=m_compressed_segmentation_volume->isUsingRandomAccess(),
+             .enable_cache_stages=(m_cache_mode == CACHE_BRICKS)});
     if (!m_additional_shader_defs.empty())
         shader_defines.emplace_back(m_additional_shader_defs);
 

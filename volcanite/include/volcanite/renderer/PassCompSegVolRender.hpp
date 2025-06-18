@@ -27,6 +27,15 @@ using namespace vvv;
 
 namespace volcanite {
 
+struct PassCompSegVolRenderCfg {
+    std::vector<std::string> shader_defines = {};
+    bool parallel_decode = false;
+    bool enable_cache_stages = true;
+    bool enable_gpu_timing = true;
+    vk::ImageUsageFlags output_image_usage = {};
+    const std::string &label = "PassCompSegVolRender";
+};
+
 class PassCompSegVolRender : public PassCompute {
 
   public:
@@ -42,11 +51,10 @@ class PassCompSegVolRender : public PassCompute {
     };
 
     PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering> &multiBuffering, uint32_t queueFamilyIndex,
-                         std::vector<std::string> shaderDefines = {}, bool parallel_decode = false, bool enable_cache_stages = true,
-                         vk::ImageUsageFlags outputImageUsage = {}, const std::string &label = "PassCompSegVolRender")
-        : PassCompute(ctx, label, multiBuffering, queueFamilyIndex),
-          WithMultiBuffering(multiBuffering), WithGpuContext(ctx), m_shader_defines(std::move(shaderDefines)),
-          m_parallel_decode(parallel_decode), m_enable_cache_stages(enable_cache_stages) {}
+                            const PassCompSegVolRenderCfg cfg)
+        : WithMultiBuffering(multiBuffering),
+          WithGpuContext(ctx), PassCompute(ctx, cfg.label, multiBuffering, queueFamilyIndex), m_shader_defines(cfg.shader_defines),
+          m_parallel_decode(cfg.parallel_decode), m_enable_cache_stages(cfg.enable_cache_stages) {}
 
     AwaitableHandle execute(AwaitableList awaitBeforeExecution = {},
                             BinaryAwaitableList awaitBinaryAwaitableList = {},
