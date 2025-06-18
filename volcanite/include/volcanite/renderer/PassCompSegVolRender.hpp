@@ -31,7 +31,7 @@ struct PassCompSegVolRenderCfg {
     std::vector<std::string> shader_defines = {};
     bool parallel_decode = false;
     bool enable_cache_stages = true;
-    bool enable_gpu_timing = true;
+    bool try_enable_gpu_timing = true;                  ///< enables GPU timing query support if possible. Check success with isGPUTimingAvailable().
     vk::ImageUsageFlags output_image_usage = {};
     const std::string &label = "PassCompSegVolRender";
 };
@@ -50,11 +50,27 @@ class PassCompSegVolRender : public PassCompute {
         RENDERING_DUMMY = 7
     };
 
+    enum TimingStageMS {
+        CACHE_MANAGE_MS = 0,
+        DECOMPRESS_MS = 1,
+        RENDERING_MS = 2,
+        POSTPROCESS_MS = 3,
+    };
+
     PassCompSegVolRender(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering> &multiBuffering, uint32_t queueFamilyIndex,
-                            const PassCompSegVolRenderCfg cfg)
+                         const PassCompSegVolRenderCfg &cfg)
         : WithMultiBuffering(multiBuffering),
           WithGpuContext(ctx), PassCompute(ctx, cfg.label, multiBuffering, queueFamilyIndex), m_shader_defines(cfg.shader_defines),
-          m_parallel_decode(cfg.parallel_decode), m_enable_cache_stages(cfg.enable_cache_stages) {}
+          m_parallel_decode(cfg.parallel_decode), m_enable_cache_stages(cfg.enable_cache_stages), m_enable_gpu_timing(cfg.try_enable_gpu_timing) {
+
+        if (m_enable_gpu_timing)
+            initializeGPUTimingQueries();
+    }
+
+    ~PassCompSegVolRender() override {
+        if (m_timestamp_query_pool)
+            VK_DEVICE_DESTROY(getCtx()->getDevice(), m_timestamp_query_pool);
+    }
 
     AwaitableHandle execute(AwaitableList awaitBeforeExecution = {},
                             BinaryAwaitableList awaitBinaryAwaitableList = {},
@@ -85,6 +101,21 @@ class PassCompSegVolRender : public PassCompute {
     void setCacheStagesEnabled(bool enable) { m_enable_cache_stages = enable; }
     [[nodiscard]] bool getCacheStagesEnabled() const { return m_enable_cache_stages; }
 
+    // GPU stage timing queries --------------
+    [[nodiscard]] bool isFrameTimeTrackingAvailable() const { return m_enable_gpu_timing; }
+
+    /// Resets the GPU frame time tracking results and starts timing the following frames until stopFrameTimeTracking() is called.
+    void startFrameTimeTracking();
+
+    /// Returns either a vector to the last tracking results or an empty vector if no tracking was previously carried out.
+    /// Starting a new frame time tracking invalidates the reference.
+    /// Will throw an exception if frame time tracking is currently active.
+    [[nodiscard]] const std::vector<glm::vec4> &getLastFrameTimeTrackingResults() const;
+
+    /// Waits for awaitLastFrameFinished and measures one last set of GPU stage timings.
+    /// @returns the GPU stage (TimingStageMS) timings in [ms] for each frame between startFrameTimeTracking() and the last frame (execute) submitted for rendering.
+    const std::vector<glm::vec4> &stopFrameTimeTracking(const std::optional<AwaitableList> &awaitLastFrameFinished);
+
   protected:
     struct PushConstants {
         uint32_t denoising_iteration; // denoising iteration variable for ping pong svgf-buffer
@@ -100,13 +131,35 @@ class PassCompSegVolRender : public PassCompute {
     }
     void executeCommands(vk::CommandBuffer commandBuffer, CSGVRenderStage stage);
 
+    // GPU stage timing queries --------------
+    /// Tries to setup GPU timing queries. If this fails, m_enable_gpu_timing is set to false.
+    /// @returns if the timing query setup was successful
+    bool initializeGPUTimingQueries();
+
+    void startTimingQuery(const vk::CommandBuffer &command_buffer, TimingStageMS stage);
+    void stopTimingQuery(const vk::CommandBuffer &command_buffer, TimingStageMS stage) const;
+
+    /// Queries the GPU stage timings of the last executed frame and appends them to the m_frame_gpu_timings vector.
+    /// Must be called after the last submitted frame finished all GPU work but before submitting the next frame.
+    void readNextGPUTimings();
+
     /// work group sizes per stage
     vk::Extent3D m_work_group_sizes[8] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}};
-    uint32_t m_render_update_flags = 0u; /// among others: if the GPU cache reset should be triggered on the next call
+    uint32_t m_render_update_flags = 0u;                ///< among others: if the GPU cache reset should be triggered on the next call
     uint32_t m_atrous_iterations = 1u;
-    const std::vector<std::string> m_shader_defines; /// defines that are passed on to shader compilation
-    bool m_parallel_decode = false;                  /// if decompression is parallelized within one brick
-    bool m_enable_cache_stages = true;               /// if the cache provision, assign, and decompress stages are executed. only required when caching full bricks.
+    const std::vector<std::string> m_shader_defines;    ///< defines that are passed on to shader compilation
+    bool m_parallel_decode = false;                     ///< if decompression is parallelized within one brick
+    bool m_enable_cache_stages = true;                  ///< if the cache provision, assign, and decompress stages are executed. only required when caching full bricks.
+
+    // GPU timing measurements
+    bool m_enable_gpu_timing = false;
+    bool m_timing_active = false;
+    uint32_t m_timing_active_stage_bits = 0u;           ///< bit (1 << TimingStageMS) == 1 <=> a time stamp query for this stage was submitted in the previous frame
+    uint32_t m_timing_frame = 0u;
+    static constexpr uint32_t GPU_TIMINGS_COUNT = 8u;   ///< twice the number of durations computed per frame (one start and one end point).
+    std::vector<glm::vec4> m_frame_gpu_timings = {};    ///< per frame GPU durations [ms] of TimingStageMS stages: cache management, brick decoding, rendering, post-processing
+    vk::QueryPool m_timestamp_query_pool = nullptr;
+    float m_timestamp_period = 0.f;
 };
 
 } // namespace volcanite

@@ -137,13 +137,12 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         m_pmaterial_reset = true;
     }
 
-    // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts
+    // wait for the previous  frame to finish execution (which will also mean that the previous upload of the detail starts
     // finished). Times out after a certain number of seconds and throws an exception.
     // Buffer upload synchronization is handled in PassCompSegVolRender
     getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 60 * 1000000000ull);
 
-    // track timing of the last frame
-    // TODO: renderFrame and thus the final timing finish will not be called after the last frame in HeadlessRendering
+    // track timing of the previous frame (CPU timings)
     if (m_enable_frame_time_tracking && m_last_frame_start_time.has_value()) {
         m_last_frame_times.emplace_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                                                 std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value())
@@ -169,12 +168,13 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     }
     m_accum_do_step = false;
 
-    // time tracking start (on host side to consider semaphores, CPU work as well, not just the GPU render times)
-    if (m_enable_frame_time_tracking)
-        m_last_frame_start_time = std::chrono::high_resolution_clock::now();
-
     // set render update flags to denote which parameter sets changed, and which render stages have to be executed
     updateRenderUpdateFlags();
+
+    // time tracking start (on host side to consider semaphores, CPU work as well, not just the GPU render times)
+    // only track timing if the render pass is executed at all
+    if (m_enable_frame_time_tracking && (m_render_update_flags & (UPDATE_RENDER_FRAME | UPDATE_PRESOLVE)))
+        m_last_frame_start_time = std::chrono::high_resolution_clock::now();
 
     // download GPU statistics information, i.e. the cache occupancy to trigger cache hard resets when it is full
     static constexpr uint32_t gpu_stats_download_interval = 1u;
@@ -771,12 +771,10 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if (getCtx()->getWsi())
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), m_queue_family_index,
-            PassCompSegVolRenderCfg{.shader_defines=shader_defines, .parallel_decode=m_compressed_segmentation_volume->isUsingRandomAccess(),
-             .enable_cache_stages=(m_cache_mode == CACHE_BRICKS)});
+                                                        PassCompSegVolRenderCfg{.shader_defines = shader_defines, .parallel_decode = m_compressed_segmentation_volume->isUsingRandomAccess(), .enable_cache_stages = (m_cache_mode == CACHE_BRICKS), .try_enable_gpu_timing = true});
     else
         m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, m_queue_family_index,
-            PassCompSegVolRenderCfg{.shader_defines=shader_defines, .parallel_decode=m_compressed_segmentation_volume->isUsingRandomAccess(),
-             .enable_cache_stages=(m_cache_mode == CACHE_BRICKS)});
+                                                        PassCompSegVolRenderCfg{.shader_defines = shader_defines, .parallel_decode = m_compressed_segmentation_volume->isUsingRandomAccess(), .enable_cache_stages = (m_cache_mode == CACHE_BRICKS), .try_enable_gpu_timing = true});
     if (!m_additional_shader_defs.empty())
         shader_defines.emplace_back(m_additional_shader_defs);
 
@@ -791,7 +789,7 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         std::chrono::high_resolution_clock::now().time_since_epoch().count());
     m_pcache_reset = true;
     m_pmaterial_reset = true;
-    m_accumulated_frames = 0;
+    m_accumulated_frames = 0u;
     m_frame = 0u;
 
     // update all bindings (if buffers were already created)
@@ -885,7 +883,7 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
     // trigger a temporal accumulation flush and force parameter updates
     m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
         std::chrono::high_resolution_clock::now().time_since_epoch().count());
-    m_accumulated_frames = 0;
+    m_accumulated_frames = 0u;
     m_frame = 0u;
 }
 
@@ -942,22 +940,34 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_factor_ambient)
     HASHP(m_light_intensity)
     HASHP(m_global_illumination_enabled)
-    HASHP(m_shadow_pathtracing_ratio) HASHP(m_light_direction)
-        HASHP(m_ambient_occlusion_dist_strength) HASHP(m_envmap_enabled) HASHP(m_max_path_length)
-        // volume transformations
-        HASHP(m_voxel_size) HASHP(m_bboxMin) HASHP(m_bboxMax) HASHP(m_axis_transpose_mat) HASHP(m_axis_flip[0])
-            HASHP(m_axis_flip[1]) HASHP(m_axis_flip[2])
-        // HASHP(m_subblock_start) HASHP(m_subblock_size) HASHP(m_subblock_enabled)
-        // general rendering config
-        HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_max_request_path_length_pow2) HASHP(m_blue_noise) HASHP(m_max_steps)
-        // request limitation
-        // TODO: should not reset frame accumulation. Right now the uniforms are always uploaded always at UPDATE_RENDER_FRAME
-        //    HASHP(m_req_limit.area_size)
-        //    if (m_req_limit.area_size > 0) {
-        //        HASHP(m_req_limit.area_pos) HASHP(m_req_limit.area_min_pixel) HASHP(m_req_limit.spp_delta)
-        //    }
-        // debug views and flags
-        const uint32_t render_debug_bits = m_debug_vis_flags & (VDEB_MODEL_SPACE_BIT | VDEB_LOD_BIT | VDEB_EMPTY_SPACE_BIT | VDEB_CACHE_VOXEL_BIT | VDEB_BRICK_IDX_BIT | VDEB_STATS_DOWNLOAD_BIT);
+    HASHP(m_shadow_pathtracing_ratio)
+    HASHP(m_light_direction)
+    HASHP(m_ambient_occlusion_dist_strength)
+    HASHP(m_envmap_enabled)
+    HASHP(m_max_path_length)
+    // volume transformations
+    HASHP(m_voxel_size)
+    HASHP(m_bboxMin)
+    HASHP(m_bboxMax)
+    HASHP(m_axis_transpose_mat)
+    HASHP(m_axis_flip[0])
+    HASHP(m_axis_flip[1])
+    HASHP(m_axis_flip[2])
+    // HASHP(m_subblock_start) HASHP(m_subblock_size) HASHP(m_subblock_enabled)
+    // general rendering config
+    HASHP(m_lod_bias)
+    HASHP(m_max_inv_lod)
+    HASHP(m_max_request_path_length_pow2)
+    HASHP(m_blue_noise)
+    HASHP(m_max_steps)
+    // request limitation
+    // TODO: should not reset frame accumulation. Right now the uniforms are always uploaded always at UPDATE_RENDER_FRAME
+    //    HASHP(m_req_limit.area_size)
+    //    if (m_req_limit.area_size > 0) {
+    //        HASHP(m_req_limit.area_pos) HASHP(m_req_limit.area_min_pixel) HASHP(m_req_limit.spp_delta)
+    //    }
+    // debug views and flags
+    const uint32_t render_debug_bits = m_debug_vis_flags & (VDEB_MODEL_SPACE_BIT | VDEB_LOD_BIT | VDEB_EMPTY_SPACE_BIT | VDEB_CACHE_VOXEL_BIT | VDEB_BRICK_IDX_BIT | VDEB_STATS_DOWNLOAD_BIT);
     HASHP(render_debug_bits)
     if (new_hash != m_prender_hash) {
         m_render_update_flags |= UPDATE_PRENDER;
@@ -977,11 +987,18 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_background_color_b)
     HASHP(m_tonemap_enabled)
     HASHP(m_exposure)
-    HASHP(m_brightness) HASHP(m_contrast) HASHP(m_gamma)
-        HASHP(m_atrous_iterations)
-            HASHP(m_denoising_enabled) HASHP(m_atrous_enabled) HASHP(m_depth_sigma) HASHP(m_denoise_fade_sigma)
-                HASHP(m_denoise_filter_kernel_size) HASHP(m_denoise_fade_enabled) HASHP(m_mouse_pos)
-                    const uint32_t resolve_debug_bits = m_debug_vis_flags & (VDEB_NO_POSTPROCESS_BIT | VDEB_CACHE_ARRAY_BIT | VDEB_EMPTY_SPACE_ARRAY_BIT | VDEB_SPP_BIT | VDEB_G_BUFFER_BIT | VDEB_ENVMAP_BIT | VDEB_REQUEST_LIMIT_BIT | VDEB_BRICK_INFO_BIT);
+    HASHP(m_brightness)
+    HASHP(m_contrast)
+    HASHP(m_gamma)
+    HASHP(m_atrous_iterations)
+    HASHP(m_denoising_enabled)
+    HASHP(m_atrous_enabled)
+    HASHP(m_depth_sigma)
+    HASHP(m_denoise_fade_sigma)
+    HASHP(m_denoise_filter_kernel_size)
+    HASHP(m_denoise_fade_enabled)
+    HASHP(m_mouse_pos)
+    const uint32_t resolve_debug_bits = m_debug_vis_flags & (VDEB_NO_POSTPROCESS_BIT | VDEB_CACHE_ARRAY_BIT | VDEB_EMPTY_SPACE_ARRAY_BIT | VDEB_SPP_BIT | VDEB_G_BUFFER_BIT | VDEB_ENVMAP_BIT | VDEB_REQUEST_LIMIT_BIT | VDEB_BRICK_INFO_BIT);
     HASHP(resolve_debug_bits)
     if (new_hash != m_presolve_hash) {
         m_render_update_flags |= UPDATE_PRESOLVE;
@@ -1728,7 +1745,7 @@ void CompressedSegmentationVolumeRenderer::printGPUMemoryUsage() {
 }
 
 CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluationResults() {
-    CSGVRenderEvaluationResults results;
+    CSGVRenderEvaluationResults results = {};
 
     // obtain GPU memory consumption
     if (m_inpaintedOutColor != nullptr) {
@@ -1739,13 +1756,13 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
             for (const auto &t : *m_inpaintedOutColor)
                 textures += t->memorySize();
         }
-        results.mem_framebuffers_bytes = textures;
+        results.mem_framebuffers_bytes = static_cast<double>(textures);
 
         size_t uniform_buffers = 0ul;
         if (m_urender_info) {
             uniform_buffers += m_urender_info->getByteSize() + m_usegmented_volume_info->getByteSize() + m_uresolve_info->getByteSize() + m_ucamera_info->getByteSize();
         }
-        results.mem_ubos_bytes = uniform_buffers;
+        results.mem_ubos_bytes = static_cast<double>(uniform_buffers);
 
         size_t materials = 0ul;
         if (m_materials_buffer) {
@@ -1755,14 +1772,14 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
                     materials += t->texture().memorySize();
             }
         }
-        results.mem_materials_bytes = materials;
+        results.mem_materials_bytes = static_cast<double>(materials);
 
         size_t cache = 0ul;
         if (m_cache_buffer) {
             cache += m_cache_info_buffer->getByteSize() + m_cache_buffer->getByteSize() + m_free_stack_buffer->getByteSize() + m_assign_info_buffer->getByteSize() + (m_detail_requests_buffer ? m_detail_requests_buffer->getByteSize() : 0ul);
         }
-        results.mem_cache_bytes = cache;
-        results.mem_cache_used_bytes = m_last_gpu_stats.used_cache_base_elements * m_cache_base_element_uints * sizeof(uint32_t);
+        results.mem_cache_bytes = static_cast<double>(cache);
+        results.mem_cache_used_bytes = static_cast<double>(m_last_gpu_stats.used_cache_base_elements * m_cache_base_element_uints * sizeof(uint32_t));
         results.mem_cache_fill_rate = getCacheFillRate();
         results.min_samples_per_pixel = static_cast<int>(m_last_gpu_stats.min_spp_and_pixel >> 48u);
         results.max_samples_per_pixel = static_cast<int>(m_last_gpu_stats.max_spp_and_pixel >> 48u);
@@ -1771,7 +1788,7 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
         if (m_empty_space_buffer) {
             empty_space = m_empty_space_buffer->getByteSize();
         }
-        results.mem_empty_space_bytes = empty_space;
+        results.mem_empty_space_bytes = static_cast<double>(empty_space);
 
         size_t encoding = 0ul;
         if (m_brick_starts_buffer) {
@@ -1783,8 +1800,8 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
                 encoding += m_detail_buffer->getByteSize() + m_detail_starts_buffer->getByteSize();
             }
         }
-        results.mem_encoding_bytes = encoding;
-        results.mem_total_bytes = getMemoryHeapBudgetAndUsage(*getCtx()).second;
+        results.mem_encoding_bytes = static_cast<double>(encoding);
+        results.mem_total_bytes = static_cast<double>(getMemoryHeapBudgetAndUsage(*getCtx()).second);
     }
 
     // frame times are only available if tracking was enabled via setEvalTracking(true)
@@ -1793,7 +1810,7 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
     }
     if (!m_last_frame_times.empty()) {
         double total = 0.f;
-        double min = std::numeric_limits<float>::max();
+        double min = std::numeric_limits<double>::max();
         double m1 = 0.;
         double m2 = 0.;
         double max = -1.;
@@ -1807,22 +1824,57 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
             m2 += ms * ms;
             total += ms;
         }
-        for (int i = m_last_frame_times.size(); i < 16; i++)
-            results.frame_ms[i] = 0.;
-        auto frame_time_cpy = m_last_frame_times;
-        nth_element(frame_time_cpy.begin(),
-                    frame_time_cpy.begin() + (frame_time_cpy.size() / 2),
-                    frame_time_cpy.end());
+        for (int i = static_cast<int>(m_last_frame_times.size()); i < 16; i++)
+            results.frame_ms[i] = 0.; // set non-rendered frames to 0
+
         results.frame_min_ms = min;
-        results.frame_avg_ms = m1 / m_last_frame_times.size();
-        results.frame_sdv_ms = std::sqrt((m2 / m_last_frame_times.size()) - results.frame_avg_ms * results.frame_avg_ms);
-        results.frame_med_ms = *(frame_time_cpy.begin() + (frame_time_cpy.size() / 2));
+        results.frame_avg_ms = m1 / static_cast<double>(m_last_frame_times.size());
+        results.frame_sdv_ms = std::sqrt((m2 / static_cast<double>(m_last_frame_times.size())) - results.frame_avg_ms * results.frame_avg_ms);
         results.frame_max_ms = max;
         results.total_ms = total;
-        results.accumulated_frames = m_last_frame_times.size();
+        results.accumulated_frames = static_cast<int>(m_last_frame_times.size());
+        // compute median
+        auto frame_time_cpy = m_last_frame_times;
+        nth_element(frame_time_cpy.begin(), frame_time_cpy.begin() + static_cast<long>(frame_time_cpy.size() / 2), frame_time_cpy.end());
+        results.frame_med_ms = *(frame_time_cpy.begin() + static_cast<long>(frame_time_cpy.size() / 2));
+
         Logger(Debug) << "CSGV rendering evaluation: "
                       << results.frame_min_ms << " / " << results.frame_avg_ms << " / " << results.frame_max_ms
                       << " [ms/frame] (min/avg/max) | " << results.accumulated_frames << " total frames";
+    }
+    if (const std::vector<glm::vec4> &last_gpu_frame_times = m_pass->getLastFrameTimeTrackingResults();
+        !last_gpu_frame_times.empty()) {
+
+        auto total = glm::dvec4{0., 0., 0., 0.};
+        auto min = glm::dvec4{std::numeric_limits<double>::max()};
+        auto m1 = glm::dvec4{0.};
+        auto m2 = glm::dvec4{0.};
+        auto max = glm::dvec4{-1.};
+        for (int i = 0; i < last_gpu_frame_times.size(); i++) {
+            const auto &ms = last_gpu_frame_times[i];
+            if (i < 16)
+                results.frame_gpu_ms[i] = ms;
+            min = glm::min(min, glm::dvec4(ms));
+            max = glm::max(max, glm::dvec4(ms));
+            m1 += ms;
+            m2 += ms * ms;
+            total += ms;
+        }
+        for (int i = static_cast<int>(last_gpu_frame_times.size()); i < 16; i++)
+            results.frame_gpu_ms[i] = glm::dvec4(0.); // set non-rendered frames to 0
+
+        results.frame_gpu_min_ms = min;
+        results.frame_gpu_avg_ms = m1 / glm::dvec4(static_cast<double>(last_gpu_frame_times.size()));
+        results.frame_gpu_sdv_ms = glm::sqrt((m2 / glm::dvec4(static_cast<double>(last_gpu_frame_times.size()))) - results.frame_gpu_avg_ms * results.frame_gpu_avg_ms);
+        results.frame_gpu_max_ms = max;
+        // compute gpu stage timing medians
+        std::vector<float> frame_time_cpy(last_gpu_frame_times.size());
+        for (int stage = 0; stage < 4; stage++) {
+            int n = 0;
+            std::generate(frame_time_cpy.begin(), frame_time_cpy.end(), [&n, &last_gpu_frame_times, &stage]() { return last_gpu_frame_times[n++][stage]; });
+            nth_element(frame_time_cpy.begin(), frame_time_cpy.begin() + static_cast<long>(frame_time_cpy.size() / 2), frame_time_cpy.end());
+            results.frame_gpu_med_ms[stage] = *(frame_time_cpy.begin() + static_cast<long>(frame_time_cpy.size() / 2));
+        }
     }
     return results;
 }

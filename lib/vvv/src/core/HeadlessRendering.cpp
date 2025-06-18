@@ -39,8 +39,6 @@ static void check_vk_result(vk::Result err) { check_vk_result(static_cast<VkResu
 void HeadlessRendering::recreateSwapchain() {
     getDevice().waitIdle();
 
-    // Note: this is conservative: destroy the swapchain and everything that might depend on it
-    // (Speak: Run the destructor up to the swapchain deletion)
     m_renderer->releaseSwapchain();
     m_renderer->initSwapchainResources();
 
@@ -48,6 +46,8 @@ void HeadlessRendering::recreateSwapchain() {
 }
 
 RendererOutput HeadlessRendering::renderFrame(AwaitableList awaitBeforeExecution) {
+    // the "swapchain" does not exist in headless.
+    // But the renderer has to create frame buffer size dependent resources.
     if (m_pendingRecreation)
         recreateSwapchain();
     return m_renderer->renderNextFrame(awaitBeforeExecution, {});
@@ -139,7 +139,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
             Camera *const camera = getCamera();
 
             float v = 0.f;
-            if (cfg.video_frames > 0)   // equidistant interpolation based on frame index
+            if (cfg.video_frames > 0) // equidistant interpolation based on frame index
                 v = static_cast<float>(frame_idx) / static_cast<float>(cfg.video_frames);
             else if (cfg.video_frames < 0) { // "real-time" interpolation based on passed duration
                 if (frame_idx == 0u) {
@@ -150,8 +150,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
                         if (frame_idx >= cfg.video_frame_times->size())
                             break;
                         elapsed_s += cfg.video_frame_times->at(frame_idx - 1u) / 1000.;
-                    }
-                    else {
+                    } else {
                         elapsed_s = timer.elapsed();
                     }
                     if (elapsed_s > static_cast<double>(-cfg.video_frames))
@@ -172,8 +171,11 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
                 break;
             default:;
             }
-            camera->rotation_y = glm::fract(glm::mix(anim.roty_0, anim.roty_1, v) / (2.f * glm::pi<float>())) * (2.f * glm::pi<float>());
-            camera->orbital_radius = glm::mix(anim.dist_0, anim.dist_1, v);
+
+            if (anim.roty_0 != anim.roty_1)
+                camera->rotation_y = glm::fract(glm::mix(anim.roty_0, anim.roty_1, v) / (2.f * glm::pi<float>())) * (2.f * glm::pi<float>());
+            if (anim.dist_0 != anim.dist_1)
+                camera->orbital_radius = glm::mix(anim.dist_0, anim.dist_1, v);
             camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
                                                                                       camera->orbital_radius * glm::cos(camera->rotation_y) * glm::cos(camera->rotation_x),
                                                                                       camera->orbital_radius * glm::sin(camera->rotation_x),
@@ -200,7 +202,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     m_renderer->stopFrameTimeTracking(rendererOutput.renderingComplete);
 
     const double endTime = timer.elapsed();
-    const double frame_time = endTime / static_cast<double>(((frame_idx + 1) * cfg.accumulation_samples));
+    const double frame_time = endTime / static_cast<double>((frame_idx * cfg.accumulation_samples));
 
     // copy the last output texture to a new texture that we can return.
     // this way the original rendering texture could be overwritten or destroyed without affecting the return texture.
@@ -225,6 +227,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     if (!cfg.video_fmt_file_out.empty()) {
         frame_idx--; // frame_idx is now the number of frames, but the last index is one before
         std::string last_output_image_path = fmt::vformat(cfg.video_fmt_file_out, fmt::make_format_args(frame_idx));
+        frame_idx++;
         Logger(Info, true) << "exporting screenshot to " << last_output_image_path;
         ret_tex->writeFile(last_output_image_path);
 
@@ -232,7 +235,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         m_renderer->exportCurrentFrameToImage("");
     }
 
-    Logger(Info) << "rendering of " << ((frame_idx + 1) * cfg.accumulation_samples)
+    Logger(Info) << "rendering of " << (frame_idx * cfg.accumulation_samples)
                  << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
     return ret_tex;
 }
@@ -264,9 +267,8 @@ void HeadlessRendering::destroyQueues() {
 }
 
 void HeadlessRendering::releaseResources() {
-    const auto device = getDevice();
 
-    if (device) {
+    if (const auto device = getDevice()) {
         device.waitIdle();
     }
 

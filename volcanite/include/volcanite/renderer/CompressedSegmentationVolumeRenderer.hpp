@@ -267,26 +267,34 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
         m_enable_frame_time_tracking = true;
         m_last_frame_times.clear();
         m_last_frame_start_time.reset();
+        if (m_pass->isFrameTimeTrackingAvailable())
+            m_pass->startFrameTimeTracking();
     }
     /// Stops the tracking. Should be immediately called after last renderNextFrame. If awaitLastFrameFinished is set,
     /// either to {} or an awaitable list, the method waits for the awaitables to finish and adds a final timing
     /// measurement for the last frame. Query the results with getLastEvaluationResults()
     void stopFrameTimeTracking(std::optional<AwaitableList> awaitLastFrameFinished) override {
-        // if the last frame is rendering, wait for completion and track
-        if (awaitLastFrameFinished.has_value()) {
+        if (!m_enable_frame_time_tracking)
+            return;
+
+        // if the last frame is rendering, wait for completion
+        if (awaitLastFrameFinished.has_value())
             getCtx()->sync->hostWaitOnDevice(awaitLastFrameFinished.value(), 60 * 1000000000ull);
-            if (m_enable_frame_time_tracking && m_last_frame_start_time.has_value()) {
-                m_last_frame_times.emplace_back(static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                                                        std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value())
-                                                                        .count()) /
-                                                1000000.f);
-            }
+
+        if (m_last_frame_start_time.has_value()) {
+            m_last_frame_times.emplace_back(static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                                   std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value())
+                                                                   .count()) /
+                                            1000000.f);
         }
         m_enable_frame_time_tracking = false;
         m_last_frame_start_time.reset();
+        if (m_pass->isFrameTimeTrackingAvailable())
+            m_pass->stopFrameTimeTracking(awaitLastFrameFinished);
     }
 
-    const std::vector<float>& getLastTrackingFrameTimes() { return m_last_frame_times; }
+    const std::vector<float> &getLastTrackingFrameTimes() override { return m_last_frame_times; }
+    const std::vector<glm::vec4> &getLastTrackingFrameTimesGPU() override { return m_pass->getLastFrameTimeTrackingResults(); }
 
     void exportCurrentFrameToImage(std::string image_path) override {
         if (image_path.empty()) {

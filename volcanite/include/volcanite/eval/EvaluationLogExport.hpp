@@ -65,6 +65,12 @@ struct CSGVRenderEvaluationResults {
     double frame_max_ms = -1.;
     double frame_ms[16] = {-1.};
     double total_ms = 0.;
+    glm::dvec4 frame_gpu_min_ms = {-1.,-1.,-1.,-1.};
+    glm::dvec4 frame_gpu_avg_ms = {-1.,-1.,-1.,-1.};
+    glm::dvec4 frame_gpu_sdv_ms = {-1.,-1.,-1.,-1.};
+    glm::dvec4 frame_gpu_med_ms = {-1.,-1.,-1.,-1.};
+    glm::dvec4 frame_gpu_max_ms = {-1.,-1.,-1.,-1.};
+    glm::dvec4 frame_gpu_ms[16] = {{-1.,-1.,-1.,-1.}};
     double mem_framebuffers_bytes = 0.;
     double mem_ubos_bytes = 0.;
     double mem_materials_bytes = 0.;
