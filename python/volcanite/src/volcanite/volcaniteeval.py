@@ -393,8 +393,7 @@ class VolcaniteArg:
         # setup list of .csgv data sets from directory
         if cls.__csgv_directory:
             for file in cls.__csgv_directory.glob('*.csgv'):
-                args_csgv_datasets[file.stem] = cls.arg_csgv_import(file.stem)
-
+                cls.args_csgv_datasets[file.stem] = cls.arg_csgv_import(file.stem)
         
 
     @classmethod
