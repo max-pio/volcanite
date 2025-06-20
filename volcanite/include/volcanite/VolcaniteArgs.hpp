@@ -45,7 +45,7 @@ struct VolcaniteArgs {
         // the video configuration can be a pre-recorded camera path
         if (video_cfg_str.ends_with(".rec")) {
             hr_cfg.record_file_in = expandPathStr(video_cfg_str);
-            // hr_cfg.video_out_frame_rate = 0; // 0: video output should use actual frame timings as frame rate
+            hr_cfg.video_out_frame_rate = 0; // 0: video output should use actual frame timings as frame rate
             hr_cfg.accumulation_samples = 1;    // only one frame per input camera pose from .rec file
             return true;
         }
@@ -261,18 +261,18 @@ struct VolcaniteArgs {
         return !decompress_export_file.empty();
     }
 
-    [[nodiscard]] bool performHeadlessVideoRendering() const {
-        return !eval_logfiles.empty() || !hr_cfg.video_fmt_file_out.empty() || !rendertimes_file.empty();
-    }
-
     [[nodiscard]] bool performHeadlessEvaluationPrepass() const {
         // either correct evaluation results are directly required, or a video with "real" frame times should be created
         return !eval_logfiles.empty() || !rendertimes_file.empty()
                 || (!hr_cfg.video_fmt_file_out.empty() && hr_cfg.video_out_frame_rate == 0u) || hr_cfg.video_frames < 0;
     }
 
+    [[nodiscard]] bool performHeadlessVideoExport() const {
+        return !hr_cfg.video_fmt_file_out.empty();
+    }
+
     [[nodiscard]] bool performHeadlessRendering() const {
-        return performHeadlessVideoRendering() || !screenshot_output_file.empty();
+        return performHeadlessVideoExport() || performHeadlessEvaluationPrepass() || !screenshot_output_file.empty();
     }
 
     static std::optional<VolcaniteArgs> parseArguments(int argc, char *argv[], bool input_volume_required = true) {

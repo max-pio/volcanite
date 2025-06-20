@@ -13,6 +13,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from pathlib import Path
+import os.path
 from time import sleep
 
 import argparse
@@ -23,19 +24,42 @@ import zipfile_deflate64 as zipfile
 from volcanite import converter as vc, converter_chunked as vcc, clouddata as vcd, volcaniteeval as ve
 import numpy as np
 
-def download_file(url: str, directory: Path, file_name: str | None = None, log: bool = True) -> Path:
+def download_file(url: str, directory: Path, file_name: str | None = None, log: bool = True, overwrite: bool = False) -> Path:
+    local_file_path = directory / Path(file_name)
     if log:
-        print(f"Downloading {url} to {directory / Path(file_name)}", end="")
+        print(f"Downloading {url} to {local_file_path}", end="")
     # taken from https://stackoverflow.com/questions/16694907/download-large-file-in-python-with-requests
     if file_name is None:
         file_name = url.split('/')[-1]
     directory.mkdir(parents=True, exist_ok=True)
+    if os.path.isfile(local_file_path) and not overwrite:
+        expected_size = int(requests.head(url).headers.get('Content-Length'))
+        if os.path.getsize(local_file_path) == expected_size:
+            if log:
+                print(" skipped, already exists.")
+            return local_file_path
+        else:
+            if log:
+                print(" (overwrite)", end="")
+
     with requests.get(url, allow_redirects=True, stream=True) as req:
-        with open(directory / Path(file_name), 'wb') as local_file:
+        with open(local_file_path, 'wb') as local_file:
             shutil.copyfileobj(req.raw, local_file)
     if log:
         print(" done.")
-    return directory / Path(file_name)
+    return local_file_path
+
+def download_files(url_fmt: str, _last_chunk: (int, int, int), directory: Path, file_name_fmt: str | None = None,
+                   log: bool = True, overwrite: bool = False) -> Path:
+    _chunk_files = [f"x{x}y{y}z{z}.hdf5" for x in range(0, _last_chunk[0] + 1) for y in range(0, _last_chunk[1] + 1)
+                                                for z in range(0, _last_chunk[2] + 1)]
+    if file_name_fmt is None:
+        file_name_fmt = Path(url_fmt).name
+    for z in range(0, _last_chunk[2] + 1):
+        for y in range(0, _last_chunk[1] + 1):
+            for x in range(0, _last_chunk[0] + 1):
+                download_file(url_fmt.format(x, y, z), directory, file_name_fmt.format(x, y , z), log, overwrite)
+    return _last_chunk
 
 def write_citation(directory: Path, name: str) -> None:
     """"Downloads a license for the volume [name] and writes a citation and this license in [directory]/[name].txt"""
@@ -225,7 +249,7 @@ if __name__ == '__main__':
         cur_dir = csgv_directory / Path(name)
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, name)
-            download_file("https://datadryad.org/api/v2/files/1098598/download", cur_dir, "azba.nii.gz")
+            download_file("https://datadryad.org/api/v2/files/1098598/download", cur_dir, "azba.nii.gz", overwrite=args.overwrite)
             vc.convert_volume(cur_dir / "azba.nii.gz", cur_dir / "azba.hdf5")
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
@@ -272,7 +296,7 @@ if __name__ == '__main__':
         cur_dir = csgv_directory / Path(name)
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, name)
-            download_file("https://zenodo.org/records/4587827/files/pa66_volumes.h5", cur_dir, "pa66.h5")
+            download_file("https://zenodo.org/records/4587827/files/pa66_volumes.h5", cur_dir, "pa66.h5", overwrite=args.overwrite)
             vc.write_volume(vc.reshape_memory_order(vc.read_hdf5(cur_dir / "pa66.h5", ['pa66', 'ground_truth']), 'xyz', 'zyx'), cur_dir / "pa66_segm.hdf5")
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
@@ -296,7 +320,7 @@ if __name__ == '__main__':
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, name)
             # data set: Ovules N_428_ds2x
-            download_file("https://osf.io/download/ghpjq/", cur_dir, "N_428_ds2x.h5")
+            download_file("https://osf.io/download/ghpjq/", cur_dir, "N_428_ds2x.h5", overwrite=args.overwrite)
             vc.write_volume(vc.read_volume(cur_dir / "N_428_ds2x.h5", "xyz"), cur_dir / (name + ".hdf5"))
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
@@ -320,8 +344,8 @@ if __name__ == '__main__':
         cur_dir = csgv_directory / Path(name)
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, name)
-            download_file("https://doi.math2market.de/s/oYGLcs8SYkLTFtS/download/data.math2market-2022-02.validation.fiberfind.zip", cur_dir, "griesser2022-validation.zip")
-            
+            download_file("https://doi.math2market.de/s/oYGLcs8SYkLTFtS/download/data.math2market-2022-02.validation.fiberfind.zip", cur_dir, "griesser2022-validation.zip", overwrite=args.overwrite)
+
             # unzip a single data set
             with zipfile.ZipFile(cur_dir / "griesser2022-validation.zip", 'r') as zf:
                 zf.extract("data.math2market-2022-02.validation.fiberfind/FiberFindValidation1/FiberFindVali1_Truth_labeled_2um_32bu_600x600x200.raw", cur_dir)
@@ -354,7 +378,7 @@ if __name__ == '__main__':
     #     cur_dir = csgv_directory / Path(name)
     #     if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
     #         write_citation(csgv_directory, "xtm-battery")
-    #         download_file("https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/505935/Pristine.zip?sequence=5&isAllowed=y", cur_dir, "Pristine.zip")
+    #         download_file("https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/505935/Pristine.zip?sequence=5&isAllowed=y", cur_dir, "Pristine.zip", overwrite=args.overwrite)
     #         with zipfile.ZipFile(cur_dir / "Pristine.zip", 'r') as zf:
     #             zf.extract("Pristine.h5", cur_dir)
     #
@@ -380,7 +404,7 @@ if __name__ == '__main__':
         cur_dir = csgv_directory / Path(name)
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, name)
-            download_file("https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/505935/8Cycles.zip?sequence=9&isAllowed=y", cur_dir, "8Cycles.zip")
+            download_file("https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/505935/8Cycles.zip?sequence=9&isAllowed=y", cur_dir, "8Cycles.zip", overwrite=args.overwrite)
             with zipfile.ZipFile(cur_dir / "8Cycles.zip", 'r') as zf:
                 zf.extract("8Cycles.h5", cur_dir)
 
@@ -406,7 +430,7 @@ if __name__ == '__main__':
         cur_dir = csgv_directory / Path(name)
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, "Motta2019")
-            download_file("https://l4dense2019.brain.mpg.de/webdav/mapped-segmentation-volume/x2y3z2.hdf5", cur_dir, "Motta2019_x2y3z2.hdf5")
+            download_file("https://l4dense2019.brain.mpg.de/webdav/mapped-segmentation-volume/x2y3z2.hdf5", cur_dir, "Motta2019_x2y3z2.hdf5", overwrite=args.overwrite)
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
@@ -430,17 +454,15 @@ if __name__ == '__main__':
             print("----------- Motta2019 -----------")
             name = "Motta2019"
             cur_dir = csgv_directory / Path(name)
-            last_chunk = (5,8,3)
             if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
                 write_citation(csgv_directory, name)
-                motta_chunk_files = [f"{name}_x{x}y{y}z{z}.hdf5" for x in range(0,last_chunk[0]) for y in range(0,last_chunk[1]) for z in range(0,last_chunk[2])]
-                for chunk_file in motta_chunk_files:
-                    download_file("https://l4dense2019.brain.mpg.de/webdav/mapped-segmentation-volume/" + chunk_file, cur_dir, chunk_file)
+                last_chunk = download_files("https://l4dense2019.brain.mpg.de/webdav/mapped-segmentation-volume/x{}y{}z{}.hdf5", (5,8,3), cur_dir, "x{}y{}z{}.hdf5", overwrite=args.overwrite)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                     f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld -b 64"
+                                                     " --cache-palette --cache-size 2048"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
-                                                    f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
+                                                    f" {cur_dir / "x{}y{}z{}.hdf5"}")
 
                 if ret.returncode != 0:
                     print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
@@ -499,7 +521,7 @@ if __name__ == '__main__':
                     shutil.rmtree(cur_dir)
             else:
                 print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
-        
+
 
         if not args.only or args.only.lower() == "griesser2022-sample":
             print("----------- Griesser2022 [nonwoven sample] ----------- ")
@@ -508,8 +530,8 @@ if __name__ == '__main__':
             if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
                 write_citation(csgv_directory, name)
                 # LARGE ONE: will create a single 500 GB raw file
-                download_file("https://doi.math2market.de/s/tYj87SXPgXT26zS/download/data.math2market-2022-02.sample-c.fiberfind.zip", cur_dir, "griesser2022-sample.zip")
-                
+                download_file("https://doi.math2market.de/s/tYj87SXPgXT26zS/download/data.math2market-2022-02.sample-c.fiberfind.zip", cur_dir, "griesser2022-sample.zip", overwrite=args.overwrite)
+
                 # unzip a single data set
                 with zipfile.ZipFile(cur_dir / "griesser2022-sample.zip", 'r') as zf:
                     zf.extract("data.math2market-2022-02.sample-c.fiberfind/FiberFindSampleC_labeled_2.4um_32bu_15363x3960x2112.raw", cur_dir)

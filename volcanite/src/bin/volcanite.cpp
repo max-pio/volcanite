@@ -46,7 +46,7 @@ int export_texture(Texture *tex, const std::string &export_file_path) {
         Logger(Error) << "Render export error: " << e.what();
         return RET_IO_ERROR;
     }
-    return 0;
+    return RET_SUCCESS;
 }
 
 int tryImportRenderConfigs(VolcaniteArgs &args, std::shared_ptr<CompressedSegmentationVolumeRenderer> renderer) {
@@ -142,11 +142,21 @@ int volcanite_main(int argc, char *argv[]) {
             renderEngine->acquireResources();
             tryImportRenderConfigs(args, renderer);
 
+            // ensure that the render will converge for at least the number
+            // of requested accumulation frames rendered for each output frame.
+            int prev_renderer_target_accumulation_frames = renderer->getTargetAccumulationFrames();
+            if (renderer->getTargetAccumulationFrames() > 0u && renderer->getTargetAccumulationFrames() < args.hr_cfg.accumulation_samples)
+                renderer->setTargetAccumulationFrames(static_cast<int>(args.hr_cfg.accumulation_samples));
+
             // perform a dry evaluation run first, gathering frame times etc., if required
             if (args.performHeadlessEvaluationPrepass()) {
                 Logger(Info) << "Rendering Evaluation Pass:";
+
                 auto hr_cfg = args.hr_cfg;
                 hr_cfg.video_fmt_file_out = ""; // disable any video export
+                if (hr_cfg.video_frames < 0)
+                    hr_cfg.video_frame_times = &renderer->getLastTrackingFrameTimes();
+
                 renderer->startFrameTimeTracking();
                 renderEngine->renderFrames(hr_cfg);
                 // the renderEngine stops the frame time tracking
@@ -156,12 +166,26 @@ int volcanite_main(int argc, char *argv[]) {
                     if (auto frame_time_file = std::ofstream(args.rendertimes_file);
                         frame_time_file.is_open()) {
                         // for more detailed frame timings: csv_utils::csv_export
-                        for (const float &v : renderer->getLastTrackingFrameTimes())
-                            frame_time_file << v << "\n";
-                        frame_time_file.close();
-                        } else {
-                            Logger(Warn) << "Could not export frame timings to " << args.rendertimes_file;
+                        const auto &cpu_timings = renderer->getLastTrackingFrameTimes();
+                        const auto &gpu_timings = renderer->getLastTrackingFrameTimesGPU();
+                        if (gpu_timings.empty())
+                            frame_time_file << "Total\n";
+                        else
+                            frame_time_file << "Total,Cache,Decompress,Render,Post-Process\n";
+                        for (int i = 0; i < cpu_timings.size(); ++i) {
+                            frame_time_file << cpu_timings[i]; // total frame (CPU)
+                            if (!gpu_timings.empty()) {
+                                frame_time_file << "," << gpu_timings.at(i)[0]; // cache
+                                frame_time_file << "," << gpu_timings.at(i)[1]; // decompress
+                                frame_time_file << "," << gpu_timings.at(i)[2]; // render
+                                frame_time_file << "," << gpu_timings.at(i)[3]; // post-process
+                            }
+                            frame_time_file << "\n";
                         }
+                        frame_time_file.close();
+                    } else {
+                        Logger(Warn) << "Could not export frame timings to " << args.rendertimes_file;
+                    }
                 }
                 // add new results to evaluation log files
                 if (!args.eval_logfiles.empty()) {
@@ -173,38 +197,35 @@ int volcanite_main(int argc, char *argv[]) {
                                                                      {}, // TODO: add decompression benchmark for evaluation logging
                                                                      renderer->getLastEvaluationResults())) {
                             Logger(Info) << "exported evaluation results to " << eval_logfile;
-                                                                     } else {
-                                                                         Logger(Warn) << "could not export evaluation results to " << eval_logfile;
-                                                                         return RET_IO_ERROR;
-                                                                     }
+                        } else {
+                            Logger(Warn) << "could not export evaluation results to " << eval_logfile;
+                            return RET_IO_ERROR;
+                        }
                     }
                 }
             }
 
             // if a video export is rendered, do a separate pass for it since the frame downloads may affect frame timings
-            if (args.performHeadlessVideoRendering()) {
-                Logger(Info) << "Video Export Pass:";
+            if (args.performHeadlessVideoExport()) {
+                Logger(Info) << "--------------------\nVideo Export Pass:";
                 auto hr_cfg = args.hr_cfg;
                 if (hr_cfg.video_frames < 0)
                     hr_cfg.video_frame_times = &renderer->getLastTrackingFrameTimes();
-                // ensure that the render will converge for at least the number
-                // of requested accumulation frames rendered for each output frame.
-                int prev_renderer_target_accumulation_frames = renderer->getTargetAccumulationFrames();
-                if (renderer->getTargetAccumulationFrames() > 0u && renderer->getTargetAccumulationFrames() < args.hr_cfg.accumulation_samples)
-                    renderer->setTargetAccumulationFrames(static_cast<int>(args.hr_cfg.accumulation_samples));
                 renderEngine->renderFrames(hr_cfg);
-                renderer->setTargetAccumulationFrames(prev_renderer_target_accumulation_frames);
 
                 // try creating a video from the files using ffmpeg system calls
                 if (args.hr_cfg.video_out_frame_rate == 0u) {
                     assert((args.hr_cfg.video_frames < 0 || renderer->getLastTrackingFrameTimes().size() == args.hr_cfg.video_frames) && "missing correct frame time tracking for video frames.");
+                    if (args.hr_cfg.video_frames >= 0)
+                        Logger(Warn) << "Video export with real-time frame rate should be used with animation duration instead of frame count (--video-cfg f{-(duration in seconds)})";
                     try_ffmpeg_video_encoding_with_timing(args.hr_cfg.video_fmt_file_out, renderer->getLastTrackingFrameTimes());
                 } else {
-                    if (args.hr_cfg.video_frames >= 0)
-                        Logger(Warn) << "Video export with real-time frame rate should be used with animation duration instead of frame count (--video-cfg f<-duration>)";
                     try_ffmpeg_video_encoding(args.hr_cfg.video_fmt_file_out, args.hr_cfg.video_out_frame_rate);
                 }
             }
+
+            // restore the old target accumulation frame count, in case it was overwritten for evaluation/video rendering
+            renderer->setTargetAccumulationFrames(prev_renderer_target_accumulation_frames);
 
             // if a screenshot export is requested, render a new high quality frame output
             // let the render engine render all frames
@@ -216,7 +237,7 @@ int volcanite_main(int argc, char *argv[]) {
                 if (args.hr_cfg.accumulation_samples == 0)
                     args.hr_cfg.accumulation_samples = 60;
                 if (auto texture = renderEngine->renderFrames(args.hr_cfg);
-                    (texture != nullptr && export_texture(texture.get(), args.screenshot_output_file))) {
+                    (texture != nullptr && export_texture(texture.get(), args.screenshot_output_file) == RET_SUCCESS)) {
                     texture = {};
                 } else {
                     Logger(Error) << "could not export final render frame to " << args.screenshot_output_file;

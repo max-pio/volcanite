@@ -198,10 +198,13 @@ class Renderer {
         throw std::logic_error("Renderer does not implement frame time tracking.");
     }
 
-    virtual const std::vector<float>& getLastTrackingFrameTimes() {
+    virtual const std::vector<float> &getLastTrackingFrameTimes() {
         throw std::logic_error("Renderer does not implement frame time tracking.");
     }
 
+    virtual const std::vector<glm::vec4> &getLastTrackingFrameTimesGPU() {
+        throw std::logic_error("Renderer does not implement frame time tracking.");
+    }
 
     /// Called after renderNextFrame to download and export the currently rendered image on the next (!) call of
     /// renderNextFrame. If renderNextFrame is not called after exportCurrentFrameToImage, the frame is not exported.
