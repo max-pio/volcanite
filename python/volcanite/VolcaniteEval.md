@@ -36,6 +36,9 @@ The command line arguments to specify log files and the name of an execution are
 
 ### Available Evaluation Result Keys
 
+Use `./volcanite --list-eval-keys` to obtain the full list of available evaluation keys.
+See a (non-exhaustive) list of keys in the following:
+
 #### General
 
 | Key   | Value                                                       |
@@ -123,7 +126,7 @@ returns a `VolcaniteArg` that tells Volcanite to export the final rendered frame
 
 #### VolcaniteExec
 The `VolcaniteExec` class encapsulates a handle to the volcanite executable through system calls.
-It is configured with a `VolcaniteEvaluation` object that specifies the output directory for all evaluation results,
+It is best configured with a `VolcaniteEvaluation` object that specifies the output directory for all evaluation results,
 a git checkout and build directory, and the Volcanite log files into which all results are written. 
 `checkout_and_build()` checks out the specified git commit, tag, or branch and builds the volcanite executable using cmake.
 Afterward, any call to `exec(args, name)` will execute Volcanite with the given arguments and evaluation name.

@@ -38,20 +38,14 @@ class VolcaniteLogFile:
     """
 
     def __create_fallback_string(self, replace_with: str = "") -> str | None:
-        """Reads the format string from the log file and replaces all placeholders with replace_with."""
-        possible_keys: list[str] = [# "name", name can be used in the fallback string
-                                    "time", "args",
-                                    "cr", "comp_s", "comp_mainpass_s", "comp_prepass_s", "comp_gb_per_s"
-                                    "csgv_gb", "orig_gb", "volume_dim",
-                                    "decomp_cpu_gb_per_s", "decomp_gpu_gb_per_s",
-                                    "frame_min_ms", "frame_avg_ms", "frame_sdv_ms", "frame_med_ms", "frame_max_ms",
-                                    "render_total_ms", "min_spp", "max_spp",
-                                    "mem_framebuffer_mb", "mem_uniformbuffer_mb", "mem_materials_mb", "mem_encoding_ms",
-                                    "mem_cache_mb", "mem_cache_used_mb", "mem_cache_fillrate", "mem_cache_fillrate_pcnt",
-                                    "mem_emptyspace_mb", "mem_total_mb", "render_frames"]
+        """Reads the format string from the log file and replaces all placeholders (anything within {...} curly braces) with replace_with."""
+
         format_string = '\n'.join(self.__fmt_strs)
-        for possible_key in possible_keys:
-            format_string = format_string.replace("%" + possible_key, replace_with)
+
+        # replace any {...} except {name} which is available in the fallback string
+        pattern = r'\{(?!name\}).*?\}'
+        format_string = re.sub(pattern, lambda m: replace_with, format_string)
+
         return format_string
 
     @classmethod
@@ -332,16 +326,32 @@ class VolcaniteArg:
     args_shading: dict[str, Self] = {}
     args_default: dict[str, Self] = {}
     args_datasynth: dict[str, Self] = {}
+    args_csgv_datasets: dict[str, Self] = {}
 
     __csgv_directory: Path = None
     __vcfg_directory: Path = None
     __eval_directory: Path = None
+    __git_directory: Path = None
 
     @classmethod
-    def setup_directories(cls, veval: VolcaniteEvaluation | None = None,
+    def get_path_setup_filename() -> Path:
+        """
+        Name of a setup file from which all evaluation scripts will automatically read relevant paths.
+        The file must contain the following newline terminated lines:
+        config_dir: [directory storing one {name}.vcfg file per {name}.csgv data sets]
+        csgv_dir: [directory storing previously compressed {name}.csgv data sets]
+        volcanite_src: [base directory of the cloned Volcanite git repository]
+        """
+        return Path("volcanite-eval-setup.txt")
+
+    @classmethod
+    def setup_directories(cls, veval: VolcaniteEvaluation | None = None, git_base_directory: PathLike | None = None,
                           csgv_directory: PathLike | None = None, vcfg_directory: PathLike | None = None):
         """
         Sets static paths to directories that are referenced when creating certain VolcaniteArgs.
+        If csgv_directory or vcfg_directory are None, it is attempted to set them up from a previously created
+        path setup file (with the name returned by get_path_setup_filename()) in the current working directory.
+        :param git_base_directory: base directory of the cloned Volcanite git repository
         :param csgv_directory: directory where newly compressed CSGV files are exported to and imported from
         :param vcfg_directory: directory containing config and rec files for the argument sets
         :param veval: the Volcanite evaluation specifying the evaluation output directory for images and videos
@@ -351,7 +361,22 @@ class VolcaniteArg:
 
         cls.__csgv_directory = Path(csgv_directory) if csgv_directory else None
         cls.__vcfg_directory = Path(vcfg_directory) if vcfg_directory else None
+        cls.__git_directory = Path(git_base_directory) if git_base_directory else None
         cls.__eval_directory = veval.eval_out_directory if veval else None
+
+        # auto initialize non-passed paths from possible evaluation setup file in working directory
+        if not csgv_directory or not vcfg_directory or not git_base_directory:
+            if cls.get_path_setup_filename().exists():
+                with open(cls.get_path_setup_filename(), 'r') as file:
+                    for l in file.readlines():
+                        parts = l.split(":")
+                        if parts[0] == "csgv_dir" and not csgv_directory:
+                            cls.__csgv_directory = parts[2].strip()
+                        if parts[0] == "vcfg_dir" and not vcfg_directory:
+                            cls.__vcfg_directory = parts[2].strip()
+                        if parts[0] == "volcanite_src" and not git_base_directory:
+                            cls.__git_directory = parts[2].strip()
+
 
         if cls.__csgv_directory and not cls.__csgv_directory.exists():
             raise FileNotFoundError(f"CSGV directory {cls.__csgv_directory} not found")
@@ -359,6 +384,18 @@ class VolcaniteArg:
             raise FileNotFoundError(f"vcfg config directory {cls.__vcfg_directory} not found")
         if cls.__eval_directory and not cls.__eval_directory.exists():
             raise FileNotFoundError(f"Evaluation output directory {cls.__eval_directory} not found")
+        if cls.__git_directory:
+            if not cls.__git_directory.exists():
+                raise FileNotFoundError(f"Volcanite git directory {cls.__git_directory} not found")
+            elif cls.__git_directory.name != "volcanite":
+                print(f"Warning: expected Volcanite git directory to be named volcanite but is {cls.__git_directory.name}")
+
+        # setup list of .csgv data sets from directory
+        if cls.__csgv_directory:
+            for file in cls.__csgv_directory.glob('*.csgv'):
+                args_csgv_datasets[file.stem] = cls.arg_csgv_import(file.stem)
+
+        
 
     @classmethod
     def get_csgv_directory(cls):
@@ -371,22 +408,26 @@ class VolcaniteArg:
     @classmethod
     def get_eval_directory(cls):
         return cls.__eval_directory
+    
+    @classmethod
+    def get_git_directory(cls):
+        return cls.__git_directory
 
-    def __init__(self, args: list[str], identifier: str, priority: float):
+    def __init__(self, args: list[str] | str, identifier: str, priority: float):
         """
         Encapsulates a Volcanite command line argument.
 
-        :param args: list of space separated arguments passed to the Volcanite call
+        :param args: list or string of space separated arguments passed to the Volcanite call
         :param identifier: short identifier of the argument used to form evaluation name strings
         :param prio: priority to sort the identifiers in the evaluation name string
         """
-        self.args = args
+        self.args = args if args is list else args.split(' ')
         self.identifier = identifier
         self.prio = priority
 
     @classmethod
     def concat_ids(cls, args: list[Self]) -> str:
-        """Create a concatenated identifier for all passed args sorted by their priority."""
+        """Create a concatenated string identifier for all passed args sorted by their priority."""
         sorted_by_prio = sorted(args, key=lambda a: a.prio)
         return ''.join([a.identifier for a in sorted_by_prio])
 
@@ -396,12 +437,19 @@ class VolcaniteArg:
             raise RuntimeError("VolcaniteArg static csgv directory must be initialized before usage"
                                "(VolcaniteArg.set_directories)")
         return cls(["-c", str(cls.__csgv_directory) + "/" + cls.concat_ids(args) + ".csgv"], "", 1000)
+
     @classmethod
-    def arg_csgv_import(cls, args: list[Self]) -> Self:
+    def arg_csgv_import(cls, name: str | None, args: list[Self] | None) -> Self:
+        """
+        Returns args for importing a previously compressed csgv file from the csgv directory.
+        The csgv file will be assumed to be {name}{concatenated arg ids}.csgv in that directory.
+        The arg id will be {name} with priority 0.
+        """
         if cls.__csgv_directory is None:
             raise RuntimeError("VolcaniteArg static csgv directory must be initialized before usage"
                                "(VolcaniteArg.set_directories)")
-        return cls([str(cls.__csgv_directory) + "/" + cls.concat_ids(args) + ".csgv"], "", 1000)
+        
+        return cls([str(cls.__csgv_directory) + "/" + name + cls.concat_ids(args) + ".csgv"], name, 0)
 
     @classmethod
     def arg_image_export(cls, args: list[Self], filetype: str = "png") -> Self:
@@ -409,6 +457,20 @@ class VolcaniteArg:
             raise RuntimeError("VolcaniteArg static evaluation directory must be initialized before usage"
                                "(VolcaniteArg.set_directories)")
         return cls(["-i", str(cls.__eval_directory) + "/" + cls.concat_ids(args) + "." + filetype], "", 1000)
+    
+    @classmethod
+    def arg_rec_import(cls, args: list[Self]) -> Self:
+        if cls.__vcfg_directory is None:
+            raise RuntimeError("VolcaniteArg static vcfg directory must be initialized before usage"
+                               "(VolcaniteArg.set_directories)")
+        return cls(["--record-in", str(cls.__vcfg_directory / cls.concat_ids(args) + ".rec")], "", 1000)
+
+    @classmethod
+    def arg_video_cfg(cls, rotation=(-360, 0), zoom=(-2, 0)):
+        """
+        Creates a VolcaniteArg for animating video rendering camera paths.
+        """
+        return cls(["--video-cfg"])
 
     @classmethod
     def arg_video_export(cls, args, create_dir=True) -> Self:
@@ -428,17 +490,10 @@ class VolcaniteArg:
         return cls(["--config", str(cls.__vcfg_directory / cls.concat_ids(args) + ".vcfg"), "--resolution", resolution], "", 1000)
 
     @classmethod
-    def arg_rec_import(cls, args: list[Self]) -> Self:
-        if cls.__vcfg_directory is None:
-            raise RuntimeError("VolcaniteArg static vcfg directory must be initialized before usage"
-                               "(VolcaniteArg.set_directories)")
-        return cls(["--record-in", str(cls.__vcfg_directory / cls.concat_ids(args) + ".rec")], "", 1000)
-
-    @classmethod
     def arg_dataset(cls, data_path: str, identifier: str | None = None,
                     chunks: tuple[int, int, int] | None = None):
         """
-        Creates a VolcaniteArg for loading the data set located ata data_path.
+        Creates a VolcaniteArg for loading the data set (.csgv or non-.csgv) located at data_path.
         If chunked is not none, the data path must contain three {} placeholders for the chunk x, y, and z indices and
         chunks must be a tuple of the last inclusive x, y, and z chunk index.
 
@@ -554,8 +609,11 @@ class VolcaniteExec:
             if git_base_dir:
                 self.git_base_dir = Path(git_base_dir)
             else:
-                self.git_base_dir = Path(subp.Popen(["git", "rev-parse", "--show-toplevel"], stdout=subp.PIPE).communicate()[0].rstrip().decode('utf-8'))
-                print(f"obtained volcanite git base directory {self.git_base_dir} with 'git rev-parse --show-toplevel'")
+                if VolcaniteArg.get_git_directory():
+                    self.git_base_dir = VolcaniteArg.get_git_directory()
+                else:
+                    self.git_base_dir = Path(subp.Popen(["git", "rev-parse", "--show-toplevel"], stdout=subp.PIPE).communicate()[0].rstrip().decode('utf-8'))
+                    print(f"obtained volcanite git base directory {self.git_base_dir} with 'git rev-parse --show-toplevel'")
             if self.git_base_dir.name != "volcanite":
                 print(f"Warning: expected git base directory to be named volcanite but is {self.git_base_dir.name}")
                 self.git_base_dir = None

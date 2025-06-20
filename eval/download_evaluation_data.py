@@ -203,9 +203,9 @@ if __name__ == '__main__':
         exit(2)
 
     # write the paths to the config file
-    setup_file = volcanite_src_dir / Path("eval/setup.txt")
+    setup_file = volcanite_src_dir / "eval" / ve.VolcaniteArg.get_path_setup_filename()
     if setup_file.exists():
-        print(f"Overwriting setup file {setup_file}.")
+        print(f"Overwriting evaluation paths file {setup_file}.")
         # sleep(2)
     with open(setup_file, "w") as file:
         file.write("volcanite_src: " + str(volcanite_src_dir.absolute()) + "\n")
