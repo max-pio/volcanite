@@ -39,14 +39,14 @@ namespace volcanite {
 struct VolcaniteArgs {
 
   private:
-    static bool parseVideoConfigString(HeadlessRenderingConfig& hr_cfg, const std::string& video_cfg_str) {
+    static bool parseVideoConfigString(HeadlessRenderingConfig &hr_cfg, const std::string &video_cfg_str) {
         if (video_cfg_str.empty())
             return true;
         // the video configuration can be a pre-recorded camera path
         if (video_cfg_str.ends_with(".rec")) {
             hr_cfg.record_file_in = expandPathStr(video_cfg_str);
             hr_cfg.video_out_frame_rate = 0; // 0: video output should use actual frame timings as frame rate
-            hr_cfg.accumulation_samples = 1;    // only one frame per input camera pose from .rec file
+            hr_cfg.accumulation_samples = 1; // only one frame per input camera pose from .rec file
             return true;
         }
         // otherwise the given string describes the camera animation
@@ -107,7 +107,7 @@ struct VolcaniteArgs {
         return !ss.fail();
     }
 
-    static bool parseOperationMaskString(uint32_t& operation_mask, std::string op_codes_str) {
+    static bool parseOperationMaskString(uint32_t &operation_mask, std::string op_codes_str) {
         std::transform(op_codes_str.begin(), op_codes_str.end(), op_codes_str.begin(), ::tolower);
         for (int i = 0; i < op_codes_str.size(); i++) {
             switch (op_codes_str.at(i)) {
@@ -154,30 +154,31 @@ struct VolcaniteArgs {
         return true;
     }
 
-    static bool parseRenderingConfigsString(std::vector<std::string>& rendering_configs, const std::string& renderconfig_str) {
-        auto split_configs = renderconfig_str | std::views::split(';') | std::views::transform([](auto r) -> std::string {
-                               // in C++20 this could be done in string views only
-                               // std::string_view v(r.data(), r.size());
-                               // v.remove_prefix(std::min(v.find_first_not_of(' '), v.size()));
-                               // v.remove_suffix(r.size() - 1u - std::min(v.find_last_not_of(' '), v.size()));
-                               std::string cfg;
-                               for (const char &c : r)
-                                   cfg.push_back(c);
-                               // trim
-                               auto first = cfg.find_first_not_of(' ');
-                               auto last = cfg.find_last_not_of(' ');
-                               cfg = cfg.substr(first, last - first + 1);
-                               // expand file path (if it is a vcfg file)
-                               // and convert to strin
-                               if (cfg.ends_with(".vcfg"))
-                                   return expandPathStr(cfg);
-                               return cfg;
-                           });
-        rendering_configs = {split_configs.begin(), split_configs.end()};
+    static bool parseRenderingConfigsString(std::vector<std::string> &rendering_configs, const std::vector<std::string> &renderconfig_strings) {
+        rendering_configs = {};
+        for (const auto &renderconfig_str : renderconfig_strings) {
+            auto split_configs = renderconfig_str | std::views::split(';') | std::views::transform([](auto r) -> std::string {
+                                     // in C++20 this could be done in string views only
+                                     // std::string_view v(r.data(), r.size());
+                                     // v.remove_prefix(std::min(v.find_first_not_of(' '), v.size()));
+                                     // v.remove_suffix(r.size() - 1u - std::min(v.find_last_not_of(' '), v.size()));
+                                     std::string cfg;
+                                     for (const char &c : r)
+                                         cfg.push_back(c);
+                                     // trim
+                                     auto first = cfg.find_first_not_of(' ');
+                                     auto last = cfg.find_last_not_of(' ');
+                                     cfg = cfg.substr(first, last - first + 1);
+                                     // expand file path (if it is a vcfg file)
+                                     // and convert to strin
+                                     if (cfg.ends_with(".vcfg"))
+                                         return expandPathStr(cfg);
+                                     return cfg;
+                                 });
+            rendering_configs.insert(rendering_configs.end(), split_configs.begin(), split_configs.end());
+        }
         return true;
     }
-
-
 
   public:
     // general args
@@ -220,8 +221,8 @@ struct VolcaniteArgs {
     bool random_access = false;                     ///< encode bricks so that they support random access within a brick
 
     // evaluation and statistics
-    HeadlessRenderingConfig hr_cfg;              ///< configuration parameters for the automated headless rendering pass
-    std::string screenshot_output_file;          ///< png or jpg output file path to export the last frame from headless rendering
+    HeadlessRenderingConfig hr_cfg;     ///< configuration parameters for the automated headless rendering pass
+    std::string screenshot_output_file; ///< png or jpg output file path to export the last frame from headless rendering
     bool run_tests = false;
     std::string brickstats_file = {};
     std::string rendertimes_file = {};
@@ -229,7 +230,6 @@ struct VolcaniteArgs {
     std::string eval_name = {};                  ///< name of the evaluation run that can be accessed in the log file as "{name}"
     bool print_eval_keys = false;                ///< if true, prints all available evaluation log keys to the console on startup
     std::string shader_defines = {};             ///< string of shader defines that will be passed on to the shader compiler
-
 
     static std::string getHelpString() {
         std::stringstream ss;
@@ -263,8 +263,7 @@ struct VolcaniteArgs {
 
     [[nodiscard]] bool performHeadlessEvaluationPrepass() const {
         // either correct evaluation results are directly required, or a video with "real" frame times should be created
-        return !eval_logfiles.empty() || !rendertimes_file.empty()
-                || (!hr_cfg.video_fmt_file_out.empty() && hr_cfg.video_out_frame_rate == 0u) || hr_cfg.video_frames < 0;
+        return !eval_logfiles.empty() || !rendertimes_file.empty() || (!hr_cfg.video_fmt_file_out.empty() && hr_cfg.video_out_frame_rate == 0u) || hr_cfg.video_frames < 0;
     }
 
     [[nodiscard]] bool performHeadlessVideoExport() const {
@@ -332,7 +331,7 @@ struct VolcaniteArgs {
             ValueArg<std::string> videoCfgArg("", "video-cfg", "Video output configuration string for rendering animations. Must be used with -v.", false, "", "options string", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
             SwitchArg fullscreenArg("", "fullscreen", "Start renderer in fullscreen mode.", cmd);
-            ValueArg<std::string> renderconfigArg("", "config", "List of .vcfg files, rendering presets, or direct config strings '[{GUI window}] {parameter label}: {parameter value(s)}', separated by ;", false, "", "{(.vcfg file | rendering preset | string);}*", cmd);
+            MultiArg<std::string> renderconfigArg("", "config", "List of .vcfg files, rendering presets, or direct config strings '[{GUI window}] {parameter label}: {parameter value(s)}', separated by ;", false, "{(.vcfg file | rendering preset | string);}*", cmd);
             // general arguments
             SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
             SwitchArg verboseArg("", "verbose", "Verbose debug output.", cmd);
@@ -367,7 +366,7 @@ struct VolcaniteArgs {
                 try {
                     size_t test_frame_idx = 1;
                     auto f = fmt::vformat(va.hr_cfg.video_fmt_file_out, fmt::make_format_args(test_frame_idx));
-                } catch (const fmt::format_error) {
+                } catch (const fmt::format_error &) {
                     throw ArgException(videoArg.longID() + " must be a formatted image file path string containing a single {} replacement field. Example: ./out{:04}.jpg", videoArg.longID());
                 }
             }
