@@ -271,6 +271,7 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
     void startFrameTimeTracking() override {
         m_enable_frame_time_tracking = true;
         m_last_frame_times.clear();
+        m_last_frame_times.reserve(4096);
         m_last_frame_start_time.reset();
         if (m_pass->isFrameTimeTrackingAvailable())
             m_pass->startFrameTimeTracking();

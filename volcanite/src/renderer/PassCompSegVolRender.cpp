@@ -301,6 +301,7 @@ void PassCompSegVolRender::startFrameTimeTracking() {
     m_timing_active = true;
     m_timing_frame = 0u;
     m_frame_gpu_timings.clear();
+    m_frame_gpu_timings.reserve(4096);
 }
 
 /// Waits for awaitLastFrameFinished and measures one last set of GPU stage timings.
