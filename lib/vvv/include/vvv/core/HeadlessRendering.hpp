@@ -34,11 +34,11 @@ class DummyGuiInterface : public GuiInterface {
 struct HeadlessRenderingConfig {
     std::string record_file_in = {};                           ///< if set, replays pre-recorded camera positions from this file
     std::string video_fmt_file_out = {};                       ///< if set, outputs video frames to file path with an integer fmt placeholder , e.g.
-    int video_out_frame_rate = 30;                             ///< when a video file is created it uses this frame rate
+    int video_out_frame_rate = 30;                             ///< when a video file is created it uses this frame rate. 0 for real time.
     size_t accumulation_samples = 1;                           ///< number of frames after which a new camera position is read and a video frame is exported
     void (*frameFinishedCallback)(RendererOutput *) = nullptr; ///< will be called each time a frame finished rendering after accumulation_samples
     // if no record_file_in pre-recorded path is given:
-    int video_frames = 300;     ///< how many video frames are rendered if a video output file and no record_file_in is given. 0 for real time. < 0 for real time target duration in seconds.
+    int duration = 300;         ///< if a video output file and no record_file_in is given: either number of frames to render (> 0) or target duration in seconds (< 0).
     const std::vector<float>* video_frame_times = nullptr; ///< if set, uses these pre-measured frame timings instead of measuring new timings
     float cam_rot_start = 0.f;  ///< start camera rotation angle relative to the init config
     float cam_rot_end = 0.f;    ///< end camera rotation angle relative to the init config
