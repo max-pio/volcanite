@@ -55,8 +55,8 @@ struct VolcaniteArgs {
             unsigned char c;
             ss >> c;
             switch (c) {
-            case 'f':
-                ss >> hr_cfg.video_frames;
+            case 'd':
+                ss >> hr_cfg.duration;
                 break;
             case 'o':
                 ss >> hr_cfg.video_out_frame_rate;
@@ -74,7 +74,7 @@ struct VolcaniteArgs {
                     hr_cfg.cam_rot_start = 0.f;
                 }
                 break;
-            case 'd':
+            case 'z':
                 ss >> hr_cfg.cam_zoom_start;
                 if (ss.good() && ss.peek() == ':') {
                     ss >> c;
@@ -264,7 +264,7 @@ struct VolcaniteArgs {
     [[nodiscard]] bool performHeadlessEvaluationPrepass() const {
         // either correct evaluation results are directly required, or a video with "real" frame times should be created
         return !eval_logfiles.empty() || !rendertimes_file.empty()
-                || (!hr_cfg.video_fmt_file_out.empty() && hr_cfg.video_out_frame_rate == 0u) || hr_cfg.video_frames < 0;
+                || (!hr_cfg.video_fmt_file_out.empty() && hr_cfg.video_out_frame_rate == 0u) || hr_cfg.duration < 0;
     }
 
     [[nodiscard]] bool performHeadlessVideoExport() const {

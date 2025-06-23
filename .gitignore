@@ -23,6 +23,7 @@ compile_commands.json
 /demo/**
 /vid/**
 /*.mp4
+eval/results
 
 # operating system and IDE specific ignores
 /.idea*

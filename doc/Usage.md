@@ -243,11 +243,11 @@ The general usage of Volcanite is
 * `--video-cfg <options string>`
 
   Camera animation configuration when using `-v` given as `{param}*` where `{param}` is one of:
-  * `f<int>` how many video frame are exported to the output. value < 0 renders until (-value) seconds elapsed  
+  * `d<int>` duration: either number of frames (>0) or until (-value) seconds elapsed (<0)
   * `o<int>` frame rate of the output video (0 to use real frame times)
   * `s<int>` how many rendering frames are accumluated for each output video frame
   * `r[<float>:]<float>` start:end camera rotation angle offsets in degrees in [-360;+360]
-  * `d[<float>:]<float>` start:end camera distance offsets relative to initial configuration
+  * `z[<float>:]<float>` start:end camera zoom offsets relative to initial configuration
   * `i{0,1,2}` interpolant: 0 linear, 1 smoothstep, 2 smootherstep
   * `e[<float>:]<float>` start:end edge before interpolation starts in [0;1]
 

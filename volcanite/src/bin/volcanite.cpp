@@ -154,7 +154,7 @@ int volcanite_main(int argc, char *argv[]) {
 
                 auto hr_cfg = args.hr_cfg;
                 hr_cfg.video_fmt_file_out = ""; // disable any video export
-                if (hr_cfg.video_frames < 0)
+                if (hr_cfg.duration < 0)
                     hr_cfg.video_frame_times = &renderer->getLastTrackingFrameTimes();
 
                 renderer->startFrameTimeTracking();
@@ -209,15 +209,13 @@ int volcanite_main(int argc, char *argv[]) {
             if (args.performHeadlessVideoExport()) {
                 Logger(Info) << "--------------------\nVideo Export Pass:";
                 auto hr_cfg = args.hr_cfg;
-                if (hr_cfg.video_frames < 0)
+                if (hr_cfg.duration < 0)
                     hr_cfg.video_frame_times = &renderer->getLastTrackingFrameTimes();
                 renderEngine->renderFrames(hr_cfg);
 
                 // try creating a video from the files using ffmpeg system calls
                 if (args.hr_cfg.video_out_frame_rate == 0u) {
-                    assert((args.hr_cfg.video_frames < 0 || renderer->getLastTrackingFrameTimes().size() == args.hr_cfg.video_frames) && "missing correct frame time tracking for video frames.");
-                    if (args.hr_cfg.video_frames >= 0)
-                        Logger(Warn) << "Video export with real-time frame rate should be used with animation duration instead of frame count (--video-cfg f{-(duration in seconds)})";
+                    assert((args.hr_cfg.duration < 0 || renderer->getLastTrackingFrameTimes().size() == args.hr_cfg.duration) && "missing correct frame time tracking for video frames.");
                     try_ffmpeg_video_encoding_with_timing(args.hr_cfg.video_fmt_file_out, renderer->getLastTrackingFrameTimes());
                 } else {
                     try_ffmpeg_video_encoding(args.hr_cfg.video_fmt_file_out, args.hr_cfg.video_out_frame_rate);
@@ -232,7 +230,7 @@ int volcanite_main(int argc, char *argv[]) {
             if (!args.screenshot_output_file.empty()) {
                 Logger(Info) << "Screenshot (High Quality) Export Pass:";
                 // ensure that a high quality screenshot is rendered (enough accumulation frames)
-                args.hr_cfg.video_frames = 1;
+                args.hr_cfg.duration = 1;
                 args.hr_cfg.accumulation_samples = renderer->getTargetAccumulationFrames();
                 if (args.hr_cfg.accumulation_samples == 0)
                     args.hr_cfg.accumulation_samples = 60;

@@ -84,10 +84,10 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
 
     if (!cfg.record_file_in.empty())
         Logger(Info) << "rendering camera poses from " + cfg.record_file_in << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
-    else if (cfg.video_frames > 0)
-        Logger(Info) << "rendering " << cfg.video_frames << " frame(s) animation with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
-    else if (cfg.video_frames < 0)
-        Logger(Info) << "rendering " << -cfg.video_frames << " second(s) animation with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+    else if (cfg.duration > 0)
+        Logger(Info) << "rendering " << cfg.duration << " frame(s) animation with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+    else if (cfg.duration < 0)
+        Logger(Info) << "rendering " << -cfg.duration << " second(s) animation with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
 
     // TODO: replace headless camera animation with real parameter animation class that operates with the GUIInterface
     // interpolation start and end values (rotation around Y axis and zoom)
@@ -109,7 +109,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         }
     }
 
-    if (cfg.video_frames < 0 && cfg.accumulation_samples > 1) {
+    if (cfg.duration < 0 && cfg.accumulation_samples > 1) {
         Logger(Warn) << "Rendering real-time video output must not use cfg.accumulation_samples != 1";
     }
 
@@ -123,7 +123,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     // if video_frames < 0 (target real-time duration): render until abs(video_frames) seconds passed
     //
     // Each frame is rendered with accumulation_samples each.
-    for (frame_idx = 0u; (record_in.has_value() && !record_in->eof()) || (cfg.video_frames > 0 && frame_idx < cfg.video_frames) || (cfg.video_frames < 0 && elapsed_s < static_cast<double>(-cfg.video_frames)); frame_idx++) {
+    for (frame_idx = 0u; (record_in.has_value() && !record_in->eof()) || (cfg.duration > 0 && frame_idx < cfg.duration) || (cfg.duration < 0 && elapsed_s < static_cast<double>(-cfg.duration)); frame_idx++) {
         if (record_in.has_value()) {
             getCamera()->readFrom(record_in.value());
             if (record_in->eof()) {
@@ -139,9 +139,9 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
             Camera *const camera = getCamera();
 
             float v = 0.f;
-            if (cfg.video_frames > 0) // equidistant interpolation based on frame index
-                v = static_cast<float>(frame_idx) / static_cast<float>(cfg.video_frames);
-            else if (cfg.video_frames < 0) { // "real-time" interpolation based on passed duration
+            if (cfg.duration > 0) // equidistant interpolation based on frame index
+                v = static_cast<float>(frame_idx) / static_cast<float>(cfg.duration);
+            else if (cfg.duration < 0) { // "real-time" interpolation based on passed duration
                 if (frame_idx == 0u) {
                     elapsed_s = 0.f;
                 } else {
@@ -153,10 +153,10 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
                     } else {
                         elapsed_s = timer.elapsed();
                     }
-                    if (elapsed_s > static_cast<double>(-cfg.video_frames))
+                    if (elapsed_s > static_cast<double>(-cfg.duration))
                         break;
                     v = static_cast<float>(elapsed_s);
-                    Logger(Info) << v << "," << timer.elapsed() << " / " << static_cast<double>(-cfg.video_frames) << " " << (cfg.video_frame_times ? cfg.video_frame_times->size() : 0);
+                    Logger(Info) << v << "," << timer.elapsed() << " / " << static_cast<double>(-cfg.duration) << " " << (cfg.video_frame_times ? cfg.video_frame_times->size() : 0);
                 }
             }
             // add edges for interpolation
@@ -235,7 +235,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         m_renderer->exportCurrentFrameToImage("");
     }
 
-    Logger(Info) << "rendering of " << (frame_idx * cfg.accumulation_samples)
+    Logger(Info) << "rendering " << (frame_idx * cfg.accumulation_samples)
                  << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
     return ret_tex;
 }
