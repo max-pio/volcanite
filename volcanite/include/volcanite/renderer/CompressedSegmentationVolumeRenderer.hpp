@@ -127,6 +127,11 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
     /// Releases all GPU states and resources but does not reset the segmentation volume.
     void resetGPU();
 
+
+    /// Resets all rendering caches, framebuffer accumulation, and other accumulated states between multiple evaluation runs.
+    /// For evaluation purposes.
+    void resetAllEvaluationStates() override;
+
     void setRenderResolution(const vk::Extent2D resolution) {
         m_resolution = resolution;
 

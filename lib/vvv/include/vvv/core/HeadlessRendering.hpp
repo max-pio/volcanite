@@ -50,6 +50,7 @@ struct HeadlessRenderingConfig {
     Interpolant interpolation = Linear;
     float edge_start = 0.f;
     float edge_end = 1.f;
+    bool verbose = true;        ///< logs the rendering progress to the console
 };
 
 class HeadlessRendering : public DefaultGpuContext, public std::enable_shared_from_this<HeadlessRendering> {

@@ -188,6 +188,12 @@ class Renderer {
         return success;
     }
 
+    /// Resets all rendering caches, framebuffer accumulation, and other accumulated states between multiple evaluation runs.
+    /// For evaluation purposes.
+    virtual void resetAllEvaluationStates() {
+        throw std::logic_error("Renderer does not implement state reset.");
+    }
+
     virtual void startFrameTimeTracking() {
         throw std::logic_error("Renderer does not implement frame time tracking.");
     }

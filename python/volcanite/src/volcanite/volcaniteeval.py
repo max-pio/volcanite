@@ -440,10 +440,7 @@ class VolcaniteArg:
         if isinstance(args, str):
             self.args = args.split(' ')
         else:
-            # split all arg names that contain spaces into a list of non-space args
-            self.args = []
-            for arg in args:
-                self.args += arg.split(' ')
+            self.args = args
 
         self.identifier = "" if identifier is None else identifier
         self.prio = 1000 if priority is None else priority
@@ -465,7 +462,7 @@ class VolcaniteArg:
             return ""
         
         sorted_by_prio = sorted(args, key=lambda a: a.prio)
-        return "_".join([a.identifier for a in sorted_by_prio])
+        return "_".join([a.identifier for a in sorted_by_prio if a.identifier])
 
     @classmethod
     def arg_csgv_export(cls, args: list[Self]) -> Self:
@@ -491,13 +488,26 @@ class VolcaniteArg:
         return cls([str(cls.__csgv_directory) + "/" + name + cls.concat_ids(args) + ".csgv"], name, 0)
 
     @classmethod
-    def arg_image_export(cls, args: list[Self], filetype: str = "png", sample_count: int | None = None) -> Self:
+    def arg_image_export(cls, args: list[Self], filetype: str = "png") -> Self:
         if cls.__eval_directory is None:
             raise RuntimeError("VolcaniteArg static evaluation directory must be initialized before usage"
                                "(VolcaniteArg.set_directories)")
-        return cls(["-i", str(cls.__eval_directory) + "/" + cls.concat_ids(args) + "." + filetype]
-                    + (["--config", "\"[Display]", "Accumulation", "Frames:", str(sample_count)]
-                        if sample_count is not None and sample_count > 0 else []), "", 110)
+        return cls(["-i", str(cls.__eval_directory) + "/" + cls.concat_ids(args) + "." + filetype], "", 110)
+    
+    @classmethod
+    def arg_image_eval_cfg(cls, sample_count: int = 1024):
+        """
+        Returns an argument to set the evaluation rendering configuration to a still perspective
+        (e.g. set by arg_config_import). Cannot be used in combination with arg_video_cfg.
+
+        :param sample_count: how many frames are rendered in the still perspective.
+        """
+
+        if sample_count <= 0:
+            raise RuntimeError("Sample count for arg_image_eval_cfg must be > 0.")
+
+        return cls(["--video-cfg", f"d1s{sample_count}r0:0z0:0", "--config", f"[Display] Accumulation Frames: {sample_count}"], "", 111)
+
     
     @classmethod
     def arg_rec_import(cls, args: list[Self]) -> Self:
@@ -507,10 +517,12 @@ class VolcaniteArg:
         return cls(["--record-in", str(cls.__vcfg_directory / cls.concat_ids(args) + ".rec")])
 
     @classmethod
-    def arg_video_cfg(cls, rotation=(-360, 0), zoom=(2, 0), duration=600, duration_is_seconds=False,
+    def arg_video_eval_cfg(cls, rotation=(-360, 0), zoom=(2, 0), duration=600, duration_is_seconds=False,
                       output_framerate=30, interpolant : str = "smooth", edge=(0.2, 0.8)):
         """
         Creates a VolcaniteArg for animating video rendering camera paths.
+        This path will be used for evaluations and video export.
+        Cannot be used in combination with arg_image_eval_cfg().
 
         :param rotation: min/max camera rotation in degrees.
         :param zoom: min/max camera zoom.
@@ -540,12 +552,37 @@ class VolcaniteArg:
         return cls(["-v", str(video_dir) + "/" + cls.concat_ids(args) + "_{:04}.jpg"])
 
     @classmethod
-    def arg_config_import(cls, args: list[Self] | None, additional_configs: list[str] | None = None, resolution: str = "1920x1080") -> Self:
-        if args and cls.__vcfg_directory is None:
+    def arg_config_import(cls, eval_config_file: list[Self] | str | None, additional_configs: list[str] | str | None = None, resolution: str = "1920x1080") -> Self:
+        if eval_config_file and cls.__vcfg_directory is None:
             raise RuntimeError("VolcaniteArg static vcfg directory must be initialized before usage"
                                "(VolcaniteArg.set_directories)")
-        args_config_file = [cls.concat_ids(args) + ".vcfg"] if args else []
-        return cls(["--config", ",".join(args_config_file + additional_configs if additional_configs else []), "--resolution", resolution], "", 100)
+        
+        args_config_file = []
+        if eval_config_file:
+            if not isinstance(eval_config_file, str):
+                eval_config_file = cls.concat_ids(eval_config_file) + ".vcfg"
+            elif not eval_config_file.endswith(".vcfg"):
+                eval_config_file += ".vcfg"
+            
+            eval_config_file = str(cls.__vcfg_directory / eval_config_file)
+            args_config_file += ["--config", eval_config_file]
+
+        # example additional_configs: ["path-tracing", "[Display] Accumulation Frames: 8"]
+        # should become: ["path-tracing,"\"[Display]", "Accumulation", "Frames:", "8\""]
+        args_config_str = []
+        if additional_configs:
+            if isinstance(additional_configs, str):
+                additional_configs = [additional_configs]
+
+            for cfg in additional_configs:
+                cfg = cfg.strip()
+                if not cfg:
+                    continue
+                args_config_str += ["--config", cfg]
+
+        print("\n\n" + str(args_config_file + args_config_str) + "\n\n")
+
+        return cls(args_config_file + args_config_str + ["--resolution", resolution], "", 100)
 
     @classmethod
     def arg_dataset(cls, data_path: str, identifier: str | None = None,
@@ -586,10 +623,10 @@ VolcaniteArg.args_cache_mode = {"none": VolcaniteArg(["--cache-mode", "n"], "csh
                             "voxel_es": VolcaniteArg(["--cache-mode", "v", "--empty-space-res", "2"], "csh-v_es", 3),
                             "brick": VolcaniteArg(["--cache-mode", "b"], "csh-b", 3),
                             "brick_sm": VolcaniteArg(["--cache-mode", "b", "--decode-sm"], "csh-bsm", 3)}
-VolcaniteArg.args_shading = {"local": VolcaniteArg(["--config", "local-shading"], "local", 0.5),
-                             "shadow": VolcaniteArg(["--config", "global-shadows"], "shadow", 0.5),
-                             "ao": VolcaniteArg(["--config", "ambient-occlusion"], "ao", 0.5),
-                             "pt": VolcaniteArg(["--config", "path-tracing"], "pt", 0.5)}
+VolcaniteArg.args_shading = {"local": VolcaniteArg(["--config", "local-shading"], "local", 105),
+                             "shadow": VolcaniteArg(["--config", "global-shadows"], "shadow", 105),
+                             "ao": VolcaniteArg(["--config", "ambient-occlusion"], "ao", 105),
+                             "pt": VolcaniteArg(["--config", "path-tracing"], "pt", 105)}
 VolcaniteArg.args_datasynth = {"dSynth8": VolcaniteArg(["+synth_1024x1024x1024_r6x6x6-10x10x10"], "dSynth8", 0),
                             "dSynth32": VolcaniteArg(["+synth_1024x1024x1024_r24x24x24-40x40x40"], "dSynth32", 0),
                             "dSynth128": VolcaniteArg(["+synth_1024x1024x1024_r96x96x96-160x160x160"], "dSynth128", 0),
@@ -606,11 +643,17 @@ class VolcaniteExec:
     """
 
     @classmethod
-    def __run_with_log(cls, call_args: list[str], cwd: str | PathLike | None = None, print_log=True, *args, **kwargs):
+    def __run_process(cls, call_args: list[str] | str, cwd: str | PathLike | None = None, print_log=True, *args, **kwargs):
         # remove empty argument strings ""
-        call_args = list(filter(None, call_args))
-        if print_log:
-            print(str(cwd) + "> " + " ".join(call_args))
+        if isinstance(call_args, str):
+            call_args = call_args.strip()
+            if print_log:
+                print(str(cwd) + "> " + call_args)
+        else:
+            call_args = list(filter(None, call_args))
+            if print_log:
+                print(str(cwd) + "> " + " ".join(call_args))
+
         return subp.run(call_args, cwd=cwd, *args, **kwargs)
 
     @classmethod
@@ -621,19 +664,22 @@ class VolcaniteExec:
         if not build_dir.exists():
             build_dir.mkdir(parents=True, exist_ok=True)
             build_type = "-DCMAKE_BUILD_TYPE=Debug" if "deb" in str(build_dir.stem).lower() else "-DCMAKE_BUILD_TYPE=Release"
-            res = cls.__run_with_log(["cmake", build_type, ".."], cwd=build_dir)
+            res = cls.__run_process(["cmake", build_type, ".."], cwd=build_dir)
             if res.returncode != 0:
                 raise RuntimeError(f"Error: cmake returned {res.returncode}")
 
-        res = cls.__run_with_log(["cmake", "--build", ".", "-j", "--target", "volcanite"], cwd=build_dir)
+        res = cls.__run_process(["cmake", "--build", ".", "-j", "--target", "volcanite"], cwd=build_dir)
         if res.returncode != 0:
             raise RuntimeError(f"Error: building target volcanite returned {res.returncode}")
         return build_dir / "volcanite"
 
     @classmethod
-    def run_volcanite(cls, binary_dir: str | PathLike, args : str):
+    def run_volcanite(cls, binary_dir: str | PathLike, args: list[str] | str, print_log: bool = True):
         """Executes Volcanite with args as argument string and no special evaluation log file handling."""
-        return VolcaniteExec.__run_with_log(["./volcanite"] + args.split(' '), print_log=True, cwd=binary_dir)
+        if isinstance(args, str):
+            return VolcaniteExec.__run_process("./volcanite " + args.strip(), print_log=print_log, cwd=binary_dir)
+        else:
+            return VolcaniteExec.__run_process(["./volcanite"] + args.split(' '), print_log=print_log, cwd=binary_dir)
 
     def __init__(self, evaluation: VolcaniteEvaluation, git_base_dir: str | PathLike | None = None,
                  git_checkout : str | None = None, build_subdir: str | PathLike = "cmake-build-release",
@@ -704,8 +750,8 @@ class VolcaniteExec:
             return
 
         if self.git_checkout:
-            VolcaniteExec.__run_with_log(["git", "checkout", self.git_checkout], cwd=self.git_base_dir)
-            res = VolcaniteExec.__run_with_log(["git", "pull"], cwd=self.git_base_dir)
+            VolcaniteExec.__run_process(["git", "checkout", self.git_checkout], cwd=self.git_base_dir)
+            res = VolcaniteExec.__run_process(["git", "pull"], cwd=self.git_base_dir)
             if res.returncode != 0:
                 raise RuntimeError(f"Error: git pull returned {res.returncode}")
 
@@ -744,7 +790,7 @@ class VolcaniteExec:
         print(" ".join(exec_call_args))
         print("-------------------------------")
         if not self.evaluation.dry_run:
-            res = VolcaniteExec.__run_with_log(exec_call_args, print_log=False, cwd=self.binary_dir)
+            res = VolcaniteExec.__run_process(exec_call_args, print_log=False, cwd=self.binary_dir)
             if res.returncode != 0:
                 print("Error: volcanite returned " + str(res.returncode))
                 if self.evaluation.enable_log:
@@ -779,5 +825,5 @@ class VolcaniteExec:
             files = prefix + "*" + _name[_name.rfind("}")+1:]
             cmd = ["ffmpeg -n -framerate 60 -pattern_type glob -i '" + files + "' -c:v libx264 -pix_fmt yuv420p " + prefix + ".mp4"]
             print("Creating video file in " + str(_dir.absolute()) + " with\n  " + cmd[0])
-            VolcaniteExec.__run_with_log(cmd, cwd=str(_dir.absolute()), shell=True)
+            VolcaniteExec.__run_process(cmd, cwd=str(_dir.absolute()), shell=True)
 

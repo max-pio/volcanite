@@ -148,15 +148,19 @@ int volcanite_main(int argc, char *argv[]) {
             if (renderer->getTargetAccumulationFrames() > 0u && renderer->getTargetAccumulationFrames() < args.hr_cfg.accumulation_samples)
                 renderer->setTargetAccumulationFrames(static_cast<int>(args.hr_cfg.accumulation_samples));
 
+            // run a short pre-pass to ensure that static resources (shaders, data set buffer..) are generated
+            // and that the GPU heats up before the actual evaluation run takes place.
+            static constexpr int HEATUP_FRAMES = 4;
+            renderEngine->renderFrames({.accumulation_samples=HEATUP_FRAMES , .duration=1, .verbose=false});
+
             // perform a dry evaluation run first, gathering frame times etc., if required
             if (args.performHeadlessEvaluationPrepass()) {
-                Logger(Info) << "Rendering Evaluation Pass:";
+                Logger(Info) << "--------------------\n        Rendering Evaluation Pass";
 
                 auto hr_cfg = args.hr_cfg;
                 hr_cfg.video_fmt_file_out = ""; // disable any video export
-                if (hr_cfg.duration < 0)
-                    hr_cfg.video_frame_times = &renderer->getLastTrackingFrameTimes();
 
+                renderer->resetAllEvaluationStates();
                 renderer->startFrameTimeTracking();
                 renderEngine->renderFrames(hr_cfg);
                 // the renderEngine stops the frame time tracking
@@ -207,10 +211,11 @@ int volcanite_main(int argc, char *argv[]) {
 
             // if a video export is rendered, do a separate pass for it since the frame downloads may affect frame timings
             if (args.performHeadlessVideoExport()) {
-                Logger(Info) << "--------------------\nVideo Export Pass:";
+                Logger(Info) << "--------------------\n        Video Export Pass";
                 auto hr_cfg = args.hr_cfg;
                 if (hr_cfg.duration < 0)
                     hr_cfg.video_frame_times = &renderer->getLastTrackingFrameTimes();
+                renderer->resetAllEvaluationStates();
                 renderEngine->renderFrames(hr_cfg);
 
                 // try creating a video from the files using ffmpeg system calls
@@ -228,13 +233,18 @@ int volcanite_main(int argc, char *argv[]) {
             // if a screenshot export is requested, render a new high quality frame output
             // let the render engine render all frames
             if (!args.screenshot_output_file.empty()) {
-                Logger(Info) << "Screenshot (High Quality) Export Pass:";
+                Logger(Info) << "--------------------\n        Screenshot (High Quality) Export Pass";
+                
                 // ensure that a high quality screenshot is rendered (enough accumulation frames)
-                args.hr_cfg.duration = 1;
-                args.hr_cfg.accumulation_samples = renderer->getTargetAccumulationFrames();
-                if (args.hr_cfg.accumulation_samples == 0)
-                    args.hr_cfg.accumulation_samples = 60;
-                if (auto texture = renderEngine->renderFrames(args.hr_cfg);
+                auto hr_cfg = args.hr_cfg;
+                hr_cfg.duration = 1;
+                hr_cfg.accumulation_samples = renderer->getTargetAccumulationFrames();
+                if (hr_cfg.accumulation_samples == 0)
+                    hr_cfg.accumulation_samples = 256;
+
+                renderer->resetAllEvaluationStates();
+                renderer->startFrameTimeTracking();
+                if (auto texture = renderEngine->renderFrames(hr_cfg);
                     (texture != nullptr && export_texture(texture.get(), args.screenshot_output_file) == RET_SUCCESS)) {
                     texture = {};
                 } else {
@@ -249,6 +259,9 @@ int volcanite_main(int argc, char *argv[]) {
 #ifndef HEADLESS
         // only start the application if we are not in headless mode
         if (!args.headless) {
+
+            Logger(Info) << "--------------------\n        Starting Volcanite Application";
+
             // we only need the rendering part for screenshots/videos or the interactive app
             const std::string appName = "Volcanite " + VolcaniteArgs::getVolcaniteVersionString() + "  " + compressedSegmentationVolume->getLabel();
             auto app = Application::create(appName, renderer, 1.f, std::make_shared<DebugUtilsExt>());

@@ -92,7 +92,7 @@ These results are only available if an image `-i` or video `-v` is rendered.
 | frame_sdv_ms           | standard deviation of frame time [ms]              |
 | frame_med_ms           | median frame time [ms]                             |
 | frame_max_ms           | maximum frame time [ms]                            |
-| frame_ms_00 to *_15    | render time of the first 16 frames [ms]            |  
+| frame_{00|01|..|15}_ms | render time of the first 16 frames [ms]            |  
 | render_total_ms        | total render time for all frames [ms]              |
 | rendered_frames        | number of rendered frames                          |
 | mem_framebuffer_mb     | GPU memory for frame buffers [MB]                  |

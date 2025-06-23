@@ -73,6 +73,10 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
 
     // TODO: add behaviour for frame_time_file_out export if it is given. Obtain frame time from renderer, write to array. export frame times + video output file names to *_timings.txt in the end.
 
+    // ensure that the renderer has created all of its "swapchain" = render size dependent resources
+    if (m_pendingRecreation)
+        recreateSwapchain();
+
     // pre-recorded camera path playback
     std::optional<std::ifstream> record_in = {};
     if (!cfg.record_file_in.empty()) {
@@ -82,12 +86,14 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         }
     }
 
-    if (!cfg.record_file_in.empty())
-        Logger(Info) << "rendering camera poses from " + cfg.record_file_in << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
-    else if (cfg.duration > 0)
-        Logger(Info) << "rendering " << cfg.duration << " frame(s) animation with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
-    else if (cfg.duration < 0)
-        Logger(Info) << "rendering " << -cfg.duration << " second(s) animation with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+    if (cfg.verbose) {
+        if (!cfg.record_file_in.empty())
+            Logger(Info) << "rendering camera poses from " + cfg.record_file_in << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+        else if (cfg.duration > 0)
+            Logger(Info) << "rendering " << cfg.duration << " frame(s) animation with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+        else if (cfg.duration < 0)
+            Logger(Info) << "rendering " << -cfg.duration << " second(s) animation with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+    }
 
     // TODO: replace headless camera animation with real parameter animation class that operates with the GUIInterface
     // interpolation start and end values (rotation around Y axis and zoom)
@@ -96,11 +102,13 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         float roty_1 = 0.f; ///< camera rotation end
         float dist_0 = 0.f; ///< camera distance start
         float dist_1 = 0.f; ///< camera distance end
+        float roty_orig = 0.f;
+        float dist_orig = 0.f;
     } anim;
     {
         auto camera = getCamera();
-        anim.roty_0 = anim.roty_1 = camera->rotation_y;
-        anim.dist_0 = anim.dist_1 = camera->orbital_radius;
+        anim.roty_0 = anim.roty_1 = anim.roty_orig = camera->rotation_y;
+        anim.dist_0 = anim.dist_1 = anim.dist_orig = camera->orbital_radius;
         if (!record_in.has_value()) {
             anim.roty_0 = camera->rotation_y + (cfg.cam_rot_start * glm::pi<float>() / 180.f);
             anim.roty_1 = camera->rotation_y + (cfg.cam_rot_end * glm::pi<float>() / 180.f);
@@ -156,7 +164,6 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
                     if (elapsed_s > static_cast<double>(-cfg.duration))
                         break;
                     v = static_cast<float>(elapsed_s);
-                    Logger(Info) << v << "," << timer.elapsed() << " / " << static_cast<double>(-cfg.duration) << " " << (cfg.video_frame_times ? cfg.video_frame_times->size() : 0);
                 }
             }
             // add edges for interpolation
@@ -200,9 +207,19 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
 
     // stop the frame time tracking here with an awaitable (to get the last timing)
     m_renderer->stopFrameTimeTracking(rendererOutput.renderingComplete);
+    const double frame_time_s = timer.elapsed() / static_cast<double>((frame_idx * cfg.accumulation_samples));
 
-    const double endTime = timer.elapsed();
-    const double frame_time = endTime / static_cast<double>((frame_idx * cfg.accumulation_samples));
+    // reset the camera (in case something was interpolated as part of an animation)
+    {
+            Camera *const camera = getCamera();
+            camera->rotation_y = anim.roty_orig;
+            camera->orbital_radius = anim.dist_orig;
+            camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
+                                                                                      camera->orbital_radius * glm::cos(camera->rotation_y) * glm::cos(camera->rotation_x),
+                                                                                      camera->orbital_radius * glm::sin(camera->rotation_x),
+                                                                                      camera->orbital_radius * glm::sin(camera->rotation_y) * glm::cos(camera->rotation_x));
+            camera->onCameraUpdate();
+    }
 
     // copy the last output texture to a new texture that we can return.
     // this way the original rendering texture could be overwritten or destroyed without affecting the return texture.
@@ -235,8 +252,10 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         m_renderer->exportCurrentFrameToImage("");
     }
 
-    Logger(Info) << "rendering " << (frame_idx * cfg.accumulation_samples)
-                 << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
+    if (cfg.verbose) {
+        Logger(Info) << "rendering " << (frame_idx * cfg.accumulation_samples)
+                     << " frames finished with " << 1. / frame_time_s << " fps (" << 1000.f * frame_time_s << "ms/frame)";
+    }
     return ret_tex;
 }
 

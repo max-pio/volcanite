@@ -263,7 +263,7 @@ struct VolcaniteArgs {
 
     [[nodiscard]] bool performHeadlessEvaluationPrepass() const {
         // either correct evaluation results are directly required, or a video with "real" frame times should be created
-        return !eval_logfiles.empty() || !rendertimes_file.empty() || (!hr_cfg.video_fmt_file_out.empty() && hr_cfg.video_out_frame_rate == 0u) || hr_cfg.video_frames < 0;
+        return !eval_logfiles.empty() || !rendertimes_file.empty() || (!hr_cfg.video_fmt_file_out.empty() && hr_cfg.video_out_frame_rate == 0u) || hr_cfg.duration < 0;
     }
 
     [[nodiscard]] bool performHeadlessVideoExport() const {

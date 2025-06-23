@@ -679,6 +679,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     awaitBeforeExecution.push_back(brickstarts_upload_finished);
 
     // wait until all uploads finished
+    // TODO: simply return the awaitable to the main renderer call
     getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution);
 
     // update all bindings
@@ -915,6 +916,16 @@ void CompressedSegmentationVolumeRenderer::resetGPU() {
     releaseSwapchain();
     releaseShaderResources();
     releaseResources();
+}
+
+void CompressedSegmentationVolumeRenderer::resetAllEvaluationStates() {
+    // reset parameter hashes to trigger re-render
+    m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
+        std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    m_pcache_reset = true;
+    m_pmaterial_reset = true;
+    m_accumulated_frames = 0u;
+    m_frame = 0u;
 }
 
 void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
