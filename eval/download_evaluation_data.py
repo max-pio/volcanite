@@ -166,7 +166,9 @@ def download_cloud_data(dataset: str, directory: Path, output_name: str | None =
                         size: tuple[int, int, int] | None = None, origin: tuple[int, int, int] = None,
                         chunk_size: tuple[int, int, int] = (1024, 1024, 1024)) -> tuple[int, int, int]:
     example_data = {"h01": ("gs://h01-release/data/20210601/c3/", {"axis_order": "xyz"}),
+                    "h01-c2": ("gs://h01-release/data/20210601/c2/", {"axis_order": "xyz"}),
                     "h01-class": ("gs://h01-release/data/20210601/c3/subcompartments", {"axis_order": "xyz"}),
+                    "h01-bloodvessel": ("gs://h01-release/data/20210601/blood_vessels_segmented", {"axis_order": "xyz"}),
                     "witvliet2020": ("bossdb://witvliet2020/Dataset_8/segmentation", {"axis_order": "zyx"}),
                     "ara2016": ("bossdb://ara_2016/sagittal_10um/annotation_10um_2017", {"axis_order": "zyx"}),
                     "liconn": ("gs://liconn-public/ExPID82_1/segmentation/231030_agg_240123", {"axis_order": "xyz"})}
@@ -482,6 +484,32 @@ if __name__ == '__main__':
                 write_citation(csgv_directory, "h01")
                 # last_chunk = download_cloud_data("h01", directory=cur_dir, output_name=name, size=(9216, 9216, 5294), origin=(133300, 262000, 0))
                 last_chunk = (6,6,5)
+                ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld- -b 64"
+                                                    f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                     "--cache-palette --stream-lod"
+                                                    f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
+                                                    f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
+
+                if ret.returncode != 0:
+                    print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+                    if not args.no_abort:
+                        exit(ret.returncode)
+                # cleanup
+                if not args.keep:
+                    shutil.rmtree(cur_dir)
+            else:
+                print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
+
+        if not args.only or args.only.lower() == "h01-bloodvessel":
+            print("----------- H01 [Blood Vessel] ----------- ")
+            name = "H01-bloodvessel"
+            cur_dir = csgv_directory / Path(name)
+            if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+                write_citation(csgv_directory, "h01")
+                # the full blood vessel volume is ~220 GB uncompressed with 1479 labels at 16b/voxel
+                #
+                last_chunk = download_cloud_data("h01-bloodvessel", directory=cur_dir, output_name=name)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                     f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld- -b 64"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)} --cache-palette"
