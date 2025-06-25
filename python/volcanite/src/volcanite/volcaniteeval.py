@@ -34,7 +34,7 @@ class VolcaniteLogFile:
     Encapsulates the log file into which new Volcanite evaluation results are appended.
     The initial log file will be created as a copy from log_file_template.
     If a fallback_log is given, it is appended to the log_file when a Volcanite run fails instead of aborting the
-    evaluation. It may use the %name placeholder for the name of the current evaluation.
+    evaluation. It may use the {name} placeholder for the name of the current evaluation.
     """
 
     def __create_fallback_string(self, replace_with: str = "") -> str | None:
@@ -646,14 +646,11 @@ class VolcaniteExec:
     def __run_process(cls, call_args: list[str] | str, cwd: str | PathLike | None = None, print_log=True, *args, **kwargs):
         # remove empty argument strings ""
         if isinstance(call_args, str):
-            call_args = call_args.strip()
-            if print_log:
-                print(str(cwd) + "> " + call_args)
-        else:
-            call_args = list(filter(None, call_args))
-            if print_log:
-                print(str(cwd) + "> " + " ".join(call_args))
+            call_args = call_args.strip().split()
 
+        call_args = list(filter(None, call_args))
+        if print_log:
+            print(str(cwd) + "> " + " ".join(call_args))
         return subp.run(call_args, cwd=cwd, *args, **kwargs)
 
     @classmethod
@@ -679,7 +676,7 @@ class VolcaniteExec:
         if isinstance(args, str):
             return VolcaniteExec.__run_process("./volcanite " + args.strip(), print_log=print_log, cwd=binary_dir)
         else:
-            return VolcaniteExec.__run_process(["./volcanite"] + args.split(' '), print_log=print_log, cwd=binary_dir)
+            return VolcaniteExec.__run_process(["volcanite"] + args, print_log=print_log, cwd=binary_dir)
 
     def __init__(self, evaluation: VolcaniteEvaluation, git_base_dir: str | PathLike | None = None,
                  git_checkout : str | None = None, build_subdir: str | PathLike = "cmake-build-release",
@@ -797,7 +794,7 @@ class VolcaniteExec:
                     for log in self.evaluation.log_files:
                         if log.fallback_log:
                             print("Error: Volcanite returned " + str(res.returncode))
-                            log.log_manual(log.fallback_log.replace("%name", eval_name) + "\n")
+                            log.log_manual(log.fallback_log.replace("{name}", eval_name) + "\n")
                         else:
                             raise RuntimeError(f"Volcanite returned {res.returncode} and no fallback log exists for {log.file_path}")
                 else:

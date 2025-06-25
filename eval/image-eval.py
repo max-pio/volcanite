@@ -4,12 +4,14 @@ from volcanite.volcaniteeval import VolcaniteArg, VolcaniteEvaluation, Volcanite
 
 def data_specific_args(data : str) -> list[VolcaniteArg]:
     vargs = []
-    if data == "Motta2019" or data == "Griesser2022-sample" or data == "H01-wm" or data == "LICONN":
+    if data == "Motta2019" or data == "Griesser2022-sample" or data == "H01-wm":
         vargs.append(VolcaniteArg("--cache-palette"))
         if data == "Motta2019" or data == "H01-wm":
             vargs.append(VolcaniteArg("--cache-size 1024"))
         else:
             vargs.append(VolcaniteArg("--cache-size 2048"))
+        if data =="H01-wm":
+            vargs.append(VolcaniteArg("--stream-lod"))
     else:
         vargs.append(VolcaniteArg("--cache-size 4095"))
     return vargs
@@ -21,9 +23,9 @@ if __name__ == "__main__":
     evaluation = VolcaniteEvaluation(eval_out_directory=f"./results/{evaluation_name}/", existing_policy=ExistingPolicy.DELETE,
                                         eval_name=evaluation_name,
                                         log_files=[VolcaniteLogFileCfg(f"{evaluation_name}.csv",
-                                                              fmts=["{name},{frame_min_ms},{frame_avg_ms},{frame_max_ms},{frame_sdv_ms},{frame_med_ms},"
+                                                              fmts=["{frame_min_ms},{frame_avg_ms},{frame_max_ms},{frame_sdv_ms},{frame_med_ms},"
                                                                      + ",".join("{{frame_{:02}_ms}}".format(i) for i in range(16))],
-                                                              headers=["Shading Mode,frame min [ms],frame avg [ms],frame max [ms],stdv,frame med [ms],"
+                                                              headers=["Data Set,Shading Mode,frame min [ms],frame avg [ms],frame max [ms],stdv,frame med [ms],"
                                                                         + ",".join("Frame {:02}".format(i) for i in range(16))])],
                                         enable_log=True, dry_run=False)
 
@@ -57,10 +59,12 @@ if __name__ == "__main__":
             vargs = [arg_data, arg_vcfg, arg_shading, arg_image_eval, arg_image_export] + data_specific_args(arg_data.identifier)
 
             # log a summary line of all arguments
-            evaluation.get_log().log_manual("# " + VolcaniteArg.concat_ids(vargs))
+            evaluation.get_log().log_manual("# " + VolcaniteArg.concat_arg_string(vargs))
 
+            # the first two columns are written from the python script
+            evaluation.get_log().log_manual(arg_data.identifier + "," + arg_shading.identifier + ",", end="")
             # execute Volcanite and pass the Volcanite log file into which the results are appended
-            volcanite.exec(vargs, eval_name=arg_shading.identifier)
+            volcanite.exec(vargs)
 
 
     # create a copy of the log file with correct formatting
