@@ -51,7 +51,9 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
         }
     }
 
-    if (!vvv::debuggerIsAttached() && !args.verbose)
+    if (debuggerIsAttached() || args.verbose)
+        Logger::s_minLevel = Debug;
+    else
         Logger::s_minLevel = Info;
 
     // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
