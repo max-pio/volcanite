@@ -932,12 +932,12 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
 #define HASHP(PARAM) new_hash = hashMemory(&PARAM, sizeof(PARAM), new_hash);
 
     m_render_update_flags = 0u;
-    size_t new_hash;
+    size_t new_hash = 0ull;
 
     // camera parameters
-    new_hash = 0ull;
     const glm::mat4 mvp = m_camera->get_world_to_projection_space(m_resolution);
-    new_hash = hashMemory(&mvp, sizeof(glm::mat4));
+    HASHP(mvp)
+    HASHP(m_voxel_size)
     if (new_hash != m_pcamera_hash) {
         m_render_update_flags |= UPDATE_PCAMERA;
         m_pcamera_hash = new_hash;
@@ -1055,8 +1055,11 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
     const auto camera = getCamera();
     updateRenderResolutionFromWSI();
 
-    glm::vec3 voldim = glm::vec3(m_compressed_segmentation_volume->getVolumeDim());
-    glm::vec3 physical_voldim = voldim * m_voxel_size;
+    const glm::vec3 voldim = glm::vec3(m_compressed_segmentation_volume->getVolumeDim());
+    const glm::vec3 physical_voldim = voldim * m_voxel_size;
+    const float scalingFactor = glm::max(physical_voldim.x, glm::max(physical_voldim.y, physical_voldim.z));
+    // size in world space: uniformly scaled so that the largest component is 1
+    const glm::vec3 normalized_volume_size(physical_voldim / scalingFactor);
 
     // camera uniform
     if (m_render_update_flags & UPDATE_PCAMERA) {
@@ -1082,10 +1085,20 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_ucamera_info->setUniform<glm::mat3x3>("g_pixel_to_ray_direction_world_space", glm::mat3x3(
                                                                                             projection_to_world_space_no_translation * pixel_to_ray_direction_projection_space));
         m_ucamera_info->setUniform<glm::vec3>("g_camera_position_world_space", camera->position_world_space);
-        // the g_voxels_per_pixel_per_dist determines how many voxels an image pixel footprint overlaps for a camera distance
-        // TODO: account for anisotropic voxel sizes, currently using average
-        float voxels_per_pixel_at_near = (physical_voldim.x + physical_voldim.y + physical_voldim.z) / 3.f / glm::max(m_voxel_size.x, glm::max(m_voxel_size.y, m_voxel_size.z)) / float(m_resolution.height);
-        m_ucamera_info->setUniform<float>("g_voxels_per_pixel_per_dist", glm::tan(this->getCamera()->vertical_fov) * voxels_per_pixel_at_near);
+        // voxel_per_distance_xyz determines how many voxels an image pixel footprint overlaps for a camera distance
+        // simplified heuristic: lod = log2(distance / base_distance) with base-distance = (texel_size * resolution.height) / (2 * tan(fov / 2))
+        // computing (1 / base_distance) as lod_per_distance allows applying it to distance with multiplication instead of division
+        //
+        // in world space, the longest axis of a volume is 1. normalized_volume_size stores the length of each axis in world space.
+        // this means that a texel in world space is:
+        const glm::vec3 voxel_size_world = normalized_volume_size / glm::vec3(voldim);
+        const glm::vec3 voxel_per_distance_xyz = (2.f * glm::tan(glm::vec3(this->getCamera()->vertical_fov / 2.f))) / (voxel_size_world * static_cast<float>(m_resolution.height));
+        // lod2_per_distance_xyz gives a component-wise heuristic. If the camera looks along one of the axis, the other two components define the mip level selection
+        // (as those two dimensions are projected onto the screen). So the information needs to be swizzled around.
+        // We use an avg() accumulation under the assumption to achieve average performance. Conservative would use min().
+        m_ucamera_info->setUniform<glm::vec3>("g_voxels_per_pixel_per_dist", glm::vec3((voxel_per_distance_xyz.y + voxel_per_distance_xyz.z) / 2.f,
+                                                                                       (voxel_per_distance_xyz.x + voxel_per_distance_xyz.z) / 2.f,
+                                                                                       (voxel_per_distance_xyz.x + voxel_per_distance_xyz.y) / 2.f));
     }
 
     // resolve pass parameter uniform
@@ -1116,11 +1129,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
 
     // render info uniform
     if (m_render_update_flags & (UPDATE_RENDER_FRAME | UPDATE_PRENDER)) {
-
         // MVP matrices, transformations, volume sizes
-        float scalingFactor = glm::max(physical_voldim.x, glm::max(physical_voldim.y, physical_voldim.z));
-        // size in world space: uniformly scaled so that the largest component is one
-        glm::vec3 normalized_volume_size(physical_voldim / scalingFactor);
         m_urender_info->setUniform<glm::vec3>("g_voxel_size", m_voxel_size);
         m_urender_info->setUniform<glm::vec3>("g_physical_vol_dim", physical_voldim);
         m_urender_info->setUniform<glm::vec3>("g_normalized_volume_size", normalized_volume_size);
@@ -1177,8 +1186,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
 
         // general render config
         m_urender_info->setUniform<uint32_t>("g_detail_buffer_dirty", m_detail_stage == DetailUploading ? 1u : 0u);
-        m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
         auto lod_count = m_compressed_segmentation_volume->getLodCountPerBrick();
+        m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
         m_urender_info->setUniform<uint32_t>("g_max_inv_lod", glm::min(static_cast<uint32_t>(m_max_inv_lod), lod_count - 1u));
         m_urender_info->setUniform<int32_t>("g_max_request_path_length", (1 << m_max_request_path_length_pow2) - 1);
         m_urender_info->setUniform<int32_t>("g_maxSteps", m_max_steps);

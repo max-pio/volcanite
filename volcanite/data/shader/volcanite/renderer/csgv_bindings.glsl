@@ -197,7 +197,7 @@ layout (std140, binding = 11) uniform camera_info {
     mat4 g_view_to_world_space;
     mat3 g_pixel_to_ray_direction_world_space;
     vec3 g_camera_position_world_space;
-    float g_voxels_per_pixel_per_dist;
+    vec3 g_voxels_per_pixel_per_dist; // per axis: (d * voxel_per_distance) #voxels projected per pixel at distance d to near
 };
 
 layout (std140, binding = 12) uniform resolve_info {

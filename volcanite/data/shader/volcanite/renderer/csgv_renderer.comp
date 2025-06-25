@@ -56,16 +56,36 @@ layout (local_size_x = 8, local_size_y = 8) in;
     #include "volcanite/bit_vector.glsl"
 #endif
 
+uint get_decoded_inv_lod(ivec3 voxel) {
+    const uint brick_idx = brick_pos2idx(uvec3(voxel) / BRICK_SIZE, g_brick_count);
+    const uint cur_inv_lod = g_brick_info[brick_idx * 4u + BRICK_INFO_CUR_INV_LOD];
+    return cur_inv_lod >= LOD_COUNT ? 0u : cur_inv_lod;
+}
+
 uint get_inv_lod(ivec3 voxel) {
+    // TODO: LOD is constant per brick, do this before decode stage. That switches LODs of cached bricks in the CURRENT frame!
+
     // Ensure the same level-of-detail for all bricks by computing it from the brick's center.
     // Otherwise, different levels-of-detail would be requested for decompression of the same brick.
-    vec3 brick_center_world_space = (g_model_to_world_space * vec4((vec3(0.5f) + vec3(voxel / int(BRICK_SIZE))) * BRICK_SIZE, 1.f)).xyz;
-    float dist = length(brick_center_world_space - g_camera_position_world_space) + (float(BRICK_SIZE)/g_world_to_model_space_scaling);
+    const vec3 brick_center_world_space = (g_model_to_world_space * vec4((voxel/BRICK_SIZE)*BRICK_SIZE + BRICK_SIZE/2, 1.f)).xyz;
 
-    // use the MSB as a fast log2 (rounding down to int anyways)
-    int voxels_per_pixel_at_hit = int(g_voxels_per_pixel_per_dist * dist);
+    // for each axis g_voxels_per_pixel_per_dist stores how many voxels an image pixel footprint overlaps per camera distance
+    // we compute the number of voxels per pixel for all axes at once. for isotropic voxel sizes we get .x == .y == .z
+    const vec3 dist_xyz = (brick_center_world_space - g_camera_position_world_space);
+    const vec3 voxels_per_pixel = length(dist_xyz) * g_voxels_per_pixel_per_dist;
+
+    // ..and then interpolate between these values based on the ray direction
+    // bias weights towards the component with the highest contribution (and get absolute values for free)
+    vec3 weight = dist_xyz * dist_xyz;
+
+    // use the MSB as a fast approximation for log2 (rounding down to int anyways)
+    const int lod_interpolated = findMSB(max(0, int(g_lod_bias + dot(voxels_per_pixel, weight) / (weight.x + weight.y + weight.z))));
     // clamp with a potential user specified max inverse. LoD
-    return min(LOD_COUNT - 1u - uint(clamp(g_lod_bias + findMSB(voxels_per_pixel_at_hit), 0, LOD_COUNT - 1u)), g_max_inv_lod);
+    return min(LOD_COUNT - 1u - uint(clamp(lod_interpolated, 0, LOD_COUNT - 1)), g_max_inv_lod);
+
+    // old isotropic computation with single distance:
+    // float dist = int(g_voxels_per_pixel_per_dist * length(brick_center_world_space - g_camera_position_world_space))
+    // return min(LOD_COUNT - 1u - uint(clamp(g_lod_bias + findMSB(int(dist)), 0, LOD_COUNT - 1u)), g_max_inv_lod);
 }
 
 #if CACHE_MODE == CACHE_NOTHING
@@ -602,8 +622,10 @@ void main() {
             else if (isEmptySpace(state.voxel))
                 dda_voxel_size = BRICK_SIZE;
             // default traversal: step into next voxel in current level-of-detail
+            // TODO: DDA traversal step sizes should depend on available brick LODs, not the requested get_inv_lod
             else
                 dda_voxel_size = BRICK_SIZE >> get_inv_lod(state.voxel);
+
 
             dda_step_multilevel(state, ray, int(dda_voxel_size));
         }
