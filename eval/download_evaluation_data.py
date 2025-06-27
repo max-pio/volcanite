@@ -68,6 +68,7 @@ def write_citation(directory: Path, name: str) -> None:
 ('''Kenney, Justin W.; Steadman, Patrick E.; Young, Olivia et al. (2021).
 A 3D Adult Zebrafish Brain Atlas (AZBA) for the Digital Age [Dataset]. Dryad.
 https://doi.org/10.5061/dryad.dfn2z351g''', "https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt"),
+#
 # TODO: atlas data set is stored on google drive. could download with gdown python package.
 "atlas": ('''Jaus, Alexander; Seibold, Constantin; Hermann, Kelsey; Shahamiri, Negar; Walter, Alexandra; Giske, Kristina;
 Haubold, Johannes; Kleesiek, Jens; Stiefelhagen, Rainer (2024). Towards Unifying Anatomy Segmentation: Automated
@@ -146,6 +147,22 @@ Identification and analysis of fibers in ultra-large micro-CT scans of nonwoven 
 The Journal of The Textile Institute, 114(11), 1647-1657.
 https://doi.org/10.1080/00405000.2022.2145429
 ''', "https://opendatacommons.org/licenses/by/odc_by_1.0_public_text.txt"),
+#
+"cells": ('''Emerging Tumor Development by Simulating Single-cell Events
+Jakob Rosenbauer, Marco Berghoff, Alexander Schug
+bioRxiv 2020.08.24.264150
+https://doi.org/10.1101/2020.08.24.264150
+
+Data Set: cell_frame065.vti
+''',""),
+#
+"fiber": ('''Maurer, J., Salaberger, D., Jerabek, M., Kastner, J., & Major, Z. (2022).
+Quantitative investigation of local strain and defect formation in short glass fibre reinforced polymers using X-ray
+computed tomography. Nondestructive Testing and Evaluation, 37(5), 582–600.
+https://doi.org/10.1080/10589759.2022.2075865
+
+Data Set: glassfibrereinforcedpolymer_unloaded_1579x1092x1651_2umVS_labeled_16bit.raw
+''', "")
 }
 
     if not name.lower() in citations:
@@ -317,7 +334,7 @@ if __name__ == '__main__':
 
     if not args.only or args.only.lower() == "wolny2020":
         print("----------- Wolny2020 ----------- ")
-        name = "wolny2020"
+        name = "Wolny2020"
         cur_dir = csgv_directory / Path(name)
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, name)
@@ -448,6 +465,51 @@ if __name__ == '__main__':
         else:
             print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
 
+
+    # Closed Source Data Sets (not publicly available)
+    if not args.only or args.only.lower() == "cells":
+        print("----------- Cells ----------- ")
+        name = "cells"
+        cur_dir = csgv_directory / Path(name)
+        if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+            if not cur_dir.exists():
+                print(f"Closed source data set {name} is not publicly available. Skipping.")
+            else:
+                write_citation(csgv_directory, name)
+                ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                    f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                    f" {cur_dir / "cells_065.hdf5"}")
+
+                if ret.returncode != 0:
+                    print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+                    if not args.no_abort:
+                        exit(ret.returncode)
+                # closed source data set input files are not removed / cleaned up
+        else:
+            print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
+
+    if not args.only or args.only.lower() == "fiber":
+        print("----------- Fiber (Maurer2022) ----------- ")
+        name = "fiber"
+        cur_dir = csgv_directory / Path(name)
+        if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
+            if not cur_dir.exists():
+                print(f"Closed source data set {name} is not publicly available. Skipping.")
+            else:
+                write_citation(csgv_directory, name)
+                ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                    f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                    f" {cur_dir / "maurer_glassfiberpolymer.hdf5"}")
+
+                if ret.returncode != 0:
+                    print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+                    if not args.no_abort:
+                        exit(ret.returncode)
+                # closed source data set input files are not removed / cleaned up
+        else:
+            print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
 
 
     # DOWNLOADING AND COMPRESSING BIG DATA -----------------------------------------------------------------------------
