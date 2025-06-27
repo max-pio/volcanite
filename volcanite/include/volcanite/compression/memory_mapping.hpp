@@ -22,22 +22,22 @@ using namespace vvv;
 namespace volcanite {
 
 /// @brief converts a 3D index of a voxel in a full volume into its 1D memory index.
-[[nodiscard]] inline glm::uvec3 voxel_idx2pos(size_t i, const glm::uvec3 volume_dim) {
+[[nodiscard]] inline glm::uvec3 voxel_idx2pos(const size_t i, const glm::uvec3& volume_dim) {
     assert(i < volume_dim.x * volume_dim.y * volume_dim.z);
     return sfc::Cartesian::i2p(i, volume_dim);
 }
 /// @brief converts a 1D memory index into its 3D index of a voxel in a full volume.
-[[nodiscard]] inline size_t voxel_pos2idx(glm::uvec3 p, const glm::uvec3 volume_dim) {
+[[nodiscard]] inline size_t voxel_pos2idx(const glm::uvec3& p, const glm::uvec3& volume_dim) {
     assert(glm::all(glm::lessThan(p, volume_dim)));
     return sfc::Cartesian::p2i(p, volume_dim);
 }
 
 /// @brief converts a 3D index of a brick into its 1D memory index.
-[[nodiscard]] inline uint32_t brick_pos2idx(glm::uvec3 brick_pos, const glm::uvec3 brick_count) {
+[[nodiscard]] inline uint32_t brick_pos2idx(const glm::uvec3& brick_pos, const glm::uvec3& brick_count) {
     return sfc::Cartesian::p2i(brick_pos, brick_count);
 }
 /// @brief converts a 1D memory index into a 3D index of its brick.
-[[nodiscard]] inline glm::uvec3 brick_idx2pos(uint32_t brick_index, const glm::uvec3 brick_count) {
+[[nodiscard]] inline glm::uvec3 brick_idx2pos(const uint32_t brick_index, const glm::uvec3& brick_count) {
     assert(brick_index < brick_count.x * brick_count.y * brick_count.z);
     return sfc::Cartesian::i2p(brick_index, brick_count);
 }
@@ -46,7 +46,7 @@ namespace volcanite {
 /// Because of how we encode the LODs, this enumeration is required to always be in an "octree manner".
 /// Iterating over it with a step size of 2*2*2=8 should land on all start points of 2x2x2 bricks in the Octree and so on.
 /// Morton and Hilbert curves for example satisfy this criterion.
-[[nodiscard]] inline glm::uvec3 enumBrickPos(uint32_t i) {
+[[nodiscard]] inline glm::uvec3 enumBrickPos(const uint32_t i) {
     // TODO: rename enumBrickPos to cache_idx2dpos or rename both to brickvoxel_idx2pos
     return sfc::Morton3D::i2p(i);
 }
