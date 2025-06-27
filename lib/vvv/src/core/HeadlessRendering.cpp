@@ -245,7 +245,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         frame_idx--; // frame_idx is now the number of frames, but the last index is one before
         std::string last_output_image_path = fmt::vformat(cfg.video_fmt_file_out, fmt::make_format_args(frame_idx));
         frame_idx++;
-        Logger(Info, true) << "exporting screenshot to " << last_output_image_path;
+        Logger(Info) << "exporting final screenshot to " << last_output_image_path;
         ret_tex->writeFile(last_output_image_path);
 
         // prevent the renderer from screenshotting the frame again, if more frames are rendered

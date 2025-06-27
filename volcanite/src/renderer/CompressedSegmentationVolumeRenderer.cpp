@@ -153,7 +153,6 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
 
     // if a screenshot export was requested, we do this here (not timed)
     if (m_download_frame_to_image_file.has_value() && m_mostRecentFrame.has_value() && m_mostRecentFrame->texture) {
-        Logger(Info, true) << "exporting screenshot to " << m_download_frame_to_image_file.value();
         try {
             m_mostRecentFrame->texture->writeFile(m_download_frame_to_image_file.value(), m_queue_family_index);
         } catch (const std::runtime_error &e) {
@@ -662,7 +661,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     Buffer::deviceAddressUvec2(m_cache_buffer->getDeviceAddress(), &m_cache_buffer_address.x);
 
     updateDeviceMemoryUsage();
-    Logger(Info) << "Device memory after initialization: " << m_gui_device_mem_text;
+    Logger(Debug) << "Device memory after initialization: " << m_gui_device_mem_text;
 
     // UPLOAD TO GPU BUFFERS ----------------------------------
     AwaitableList awaitBeforeExecution;
@@ -702,7 +701,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
 void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     setCtx(ctx);
     updateDeviceMemoryUsage();
-    Logger(Info) << "Device memory on startup: " << m_gui_device_mem_text;
+    Logger(Debug) << "Device memory on startup: " << m_gui_device_mem_text;
 
     // TODO: all rendering should happen on the compute queue, + queue ownership transfer to present for the Application
     m_queue_family_index = getCtx()->getQueueFamilyIndices().graphics.value();
@@ -1303,6 +1302,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         auto selected_file = pfd::save_file("Save Screenshot", Paths::getHomeDirectory().string() + "/*",
                                             {"Image File (.png .jpg .jpeg)", "*.png *.jpg *.jpeg", "All Files", "*"});
         if (!selected_file.result().empty()) {
+            Logger(Info) << "exporting screenshot to " << selected_file.result();
             exportCurrentFrameToImage(selected_file.result());
         }
 #endif
