@@ -2,19 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from volcanite.volcaniteeval import VolcaniteArg, VolcaniteEvaluation, VolcaniteExec, VolcaniteLogFileCfg, ExistingPolicy
 
-def data_specific_args(data : str) -> list[VolcaniteArg]:
-    vargs = []
-    if data == "Motta2019" or data == "Griesser2022-sample" or data == "H01-wm":
-        vargs.append(VolcaniteArg("--cache-palette"))
-        if data == "Motta2019" or data == "H01-wm":
-            vargs.append(VolcaniteArg("--cache-size 1024"))
-        else:
-            vargs.append(VolcaniteArg("--cache-size 2048"))
-        if data =="H01-wm":
-            vargs.append(VolcaniteArg("--stream-lod"))
-    else:
-        vargs.append(VolcaniteArg("--cache-size 4095"))
-    return vargs
+from common import data_specific_args
 
 if __name__ == "__main__":
 
@@ -65,8 +53,4 @@ if __name__ == "__main__":
             evaluation.get_log().log_manual(arg_data.identifier + "," + arg_shading.identifier + ",", end="")
             # execute Volcanite and pass the Volcanite log file into which the results are appended
             volcanite.exec(vargs)
-
-
-    # create a copy of the log file with correct formatting
-    # evaluation.get_log().create_formatted_copy(evaluation.eval_out_directory / Path("image-eval.csv"), newline_separator="\\\\")
 

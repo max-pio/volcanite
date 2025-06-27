@@ -1,17 +1,8 @@
+from datetime import datetime
 from pathlib import Path
 from volcanite.volcaniteeval import VolcaniteArg, VolcaniteEvaluation, VolcaniteExec, VolcaniteLogFileCfg, ExistingPolicy
 
-def data_specific_args(data : str) -> list[VolcaniteArg]:
-    vargs = []
-    if data == "Motta2019" or data == "Griesser2022-sample" or data == "H01-wm" or data == "LICONN":
-        vargs.append(VolcaniteArg("--cache-palette"))
-        if data == "Motta2019" or data == "H01-wm":
-            vargs.append(VolcaniteArg("--cache-size 1024"))
-        else:
-            vargs.append(VolcaniteArg("--cache-size 2048"))
-    else:
-        vargs.append(VolcaniteArg("--cache-size 4095"))
-    return vargs
+from common import data_specific_args
 
 if __name__ == "__main__":
 
@@ -40,7 +31,7 @@ if __name__ == "__main__":
 
 
     # constant arguments
-    arg_video_cfg = VolcaniteArg.arg_video_eval_cfg(rotation=(-360, 0), zoom=(2, 0), duration=600, interpolant="smooth", edge=(0.2, 0.8),
+    arg_video_cfg = VolcaniteArg.arg_video_eval_cfg(rotation=(-360, 0), zoom=(2, -0.2), duration=600, interpolant="smooth", edge=(0.2, 0.8),
                                               duration_is_seconds=False, output_framerate=0)
 
     # iterate over all configuration combinations and execute Volcanite
@@ -54,9 +45,8 @@ if __name__ == "__main__":
 
         for arg_shading in VolcaniteArg.args_shading.values():
 
-            # evaluate timings and export an image
-            arg_video_export = VolcaniteArg.arg_video_export([arg_data])
-
+            # evaluate timings and export path as video
+            arg_video_export = VolcaniteArg.arg_video_export([arg_data, arg_shading])
 
             vargs = [arg_data, arg_vcfg, arg_shading, arg_video_cfg, arg_video_export] + data_specific_args(arg_data.identifier)
 
@@ -64,8 +54,7 @@ if __name__ == "__main__":
             evaluation.get_log().log_manual("# " + VolcaniteArg.concat_ids(vargs))
 
             # execute Volcanite and pass the Volcanite log file into which the results are appended
-            volcanite.exec(vargs, eval_name=arg_shading.identifier)
+            volcanite.exec(vargs)
 
 
-    # create a copy of the log file with correct formatting
-    # evaluation.get_log().create_formatted_copy(evaluation.eval_out_directory / Path("image-eval.csv"), newline_separator="\\\\")
+    # create a eate_formatted_copy(evaluation.eval_out_directory / Path("image-eval.csv"), newline_separator="\\\\")

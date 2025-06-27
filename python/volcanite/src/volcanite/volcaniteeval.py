@@ -794,7 +794,7 @@ class VolcaniteExec:
                     for log in self.evaluation.log_files:
                         if log.fallback_log:
                             print("Error: Volcanite returned " + str(res.returncode))
-                            log.log_manual(log.fallback_log.replace("{name}", eval_name) + "\n")
+                            log.log_manual(log.fallback_log.replace("{name}", eval_name))
                         else:
                             raise RuntimeError(f"Volcanite returned {res.returncode} and no fallback log exists for {log.file_path}")
                 else:

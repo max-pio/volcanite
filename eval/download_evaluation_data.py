@@ -482,12 +482,12 @@ if __name__ == '__main__':
             cur_dir = csgv_directory / Path(name)
             if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
                 write_citation(csgv_directory, "h01")
-                # last_chunk = download_cloud_data("h01", directory=cur_dir, output_name=name, size=(9216, 9216, 5294), origin=(133300, 262000, 0))
-                last_chunk = (6,6,5)
+                # last_chunk = download_cloud_data("h01", directory=cur_dir, output_name=name, size=(10240, 10240, 5294), origin=(133300, 262000, 0))
+                last_chunk = (9,9,5)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                     f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld- -b 64"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
-                                                     "--cache-palette --stream-lod"
+                                                     " --cache-palette --stream-lod --cache-size 4095"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
 
