@@ -77,7 +77,7 @@ Haubold, Johannes; Kleesiek, Jens; Stiefelhagen, Rainer (2024). Towards Unifying
  https://www.synapse.org/Synapse:syn52287632/version/1
  https://github.com/alexanderjaus/AtlasDataset''', "https://www.apache.org/licenses/LICENSE-2.0.txt"),
 #
- "ara2016": ('''Allen Mouse Reference Atlas [Dataset]. bossdb archive. https://10.60533/BOSS-2017-DDKQ''',
+ "Ara2016": ('''Allen Mouse Reference Atlas [Dataset]. bossdb archive. https://10.60533/BOSS-2017-DDKQ''',
 "https://creativecommons.org/licenses/by/4.0/legalcode.txt"),
 #
 "pa66": ('''Bertoldo, J., Decencière, E., Ryckelynck, D., & Proudhon, H. (2021). Glass fiber-reinforced polyamide
@@ -286,7 +286,7 @@ if __name__ == '__main__':
 
     if not args.only or args.only.lower() == "ara2106":
         print("----------- Ara2016 ----------- ")
-        name = "ara2016"
+        name = "Ara2016"
         cur_dir = csgv_directory / Path(name)
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, name)
@@ -590,8 +590,8 @@ if __name__ == '__main__':
 
 
         if not args.only or args.only.lower() == "liconn":
-            print("----------- LICONN ----------- ")
-            name = "LICONN"
+            print("----------- liconn ----------- ")
+            name = "liconn"
             cur_dir = csgv_directory / Path(name)
             if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
                 write_citation(csgv_directory, name)

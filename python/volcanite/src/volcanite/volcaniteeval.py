@@ -580,8 +580,6 @@ class VolcaniteArg:
                     continue
                 args_config_str += ["--config", cfg]
 
-        print("\n\n" + str(args_config_file + args_config_str) + "\n\n")
-
         return cls(args_config_file + args_config_str + ["--resolution", resolution], "", 100)
 
     @classmethod

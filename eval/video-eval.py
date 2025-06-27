@@ -15,7 +15,7 @@ if __name__ == "__main__":
                                                                      + ",".join("{{frame_{:02}_ms}}".format(i) for i in range(16))],
                                                               headers=["Data Set,Shading Mode,frame min [ms],frame avg [ms],frame max [ms],stdv,frame med [ms],"
                                                                         + ",".join("Frame {:02}".format(i) for i in range(16))])],
-                                        enable_log=True, dry_run=False)
+                                        enable_log=True, dry_run=True)
 
     volcanite = VolcaniteExec(evaluation, build_subdir="cmake-build-release")
     volcanite.checkout_and_build()
