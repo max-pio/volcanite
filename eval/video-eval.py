@@ -11,9 +11,9 @@ if __name__ == "__main__":
     evaluation = VolcaniteEvaluation(eval_out_directory=f"./results/{evaluation_name}/", existing_policy=ExistingPolicy.DELETE,
                                         eval_name=evaluation_name,
                                         log_files=[VolcaniteLogFileCfg(f"{evaluation_name}.csv",
-                                                              fmts=["{name},{frame_min_ms},{frame_avg_ms},{frame_max_ms},{frame_sdv_ms},{frame_med_ms},"
+                                                              fmts=["{frame_min_ms},{frame_avg_ms},{frame_max_ms},{frame_sdv_ms},{frame_med_ms},"
                                                                      + ",".join("{{frame_{:02}_ms}}".format(i) for i in range(16))],
-                                                              headers=["Shading Mode,frame min [ms],frame avg [ms],frame max [ms],stdv,frame med [ms],"
+                                                              headers=["Data Set,Shading Mode,frame min [ms],frame avg [ms],frame max [ms],stdv,frame med [ms],"
                                                                         + ",".join("Frame {:02}".format(i) for i in range(16))])],
                                         enable_log=True, dry_run=False)
 
@@ -53,6 +53,8 @@ if __name__ == "__main__":
             # log a summary line of all arguments
             evaluation.get_log().log_manual("# " + VolcaniteArg.concat_ids(vargs))
 
+            # the first two columns are written from the python script
+            evaluation.get_log().log_manual(arg_data.identifier + "," + arg_shading.identifier + ",", end="")
             # execute Volcanite and pass the Volcanite log file into which the results are appended
             volcanite.exec(vargs)
 
