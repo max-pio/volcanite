@@ -4,6 +4,7 @@
 compile_commands.json
 .ipynb_checkpoints/
 *.pkl
+.aider*
 
 # gitlab merge conflict backups
 **/**.orig
