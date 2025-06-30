@@ -1499,6 +1499,18 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                                VDEB_ENVMAP_BIT, VDEB_STATS_DOWNLOAD_BIT};
     g_dev->addBitFlags(&m_debug_vis_flags, option_labels, option_bits, true, "Debug View");
     g_dev->addSeparator();
+    g_dev->addAction([this]() { if (m_enable_frame_time_tracking) stopFrameTimeTracking(m_mostRecentFrame->renderingComplete); else startFrameTimeTracking(); }, "Frame Time Tracking");
+#ifdef IMGUI
+    GUI_SAME_LINE(g_dev)
+    g_dev->addCustomCode([this]() {
+        if (!m_pass->getLastFrameTimeTrackingResults().empty()) {
+            glm::vec4 gpu_timings = m_pass->getLastFrameTimeTrackingResults().back();
+            ImGui::Text("T: %.2f | C: %.2f D: %.2f R: %.2f P: %.2f", m_last_frame_times.back(), gpu_timings.x, gpu_timings.y, gpu_timings.z, gpu_timings.w);
+        } else {
+            ImGui::TextColored(glm::vec4(0.5f, 0.5f, 0.5f, 1.f), "-- | -- -- -- --");
+        }
+    }, "##TimingResults");
+#endif
     g_dev->addLabel("Label Cache Management");
     g_dev->addBool(&m_req_limit.g_enable, "Auto Cache Request Limitation");
     g_dev->addInt(&m_req_limit.spp_delta, "Allowed SPP Difference", 2, 512, 1);
@@ -1671,11 +1683,13 @@ void CompressedSegmentationVolumeRenderer::updateRequestLimiation(const uint32_t
         m_req_limit.tried_cache_reset = false;
         m_req_limit.random_area_pixel = false,
         m_req_limit.area_size = 1 << glm::findMSB(glm::max(m_resolution.width, m_resolution.height));
-        m_req_limit.area_pos = {0, 0};
         m_req_limit.area_start_frame = m_accumulated_frames;
         m_req_limit.area_min_pixel_last_spp = global_min_spp;
         m_req_limit.area_min_pixel = m_req_limit.global_min_pixel;
+        m_req_limit.area_pos = (m_req_limit.area_min_pixel / glm::ivec2(m_req_limit.area_size)) * glm::ivec2(m_req_limit.area_size);
         m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x;
+        if (m_req_limit.area_start_frame == 0u)
+            Logger(Debug) << "Cache insufficient. Enabling request limitation.";
     }
     // if a brick request limitation is already set: move the AABB in which pixels can request bricks around
     // when a new area configuration is set, area_duration frames are accumulated to see if it was effective

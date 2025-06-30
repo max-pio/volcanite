@@ -324,9 +324,9 @@ const std::vector<glm::vec4> &PassCompSegVolRender::stopFrameTimeTracking(const 
 }
 
 [[nodiscard]] const std::vector<glm::vec4> &PassCompSegVolRender::getLastFrameTimeTrackingResults() const {
-    if (m_timing_active) {
-        throw std::runtime_error("PassCompSegVolRender frame time tracking is active. Call stopFrameTimeTracking() before getLastFrameTimeTrackingResults().");
-    }
+    // if (m_timing_active) {
+    //     throw std::runtime_error("PassCompSegVolRender frame time tracking is active. Call stopFrameTimeTracking() before getLastFrameTimeTrackingResults().");
+    // }
     return m_frame_gpu_timings;
 }
 
