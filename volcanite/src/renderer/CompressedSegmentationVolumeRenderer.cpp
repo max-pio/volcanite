@@ -302,6 +302,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         detail_upload_thread.detach();
     }
 
+    if (m_render_update_flags & UPDATE_CLEAR_CACHE)
+        Logger(Debug) << "hard reset brick cache at accumulated|total frame " << m_accumulated_frames << " | " << m_frame << " (" << m_parameter_hash_at_last_reset << ")";
+
     m_pass->setStorageImage("inpaintedOutColor", *m_inpaintedOutColor);
     // feedback texture ping pong for the inpainting shader
     m_pass->setStorageImage("accumulationIn", *m_accumulation_rgba_tex[m_frame % 2u]);

@@ -71,7 +71,6 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
                                       {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite,
                                                          vk::AccessFlagBits::eMemoryRead)},
                                       nullptr, nullptr);
-        Logger(Debug) << "hard reset brick cache";
     }
 
     // block request and visibility classification
