@@ -36,6 +36,30 @@ layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
 #include "pcg_hash.glsl"
 
+uint get_brick_inv_lod(uvec3 brick) {
+    // Ensure the same level-of-detail for all bricks by computing it from the brick's center.
+    // Otherwise, different levels-of-detail would be requested for decompression of the same brick.
+    const vec3 brick_center_world_space = (g_model_to_world_space * vec4(brick*BRICK_SIZE + BRICK_SIZE/2, 1.f)).xyz;
+
+    // for each axis g_voxels_per_pixel_per_dist stores how many voxels an image pixel footprint overlaps per camera distance
+    // we compute the number of voxels per pixel for all axes at once. for isotropic voxel sizes we get .x == .y == .z
+    const vec3 dist_xyz = (brick_center_world_space - g_camera_position_world_space);
+    const vec3 voxels_per_pixel = length(dist_xyz) * g_voxels_per_pixel_per_dist;
+
+    // ..and then interpolate between these values based on the ray direction
+    // bias weights towards the component with the highest contribution (and get absolute values for free)
+    vec3 weight = dist_xyz * dist_xyz;
+
+    // use the MSB as a fast approximation for log2 (rounding down to int anyways)
+    const int lod_interpolated = findMSB(max(0, int(g_lod_bias + dot(voxels_per_pixel, weight) / (weight.x + weight.y + weight.z))));
+    // clamp with a potential user specified max inverse. LoD
+    return min(LOD_COUNT - 1u - uint(clamp(lod_interpolated, 0, LOD_COUNT - 1)), g_max_inv_lod);
+
+    // old isotropic computation with single distance:
+    // float dist = int(g_voxels_per_pixel_per_dist * length(brick_center_world_space - g_camera_position_world_space))
+    // return min(LOD_COUNT - 1u - uint(clamp(g_lod_bias + findMSB(int(dist)), 0, LOD_COUNT - 1u)), g_max_inv_lod);
+}
+
 bool pushFreeBlockStack(uint inv_lod, uint value) {
     uint pos = atomicAdd(g_free_block_stacks[(LOD_COUNT - 1u) * g_free_stack_capacity + (inv_lod - 1u)], 1u);
     if(pos > g_free_stack_capacity) {
@@ -130,11 +154,18 @@ void main() {
     return;
 #endif
 
-#ifndef NDEBUG
+#if !defined(COMPUTE_LOD_AT_RENDER_TIME)
+    // Set the LOD of visible bricks to the correct LOD that is required in this frame
+    // "flagged as visible by the renderer" in this case means REQ_INV_LOD was set to anything < LOD_COUNT
+    if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < LOD_COUNT) {
+        // note: the brick_inv_lod can be zero, in which case no cache area will be requested for this brick
+        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = potentially_visible ? get_brick_inv_lod(brick) : (LOD_COUNT + 1);
+    }
+#elif !defined(NDEBUG)
     // the coarsest LoD 0 must not be requested! we can just read it from the first palette entry during rendering so
     // we don't do anything here.
     // TODO: could assign the label from palette to brick directly to not be required to read g_encoding in the renderer
-    if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == 0u) {
+    if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == 0u) {
         assert(false, "requesting LoD 0 is not allowed!");
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT;
     }
@@ -159,7 +190,8 @@ void main() {
     // we deallocate if we hold a cache element.
     // only chance to not deallocate is that the brick is potentially_visible, flagged as visible in the last render
     // frame, AND decoded to the LoD requested by the renderer (this is the last else block below).
-    bool deallocate = g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] != INVALID;
+    bool deallocate = 0 < g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] && g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] < LOD_COUNT;
+    assert(!deallocate || g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] != INVALID, "brick is decoded but has no cache location at frame start");
     bool allocate = false;
     // no visible palette entries: brick is empty space
     if (!potentially_visible) {
@@ -171,7 +203,7 @@ void main() {
     }
     // brick is already flagged as visible (REQ_INV_LOD < LOD_COUNT) but not decoded to the requested LoD
     else if(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]){
-        allocate = true;
+        allocate = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > 0;
     }
     // brick is visilbe and already decoded to its requeste level: it should remain in cache.
     else {
@@ -182,8 +214,7 @@ void main() {
 
     // we can refuse to deallocate elements if the cache is filled below 75%, but only if it does not have to switch LOD
 #ifndef NO_CACHE_LAZY_EJECT
-    const uint cache_top = (LOD_COUNT - 1u) * ASSIGN_ELEMS_PER_LOD;
-    if (!allocate && g_assign_info[cache_top] < g_cache_capacity / 4u * 3u) {
+    if (!allocate && g_assign_info[ASSIGN_CACHE_TOP_IDX] < g_cache_capacity / 4u * 3u) {
         deallocate = false;
     }
 #endif
@@ -210,6 +241,13 @@ void main() {
 //        }
     }
 
+    // bricks that are requested for the corasest inverse LOD 0 (one label for the whole brick) can be directly "decoded"
+    if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == 0u) {
+        // the label is directly stored instead of the cache index
+        g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] = getBrickEncodingRef(brick_idx).buf[getBrickEncodingLength(brick_idx) - 1u];
+        g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] = 0u;
+    }
+
     // every brick that needs to allocate a new element gets one uniqe index in [0, 1, ..] in its requested LOD
     // TODO: the assert for the BRICK_INFO_REQ_SLOT reset is (1) not necessary as it is overwritten here anyways, and (2) if the render update flags are not UPDATE_RENDER, the cache stages are not called. after reactivation the slots may not have been reset yet.
     // BUT THE g_assign_info + ASSIGN_REQUESTED_BRICKS MUST be reset before assigning slots again!!
@@ -229,7 +267,9 @@ void main() {
 
     // after this shader execution:
     // cache element ownership
-    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick still owns a cache element
+    // - (0 < BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick still owns a cache element
+    // - (BRICK_INFO_CACHE_INDEX < INVALID) and is a cache index <=> (0 < CUR_INV_LOD < LOD_COUNT)
+    // - (BRICK_INFO_CACHE_INDEX < INVALID) and is label of inv. LOD 0 <=> (0 == CUR_INV_LOD)
     // - REQ_SLOT < INVALID <=> the brick needs a cache element <=> the REQ_SLOT is a valid entry for its REQ_LOD
     // - REQ_SLOT < INVALID => BRICK_INFO_INDEX == INVALID
     // - the ASSIGN_REQUESTED_BRICKS for each LoD contains the number of requested blocks for this LoD.

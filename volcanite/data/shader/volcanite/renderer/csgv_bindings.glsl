@@ -82,6 +82,9 @@ layout(std430, binding = 3) buffer restrict brick_cache_infos
 };
 #define BRICK_INFO_REQ_INV_LOD 0
 #define BRICK_INFO_CUR_INV_LOD 1
+// either the start index of the decoded brick in the cache (0 < CUR_INV_LOD < LOD_COUNT),
+// or the label of the corasest inv. lod 0 (0 == CUR_INV_LOD),
+// or INVALID (CUR_INV_LOD >= LOD_COUNT)
 #define BRICK_INFO_CACHE_INDEX 2
 #define BRICK_INFO_REQ_SLOT 3
 

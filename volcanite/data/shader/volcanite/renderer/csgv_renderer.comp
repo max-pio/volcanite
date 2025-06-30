@@ -307,7 +307,49 @@ uint get_inv_lod(ivec3 voxel) {
         const uint brick_idx = brick_pos2idx(brick, g_brick_count);
         const uint brick_info_pos = brick_idx * 4u;
 
-        // TODO: a lot of these computations would only be required when entering a *new* brick. store lod + last_brick_idx in the state?
+#ifndef COMPUTE_LOD_AT_RENDER_TIME
+        // mark brick as visible
+        const uint old_req_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
+        assert(old_req_inv_lod <= LOD_COUNT, "trying to access a brick that's flagged as invisible");
+        if (old_req_inv_lod == LOD_COUNT    // brick is not yet requested
+            #ifdef VALID_RAY_REQUEST_ONLY
+                // without checking for validity, may (rarely) request bricks that are actually obscured by bricks
+                // in front of them. limiting requests to valid rays, however, creates popping artifacts at
+                // interfaces between LODs when the camera moves: bricks behind other bricks are not flagged as
+                // visible (because the brick in front is an out-of-date LOD)
+                // TODO: this may currently be a source for normal vector artifacts from DDA traversal
+                && isDepthValid(depth_valid)
+            #else
+                // by default: request bricks with invalid rays as well except if brick request limitation is enabled
+                && (isDepthValid(depth_valid) || g_req_limit_area_size == 0u)
+            #endif
+                && (request_invalid_bits & REQUEST_ENABLE_BIT) > 0u) { // this path may still request new brick
+
+            // we set the requested LOD to 0 (does not matter as long as it is < LOD_COUNT) as it will actually be
+            // computed in the csgv_request stage of the next frame.
+            atomicCompSwap(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD], old_req_inv_lod, 1);
+        }
+
+        // read voxel from cache (or decoding if the brick is not decoded)
+        const uint cur_inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD];
+        if (cur_inv_lod == 0u) {
+            // if the corasest LOD is "decoded", its single label is directly storead as "cache index"
+            return g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX];
+        } else if (cur_inv_lod >= LOD_COUNT) {
+            // invalidate the sample if the brick is not decoded yet
+            if (bool(request_invalid_bits & INVALIDATE_ENABLE_BIT))
+                depth_valid = INVALID_DEPTH;
+
+            // we could alternatively perform a small linear search for the first *visible* label here
+            return getBrickEncodingRef(brick_idx).buf[getBrickEncodingLength(brick_idx) - 1u];
+        } else {
+            #ifdef PALETTE_CACHE
+                return readCSGVPaletteBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * g_cache_base_element_uints, brick_idx);
+            #else
+                return readCSGVBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * g_cache_base_element_uints);
+            #endif
+        }
+#else
         // compute optimal LOD for the center of this brick
         // all threads that access this brick are guaranteed to compute the same LOD for this brick
         uint req_inv_lod = get_inv_lod(voxel);
@@ -330,7 +372,7 @@ uint get_inv_lod(ivec3 voxel) {
                     // TODO: this may currently be a source for normal vector artifacts from DDA traversal
                 && isDepthValid(depth_valid)
             #else
-                // by default: request bricks with invalid rays as well, except if brick request limitation is enabled
+                // by default: request bricks with invalid rays as well except if brick request limitation is enabled
                 && (isDepthValid(depth_valid) || g_req_limit_area_size == 0u)
             #endif
                 && (request_invalid_bits & REQUEST_ENABLE_BIT) > 0u) { // this path may still request new brick
@@ -346,7 +388,7 @@ uint get_inv_lod(ivec3 voxel) {
         if (cur_inv_lod != req_inv_lod && bool(request_invalid_bits & INVALIDATE_ENABLE_BIT))
             depth_valid = INVALID_DEPTH;
 
-        // if the brick is not yet decoded: return a palette label
+        // if the brick is not (yet) decoded: return a palette label
         if (cur_inv_lod >= LOD_COUNT) {
             EncodingRef encoding_address = getBrickEncodingRef(brick_idx);
             const uint encoding_size = getBrickEncodingLength(brick_idx);
@@ -368,6 +410,7 @@ uint get_inv_lod(ivec3 voxel) {
             return readCSGVBrick(brick_voxel, cur_inv_lod, g_brick_info[brick_info_pos + BRICK_INFO_CACHE_INDEX] * g_cache_base_element_uints);
     #endif
         }
+#endif //  COMPUTE_LOD_AT_RENDER
     }
 #endif
 
