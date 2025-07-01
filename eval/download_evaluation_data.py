@@ -64,8 +64,8 @@ def download_files(url_fmt: str, _last_chunk: (int, int, int), directory: Path, 
 def write_citation(directory: Path, name: str) -> None:
     """"Downloads a license for the volume [name] and writes a citation and this license in [directory]/[name].txt"""
 
-    citations = {"azba":
-('''Kenney, Justin W.; Steadman, Patrick E.; Young, Olivia et al. (2021).
+    citations = {
+"azba": ('''Kenney, Justin W.; Steadman, Patrick E.; Young, Olivia et al. (2021).
 A 3D Adult Zebrafish Brain Atlas (AZBA) for the Digital Age [Dataset]. Dryad.
 https://doi.org/10.5061/dryad.dfn2z351g''', "https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt"),
 #
@@ -77,7 +77,7 @@ Haubold, Johannes; Kleesiek, Jens; Stiefelhagen, Rainer (2024). Towards Unifying
  https://www.synapse.org/Synapse:syn52287632/version/1
  https://github.com/alexanderjaus/AtlasDataset''', "https://www.apache.org/licenses/LICENSE-2.0.txt"),
 #
- "Ara2016": ('''Allen Mouse Reference Atlas [Dataset]. bossdb archive. https://10.60533/BOSS-2017-DDKQ''',
+ "ara2016": ('''Allen Mouse Reference Atlas [Dataset]. bossdb archive. https://10.60533/BOSS-2017-DDKQ''',
 "https://creativecommons.org/licenses/by/4.0/legalcode.txt"),
 #
 "pa66": ('''Bertoldo, J., Decencière, E., Ryckelynck, D., & Proudhon, H. (2021). Glass fiber-reinforced polyamide
@@ -273,7 +273,7 @@ if __name__ == '__main__':
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
-    f" {cur_dir / "azba.hdf5"}")
+                                                f" {cur_dir / "azba.hdf5"}")
             if ret.returncode != 0:
                 print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
                 if not args.no_abort:
@@ -284,7 +284,7 @@ if __name__ == '__main__':
         else:
             print(f"{(csgv_directory / "azba.csgv")} already exists. Skipping download.")
 
-    if not args.only or args.only.lower() == "ara2106":
+    if not args.only or args.only.lower() == "ara2016":
         print("----------- Ara2016 ----------- ")
         name = "Ara2016"
         cur_dir = csgv_directory / Path(name)

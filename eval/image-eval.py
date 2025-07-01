@@ -43,8 +43,10 @@ if __name__ == "__main__":
             # evaluate timings and export an image
             arg_image_eval = VolcaniteArg.arg_image_eval_cfg(1024)
             arg_image_export = VolcaniteArg.arg_image_export([arg_data, arg_shading])
+            arg_timing_export = VolcaniteArg.arg_timing_export([arg_data, arg_shading])
 
-            vargs = [arg_data, arg_vcfg, arg_shading, arg_image_eval, arg_image_export] + data_specific_args(arg_data.identifier)
+            # vargs = [VolcaniteArg("--verbose"), arg_data, arg_vcfg, arg_shading, arg_timing_export, arg_image_eval, arg_image_export] + data_specific_args(arg_data.identifier)
+            vargs = [arg_data, arg_vcfg, arg_shading, arg_timing_export, arg_image_eval, arg_image_export] + data_specific_args(arg_data.identifier)
 
             # log a summary line of all arguments
             evaluation.get_log().log_manual("# " + VolcaniteArg.concat_arg_string(vargs))

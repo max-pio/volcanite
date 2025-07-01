@@ -552,6 +552,15 @@ class VolcaniteArg:
         return cls(["-v", str(video_dir) + "/" + cls.concat_ids(args) + "_{:04}.jpg"])
 
     @classmethod
+    def arg_timing_export(cls, args) -> Self:
+        if cls.__eval_directory is None:
+            raise RuntimeError("VolcaniteArg static evaluation directory must be initialized before usage"
+                               "(VolcaniteArg.set_directories)")
+        timing_dir = (Path(cls.__eval_directory)).absolute()
+        timing_dir.mkdir(parents=True, exist_ok=True)
+        return cls(["--timings-logfile", str(timing_dir) + "/" + cls.concat_ids(args) + "_timing.csv"])
+
+    @classmethod
     def arg_config_import(cls, eval_config_file: list[Self] | str | None, additional_configs: list[str] | str | None = None, resolution: str = "1920x1080") -> Self:
         if eval_config_file and cls.__vcfg_directory is None:
             raise RuntimeError("VolcaniteArg static vcfg directory must be initialized before usage"

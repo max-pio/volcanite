@@ -15,7 +15,7 @@ if __name__ == "__main__":
                                                                      + ",".join("{{frame_{:02}_ms}}".format(i) for i in range(16))],
                                                               headers=["Data Set,Shading Mode,frame min [ms],frame avg [ms],frame max [ms],stdv,frame med [ms],"
                                                                         + ",".join("Frame {:02}".format(i) for i in range(16))])],
-                                        enable_log=True, dry_run=True)
+                                        enable_log=True, dry_run=False)
 
     volcanite = VolcaniteExec(evaluation, build_subdir="cmake-build-release")
     volcanite.checkout_and_build()
@@ -47,8 +47,9 @@ if __name__ == "__main__":
 
             # evaluate timings and export path as video
             arg_video_export = VolcaniteArg.arg_video_export([arg_data, arg_shading])
+            arg_timing_export = VolcaniteArg.arg_timing_export([arg_data, arg_shading])
 
-            vargs = [arg_data, arg_vcfg, arg_shading, arg_video_cfg, arg_video_export] + data_specific_args(arg_data.identifier)
+            vargs = [arg_data, arg_vcfg, arg_shading, arg_timing_export, arg_video_cfg, arg_video_export] + data_specific_args(arg_data.identifier)
 
             # log a summary line of all arguments
             evaluation.get_log().log_manual("# " + VolcaniteArg.concat_ids(vargs))
