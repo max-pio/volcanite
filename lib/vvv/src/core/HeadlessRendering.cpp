@@ -86,15 +86,6 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         }
     }
 
-    if (cfg.verbose) {
-        if (!cfg.record_file_in.empty())
-            Logger(Info) << "rendering camera poses from " + cfg.record_file_in << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
-        else if (cfg.duration > 0)
-            Logger(Info) << "rendering " << cfg.duration << " frame(s) animation with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
-        else if (cfg.duration < 0)
-            Logger(Info) << "rendering " << -cfg.duration << " second(s) animation with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
-    }
-
     // TODO: replace headless camera animation with real parameter animation class that operates with the GUIInterface
     // interpolation start and end values (rotation around Y axis and zoom)
     struct VideoKeyFrames {
@@ -115,6 +106,17 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
             anim.dist_0 = glm::max(0.001f, camera->orbital_radius + cfg.cam_zoom_start);
             anim.dist_1 = glm::max(0.001f, camera->orbital_radius + cfg.cam_zoom_end);
         }
+    }
+
+    
+    if (cfg.verbose) {
+        bool is_animation = anim.roty_0 != anim.roty_1 || anim.dist_0 != anim.dist_1; 
+        if (!cfg.record_file_in.empty())
+            Logger(Info) << "rendering camera poses from " + cfg.record_file_in << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+        else if (cfg.duration > 0)
+            Logger(Info) << "rendering " << cfg.duration << " frame(s) " << (is_animation ? "animation" : "image") << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+        else if (cfg.duration < 0)
+            Logger(Info) << "rendering " << -cfg.duration << " second(s) " << (is_animation ? "animation" : "image") << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
     }
 
     if (cfg.duration < 0 && cfg.accumulation_samples > 1) {
