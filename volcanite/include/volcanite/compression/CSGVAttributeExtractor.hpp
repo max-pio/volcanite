@@ -92,7 +92,7 @@ class CSGVAttributeExtractor {
     };
 
     /// returns label for given position
-    uint32_t getLabelFromBrick(const glm::uvec3 &global_pos, const uint32_t brick_size, const glm::uvec3 start_current_brick, const std::vector<uint32_t> decompressed_bricks[2][2][2]) {
+    static uint32_t getLabelFromBrick(const glm::uvec3 &global_pos, const uint32_t brick_size, const glm::uvec3 start_current_brick, const std::vector<uint32_t> decompressed_bricks[2][2][2]) {
         // global_pos in (XYZ), brick_pos in (XYZ), decompressed_bricks in (ZYX),
         glm::uvec3 brick_idx = {global_pos.x >= brick_size * start_current_brick.x + brick_size ? 1 : 0,
                                 global_pos.y >= brick_size * start_current_brick.y + brick_size ? 1 : 0,
@@ -112,7 +112,8 @@ class CSGVAttributeExtractor {
         m_thread_access.resize(volume_dim.x * volume_dim.y * volume_dim.z, nullptr);
 
         double preliminary_cpu_threads = glm::min(std::thread::hardware_concurrency(), volume_dim.z);
-        const unsigned int cpu_threads = std::pow(std::ceil(std::sqrt(preliminary_cpu_threads)), 2); // round cpu threads to nearest square -> for parallelization
+        // round cpu threads to nearest square -> for parallelization
+        const unsigned int cpu_threads = glm::max(static_cast<int>(std::pow(std::ceil(std::sqrt(preliminary_cpu_threads)), 2)), 2);
         const int offset_loop_end = diagonal ? 4 : 3;
 
         std::vector<std::vector<LabelAttributeTracking>> thread_tracking(cpu_threads, std::vector<LabelAttributeTracking>(m_neighbors_per_label.size()));
@@ -122,7 +123,7 @@ class CSGVAttributeExtractor {
         MiniTimer t;
         // divide volume for parallelization
         {
-            const int cpu_threads_sqrt = std::sqrt(cpu_threads);
+            const int cpu_threads_sqrt = static_cast<int>(std::sqrt(cpu_threads));
             const unsigned int x_per_thread = volume_dim.x / cpu_threads_sqrt;
             const unsigned int x_remainder = volume_dim.x % cpu_threads_sqrt;
             const unsigned int y_per_thread = volume_dim.y / cpu_threads_sqrt;
@@ -169,23 +170,23 @@ class CSGVAttributeExtractor {
             ThreadBlock tb = thread_blocks[thread_id];
 
             // determine how many individual blocks need to be iterated through
-            int first_block_x = tb.start_x / brick_size;
-            int last_block_x = (tb.end_x - 1) / brick_size;
-            int first_block_y = tb.start_y / brick_size;
-            int last_block_y = (tb.end_y - 1) / brick_size;
+            uint32_t first_block_x = tb.start_x / brick_size;
+            uint32_t last_block_x = (tb.end_x - 1) / brick_size;
+            uint32_t first_block_y = tb.start_y / brick_size;
+            uint32_t last_block_y = (tb.end_y - 1) / brick_size;
 
-            int count_blocks_x = last_block_x - first_block_x + 1;
-            int count_blocks_y = last_block_y - first_block_y + 1;
+            uint32_t count_blocks_x = last_block_x - first_block_x + 1;
+            uint32_t count_blocks_y = last_block_y - first_block_y + 1;
 
             // calculate starting offset after brick one
             glm::uvec2 elements_in_first_block;
             elements_in_first_block.x = brick_size - (tb.start_x % brick_size);
             elements_in_first_block.y = brick_size - (tb.start_y % brick_size);
-            glm::vec2 start_offset (0);
+            glm::uvec2 start_offset (0);
             for (uint32_t thread_block_y = 0; thread_block_y < count_blocks_y; thread_block_y++) {
                 if (thread_block_y != 0)
                     // increment start_offset after first block
-                    start_offset.y += thread_block_y == 1 ? elements_in_first_block.y : brick_size;
+                    start_offset.y += (thread_block_y == 1 ? elements_in_first_block.y : brick_size);
                 start_offset.x = 0;
                 for (uint32_t thread_block_x = 0; thread_block_x < count_blocks_x; thread_block_x++) {
                     if (thread_block_x != 0)
@@ -250,11 +251,11 @@ class CSGVAttributeExtractor {
 
                                     std::vector<uint32_t> decompressed_brick(brick_size * brick_size * brick_size, INVALID);
                                     std::vector<uint32_t> tmp(brick_size * brick_size * brick_size, INVALID);
-                                    m_csgv->decompressBrickTo(tmp.data(), brick_pos_to_decompress, m_csgv->getLodCountPerBrick() - 1u);
+                                    m_csgv->decompressBrickTo(tmp.data(), brick_pos_to_decompress, static_cast<int>(m_csgv->getLodCountPerBrick() - 1u));
                                     // fill output array with decoded brick entries
                                     for (uint32_t j = 0; j < brick_size * brick_size * brick_size; j++) {
-                                        glm::uvec3 out_pos = enumBrickPos(j);
-                                        if (glm::all(glm::lessThan(out_pos, {brick_size, brick_size, brick_size}))) {
+                                        if (glm::uvec3 out_pos = enumBrickPos(j);
+                                            glm::all(glm::lessThan(out_pos, {brick_size, brick_size, brick_size}))) {
                                             decompressed_brick[brick_pos2idx(out_pos, {brick_size, brick_size, brick_size})] = tmp[j];
                                         }
                                     }
@@ -282,8 +283,8 @@ class CSGVAttributeExtractor {
                                     if (nx >= 0 && nx < volume_dim.x &&
                                         ny >= 0 && ny < volume_dim.y &&
                                         nz >= 0 && nz < volume_dim.z) {
-                                        uint32_t neighbor_label;
-                                        if ((neighbor_label = getLabelFromBrick({nx, ny, nz}, brick_size, start_current_brick, decompressed_bricks)) != current_label) {
+                                        if (uint32_t neighbor_label = getLabelFromBrick({nx, ny, nz}, brick_size, start_current_brick, decompressed_bricks);
+                                            neighbor_label != current_label) {
                                             // check for neighbors is symmetrical
                                             if (!thread_tracking[thread_id][current_label].neighbors.contains(neighbor_label))
                                                 thread_tracking[thread_id][current_label].neighbors.insert(neighbor_label);
@@ -314,8 +315,8 @@ class CSGVAttributeExtractor {
             assert(thread_tracking[thread_id].size() == m_csgv->getNumberOfUniqueLabelsInVolume());
             for (int label = 0; label < thread_tracking[thread_id].size(); label++) {
                 // label tracking information
-                auto current_neighbor = thread_tracking[thread_id][label].neighbors;
-                for (auto neighbor_label : current_neighbor) {
+                for (auto current_neighbor = thread_tracking[thread_id][label].neighbors;
+                    auto neighbor_label : current_neighbor) {
                     if (!thread_tracking[0][label].neighbors.contains(neighbor_label))
                         thread_tracking[0][label].neighbors.insert(neighbor_label);
                 }
@@ -327,8 +328,8 @@ class CSGVAttributeExtractor {
                     thread_tracking[0][label].surface_count += thread_tracking[thread_id][label].surface_count;
 
                     // Welford's algorithm
-                    auto current_mean_pos = thread_tracking[0][label];
-                    auto pos_to_add = thread_tracking[thread_id][label];
+                    auto& current_mean_pos = thread_tracking[0][label];
+                    const auto& pos_to_add = thread_tracking[thread_id][label];
 
                     size_t delta0 = pos_to_add.sum_pos_x < current_mean_pos.sum_pos_x ? (current_mean_pos.sum_pos_x - pos_to_add.sum_pos_x) : (pos_to_add.sum_pos_x - current_mean_pos.sum_pos_x);
                     size_t delta1 = pos_to_add.sum_pos_y < current_mean_pos.sum_pos_y ? (current_mean_pos.sum_pos_y - pos_to_add.sum_pos_y) : (pos_to_add.sum_pos_y - current_mean_pos.sum_pos_y);
