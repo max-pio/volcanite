@@ -249,11 +249,11 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             size_t decoded_bytes_in_frame = 0;
             size_t decoded_bytes_total = 0;
             std::stringstream cache_state = {};
-            cache_state << " decoded: ";
+            cache_state << "frame " << m_frame << " decoded: ";
             for (int lod = 1; lod < m_compressed_segmentation_volume->getLodCountPerBrick(); lod++) {
                 decoded_bytes_in_frame += m_last_gpu_stats.blocks_decoded_L1_to_7[lod - 1] * (1u << (lod * 3)) * 4;
                 decoded_bytes_total += m_last_gpu_stats.blocks_decoded_L1_to_7[lod - 1] * (1u << (lod * 3)) * 4;
-                cache_state << "inv. LOD" << lod << ": " << m_last_gpu_stats.blocks_decoded_L1_to_7[lod - 1] << ", ";
+                cache_state << "iLOD" << lod << ": " << m_last_gpu_stats.blocks_decoded_L1_to_7[lod - 1] << ", ";
             }
             cache_state << " in total: " << static_cast<double>(decoded_bytes_total) * BYTE_TO_MB << " MB";
             if (decoded_bytes_in_frame > 0)
@@ -1705,9 +1705,10 @@ void CompressedSegmentationVolumeRenderer::updateRequestLimiation(const uint32_t
             m_req_limit.area_duration = glm::max((m_req_limit.area_duration + (1 + new_samples_rendered - m_req_limit.area_duration)) / 2, 4);
             // increase the area size (slower than it is decreased)
             m_req_limit.area_size = ((m_req_limit.area_size * 3 + 7) / 8) * 8; // *3 rounded up to multiple of 8
-            // if the area would now cover the whole screen, disable request limitation
+            // if the area would now cover the whole screen, limit to screen size
+            // request limitation will be disabled if the min_spp caught up with the max_spp
             if (m_req_limit.area_size > glm::max(m_resolution.width, m_resolution.height)) {
-                disableRequestLimiation();
+                m_req_limit.area_size = glm::max(m_resolution.width, m_resolution.height);
             }
         }
         // if not: reduce the area size and increase the area duration as long as this is possible
