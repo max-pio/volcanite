@@ -268,7 +268,7 @@ void PassCompSegVolRender::readNextGPUTimings() {
                                                         2 * sizeof(uint64_t),
                                                         vk::QueryResultFlagBits::e64 | vk::QueryResultFlagBits::eWithAvailability);
 
-    if (query_res != vk::Result::eSuccess) {
+    if (query_res != vk::Result::eSuccess && query_res != vk::Result::eNotReady) {
         Logger(Warn) << "Could not query timestamp of frame " << (m_frame_gpu_timings.size() - 1);
         return;
     }
