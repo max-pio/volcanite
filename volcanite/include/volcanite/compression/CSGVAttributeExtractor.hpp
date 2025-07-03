@@ -118,7 +118,7 @@ class CSGVAttributeExtractor {
 
         std::vector<std::vector<LabelAttributeTracking>> thread_tracking(cpu_threads, std::vector<LabelAttributeTracking>(m_neighbors_per_label.size()));
         std::vector<ThreadBlock> thread_blocks;
-        std::vector<std::vector<LabelAttributeTracking>> volume_thread_debug_count (cpu_threads, std::vector<LabelAttributeTracking>( volume_dim.x * volume_dim.y * volume_dim.z));
+        std::vector<std::vector<LabelAttributeTracking>> volume_thread_debug_count(cpu_threads, std::vector<LabelAttributeTracking>(volume_dim.x * volume_dim.y * volume_dim.z));
 
         MiniTimer t;
         // divide volume for parallelization
@@ -151,7 +151,7 @@ class CSGVAttributeExtractor {
             }
         }
 
-            // compute attribute tracking information for the labels of multiple voxels in parallel
+        // compute attribute tracking information for the labels of multiple voxels in parallel
 #pragma omp parallel num_threads(cpu_threads) default(shared)
         {
             // parallelization done by dividing the xy-plane between threads and iterating through each xy-brick-part of every thread, bricks can be divided between different threads
@@ -182,7 +182,7 @@ class CSGVAttributeExtractor {
             glm::uvec2 elements_in_first_block;
             elements_in_first_block.x = brick_size - (tb.start_x % brick_size);
             elements_in_first_block.y = brick_size - (tb.start_y % brick_size);
-            glm::uvec2 start_offset (0);
+            glm::uvec2 start_offset(0);
             for (uint32_t thread_block_y = 0; thread_block_y < count_blocks_y; thread_block_y++) {
                 if (thread_block_y != 0)
                     // increment start_offset after first block
@@ -191,7 +191,7 @@ class CSGVAttributeExtractor {
                 for (uint32_t thread_block_x = 0; thread_block_x < count_blocks_x; thread_block_x++) {
                     if (thread_block_x != 0)
                         start_offset.x += thread_block_x == 1 ? elements_in_first_block.x : brick_size;
-                    for (uint32_t z = 0; z < volume_dim.z; z ++) {
+                    for (uint32_t z = 0; z < volume_dim.z; z++) {
                         uint32_t current_label = INVALID;
 
                         // check if new xy-plane is in new brick and decompress new bricks if needed
@@ -311,32 +311,40 @@ class CSGVAttributeExtractor {
         }
 
         // gather all thread results and merge them together
-        for (int thread_id = 1; thread_id < cpu_threads; thread_id++) {
+        for (int thread_id = 0; thread_id < cpu_threads; thread_id++) {
             assert(thread_tracking[thread_id].size() == m_csgv->getNumberOfUniqueLabelsInVolume());
             for (int label = 0; label < thread_tracking[thread_id].size(); label++) {
-                // label tracking information
-                for (auto current_neighbor = thread_tracking[thread_id][label].neighbors;
-                    auto neighbor_label : current_neighbor) {
-                    if (!thread_tracking[0][label].neighbors.contains(neighbor_label))
-                        thread_tracking[0][label].neighbors.insert(neighbor_label);
-                }
-                if (thread_tracking[thread_id][label].voxel_count > 0) {
-                    // other tracking information
-                    thread_tracking[0][label].min_voxel = glm::min(thread_tracking[0][label].min_voxel, thread_tracking[thread_id][label].min_voxel);
-                    thread_tracking[0][label].max_voxel = glm::max(thread_tracking[0][label].max_voxel, thread_tracking[thread_id][label].max_voxel);
-                    thread_tracking[0][label].voxel_count += thread_tracking[thread_id][label].voxel_count;
-                    thread_tracking[0][label].surface_count += thread_tracking[thread_id][label].surface_count;
+                if (thread_id == 0 && thread_tracking[thread_id][label].voxel_count > 0) {
+                    // calculate thread 0 center mean position
+                    auto &current_mean_pos = thread_tracking[0][label];
+                    current_mean_pos.sum_pos_x /= current_mean_pos.voxel_count;
+                    current_mean_pos.sum_pos_y /= current_mean_pos.voxel_count;
+                    current_mean_pos.sum_pos_z /= current_mean_pos.voxel_count;
+                } else {
+                    // label tracking information
+                    for (auto current_neighbor = thread_tracking[thread_id][label].neighbors;
+                         auto neighbor_label : current_neighbor) {
+                        if (!thread_tracking[0][label].neighbors.contains(neighbor_label))
+                            thread_tracking[0][label].neighbors.insert(neighbor_label);
+                    }
+                    if (thread_tracking[thread_id][label].voxel_count > 0) {
+                        // other tracking information
+                        thread_tracking[0][label].min_voxel = glm::min(thread_tracking[0][label].min_voxel, thread_tracking[thread_id][label].min_voxel);
+                        thread_tracking[0][label].max_voxel = glm::max(thread_tracking[0][label].max_voxel, thread_tracking[thread_id][label].max_voxel);
+                        thread_tracking[0][label].voxel_count += thread_tracking[thread_id][label].voxel_count;
+                        thread_tracking[0][label].surface_count += thread_tracking[thread_id][label].surface_count;
 
-                    // Welford's algorithm
-                    auto& current_mean_pos = thread_tracking[0][label];
-                    const auto& pos_to_add = thread_tracking[thread_id][label];
+                        // Welford's algorithm
+                        auto &current_mean_pos = thread_tracking[0][label];
+                        const auto &pos_to_add = thread_tracking[thread_id][label];
 
-                    size_t delta0 = pos_to_add.sum_pos_x < current_mean_pos.sum_pos_x ? (current_mean_pos.sum_pos_x - pos_to_add.sum_pos_x) : (pos_to_add.sum_pos_x - current_mean_pos.sum_pos_x);
-                    size_t delta1 = pos_to_add.sum_pos_y < current_mean_pos.sum_pos_y ? (current_mean_pos.sum_pos_y - pos_to_add.sum_pos_y) : (pos_to_add.sum_pos_y - current_mean_pos.sum_pos_y);
-                    size_t delta2 = pos_to_add.sum_pos_z < current_mean_pos.sum_pos_z ? (current_mean_pos.sum_pos_z - pos_to_add.sum_pos_z) : (pos_to_add.sum_pos_z - current_mean_pos.sum_pos_z);
-                    current_mean_pos.sum_pos_x += current_mean_pos.sum_pos_x + delta0 / (pos_to_add.voxel_count);
-                    current_mean_pos.sum_pos_y += current_mean_pos.sum_pos_y + delta1 / pos_to_add.voxel_count;
-                    current_mean_pos.sum_pos_z += current_mean_pos.sum_pos_z + delta2 / pos_to_add.voxel_count;
+                        float delta_x = (static_cast<float>(pos_to_add.sum_pos_x) / pos_to_add.voxel_count) - current_mean_pos.sum_pos_x;
+                        float delta_y = (static_cast<float>(pos_to_add.sum_pos_y) / pos_to_add.voxel_count) - current_mean_pos.sum_pos_y;
+                        float delta_z = (static_cast<float>(pos_to_add.sum_pos_z) / pos_to_add.voxel_count) - current_mean_pos.sum_pos_z;
+                        current_mean_pos.sum_pos_x += delta_x * pos_to_add.voxel_count / current_mean_pos.voxel_count;
+                        current_mean_pos.sum_pos_y += delta_y * pos_to_add.voxel_count / current_mean_pos.voxel_count;
+                        current_mean_pos.sum_pos_z += delta_z * pos_to_add.voxel_count / current_mean_pos.voxel_count;
+                    }
                 }
             }
         }
@@ -365,11 +373,11 @@ class CSGVAttributeExtractor {
             // Surface
             m_attribute_values[label][1] = static_cast<float>(thread_tracking[0][label].surface_count);
             // Center X
-            m_attribute_values[label][2] = static_cast<float>(thread_tracking[0][label].sum_pos_x) / thread_tracking[0][label].voxel_count;
+            m_attribute_values[label][2] = static_cast<float>(thread_tracking[0][label].sum_pos_x);
             // Center Y
-            m_attribute_values[label][3] = static_cast<float>(thread_tracking[0][label].sum_pos_y) / thread_tracking[0][label].voxel_count;
+            m_attribute_values[label][3] = static_cast<float>(thread_tracking[0][label].sum_pos_y);
             // Center Z
-            m_attribute_values[label][4] = static_cast<float>(thread_tracking[0][label].sum_pos_z) / thread_tracking[0][label].voxel_count;
+            m_attribute_values[label][4] = static_cast<float>(thread_tracking[0][label].sum_pos_z);
             // Neighbor Count
             m_attribute_values[label][5] = static_cast<float>(thread_tracking[0][label].neighbors.size());
         }
