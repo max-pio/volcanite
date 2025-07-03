@@ -199,6 +199,12 @@
 #define UPDATE_RENDER_FRAME 64
 
 
+// ray will request a brick for decompression if it is not available
+#define REQUEST_ENABLE_BIT 1u
+// ray will be set to invalid (will not be if brick is not available
+#define INVALIDATE_ENABLE_BIT 2u
+
+
 // Material Constants --------------------------------------------------------------------------------------------------
 #define LABEL_AS_ATTRIBUTE 0xFFFFFFFFu
 

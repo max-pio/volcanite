@@ -154,22 +154,12 @@ void main() {
     return;
 #endif
 
-#if !defined(COMPUTE_LOD_AT_RENDER_TIME)
     // Set the LOD of visible bricks to the correct LOD that is required in this frame
     // "flagged as visible by the renderer" in this case means REQ_INV_LOD was set to anything < LOD_COUNT
     if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] < LOD_COUNT) {
         // note: the brick_inv_lod can be zero, in which case no cache area will be requested for this brick
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = potentially_visible ? get_brick_inv_lod(brick) : (LOD_COUNT + 1);
     }
-#elif !defined(NDEBUG)
-    // the coarsest LoD 0 must not be requested! we can just read it from the first palette entry during rendering so
-    // we don't do anything here.
-    // TODO: could assign the label from palette to brick directly to not be required to read g_encoding in the renderer
-    if (g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] == 0u) {
-        assert(false, "requesting LoD 0 is not allowed!");
-        g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT;
-    }
-#endif
 
 #ifdef SEPARATE_DETAIL
     // if the detail for this brick is not available and it is currently not decoded, we can only decode it with the base levels
@@ -201,8 +191,9 @@ void main() {
     else if(g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] >= LOD_COUNT) {
         g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = LOD_COUNT;      // = lod_count is potentially visible
     }
-    // brick is already flagged as visible (REQ_INV_LOD < LOD_COUNT) but not decoded to the requested LoD
+    // brick is already flagged as visible (REQ_INV_LOD < LOD_COUNT) but not decoded to the requested iLOD
     else if(g_brick_info[brick_info_pos + BRICK_INFO_CUR_INV_LOD] != g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]){
+        // if the requested iLOD is 0 (coarsest iLOD) it must not be decoded
         allocate = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] > 0;
     }
     // brick is visilbe and already decoded to its requeste level: it should remain in cache.
@@ -270,8 +261,8 @@ void main() {
     // - (0 < BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick still owns a cache element
     // - (BRICK_INFO_CACHE_INDEX < INVALID) and is a cache index <=> (0 < CUR_INV_LOD < LOD_COUNT)
     // - (BRICK_INFO_CACHE_INDEX < INVALID) and is label of inv. LOD 0 <=> (0 == CUR_INV_LOD)
-    // - REQ_SLOT < INVALID <=> the brick needs a cache element <=> the REQ_SLOT is a valid entry for its REQ_LOD
-    // - REQ_SLOT < INVALID => BRICK_INFO_INDEX == INVALID
+    // - REQ_SLOT < INVALID <=> the brick needs a new cache element <=> the REQ_SLOT is a valid entry for its REQ_LOD
+    // - REQ_SLOT < INVALID => CACHE_INDEX == INVALID
     // - the ASSIGN_REQUESTED_BRICKS for each LoD contains the number of requested blocks for this LoD.
     // - all SLOT indices < ASSIGN_REQUESTED_BRICKS are uniquely assigned to one block each
     // visibility
