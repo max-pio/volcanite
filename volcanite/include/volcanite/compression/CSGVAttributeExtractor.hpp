@@ -82,7 +82,7 @@ class CSGVAttributeExtractor {
     std::vector<NeighborList *> m_neighbors_per_label;
     std::vector<NeighborList *> m_thread_access;
     std::vector<std::string> m_attribute_names = {"Volume", "Surface", "CenterX", "CenterY", "CenterZ", "Neighbor_Count"};
-    std::vector<std::vector<float>> m_attribute_values = {m_csgv->getNumberOfUniqueLabelsInVolume(), std::vector<float>(6)};
+    std::vector<std::vector<float>> m_attribute_values = {};
 
     const int neighbor_offset[4][3] = {
         {0, 1, 0}, // right
@@ -386,7 +386,9 @@ class CSGVAttributeExtractor {
     }
 
   public:
-    CSGVAttributeExtractor(const std::shared_ptr<CompressedSegmentationVolume> &csgv) : m_csgv(csgv), m_neighbors_per_label() {
+    CSGVAttributeExtractor(const std::shared_ptr<const CompressedSegmentationVolume> &csgv)
+        : m_csgv{csgv}, m_neighbors_per_label{},
+          m_attribute_values{csgv->getNumberOfUniqueLabelsInVolume(), std::vector<float>(m_attribute_names.size())} {
         if (!csgv->hasContiguousLabels())
             throw std::runtime_error("Provided labels for compressed volume are not contiguous. Relabel volume with --relabel first.");
 
