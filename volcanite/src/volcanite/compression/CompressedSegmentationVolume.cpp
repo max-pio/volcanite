@@ -861,6 +861,7 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
             return false;
         } else {
             Logger(Debug) << "verifying: ok (" << verifyTimer.elapsed() << "s)";
+            computeVolumeInfo();
             return true;
         }
     }
