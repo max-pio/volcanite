@@ -251,9 +251,11 @@ if __name__ == '__main__':
         print(f"Overwriting evaluation paths file {setup_file}.")
         # sleep(2)
     with open(setup_file, "w") as file:
-        file.write("volcanite_src: " + str(volcanite_src_dir.absolute()) + "\n")
-        file.write("config_dir: " + str(config_dir.absolute()) + "\n")
-        file.write("csgv_dir: " + str(csgv_directory.absolute()) + "\n")
+        file.write("volcanite-src: " + str(volcanite_src_dir.absolute()) + "\n")
+        file.write("vcfg-dir: " + str(config_dir.absolute()) + "\n")
+        file.write("csgv-dir: " + str(csgv_directory.absolute()) + "\n")
+        file.write("entry-command: \n")
+        file.write("exit-command: \n")
 
     # create download directory
     csgv_directory.mkdir(parents=True, exist_ok=True);

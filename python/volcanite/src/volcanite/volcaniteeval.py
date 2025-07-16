@@ -21,6 +21,7 @@ import shutil
 import re
 from datetime import datetime
 from time import sleep
+import traceback
 from typing import Self
 
 class ExistingPolicy(Enum):
@@ -202,6 +203,9 @@ class VolcaniteLogFileCfg:
 class VolcaniteEvaluation:
     """
     Encapsulates one evaluation. The evaluation results are stored in a single directory (eval_out_directory).
+    If VolcaniteEvaluation is used as a Context Manager (using the with keyword) it will call the entry-command
+    and exit-command if those exist it the evaluation setup file (typically volcanite-eval-setup.txt).
+
     :var eval_out_directory: directory to store evaluation results in
     :var log_files: list of Volcanite evaluation log files that are used in the evaluation
     :var name: name of the evaluation
@@ -290,10 +294,45 @@ class VolcaniteEvaluation:
             VolcaniteArg.setup_directories(veval=self,
                                            git_base_directory=VolcaniteArg.get_git_directory(),
                                            csgv_directory=VolcaniteArg.get_csgv_directory(),
-                                           vcfg_directory=VolcaniteArg.get_vcfg_directory())
-
+                                           vcfg_directory=VolcaniteArg.get_vcfg_directory(),
+                                           entry_command=VolcaniteArg.get_entry_command(),
+                                           exit_command=VolcaniteArg.get_exit_command())
+    
+    
     def is_initialized(self) -> bool:
         return self.__initialized
+
+
+    def __enter__(self) -> Self:
+        """
+        Prints and calls the entry-commmand as a subprocess if one exists.
+        """
+
+        if VolcaniteArg.get_entry_command():
+            print("> " + VolcaniteArg.get_entry_command())
+            if not self.dry_run:
+                subp.run(VolcaniteArg.get_entry_command(), shell=True)
+        else:
+            print("> no entry command")
+
+        return self
+
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        Prints and calls the exit-commmand as a subprocess if one exists.
+        """
+
+        if exc_type is not None:
+            traceback.print_exception(exc_type, exc_val, exc_tb)
+
+        if VolcaniteArg.get_exit_command():
+            print("> " + VolcaniteArg.get_exit_command())
+            if not self.dry_run:
+                subp.run(VolcaniteArg.get_exit_command(), shell=True)
+        else:
+            print("> no exit command")
+
 
     def get_log(self, filename: str = None) -> VolcaniteLogFile:
         """
@@ -329,33 +368,40 @@ class VolcaniteArg:
     args_datasynth: dict[str, Self] = {}
     args_csgv_datasets: dict[str, Self] = {}
 
-    __csgv_directory: Path = None
-    __vcfg_directory: Path = None
-    __eval_directory: Path = None
-    __git_directory: Path = None
+    __csgv_directory: Path | None = None
+    __vcfg_directory: Path | None = None
+    __eval_directory: Path | None = None
+    __git_directory: Path | None = None
+    __entry_command: str | None = None
+    __exit_command: str | None = None
 
     @classmethod
     def get_path_setup_filename(cls) -> Path:
         """
         Name of a setup file from which all evaluation scripts will automatically read relevant paths.
         The file must contain the following newline terminated lines:
-        config_dir: [directory storing one {name}.vcfg file per {name}.csgv data sets]
-        csgv_dir: [directory storing previously compressed {name}.csgv data sets]
-        volcanite_src: [base directory of the cloned Volcanite git repository]
+        vcfg-dir: [directory storing one {name}.vcfg file per {name}.csgv data sets]
+        csgv-dir: [directory storing previously compressed {name}.csgv data sets]
+        volcanite-src: [base directory of the cloned Volcanite git repository]
+        entry-command: [syscall comamnd to execute before evaluation]
+        exit-command: [syscall comamnd to execute after evaluation]
         """
         return Path("volcanite-eval-setup.txt")
 
     @classmethod
     def setup_directories(cls, veval: VolcaniteEvaluation | None = None, git_base_directory: PathLike | None = None,
-                          csgv_directory: PathLike | None = None, vcfg_directory: PathLike | None = None):
+                          csgv_directory: PathLike | None = None, vcfg_directory: PathLike | None = None,
+                          entry_command: str | None = None, exit_command: str | None = None):
         """
         Sets static paths to directories that are referenced when creating certain VolcaniteArgs.
         If csgv_directory or vcfg_directory are None, it is attempted to set them up from a previously created
         path setup file (with the name returned by get_path_setup_filename()) in the current working directory.
+        :param veval: the Volcanite evaluation specifying the evaluation output directory for images and videos
         :param git_base_directory: base directory of the cloned Volcanite git repository
         :param csgv_directory: directory where newly compressed CSGV files are exported to and imported from
         :param vcfg_directory: directory containing config and rec files for the argument sets
-        :param veval: the Volcanite evaluation specifying the evaluation output directory for images and videos
+        :param entry_command: command to call at entry if VolcaniteEvaluation is used as Context Manager
+        :param exit_command: command to call at exit if VolcaniteEvaluation is used as Context Manager
         """
         if not veval:
             raise ValueError("VolcaniteEvaluation must not be None")
@@ -363,6 +409,8 @@ class VolcaniteArg:
         cls.__csgv_directory = Path(csgv_directory) if csgv_directory else None
         cls.__vcfg_directory = Path(vcfg_directory) if vcfg_directory else None
         cls.__git_directory = Path(git_base_directory) if git_base_directory else None
+        cls.__entry_command = entry_command if entry_command else None
+        cls.__exit_command = exit_command if exit_command else None
         cls.__eval_directory = veval.eval_out_directory if veval else None
 
         if not cls.__git_directory:
@@ -370,9 +418,8 @@ class VolcaniteArg:
             print(f"obtained volcanite git base directory {cls.__git_directory} with 'git rev-parse --show-toplevel'")
 
         # auto initialize non-passed paths from possible evaluation setup file in working directory
-        if not csgv_directory or not vcfg_directory or not git_base_directory:
+        if not csgv_directory or not vcfg_directory or not git_base_directory or not entry_command or not exit_command:
             setup_file = cls.get_path_setup_filename()
-            print(setup_file)
             if not setup_file.exists() and cls.__git_directory:
                 setup_file = cls.__git_directory / "eval" / cls.get_path_setup_filename()
                 print(setup_file)
@@ -383,12 +430,16 @@ class VolcaniteArg:
                         parts = l.split(":", 1)
                         if len(parts) != 2:
                             continue
-                        if parts[0] == "csgv_dir" and not csgv_directory:
+                        if parts[0] == "csgv-dir" and not csgv_directory:
                             cls.__csgv_directory = Path(parts[1].strip())
-                        if parts[0] == "config_dir" and not vcfg_directory:
+                        if parts[0] == "vcfg-dir" and not vcfg_directory:
                             cls.__vcfg_directory = Path(parts[1].strip())
-                        if parts[0] == "volcanite_src" and not git_base_directory:
+                        if parts[0] == "volcanite-src" and not git_base_directory:
                             cls.__git_directory = Path(parts[1].strip())
+                        if parts[0] == "entry-command" and not entry_command:
+                            cls.__entry_command = parts[1].strip()
+                        if parts[0] == "exit-command" and not exit_command:
+                            cls.__exit_command = parts[1].strip()
             else:
                 print(f"unable to setup paths. missing {cls.get_path_setup_filename()} file.")
 
@@ -397,8 +448,6 @@ class VolcaniteArg:
             raise FileNotFoundError(f"CSGV directory {cls.__csgv_directory} not found")
         if cls.__vcfg_directory and not cls.__vcfg_directory.exists():
             raise FileNotFoundError(f"vcfg config directory {cls.__vcfg_directory} not found")
-        if cls.__eval_directory and not cls.__eval_directory.exists():
-            raise FileNotFoundError(f"Evaluation output directory {cls.__eval_directory} not found")
         if cls.__git_directory:
             if not cls.__git_directory.exists():
                 raise FileNotFoundError(f"Volcanite git directory {cls.__git_directory} not found")
@@ -426,6 +475,14 @@ class VolcaniteArg:
     @classmethod
     def get_git_directory(cls):
         return cls.__git_directory
+    
+    @classmethod
+    def get_entry_command(cls):
+        return cls.__entry_command
+    
+    @classmethod
+    def get_exit_command(cls):
+        return cls.__exit_command
 
 
     def __init__(self, args: list[str] | str, identifier: str | None = None, priority: float | None = None):
@@ -438,9 +495,11 @@ class VolcaniteArg:
         :param prio: priority to sort the identifiers in the evaluation name string
         """
         if isinstance(args, str):
-            self.args = args.split(' ')
+            # split by ' ' but do not split substrings within quotes ""
+            self.args = [quoted if quoted else unquoted for quoted, unquoted in re.findall(r'"([^"]*)"|(\S+)', args)]
         else:
             self.args = args
+
 
         self.identifier = "" if identifier is None else identifier
         self.prio = 1000 if priority is None else priority
@@ -653,7 +712,8 @@ class VolcaniteExec:
     def __run_process(cls, call_args: list[str] | str, cwd: str | PathLike | None = None, print_log=True, *args, **kwargs):
         # remove empty argument strings ""
         if isinstance(call_args, str):
-            call_args = call_args.strip().split()
+            # split by ' ' but do not split substrings within quotes ""
+            call_args = [quoted if quoted else unquoted for quoted, unquoted in re.findall(r'"([^"]*)"|(\S+)', call_args.strip())]
 
         call_args = list(filter(None, call_args))
         if print_log:

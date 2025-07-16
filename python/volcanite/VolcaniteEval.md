@@ -115,6 +115,7 @@ Additionally, install python 3.12 and the python packages used by `volcaniteeval
 The `volcaniteeval` module contains classes for executing Volcanite through system calls as well as utility functions to
 handle and group command line arguments.
 
+
 #### VolcaniteArg
 The `VolcaniteArg` class encapsulates sets of space separated Volcanite command line arguments together with a short
 identifier.
@@ -124,12 +125,29 @@ to set all shading modes.
 * Other variable `VolcaniteArg` can be obtained through `arg_*(..)` functions, e.g. the `arg_image_export(path)`
 returns a `VolcaniteArg` that tells Volcanite to export the final rendered frame to `path`.
 
+A `volcanite-eval-setup.txt` should be provided next to the evaluation script to initialize the generall configuration
+for the `VolcaniteArg` class.
+It can have the following format:
+
+```
+volcanite-src: <path to volcanite git directory>
+vcfg-dir: <path to directory containing vcfg file per data>
+csgv-dir: <path to directory containing csgv data sets>
+entry-command: <command to execute before evaluation starts>
+exit-command: <command to execute after evaluation ends>
+```
+
+Entry and exit commands can for example be used to [lock GPU clock speeds](https://developer.nvidia.com/blog/advanced-api-performance-setstablepowerstate/) for consistent evaluation results.
+
+
 #### VolcaniteExec
 The `VolcaniteExec` class encapsulates a handle to the volcanite executable through system calls.
 It is best configured with a `VolcaniteEvaluation` object that specifies the output directory for all evaluation results,
 a git checkout and build directory, and the Volcanite log files into which all results are written. 
 `checkout_and_build()` checks out the specified git commit, tag, or branch and builds the volcanite executable using cmake.
 Afterward, any call to `exec(args, name)` will execute Volcanite with the given arguments and evaluation name.
+
+
 
 ### Example
 
@@ -141,32 +159,33 @@ args_data = {"cells": ve.VolcaniteArg.arg_dataset("/data/cells_segmentation.raw"
              "h01": ve.VolcaniteArg.arg_dataset("/data/h01_chunks/x{}y{}z{}.hdf5", "h01", chunks=(4,5,5)),
 
 # setup the evaluation output directory and the log files
-evaluation = ve.VolcaniteEvaluation("/volcanite-eval/my_test_eval", ve.ExistingPolicy.APPEND, "my_test_eval",
-                                     [VolcaniteLogFileCfg("results.txt",
-                                                          fmts=["{name},{comprate_pcnt:.3}%"],
-                                                          headers=["Name,Compression Rate [%]"])],
-                                    enable_log=True, dry_run=False)
+# if used as a context manager (with VolcaniteEvaluation ..),
+# entry-command and exit-command will be called before and after the evaluation.
+with ve.VolcaniteEvaluation("/volcanite-eval/my_test_eval", ve.ExistingPolicy.APPEND, "my_test_eval",
+                            [VolcaniteLogFileCfg("results.txt",
+                                                fmts=["{name},{comprate_pcnt:.3}%"],
+                                                headers=["Name,Compression Rate [%]"])],
+                            enable_log=True, dry_run=False) as evaluation:
 
-# create the Volcanite executor, checkout main and build into cmake-build-release 
-volcanite = ve.VolcaniteExec(evaluation, "main", "cmake-build-release")
-volcanite.checkout_and_build()
+    # create the Volcanite executor, checkout main and build into cmake-build-release 
+    volcanite = ve.VolcaniteExec(evaluation, "main", "cmake-build-release")
+    volcanite.checkout_and_build()
 
-# print evaluation information to console
-print(volcanite.info_str())
-print('\n'.join(volcanite.logs_info_str()))
+    # print evaluation information to console
+    print(volcanite.info_str())
+    print('\n'.join(volcanite.logs_info_str()))
 
-# iterate over all configuration combinations and execute Volcanite
-for arg_shade in VolcaniteArg.args_shading.values():
-    for arg_data in args_data:
-        vargs = [arg_data, arg_shade]
-        name = VolcaniteArg.concat_ids(vargs)
-    
-        # manually log a comment line to the log file
-        evaluation.get_log().log_manual("# Running evaluation: " + name)
-        # execute Volcanite and passe the Volcanite log file  
-        volcanite.exec(vargs, name)
+    # iterate over all configuration combinations and execute Volcanite
+    for arg_shade in VolcaniteArg.args_shading.values():
+        for arg_data in args_data:
+            vargs = [arg_data, arg_shade]
+            name = VolcaniteArg.concat_ids(vargs)
         
-# create a copy of the log file without comment lines that start with # which includes the #fmt: strings
-evaluation.get_log().create_formatted_copy("/volcanite-eval/my_test_eval/results.csv",
-                                           remove_line_prefixes=["#"])
+            # manually log a comment line to the log file
+            evaluation.get_log().log_manual("# Running evaluation: " + name)
+            # execute Volcanite and passe the Volcanite log file  
+            volcanite.exec(vargs, name)
+            
+    # create a copy of the log file without comment lines that start with # which includes the #fmt: strings
+    evaluation.get_log().create_formatted_copy("/volcanite-eval/my_test_eval/results.csv", remove_line_prefixes=["#"])
 ```
