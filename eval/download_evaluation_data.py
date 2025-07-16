@@ -77,7 +77,7 @@ Haubold, Johannes; Kleesiek, Jens; Stiefelhagen, Rainer (2024). Towards Unifying
  https://www.synapse.org/Synapse:syn52287632/version/1
  https://github.com/alexanderjaus/AtlasDataset''', "https://www.apache.org/licenses/LICENSE-2.0.txt"),
 #
- "ara2016": ('''Allen Mouse Reference Atlas [Dataset]. bossdb archive. https://10.60533/BOSS-2017-DDKQ''',
+ "ara2016": ('''Allen Mouse Reference Atlas [Dataset]. bossdb archive. https://doi.org/10.60533/BOSS-2017-DDKQ''',
 "https://creativecommons.org/licenses/by/4.0/legalcode.txt"),
 #
 "pa66": ('''Bertoldo, J., Decencière, E., Ryckelynck, D., & Proudhon, H. (2021). Glass fiber-reinforced polyamide

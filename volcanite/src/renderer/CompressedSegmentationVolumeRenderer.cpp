@@ -24,6 +24,7 @@
 #include "vvv/util/hash_memory.hpp"
 
 #include "glm/gtc/matrix_transform.hpp"
+#include "implot/implot.h"
 #include "vvvwindow/App.hpp"
 
 #ifndef HEADLESS
@@ -1510,6 +1511,31 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
             ImGui::TextColored(glm::vec4(0.5f, 0.5f, 0.5f, 1.f), "-- | -- -- -- --");
         }
     }, "##TimingResults");
+
+    g_dev->addCustomCode([this]() {
+        if (!m_last_frame_times.empty()) {
+            const int frame_count = static_cast<int>(m_last_frame_times.size());
+            static const char* labels[] = {"Cache","Decode","Render","Post"};
+            constexpr float max_frame_time = 100.f;
+
+            if (ImPlot::BeginPlot("Frame Timings")) {
+
+                ImPlot::SetupAxes("Frame","ms");
+                ImPlot::SetupAxesLimits(0, frame_count, 0.f, max_frame_time, ImPlotCond_Always);
+                ImPlot::SetupAxesLimits(0,static_cast<int>(m_last_frame_times.size()),0.f,max_frame_time);
+
+                ImPlot::PlotBars("Total", m_last_frame_times.data(),frame_count, 1.f);
+
+                // if (const auto& gpu_timings = m_pass->getLastFrameTimeTrackingResults();
+                //     !gpu_timings.empty()) {
+                //      This is column major but should be row major: x0 y0 z0 w0 y1 y1 z1 w0 --> x0 x1 y0 y1 z0 z1 w0 w1
+                //     ImPlot::PlotBarGroups(labels, reinterpret_cast<const float*>(gpu_timings.data()), 4, frame_count, 1.f, 0, ImPlotBarGroupsFlags_Stacked);
+                // }
+
+                ImPlot::EndPlot();
+            }
+        }
+    }, "##TimingResultsPlotCont");
 #endif
     g_dev->addLabel("Label Cache Management");
     g_dev->addBool(&m_req_limit.g_enable, "Auto Cache Request Limitation");

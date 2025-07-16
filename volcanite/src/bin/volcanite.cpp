@@ -193,7 +193,7 @@ int volcanite_main(int argc, char *argv[]) {
                 }
                 // add new results to evaluation log files
                 if (!args.eval_logfiles.empty()) {
-                    if (!renderer->writeParameterFile(stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg"))
+                    if (!renderer->writeParameterFile(stripFileExtension(args.eval_logfiles.at(0)) + (args.eval_name.empty() ? "" : "_" + args.eval_name) + ".vcfg"))
                         Logger(Warn) << "could not write vcfg file " << (stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg");
                     for (const auto &eval_logfile : args.eval_logfiles) {
                         if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
