@@ -152,7 +152,7 @@ void vvv::DefaultGpuContext::createInstance() {
 #if VK_HEADER_VERSION >= 255
     VULKAN_HPP_DEFAULT_DISPATCHER.init();
 #else
-    static vk::detail::DynamicLoader dl;
+    static vk::DynamicLoader dl;
     PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 #endif

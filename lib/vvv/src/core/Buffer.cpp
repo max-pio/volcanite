@@ -34,7 +34,9 @@ void Buffer::createBuffer(vk::BufferUsageFlags bufferUsage, vk::MemoryPropertyFl
     bool enable_device_address = (bufferUsage & (vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eShaderDeviceAddressEXT | vk::BufferUsageFlagBits::eShaderDeviceAddressKHR)) != vk::BufferUsageFlags();
     if (enable_device_address) {
         vk::MemoryAllocateFlagsInfo flags_info(vk::MemoryAllocateFlagBits::eDeviceAddress);
-        m_bufferMemory = device.allocateMemory(vk::MemoryAllocateInfo(memoryRequirements.size, memoryTypeIndex, &flags_info));
+        vk::MemoryAllocateInfo allocateInfo(memoryRequirements.size, memoryTypeIndex);
+        allocateInfo.pNext = &flags_info;
+        m_bufferMemory = device.allocateMemory(allocateInfo);
     } else {
         m_bufferMemory = device.allocateMemory(vk::MemoryAllocateInfo(memoryRequirements.size, memoryTypeIndex));
     }
