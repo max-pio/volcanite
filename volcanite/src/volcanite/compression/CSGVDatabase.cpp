@@ -273,7 +273,7 @@ bool CSGVDatabase::databaseExportAndOpen(const std::string &sqlite_path, const s
         // remove broken database file and forward the exception
         if (std::filesystem::exists(sqlite_path))
             std::filesystem::remove(sqlite_path);
-        throw std::runtime_error(std::string("SQLite error: ") + e.what());
+        throw std::runtime_error(std::string("SQLite error: ") + e.what() + ". Data base: " + sqlite_path);
     }
 
     // reimport database as read only
@@ -328,9 +328,8 @@ void CSGVDatabase::processVolumeAndCreateSqlite(const std::string &sqlite_export
                                                                                 static_cast<int>(chunk_index.z))
                                                               : volume_input_path;
             // load chunk volume
-            Logger(Debug, true) << "  label preprocessing " << chunk_input_path << " "
-                                << (1 + sfc::Cartesian::p2i(chunk_index, max_file_index + glm::uvec3(1))) << "/" << (1 + sfc::Cartesian::p2i(max_file_index, max_file_index + glm::uvec3(1)));
-
+            //Logger(Debug, true) << "  label preprocessing " << chunk_input_path << " "
+            //                    << (1 + sfc::Cartesian::p2i(chunk_index, max_file_index + glm::uvec3(1))) << "/" << (1 + sfc::Cartesian::p2i(max_file_index, max_file_index + glm::uvec3(1)));
             CompSegVolHandler::loadSegmentationVolumeFile(chunk_input_path, volume);
             glm::uvec3 cur_chunk_dim(volume->dim_x, volume->dim_y, volume->dim_z);
 
