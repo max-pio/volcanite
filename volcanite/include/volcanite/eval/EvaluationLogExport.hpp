@@ -36,16 +36,15 @@ struct CSGVCompressionEvaluationResults {
     int original_volume_bytes_per_voxel = 0;
     glm::uvec3 volume_dim = {0u, 0u, 0u};
     uint32_t volume_labels = 0u;
-    //    uint32_t labels_per_brick_min = 0u;
-    //    uint32_t labels_per_brick_avg = 0u;
-    //    uint32_t labels_per_brick_max = 0u;
-    //    uint32_t palette_size_min = 0u;
-    //    uint32_t palette_size_avg = 0u;
-    //    uint32_t palette_size_max = 0u;
-    //    double brick_min_bytes = 0u;
-    //    double brick_avg_bytes = 0u;
-    //    double brick_max_bytes = 0u;
-    //    double header_bytes = 0u;
+    uint32_t labels_per_brick_min = 0u;
+    double labels_per_brick_avg = 0u;
+    uint32_t labels_per_brick_max = 0u;
+    uint32_t palette_size_min = 0u;
+    double palette_size_avg = 0u;
+    uint32_t palette_size_max = 0u;
+    double brick_min_bytes = 0u;
+    double brick_avg_bytes = 0u;
+    double brick_max_bytes = 0u;
 };
 
 struct CSGVDecompressionEvaluationResults {
@@ -80,6 +79,8 @@ struct CSGVRenderEvaluationResults {
     double mem_cache_fill_rate = 0.;
     double mem_empty_space_bytes = 0.;
     double mem_total_bytes = 0.;
+    uint32_t mem_cache_voxels_per_uint = 1; ///< how many label (indices) are stored per uint in the cache. If no cache paletting is used, this is 1.
+    double mem_cache_packing_factor = 1.;   ///< effective packing factor in [1;8] <= voxels_per_uint (base elements must fit 8 voxels in an integer number of uints).
     int accumulated_frames = 0;
     int min_samples_per_pixel = 0;
     int max_samples_per_pixel = 0;

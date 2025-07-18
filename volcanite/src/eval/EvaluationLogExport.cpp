@@ -63,7 +63,20 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     fmt_args.push_back(fmt::arg("orig_gb", comp_res.original_volume_bytes * BYTE_TO_GB));
     fmt_args.push_back(fmt::arg("orig_bytes_per_voxel", comp_res.original_volume_bytes_per_voxel));
     fmt_args.push_back(fmt::arg("volume_dim", std::to_string(comp_res.volume_dim.x) + "x" + std::to_string(comp_res.volume_dim.y) + "x" + std::to_string(comp_res.volume_dim.z)));
+    fmt_args.push_back(fmt::arg("volume_dim_x", std::to_string(comp_res.volume_dim.x)));
+    fmt_args.push_back(fmt::arg("volume_dim_y", std::to_string(comp_res.volume_dim.y)));
+    fmt_args.push_back(fmt::arg("volume_dim_z", std::to_string(comp_res.volume_dim.z)));
     fmt_args.push_back(fmt::arg("volume_labels", comp_res.volume_labels));
+    fmt_args.push_back(fmt::arg("labels_per_brick_min", comp_res.labels_per_brick_min));
+    fmt_args.push_back(fmt::arg("labels_per_brick_avg", comp_res.labels_per_brick_avg));
+    fmt_args.push_back(fmt::arg("labels_per_brick_max", comp_res.labels_per_brick_max));
+    fmt_args.push_back(fmt::arg("palette_size_per_brick_min", comp_res.palette_size_min));
+    fmt_args.push_back(fmt::arg("palette_size_per_brick_avg", comp_res.palette_size_avg));
+    fmt_args.push_back(fmt::arg("palette_size_per_brick_max", comp_res.palette_size_max));
+    fmt_args.push_back(fmt::arg("brick_bytes_min", comp_res.brick_min_bytes));
+    fmt_args.push_back(fmt::arg("brick_bytes_avg", comp_res.brick_avg_bytes));
+    fmt_args.push_back(fmt::arg("brick_bytes_max", comp_res.brick_max_bytes));
+
     // decompression
     fmt_args.push_back(fmt::arg("decomp_cpu_gb_per_s", decomp_res.cpu_GB_per_s));
     fmt_args.push_back(fmt::arg("decomp_cpu_s", decomp_res.cpu_decoded_seconds));
@@ -102,13 +115,15 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     fmt_args.push_back(fmt::arg("mem_framebuffer_mb", render_res.mem_framebuffers_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_uniformbuffer_mb", render_res.mem_ubos_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_materials_mb", render_res.mem_materials_bytes * BYTE_TO_MB));
-    fmt_args.push_back(fmt::arg("mem_encoding_Mb", render_res.mem_encoding_bytes * BYTE_TO_MB));
+    fmt_args.push_back(fmt::arg("mem_encoding_mb", render_res.mem_encoding_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_cache_mb", render_res.mem_cache_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_cache_used_mb", render_res.mem_cache_used_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_cache_fillrate", render_res.mem_cache_fill_rate));
     fmt_args.push_back(fmt::arg("mem_cache_fillrate_pcnt", render_res.mem_cache_fill_rate * 100.));
     fmt_args.push_back(fmt::arg("mem_emptyspace_mb", render_res.mem_empty_space_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_total_mb", render_res.mem_total_bytes * BYTE_TO_MB));
+    fmt_args.push_back(fmt::arg("mem_cache_voxels_per_uint", render_res.mem_cache_voxels_per_uint));
+    fmt_args.push_back(fmt::arg("mem_cache_packing_factor", render_res.mem_cache_packing_factor));
     return std::move(fmt_args);
 }
 
@@ -144,7 +159,19 @@ std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
         "orig_gb",
         "orig_bytes_per_voxel",
         "volume_dim",
+        "volume_dim_x",
+        "volume_dim_y",
+        "volume_dim_z",
         "volume_labels",
+        "labels_per_brick_min",
+        "labels_per_brick_avg",
+        "labels_per_brick_max",
+        "palette_size_min",
+        "palette_size_avg",
+        "palette_size_max",
+        "brick_bytes_min",
+        "brick_bytes_avg",
+        "brick_bytes_max",
         "decomp_cpu_gb_per_s",
         "decomp_cpu_s",
         "decomp_gpu_gb_per_s",
@@ -261,13 +288,15 @@ std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
         "mem_framebuffer_mb",
         "mem_uniformbuffer_mb",
         "mem_materials_mb",
-        "mem_encoding_Mb",
+        "mem_encoding_mb",
         "mem_cache_mb",
         "mem_cache_used_mb",
         "mem_cache_fillrate",
         "mem_cache_fillrate_pcnt",
         "mem_emptyspace_mb",
         "mem_total_mb",
+        "mem_cache_voxels_per_uint",
+        "mem_cache_packing_factor",
     };
 }
 

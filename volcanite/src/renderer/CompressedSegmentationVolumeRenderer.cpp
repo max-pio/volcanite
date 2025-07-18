@@ -1866,6 +1866,8 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
         }
         results.mem_encoding_bytes = static_cast<double>(encoding);
         results.mem_total_bytes = static_cast<double>(getMemoryHeapBudgetAndUsage(*getCtx()).second);
+        results.mem_cache_voxels_per_uint = m_cache_indices_per_uint;
+        results.mem_cache_packing_factor = 8. / static_cast<double>(m_cache_base_element_uints);
     }
 
     // frame times are only available if tracking was enabled via setEvalTracking(true)
