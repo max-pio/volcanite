@@ -792,13 +792,17 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     if (verbose && !fin.eof())
         Logger(Warn) << "Unexpected end of file during Compressed Segmentation Volume import!";
     fin.close();
-    if (verbose)
+    if (verbose) {
+        std::string op_mask_str = OperationMask_STR(m_op_mask);
         Logger(Debug) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim)
                       << " = " << (static_cast<size_t>(m_volume_dim.x) * m_volume_dim.y * m_volume_dim.z)
                       << " voxels and " << getNumberOfUniqueLabelsInVolume() << " unique labels,"
                       << " encoded in " << str(getBrickCount()) << " = " << getBrickIndexCount() << " bricks"
-                      << " [b=" << m_brick_size << ",e=" << EncodingMode_STR(m_encoding_mode) << "]"
+                      << " [b=" << m_brick_size << ",e=" << EncodingMode_STR(m_encoding_mode)
+                      << ", op=" << op_mask_str
+                      << (m_random_access ? ", p" : "") << "]"
                       << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
+    }
 
     if (verify) {
         Logger(Debug, true) << "verifying..";
