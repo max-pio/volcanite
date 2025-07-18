@@ -378,7 +378,7 @@ if __name__ == '__main__':
             last_chunk = vcc.write_chunked_volume(volume_mm, f'{cur_dir / (name + "_x{}y{}z{}.hdf5")}', (512,512,512))
 
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld -b 64"
+                                                f"--headless -c {csgv_directory / (name + ".csgv")} -b 64"
                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                 f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                 f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
@@ -524,7 +524,7 @@ if __name__ == '__main__':
                 write_citation(csgv_directory, name)
                 last_chunk = download_files("https://l4dense2019.brain.mpg.de/webdav/mapped-segmentation-volume/x{}y{}z{}.hdf5", (5,8,3), cur_dir, "x{}y{}z{}.hdf5", overwrite=args.overwrite)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld -b 64"
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -b 64"
                                                      " --cache-palette --cache-size 2048"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
@@ -549,7 +549,7 @@ if __name__ == '__main__':
                 # last_chunk = download_cloud_data("h01", directory=cur_dir, output_name=name, size=(10240, 10240, 5294), origin=(133300, 262000, 0))
                 last_chunk = (9,9,5)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld- -b 64"
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld-s -b 64"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                      " --cache-palette --stream-lod --cache-size 4095"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
@@ -575,7 +575,7 @@ if __name__ == '__main__':
                 #
                 last_chunk = download_cloud_data("h01-bloodvessel", directory=cur_dir, output_name=name)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld- -b 64"
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld-s -b 64"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)} --cache-palette"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
@@ -599,7 +599,7 @@ if __name__ == '__main__':
                 write_citation(csgv_directory, name)
                 last_chunk = download_cloud_data("liconn", directory=cur_dir, output_name=name)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld -b 64"
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -b 64"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
@@ -633,7 +633,7 @@ if __name__ == '__main__':
                 last_chunk = vcc.write_chunked_volume(volume_mm, f'{cur_dir / (name + "_x{}y{}z{}.hdf5")}', (1024,1024,1024))
 
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld -b 64"
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -b 64"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
