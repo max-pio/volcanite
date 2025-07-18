@@ -70,6 +70,7 @@ class VolcaniteLogFile:
         header_strings: list[str] = lines[i::]
         return format_strings, header_strings
 
+
     def __init__(self, log_file: Path, fmt_strs: list[str], header_strings: list[str],
                  fallback_log_line: str | None, use_fmt_from_existing_log: bool = True):
         """
@@ -89,6 +90,7 @@ class VolcaniteLogFile:
         self.fallback_log: str = fallback_log_line if fallback_log_line is not None else self.__create_fallback_string()
         self.disable_manual_logs = False
 
+
     @classmethod
     def create_from_template_log_file(cls, log_file: Path, template_log_file: Path,
                                       fallback_log_line: str | None, use_fmt_from_existing_log: bool = True) -> Self:
@@ -96,11 +98,14 @@ class VolcaniteLogFile:
         return cls(log_file=log_file, fmt_strs=format_strings, header_strings=header_strings,
                    fallback_log_line=fallback_log_line, use_fmt_from_existing_log=use_fmt_from_existing_log)
 
+
     def get_log_file(self) -> Path:
         return self.file_path
 
+
     def get_fmt_and_header_lines(self) -> tuple[list[str], list[str]]:
         return self.__fmt_strs, self.__header_strings
+
 
     def setup(self, old_log_policy: ExistingPolicy = ExistingPolicy.ABORT):
         """
@@ -128,11 +133,13 @@ class VolcaniteLogFile:
         if not self.file_path.exists():
             raise IOError(f"Could not create log file {self.file_path}")
 
+
     def log_manual(self, output: str, end: str = "\n") -> None:
         if self.disable_manual_logs:
             return
         with open(str(self.file_path), "a") as log_out:
             log_out.write(output + end)
+
 
     def create_formatted_copy(self, dest: Path, newline_separator: str = None, remove_line_prefixes: list[str] = None,
                               replace_map: dict[str, str] = None):
@@ -162,10 +169,12 @@ class VolcaniteLogFile:
                 file_out.write(formatted_log)
             print(f"create formated copy of {self.file_path} to {dest}")
 
+
     @classmethod
     def initialize_log_files(cls, log_files : list[Self], old_logs: ExistingPolicy = ExistingPolicy.ABORT):
         for log_file in log_files:
             log_file.setup(old_logs)
+
 
 class VolcaniteLogFileCfg:
     def __init__(self, log_file_name: str | None, fmts: list[str] | None = None, headers: list[str] | None = None,
@@ -199,6 +208,7 @@ class VolcaniteLogFileCfg:
         self.template_log_file = template_log_file
         self.fallback_log_line = fallback_log_line
         self.use_fmt_from_existing_log = use_fmt_from_existing_log
+
 
 class VolcaniteEvaluation:
     """
