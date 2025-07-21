@@ -24,7 +24,13 @@ import zipfile_deflate64 as zipfile
 from volcanite import converter as vc, converter_chunked as vcc, clouddata as vcd, volcaniteeval as ve
 import numpy as np
 
-def download_file(url: str, directory: Path, file_name: str | None = None, log: bool = True, overwrite: bool = False) -> Path:
+def download_file(url: str, directory: Path, file_name: str | None = None, log: bool = True, overwrite: bool = False) -> Path | None:
+    """
+    Downloads the file from the url to the directory as file_name.
+
+    :return: file path if the file already exists or the download was successful. None otherwise.
+    """
+
     local_file_path = directory / Path(file_name)
     if log:
         print(f"Downloading {url} to {local_file_path}", end="")
@@ -33,6 +39,11 @@ def download_file(url: str, directory: Path, file_name: str | None = None, log: 
         file_name = url.split('/')[-1]
     directory.mkdir(parents=True, exist_ok=True)
     if os.path.isfile(local_file_path) and not overwrite:
+
+        if not requests.head(url).headers.get('Content-Length'):
+            print(f"error downloading {url}: has no content length")
+            return None
+
         expected_size = int(requests.head(url).headers.get('Content-Length'))
         if os.path.getsize(local_file_path) == expected_size:
             if log:
@@ -42,11 +53,16 @@ def download_file(url: str, directory: Path, file_name: str | None = None, log: 
             if log:
                 print(" (overwrite)", end="")
 
-    with requests.get(url, allow_redirects=True, stream=True) as req:
-        with open(local_file_path, 'wb') as local_file:
-            shutil.copyfileobj(req.raw, local_file)
-    if log:
-        print(" done.")
+    try:
+        with requests.get(url, allow_redirects=True, stream=True) as req:
+            with open(local_file_path, 'wb') as local_file:
+                shutil.copyfileobj(req.raw, local_file)
+        if log:
+            print(" done.")
+    except requests.exceptions.RequestException as e:
+        print(f"error downloading {url}: {e}")
+        return None
+
     return local_file_path
 
 def download_files(url_fmt: str, _last_chunk: (int, int, int), directory: Path, file_name_fmt: str | None = None,
@@ -58,7 +74,8 @@ def download_files(url_fmt: str, _last_chunk: (int, int, int), directory: Path, 
     for z in range(0, _last_chunk[2] + 1):
         for y in range(0, _last_chunk[1] + 1):
             for x in range(0, _last_chunk[0] + 1):
-                download_file(url_fmt.format(x, y, z), directory, file_name_fmt.format(x, y , z), log, overwrite)
+                if not download_file(url_fmt.format(x, y, z), directory, file_name_fmt.format(x, y , z), log, overwrite):
+                    return (-1, -1, -1)
     return _last_chunk
 
 def write_citation(directory: Path, name: str) -> None:
@@ -321,6 +338,7 @@ if __name__ == '__main__':
             vc.write_volume(vc.reshape_memory_order(vc.read_hdf5(cur_dir / "pa66.h5", ['pa66', 'ground_truth']), 'xyz', 'zyx'), cur_dir / "pa66_segm.hdf5")
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                 "--cache-palette"
                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                 f" {cur_dir / "pa66_segm.hdf5"}")
 
@@ -502,6 +520,7 @@ if __name__ == '__main__':
                 write_citation(csgv_directory, name)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                     f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                     "--cache-palette --cache-size 2048"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" {cur_dir / "maurer_glassfiberpolymer.hdf5"}")
 
@@ -525,7 +544,7 @@ if __name__ == '__main__':
                 last_chunk = download_files("https://l4dense2019.brain.mpg.de/webdav/mapped-segmentation-volume/x{}y{}z{}.hdf5", (5,8,3), cur_dir, "x{}y{}z{}.hdf5", overwrite=args.overwrite)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                     f"--headless -c {csgv_directory / (name + ".csgv")} -b 64"
-                                                     " --cache-palette --cache-size 2048"
+                                                     " --cache-palette --cache-size 1024"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / "x{}y{}z{}.hdf5"}")
@@ -546,8 +565,7 @@ if __name__ == '__main__':
             cur_dir = csgv_directory / Path(name)
             if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
                 write_citation(csgv_directory, "h01")
-                # last_chunk = download_cloud_data("h01", directory=cur_dir, output_name=name, size=(10240, 10240, 5294), origin=(133300, 262000, 0))
-                last_chunk = (9,9,5)
+                last_chunk = download_cloud_data("h01", directory=cur_dir, output_name=name, size=(10240, 10240, 5294), origin=(133300, 262000, 0))
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                     f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld-s -b 64"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
