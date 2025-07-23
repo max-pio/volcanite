@@ -118,7 +118,6 @@ class CSGVAttributeExtractor {
 
         std::vector<std::vector<LabelAttributeTracking>> thread_tracking(cpu_threads, std::vector<LabelAttributeTracking>(m_neighbors_per_label.size()));
         std::vector<ThreadBlock> thread_blocks;
-        std::vector<std::vector<LabelAttributeTracking>> volume_thread_debug_count(cpu_threads, std::vector<LabelAttributeTracking>(volume_dim.x * volume_dim.y * volume_dim.z));
 
         MiniTimer t;
         // divide volume for parallelization
