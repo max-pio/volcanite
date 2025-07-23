@@ -36,15 +36,23 @@ struct CSGVCompressionEvaluationResults {
     int original_volume_bytes_per_voxel = 0;
     glm::uvec3 volume_dim = {0u, 0u, 0u};
     uint32_t volume_labels = 0u;
-    uint32_t labels_per_brick_min = 0u;
-    double labels_per_brick_avg = 0u;
-    uint32_t labels_per_brick_max = 0u;
-    uint32_t palette_size_min = 0u;
-    double palette_size_avg = 0u;
-    uint32_t palette_size_max = 0u;
-    double brick_min_bytes = 0u;
-    double brick_avg_bytes = 0u;
-    double brick_max_bytes = 0u;
+    uint32_t brick_size = 0u;
+    std::string operation_mask = {};
+    std::string encoding_mode = {};
+    bool random_access = false;
+    bool detail_separation = false;
+    uint32_t brick_labels_min = 0u;
+    double brick_labels_avg = 0u;
+    uint32_t brick_labels_max = 0u;
+    uint32_t brick_palette_size_min = 0u;
+    double brick_palette_size_avg = 0u;
+    uint32_t brick_palette_size_max = 0u;
+    uint32_t brick_palette_duplicates_min = 0u;
+    double brick_palette_duplicates_avg = 0u;
+    uint32_t brick_palette_duplicates_max = 0u;
+    double brick_bytes_min = 0u;
+    double brick_bytes_avg = 0u;
+    double brick_bytes_max = 0u;
 };
 
 struct CSGVDecompressionEvaluationResults {

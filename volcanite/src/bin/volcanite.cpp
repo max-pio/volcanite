@@ -115,7 +115,7 @@ int volcanite_main(int argc, char *argv[]) {
 
         // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
         if (args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
-            Logger(Debug) << "separating detail level encoding for streaming";
+            Logger(Info) << "separating detail level encoding for streaming";
             compressedSegmentationVolume->separateDetail();
             Logger(Debug) << compressedSegmentationVolume->getEncodingInfoString();
         }

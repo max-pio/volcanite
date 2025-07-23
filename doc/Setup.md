@@ -131,5 +131,5 @@ How do I solve an `ErrorOutOfDeviceMemory` error?
   `--stream-lod` and `--cache-packed` arguments (see [Usage.md](Usage.md#command-line-interface) for details) to minimize
   the required memory. If this is not enough either, your segmentation volume is simply too big to be rendered. Try to
  render a smaller sub-volume in this case. Have a look at the startup message
- `Device memory on startup: GPU Memory: used/avail/total GB` to find out how much total memory your GPU has and how much
+ `Device memory on startup: GPU Memory: used/avail/total GB` when executed with `--verbose` to find out how much total memory your GPU has and how much
  of it is actually available to Volcanite.

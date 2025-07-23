@@ -630,6 +630,10 @@ class VolcaniteArg:
         return cls(["--timings-logfile", str(timing_dir) + "/" + cls.concat_ids(args) + "_timing.csv"])
 
     @classmethod
+    def arg_cache_size(cls, cache_size_mb: int):
+        return cls(["--cache-size", str(cache_size_mb)], "cs" + str(cache_size_mb), 19)   
+
+    @classmethod
     def arg_config_import(cls, eval_config_file: list[Self] | str | None, additional_configs: list[str] | str | None = None, resolution: str = "1920x1080") -> Self:
         if eval_config_file and cls.__vcfg_directory is None:
             raise RuntimeError("VolcaniteArg static vcfg directory must be initialized before usage"

@@ -60,22 +60,41 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     fmt_args.push_back(fmt::arg("comp_prepass_s", comp_res.compression_prepass_seconds));
     fmt_args.push_back(fmt::arg("comp_gb_per_s", comp_res.compression_GB_per_s));
     fmt_args.push_back(fmt::arg("csgv_gb", comp_res.csgv_bytes * BYTE_TO_GB));
+    const double volume_voxel_count = static_cast<double>(comp_res.volume_dim.x) * comp_res.volume_dim.y * comp_res.volume_dim.z;
+    fmt_args.push_back(fmt::arg("csgv_bits_per_voxel", comp_res.csgv_bytes / volume_voxel_count * 8.));
+    fmt_args.push_back(fmt::arg("csgv_bytes_per_voxel", comp_res.csgv_bytes / volume_voxel_count));
+    fmt_args.push_back(fmt::arg("csgv_base_gb", comp_res.csgv_base_encoding_bytes * BYTE_TO_GB));
+    fmt_args.push_back(fmt::arg("csgv_base_pcnt", comp_res.csgv_base_encoding_bytes / comp_res.csgv_bytes * BYTE_TO_GB));
+    fmt_args.push_back(fmt::arg("csgv_detail_gb", comp_res.csgv_detail_encoding_bytes * BYTE_TO_GB));
+    fmt_args.push_back(fmt::arg("csgv_detail_pcnt", static_cast<double>(comp_res.csgv_detail_encoding_bytes) / static_cast<double>(comp_res.csgv_bytes) * 100.));
+    //
+    fmt_args.push_back(fmt::arg("brick_size", comp_res.brick_size));
+    fmt_args.push_back(fmt::arg("operation_mask", comp_res.operation_mask));
+    fmt_args.push_back(fmt::arg("encoding_mode", comp_res.encoding_mode));
+    fmt_args.push_back(fmt::arg("random_access", comp_res.random_access));
+    fmt_args.push_back(fmt::arg("detail_separation", comp_res.detail_separation));
+    //
     fmt_args.push_back(fmt::arg("orig_gb", comp_res.original_volume_bytes * BYTE_TO_GB));
+    fmt_args.push_back(fmt::arg("orig_bits_per_voxel", comp_res.original_volume_bytes_per_voxel * 8));
     fmt_args.push_back(fmt::arg("orig_bytes_per_voxel", comp_res.original_volume_bytes_per_voxel));
     fmt_args.push_back(fmt::arg("volume_dim", std::to_string(comp_res.volume_dim.x) + "x" + std::to_string(comp_res.volume_dim.y) + "x" + std::to_string(comp_res.volume_dim.z)));
     fmt_args.push_back(fmt::arg("volume_dim_x", std::to_string(comp_res.volume_dim.x)));
     fmt_args.push_back(fmt::arg("volume_dim_y", std::to_string(comp_res.volume_dim.y)));
     fmt_args.push_back(fmt::arg("volume_dim_z", std::to_string(comp_res.volume_dim.z)));
     fmt_args.push_back(fmt::arg("volume_labels", comp_res.volume_labels));
-    fmt_args.push_back(fmt::arg("labels_per_brick_min", comp_res.labels_per_brick_min));
-    fmt_args.push_back(fmt::arg("labels_per_brick_avg", comp_res.labels_per_brick_avg));
-    fmt_args.push_back(fmt::arg("labels_per_brick_max", comp_res.labels_per_brick_max));
-    fmt_args.push_back(fmt::arg("palette_size_per_brick_min", comp_res.palette_size_min));
-    fmt_args.push_back(fmt::arg("palette_size_per_brick_avg", comp_res.palette_size_avg));
-    fmt_args.push_back(fmt::arg("palette_size_per_brick_max", comp_res.palette_size_max));
-    fmt_args.push_back(fmt::arg("brick_bytes_min", comp_res.brick_min_bytes));
-    fmt_args.push_back(fmt::arg("brick_bytes_avg", comp_res.brick_avg_bytes));
-    fmt_args.push_back(fmt::arg("brick_bytes_max", comp_res.brick_max_bytes));
+    //
+    fmt_args.push_back(fmt::arg("brick_labels_min", comp_res.brick_labels_min));
+    fmt_args.push_back(fmt::arg("brick_labels_avg", comp_res.brick_labels_avg));
+    fmt_args.push_back(fmt::arg("brick_labels_max", comp_res.brick_labels_max));
+    fmt_args.push_back(fmt::arg("brick_palette_size_min", comp_res.brick_palette_size_min));
+    fmt_args.push_back(fmt::arg("brick_palette_size_avg", comp_res.brick_palette_size_avg));
+    fmt_args.push_back(fmt::arg("brick_palette_size_max", comp_res.brick_palette_size_max));
+    fmt_args.push_back(fmt::arg("brick_palette_duplicates_min", comp_res.brick_palette_duplicates_min));
+    fmt_args.push_back(fmt::arg("brick_palette_duplicates_avg", comp_res.brick_palette_duplicates_avg));
+    fmt_args.push_back(fmt::arg("brick_palette_duplicates_max", comp_res.brick_palette_duplicates_max));
+    fmt_args.push_back(fmt::arg("brick_bytes_min", comp_res.brick_bytes_min));
+    fmt_args.push_back(fmt::arg("brick_bytes_avg", comp_res.brick_bytes_avg));
+    fmt_args.push_back(fmt::arg("brick_bytes_max", comp_res.brick_bytes_max));
 
     // decompression
     fmt_args.push_back(fmt::arg("decomp_cpu_gb_per_s", decomp_res.cpu_GB_per_s));
@@ -139,7 +158,7 @@ std::string EvaluationLogExport::format_evaluation_string(std::string format_str
     try {
         return fmt::vformat(format_string, fmt_args);
     } catch (const fmt::format_error &err) {
-        Logger(Error) << "evaluation output format error: " << format_string;
+        Logger(Error) << "evaluation output format error: " << err.what() << " for " << format_string;
         throw;
     }
 }
@@ -156,19 +175,34 @@ std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
         "comp_prepass_s",
         "comp_gb_per_s",
         "csgv_gb",
+        "csgv_bits_per_voxel",
+        "csgv_bytes_per_voxel",
+        "csgv_base_gb",
+        "csgv_base_pcnt",
+        "csgv_detail_gb",
+        "csgv_detail_pcnt",
+        "brick_size",
+        "operation_mask",
+        "encoding_mode",
+        "random_access",
+        "detail_separation",
         "orig_gb",
-        "orig_bytes_per_voxel",
+        "orig_bits_per_voxel",
+        "orig_bytes_per_voxel"
         "volume_dim",
         "volume_dim_x",
         "volume_dim_y",
         "volume_dim_z",
         "volume_labels",
-        "labels_per_brick_min",
-        "labels_per_brick_avg",
-        "labels_per_brick_max",
-        "palette_size_min",
-        "palette_size_avg",
-        "palette_size_max",
+        "brick_labels_min",
+        "brick_labels_avg",
+        "brick_labels_max",
+        "brick_palette_size_min",
+        "brick_palette_size_avg",
+        "brick_palette_size_max",
+        "brick_palette_duplicates_min",
+        "brick_palette_duplicates_avg",
+        "brick_palette_duplicates_max",
         "brick_bytes_min",
         "brick_bytes_avg",
         "brick_bytes_max",
