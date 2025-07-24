@@ -351,6 +351,7 @@ void CSGVDatabase::processVolumeAndCreateSqlite(const std::string &sqlite_export
             // the index_to_label vector if they did not occur before.
             {
                 const uint64_t last_i = sfc::Morton3D::p2i_64(cur_chunk_dim);
+                uint32_t last_progress_pcnt = ~0u;
                 constexpr int NUM_THREADS = 8;
                 size_t voxels_per_thread = (32ul * 32ul * 32ul);
                 // parallel processing will only have a benefit if we can run at least 4 threads in parallel
@@ -397,8 +398,12 @@ void CSGVDatabase::processVolumeAndCreateSqlite(const std::string &sqlite_export
                         }
                     }
 
-                    if (i % (last_i / 100) == 0u)
-                        Logger(Info, true) << " re-labelling map computation " << static_cast<int>(static_cast<float>(i) / static_cast<float>(last_i) * 100.f) << "%";
+                    if ((i * 10) / last_i != last_progress_pcnt) {
+                        last_progress_pcnt = (i * 10) / last_i;
+                        Logger(Info, true) << " re-labelling map computation [chunk "
+                                           << str(chunk_index) << "/" << str(max_file_index) << "] "
+                                           << last_progress_pcnt*10 << "%";
+                    }
                 }
 
                 if (index_to_label.size() != label_set.size())
@@ -406,6 +411,7 @@ void CSGVDatabase::processVolumeAndCreateSqlite(const std::string &sqlite_export
             }
         }
 
+        Logger(Info, true) << " re-labelling map computation [chunk " << str(chunk_index) << "/" << str(max_file_index) << "] 100%";
         chunk_index1D++;
     } while (chunked_input_data && glm::any(glm::lessThanEqual(chunk_index, max_file_index)));
 

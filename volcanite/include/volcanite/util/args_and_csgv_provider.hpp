@@ -219,7 +219,10 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
 
     // optionally, add additional attributes from the attribute extraction
     if (args.compute_attributes) {
-        if (compressedSegmentationVolume->hasContiguousLabels() && csgvDatabase->isDummy()) {
+        if (!compressedSegmentationVolume->hasContiguousLabels())
+            throw std::runtime_error("Compressed Segmentation Volume must have contiguous labels. Compress with --relabel or -a first.");
+        
+        if (csgvDatabase->isDummy()) {
             // convert dummy db to an sql db to insert extracted attributes
             csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
             csgvDatabase->createDBfromDummyDB(stripFileExtension(args.input_file) + "_csgv.db3", *compressedSegmentationVolume);
@@ -227,7 +230,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
 
         CSGVAttributeExtractor csgvAttributeExtractor(compressedSegmentationVolume);
         csgvDatabase->addAttributesIfNotExist(&csgvAttributeExtractor);
-
+    
         // (optionally), export the connectivity information, i.e. which labels are neighboring each other in the volume
         // TODO: create a command line argument for connectivity .csv export
         csgvAttributeExtractor.exportNeighborsPerLabel(stripFileExtension(args.input_file) + "_connectivity.csv");
