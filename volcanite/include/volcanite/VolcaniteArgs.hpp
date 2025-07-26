@@ -430,7 +430,6 @@ struct VolcaniteArgs {
                     if (!std::filesystem::exists(va.attribute_database))
                         throw ArgException(attributeArg.longID() + " attribute database file does not exists or can not be accessed.", attributeArg.longID());
                 }
-                va.compute_attributes = (va.attribute_database.empty() && va.label_remapping) || computeAttributesArg.getValue();
 
                 // compression arguments
                 va.brick_size = bricksizeArg.getValue();
@@ -482,6 +481,12 @@ struct VolcaniteArgs {
                 }
                 va.run_tests = testArg.getValue();
             }
+
+            // it is possible to obtain new attributes for the volume and append them to the attribute database
+            // this requires that the csgv volume IDs are contiguous however (use --relabel or -a).
+            //va.compute_attributes = (va.attribute_database.empty() && va.label_remapping) || computeAttributesArg.getValue();
+            va.compute_attributes = computeAttributesArg.getValue();
+
             va.export_stats = statsArg.getValue();
             va.record_in_file = expandPathStr(recordInFileArg.getValue());
             va.record_convergence_frames = recordConvergenceArg.getValue();
