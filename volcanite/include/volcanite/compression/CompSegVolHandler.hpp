@@ -53,6 +53,9 @@ class CompSegVolHandler {
 
   public:
     CompSegVolHandler() = default;
+    ~CompSegVolHandler() {
+        m_volume = nullptr;
+    }
 
     static bool relabelVoxelsFromCSV(std::string url, std::unordered_map<uint32_t, uint32_t> &type_per_id) {
         std::ifstream nrrd(url, std::ios_base::in | std::ios_base::binary);
@@ -153,7 +156,24 @@ class CompSegVolHandler {
         bool verbose = true;
     };
 
-    static std::shared_ptr<CompressedSegmentationVolume> createCompressedSegmentationVolume(const std::string &volume_input_path,
+
+private:
+    std::string m_last_volume_path = {};
+    glm::ivec3 m_volume_dim = glm::ivec3(0);
+    std::shared_ptr<Volume<uint32_t>> m_volume = nullptr;
+    void loadSegmentationVolumeFileCached(const std::string& path,
+                                   const std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> &label_remapping = nullptr,
+                                   uint32_t cpu_threads = std::thread::hardware_concurrency()) {
+        // only load the volume file if it differs from the previously loaded volume
+        if (path != m_last_volume_path || !m_volume) {
+            loadSegmentationVolumeFile(path, m_volume, label_remapping, cpu_threads);
+            m_volume_dim = glm::ivec3(m_volume->dim_x, m_volume->dim_y, m_volume->dim_z);
+            m_last_volume_path = path;
+        }
+    }
+
+public:
+    std::shared_ptr<CompressedSegmentationVolume> createCompressedSegmentationVolume(const std::string &volume_input_path,
                                                                                             const std::string &csgv_path, const CSGVCompressionConfig &cfg) {
         uint32_t cpu_threads = cfg.cpu_threads;
         if (cpu_threads == 0u)
@@ -167,9 +187,6 @@ class CompSegVolHandler {
             Logger(Warn) << "Using detail separation is not recommended at compression stage and may be removed later.";
         if (cfg.random_access && cfg.encoding_mode != NIBBLE_ENC && cfg.encoding_mode != WAVELET_MATRIX_ENC && cfg.encoding_mode != HUFFMAN_WM_ENC)
             throw std::runtime_error("Random access can only be used in combination with wavelet matrix or nibble encoding.");
-
-        std::shared_ptr<Volume<uint32_t>> volume = nullptr;
-        glm::ivec3 volume_dim(0);
 
         const bool create_log_file = false;
         const bool create_operation_freq_file = cfg.chunked_input_data;
@@ -205,10 +222,9 @@ class CompSegVolHandler {
         if (!cfg.force_recompute && csgv->importFromFile(csgv_path, false)) {
             if (cfg.run_tests) {
                 if (!cfg.chunked_input_data) {
-                    loadSegmentationVolumeFile(volume_input_path, volume, cfg.label_remapping, cpu_threads);
-                    volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
-                    Logger(Info) << volume_input_path + " loaded with dim " << str(volume_dim);
-                    if (!csgv->test(volume->data(), volume_dim)) {
+                    loadSegmentationVolumeFileCached(volume_input_path, cfg.label_remapping, cpu_threads);
+                    Logger(Info) << volume_input_path + " loaded with dim " << str(m_volume_dim);
+                    if (!csgv->test(m_volume->data(), m_volume_dim)) {
                         return nullptr;
                     }
                 } else {
@@ -251,13 +267,12 @@ class CompSegVolHandler {
                             // create new file path for the compressed version of this single chunk
                             std::string chunk_input_path = cfg.chunked_input_data ? formatChunkPath(volume_input_path, x, y, z) : volume_input_path;
 
-                            loadSegmentationVolumeFile(chunk_input_path, volume, cfg.label_remapping, cpu_threads);
-                            volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
+                            loadSegmentationVolumeFileCached(chunk_input_path, cfg.label_remapping, cpu_threads);
 
                             size_t tmp_code_frequencies[32];
                             csgv->setLabel(std::filesystem::path(chunk_input_path).stem().string());
                             csgv->setCompressionOptions({.brick_size=cfg.brick_dim, .encoding_mode=NIBBLE_ENC, .op_mask=cfg.op_mask, .random_access=cfg.random_access});
-                            csgv->compressForFrequencyTable(volume->data(), volume_dim, tmp_code_frequencies, cfg.freq_subsampling, cfg.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
+                            csgv->compressForFrequencyTable(m_volume->data(), m_volume_dim, tmp_code_frequencies, cfg.freq_subsampling, cfg.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
                             for (int i = 0; i < 16; i++) {
                                 code_frequencies[i] += tmp_code_frequencies[i];
                                 detail_code_frequencies[i] += tmp_code_frequencies[i + 16];
@@ -307,10 +322,9 @@ class CompSegVolHandler {
                     bool recompute = cfg.force_recompute || (cfg.max_file_index.x + cfg.max_file_index.y + cfg.max_file_index.z == 0u) // if this is just one chunk, we also have to recompute at this point
                                      || !csgv->importFromFile(chunk_output_path, false);
                     if (recompute) {
-                        loadSegmentationVolumeFile(chunk_input_path, volume, cfg.label_remapping, cpu_threads);
-                        volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
+                        loadSegmentationVolumeFileCached(chunk_input_path, cfg.label_remapping, cpu_threads);
                         if (cfg.verbose) {
-                            Logger(Info) << " " << chunk_input_path + " loaded with dim " << str(volume_dim);
+                            Logger(Info) << " " << chunk_input_path + " loaded with dim " << str(m_volume_dim);
                             Logger(Info) << "Running Encoding  --------------------------------------------";
                         }
 
@@ -319,14 +333,14 @@ class CompSegVolHandler {
                         csgv->setLabel(chunk_input_path);
                         csgv->setCompressionOptions({.brick_size=cfg.brick_dim, .encoding_mode=cfg.encoding_mode, .op_mask=cfg.op_mask, .random_access=cfg.random_access,
                                                     .code_frequencies=code_frequencies.data(), .detail_code_frequencies=detail_code_frequencies.data()});
-                        csgv->compress(volume->data(), volume_dim, cfg.verbose);
+                        csgv->compress(m_volume->data(), m_volume_dim, cfg.verbose);
                         total_encoding_seconds += csgv->getLastTotalEncodingSeconds();
                         if (std::filesystem::exists(chunk_output_path)) {
                             Logger(Warn) << "overwriting file " << chunk_output_path;
                             std::filesystem::remove(chunk_output_path);
                         }
 
-                        if (cfg.run_tests && !csgv->test(volume->data(), volume_dim)) {
+                        if (cfg.run_tests && !csgv->test(m_volume->data(), m_volume_dim)) {
                             return nullptr;
                         }
 
@@ -339,12 +353,11 @@ class CompSegVolHandler {
                         }
 
                         if (cfg.run_tests) {
-                            if (!volume) {
-                                loadSegmentationVolumeFile(chunk_input_path, volume, cfg.label_remapping, cpu_threads);
-                                volume_dim = glm::ivec3(volume->dim_x, volume->dim_y, volume->dim_z);
-                                Logger(Info) << chunk_input_path + " loaded with dim " << str(volume_dim);
+                            if (!m_volume) {
+                                loadSegmentationVolumeFileCached(chunk_input_path, cfg.label_remapping, cpu_threads);
+                                Logger(Info) << chunk_input_path + " loaded with dim " << str(m_volume_dim);
                             }
-                            if (!csgv->test(volume->data(), volume_dim)) {
+                            if (!csgv->test(m_volume->data(), m_volume_dim)) {
                                 return nullptr;
                             }
                         }

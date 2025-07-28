@@ -137,7 +137,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
                                                         .run_tests = args.run_tests,
                                                         .export_stats_per_chunk = !args.brickstats_file.empty() && args.chunked,
                                                         .verbose = args.verbose};
-        compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
+        compressedSegmentationVolume = CompSegVolHandler().createCompressedSegmentationVolume(args.input_file,
                                                                                              complete_csgv_path, cfg);
 
         if (use_temporary_output_file) {
