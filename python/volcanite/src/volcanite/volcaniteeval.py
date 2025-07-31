@@ -687,6 +687,12 @@ class VolcaniteArg:
         else:
             return cls([data_path], identifier, 0)
 
+    @classmethod
+    def arg_operations(cls, operations: str):
+        if not set(operations).issubset(set("pnxyzld-sao")) or len(operations) != len(set(operations)):
+            raise ValueError("Operations argument can only consist of unique characters in: pnxyzld-sao")
+        return cls(["-o", operations], "op-" + operations, 2.5)
+
 
 # several default VolcaniteArgs:
 VolcaniteArg.args_encoding = {"nibble": VolcaniteArg(["-s", "0"], "nb", 1),

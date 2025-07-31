@@ -70,9 +70,9 @@ def data_specific_compression_args(data: str, volume_data_dir: Path, input_file:
             raise ValueError(f"No input volume path found for {data}.")
         
         if _chunked:
-            vargs.append(VolcaniteArg(["--chunked", f"{_chunked[0]},{_chunked[1]},{_chunked[2]}", _input_path]))
+            vargs.append(VolcaniteArg(["--chunked", f"{_chunked[0]},{_chunked[1]},{_chunked[2]}", str(_input_path)]))
         else:
-            vargs.append(VolcaniteArg([_input_path]))
+            vargs.append(VolcaniteArg([str(_input_path)]))
 
     if brick_size:
         if data in ["motta2019","griesser2022-sample","h01-wm","h01-bloodvessel"]:
@@ -81,8 +81,15 @@ def data_specific_compression_args(data: str, volume_data_dir: Path, input_file:
             vargs.append(VolcaniteArg.args_brick_size["32"])
 
     if operations:
-        if data in ["h01-wm", "h01-bloodvessel"]:
+        # unlimited Palette delta (optimal for cache paletting)
+        if data == "Motta2019" or data == "Griesser2022-sample" or data == "pa66" or data == "fiber":
+            vargs.append(VolcaniteArg("-o pnlds"))
+        # old Palette delta (better compression rates)
+        elif data in ["h01-wm", "h01-bloodvessel"]:
             vargs.append(VolcaniteArg("-o pnld-s"))
+        # no Palette delta (faster rendering)
+        else:
+            vargs.append(VolcaniteArg("-o pnls"))
 
     return vargs
 
