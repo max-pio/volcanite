@@ -1,0 +1,15 @@
+Data Set,Size [MB],Brick Size,Operations,Rendering Parameters,Cache Size [MiB]
+pa66,1300,32,default,cache-palette,4095
+Griesser2022-sample,15363,64,default,cache-palette,2048
+Ara2016,1320,32,default,,4095
+cells,1000,32,default,,4095
+xtm-battery,560,32,default,,4095
+azba,670,32,default,,4095
+H01-bloodvessel,32243,64,short Pdelta,cache-palette,4095
+H01-wm,10112,64,short Pdelta,stream-lod cache-palette,4095
+Wolny2020,896,32,default,,4095
+liconn,3825,64,default,,4095
+fiber,1579,32,default,cache-palette,4095
+Motta2019-small,1024,32,default,,4095
+Griesser2022-validation,600,64,default,,4095
+Motta2019,6144,64,default,cache-palette,1024

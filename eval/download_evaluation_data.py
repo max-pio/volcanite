@@ -520,7 +520,7 @@ if __name__ == '__main__':
                 write_citation(csgv_directory, name)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                     f"--headless -c {csgv_directory / (name + ".csgv")}"
-                                                     "--cache-palette --cache-size 2048"
+                                                     "--cache-palette --cache-size 1024"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" {cur_dir / "maurer_glassfiberpolymer.hdf5"}")
 
@@ -652,6 +652,7 @@ if __name__ == '__main__':
 
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                     f"--headless -c {csgv_directory / (name + ".csgv")} -b 64"
+                                                     " --cache-palette"
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
