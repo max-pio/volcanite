@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from volcanite.volcaniteeval import VolcaniteArg, VolcaniteEvaluation, VolcaniteExec, VolcaniteLogFileCfg, ExistingPolicy
 
-from common import data_specific_args
+from common import data_specific_rendering_args
 
 if __name__ == "__main__":
 

@@ -1,7 +1,7 @@
 from volcanite.volcaniteeval import VolcaniteArg
 from pathlib import Path
 
-def data_specific_args(data : str, cache_palette : bool = True, stream_lod : bool = True, cache_size : bool = True) -> list[VolcaniteArg]:
+def data_specific_rendering_args(data : str, cache_palette : bool = True, stream_lod : bool = True, cache_size : bool = True) -> list[VolcaniteArg]:
     vargs = []
 
     if cache_palette:
@@ -75,21 +75,45 @@ def data_specific_compression_args(data: str, volume_data_dir: Path, input_file:
             vargs.append(VolcaniteArg([str(_input_path)]))
 
     if brick_size:
-        if data in ["motta2019","griesser2022-sample","h01-wm","h01-bloodvessel"]:
+        if data in ["Motta2019","Griesser2022-sample","H01-wm","H01-bloodvessel"]:
             vargs.append(VolcaniteArg.args_brick_size["64"])
         else:
             vargs.append(VolcaniteArg.args_brick_size["32"])
 
     if operations:
-        # unlimited Palette delta (optimal for cache paletting)
-        if data == "Motta2019" or data == "Griesser2022-sample" or data == "pa66" or data == "fiber":
-            vargs.append(VolcaniteArg("-o pnlds"))
-        # old Palette delta (better compression rates)
-        elif data in ["h01-wm", "h01-bloodvessel"]:
-            vargs.append(VolcaniteArg("-o pnld-s"))
+        # -- Cache Packing Effect --
+        # No ratio difference with Pdelta:                          Ara2016 Wolny2020 azba fiber
+        # Better cache-palette packing ratio with unlimited Delta:  cells
+        #
+        # -- Compression Rate Effect --
+        # diff[none, d-]: << 0 use any delta here       diff[d, d-] > 0: use new d
+        # xtm-battery                     -0.242136     0.0
+        # pa66                            -0.165266     0.0
+        # cells                           -0.073341     0.37
+        # H01-wm                          -0.073179     -0.01833
+        # fiber                           -0.032356     -0.000355
+        # Motta2019-small                 -0.022406     -0.064437
+        # liconn                          -0.019662     -0.001779
+        # Griesser2022-validation         -0.012789     -0.000106
+        # Ara2016                         -0.011444     -0.000072
+        # Wolny2020                       -0.009742     -0.000092
+        # Motta2019                       -0.008618     -0.022149
+        # azba                            -0.008513     -0.000060
+        # ---- no relevant effect:
+        # Griesser2022-sample             -0.000482      0.000000
+        # H01-bloodvessel                 -0.000012      0.000000
+
+        # unlimited Palette delta (optimal for cache paletting, minimal palette size)
+        if data in ["cells", "H01-wm", "Motta2019", "Motta2019-small", "liconn"]:
+            op_delta = "d"
         # no Palette delta (faster rendering)
+        elif data in ["Griesser2022-sample", "H01-bloodvessel"]:
+            op_delta = ""
+        # limited Palette delta (possibly slightly better rendering and compression performance)
         else:
-            vargs.append(VolcaniteArg("-o pnls"))
+            op_delta = "d-"
+    
+        vargs.append(VolcaniteArg(f"-o pnl{op_delta}s"))
 
     return vargs
 

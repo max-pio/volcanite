@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from volcanite.volcaniteeval import VolcaniteArg, VolcaniteEvaluation, VolcaniteExec, VolcaniteLogFileCfg, ExistingPolicy
 
-from common import data_specific_args
+from common import data_specific_rendering_args
 
 if __name__ == "__main__":
 
@@ -43,7 +43,7 @@ if __name__ == "__main__":
             arg_image_eval = VolcaniteArg.arg_image_eval_cfg(1024)
 
             # log a summary line of all arguments
-            vargs = [arg_data, arg_vcfg, arg_shading, arg_image_eval, VolcaniteArg(["--verbose"])] + data_specific_args(arg_data.identifier)
+            vargs = [arg_data, arg_vcfg, arg_shading, arg_image_eval, VolcaniteArg(["--verbose"])] + data_specific_rendering_args(arg_data.identifier)
             evaluation.get_log().log_manual("# " + VolcaniteArg.concat_arg_string(vargs))
 
             # write data set name to csv logfile

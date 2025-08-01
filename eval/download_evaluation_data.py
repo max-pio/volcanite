@@ -17,12 +17,15 @@ import os.path
 from time import sleep
 
 import argparse
+import numpy as np
 import requests
 import shutil
 import zipfile_deflate64 as zipfile
 
 from volcanite import converter as vc, converter_chunked as vcc, clouddata as vcd, volcaniteeval as ve
-import numpy as np
+from volcanite.volcaniteeval import VolcaniteArg
+from common import data_specific_compression_args, data_specific_rendering_args
+
 
 def download_file(url: str, directory: Path, file_name: str | None = None, log: bool = True, overwrite: bool = False) -> Path | None:
     """
@@ -227,6 +230,7 @@ def __preview_arg(enable: bool, directory: Path, dataset: str):
     if not enable:
         return ""
     arg = "-i " + str(directory / Path(dataset + ".jpg"))
+    arg += " " + VolcaniteArg.concat_arg_string(data_specific_rendering_args(name))
     if config_dir and (config_dir / (dataset + ".vcfg")).exists():
         arg += " --config " + str((config_dir / (dataset + ".vcfg")).absolute())
     return arg
@@ -291,6 +295,7 @@ if __name__ == '__main__':
             vc.convert_volume(cur_dir / "azba.nii.gz", cur_dir / "azba.hdf5")
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                 f" {cur_dir / "azba.hdf5"}")
             if ret.returncode != 0:
@@ -313,6 +318,7 @@ if __name__ == '__main__':
                                             size=None, origin=(0,0,0), chunk_size=(512,512,512))
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                 f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                 f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
@@ -338,7 +344,7 @@ if __name__ == '__main__':
             vc.write_volume(vc.reshape_memory_order(vc.read_hdf5(cur_dir / "pa66.h5", ['pa66', 'ground_truth']), 'xyz', 'zyx'), cur_dir / "pa66_segm.hdf5")
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
-                                                 "--cache-palette"
+                                                + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                 f" {cur_dir / "pa66_segm.hdf5"}")
 
@@ -363,6 +369,7 @@ if __name__ == '__main__':
             vc.write_volume(vc.read_volume(cur_dir / "N_428_ds2x.h5", "xyz"), cur_dir / (name + ".hdf5"))
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                 f" {cur_dir / (name + ".hdf5")}")
 
@@ -396,7 +403,8 @@ if __name__ == '__main__':
             last_chunk = vcc.write_chunked_volume(volume_mm, f'{cur_dir / (name + "_x{}y{}z{}.hdf5")}', (512,512,512))
 
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                f"--headless -c {csgv_directory / (name + ".csgv")} -b 64"
+                                                f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                 f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                 f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
@@ -411,32 +419,6 @@ if __name__ == '__main__':
         else:
             print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
 
-    # if not args.only or args.only.lower() == "xtm-battery-pristine":
-    #     print("----------- Mueller2021 XTM Battery [Pristine] ----------- ")
-    #     name = "xtm-battery-pristine"
-    #     cur_dir = csgv_directory / Path(name)
-    #     if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
-    #         write_citation(csgv_directory, "xtm-battery")
-    #         download_file("https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/505935/Pristine.zip?sequence=5&isAllowed=y", cur_dir, "Pristine.zip", overwrite=args.overwrite)
-    #         with zipfile.ZipFile(cur_dir / "Pristine.zip", 'r') as zf:
-    #             zf.extract("Pristine.h5", cur_dir)
-    #
-    #         vc.write_volume(vc.reshape_memory_order(vc.read_hdf5(cur_dir / "Pristine.h5", ['Electrode1', 'Segmentation']), 'xyz', 'zyx'), cur_dir / "xtm-battery-pristine.hdf5")
-    #         ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-    #                                              f"--headless -c {csgv_directory / (name + ".csgv")}"
-    #                                              f" {__preview_arg(args.preview, csgv_directory, name)}"
-    #                                              f" {cur_dir / "xtm-battery-pristine.hdf5"}")
-    #
-    #         if ret.returncode != 0:
-    #             print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
-    #             if not args.no_abort:
-    #                 exit(ret.returncode)
-    #         # cleanup
-    #         if not args.keep:
-    #             shutil.rmtree(cur_dir)
-    #     else:
-    #         print(f"{(csgv_directory / (name + ".csgv"))} already exists. Skipping download.")
-
     if not args.only or args.only.lower() == "xtm-battery":
         print("----------- Mueller2021 XTM Battery [8Cycles] ----------- ")
         name = "xtm-battery"
@@ -449,9 +431,10 @@ if __name__ == '__main__':
 
             vc.write_volume(vc.reshape_memory_order(vc.read_hdf5(cur_dir / "8Cycles.h5", ['Electrode1', 'Segmentation']), 'xyz', 'zyx'), cur_dir / "xtm-battery.hdf5")
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
-                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
-                                                 f" {cur_dir / "xtm-battery.hdf5"}")
+                                                f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
+                                                f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                f" {cur_dir / "xtm-battery.hdf5"}")
 
             if ret.returncode != 0:
                 print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
@@ -472,6 +455,7 @@ if __name__ == '__main__':
             download_file("https://l4dense2019.brain.mpg.de/webdav/mapped-segmentation-volume/x2y3z2.hdf5", cur_dir, "Motta2019_x2y3z2.hdf5", overwrite=args.overwrite)
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
                                                 f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                 f" {cur_dir / "Motta2019_x2y3z2.hdf5"}")
 
@@ -498,6 +482,7 @@ if __name__ == '__main__':
                 write_citation(csgv_directory, name)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                     f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                    + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" {cur_dir / "cells_065.hdf5"}")
 
@@ -520,7 +505,7 @@ if __name__ == '__main__':
                 write_citation(csgv_directory, name)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                     f"--headless -c {csgv_directory / (name + ".csgv")}"
-                                                     "--cache-palette --cache-size 1024"
+                                                    + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" {cur_dir / "maurer_glassfiberpolymer.hdf5"}")
 
@@ -543,8 +528,8 @@ if __name__ == '__main__':
                 write_citation(csgv_directory, name)
                 last_chunk = download_files("https://l4dense2019.brain.mpg.de/webdav/mapped-segmentation-volume/x{}y{}z{}.hdf5", (5,8,3), cur_dir, "x{}y{}z{}.hdf5", overwrite=args.overwrite)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -b 64"
-                                                     " --cache-palette --cache-size 1024"
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                    + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / "x{}y{}z{}.hdf5"}")
@@ -567,9 +552,9 @@ if __name__ == '__main__':
                 write_citation(csgv_directory, "h01")
                 last_chunk = download_cloud_data("h01", directory=cur_dir, output_name=name, size=(10240, 10240, 5294), origin=(133300, 262000, 0))
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld-s -b 64"
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                    + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
-                                                     " --cache-palette --stream-lod --cache-size 4095"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
 
@@ -593,8 +578,9 @@ if __name__ == '__main__':
                 #
                 last_chunk = download_cloud_data("h01-bloodvessel", directory=cur_dir, output_name=name)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -o pnld-s -b 64"
-                                                    f" {__preview_arg(args.preview, csgv_directory, name)} --cache-palette"
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                    + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
+                                                    f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
 
@@ -617,7 +603,8 @@ if __name__ == '__main__':
                 write_citation(csgv_directory, name)
                 last_chunk = download_cloud_data("liconn", directory=cur_dir, output_name=name)
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -b 64"
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                    + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")
@@ -651,8 +638,8 @@ if __name__ == '__main__':
                 last_chunk = vcc.write_chunked_volume(volume_mm, f'{cur_dir / (name + "_x{}y{}z{}.hdf5")}', (1024,1024,1024))
 
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                    f"--headless -c {csgv_directory / (name + ".csgv")} -b 64"
-                                                     " --cache-palette"
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                    + data_specific_compression_args(name, volume_data_dir=csgv_directory, input_file=False) + \
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
                                                     f" --chunked {last_chunk[0]},{last_chunk[1]},{last_chunk[2]}"
                                                     f" {cur_dir / (name + "_x{}y{}z{}.hdf5")}")

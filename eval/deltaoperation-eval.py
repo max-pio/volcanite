@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from volcanite.volcaniteeval import VolcaniteArg, VolcaniteEvaluation, VolcaniteExec, VolcaniteLogFileCfg, ExistingPolicy
 
-from common import data_specific_compression_args, data_specific_args
+from common import data_specific_compression_args, data_specific_rendering_args
 
 if __name__ == "__main__":
 
@@ -54,7 +54,7 @@ if __name__ == "__main__":
                 # the old palette delta operation behavior had a limited delta length. enable with 'p-' operation
                 arg_operation = VolcaniteArg.arg_operations("pnl" + arg_unlim_pdelta + "s")
 
-                args_rendering = data_specific_args(arg_csgv.identifier, cache_palette=False, stream_lod=False)
+                args_rendering = data_specific_rendering_args(arg_csgv.identifier, cache_palette=False, stream_lod=False)
 
                 # chunked data must have a decompression path
                 arg_csgv_export = VolcaniteArg(["-c", str(Path(f"./results/{evaluation_name}/{VolcaniteArg.concat_ids([arg_csgv, arg_operation])}.csgv").resolve())])
