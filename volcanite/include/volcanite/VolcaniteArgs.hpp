@@ -570,8 +570,8 @@ struct VolcaniteArgs {
                 }
                 va.run_tests = testArg.getValue();
             }
-            va.brickstats_file = expandPath(brickStatsArg.getValue());
-            va.rendertimes_file = expandPath(renderTimesArg.getValue());
+            va.brickstats_file = expandPath(brickStatsArg.getValue()).generic_string();
+            va.rendertimes_file = expandPath(renderTimesArg.getValue()).generic_string();
             std::string comma_separated_logfiles = evalLogFilesArg.getValue();
             va.eval_logfiles.clear();
             for (const auto &logfile : comma_separated_logfiles | std::views::split(',') | std::views::transform([](const auto &&range) -> std::string {
