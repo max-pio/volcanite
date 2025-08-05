@@ -49,7 +49,7 @@ if __name__ == "__main__":
                 # the raw input data and compression parameters (except operation list) for the compression
                 # input data sets are assumed to be structured in subdirectories in the same location as the csgv files, 
                 # as created by the download_evaluation_data.py download script.
-                args_data_input = data_specific_compression_args(arg_csgv.identifier, volume_data_dir=VolcaniteArg.get_csgv_directory(), operations=False)
+                args_data_input = data_specific_compression_args(arg_csgv.identifier, volume_data_dir=VolcaniteArg.get_csgv_directory(), operations=False, brick_size=False)
 
                 # the old palette delta operation behavior had a limited delta length. enable with 'p-' operation
                 arg_operation = VolcaniteArg.arg_operations("pnl" + arg_unlim_pdelta + "s")
@@ -62,4 +62,4 @@ if __name__ == "__main__":
                 # execute Volcanite and pass the Volcanite log file into which the results are appended
                 # stream-lod is necessary to force detail separation (and obtain the detail encoding size)
                 # cache-palette is enabled to obtain cache packing factors
-                volcanite.exec(args_data_input + args_rendering + [arg_operation, arg_csgv_export, VolcaniteArg("--stream-lod"), VolcaniteArg("--cache-palette")])
+                volcanite.exec(args_data_input + args_rendering + [VolcaniteArg.args_brick_size["64"], arg_operation, arg_csgv_export, VolcaniteArg("--stream-lod"), VolcaniteArg("--cache-palette")])
