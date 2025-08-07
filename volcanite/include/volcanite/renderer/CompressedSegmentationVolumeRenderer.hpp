@@ -363,6 +363,8 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
     float m_lod_bias = 0.f;
     bool m_blue_noise = true;
     uint32_t m_debug_vis_flags = 0u;
+    bool m_constant_mouse_pos_enabled = false;
+    glm::vec2 m_constant_mouse_pos = glm::vec2{0.5f};
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
     int m_target_accum_frames = 128;

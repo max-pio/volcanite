@@ -1011,7 +1011,11 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_denoise_fade_sigma)
     HASHP(m_denoise_filter_kernel_size)
     HASHP(m_denoise_fade_enabled)
-    HASHP(m_mouse_pos)
+    HASHP(m_constant_mouse_pos_enabled)
+    if (m_constant_mouse_pos_enabled)
+        HASHP(m_constant_mouse_pos)
+    else
+        HASHP(m_mouse_pos)
     const uint32_t resolve_debug_bits = m_debug_vis_flags & (VDEB_NO_POSTPROCESS_BIT | VDEB_CACHE_ARRAY_BIT | VDEB_EMPTY_SPACE_ARRAY_BIT | VDEB_SPP_BIT | VDEB_G_BUFFER_BIT | VDEB_ENVMAP_BIT | VDEB_REQUEST_LIMIT_BIT | VDEB_BRICK_INFO_BIT);
     HASHP(resolve_debug_bits)
     if (new_hash != m_presolve_hash) {
@@ -1125,7 +1129,7 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_uresolve_info->setUniform<int>("g_denoise_filter_kernel_size",
                                          glm::min(m_denoise_filter_kernel_size, (m_denoise_filter_kernel_size < 8 * pixels_per_sample) ? 3 : 1));
         m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? ~0u : 0u);
-        m_uresolve_info->setUniform<glm::ivec2>("g_cursor_pixel_pos", glm::ivec2(m_mouse_pos * glm::vec2(m_resolution.width,
+        m_uresolve_info->setUniform<glm::ivec2>("g_cursor_pixel_pos", glm::ivec2((m_constant_mouse_pos_enabled ? m_constant_mouse_pos : m_mouse_pos) * glm::vec2(m_resolution.width,
                                                                                                          m_resolution.height)));
         m_uresolve_info->setUniform<uint32_t>("g_debug_vis_flags", m_debug_vis_flags);
     }
@@ -1499,6 +1503,8 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                                VDEB_EMPTY_SPACE_ARRAY_BIT, VDEB_G_BUFFER_BIT, VDEB_SPP_BIT,
                                                VDEB_ENVMAP_BIT, VDEB_STATS_DOWNLOAD_BIT};
     g_dev->addBitFlags(&m_debug_vis_flags, option_labels, option_bits, true, "Debug View");
+    g_dev->addBool(&m_constant_mouse_pos_enabled, "Constant Mouse Pos");
+    g_dev->addVec2(&m_constant_mouse_pos, "Mouse XY", glm::vec2(0.f), glm::vec2(1.f), glm::vec2(0.001f), 3);
     g_dev->addSeparator();
     g_dev->addAction([this]() { if (m_enable_frame_time_tracking) stopFrameTimeTracking(m_mostRecentFrame->renderingComplete); else startFrameTimeTracking(); }, "Frame Time Tracking");
 #ifdef IMGUI
