@@ -43,6 +43,12 @@ if __name__ == "__main__":
             # compress three times: without any delta, with the old (1 < delta < 17) and once with the new (unlimited) palette delta
             for arg_unlim_pdelta in ["", "d-", "d"]:
 
+                # some data sets are omitted in the plots
+                if arg_csgv.identifier in ["pa66", "Griesser2022-sample", "xtm-battery", "H01-bloodvessel", "Griesser2022-validation"]:
+                    # instead of skipping the computation, they are commented out in the .csv
+                    # continue
+                    evaluation.get_log().log_manual("#", end="")
+
                 # the first two columns are written from the python script
                 evaluation.get_log().log_manual(arg_csgv.identifier + "," + arg_unlim_pdelta + ",", end="")
 
