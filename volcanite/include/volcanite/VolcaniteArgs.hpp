@@ -22,7 +22,8 @@
 
 #include "CSGVPathUtils.hpp"
 #include "csgv_constants.incl"
-#include "volcanite/util/segmentation_volume_synthesis.hpp"
+#include "util/segmentation_volume_synthesis.hpp"
+#include "eval/EvaluationLogExport.hpp"
 #include "vvv/core/HeadlessRendering.hpp"
 #include "vvv/util/Logger.hpp"
 
@@ -586,7 +587,9 @@ struct VolcaniteArgs {
                                            return tmp;
                                        })) {
                 va.eval_logfiles.emplace_back(expandPathStr(std::string(logfile)));
-                // TODO: check if the logfiles contain valid format strings
+                if (std::optional<std::string> logfile_err = EvaluationLogExport::check_eval_logfile(va.eval_logfiles.back()); logfile_err.has_value()) {
+                    throw ArgException(logfile_err.value() + " (" + va.eval_logfiles.back() + ")", evalLogFilesArg.longID());
+                }
             }
             va.eval_name = evalNameArg.getValue();
             if (!va.eval_name.empty() && va.eval_logfiles.empty()) {

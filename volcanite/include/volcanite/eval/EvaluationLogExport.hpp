@@ -16,7 +16,9 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "csgv_constants.incl"
@@ -101,7 +103,7 @@ struct CSGVRenderEvaluationResults {
 class EvaluationLogExport {
 
   private:
-    static std::string format_evaluation_string(std::string format_string, const std::string &eval_name,
+    static std::string format_evaluation_string(std::string_view format_string, const std::string &eval_name,
                                                 int argc, char *argv[],
                                                 CSGVCompressionEvaluationResults comp_res,
                                                 CSGVDecompressionEvaluationResults decomp_res,
@@ -109,6 +111,16 @@ class EvaluationLogExport {
 
   public:
     static std::vector<std::string> get_all_evaluation_keys();
+
+    // TODO: should use std::expected instead of optional when moving to C++23
+
+    /// Checks if all evaluation keys {k:[options]} are available.
+    /// @returns empty on success, otherwise an error string describing the first detected error key.
+    static std::optional<std::string> check_evaluation_string(std::string_view format_string);
+
+    /// If the logfile exists: Checks if all specified evaluation keys {k:[options]} are available.
+    /// @returns empty on success, otherwise an error string describing the first detected error key.
+    static std::optional<std::string> check_eval_logfile(const std::string &eval_logfile);
 
     static int write_eval_logfile(const std::string &eval_logfile, const std::string &eval_name, int argc, char *argv[],
                                   CSGVCompressionEvaluationResults comp_res,

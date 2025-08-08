@@ -14,6 +14,7 @@
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "volcanite/eval/EvaluationLogExport.hpp"
+#include "vvv/util/closest_string_match.hpp"
 #include "vvv/util/Logger.hpp"
 
 #include <complex>
@@ -146,7 +147,7 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     return std::move(fmt_args);
 }
 
-std::string EvaluationLogExport::format_evaluation_string(std::string format_string, const std::string &eval_name,
+std::string EvaluationLogExport::format_evaluation_string(std::string_view format_string, const std::string &eval_name,
                                                           int argc, char *argv[],
                                                           CSGVCompressionEvaluationResults comp_res,
                                                           CSGVDecompressionEvaluationResults decomp_res,
@@ -334,6 +335,72 @@ std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
     };
 }
 
+std::optional<std::string> EvaluationLogExport::check_evaluation_string(std::string_view format_string) {
+
+    const auto& all_format_keys = EvaluationLogExport::get_all_evaluation_keys();
+
+    // iterate over all keys
+    size_t pos = 0;
+    while ((pos = format_string.find('{', pos)) != std::string_view::npos) {
+        size_t end = format_string.find('}', pos);
+        if (end == std::string_view::npos)
+            break;
+        // Key is between pos+1 and end-1
+        std::string_view key = format_string.substr(pos + 1, end - pos - 1);
+        if (auto arg_pos = key.find(':');
+            arg_pos != std::string_view::npos) {
+            key = key.substr(0, arg_pos);
+        }
+
+        size_t closest_idx;
+        if (!stringCheckAndSuggest(key, all_format_keys, closest_idx)) {
+            if (closest_idx < all_format_keys.size()) {
+                return std::string("unknown evaluation log key ") + std::string(key) + ". did you mean " + all_format_keys[closest_idx] + "?";
+            } else {
+                return std::string("unknown evaluation log key ") + std::string(key) + ".";
+            }
+        }            
+
+        pos = end + 1;
+    }
+
+    // check if the complete string formatting works:
+    try {
+        format_evaluation_string(format_string, "", 0, nullptr, {}, {}, {});
+    } catch (const fmt::format_error &err) {
+        return err.what();
+    }
+
+    return {};
+}
+
+std::optional<std::string> EvaluationLogExport::check_eval_logfile(const std::string &eval_logfile) {
+    if (!std::filesystem::exists(eval_logfile))
+        return {};
+
+    std::string format_string;
+    std::string header_string;
+    std::ifstream file = std::ifstream(eval_logfile);
+    if (file.is_open()) {
+        std::string line;
+        std::getline(file, line);
+        while (line.starts_with("#fmt:")) {
+            line = line.substr(5);
+            format_string += (line + "\n");
+            std::getline(file, line);
+        }
+        if (format_string.ends_with('\n'))
+            format_string.pop_back(); // remove trailing '\n'
+        file.close();
+    } else {
+        return "Could not open existing evaluation log file " + eval_logfile;
+    }
+
+    return EvaluationLogExport::check_evaluation_string(format_string);
+}
+
+
+
 int EvaluationLogExport::write_eval_logfile(const std::string &eval_logfile, const std::string &eval_name, int argc, char *argv[],
                                             CSGVCompressionEvaluationResults comp_res,
                                             CSGVDecompressionEvaluationResults decomp_res,
@@ -355,7 +422,7 @@ int EvaluationLogExport::write_eval_logfile(const std::string &eval_logfile, con
                 format_string.pop_back(); // remove trailing '\n'
             file.close();
         } else {
-            Logger(Error) << "Could not open pre-existing evaluation log file " << eval_logfile;
+            Logger(Error) << "Could not open existing evaluation log file " << eval_logfile;
             return 5;
         }
     }
