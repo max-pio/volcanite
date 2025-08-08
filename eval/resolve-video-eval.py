@@ -12,11 +12,12 @@ if __name__ == "__main__":
                                         eval_name=evaluation_name,
                                         log_files=[VolcaniteLogFileCfg(f"{evaluation_name}.csv",
                                                               fmts=["{frame_min_ms},{frame_avg_ms},{frame_max_ms},{frame_sdv_ms},{frame_med_ms},"
-                                                                    "{frame_gpu_cache_min_ms},{frame_gpu_decomp_min_m},{frame_gpu_render_min_ms},{frame_gpu_post_min_ms},"
+                                                                    "{frame_gpu_cache_min_ms},{frame_gpu_decomp_min_ms},{frame_gpu_render_min_ms},{frame_gpu_post_min_ms},"
                                                                     "{frame_gpu_cache_avg_ms},{frame_gpu_decomp_avg_ms},{frame_gpu_render_avg_ms},{frame_gpu_post_avg_ms},"
                                                                     "{frame_gpu_cache_max_ms},{frame_gpu_decomp_max_ms},{frame_gpu_render_max_ms},{frame_gpu_post_max_ms},"
                                                                      + ",".join("{{frame_{:02}_ms}}".format(i) for i in range(16))],
-                                                              headers=["Data Set,Denoising,Subsampling,frame min [ms],frame avg [ms],frame max [ms],stdv,frame med [ms],"
+                                                              headers=["Data Set,Denoising,Subsampling,"
+                                                                       "frame min [ms],frame avg [ms],frame max [ms],frame stdv [ms],frame med [ms],"
                                                                        "cache min [ms],decompress min [ms],render min [ms],post-process min [ms],"
                                                                        "cache avg [ms],decompress avg [ms],render avg [ms],post-process avg [ms],"
                                                                        "cache max [ms],decompress max [ms],render max [ms],post-process max [ms],"
@@ -40,7 +41,7 @@ if __name__ == "__main__":
         arg_video_cfg = VolcaniteArg.arg_video_eval_cfg(rotation=(-360, 0), zoom=(2, -0.2), duration=600, interpolant="smooth", edge=(0.2, 0.8),
                                                 duration_is_seconds=False, output_framerate=0)
 
-        arg_shading = VolcaniteArg.args_shading["pt"]:
+        arg_shading = VolcaniteArg.args_shading["pt"]
 
         # iterate over all configuration combinations and execute Volcanite
         for arg_data in VolcaniteArg.args_csgv_datasets.values():

@@ -48,7 +48,11 @@ if __name__ == "__main__":
             for arg_csgv in VolcaniteArg.args_csgv_datasets.values():
 
                 # TODO: REMOVE SKIPPING ALREADY COMPUTED
-                if arg_csgv.identifier in ["pa66","Griesser2022-sample","Ara2016","cells","xtm-battery","azba","H01-bloodvessel"]:
+                if not stopbit_code and arg_csgv.identifier in ["pa66","Griesser2022-sample","Ara2016","cells","xtm-battery","azba", "H01-bloodvessel"]:
+                    continue
+
+                # H01-wm is too large to be processed on our evaluation system with 64 GB of RAM if not compressed with all operations
+                if arg_csgv.identifier in ["H01-wm"]:
                     continue
 
                 # compress three times: without any delta, with the old (1 < delta < 17) and once with the new (unlimited) palette delta
@@ -74,7 +78,7 @@ if __name__ == "__main__":
                     # execute Volcanite and pass the Volcanite log file into which the results are appended
                     # stream-lod is necessary to force detail separation (and obtain the detail encoding size)
                     # cache-palette is enabled to obtain cache packing factors
-                    volcanite.exec(args_data_input + args_rendering + [arg_operation, VolcaniteArg.args_brick_size["64"],
+                    volcanite.exec(args_data_input + args_rendering + [arg_operation, VolcaniteArg.args_brick_size["64"], VolcaniteArg("--verbose"),
                                                                        arg_csgv_export, VolcaniteArg("--stream-lod"), VolcaniteArg("--cache-palette")])
 
                     # remove the csgv file, otherwise this would store hundreds of GB

@@ -7,7 +7,7 @@ fi
 
 source ../.venv/bin/activate
 
-# python3 ./csgv-ablation-eval.py
+python3 ./csgv-ablation-eval.py
 # sleep 30
 # python3 ./deltaoperation-b64-eval.py
 # sleep 30
@@ -18,8 +18,8 @@ source ../.venv/bin/activate
 # sleep 30
 # python3 ./vram-eval.py
 # sleep 30
-python3 ./resolve-video-eval.py
-sleep 30
+#python3 ./resolve-video-eval.py
+# sleep 30
 
 # python3 ./csgv-eval.p
 # sleep 30
