@@ -48,11 +48,11 @@ if __name__ == "__main__":
             for arg_csgv in VolcaniteArg.args_csgv_datasets.values():
 
                 # TODO: REMOVE SKIPPING ALREADY COMPUTED
-                if not stopbit_code and arg_csgv.identifier in ["pa66","Griesser2022-sample","Ara2016","cells","xtm-battery","azba", "H01-bloodvessel"]:
+                if not stopbit_code and arg_csgv.identifier in ["pa66","Griesser2022-sample","Ara2016","cells","xtm-battery","azba", "H01-bloodvessel", "Wolny2020", "liconn", "fiber", "Motta2019-small", "Griesser2022-validation"]:
                     continue
 
                 # H01-wm is too large to be processed on our evaluation system with 64 GB of RAM if not compressed with all operations
-                if arg_csgv.identifier in ["H01-wm"]:
+                if arg_csgv.identifier in ["H01-wm", "Motta2019"]:
                     continue
 
                 # compress three times: without any delta, with the old (1 < delta < 17) and once with the new (unlimited) palette delta
