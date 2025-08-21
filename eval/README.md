@@ -1,6 +1,13 @@
 # Volcanite Evaluation Scripts
 
-This directory contains several evaluation python scripts.
+This directory contains several evaluation python scripts that generate the results for the main Volcanite paper.
+
+For importing the evaluation data sets, Volcanite must be build with the hdf5 libraries being available.
+The evaluations assume a system with at least 64 GB RAM and a GPU with at least 16 GB VRAM.
+If your system does not meet this requirements, consider downloading only the smaller data
+(i.e. omitting `--big-data` in the data set download script). 
+ 
+
 The structure of the directory is as follows:
 * `./config/` contains the `.vcfg` and `.rec` files for the renderer
 * `./results/` will contain the results of the evaluation scripts 
@@ -55,9 +62,9 @@ Evaluation scripts are named `*-eval.py` and located in this directory.
 They can be directly executed in the previously created virtual environment.
 For example:
 ```
-python3 csgv-eval.py
+python3 test-eval.py
 ```
-Afterwards, results can be found in the [/results](./results) subdirectory.
+Afterward, results can be found in the [/results](./results) subdirectory.
 
 If not all data sets could be downloaded or were requested for download, some result tables may return missing entries.
 In general, the scripts should ignore evaluation runs that fail due to non-existing data sets.

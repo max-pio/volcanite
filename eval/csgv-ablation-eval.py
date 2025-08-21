@@ -47,8 +47,8 @@ if __name__ == "__main__":
             
             for arg_csgv in VolcaniteArg.args_csgv_datasets.values():
 
-                # TODO: REMOVE SKIPPING ALREADY COMPUTED
-                if not stopbit_code and arg_csgv.identifier in ["pa66","Griesser2022-sample","Ara2016","cells","xtm-battery","azba", "H01-bloodvessel", "Wolny2020", "liconn", "fiber", "Motta2019-small", "Griesser2022-validation"]:
+                #if not arg_csgv.identifier in ["pa66","Griesser2022-sample","Ara2016","cells","xtm-battery","azba", "H01-bloodvessel", "Wolny2020", "liconn", "fiber", "Motta2019-small", "Griesser2022-validation"]:
+                if not stopbit_code or not (arg_csgv.identifier in ["Wolny2020", "liconn", "fiber", "Motta2019-small", "Griesser2022-validation"]):
                     continue
 
                 # H01-wm is too large to be processed on our evaluation system with 64 GB of RAM if not compressed with all operations
