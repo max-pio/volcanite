@@ -2,19 +2,12 @@
 
 This directory contains several evaluation python scripts that generate the results for the main Volcanite paper.
 
-For importing the evaluation data sets, Volcanite must be build with the hdf5 libraries being available.
-The evaluations assume a system with at least 64 GB RAM and a GPU with at least 16 GB VRAM.
-If your system does not meet this requirements, consider downloading only the smaller data
-(i.e. omitting `--big-data` in the data set download script). 
- 
-
 The structure of the directory is as follows:
 * `./config/` contains the `.vcfg` and `.rec` files for the renderer
 * `./results/` will contain the results of the evaluation scripts 
 * `./volcanite-eval-setup.txt` is created by the data downloader and contains file paths to this directory and the volcanite binary.
 
-## Prerequisities 
-
+## Prerequisities
 The evaluation scripts require python and the Volcanite python package located in `../python/volcanite/` to be installed.
 You need the complete Volcanite source directory and all [build dependencies](../doc/Setup.md), including the optional hdf5 libraries   
 It is advised to do this inside a python virtual environment:
@@ -44,6 +37,9 @@ In addition, the following arguments exist as well:
 * `--big-data` downloads and compresses large, chunked data sets (~1 TB)
 * `--volcanite-src` if the download script is not run from inside the volcanite directory, 
 
+The evaluations assume a system with at least 64 GB RAM and a GPU with at least 16 GB VRAM.
+If your system does not meet these requirements, consider downloading only the smaller data
+(i.e. omitting `--big-data` in the data set download script).
 
 ### Optional: Fixing GPU clock speeds
 
