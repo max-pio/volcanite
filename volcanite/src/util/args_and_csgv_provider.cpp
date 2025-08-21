@@ -51,7 +51,9 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
         }
     }
 
-    if (!vvv::debuggerIsAttached() && !args.verbose)
+    if (debuggerIsAttached() || args.verbose)
+        Logger::s_minLevel = Debug;
+    else
         Logger::s_minLevel = Info;
 
     // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
@@ -119,7 +121,7 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
             csgvDatabase->createDummy();
         }
 
-        CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),
+        CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = args.brick_size,
                                                         .encoding_mode = args.encoding_mode,
                                                         .op_mask = args.operation_mask,
                                                         .random_access = args.random_access,
@@ -133,9 +135,9 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
                                                         .max_file_index = max_chunk_id,
                                                         .freq_subsampling = args.freq_subsampling,
                                                         .run_tests = args.run_tests,
-                                                        .export_stats_per_chunk = args.export_stats && args.chunked,
+                                                        .export_stats_per_chunk = !args.brickstats_file.empty() && args.chunked,
                                                         .verbose = args.verbose};
-        compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
+        compressedSegmentationVolume = CompSegVolHandler().createCompressedSegmentationVolume(args.input_file,
                                                                                              complete_csgv_path, cfg);
 
         if (use_temporary_output_file) {

@@ -72,6 +72,7 @@ set(VVV_HEADERS
         include/vvv/util/random_gpu.hpp
         include/vvv/util/space_filling_curves.hpp
         include/vvv/util/util.hpp
+        include/vvv/util/video_encoding.hpp
         include/vvv/util/volume_data_types.hpp
         include/vvv/util/vertex_primitives.hpp
         include/vvv/util/Paths.hpp
@@ -129,6 +130,7 @@ set(VVV_SOURCES
         src/util/detect_debugger.cpp
         src/util/random_gpu.cpp
         src/util/util.cpp
+        src/util/video_encoding.cpp
         src/util/Paths.cpp
 
         src/reader/hdf5.cpp

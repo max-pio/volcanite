@@ -511,6 +511,74 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
         res.original_volume_bytes_per_voxel = static_cast<int>(bytes_per_voxel);
         res.compression_rate = res.csgv_bytes / res.original_volume_bytes;
         res.compression_GB_per_s = (res.original_volume_bytes * BYTE_TO_GB) / res.compression_total_seconds;
+        // configuration
+        res.brick_size = m_brick_size;
+        res.operation_mask = OperationMask_STR(m_op_mask);
+        res.random_access = m_random_access;
+        res.detail_separation = m_separate_detail;
+        res.encoding_mode = EncodingMode_STR(m_encoding_mode);
+        // per-brick information
+        double labels_per_brick_sum = 0u;
+        uint32_t brick_labels_min = std::numeric_limits<uint32_t>::max();
+        uint32_t brick_labels_max = 0u;
+        double palette_size_sum = 0u;
+        uint32_t brick_palette_size_min = std::numeric_limits<uint32_t>::max();
+        uint32_t brick_palette_size_max = 0u;
+        double palette_duplicates_sum = 0u;
+        uint32_t brick_palette_duplicates_min = std::numeric_limits<uint32_t>::max();
+        uint32_t brick_palette_duplicates_max = 0u;
+        double brick_bytes_sum = 0u;
+        double brick_bytes_min = std::numeric_limits<uint32_t>::max();
+        double brick_bytes_max = 0u;
+
+        #pragma omp parallel for num_threads(m_cpu_threads) default(none) \
+                reduction(min: brick_labels_min, brick_palette_size_min, brick_palette_duplicates_min, brick_bytes_min) \
+                reduction(max: brick_labels_max, brick_palette_size_max, brick_palette_duplicates_max, brick_bytes_max) \
+                reduction(+: labels_per_brick_sum, palette_size_sum, palette_duplicates_sum, brick_bytes_sum)
+        for (size_t i = 0; i < getBrickIndexCount(); i++) {
+            if (i < getBrickIndexCount()) {
+                const auto brick_encoding = getBrickEncoding(i);
+                const uint32_t brick_encoding_length = getBrickEncodingLength(i);
+                const uint32_t palette_size = getBrickPaletteLength(i);
+
+                // unique labels in brick
+                std::unordered_set<uint32_t> label_set = {};
+                for (int p = 1; p <= palette_size; p++) {
+                    uint32_t label = brick_encoding[brick_encoding_length - p];
+                    if (!label_set.contains(label)) {
+                        label_set.insert(label);
+                    }
+                }
+                labels_per_brick_sum += label_set.size();
+                brick_labels_min = glm::min(static_cast<uint32_t>(label_set.size()), brick_labels_min);
+                brick_labels_max = glm::max(static_cast<uint32_t>(label_set.size()), brick_labels_max);
+
+                palette_size_sum += palette_size;
+                brick_palette_size_min = glm::min(static_cast<uint32_t>(palette_size), brick_palette_size_min);
+                brick_palette_size_max = glm::max(static_cast<uint32_t>(palette_size), brick_palette_size_max);
+
+                palette_duplicates_sum += (palette_size - label_set.size());
+                brick_palette_duplicates_min = glm::min(static_cast<uint32_t>(palette_size - label_set.size()), brick_palette_duplicates_min);
+                brick_palette_duplicates_max = glm::max(static_cast<uint32_t>(palette_size - label_set.size()), brick_palette_duplicates_max);
+
+                brick_bytes_sum += brick_encoding_length * sizeof(uint32_t);
+                brick_bytes_min = glm::min(static_cast<double>(brick_encoding_length * sizeof(uint32_t)), brick_bytes_min);
+                brick_bytes_max = glm::max(static_cast<double>(brick_encoding_length * sizeof(uint32_t)), brick_bytes_max);
+            }
+        }
+        res.brick_labels_min = brick_labels_min;
+        res.brick_labels_avg = labels_per_brick_sum / getBrickIndexCount();
+        res.brick_labels_max = brick_labels_max;
+        res.brick_palette_size_min = brick_palette_size_min;
+        res.brick_palette_size_avg = palette_size_sum / getBrickIndexCount();
+        res.brick_palette_size_max = brick_palette_size_max;
+        res.brick_palette_duplicates_min = brick_palette_duplicates_min;
+        res.brick_palette_duplicates_avg = palette_duplicates_sum / getBrickIndexCount();
+        res.brick_palette_duplicates_max = brick_palette_duplicates_max;
+        res.brick_bytes_min = brick_bytes_min;
+        res.brick_bytes_avg = brick_bytes_sum / getBrickIndexCount();
+        res.brick_bytes_max = brick_bytes_max;
+
         return res;
     }
 

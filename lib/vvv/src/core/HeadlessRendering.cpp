@@ -19,6 +19,7 @@
 #include <vvv/util/util.hpp>
 
 #include "glm/ext/scalar_constants.hpp"
+
 #include <fmt/core.h>
 
 namespace vvv {
@@ -38,8 +39,6 @@ static void check_vk_result(vk::Result err) { check_vk_result(static_cast<VkResu
 void HeadlessRendering::recreateSwapchain() {
     getDevice().waitIdle();
 
-    // Note: this is conservative: destroy the swapchain and everything that might depend on it
-    // (Speak: Run the destructor up to the swapchain deletion)
     m_renderer->releaseSwapchain();
     m_renderer->initSwapchainResources();
 
@@ -47,6 +46,8 @@ void HeadlessRendering::recreateSwapchain() {
 }
 
 RendererOutput HeadlessRendering::renderFrame(AwaitableList awaitBeforeExecution) {
+    // the "swapchain" does not exist in headless.
+    // But the renderer has to create frame buffer size dependent resources.
     if (m_pendingRecreation)
         recreateSwapchain();
     return m_renderer->renderNextFrame(awaitBeforeExecution, {});
@@ -64,74 +65,126 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         throw std::runtime_error("GPU context not available. You must call acquireResources() before rendering.");
     if (cfg.accumulation_samples == 0)
         throw std::runtime_error("Accumulation frames must be greater then zero.");
-    // if (cfg.camera_auto_rotate_frames > 0 && !cfg.record_file_in.empty())
-    //     throw std::runtime_error("Cannot specify both camera_auto_rotate_frames and record_file_in.");
+    // if (cfg.video_frames > 0 && !cfg.record_file_in.empty())
+    //     throw std::runtime_error("Cannot specify both video_frames and record_file_in.");
 
     // TODO: decouple HeadlessRendering::exec in an initialization method and multiple render calls, respect m_pendingRecreation
     // e.g.: hr.init(); hr.setRenderResolution(400, 400); hr.renderToFile(120); hr.setRenderParametersFromFile(path); auto output = hr.render(60);
 
-    constexpr int MAX_CAMERA_AUTO_FRAMES = 256; // 1800 frames would be 1 min at 30 fps
-    int camera_auto_rotate_frames;
+    // TODO: add behaviour for frame_time_file_out export if it is given. Obtain frame time from renderer, write to array. export frame times + video output file names to *_timings.txt in the end.
+
+    // ensure that the renderer has created all of its "swapchain" = render size dependent resources
+    if (m_pendingRecreation)
+        recreateSwapchain();
+
     // pre-recorded camera path playback
-    std::optional<std::ifstream> m_record_in = {};
+    std::optional<std::ifstream> record_in = {};
     if (!cfg.record_file_in.empty()) {
-        m_record_in = std::ifstream(cfg.record_file_in, std::ios::in | std::ios::binary);
-        if (!m_record_in->is_open()) {
+        record_in = std::ifstream(cfg.record_file_in, std::ios::in | std::ios::binary);
+        if (!record_in->is_open()) {
             throw std::runtime_error("could not open recording input file " + cfg.record_file_in);
         }
-        camera_auto_rotate_frames = 0; // exit when the camera file reached its end
-    }
-    // rendering video images but no camera playback is specified: rotate camera around
-    else if (!cfg.video_fmt_file_out.empty()) {
-        camera_auto_rotate_frames = MAX_CAMERA_AUTO_FRAMES;
-    } else {
-        camera_auto_rotate_frames = 1;
     }
 
-    Logger(Info) << "rendering " << (camera_auto_rotate_frames == 0u ? (" camera poses from " + cfg.record_file_in) : (std::to_string(camera_auto_rotate_frames) + " camera pose(s)"))
-                 << " with " + std::to_string(cfg.accumulation_samples) << " frame(s) each";
-
+    // TODO: replace headless camera animation with real parameter animation class that operates with the GUIInterface
     // interpolation start and end values (rotation around Y axis and zoom)
-    float roty_0, roty_1;
-    float rad_0, rad_1;
+    struct VideoKeyFrames {
+        float roty_0 = 0.f; ///< camera rotation start
+        float roty_1 = 0.f; ///< camera rotation end
+        float dist_0 = 0.f; ///< camera distance start
+        float dist_1 = 0.f; ///< camera distance end
+        float roty_orig = 0.f;
+        float dist_orig = 0.f;
+    } anim;
     {
         auto camera = getCamera();
-        roty_0 = roty_1 = camera->rotation_y;
-        rad_0 = rad_1 = camera->orbital_radius;
-        if (camera_auto_rotate_frames > 0) {
-            roty_1 = roty_0 + (2.f * glm::pi<float>());
-            rad_1 = 1.f;
+        anim.roty_0 = anim.roty_1 = anim.roty_orig = camera->rotation_y;
+        anim.dist_0 = anim.dist_1 = anim.dist_orig = camera->orbital_radius;
+        if (!record_in.has_value()) {
+            anim.roty_0 = camera->rotation_y + (cfg.cam_rot_start * glm::pi<float>() / 180.f);
+            anim.roty_1 = camera->rotation_y + (cfg.cam_rot_end * glm::pi<float>() / 180.f);
+            anim.dist_0 = glm::max(0.001f, camera->orbital_radius + cfg.cam_zoom_start);
+            anim.dist_1 = glm::max(0.001f, camera->orbital_radius + cfg.cam_zoom_end);
         }
+    }
+
+    
+    if (cfg.verbose) {
+        bool is_animation = anim.roty_0 != anim.roty_1 || anim.dist_0 != anim.dist_1; 
+        if (!cfg.record_file_in.empty())
+            Logger(Info) << "rendering camera poses from " + cfg.record_file_in << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+        else if (cfg.duration > 0)
+            Logger(Info) << "rendering " << cfg.duration << " frame(s) " << (is_animation ? "animation" : "image") << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+        else if (cfg.duration < 0)
+            Logger(Info) << "rendering " << -cfg.duration << " second(s) " << (is_animation ? "animation" : "image") << " with " + std::to_string(cfg.accumulation_samples) << " render sample(s) each";
+    }
+
+    if (cfg.duration < 0 && cfg.accumulation_samples > 1) {
+        Logger(Warn) << "Rendering real-time video output must not use cfg.accumulation_samples != 1";
     }
 
     RendererOutput rendererOutput = {nullptr, {}};
     size_t frame_idx = 0u;
     MiniTimer timer;
-    // either render all camera poses from the record_in file or render camera_auto_rotate_frames images with
-    // accumulation_samples each. he camera is rotated around the Y axis after each camera_auto_rotate_frame
-    for (frame_idx = 0u; (m_record_in.has_value() && !m_record_in->eof()) || frame_idx < camera_auto_rotate_frames; frame_idx++) {
-        if (m_record_in.has_value()) {
-            getCamera()->readFrom(m_record_in.value());
-            if (m_record_in->eof()) {
-                m_record_in->close();
-                m_record_in = {};
+    double elapsed_s = 0.;
+    // if record_in is given (pre-recorded): render all camera poses from the record_in file
+    // else, render a camera path animation:
+    // if video_frames > 0 (target frame count): render video_frames images
+    // if video_frames < 0 (target real-time duration): render until abs(video_frames) seconds passed
+    //
+    // Each frame is rendered with accumulation_samples each.
+    for (frame_idx = 0u; (record_in.has_value() && !record_in->eof()) || (cfg.duration > 0 && frame_idx < cfg.duration) || (cfg.duration < 0 && elapsed_s < static_cast<double>(-cfg.duration)); frame_idx++) {
+        if (record_in.has_value()) {
+            getCamera()->readFrom(record_in.value());
+            if (record_in->eof()) {
+                record_in->close();
+                record_in = {};
                 break;
             }
-            if (m_record_in->fail()) {
+            if (record_in->fail()) {
                 throw std::runtime_error("Error reading camera pose from " + cfg.record_file_in);
             }
-        } else if (camera_auto_rotate_frames > 0) {
-            auto camera = getCamera();
+        } else {
+            // if an automated video is rendered, animate the parameters based on the config
+            Camera *const camera = getCamera();
 
-            // constexpr float smootherstep(float s_min, float s_max, float x) {
-            //     x = glm::clamp((x - s_min) / (s_max - s_min), 0.f, 1.f);
-            //     return x * x * x * (x * (6.f * x - 15.f) + 10.f);
-            // }
+            float v = 0.f;
+            if (cfg.duration > 0) // equidistant interpolation based on frame index
+                v = static_cast<float>(frame_idx) / static_cast<float>(cfg.duration);
+            else if (cfg.duration < 0) { // "real-time" interpolation based on passed duration
+                if (frame_idx == 0u) {
+                    elapsed_s = 0.f;
+                } else {
+                    // either use pre-recorded timings or measure the timings as given
+                    if (cfg.video_frame_times) {
+                        if (frame_idx >= cfg.video_frame_times->size())
+                            break;
+                        elapsed_s += cfg.video_frame_times->at(frame_idx - 1u) / 1000.;
+                    } else {
+                        elapsed_s = timer.elapsed();
+                    }
+                    if (elapsed_s > static_cast<double>(-cfg.duration))
+                        break;
+                    v = static_cast<float>(elapsed_s);
+                }
+            }
+            // add edges for interpolation
+            v = glm::clamp((v - cfg.edge_start) / (cfg.edge_end - cfg.edge_start), 0.f, 1.f);
 
-            // TODO: camera auto rotation in headless rendering could become a (configurable) camera controller
-            const float v = glm::smoothstep(0.01f, 0.99f, static_cast<float>(frame_idx) / static_cast<float>(camera_auto_rotate_frames));
-            camera->rotation_y = glm::mix(roty_0, roty_1, v);
-            camera->orbital_radius = glm::mix(rad_0, rad_1, v);
+            switch (cfg.interpolation) {
+            case HeadlessRenderingConfig::Interpolant::Smooth:
+                v = glm::smoothstep(0.f, 1.f, v);
+                break;
+            case HeadlessRenderingConfig::Interpolant::Smoother:
+                v = v * v * v * (v * (6.f * v - 15.f) + 10.f);
+                break;
+            default:;
+            }
+
+            if (anim.roty_0 != anim.roty_1)
+                camera->rotation_y = glm::fract(glm::mix(anim.roty_0, anim.roty_1, v) / (2.f * glm::pi<float>())) * (2.f * glm::pi<float>());
+            if (anim.dist_0 != anim.dist_1)
+                camera->orbital_radius = glm::mix(anim.dist_0, anim.dist_1, v);
             camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
                                                                                       camera->orbital_radius * glm::cos(camera->rotation_y) * glm::cos(camera->rotation_x),
                                                                                       camera->orbital_radius * glm::sin(camera->rotation_x),
@@ -142,7 +195,7 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
 
         // render one frame after the other = wait for the last renderingComplete to finish
         for (size_t accumulation_idx = 0; accumulation_idx < cfg.accumulation_samples; accumulation_idx++) {
-            rendererOutput = renderFrame({rendererOutput.renderingComplete});
+            rendererOutput = renderFrame(rendererOutput.renderingComplete);
         }
 
         if (!cfg.video_fmt_file_out.empty()) {
@@ -154,9 +207,21 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
         }
     }
 
+    // stop the frame time tracking here with an awaitable (to get the last timing)
     m_renderer->stopFrameTimeTracking(rendererOutput.renderingComplete);
-    const double endTime = timer.elapsed();
-    const double frame_time = endTime / static_cast<double>((frame_idx * cfg.accumulation_samples));
+    const double frame_time_s = timer.elapsed() / static_cast<double>((frame_idx * cfg.accumulation_samples));
+
+    // reset the camera (in case something was interpolated as part of an animation)
+    {
+            Camera *const camera = getCamera();
+            camera->rotation_y = anim.roty_orig;
+            camera->orbital_radius = anim.dist_orig;
+            camera->position_world_space = camera->position_look_at_world_space + glm::vec3(
+                                                                                      camera->orbital_radius * glm::cos(camera->rotation_y) * glm::cos(camera->rotation_x),
+                                                                                      camera->orbital_radius * glm::sin(camera->rotation_x),
+                                                                                      camera->orbital_radius * glm::sin(camera->rotation_y) * glm::cos(camera->rotation_x));
+            camera->onCameraUpdate();
+    }
 
     // copy the last output texture to a new texture that we can return.
     // this way the original rendering texture could be overwritten or destroyed without affecting the return texture.
@@ -181,12 +246,18 @@ std::shared_ptr<Texture> HeadlessRendering::renderFrames(const HeadlessRendering
     if (!cfg.video_fmt_file_out.empty()) {
         frame_idx--; // frame_idx is now the number of frames, but the last index is one before
         std::string last_output_image_path = fmt::vformat(cfg.video_fmt_file_out, fmt::make_format_args(frame_idx));
-        Logger(Info) << "exporting screenshot to " << last_output_image_path;
+        frame_idx++;
+        Logger(Info) << "exporting final screenshot to " << last_output_image_path;
         ret_tex->writeFile(last_output_image_path);
+
+        // prevent the renderer from screenshotting the frame again, if more frames are rendered
+        m_renderer->exportCurrentFrameToImage("");
     }
 
-    Logger(Info) << "rendering of " << (frame_idx * cfg.accumulation_samples)
-                 << " frames finished with " << 1. / frame_time << " fps (" << 1000.f * frame_time << "ms/frame)";
+    if (cfg.verbose) {
+        Logger(Info) << "rendering " << (frame_idx * cfg.accumulation_samples)
+                     << " frames finished with " << 1. / frame_time_s << " fps (" << 1000.f * frame_time_s << "ms/frame)";
+    }
     return ret_tex;
 }
 
@@ -217,9 +288,8 @@ void HeadlessRendering::destroyQueues() {
 }
 
 void HeadlessRendering::releaseResources() {
-    const auto device = getDevice();
 
-    if (device) {
+    if (const auto device = getDevice()) {
         device.waitIdle();
     }
 

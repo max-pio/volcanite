@@ -96,7 +96,7 @@ class CSGVBenchmarkPass : public PassCompute {
         initDataSetGPUBuffers();
 
         // initialize timing queries
-        m_time_stamps = std::vector<uint64_t>(2 * m_execution_iterations, 0);
+        m_timestamps = std::vector<uint64_t>(2 * m_execution_iterations, 0);
         auto device_limits = getCtx()->getPhysicalDevice().getProperties().limits;
         m_timestamp_period = device_limits.timestampPeriod;
         if (m_timestamp_period == 0.f)
@@ -105,10 +105,10 @@ class CSGVBenchmarkPass : public PassCompute {
             throw std::runtime_error("The queue might not support time stamps.");
         vk::QueryPoolCreateInfo query_pool_info{};
         query_pool_info.queryType = vk::QueryType::eTimestamp;
-        query_pool_info.queryCount = static_cast<uint32_t>(m_time_stamps.size());
+        query_pool_info.queryCount = static_cast<uint32_t>(m_timestamps.size());
         auto query_pool_res = getCtx()->getDevice().createQueryPool(query_pool_info);
         if (query_pool_res)
-            m_query_pool_timestamps = query_pool_res;
+            m_timestamp_query_pool = query_pool_res;
     }
 
     void initDataSetGPUBuffers();
@@ -121,8 +121,8 @@ class CSGVBenchmarkPass : public PassCompute {
     /// Returns 0 if the result is not yet available.
     /// @returns the GPU decompression time in milliseconds
     [[nodiscard]] double getExecutionTimeMS() {
-        std::vector<uint64_t> time_stamp_avail(m_time_stamps.size() * 2);
-        auto query_res = device().getQueryPoolResults(m_query_pool_timestamps, 0, m_time_stamps.size(),
+        std::vector<uint64_t> time_stamp_avail(m_timestamps.size() * 2);
+        auto query_res = device().getQueryPoolResults(m_timestamp_query_pool, 0, m_timestamps.size(),
                                                       time_stamp_avail.size() * sizeof(uint64_t), time_stamp_avail.data(),
                                                       2 * sizeof(uint64_t), vk::QueryResultFlagBits::e64 | vk::QueryResultFlagBits::eWithAvailability);
         if (query_res != vk::Result::eSuccess) {
@@ -130,17 +130,17 @@ class CSGVBenchmarkPass : public PassCompute {
             return -1.f;
         }
 
-        for (int i = 0; i < m_time_stamps.size(); i++) {
-            // return 0 if one of the timestamps is not available
+        for (int i = 0; i < m_timestamps.size(); i++) {
+            // return -1 if one of the timestamps is not available
             if (time_stamp_avail[i * 2 + 1] == 0u)
-                return 0u;
-            m_time_stamps[i] = time_stamp_avail[i * 2];
+                return -1.f;
+            m_timestamps[i] = time_stamp_avail[i * 2];
         }
 
         // convert execution times to milliseconds
         double total_time_ms = 0.;
         for (int i = 0; i < m_execution_iterations; i++) {
-            total_time_ms += static_cast<double>(m_time_stamps[2 * i + 1] - m_time_stamps[2 * i]) * m_timestamp_period / 1000000.;
+            total_time_ms += static_cast<double>(m_timestamps[2 * i + 1] - m_timestamps[2 * i]) * m_timestamp_period / 1000000.;
         }
         return total_time_ms;
     }
@@ -189,9 +189,9 @@ class CSGVBenchmarkPass : public PassCompute {
     glm::uvec2 m_detail_buffer_address = {};
 
     // timing
-    float m_timestamp_period;
-    std::vector<uint64_t> m_time_stamps;
-    vk::QueryPool m_query_pool_timestamps;
+    float m_timestamp_period = 0.f;
+    std::vector<uint64_t> m_timestamps = {};
+    vk::QueryPool m_timestamp_query_pool = {};
     int m_cache_heat_up_iterations = 0;
 };
 

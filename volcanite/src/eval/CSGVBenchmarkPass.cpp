@@ -30,7 +30,7 @@ AwaitableHandle CSGVBenchmarkPass::execute(AwaitableList awaitBeforeExecution, B
     getCtx()->debugMarker->setName(commandBuffer, "CSGVBenchmarkPass.commandBuffer");
     commandBuffer.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
-    commandBuffer.resetQueryPool(m_query_pool_timestamps, 0, static_cast<uint32_t>(m_time_stamps.size()));
+    commandBuffer.resetQueryPool(m_timestamp_query_pool, 0, static_cast<uint32_t>(m_timestamps.size()));
 
     // all uploads must be finished before the rendering can access the buffers
     commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eComputeShader, {},
@@ -64,12 +64,12 @@ AwaitableHandle CSGVBenchmarkPass::execute(AwaitableList awaitBeforeExecution, B
             // dispatch decompression of bricks and measure runtime
             if (heatup_i == m_cache_heat_up_iterations)
                 commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eTopOfPipe,
-                                             m_query_pool_timestamps, 2 * i);
+                                             m_timestamp_query_pool, 2 * i);
             commandBuffer.dispatch(m_decompression_workgroup_size.width, m_decompression_workgroup_size.height,
                                    m_decompression_workgroup_size.depth);
             if (heatup_i == m_cache_heat_up_iterations)
                 commandBuffer.writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe,
-                                             m_query_pool_timestamps, 2 * i + 1);
+                                             m_timestamp_query_pool, 2 * i + 1);
 
             // barrier so that all executions finish writing to the cache
             commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
@@ -238,7 +238,7 @@ std::vector<vk::PushConstantRange> CSGVBenchmarkPass::definePushConstantRanges()
 }
 
 void CSGVBenchmarkPass::freeResources() {
-    VK_DEVICE_DESTROY(device(), m_query_pool_timestamps);
+    VK_DEVICE_DESTROY(device(), m_timestamp_query_pool);
     m_usegmented_volume_info = nullptr;
     m_cache_buffer = nullptr;
     for (auto &b : m_split_encoding_buffers)

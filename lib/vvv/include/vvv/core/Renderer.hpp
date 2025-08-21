@@ -188,6 +188,12 @@ class Renderer {
         return success;
     }
 
+    /// Resets all rendering caches, framebuffer accumulation, and other accumulated states between multiple evaluation runs.
+    /// For evaluation purposes.
+    virtual void resetAllEvaluationStates() {
+        throw std::logic_error("Renderer does not implement state reset.");
+    }
+
     virtual void startFrameTimeTracking() {
         throw std::logic_error("Renderer does not implement frame time tracking.");
     }
@@ -195,6 +201,14 @@ class Renderer {
     /// either to {} or an awaitable list, the method waits for the awaitables to finish and adds a final timing
     /// measurement for the last frame. Query the results with getLastEvaluationResults()
     virtual void stopFrameTimeTracking(std::optional<AwaitableList> awaitLastFrameFinished = {}) {
+        throw std::logic_error("Renderer does not implement frame time tracking.");
+    }
+
+    virtual const std::vector<float> &getLastTrackingFrameTimes() {
+        throw std::logic_error("Renderer does not implement frame time tracking.");
+    }
+
+    virtual const std::vector<glm::vec4> &getLastTrackingFrameTimesGPU() {
         throw std::logic_error("Renderer does not implement frame time tracking.");
     }
 

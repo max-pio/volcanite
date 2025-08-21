@@ -26,6 +26,7 @@ void main() {
     const uint brick_info_pos = brick_idx * 4u;
     // obtain requested inv_lod and reset it. the renderer will have to flag everything visible again
     const uint inv_lod = g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD];
+    // mark brick as either "potentially visible" (LOD_COUNT) or "guaranteed to be invisible" (> LOD_COUNT) from now on
     g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD] = max(LOD_COUNT, g_brick_info[brick_info_pos + BRICK_INFO_REQ_INV_LOD]);
 
     // if this brick has a valid request slot, it requests decompression. Otherwise, it can be ignored.

@@ -131,6 +131,8 @@ float CompressedSegmentationVolume::separateDetail() {
             detail_start = 0u;
             // finish the last (now completed) base encoding vector and shrink to fit
             m_encodings.at((brick_idx - 1u) / m_brick_idx_to_enc_vector).resize(m_brick_starts[brick_idx]);
+            // Technically, shrink_to_fit is not required to release the excess memory, but every practical implementation will do this.
+            m_encodings.at((brick_idx - 1u) / m_brick_idx_to_enc_vector).shrink_to_fit();
             cur_base_enc_brick_end = 0u;
             assert(brick_idx % m_brick_idx_to_enc_vector == 0 && "new split encoding does not start with first brick");
             assert(next_old_brick_start == 0u && "base encoding and new detail encoding start at different split points");
@@ -154,10 +156,11 @@ float CompressedSegmentationVolume::separateDetail() {
             next_old_brick_start = getBrickStart(brick_idx + 1);
             next_old_brick_length = getBrickEncodingLength(brick_idx + 1);
         }
-        m_brick_starts[brick_idx + 1] = cur_base_enc_brick_end;
+        m_brick_starts.at(brick_idx + 1) = cur_base_enc_brick_end;
     }
     // shrink last encoding buffer
     m_encodings.back().resize(m_brick_starts[brick_idx_count]);
+    m_encodings.back().shrink_to_fit();
 
     m_separate_detail = true;
     m_encoder->setDecodeWithSeparateDetail(true);
@@ -734,8 +737,9 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
 
     // update encoder
     fin.read(reinterpret_cast<char *>(&m_op_mask), sizeof(uint32_t));
-    if (_numeric_version == 15)
+    if (_numeric_version == 15) {
         m_op_mask |= OP_USE_OLD_PAL_D_BIT; // compatibility: changed behavior of palette delta operation in 0016
+    }
     if (m_encoding_mode == NIBBLE_ENC) {
         m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     } else if (m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
@@ -789,13 +793,17 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     if (verbose && !fin.eof())
         Logger(Warn) << "Unexpected end of file during Compressed Segmentation Volume import!";
     fin.close();
-    if (verbose)
+    if (verbose) {
+        std::string op_mask_str = OperationMask_STR(m_op_mask);
         Logger(Debug) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim)
                       << " = " << (static_cast<size_t>(m_volume_dim.x) * m_volume_dim.y * m_volume_dim.z)
                       << " voxels and " << getNumberOfUniqueLabelsInVolume() << " unique labels,"
                       << " encoded in " << str(getBrickCount()) << " = " << getBrickIndexCount() << " bricks"
-                      << " [b=" << m_brick_size << ",e=" << EncodingMode_STR(m_encoding_mode) << "]"
+                      << " [b=" << m_brick_size << ",e=" << EncodingMode_STR(m_encoding_mode)
+                      << ", op=" << op_mask_str
+                      << (m_random_access ? ", p" : "") << "]"
                       << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
+    }
 
     if (verify) {
         Logger(Debug, true) << "verifying..";

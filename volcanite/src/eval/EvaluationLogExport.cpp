@@ -14,6 +14,7 @@
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "volcanite/eval/EvaluationLogExport.hpp"
+#include "vvv/util/closest_string_match.hpp"
 #include "vvv/util/Logger.hpp"
 
 #include <complex>
@@ -60,10 +61,42 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     fmt_args.push_back(fmt::arg("comp_prepass_s", comp_res.compression_prepass_seconds));
     fmt_args.push_back(fmt::arg("comp_gb_per_s", comp_res.compression_GB_per_s));
     fmt_args.push_back(fmt::arg("csgv_gb", comp_res.csgv_bytes * BYTE_TO_GB));
+    const double volume_voxel_count = static_cast<double>(comp_res.volume_dim.x) * comp_res.volume_dim.y * comp_res.volume_dim.z;
+    fmt_args.push_back(fmt::arg("csgv_bits_per_voxel", comp_res.csgv_bytes / volume_voxel_count * 8.));
+    fmt_args.push_back(fmt::arg("csgv_bytes_per_voxel", comp_res.csgv_bytes / volume_voxel_count));
+    fmt_args.push_back(fmt::arg("csgv_base_gb", comp_res.csgv_base_encoding_bytes * BYTE_TO_GB));
+    fmt_args.push_back(fmt::arg("csgv_base_pcnt", comp_res.csgv_base_encoding_bytes / comp_res.csgv_bytes * BYTE_TO_GB));
+    fmt_args.push_back(fmt::arg("csgv_detail_gb", comp_res.csgv_detail_encoding_bytes * BYTE_TO_GB));
+    fmt_args.push_back(fmt::arg("csgv_detail_pcnt", static_cast<double>(comp_res.csgv_detail_encoding_bytes) / static_cast<double>(comp_res.csgv_bytes) * 100.));
+    //
+    fmt_args.push_back(fmt::arg("brick_size", comp_res.brick_size));
+    fmt_args.push_back(fmt::arg("operation_mask", comp_res.operation_mask));
+    fmt_args.push_back(fmt::arg("encoding_mode", comp_res.encoding_mode));
+    fmt_args.push_back(fmt::arg("random_access", comp_res.random_access));
+    fmt_args.push_back(fmt::arg("detail_separation", comp_res.detail_separation));
+    //
     fmt_args.push_back(fmt::arg("orig_gb", comp_res.original_volume_bytes * BYTE_TO_GB));
+    fmt_args.push_back(fmt::arg("orig_bits_per_voxel", comp_res.original_volume_bytes_per_voxel * 8));
     fmt_args.push_back(fmt::arg("orig_bytes_per_voxel", comp_res.original_volume_bytes_per_voxel));
     fmt_args.push_back(fmt::arg("volume_dim", std::to_string(comp_res.volume_dim.x) + "x" + std::to_string(comp_res.volume_dim.y) + "x" + std::to_string(comp_res.volume_dim.z)));
+    fmt_args.push_back(fmt::arg("volume_dim_x", std::to_string(comp_res.volume_dim.x)));
+    fmt_args.push_back(fmt::arg("volume_dim_y", std::to_string(comp_res.volume_dim.y)));
+    fmt_args.push_back(fmt::arg("volume_dim_z", std::to_string(comp_res.volume_dim.z)));
     fmt_args.push_back(fmt::arg("volume_labels", comp_res.volume_labels));
+    //
+    fmt_args.push_back(fmt::arg("brick_labels_min", comp_res.brick_labels_min));
+    fmt_args.push_back(fmt::arg("brick_labels_avg", comp_res.brick_labels_avg));
+    fmt_args.push_back(fmt::arg("brick_labels_max", comp_res.brick_labels_max));
+    fmt_args.push_back(fmt::arg("brick_palette_size_min", comp_res.brick_palette_size_min));
+    fmt_args.push_back(fmt::arg("brick_palette_size_avg", comp_res.brick_palette_size_avg));
+    fmt_args.push_back(fmt::arg("brick_palette_size_max", comp_res.brick_palette_size_max));
+    fmt_args.push_back(fmt::arg("brick_palette_duplicates_min", comp_res.brick_palette_duplicates_min));
+    fmt_args.push_back(fmt::arg("brick_palette_duplicates_avg", comp_res.brick_palette_duplicates_avg));
+    fmt_args.push_back(fmt::arg("brick_palette_duplicates_max", comp_res.brick_palette_duplicates_max));
+    fmt_args.push_back(fmt::arg("brick_bytes_min", comp_res.brick_bytes_min));
+    fmt_args.push_back(fmt::arg("brick_bytes_avg", comp_res.brick_bytes_avg));
+    fmt_args.push_back(fmt::arg("brick_bytes_max", comp_res.brick_bytes_max));
+
     // decompression
     fmt_args.push_back(fmt::arg("decomp_cpu_gb_per_s", decomp_res.cpu_GB_per_s));
     fmt_args.push_back(fmt::arg("decomp_cpu_s", decomp_res.cpu_decoded_seconds));
@@ -78,26 +111,43 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     fmt_args.push_back(fmt::arg("frame_med_ms", render_res.frame_med_ms));
     fmt_args.push_back(fmt::arg("frame_max_ms", render_res.frame_max_ms));
     for (int i = 0; i < 10; i++) {
-        fmt_args.push_back(fmt::arg(("frame_ms_0" + std::to_string(i)).c_str(), render_res.frame_ms[i]));
+        fmt_args.push_back(fmt::arg(("frame_0" + std::to_string(i) + "_ms").c_str(), render_res.frame_ms[i]));
         if (i < 6)
-            fmt_args.push_back(fmt::arg(("frame_ms_1" + std::to_string(i)).c_str(), render_res.frame_ms[10 + i]));
+            fmt_args.push_back(fmt::arg(("frame_1" + std::to_string(i) + "_ms").c_str(), render_res.frame_ms[10 + i]));
     }
+    // gpu rendering
+    const std::string stages[4] = {"cache", "decomp", "render", "post"};
+    for (int stage = 0; stage < 4; stage++) {
+        fmt_args.push_back(fmt::arg(("frame_gpu_" + stages[stage] + "_min_ms").c_str(), render_res.frame_gpu_min_ms[stage]));
+        fmt_args.push_back(fmt::arg(("frame_gpu_" + stages[stage] + "_avg_ms").c_str(), render_res.frame_gpu_avg_ms[stage]));
+        fmt_args.push_back(fmt::arg(("frame_gpu_" + stages[stage] + "_sdv_ms").c_str(), render_res.frame_gpu_sdv_ms[stage]));
+        fmt_args.push_back(fmt::arg(("frame_gpu_" + stages[stage] + "_med_ms").c_str(), render_res.frame_gpu_med_ms[stage]));
+        fmt_args.push_back(fmt::arg(("frame_gpu_" + stages[stage] + "_max_ms").c_str(), render_res.frame_gpu_max_ms[stage]));
+        for (int i = 0; i < 10; i++) {
+            fmt_args.push_back(fmt::arg(("frame_gpu_" + stages[stage] + "0" + std::to_string(i) + "_ms").c_str(), render_res.frame_gpu_ms[i][stage]));
+            if (i < 6)
+                fmt_args.push_back(fmt::arg(("frame_gpu_" + stages[stage] + "1" + std::to_string(i) + "_ms").c_str(), render_res.frame_gpu_ms[10 + i][stage]));
+        }
+    }
+
     fmt_args.push_back(fmt::arg("render_total_max", render_res.total_ms));
     fmt_args.push_back(fmt::arg("rendered_frames", render_res.accumulated_frames));
     fmt_args.push_back(fmt::arg("mem_framebuffer_mb", render_res.mem_framebuffers_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_uniformbuffer_mb", render_res.mem_ubos_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_materials_mb", render_res.mem_materials_bytes * BYTE_TO_MB));
-    fmt_args.push_back(fmt::arg("mem_encoding_Mb", render_res.mem_encoding_bytes * BYTE_TO_MB));
+    fmt_args.push_back(fmt::arg("mem_encoding_mb", render_res.mem_encoding_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_cache_mb", render_res.mem_cache_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_cache_used_mb", render_res.mem_cache_used_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_cache_fillrate", render_res.mem_cache_fill_rate));
     fmt_args.push_back(fmt::arg("mem_cache_fillrate_pcnt", render_res.mem_cache_fill_rate * 100.));
     fmt_args.push_back(fmt::arg("mem_emptyspace_mb", render_res.mem_empty_space_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_total_mb", render_res.mem_total_bytes * BYTE_TO_MB));
+    fmt_args.push_back(fmt::arg("mem_cache_voxels_per_uint", render_res.mem_cache_voxels_per_uint));
+    fmt_args.push_back(fmt::arg("mem_cache_packing_factor", render_res.mem_cache_packing_factor));
     return std::move(fmt_args);
 }
 
-std::string EvaluationLogExport::format_evaluation_string(std::string format_string, const std::string &eval_name,
+std::string EvaluationLogExport::format_evaluation_string(std::string_view format_string, const std::string &eval_name,
                                                           int argc, char *argv[],
                                                           CSGVCompressionEvaluationResults comp_res,
                                                           CSGVDecompressionEvaluationResults decomp_res,
@@ -109,7 +159,7 @@ std::string EvaluationLogExport::format_evaluation_string(std::string format_str
     try {
         return fmt::vformat(format_string, fmt_args);
     } catch (const fmt::format_error &err) {
-        Logger(Error) << "evaluation output format error: " << format_string;
+        Logger(Error) << "evaluation output format error: " << err.what() << " for " << format_string;
         throw;
     }
 }
@@ -126,10 +176,37 @@ std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
         "comp_prepass_s",
         "comp_gb_per_s",
         "csgv_gb",
+        "csgv_bits_per_voxel",
+        "csgv_bytes_per_voxel",
+        "csgv_base_gb",
+        "csgv_base_pcnt",
+        "csgv_detail_gb",
+        "csgv_detail_pcnt",
+        "brick_size",
+        "operation_mask",
+        "encoding_mode",
+        "random_access",
+        "detail_separation",
         "orig_gb",
-        "orig_bytes_per_voxel",
+        "orig_bits_per_voxel",
+        "orig_bytes_per_voxel"
         "volume_dim",
+        "volume_dim_x",
+        "volume_dim_y",
+        "volume_dim_z",
         "volume_labels",
+        "brick_labels_min",
+        "brick_labels_avg",
+        "brick_labels_max",
+        "brick_palette_size_min",
+        "brick_palette_size_avg",
+        "brick_palette_size_max",
+        "brick_palette_duplicates_min",
+        "brick_palette_duplicates_avg",
+        "brick_palette_duplicates_max",
+        "brick_bytes_min",
+        "brick_bytes_avg",
+        "brick_bytes_max",
         "decomp_cpu_gb_per_s",
         "decomp_cpu_s",
         "decomp_gpu_gb_per_s",
@@ -141,36 +218,188 @@ std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
         "frame_sdv_ms",
         "frame_med_ms",
         "frame_max_ms",
-        "frame_ms_00",
-        "frame_ms_01",
-        "frame_ms_02",
-        "frame_ms_03",
-        "frame_ms_04",
-        "frame_ms_05",
-        "frame_ms_06",
-        "frame_ms_07",
-        "frame_ms_08",
-        "frame_ms_09",
-        "frame_ms_10",
-        "frame_ms_11",
-        "frame_ms_12",
-        "frame_ms_13",
-        "frame_ms_14",
-        "frame_ms_15",
+        "frame_00_ms",
+        "frame_01_ms",
+        "frame_02_ms",
+        "frame_03_ms",
+        "frame_04_ms",
+        "frame_05_ms",
+        "frame_06_ms",
+        "frame_07_ms",
+        "frame_08_ms",
+        "frame_09_ms",
+        "frame_10_ms",
+        "frame_11_ms",
+        "frame_12_ms",
+        "frame_13_ms",
+        "frame_14_ms",
+        "frame_15_ms",
+        "frame_gpu_cache_min_ms",
+        "frame_gpu_decomp_min_ms",
+        "frame_gpu_render_min_ms",
+        "frame_gpu_post_min_ms",
+        "frame_gpu_cache_avg_ms",
+        "frame_gpu_decomp_avg_ms",
+        "frame_gpu_render_avg_ms",
+        "frame_gpu_post_avg_ms",
+        "frame_gpu_cache_sdv_ms",
+        "frame_gpu_decomp_sdv_ms",
+        "frame_gpu_render_sdv_ms",
+        "frame_gpu_post_sdv_ms",
+        "frame_gpu_cache_med_ms",
+        "frame_gpu_decomp_med_ms",
+        "frame_gpu_render_med_ms",
+        "frame_gpu_post_med_ms",
+        "frame_gpu_cache_max_ms",
+        "frame_gpu_decomp_max_ms",
+        "frame_gpu_render_max_ms",
+        "frame_gpu_post_max_ms",
+        "frame_gpu_cache_00_ms",
+        "frame_gpu_cache_01_ms",
+        "frame_gpu_cache_02_ms",
+        "frame_gpu_cache_03_ms",
+        "frame_gpu_cache_04_ms",
+        "frame_gpu_cache_05_ms",
+        "frame_gpu_cache_06_ms",
+        "frame_gpu_cache_07_ms",
+        "frame_gpu_cache_08_ms",
+        "frame_gpu_cache_09_ms",
+        "frame_gpu_cache_10_ms",
+        "frame_gpu_cache_11_ms",
+        "frame_gpu_cache_12_ms",
+        "frame_gpu_cache_13_ms",
+        "frame_gpu_cache_14_ms",
+        "frame_gpu_cache_15_ms",
+        "frame_gpu_decomp_00_ms",
+        "frame_gpu_decomp_01_ms",
+        "frame_gpu_decomp_02_ms",
+        "frame_gpu_decomp_03_ms",
+        "frame_gpu_decomp_04_ms",
+        "frame_gpu_decomp_05_ms",
+        "frame_gpu_decomp_06_ms",
+        "frame_gpu_decomp_07_ms",
+        "frame_gpu_decomp_08_ms",
+        "frame_gpu_decomp_09_ms",
+        "frame_gpu_decomp_10_ms",
+        "frame_gpu_decomp_11_ms",
+        "frame_gpu_decomp_12_ms",
+        "frame_gpu_decomp_13_ms",
+        "frame_gpu_decomp_14_ms",
+        "frame_gpu_decomp_15_ms",
+        "frame_gpu_render_00_ms",
+        "frame_gpu_render_01_ms",
+        "frame_gpu_render_02_ms",
+        "frame_gpu_render_03_ms",
+        "frame_gpu_render_04_ms",
+        "frame_gpu_render_05_ms",
+        "frame_gpu_render_06_ms",
+        "frame_gpu_render_07_ms",
+        "frame_gpu_render_08_ms",
+        "frame_gpu_render_09_ms",
+        "frame_gpu_render_10_ms",
+        "frame_gpu_render_11_ms",
+        "frame_gpu_render_12_ms",
+        "frame_gpu_render_13_ms",
+        "frame_gpu_render_14_ms",
+        "frame_gpu_render_15_ms",
+        "frame_gpu_post_00_ms",
+        "frame_gpu_post_01_ms",
+        "frame_gpu_post_02_ms",
+        "frame_gpu_post_03_ms",
+        "frame_gpu_post_04_ms",
+        "frame_gpu_post_05_ms",
+        "frame_gpu_post_06_ms",
+        "frame_gpu_post_07_ms",
+        "frame_gpu_post_08_ms",
+        "frame_gpu_post_09_ms",
+        "frame_gpu_post_10_ms",
+        "frame_gpu_post_11_ms",
+        "frame_gpu_post_12_ms",
+        "frame_gpu_post_13_ms",
+        "frame_gpu_post_14_ms",
+        "frame_gpu_post_15_ms",
         "render_total_max",
         "rendered_frames",
         "mem_framebuffer_mb",
         "mem_uniformbuffer_mb",
         "mem_materials_mb",
-        "mem_encoding_Mb",
+        "mem_encoding_mb",
         "mem_cache_mb",
         "mem_cache_used_mb",
         "mem_cache_fillrate",
         "mem_cache_fillrate_pcnt",
         "mem_emptyspace_mb",
         "mem_total_mb",
+        "mem_cache_voxels_per_uint",
+        "mem_cache_packing_factor",
     };
 }
+
+std::optional<std::string> EvaluationLogExport::check_evaluation_string(std::string_view format_string) {
+
+    const auto& all_format_keys = EvaluationLogExport::get_all_evaluation_keys();
+
+    // iterate over all keys
+    size_t pos = 0;
+    while ((pos = format_string.find('{', pos)) != std::string_view::npos) {
+        size_t end = format_string.find('}', pos);
+        if (end == std::string_view::npos)
+            break;
+        // Key is between pos+1 and end-1
+        std::string_view key = format_string.substr(pos + 1, end - pos - 1);
+        if (auto arg_pos = key.find(':');
+            arg_pos != std::string_view::npos) {
+            key = key.substr(0, arg_pos);
+        }
+
+        size_t closest_idx;
+        if (!stringCheckAndSuggest(key, all_format_keys, closest_idx)) {
+            if (closest_idx < all_format_keys.size()) {
+                return std::string("unknown evaluation log key ") + std::string(key) + ". did you mean " + all_format_keys[closest_idx] + "?";
+            } else {
+                return std::string("unknown evaluation log key ") + std::string(key) + ".";
+            }
+        }            
+
+        pos = end + 1;
+    }
+
+    // check if the complete string formatting works:
+    try {
+        format_evaluation_string(format_string, "", 0, nullptr, {}, {}, {});
+    } catch (const fmt::format_error &err) {
+        return err.what();
+    }
+
+    return {};
+}
+
+std::optional<std::string> EvaluationLogExport::check_eval_logfile(const std::string &eval_logfile) {
+    if (!std::filesystem::exists(eval_logfile))
+        return {};
+
+    std::string format_string;
+    std::string header_string;
+    std::ifstream file = std::ifstream(eval_logfile);
+    if (file.is_open()) {
+        std::string line;
+        std::getline(file, line);
+        while (line.starts_with("#fmt:")) {
+            line = line.substr(5);
+            format_string += (line + "\n");
+            std::getline(file, line);
+        }
+        if (format_string.ends_with('\n'))
+            format_string.pop_back(); // remove trailing '\n'
+        file.close();
+    } else {
+        return "Could not open existing evaluation log file " + eval_logfile;
+    }
+
+    return EvaluationLogExport::check_evaluation_string(format_string);
+}
+
+
 
 int EvaluationLogExport::write_eval_logfile(const std::string &eval_logfile, const std::string &eval_name, int argc, char *argv[],
                                             CSGVCompressionEvaluationResults comp_res,
@@ -193,7 +422,7 @@ int EvaluationLogExport::write_eval_logfile(const std::string &eval_logfile, con
                 format_string.pop_back(); // remove trailing '\n'
             file.close();
         } else {
-            Logger(Error) << "Could not open pre-existing evaluation log file " << eval_logfile;
+            Logger(Error) << "Could not open existing evaluation log file " << eval_logfile;
             return 5;
         }
     }

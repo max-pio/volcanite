@@ -40,13 +40,14 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegment
     std::uniform_int_distribution<unsigned int> urd(0u, ~0u);
 #define V_RND_UINT() urd(eng)
 
+    const size_t voxel_count = (static_cast<size_t>(cfg.dim[0]) * cfg.dim[1] * cfg.dim[2]);
     std::srand(cfg.seed);
     std::shared_ptr<Volume<uint32_t>> volume = std::make_shared<Volume<uint32_t>>(cfg.dim[0], cfg.dim[1], cfg.dim[2],
                                                                                   cfg.dim[0], cfg.dim[1], cfg.dim[2], vk::Format::eR32Uint,
-                                                                                  cfg.dim[0] * cfg.dim[1] * cfg.dim[2]);
-    memset(volume->data().data(), 0, cfg.dim[0] * cfg.dim[1] * cfg.dim[2] * sizeof(uint32_t));
+                                                                                  voxel_count);
+    memset(volume->data().data(), 0, voxel_count * sizeof(uint32_t));
 
-    const size_t number_of_areas = static_cast<size_t>(cfg.dim[0] * cfg.dim[1] * cfg.dim[2] + cfg.voxels_per_label - 1u) / cfg.voxels_per_label;
+    const size_t number_of_areas = (voxel_count + cfg.voxels_per_label - 1u) / cfg.voxels_per_label;
 
     Logger(Info) << "Creating synthetic segmentation volume with dimension " << str(cfg.dim)
                  << " and approx. " << number_of_areas << " label regions, " << cfg.voxels_per_label << " voxels/label.";

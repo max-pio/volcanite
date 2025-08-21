@@ -106,13 +106,16 @@ def write_nrrd(volume: np.ndarray, path_out: str | os.PathLike, dtype = None) ->
 def read_hdf5(path_in: str | os.PathLike, key_path: list[str] | None = None) -> np.ndarray:
     f = h5py.File(path_in, 'r')
     # obtain the volume in xyz shape
-    if key_path is None:
-        # TODO: iterate through groups until first ndarray is found
-        key_path = [list(f.keys())[0]]
-    # iterate through keys
-    _data = f[key_path[0]]
-    for i in range(1, len(key_path)):
-        _data = _data[key_path[i]]
+    if key_path:
+        # iterate through keys
+        _data = f[key_path[0]]
+        for i in range(1, len(key_path)):
+            _data = _data[key_path[i]]
+    else:
+        _data = f[list(f.keys())[0]]
+    # iterate through tree depth first from starting point until the first data set is found
+    while not isinstance(_data, h5py.Dataset) and len(_data.keys()) > 0:
+        _data = _data[list(_data.keys())[0]]
     volume = _data[()]
     # return it in zyx shape (numpy convention)
     return volume.reshape((volume.shape[2], volume.shape[1], volume.shape[0]))

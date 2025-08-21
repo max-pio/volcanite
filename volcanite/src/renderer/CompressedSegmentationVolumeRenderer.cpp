@@ -24,6 +24,7 @@
 #include "vvv/util/hash_memory.hpp"
 
 #include "glm/gtc/matrix_transform.hpp"
+#include "implot/implot.h"
 #include "vvvwindow/App.hpp"
 
 #ifndef HEADLESS
@@ -137,13 +138,12 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         m_pmaterial_reset = true;
     }
 
-    // wait for the last frame to finish execution (which will also mean that the previous upload of the detail starts
+    // wait for the previous  frame to finish execution (which will also mean that the previous upload of the detail starts
     // finished). Times out after a certain number of seconds and throws an exception.
     // Buffer upload synchronization is handled in PassCompSegVolRender
     getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution, 60 * 1000000000ull);
 
-    // track timing of the last frame
-    // TODO: renderFrame and thus the final timing finish will not be called after the last frame in HeadlessRendering
+    // track timing of the previous frame (CPU timings)
     if (m_enable_frame_time_tracking && m_last_frame_start_time.has_value()) {
         m_last_frame_times.emplace_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                                                 std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value())
@@ -153,8 +153,7 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     }
 
     // if a screenshot export was requested, we do this here (not timed)
-    if (m_download_frame_to_image_file.has_value() && m_mostRecentFrame.has_value()) {
-        Logger(Info) << "exporting screenshot to " << m_download_frame_to_image_file.value();
+    if (m_download_frame_to_image_file.has_value() && m_mostRecentFrame.has_value() && m_mostRecentFrame->texture) {
         try {
             m_mostRecentFrame->texture->writeFile(m_download_frame_to_image_file.value(), m_queue_family_index);
         } catch (const std::runtime_error &e) {
@@ -169,12 +168,13 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
     }
     m_accum_do_step = false;
 
-    // time tracking start (on host side to consider semaphores, CPU work as well, not just the GPU render times)
-    if (m_enable_frame_time_tracking)
-        m_last_frame_start_time = std::chrono::high_resolution_clock::now();
-
     // set render update flags to denote which parameter sets changed, and which render stages have to be executed
     updateRenderUpdateFlags();
+
+    // time tracking start (on host side to consider semaphores, CPU work as well, not just the GPU render times)
+    // only track timing if the render pass is executed at all
+    if (m_enable_frame_time_tracking && (m_render_update_flags & (UPDATE_RENDER_FRAME | UPDATE_PRESOLVE)))
+        m_last_frame_start_time = std::chrono::high_resolution_clock::now();
 
     // download GPU statistics information, i.e. the cache occupancy to trigger cache hard resets when it is full
     static constexpr uint32_t gpu_stats_download_interval = 1u;
@@ -250,11 +250,11 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
             size_t decoded_bytes_in_frame = 0;
             size_t decoded_bytes_total = 0;
             std::stringstream cache_state = {};
-            cache_state << " decoded: ";
+            cache_state << "frame " << m_frame << " decoded: ";
             for (int lod = 1; lod < m_compressed_segmentation_volume->getLodCountPerBrick(); lod++) {
                 decoded_bytes_in_frame += m_last_gpu_stats.blocks_decoded_L1_to_7[lod - 1] * (1u << (lod * 3)) * 4;
                 decoded_bytes_total += m_last_gpu_stats.blocks_decoded_L1_to_7[lod - 1] * (1u << (lod * 3)) * 4;
-                cache_state << "inv. LOD" << lod << ": " << m_last_gpu_stats.blocks_decoded_L1_to_7[lod - 1] << ", ";
+                cache_state << "iLOD" << lod << ": " << m_last_gpu_stats.blocks_decoded_L1_to_7[lod - 1] << ", ";
             }
             cache_state << " in total: " << static_cast<double>(decoded_bytes_total) * BYTE_TO_MB << " MB";
             if (decoded_bytes_in_frame > 0)
@@ -302,6 +302,9 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
         });
         detail_upload_thread.detach();
     }
+
+    if (m_render_update_flags & UPDATE_CLEAR_CACHE)
+        Logger(Debug) << "hard reset brick cache at accumulated|total frame " << m_accumulated_frames << " | " << m_frame << " (" << m_parameter_hash_at_last_reset << ")";
 
     m_pass->setStorageImage("inpaintedOutColor", *m_inpaintedOutColor);
     // feedback texture ping pong for the inpainting shader
@@ -662,7 +665,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     Buffer::deviceAddressUvec2(m_cache_buffer->getDeviceAddress(), &m_cache_buffer_address.x);
 
     updateDeviceMemoryUsage();
-    Logger(Info) << "Device memory after initialization: " << m_gui_device_mem_text;
+    Logger(Debug) << "Device memory after initialization: " << m_gui_device_mem_text;
 
     // UPLOAD TO GPU BUFFERS ----------------------------------
     AwaitableList awaitBeforeExecution;
@@ -679,6 +682,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
     awaitBeforeExecution.push_back(brickstarts_upload_finished);
 
     // wait until all uploads finished
+    // TODO: simply return the awaitable to the main renderer call
     getCtx()->sync->hostWaitOnDevice(awaitBeforeExecution);
 
     // update all bindings
@@ -701,7 +705,7 @@ void CompressedSegmentationVolumeRenderer::initDataSetGPUBuffers() {
 void CompressedSegmentationVolumeRenderer::initResources(GpuContext *ctx) {
     setCtx(ctx);
     updateDeviceMemoryUsage();
-    Logger(Info) << "Device memory on startup: " << m_gui_device_mem_text;
+    Logger(Debug) << "Device memory on startup: " << m_gui_device_mem_text;
 
     // TODO: all rendering should happen on the compute queue, + queue ownership transfer to present for the Application
     m_queue_family_index = getCtx()->getQueueFamilyIndices().graphics.value();
@@ -770,11 +774,11 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
     shader_defines.emplace_back("SUBGROUP_SIZE=" + std::to_string(getCtx()->getPhysicalDeviceSubgroupProperties().subgroupSize));
     // if we're rendering without a GLFW window / WSI, we're disabling MultiBuffering
     if (getCtx()->getWsi())
-        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), m_queue_family_index, shader_defines,
-                                                        m_compressed_segmentation_volume->isUsingRandomAccess(), m_cache_mode == CACHE_BRICKS);
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), getCtx()->getWsi()->stateInFlight(), m_queue_family_index,
+                                                        PassCompSegVolRenderCfg{.shader_defines = shader_defines, .parallel_decode = m_compressed_segmentation_volume->isUsingRandomAccess(), .enable_cache_stages = (m_cache_mode == CACHE_BRICKS), .try_enable_gpu_timing = true});
     else
-        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, m_queue_family_index, shader_defines,
-                                                        m_compressed_segmentation_volume->isUsingRandomAccess(), m_cache_mode == CACHE_BRICKS);
+        m_pass = std::make_unique<PassCompSegVolRender>(getCtx(), NoMultiBuffering, m_queue_family_index,
+                                                        PassCompSegVolRenderCfg{.shader_defines = shader_defines, .parallel_decode = m_compressed_segmentation_volume->isUsingRandomAccess(), .enable_cache_stages = (m_cache_mode == CACHE_BRICKS), .try_enable_gpu_timing = true});
     if (!m_additional_shader_defs.empty())
         shader_defines.emplace_back(m_additional_shader_defs);
 
@@ -789,7 +793,7 @@ void CompressedSegmentationVolumeRenderer::initShaderResources() {
         std::chrono::high_resolution_clock::now().time_since_epoch().count());
     m_pcache_reset = true;
     m_pmaterial_reset = true;
-    m_accumulated_frames = 0;
+    m_accumulated_frames = 0u;
     m_frame = 0u;
 
     // update all bindings (if buffers were already created)
@@ -883,7 +887,7 @@ void CompressedSegmentationVolumeRenderer::initSwapchainResources() {
     // trigger a temporal accumulation flush and force parameter updates
     m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
         std::chrono::high_resolution_clock::now().time_since_epoch().count());
-    m_accumulated_frames = 0;
+    m_accumulated_frames = 0u;
     m_frame = 0u;
 }
 
@@ -917,16 +921,26 @@ void CompressedSegmentationVolumeRenderer::resetGPU() {
     releaseResources();
 }
 
+void CompressedSegmentationVolumeRenderer::resetAllEvaluationStates() {
+    // reset parameter hashes to trigger re-render
+    m_presolve_hash = m_prender_hash = m_pcamera_hash = static_cast<size_t>(
+        std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    m_pcache_reset = true;
+    m_pmaterial_reset = true;
+    m_accumulated_frames = 0u;
+    m_frame = 0u;
+}
+
 void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
 #define HASHP(PARAM) new_hash = hashMemory(&PARAM, sizeof(PARAM), new_hash);
 
     m_render_update_flags = 0u;
-    size_t new_hash;
+    size_t new_hash = 0ull;
 
     // camera parameters
-    new_hash = 0ull;
     const glm::mat4 mvp = m_camera->get_world_to_projection_space(m_resolution);
-    new_hash = hashMemory(&mvp, sizeof(glm::mat4));
+    HASHP(mvp)
+    HASHP(m_voxel_size)
     if (new_hash != m_pcamera_hash) {
         m_render_update_flags |= UPDATE_PCAMERA;
         m_pcamera_hash = new_hash;
@@ -940,22 +954,34 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_factor_ambient)
     HASHP(m_light_intensity)
     HASHP(m_global_illumination_enabled)
-    HASHP(m_shadow_pathtracing_ratio) HASHP(m_light_direction)
-        HASHP(m_ambient_occlusion_dist_strength) HASHP(m_envmap_enabled) HASHP(m_max_path_length)
-        // volume transformations
-        HASHP(m_voxel_size) HASHP(m_bboxMin) HASHP(m_bboxMax) HASHP(m_axis_transpose_mat) HASHP(m_axis_flip[0])
-            HASHP(m_axis_flip[1]) HASHP(m_axis_flip[2])
-        // HASHP(m_subblock_start) HASHP(m_subblock_size) HASHP(m_subblock_enabled)
-        // general rendering config
-        HASHP(m_lod_bias) HASHP(m_max_inv_lod) HASHP(m_max_request_path_length_pow2) HASHP(m_blue_noise) HASHP(m_max_steps)
-        // request limitation
-        // TODO: should not reset frame accumulation. Right now the uniforms are always uploaded always at UPDATE_RENDER_FRAME
-        //    HASHP(m_req_limit.area_size)
-        //    if (m_req_limit.area_size > 0) {
-        //        HASHP(m_req_limit.area_pos) HASHP(m_req_limit.area_min_pixel) HASHP(m_req_limit.spp_delta)
-        //    }
-        // debug views and flags
-        const uint32_t render_debug_bits = m_debug_vis_flags & (VDEB_MODEL_SPACE_BIT | VDEB_LOD_BIT | VDEB_EMPTY_SPACE_BIT | VDEB_CACHE_VOXEL_BIT | VDEB_BRICK_IDX_BIT | VDEB_STATS_DOWNLOAD_BIT);
+    HASHP(m_shadow_pathtracing_ratio)
+    HASHP(m_light_direction)
+    HASHP(m_ambient_occlusion_dist_strength)
+    HASHP(m_envmap_enabled)
+    HASHP(m_max_path_length)
+    // volume transformations
+    HASHP(m_voxel_size)
+    HASHP(m_bboxMin)
+    HASHP(m_bboxMax)
+    HASHP(m_axis_transpose_mat)
+    HASHP(m_axis_flip[0])
+    HASHP(m_axis_flip[1])
+    HASHP(m_axis_flip[2])
+    // HASHP(m_subblock_start) HASHP(m_subblock_size) HASHP(m_subblock_enabled)
+    // general rendering config
+    HASHP(m_lod_bias)
+    HASHP(m_max_inv_lod)
+    HASHP(m_max_request_path_length_pow2)
+    HASHP(m_blue_noise)
+    HASHP(m_max_steps)
+    // request limitation
+    // TODO: should not reset frame accumulation. Right now the uniforms are always uploaded always at UPDATE_RENDER_FRAME
+    //    HASHP(m_req_limit.area_size)
+    //    if (m_req_limit.area_size > 0) {
+    //        HASHP(m_req_limit.area_pos) HASHP(m_req_limit.area_min_pixel) HASHP(m_req_limit.spp_delta)
+    //    }
+    // debug views and flags
+    const uint32_t render_debug_bits = m_debug_vis_flags & (VDEB_MODEL_SPACE_BIT | VDEB_LOD_BIT | VDEB_EMPTY_SPACE_BIT | VDEB_CACHE_VOXEL_BIT | VDEB_BRICK_IDX_BIT | VDEB_STATS_DOWNLOAD_BIT);
     HASHP(render_debug_bits)
     if (new_hash != m_prender_hash) {
         m_render_update_flags |= UPDATE_PRENDER;
@@ -975,11 +1001,22 @@ void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
     HASHP(m_background_color_b)
     HASHP(m_tonemap_enabled)
     HASHP(m_exposure)
-    HASHP(m_brightness) HASHP(m_contrast) HASHP(m_gamma)
-        HASHP(m_atrous_iterations)
-            HASHP(m_denoising_enabled) HASHP(m_atrous_enabled) HASHP(m_depth_sigma) HASHP(m_denoise_fade_sigma)
-                HASHP(m_denoise_filter_kernel_size) HASHP(m_denoise_fade_enabled) HASHP(m_mouse_pos)
-                    const uint32_t resolve_debug_bits = m_debug_vis_flags & (VDEB_NO_POSTPROCESS_BIT | VDEB_CACHE_ARRAY_BIT | VDEB_EMPTY_SPACE_ARRAY_BIT | VDEB_SPP_BIT | VDEB_G_BUFFER_BIT | VDEB_ENVMAP_BIT | VDEB_REQUEST_LIMIT_BIT | VDEB_BRICK_INFO_BIT);
+    HASHP(m_brightness)
+    HASHP(m_contrast)
+    HASHP(m_gamma)
+    HASHP(m_atrous_iterations)
+    HASHP(m_denoising_enabled)
+    HASHP(m_atrous_enabled)
+    HASHP(m_depth_sigma)
+    HASHP(m_denoise_fade_sigma)
+    HASHP(m_denoise_filter_kernel_size)
+    HASHP(m_denoise_fade_enabled)
+    HASHP(m_constant_mouse_pos_enabled)
+    if (m_constant_mouse_pos_enabled)
+        HASHP(m_constant_mouse_pos)
+    else
+        HASHP(m_mouse_pos)
+    const uint32_t resolve_debug_bits = m_debug_vis_flags & (VDEB_NO_POSTPROCESS_BIT | VDEB_CACHE_ARRAY_BIT | VDEB_EMPTY_SPACE_ARRAY_BIT | VDEB_SPP_BIT | VDEB_G_BUFFER_BIT | VDEB_ENVMAP_BIT | VDEB_REQUEST_LIMIT_BIT | VDEB_BRICK_INFO_BIT);
     HASHP(resolve_debug_bits)
     if (new_hash != m_presolve_hash) {
         m_render_update_flags |= UPDATE_PRESOLVE;
@@ -1025,8 +1062,11 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
     const auto camera = getCamera();
     updateRenderResolutionFromWSI();
 
-    glm::vec3 voldim = glm::vec3(m_compressed_segmentation_volume->getVolumeDim());
-    glm::vec3 physical_voldim = voldim * m_voxel_size;
+    const glm::vec3 voldim = glm::vec3(m_compressed_segmentation_volume->getVolumeDim());
+    const glm::vec3 physical_voldim = voldim * m_voxel_size;
+    const float scalingFactor = glm::max(physical_voldim.x, glm::max(physical_voldim.y, physical_voldim.z));
+    // size in world space: uniformly scaled so that the largest component is 1
+    const glm::vec3 normalized_volume_size(physical_voldim / scalingFactor);
 
     // camera uniform
     if (m_render_update_flags & UPDATE_PCAMERA) {
@@ -1052,10 +1092,20 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_ucamera_info->setUniform<glm::mat3x3>("g_pixel_to_ray_direction_world_space", glm::mat3x3(
                                                                                             projection_to_world_space_no_translation * pixel_to_ray_direction_projection_space));
         m_ucamera_info->setUniform<glm::vec3>("g_camera_position_world_space", camera->position_world_space);
-        // the g_voxels_per_pixel_per_dist determines how many voxels an image pixel footprint overlaps for a camera distance
-        // TODO: account for anisotropic voxel sizes, currently using average
-        float voxels_per_pixel_at_near = (physical_voldim.x + physical_voldim.y + physical_voldim.z) / 3.f / glm::max(m_voxel_size.x, glm::max(m_voxel_size.y, m_voxel_size.z)) / float(m_resolution.height);
-        m_ucamera_info->setUniform<float>("g_voxels_per_pixel_per_dist", glm::tan(this->getCamera()->vertical_fov) * voxels_per_pixel_at_near);
+        // voxel_per_distance_xyz determines how many voxels an image pixel footprint overlaps for a camera distance
+        // simplified heuristic: lod = log2(distance / base_distance) with base-distance = (texel_size * resolution.height) / (2 * tan(fov / 2))
+        // computing (1 / base_distance) as lod_per_distance allows applying it to distance with multiplication instead of division
+        //
+        // in world space, the longest axis of a volume is 1. normalized_volume_size stores the length of each axis in world space.
+        // this means that a texel in world space is:
+        const glm::vec3 voxel_size_world = normalized_volume_size / glm::vec3(voldim);
+        const glm::vec3 voxel_per_distance_xyz = (2.f * glm::tan(glm::vec3(this->getCamera()->vertical_fov / 2.f))) / (voxel_size_world * static_cast<float>(m_resolution.height));
+        // lod2_per_distance_xyz gives a component-wise heuristic. If the camera looks along one of the axis, the other two components define the mip level selection
+        // (as those two dimensions are projected onto the screen). So the information needs to be swizzled around.
+        // We use an avg() accumulation under the assumption to achieve average performance. Conservative would use min().
+        m_ucamera_info->setUniform<glm::vec3>("g_voxels_per_pixel_per_dist", glm::vec3((voxel_per_distance_xyz.y + voxel_per_distance_xyz.z) / 2.f,
+                                                                                       (voxel_per_distance_xyz.x + voxel_per_distance_xyz.z) / 2.f,
+                                                                                       (voxel_per_distance_xyz.x + voxel_per_distance_xyz.y) / 2.f));
     }
 
     // resolve pass parameter uniform
@@ -1079,18 +1129,14 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
         m_uresolve_info->setUniform<int>("g_denoise_filter_kernel_size",
                                          glm::min(m_denoise_filter_kernel_size, (m_denoise_filter_kernel_size < 8 * pixels_per_sample) ? 3 : 1));
         m_uresolve_info->setUniform<uint32_t>("g_denoise_fade_enable", m_denoise_fade_enabled ? ~0u : 0u);
-        m_uresolve_info->setUniform<glm::ivec2>("g_cursor_pixel_pos", glm::ivec2(m_mouse_pos * glm::vec2(m_resolution.width,
+        m_uresolve_info->setUniform<glm::ivec2>("g_cursor_pixel_pos", glm::ivec2((m_constant_mouse_pos_enabled ? m_constant_mouse_pos : m_mouse_pos) * glm::vec2(m_resolution.width,
                                                                                                          m_resolution.height)));
         m_uresolve_info->setUniform<uint32_t>("g_debug_vis_flags", m_debug_vis_flags);
     }
 
     // render info uniform
     if (m_render_update_flags & (UPDATE_RENDER_FRAME | UPDATE_PRENDER)) {
-
         // MVP matrices, transformations, volume sizes
-        float scalingFactor = glm::max(physical_voldim.x, glm::max(physical_voldim.y, physical_voldim.z));
-        // size in world space: uniformly scaled so that the largest component is one
-        glm::vec3 normalized_volume_size(physical_voldim / scalingFactor);
         m_urender_info->setUniform<glm::vec3>("g_voxel_size", m_voxel_size);
         m_urender_info->setUniform<glm::vec3>("g_physical_vol_dim", physical_voldim);
         m_urender_info->setUniform<glm::vec3>("g_normalized_volume_size", normalized_volume_size);
@@ -1147,8 +1193,8 @@ void CompressedSegmentationVolumeRenderer::updateUniformDescriptorset() {
 
         // general render config
         m_urender_info->setUniform<uint32_t>("g_detail_buffer_dirty", m_detail_stage == DetailUploading ? 1u : 0u);
-        m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
         auto lod_count = m_compressed_segmentation_volume->getLodCountPerBrick();
+        m_urender_info->setUniform<float>("g_lod_bias", m_lod_bias);
         m_urender_info->setUniform<uint32_t>("g_max_inv_lod", glm::min(static_cast<uint32_t>(m_max_inv_lod), lod_count - 1u));
         m_urender_info->setUniform<int32_t>("g_max_request_path_length", (1 << m_max_request_path_length_pow2) - 1);
         m_urender_info->setUniform<int32_t>("g_maxSteps", m_max_steps);
@@ -1264,6 +1310,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         auto selected_file = pfd::save_file("Save Screenshot", Paths::getHomeDirectory().string(),
                                             {"Image File (.png .jpg .jpeg)", "*.png *.jpg *.jpeg", "All Files", "*"});
         if (!selected_file.result().empty()) {
+            Logger(Info) << "exporting screenshot to " << selected_file.result();
             exportCurrentFrameToImage(selected_file.result());
         }
 #endif
@@ -1456,7 +1503,46 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
                                                VDEB_EMPTY_SPACE_ARRAY_BIT, VDEB_G_BUFFER_BIT, VDEB_SPP_BIT,
                                                VDEB_ENVMAP_BIT, VDEB_STATS_DOWNLOAD_BIT};
     g_dev->addBitFlags(&m_debug_vis_flags, option_labels, option_bits, true, "Debug View");
+    g_dev->addBool(&m_constant_mouse_pos_enabled, "Constant Mouse Pos");
+    g_dev->addVec2(&m_constant_mouse_pos, "Mouse XY", glm::vec2(0.f), glm::vec2(1.f), glm::vec2(0.001f), 3);
     g_dev->addSeparator();
+    g_dev->addAction([this]() { if (m_enable_frame_time_tracking) stopFrameTimeTracking(m_mostRecentFrame->renderingComplete); else startFrameTimeTracking(); }, "Frame Time Tracking");
+#ifdef IMGUI
+    GUI_SAME_LINE(g_dev)
+    g_dev->addCustomCode([this]() {
+        if (!m_pass->getLastFrameTimeTrackingResults().empty()) {
+            glm::vec4 gpu_timings = m_pass->getLastFrameTimeTrackingResults().back();
+            ImGui::Text("T: %.2f | C: %.2f D: %.2f R: %.2f P: %.2f", m_last_frame_times.back(), gpu_timings.x, gpu_timings.y, gpu_timings.z, gpu_timings.w);
+        } else {
+            ImGui::TextColored(glm::vec4(0.5f, 0.5f, 0.5f, 1.f), "-- | -- -- -- --");
+        }
+    }, "##TimingResults");
+
+    g_dev->addCustomCode([this]() {
+        if (!m_last_frame_times.empty()) {
+            const int frame_count = static_cast<int>(m_last_frame_times.size());
+            static const char* labels[] = {"Cache","Decode","Render","Post"};
+            constexpr float max_frame_time = 100.f;
+
+            if (ImPlot::BeginPlot("Frame Timings")) {
+
+                ImPlot::SetupAxes("Frame","ms");
+                ImPlot::SetupAxesLimits(0, frame_count, 0.f, max_frame_time, ImPlotCond_Always);
+                ImPlot::SetupAxesLimits(0,static_cast<int>(m_last_frame_times.size()),0.f,max_frame_time);
+
+                ImPlot::PlotBars("Total", m_last_frame_times.data(),frame_count, 1.f);
+
+                // if (const auto& gpu_timings = m_pass->getLastFrameTimeTrackingResults();
+                //     !gpu_timings.empty()) {
+                //      This is column major but should be row major: x0 y0 z0 w0 y1 y1 z1 w0 --> x0 x1 y0 y1 z0 z1 w0 w1
+                //     ImPlot::PlotBarGroups(labels, reinterpret_cast<const float*>(gpu_timings.data()), 4, frame_count, 1.f, 0, ImPlotBarGroupsFlags_Stacked);
+                // }
+
+                ImPlot::EndPlot();
+            }
+        }
+    }, "##TimingResultsPlotCont");
+#endif
     g_dev->addLabel("Label Cache Management");
     g_dev->addBool(&m_req_limit.g_enable, "Auto Cache Request Limitation");
     g_dev->addInt(&m_req_limit.spp_delta, "Allowed SPP Difference", 2, 512, 1);
@@ -1629,11 +1715,13 @@ void CompressedSegmentationVolumeRenderer::updateRequestLimiation(const uint32_t
         m_req_limit.tried_cache_reset = false;
         m_req_limit.random_area_pixel = false,
         m_req_limit.area_size = 1 << glm::findMSB(glm::max(m_resolution.width, m_resolution.height));
-        m_req_limit.area_pos = {0, 0};
         m_req_limit.area_start_frame = m_accumulated_frames;
         m_req_limit.area_min_pixel_last_spp = global_min_spp;
         m_req_limit.area_min_pixel = m_req_limit.global_min_pixel;
+        m_req_limit.area_pos = (m_req_limit.area_min_pixel / glm::ivec2(m_req_limit.area_size)) * glm::ivec2(m_req_limit.area_size);
         m_req_limit.area_duration = m_req_limit.g_area_duration_bounds.x;
+        if (m_req_limit.area_start_frame == 0u)
+            Logger(Debug) << "Cache insufficient. Enabling request limitation.";
     }
     // if a brick request limitation is already set: move the AABB in which pixels can request bricks around
     // when a new area configuration is set, area_duration frames are accumulated to see if it was effective
@@ -1649,9 +1737,10 @@ void CompressedSegmentationVolumeRenderer::updateRequestLimiation(const uint32_t
             m_req_limit.area_duration = glm::max((m_req_limit.area_duration + (1 + new_samples_rendered - m_req_limit.area_duration)) / 2, 4);
             // increase the area size (slower than it is decreased)
             m_req_limit.area_size = ((m_req_limit.area_size * 3 + 7) / 8) * 8; // *3 rounded up to multiple of 8
-            // if the area would now cover the whole screen, disable request limitation
+            // if the area would now cover the whole screen, limit to screen size
+            // request limitation will be disabled if the min_spp caught up with the max_spp
             if (m_req_limit.area_size > glm::max(m_resolution.width, m_resolution.height)) {
-                disableRequestLimiation();
+                m_req_limit.area_size = glm::max(m_resolution.width, m_resolution.height);
             }
         }
         // if not: reduce the area size and increase the area duration as long as this is possible
@@ -1726,7 +1815,7 @@ void CompressedSegmentationVolumeRenderer::printGPUMemoryUsage() {
 }
 
 CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluationResults() {
-    CSGVRenderEvaluationResults results;
+    CSGVRenderEvaluationResults results = {};
 
     // obtain GPU memory consumption
     if (m_inpaintedOutColor != nullptr) {
@@ -1737,13 +1826,13 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
             for (const auto &t : *m_inpaintedOutColor)
                 textures += t->memorySize();
         }
-        results.mem_framebuffers_bytes = textures;
+        results.mem_framebuffers_bytes = static_cast<double>(textures);
 
         size_t uniform_buffers = 0ul;
         if (m_urender_info) {
             uniform_buffers += m_urender_info->getByteSize() + m_usegmented_volume_info->getByteSize() + m_uresolve_info->getByteSize() + m_ucamera_info->getByteSize();
         }
-        results.mem_ubos_bytes = uniform_buffers;
+        results.mem_ubos_bytes = static_cast<double>(uniform_buffers);
 
         size_t materials = 0ul;
         if (m_materials_buffer) {
@@ -1753,14 +1842,14 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
                     materials += t->texture().memorySize();
             }
         }
-        results.mem_materials_bytes = materials;
+        results.mem_materials_bytes = static_cast<double>(materials);
 
         size_t cache = 0ul;
         if (m_cache_buffer) {
             cache += m_cache_info_buffer->getByteSize() + m_cache_buffer->getByteSize() + m_free_stack_buffer->getByteSize() + m_assign_info_buffer->getByteSize() + (m_detail_requests_buffer ? m_detail_requests_buffer->getByteSize() : 0ul);
         }
-        results.mem_cache_bytes = cache;
-        results.mem_cache_used_bytes = m_last_gpu_stats.used_cache_base_elements * m_cache_base_element_uints * sizeof(uint32_t);
+        results.mem_cache_bytes = static_cast<double>(cache);
+        results.mem_cache_used_bytes = static_cast<double>(m_last_gpu_stats.used_cache_base_elements * m_cache_base_element_uints * sizeof(uint32_t));
         results.mem_cache_fill_rate = getCacheFillRate();
         results.min_samples_per_pixel = static_cast<int>(m_last_gpu_stats.min_spp_and_pixel >> 48u);
         results.max_samples_per_pixel = static_cast<int>(m_last_gpu_stats.max_spp_and_pixel >> 48u);
@@ -1769,7 +1858,7 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
         if (m_empty_space_buffer) {
             empty_space = m_empty_space_buffer->getByteSize();
         }
-        results.mem_empty_space_bytes = empty_space;
+        results.mem_empty_space_bytes = static_cast<double>(empty_space);
 
         size_t encoding = 0ul;
         if (m_brick_starts_buffer) {
@@ -1781,8 +1870,10 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
                 encoding += m_detail_buffer->getByteSize() + m_detail_starts_buffer->getByteSize();
             }
         }
-        results.mem_encoding_bytes = encoding;
-        results.mem_total_bytes = getMemoryHeapBudgetAndUsage(*getCtx()).second;
+        results.mem_encoding_bytes = static_cast<double>(encoding);
+        results.mem_total_bytes = static_cast<double>(getMemoryHeapBudgetAndUsage(*getCtx()).second);
+        results.mem_cache_voxels_per_uint = m_cache_indices_per_uint;
+        results.mem_cache_packing_factor = 8. / static_cast<double>(m_cache_base_element_uints);
     }
 
     // frame times are only available if tracking was enabled via setEvalTracking(true)
@@ -1799,28 +1890,63 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
             const auto &ms = m_last_frame_times[i];
             if (i < 16)
                 results.frame_ms[i] = ms;
-            min = std::min(min, ms);
-            max = std::max(max, ms);
+            min = std::min(min, static_cast<double>(ms));
+            max = std::max(max, static_cast<double>(ms));
             m1 += ms;
             m2 += ms * ms;
             total += ms;
         }
-        for (int i = m_last_frame_times.size(); i < 16; i++)
-            results.frame_ms[i] = 0.;
-        auto frame_time_cpy = m_last_frame_times;
-        nth_element(frame_time_cpy.begin(),
-                    frame_time_cpy.begin() + (frame_time_cpy.size() / 2),
-                    frame_time_cpy.end());
+        for (int i = static_cast<int>(m_last_frame_times.size()); i < 16; i++)
+            results.frame_ms[i] = 0.; // set non-rendered frames to 0
+
         results.frame_min_ms = min;
-        results.frame_avg_ms = m1 / m_last_frame_times.size();
-        results.frame_sdv_ms = std::sqrt((m2 / m_last_frame_times.size()) - results.frame_avg_ms * results.frame_avg_ms);
-        results.frame_med_ms = *(frame_time_cpy.begin() + (frame_time_cpy.size() / 2));
+        results.frame_avg_ms = m1 / static_cast<double>(m_last_frame_times.size());
+        results.frame_sdv_ms = std::sqrt((m2 / static_cast<double>(m_last_frame_times.size())) - results.frame_avg_ms * results.frame_avg_ms);
         results.frame_max_ms = max;
         results.total_ms = total;
-        results.accumulated_frames = m_last_frame_times.size();
+        results.accumulated_frames = static_cast<int>(m_last_frame_times.size());
+        // compute median
+        auto frame_time_cpy = m_last_frame_times;
+        nth_element(frame_time_cpy.begin(), frame_time_cpy.begin() + static_cast<long>(frame_time_cpy.size() / 2), frame_time_cpy.end());
+        results.frame_med_ms = *(frame_time_cpy.begin() + static_cast<long>(frame_time_cpy.size() / 2));
+
         Logger(Debug) << "CSGV rendering evaluation: "
                       << results.frame_min_ms << " / " << results.frame_avg_ms << " / " << results.frame_max_ms
                       << " [ms/frame] (min/avg/max) | " << results.accumulated_frames << " total frames";
+    }
+    if (const std::vector<glm::vec4> &last_gpu_frame_times = m_pass->getLastFrameTimeTrackingResults();
+        !last_gpu_frame_times.empty()) {
+
+        auto total = glm::dvec4{0., 0., 0., 0.};
+        auto min = glm::dvec4{std::numeric_limits<double>::max()};
+        auto m1 = glm::dvec4{0.};
+        auto m2 = glm::dvec4{0.};
+        auto max = glm::dvec4{-1.};
+        for (int i = 0; i < last_gpu_frame_times.size(); i++) {
+            const auto &ms = last_gpu_frame_times[i];
+            if (i < 16)
+                results.frame_gpu_ms[i] = ms;
+            min = glm::min(min, glm::dvec4(ms));
+            max = glm::max(max, glm::dvec4(ms));
+            m1 += ms;
+            m2 += ms * ms;
+            total += ms;
+        }
+        for (int i = static_cast<int>(last_gpu_frame_times.size()); i < 16; i++)
+            results.frame_gpu_ms[i] = glm::dvec4(0.); // set non-rendered frames to 0
+
+        results.frame_gpu_min_ms = min;
+        results.frame_gpu_avg_ms = m1 / glm::dvec4(static_cast<double>(last_gpu_frame_times.size()));
+        results.frame_gpu_sdv_ms = glm::sqrt((m2 / glm::dvec4(static_cast<double>(last_gpu_frame_times.size()))) - results.frame_gpu_avg_ms * results.frame_gpu_avg_ms);
+        results.frame_gpu_max_ms = max;
+        // compute gpu stage timing medians
+        std::vector<float> frame_time_cpy(last_gpu_frame_times.size());
+        for (int stage = 0; stage < 4; stage++) {
+            int n = 0;
+            std::generate(frame_time_cpy.begin(), frame_time_cpy.end(), [&n, &last_gpu_frame_times, &stage]() { return last_gpu_frame_times[n++][stage]; });
+            nth_element(frame_time_cpy.begin(), frame_time_cpy.begin() + static_cast<long>(frame_time_cpy.size() / 2), frame_time_cpy.end());
+            results.frame_gpu_med_ms[stage] = *(frame_time_cpy.begin() + static_cast<long>(frame_time_cpy.size() / 2));
+        }
     }
     return results;
 }

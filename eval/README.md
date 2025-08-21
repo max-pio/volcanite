@@ -1,13 +1,13 @@
 # Volcanite Evaluation Scripts
 
-This directory contains several evaluation python scripts.
+This directory contains several evaluation python scripts that generate the results for the main Volcanite paper.
+
 The structure of the directory is as follows:
 * `./config/` contains the `.vcfg` and `.rec` files for the renderer
 * `./results/` will contain the results of the evaluation scripts 
-* `./setup.txt` is created by the data downloader and contains file paths to this directory and the volcanite binary
+* `./volcanite-eval-setup.txt` is created by the data downloader and contains file paths to this directory and the volcanite binary.
 
-## Prerequisities 
-
+## Prerequisities
 The evaluation scripts require python and the Volcanite python package located in `../python/volcanite/` to be installed.
 You need the complete Volcanite source directory and all [build dependencies](../doc/Setup.md), including the optional hdf5 libraries   
 It is advised to do this inside a python virtual environment:
@@ -34,5 +34,33 @@ is stored for the evaluation scripts.
 
 In addition, the following arguments exist as well:
 * `--keep` do not remove the original input data once the CSGV files are created
-* `--big-data` downloads and compresses large, chunked data sets (~2 TB)
+* `--big-data` downloads and compresses large, chunked data sets (~1 TB)
 * `--volcanite-src` if the download script is not run from inside the volcanite directory, 
+
+The evaluations assume a system with at least 64 GB RAM and a GPU with at least 16 GB VRAM.
+If your system does not meet these requirements, consider downloading only the smaller data
+(i.e. omitting `--big-data` in the data set download script).
+
+### Optional: Fixing GPU clock speeds
+
+For most accurate render timing measurements, it is optionally recommended to fix performance counters and GPU and VRAM clock speeds before each evaluation run.
+To that end, the [volcanite-eval-setup.txt](volcanite-eval-setup.txt) allows to set an entry- and shell exit-command that are execute before and after an evaluation script is run respectively.
+
+Example for an NVIDIA GPU with a maximum GPU clock speed of 3105 MHz and a maximum memory clock speed of 10501 MHz:
+```
+entry-command: sudo nvidia-smi --lock-gpu-clocks=3105 && sudo nvidia-smi --lock-memory-clocks=10501 && sudo nvidia-smi -pm 1
+exit-command: sudo nvidia-smi --reset-gpu-clocks && sudo nvidia-smi --reset-memory-clocks && sudo nvidia-smi -pm 0
+```
+
+## Running the Evaluations
+
+Evaluation scripts are named `*-eval.py` and located in this directory.
+They can be directly executed in the previously created virtual environment.
+For example:
+```
+python3 test-eval.py
+```
+Afterward, results can be found in the [/results](./results) subdirectory.
+
+If not all data sets could be downloaded or were requested for download, some result tables may return missing entries.
+In general, the scripts should ignore evaluation runs that fail due to non-existing data sets.

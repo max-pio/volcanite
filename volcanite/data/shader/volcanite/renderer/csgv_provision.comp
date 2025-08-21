@@ -33,8 +33,9 @@ layout (local_size_x = 16) in;
 void main() {
     // at the beginning of this shader:
     // cache element ownership
-    // - (BRICK_INFO_INDEX < INVALID) <=> (BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick still owns a cache element
-    // - REQ_SLOT < INVALID <=> the brick needs a cache element <=> the REQ_SLOT is a valid entry for its REQ_LOD
+    // - (0 < BRICK_INFO_CUR_INV_LOD < LOD_COUNT) <=> the brick still owns a cache element
+    // - (BRICK_INFO_CACHE_INDEX < INVALID) and is a cache index <=> (0 < CUR_INV_LOD < LOD_COUNT)
+    // - (BRICK_INFO_CACHE_INDEX < INVALID) and is label of inv. LOD 0 <=> (0 == CUR_INV_LOD)    // - REQ_SLOT < INVALID <=> the brick needs a cache element <=> the REQ_SLOT is a valid entry for its REQ_LOD
     // - REQ_SLOT < INVALID => BRICK_INFO_INDEX == INVALID
     // - the ASSIGN_REQUESTED_BRICKS for each LoD contains the number of requested bricks for this LoD.
     // - all SLOT indices < ASSIGN_REQUESTED_BRICKS are uniquely assigned to one brick each

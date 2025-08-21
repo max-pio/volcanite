@@ -31,6 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose', action='store_true', help="enable verbose output")
     parser.add_argument('--chunked_in', type=int, nargs=3, help="maximum existing XYZ chunk indices for the input chunks")
     parser.add_argument('--chunked_out', type=int, nargs=3, help="maximum existing XYZ chunk indices for the output chunks")
+    parser.add_argument('--axes', help="axis order of volume file (default ZYX)")
 
     args = parser.parse_args()
 
@@ -40,7 +41,7 @@ if __name__ == '__main__':
     elif args.chunked_out:
         raise ArgumentError(args.chunked_out, message="Chunked volume conversion not yet implemented.")
 
-    volume = vc.read_volume(args.input_file)
+    volume = vc.read_volume(args.input_file, args.axes.lower() if args.axes else "ZYX")
 
     if args.verbose:
         vc.debug_print(volume)

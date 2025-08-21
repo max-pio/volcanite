@@ -139,7 +139,7 @@
 #define OP_NEIGHBORY_BIT 4
 #define OP_NEIGHBORZ_BIT 8
 #define OP_NEIGHBOR_BITS 14
-// PALETTE_ADV must always be enabled
+// PALETTE_ADV must always be enabled: operation mask = 0u is PALETTE_ADV only 
 #define OP_PALETTE_LAST_BIT 32
 /// if OP_USE_OLD_PAL_D_BIT and OP_PALETTE_D_BIT are set, delta is only one 4 bit element after the operation (old variant)
 #define OP_USE_OLD_PAL_D_BIT 64
@@ -154,14 +154,16 @@
      static const std::string OperationMask_STR(uint32_t op_mask) {
             // in C++20 the function could be constexpr const char* but C++17 does not support std::string in costexpr.
             std::string op_mask_str;
-            if (op_mask == OP_ALL)
-                op_mask_str = "ALL";
-            else if (op_mask == OP_ALL_WITHOUT_DELTA)
-                op_mask_str = "OPT";
+            if (op_mask == 0u)
+                op_mask_str = "none";
+            // else if (op_mask == OP_ALL)
+            //     op_mask_str = "ALL";
+            // else if (op_mask == OP_ALL_WITHOUT_DELTA)
+            //     op_mask_str = "OPT";
             else {
                 if (op_mask & OP_PARENT_BIT)
                     op_mask_str.push_back('p');
-                if (op_mask & OP_NEIGHBORY_BIT)
+                if (op_mask & OP_NEIGHBORX_BIT)
                     op_mask_str.push_back('x');
                 if (op_mask & OP_NEIGHBORY_BIT)
                     op_mask_str.push_back('y');
@@ -197,6 +199,12 @@
 #define UPDATE_CLEAR_ACCUM 32
 // triggers rendering the next frame
 #define UPDATE_RENDER_FRAME 64
+
+
+// ray will request a brick for decompression if it is not available
+#define REQUEST_ENABLE_BIT 1u
+// ray will be set to invalid (will not be if brick is not available
+#define INVALIDATE_ENABLE_BIT 2u
 
 
 // Material Constants --------------------------------------------------------------------------------------------------
