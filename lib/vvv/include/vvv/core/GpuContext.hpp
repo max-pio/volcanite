@@ -64,7 +64,7 @@ class GpuPipelineCache {
   public:
     virtual ~GpuPipelineCache() = default;
 
-    virtual vk::PipelineCache getPipelineCache() const { return m_pipelineCache; }
+    [[nodiscard]] virtual vk::PipelineCache getPipelineCache() const { return m_pipelineCache; }
 
     virtual void destroyPipelineCache(vk::Device device) { VK_DEVICE_DESTROY(device, m_pipelineCache); }
 
@@ -73,7 +73,7 @@ class GpuPipelineCache {
 
     void writePipelineCacheToDisk(vk::Device device) {
         // Get size of pipeline cache
-        if (m_pipelineCache == static_cast<vk::PipelineCache>(VK_NULL_HANDLE))
+        if (m_pipelineCache == VK_NULL_HANDLE)
             throw std::runtime_error("pipeline cache is null");
         auto data = device.getPipelineCacheData(m_pipelineCache);
 
@@ -96,11 +96,11 @@ class GpuPipelineCache {
         }
 
         m_pipelineCache = device.createPipelineCache(pipelineCacheCreateInfo);
-        if (m_pipelineCache == static_cast<vk::PipelineCache>(VK_NULL_HANDLE)) {
+        if (m_pipelineCache == VK_NULL_HANDLE) {
             Logger(Warn) << "Error reading vulkan pipeline cache from " << getPipelineCachePath() << ". Resetting file.";
             std::filesystem::remove(getPipelineCachePath());
             m_pipelineCache = device.createPipelineCache(pipelineCacheCreateInfo);
-            if (m_pipelineCache == static_cast<vk::PipelineCache>(VK_NULL_HANDLE))
+            if (m_pipelineCache == VK_NULL_HANDLE)
                 throw std::runtime_error("Reading pipeline cache " + getPipelineCachePath() + " failed.");
         }
     }
@@ -133,7 +133,7 @@ struct OpenGLStyleSubmitOptions {
 /// that only announce change for data within the stable class reference.
 class GpuContext : public GpuPipelineCache {
   public:
-    GpuContext(std::shared_ptr<DebugUtilities> debugUtilities);
+    GpuContext(const std::shared_ptr<DebugUtilities> &debugUtilities);
 
     virtual void destroyGpuContext() {
         const auto device = getDevice();

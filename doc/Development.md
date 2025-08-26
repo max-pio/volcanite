@@ -32,6 +32,25 @@ instead of `xorg-dev`.
 | PugiXML             | 1.12.1       | parse XML data                          | `libpugixml-dev`              |
 | OpenMP              | 4.5          | CPU parallelization                     | included in compiler          |
 
+A note on **compile times**:
+Volcanite is currently build and used on specialized hardware (e.g. HPC clusters) where users have only limited rights
+to install modules and packages.
+For that reason, most libraries are included at *compile time*, leaving only the optional libraries and the Vulkan SDK as
+external dependencies.
+
+You can reduce compile times by setting the CMake option `USE_SYSTEM_GLSLANG=ON` to exclude the large shaderc library.
+Note that you must not install or pacakge Volcanite with this option set as the resulting binary would only work on
+systems where the glslangValidator is present at the given hardcoded path from development.
+
+## Packaging
+
+After creating a Release build of Volcanite, it can be packaged for distribution on Linux or Windodws systems.
+We use CPack for packaging which will create .exe, .deb, zip, or tar.gz installers or packages depending on your current build system:
+```bash
+cd cmake-build-release
+cpack --config CPackConfig.cmake
+```
+
 
 ## Development Tools
 
@@ -78,38 +97,10 @@ or your dependency is out of date?*
 
 The Volcanite project directory has its own [ReadMe](../volcanite/ReadMe.md) with development information about the renderer.
 
-
-## Git Branching Strategy
-
-* Each developer starts own branch names with a prefix `ab/<branch>`. Usually, `ab` are your initials.
-* Each developer has their own development branch from which additional branches for features can be created.
-* Merging happens to the `staging` branch first where merging bugs can be fixed. We do not rebase here.
-* Ideally, we test the `staging` branch with different builds (Ubuntu, Windows, headless, ..) before release.
-* If the `staging` branch feels complete and bug free, it can be merged into `main` by the repository maintainer.
-
-```
-  ab/feature   ab/development   cd/development   staging      main
-      .              ┌─┐              .             .           .
-      .              └┬┘             ┌─┐            .           .
-      .               │              └┬┘            .           .
-      .              ┌▼┐              │             .           .
-      ┌──────────────┴┬┘             ┌▼┐            .           .
-      │               │              └┬┘            .           .
-     ┌▼┐              │               └───────────►┌─┐          .
-     └┬┘ feature     ┌▼┐              .            └┬┘          .
-      │  branch      └┬┘              .             │           .
-     ┌▼┐              │               .            ┌▼┐          .
-     └─┴────────────►┌▼┐              .            └┬┘ bugfix   .
-      .              └┬┘              .             │           .
-      .               │               .             │           .
-      .               └───────────────────────────►┌▼┐          .
-      .               .               .            └┬┘          .
-      .               .               .             └─────────►┌─┐
-      .               .               .                        └─┘ tag 0.1
-```
-
 ## Open Source Libraries and Licenses
 
+For a full list of directly included dependencies and their licenses
+see the [LICENSE_THIRD_PARTY](../volcanite/package_assets/LICENSE_THIRD_PARTY.txt) document.  
 The Volcanite code directly includes or uses code from:
 * [GLFW](https://github.com/glfw/glfw), released under the Zlib license
 * [GLM](https://github.com/g-truc/glm), released under the MIT license
@@ -122,6 +113,7 @@ The Volcanite code directly includes or uses code from:
 * [stb](https://github.com/nothings/stb), released into the public domain via Unlicense
 * [tclap](https://tclap.sourceforge.net/), released under the MIT license
 * [MyToyRenderer](https://github.com/MomentsInGraphics/vulkan_renderer), released by Christoph Peters under the GPLv3 license 
+* [Pasta Toolbox](https://github.com/pasta-toolbox/), released by Florian Kurpicz under the GPLv3 license
 
 as well as the following assets:
 * [Tileable Blue Noise Textures](http://momentsingraphics.de/BlueNoise.html) released by Christoph Peters under the CC0 license

@@ -22,7 +22,9 @@
 
 #include "CSGVPathUtils.hpp"
 #include "csgv_constants.incl"
-#include "volcanite/util/segmentation_volume_synthesis.hpp"
+#include "util/segmentation_volume_synthesis.hpp"
+#include "eval/EvaluationLogExport.hpp"
+#include "vvv/core/HeadlessRendering.hpp"
 #include "vvv/util/Logger.hpp"
 
 #include <fmt/core.h>
@@ -30,13 +32,158 @@
 #include <ranges>
 #include <sstream>
 #include <string>
-#include <string_view>
 
 using namespace vvv;
 
 namespace volcanite {
 
 struct VolcaniteArgs {
+
+  private:
+    static bool parseVideoConfigString(HeadlessRenderingConfig &hr_cfg, const std::string &video_cfg_str) {
+        if (video_cfg_str.empty())
+            return true;
+        // the video configuration can be a pre-recorded camera path
+        if (video_cfg_str.ends_with(".rec")) {
+            hr_cfg.record_file_in = expandPathStr(video_cfg_str);
+            hr_cfg.video_out_frame_rate = 0; // 0: video output should use actual frame timings as frame rate
+            hr_cfg.accumulation_samples = 1; // only one frame per input camera pose from .rec file
+            return true;
+        }
+        // otherwise the given string describes the camera animation
+        std::stringstream ss(video_cfg_str);
+        while (ss.good()) {
+            unsigned char c;
+            ss >> c;
+            switch (c) {
+            case 'd':
+                ss >> hr_cfg.duration;
+                break;
+            case 'o':
+                ss >> hr_cfg.video_out_frame_rate;
+                break;
+            case 's':
+                ss >> hr_cfg.accumulation_samples;
+                break;
+            case 'r':
+                ss >> hr_cfg.cam_rot_start;
+                if (ss.good() && ss.peek() == ':') {
+                    ss >> c;
+                    ss >> hr_cfg.cam_rot_end;
+                } else {
+                    hr_cfg.cam_rot_end = hr_cfg.cam_rot_start;
+                    hr_cfg.cam_rot_start = 0.f;
+                }
+                break;
+            case 'z':
+                ss >> hr_cfg.cam_zoom_start;
+                if (ss.good() && ss.peek() == ':') {
+                    ss >> c;
+                    ss >> hr_cfg.cam_zoom_end;
+                } else {
+                    hr_cfg.cam_zoom_end = hr_cfg.cam_zoom_start;
+                    hr_cfg.cam_zoom_start = 0.f;
+                }
+                break;
+            case 'i':
+                int i;
+                ss >> i;
+                if (i < 0 || i > 2)
+                    return false;
+                hr_cfg.interpolation = static_cast<HeadlessRenderingConfig::Interpolant>(i);
+                break;
+            case 'e':
+                ss >> hr_cfg.edge_start;
+                if (ss.good() && ss.peek() == ':') {
+                    ss >> c;
+                    ss >> hr_cfg.edge_end;
+                } else {
+                    hr_cfg.edge_end = hr_cfg.edge_start;
+                }
+                break;
+            default:
+                return false;
+            }
+        }
+        return !ss.fail();
+    }
+
+    static bool parseOperationMaskString(uint32_t &operation_mask, std::string op_codes_str) {
+        operation_mask = 0u;
+        if (op_codes_str == "none") {
+            return true;
+        }
+        std::transform(op_codes_str.begin(), op_codes_str.end(), op_codes_str.begin(), ::tolower);
+        for (int i = 0; i < op_codes_str.size(); i++) {
+            switch (op_codes_str.at(i)) {
+            case 'a':
+                operation_mask |= OP_ALL;
+                break;
+            case 'o':
+                operation_mask |= OP_ALL_WITHOUT_DELTA;
+                break;
+            case 'p':
+                operation_mask |= OP_PARENT_BIT;
+                break;
+            case 'x':
+                operation_mask |= OP_NEIGHBORX_BIT;
+                break;
+            case 'y':
+                operation_mask |= OP_NEIGHBORY_BIT;
+                break;
+            case 'z':
+                operation_mask |= OP_NEIGHBORZ_BIT;
+                break;
+            case 'n':
+                operation_mask |= OP_NEIGHBOR_BITS;
+                break;
+            case 'l':
+                operation_mask |= OP_PALETTE_LAST_BIT;
+                break;
+            case 'd':
+                // a "d-" instead of "d" switch enables using the old palette delta operations where only
+                // a single entry follows the delta operations and thus only deltas of 1<D<17 are supported
+                if (i + 1 < op_codes_str.size() && op_codes_str[i + 1] == '-') {
+                    operation_mask |= OP_USE_OLD_PAL_D_BIT;
+                    i++;
+                }
+                operation_mask |= OP_PALETTE_D_BIT;
+                break;
+            case 's':
+                operation_mask |= OP_STOP_BIT;
+                break;
+            default:
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static bool parseRenderingConfigsString(std::vector<std::string> &rendering_configs, const std::vector<std::string> &renderconfig_strings) {
+        rendering_configs = {};
+        for (const auto &renderconfig_str : renderconfig_strings) {
+            auto split_configs = renderconfig_str | std::views::split(';') | std::views::transform([](auto r) -> std::string {
+                                     // in C++20 this could be done in string views only
+                                     // std::string_view v(r.data(), r.size());
+                                     // v.remove_prefix(std::min(v.find_first_not_of(' '), v.size()));
+                                     // v.remove_suffix(r.size() - 1u - std::min(v.find_last_not_of(' '), v.size()));
+                                     std::string cfg;
+                                     for (const char &c : r)
+                                         cfg.push_back(c);
+                                     // trim
+                                     auto first = cfg.find_first_not_of(' ');
+                                     auto last = cfg.find_last_not_of(' ');
+                                     cfg = cfg.substr(first, last - first + 1);
+                                     // expand file path (if it is a vcfg file)
+                                     // and convert to strin
+                                     if (cfg.ends_with(".vcfg"))
+                                         return expandPathStr(cfg);
+                                     return cfg;
+                                 });
+            rendering_configs.insert(rendering_configs.end(), split_configs.begin(), split_configs.end());
+        }
+        return true;
+    }
 
   public:
     // general args
@@ -65,7 +212,7 @@ struct VolcaniteArgs {
     std::string attribute_database;            ///< SQlite3 file with attributes for volume labels
     std::string attribute_table;               ///< table or view containing the attributes for the volume labels
     std::string attribute_label;               ///< name of the label attribute
-    std::string attribute_csv_separator = ","; ///< only for csv attribute databases
+    std::string attribute_csv_separator = ","; //< only for csv attribute databases
     bool label_remapping = false;              ///< if label ids in the volume should be remapped to a consecutive interval
     bool compute_attributes = false;           ///< if additional attributes are computed from the segmentation volume
 
@@ -80,16 +227,15 @@ struct VolcaniteArgs {
     bool random_access = false;                     ///< encode bricks so that they support random access within a brick
 
     // evaluation and statistics
+    HeadlessRenderingConfig hr_cfg;     ///< configuration parameters for the automated headless rendering pass
     std::string screenshot_output_file; ///< png or jpg output file path to export the last frame from headless rendering
-    std::string video_output_fmt_file;  ///< output image file path string accepted by std::format for immediate frames
     bool run_tests = false;
-    bool export_stats = false;
-    std::string record_in_file = "";             ///< file that stores a previously exported camera path for replay in headless
-    uint32_t record_convergence_frames = 1;      ///< number of render frames that are accumulated per output frame of a camera path
-    std::vector<std::string> eval_logfiles = {}; // files into which evaluation results are exported (with 'append')
+    std::string brickstats_file = {};
+    std::string rendertimes_file = {};
+    std::vector<std::string> eval_logfiles = {}; ///< files into which evaluation results are exported (with 'append')
     std::string eval_name = {};                  ///< name of the evaluation run that can be accessed in the log file as "{name}"
     bool print_eval_keys = false;                ///< if true, prints all available evaluation log keys to the console on startup
-    std::string shader_defines = "";             ///< string of shader defines that will be passed on to the shader compiler
+    std::string shader_defines = {};             ///< string of shader defines that will be passed on to the shader compiler
 
     static std::string getHelpString() {
         std::stringstream ss;
@@ -113,12 +259,25 @@ struct VolcaniteArgs {
         return VOLCANITE_VERSION;
     }
 
-    bool performCompression() {
+    [[nodiscard]] bool performCompression() const {
         return !input_file.ends_with(".csgv");
     }
 
-    bool performDecompression() {
+    [[nodiscard]] bool performDecompression() const {
         return !decompress_export_file.empty();
+    }
+
+    [[nodiscard]] bool performHeadlessEvaluationPrepass() const {
+        // either correct evaluation results are directly required, or a video with "real" frame times should be created
+        return !eval_logfiles.empty() || !rendertimes_file.empty() || (!hr_cfg.video_fmt_file_out.empty() && hr_cfg.video_out_frame_rate == 0u) || hr_cfg.duration < 0;
+    }
+
+    [[nodiscard]] bool performHeadlessVideoExport() const {
+        return !hr_cfg.video_fmt_file_out.empty();
+    }
+
+    [[nodiscard]] bool performHeadlessRendering() const {
+        return performHeadlessVideoExport() || performHeadlessEvaluationPrepass() || !screenshot_output_file.empty();
     }
 
     static std::optional<VolcaniteArgs> parseArguments(int argc, char *argv[], bool input_volume_required = true) {
@@ -144,13 +303,12 @@ struct VolcaniteArgs {
             ValuesConstraint<uint32_t> allowedBrickSize(_allowedBrickSize);
             ValueArg<uint32_t> bricksizeArg("b", "brick-size", "Compress with given brick size.", false, va.brick_size, &allowedBrickSize);
             cmd.add(bricksizeArg);
-            ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits. Quick: [a]ll or [o]ptimized.", false, "o", "(a|o|p|n|x|y|z|l|d[-]|s)*", cmd);
+            ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits. Quick: [a]ll or [o]ptimized (no Pdelta).", false, "a", "none|(a|o|p|n|x|y|z|l|d[-]|s)*", cmd);
             SwitchArg randomAccessArg("", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
             // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
-            SwitchArg statsArg("", "stats", "Export statistics after performing the compression", cmd);
-            ValueArg<std::string> recordInFileArg("", "record-in", "File that stores a previously exported camera path for replay on startup. Must be used with -i or -v.", false, va.record_in_file, "file", cmd);
-            ValueArg<uint32_t> recordConvergenceArg("", "record-frames", "How many render frames are accumulated per output frame of a camera path. Must be used with --record-in or -v.", false, va.record_convergence_frames, "int", cmd);
+            ValueArg<std::string> brickStatsArg("", "brickstats-logfile", "File into which statistics per brick are exported", false, "", "file", cmd);
+            ValueArg<std::string> renderTimesArg("", "timings-logfile", "File into which frame render timings [ms] are exported", false, "", "file", cmd);
             ValueArg<std::string> evalLogFilesArg("", "eval-logfiles", "Comma separated files into which evaluation results are appended.", false, "", "file", cmd);
             ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"{name}\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
             SwitchArg evalPrintArg("", "eval-print-keys", "Print all available evaluation keys to the console and exit.", cmd);
@@ -176,10 +334,11 @@ struct VolcaniteArgs {
             cmd.add(emptySpaceResolutionArg);
             SwitchArg streamlodArg("", "stream-lod", "Stream finest level of detail to GPU on demand. Helps with low GPU memory.", cmd);
             ValueArg<std::string> imageArg("i", "image", "Renders an image to the given file on startup.", false, va.screenshot_output_file, "file", cmd);
-            ValueArg<std::string> videoArg("v", "video", "Video output with one image output file per frame. The formatted file path must contain a single {} placeholder which will be replaced with frame index. Example: ./out{:04}.jpg", false, va.video_output_fmt_file, "formatted file", cmd);
+            ValueArg<std::string> videoArg("v", "video", "Video output with one image output file per frame. The formatted file path must contain a single {} placeholder which will be replaced with frame index. Example: ./out{:04}.jpg", false, va.hr_cfg.video_fmt_file_out, "formatted file", cmd);
+            ValueArg<std::string> videoCfgArg("", "video-cfg", "Video output configuration string for rendering animations. Must be used with -v.", false, "", "options string", cmd);
             ValueArg<std::string> resolutionArg("r", "resolution", "Startup render resolution as [Width]x[Height].", false, "", "[Width]x[Height]", cmd);
             SwitchArg fullscreenArg("", "fullscreen", "Start renderer in fullscreen mode.", cmd);
-            ValueArg<std::string> renderconfigArg("", "config", "List of .vcfg files, rendering presets, or direct config strings '[{GUI window}] {parameter label}: {parameter value(s)}', separated by ;", false, "", "{(.vcfg file | rendering preset | string);}*", cmd);
+            MultiArg<std::string> renderconfigArg("", "config", "List of .vcfg files, rendering presets, or direct config strings '[{GUI window}] {parameter label}: {parameter value(s)}', separated by ;", false, "{(.vcfg file | rendering preset | string);}*", cmd);
             // general arguments
             SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
             SwitchArg verboseArg("", "verbose", "Verbose debug output.", cmd);
@@ -200,84 +359,21 @@ struct VolcaniteArgs {
 #endif
             va.decompress_export_file = expandPathStr(decompresspathArg.getValue());
             va.compress_export_file = expandPathStr(compresspathArg.getValue());
-            {
-                std::string op_codes = opMaskArg.getValue();
-                std::transform(op_codes.begin(), op_codes.end(), op_codes.begin(), ::tolower);
-                va.operation_mask = 0;
-                for (int i = 0; i < op_codes.size(); i++) {
-                    switch (const char &c = op_codes.at(i)) {
-                    case 'a':
-                        va.operation_mask |= OP_ALL;
-                        break;
-                    case 'o':
-                        va.operation_mask |= OP_ALL_WITHOUT_DELTA;
-                        break;
-                    case 'p':
-                        va.operation_mask |= OP_PARENT_BIT;
-                        break;
-                    case 'x':
-                        va.operation_mask |= OP_NEIGHBORX_BIT;
-                        break;
-                    case 'y':
-                        va.operation_mask |= OP_NEIGHBORY_BIT;
-                        break;
-                    case 'z':
-                        va.operation_mask |= OP_NEIGHBORZ_BIT;
-                        break;
-                    case 'n':
-                        va.operation_mask |= OP_NEIGHBOR_BITS;
-                        break;
-                    case 'l':
-                        va.operation_mask |= OP_PALETTE_LAST_BIT;
-                        break;
-                    case 'd':
-                        // a "d-" instead of "d" switch enables using the old palette delta operations where only
-                        // a single entry follows the delta operations and thus only deltas of 1<D<17 are supported
-                        if (i + 1 < op_codes.size() && op_codes[i + 1] == '-') {
-                            va.operation_mask |= OP_USE_OLD_PAL_D_BIT;
-                            i++;
-                            Logger(Info) << " JOOO ITS HERE LELELEL";
-                        }
-                        va.operation_mask |= OP_PALETTE_D_BIT;
-                        break;
-                    case 's':
-                        va.operation_mask |= OP_STOP_BIT;
-                        break;
-                    default:
-                        throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d[-],s only", opMaskArg.longID());
-                    }
-                }
-            }
+            if (!parseOperationMaskString(va.operation_mask, opMaskArg.getValue()))
+                throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d[-],s only", opMaskArg.longID());
             va.random_access = randomAccessArg.getValue();
             // rendering arguments
-            {
-                auto split_configs = renderconfigArg.getValue() | std::views::split(';') | std::views::transform([](auto r) -> std::string {
-                                         // in C++20 this could be done in string views only
-                                         // std::string_view v(r.data(), r.size());
-                                         // v.remove_prefix(std::min(v.find_first_not_of(' '), v.size()));
-                                         // v.remove_suffix(r.size() - 1u - std::min(v.find_last_not_of(' '), v.size()));
-                                         std::string cfg;
-                                         for (const char &c : r)
-                                             cfg.push_back(c);
-                                         // trim
-                                         auto first = cfg.find_first_not_of(' ');
-                                         auto last = cfg.find_last_not_of(' ');
-                                         cfg = cfg.substr(first, last - first + 1);
-                                         // expand file path (if it is a vcfg file)
-                                         // and convert to strin
-                                         if (cfg.ends_with(".vcfg"))
-                                             return expandPathStr(cfg);
-                                         return cfg;
-                                     });
-                va.rendering_configs = {split_configs.begin(), split_configs.end()};
-            }
+            if (!parseRenderingConfigsString(va.rendering_configs, renderconfigArg.getValue()))
+                throw ArgException(renderconfigArg.longID() + " must be a ; separated list of .vcfg files or config strings.", renderconfigArg.longID());
             va.screenshot_output_file = expandPathStr(imageArg.getValue());
-            va.video_output_fmt_file = expandPathStr(videoArg.getValue());
-            if (!va.video_output_fmt_file.empty()) {
+            va.hr_cfg.video_fmt_file_out = expandPathStr(videoArg.getValue());
+            if (!parseVideoConfigString(va.hr_cfg, videoCfgArg.getValue()))
+                throw ArgException(videoCfgArg.longID() + " must be a list of valid animation parameters: f{i} o{i} s{i} r{f}:{f} d{f}:{f} i{0|1|2} e{0-1}:{0-1}", videoCfgArg.longID());
+            if (!va.hr_cfg.video_fmt_file_out.empty()) {
                 try {
                     size_t test_frame_idx = 1;
-                    auto f = fmt::vformat(va.video_output_fmt_file, fmt::make_format_args(test_frame_idx));
-                } catch (const fmt::format_error &err) {
+                    auto f = fmt::vformat(va.hr_cfg.video_fmt_file_out, fmt::make_format_args(test_frame_idx));
+                } catch (const fmt::format_error &) {
                     throw ArgException(videoArg.longID() + " must be a formatted image file path string containing a single {} replacement field. Example: ./out{:04}.jpg", videoArg.longID());
                 }
             }
@@ -474,7 +570,7 @@ struct VolcaniteArgs {
                         try {
                             uint32_t test_chunk_idx = 1;
                             auto f = fmt::vformat(va.input_file, fmt::make_format_args(test_chunk_idx, test_chunk_idx, test_chunk_idx));
-                        } catch (const fmt::format_error &err) {
+                        } catch (const fmt::format_error) {
                             throw ArgException("input volume must be a formatted file path string containing three {} keys to be replaced with x,y,z chunk indices. Example: ./x{}y{}z{}.hdf5", inputpathArg.longID(""));
                         }
                     }
@@ -487,20 +583,21 @@ struct VolcaniteArgs {
             //va.compute_attributes = (va.attribute_database.empty() && va.label_remapping) || computeAttributesArg.getValue();
             va.compute_attributes = computeAttributesArg.getValue();
 
-            va.export_stats = statsArg.getValue();
-            va.record_in_file = expandPathStr(recordInFileArg.getValue());
-            va.record_convergence_frames = recordConvergenceArg.getValue();
+            va.brickstats_file = expandPath(brickStatsArg.getValue()).generic_string();
+            va.rendertimes_file = expandPath(renderTimesArg.getValue()).generic_string();
             std::string comma_separated_logfiles = evalLogFilesArg.getValue();
             va.eval_logfiles.clear();
-            for (const std::string_view &logfile : comma_separated_logfiles | std::views::split(',') | std::views::transform([](const auto &&range) -> std::string {
-                                                       // string_view and string constructors do not accept the range iterators in C++17
-                                                       std::string tmp;
-                                                       for (const char c : range)
-                                                           tmp.push_back(c);
-                                                       return tmp;
-                                                   })) {
+            for (const auto &logfile : comma_separated_logfiles | std::views::split(',') | std::views::transform([](const auto &&range) -> std::string {
+                                           // string_view and string constructors do not accept the range iterators in C++17
+                                           std::string tmp;
+                                           for (const char c : range)
+                                               tmp.push_back(c);
+                                           return tmp;
+                                       })) {
                 va.eval_logfiles.emplace_back(expandPathStr(std::string(logfile)));
-                // TODO: check if the logfiles contain valid format strings
+                if (std::optional<std::string> logfile_err = EvaluationLogExport::check_eval_logfile(va.eval_logfiles.back()); logfile_err.has_value()) {
+                    throw ArgException(logfile_err.value() + " (" + va.eval_logfiles.back() + ")", evalLogFilesArg.longID());
+                }
             }
             va.eval_name = evalNameArg.getValue();
             if (!va.eval_name.empty() && va.eval_logfiles.empty()) {

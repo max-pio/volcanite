@@ -69,7 +69,7 @@ class CSGVBrickEncoder {
     /// @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
     /// @param valid_brick_size is used to clamp used voxels for border bricks. Values outside are undefined.
     /// @param inv_lod the LOD until which to decompress, or rather, the decompression iterations. 0 is the coarsest and log2(brick_size) is the original / finest level.
-    virtual void decodeBrick(const uint32_t *brick_encoding, const uint32_t brick_encoding_length,
+    virtual void decodeBrick(const uint32_t *brick_encoding, uint32_t brick_encoding_length,
                              const uint32_t *brick_detail_encoding, const uint32_t brick_detail_encoding_length,
                              uint32_t *output_brick, glm::uvec3 valid_brick_size, int inv_lod) const = 0;
 
@@ -117,7 +117,8 @@ class CSGVBrickEncoder {
     }
 
     /// Decompresses a single brick in parallel.
-    /// @param brick_idx is used to read the begin and endpoint of the encoding from the brick_starts buffer.
+    /// @param brick_encoding memory location of the brick encoding.
+    /// @param brick_encoding_length length of the complete brick encoding in number of uint32 elements.
     /// @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
     /// @param valid_brick_size is used to clamp used voxels for border bricks. Values outside are undefined.
     /// @param target_inv_lod the LOD until which to decompress. 0 is the coarsest and log2(brick_size) is the original / finest level.
@@ -226,14 +227,14 @@ class CSGVBrickEncoder {
 
   protected:
     /// list of neighbor vectors per index (8 indices in total) where each index has 3 ivec3 vectors of type {-1, 1}^3
-    static constexpr const glm::ivec3 neighbor[8][3] = {{glm::ivec3({-1, 0, 0}), glm::ivec3({0, -1, 0}), glm::ivec3({0, 0, -1})},
-                                                        {glm::ivec3({1, 0, 0}), glm::ivec3({0, -1, 0}), glm::ivec3({0, 0, -1})},
-                                                        {glm::ivec3({-1, 0, 0}), glm::ivec3({0, 1, 0}), glm::ivec3({0, 0, -1})},
-                                                        {glm::ivec3({1, 0, 0}), glm::ivec3({0, 1, 0}), glm::ivec3({0, 0, -1})},
-                                                        {glm::ivec3({-1, 0, 0}), glm::ivec3({0, -1, 0}), glm::ivec3({0, 0, 1})},
-                                                        {glm::ivec3({1, 0, 0}), glm::ivec3({0, -1, 0}), glm::ivec3({0, 0, 1})},
-                                                        {glm::ivec3({-1, 0, 0}), glm::ivec3({0, 1, 0}), glm::ivec3({0, 0, 1})},
-                                                        {glm::ivec3({1, 0, 0}), glm::ivec3({0, 1, 0}), glm::ivec3({0, 0, 1})}};
+    static constexpr glm::ivec3 neighbor[8][3] = {{glm::ivec3({-1, 0, 0}), glm::ivec3({0, -1, 0}), glm::ivec3({0, 0, -1})},
+                                                  {glm::ivec3({1, 0, 0}), glm::ivec3({0, -1, 0}), glm::ivec3({0, 0, -1})},
+                                                  {glm::ivec3({-1, 0, 0}), glm::ivec3({0, 1, 0}), glm::ivec3({0, 0, -1})},
+                                                  {glm::ivec3({1, 0, 0}), glm::ivec3({0, 1, 0}), glm::ivec3({0, 0, -1})},
+                                                  {glm::ivec3({-1, 0, 0}), glm::ivec3({0, -1, 0}), glm::ivec3({0, 0, 1})},
+                                                  {glm::ivec3({1, 0, 0}), glm::ivec3({0, -1, 0}), glm::ivec3({0, 0, 1})},
+                                                  {glm::ivec3({-1, 0, 0}), glm::ivec3({0, 1, 0}), glm::ivec3({0, 0, 1})},
+                                                  {glm::ivec3({1, 0, 0}), glm::ivec3({0, 1, 0}), glm::ivec3({0, 0, 1})}};
 
     static uint32_t valueOfNeighbor(const MultiGridNode *grid, const MultiGridNode *parent_grid,
                                     const glm::uvec3 &brick_pos, uint32_t local_lod_i, uint32_t lod_width,

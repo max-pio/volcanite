@@ -1,4 +1,4 @@
-//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//  Copyright (C) 2024, Patrick Jaberg, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
 #pragma once
 
 #include <vvv/core/Shader.hpp>
-#include <vvv/core/preamble.hpp>
 
 #include "color.hpp"
 
@@ -28,7 +27,7 @@ namespace vvv {
 
 enum class ChannelOpacityState { AlphaPremultiplied,
                                  PostMultiplied };
-const ChannelOpacityState DefaultChannelOpacityState = ChannelOpacityState::PostMultiplied;
+constexpr ChannelOpacityState DefaultChannelOpacityState = ChannelOpacityState::PostMultiplied;
 
 class TransferFunction1D : public TransferFunction {
 
@@ -59,6 +58,8 @@ class TransferFunction1D : public TransferFunction {
     TransferFunction1D(vvv::GpuContextPtr ctx, std::initializer_list<uint16_t> values, ChannelOpacityState channelOpacityState = DefaultChannelOpacityState)
         : TransferFunction1D(ctx, std::data(values), values.size(), channelOpacityState) {}
 
+    ~TransferFunction1D() override = default;
+
     [[nodiscard]] std::pair<vvv::AwaitableHandle, std::shared_ptr<vvv::Buffer>> upload() override {
         auto ret = m_texture->upload(m_data.data());
         m_texture->setName("tf1d.1d_texture");
@@ -87,7 +88,7 @@ struct TransferFunction1D::solidColor : public TransferFunction1D {
 };
 
 struct TransferFunction1D::fullyTransparent : public TransferFunction1D {
-    fullyTransparent(vvv::GpuContextPtr ctx) : TransferFunction1D(ctx, {0, 0, 0, 0}) {}
+    explicit fullyTransparent(vvv::GpuContextPtr ctx) : TransferFunction1D(ctx, {0, 0, 0, 0}) {}
 };
 
 struct TransferFunction1D::linearRamp : public TransferFunction1D {

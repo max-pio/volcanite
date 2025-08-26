@@ -15,9 +15,6 @@
 
 #include "volcanite/renderer/CompressedSegmentationVolumeBrickViewer.hpp"
 
-#include <random>
-#include <vvv/core/Buffer.hpp>
-
 #include "glm/gtc/matrix_transform.hpp"
 
 #include "stb/stb_image.hpp"
@@ -167,8 +164,8 @@ void CompressedSegmentationVolumeBrickViewer::releaseSwapchain() {
 
 void CompressedSegmentationVolumeBrickViewer::updateUniformDescriptorset() {
     const auto wsi = getCtx()->getWsi();
-    const auto camera = wsi->getCamera();
-    const auto screenExtent = wsi->getScreenExtent();
+    // const auto camera = wsi->getCamera();
+    // const auto screenExtent = wsi->getScreenExtent();
 
     glm::vec4 physical_volume_size(1.f, 1.f, 1.f, 1.f);
 

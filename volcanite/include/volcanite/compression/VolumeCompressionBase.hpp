@@ -40,6 +40,8 @@ struct MultiGridNode {
 class VolumeCompressionBase {
 
   public:
+    virtual ~VolumeCompressionBase() = default;
+
     /**
      * Constructs a multigrid in out from finest to coarsest level for the given brick in the volume.
      * brick_dim must be a power of 2 but can reach to areas outside of the volume.
@@ -246,7 +248,7 @@ class VolumeCompressionBase {
         if ((brick_dim.x == 1 && brick_dim.y == 1 && brick_dim.z == 1) || glm::any(glm::greaterThanEqual(brick_start, volume_dim)))
             return true;
 
-        uint32_t v = volume[voxel_pos2idx(brick_start, volume_dim)];
+        const uint32_t v = volume[voxel_pos2idx(brick_start, volume_dim)];
         glm::uvec3 pos;
         for (pos.z = 0u; pos.z < brick_dim.z; pos.z++) {
             for (pos.y = 0u; pos.y < brick_dim.y; pos.y++) {
@@ -266,7 +268,7 @@ class VolumeCompressionBase {
      * Compresses and decompresses the given volume, then checks for all differences.
      * @return true if output and input are the same, false if there are (de)compression errors.
      */
-    virtual bool test(const std::vector<uint32_t> &volume, const glm::uvec3 volume_dim, bool compress_first = false) {
+    virtual bool test(const std::vector<uint32_t> &volume, const glm::uvec3 volume_dim, const bool compress_first = false) {
         assert(volume.size() == volume_dim.x * volume_dim.y * volume_dim.z && "volume size does not match dimension");
 
         Logger(Info) << "Running compression test ------------------------------------";
@@ -277,7 +279,7 @@ class VolumeCompressionBase {
             Logger(Info) << " finished in " << timer.restart() << "s with compression ratio " << getCompressionRatio() << "%";
         }
         Logger(Info) << "Decode";
-        std::shared_ptr<std::vector<uint32_t>> out = decompress();
+        const std::shared_ptr<std::vector<uint32_t>> out = decompress();
         Logger(Info) << " finished in " << timer.elapsed() << "s";
 
         if (volume.size() != out->size()) {

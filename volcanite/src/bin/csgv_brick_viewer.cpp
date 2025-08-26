@@ -45,7 +45,7 @@ int csgv_brick_viewer(int argc, char *argv[]) {
         return ret;
     }
 
-    std::string appName = "Compressed Segmentation Volume Brick Viewer";
+    const std::string appName = "Compressed Segmentation Volume Brick Viewer";
 
     // create and run the interactive Application
     const auto renderer = std::make_shared<CompressedSegmentationVolumeBrickViewer>();
@@ -58,3 +58,4 @@ int csgv_brick_viewer(int argc, char *argv[]) {
 ENTRYPOINT(csgv_brick_viewer)
 
 #endif // HEADLESS
+

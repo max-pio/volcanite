@@ -16,7 +16,9 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "csgv_constants.incl"
@@ -36,16 +38,23 @@ struct CSGVCompressionEvaluationResults {
     int original_volume_bytes_per_voxel = 0;
     glm::uvec3 volume_dim = {0u, 0u, 0u};
     uint32_t volume_labels = 0u;
-    //    uint32_t labels_per_brick_min = 0u;
-    //    uint32_t labels_per_brick_avg = 0u;
-    //    uint32_t labels_per_brick_max = 0u;
-    //    uint32_t palette_size_min = 0u;
-    //    uint32_t palette_size_avg = 0u;
-    //    uint32_t palette_size_max = 0u;
-    //    double brick_min_bytes = 0u;
-    //    double brick_avg_bytes = 0u;
-    //    double brick_max_bytes = 0u;
-    //    double header_bytes = 0u;
+    uint32_t brick_size = 0u;
+    std::string operation_mask = {};
+    std::string encoding_mode = {};
+    bool random_access = false;
+    bool detail_separation = false;
+    uint32_t brick_labels_min = 0u;
+    double brick_labels_avg = 0u;
+    uint32_t brick_labels_max = 0u;
+    uint32_t brick_palette_size_min = 0u;
+    double brick_palette_size_avg = 0u;
+    uint32_t brick_palette_size_max = 0u;
+    uint32_t brick_palette_duplicates_min = 0u;
+    double brick_palette_duplicates_avg = 0u;
+    uint32_t brick_palette_duplicates_max = 0u;
+    double brick_bytes_min = 0u;
+    double brick_bytes_avg = 0u;
+    double brick_bytes_max = 0u;
 };
 
 struct CSGVDecompressionEvaluationResults {
@@ -65,6 +74,12 @@ struct CSGVRenderEvaluationResults {
     double frame_max_ms = -1.;
     double frame_ms[16] = {-1.};
     double total_ms = 0.;
+    glm::dvec4 frame_gpu_min_ms = {-1.,-1.,-1.,-1.};
+    glm::dvec4 frame_gpu_avg_ms = {-1.,-1.,-1.,-1.};
+    glm::dvec4 frame_gpu_sdv_ms = {-1.,-1.,-1.,-1.};
+    glm::dvec4 frame_gpu_med_ms = {-1.,-1.,-1.,-1.};
+    glm::dvec4 frame_gpu_max_ms = {-1.,-1.,-1.,-1.};
+    glm::dvec4 frame_gpu_ms[16] = {{-1.,-1.,-1.,-1.}};
     double mem_framebuffers_bytes = 0.;
     double mem_ubos_bytes = 0.;
     double mem_materials_bytes = 0.;
@@ -74,6 +89,8 @@ struct CSGVRenderEvaluationResults {
     double mem_cache_fill_rate = 0.;
     double mem_empty_space_bytes = 0.;
     double mem_total_bytes = 0.;
+    uint32_t mem_cache_voxels_per_uint = 1; ///< how many label (indices) are stored per uint in the cache. If no cache paletting is used, this is 1.
+    double mem_cache_packing_factor = 1.;   ///< effective packing factor in [1;8] <= voxels_per_uint (base elements must fit 8 voxels in an integer number of uints).
     int accumulated_frames = 0;
     int min_samples_per_pixel = 0;
     int max_samples_per_pixel = 0;
@@ -86,7 +103,7 @@ struct CSGVRenderEvaluationResults {
 class EvaluationLogExport {
 
   private:
-    static std::string format_evaluation_string(std::string format_string, const std::string &eval_name,
+    static std::string format_evaluation_string(std::string_view format_string, const std::string &eval_name,
                                                 int argc, char *argv[],
                                                 CSGVCompressionEvaluationResults comp_res,
                                                 CSGVDecompressionEvaluationResults decomp_res,
@@ -94,6 +111,16 @@ class EvaluationLogExport {
 
   public:
     static std::vector<std::string> get_all_evaluation_keys();
+
+    // TODO: should use std::expected instead of optional when moving to C++23
+
+    /// Checks if all evaluation keys {k:[options]} are available.
+    /// @returns empty on success, otherwise an error string describing the first detected error key.
+    static std::optional<std::string> check_evaluation_string(std::string_view format_string);
+
+    /// If the logfile exists: Checks if all specified evaluation keys {k:[options]} are available.
+    /// @returns empty on success, otherwise an error string describing the first detected error key.
+    static std::optional<std::string> check_eval_logfile(const std::string &eval_logfile);
 
     static int write_eval_logfile(const std::string &eval_logfile, const std::string &eval_name, int argc, char *argv[],
                                   CSGVCompressionEvaluationResults comp_res,

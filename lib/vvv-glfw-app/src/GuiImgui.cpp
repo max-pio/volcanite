@@ -173,11 +173,11 @@ void GuiImgui::renderGui() {
         auto columns = window.second.getColumns();
         for (int c_id = 0; c_id < columns.size(); c_id++) {
             ImGuiWindowFlags window_flags = ImGuiWindowFlags_HorizontalScrollbar;
-            ImGui::BeginChild((window.second.getName() + std::to_string(c_id)).c_str(), ImVec2(ImGui::GetContentRegionAvail().x / columns.size(), 0), false, window_flags);
+            ImGui::BeginChild((window.second.getName() + std::to_string(c_id)).c_str(), ImVec2(ImGui::GetContentRegionAvail().x / static_cast<float>(columns.size()), 0.f), false, window_flags);
 
             // iterate over GUI entries
             for (BaseGuiEntry *be : GuiInterface::getEntriesForColumn(columns[c_id])) {
-                ImGui::PushID(be->id);
+                ImGui::PushID(static_cast<int>(be->id));
 
                 auto gui_get = []<class T>(GuiEntry<T> *e) -> T {
                     if (e->getter)
@@ -185,7 +185,7 @@ void GuiImgui::renderGui() {
                     else
                         return *e->value;
                 };
-                auto gui_set = []<class T>(GuiEntry<T> *e, bool changed, T value) {
+                auto gui_set = []<class T>(GuiEntry<T> *e, bool changed, const T &value) {
                     if (changed) {
                         if (e->setter)
                             e->setter(value);
@@ -246,9 +246,9 @@ void GuiImgui::renderGui() {
                     auto value = gui_get(e);
                     bool changed;
                     if (e->min.has_value() && e->max.has_value())
-                        changed = ImGui::DragIntRange2(e->label.c_str(), &value.x, &value.y, glm::pow(10, -e->floatDecimals), e->min.value().r, e->max.value().r);
+                        changed = ImGui::DragIntRange2(e->label.c_str(), &value.x, &value.y, static_cast<float>(glm::pow(10, -e->floatDecimals)), e->min.value().r, e->max.value().r);
                     else
-                        changed = ImGui::DragIntRange2(e->label.c_str(), &value.x, &value.y, glm::pow(10, -e->floatDecimals), 0.f, 0.f);
+                        changed = ImGui::DragIntRange2(e->label.c_str(), &value.x, &value.y, static_cast<float>(glm::pow(10, -e->floatDecimals)), 0.f, 0.f);
                     gui_set(e, changed, value);
                     break;
                 }
@@ -303,9 +303,9 @@ void GuiImgui::renderGui() {
                     auto value = gui_get(e);
                     bool changed;
                     if (e->min.has_value() && e->max.has_value())
-                        changed = ImGui::DragFloatRange2(e->label.c_str(), &value.x, &value.y, glm::pow(10, -e->floatDecimals), e->min.value().r, e->max.value().r, ("%." + std::to_string(e->floatDecimals) + "f").c_str());
+                        changed = ImGui::DragFloatRange2(e->label.c_str(), &value.x, &value.y, static_cast<float>(glm::pow(10, -e->floatDecimals)), e->min.value().r, e->max.value().r, ("%." + std::to_string(e->floatDecimals) + "f").c_str());
                     else
-                        changed = ImGui::DragFloatRange2(e->label.c_str(), &value.x, &value.y, glm::pow(10, -e->floatDecimals), 0.f, 0.f, ("%." + std::to_string(e->floatDecimals) + "f").c_str());
+                        changed = ImGui::DragFloatRange2(e->label.c_str(), &value.x, &value.y, static_cast<float>(glm::pow(10, -e->floatDecimals)), 0.f, 0.f, ("%." + std::to_string(e->floatDecimals) + "f").c_str());
                     gui_set(e, changed, value);
                     break;
                 }

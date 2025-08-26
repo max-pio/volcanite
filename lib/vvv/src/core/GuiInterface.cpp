@@ -79,7 +79,7 @@ void GuiInterface::GuiTFSegmentedVolumeEntry::updateVectorColormap(int material)
         break;
     case GuiInterface::GuiTFSegmentedVolumeEntry::SVTFImport: {
         mat.tf->m_interpolationColorSpace = VectorTransferFunction::RGB;
-        int targetSizeControlPointsRgb = d.color.size() * 4;
+        size_t targetSizeControlPointsRgb = d.color.size() * 4;
         if (mat.tf->m_controlPointsRgb.size() != targetSizeControlPointsRgb) {
             mat.tf->m_controlPointsRgb.resize(targetSizeControlPointsRgb);
         }

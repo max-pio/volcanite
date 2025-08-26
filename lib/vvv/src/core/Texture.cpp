@@ -30,11 +30,11 @@ void Texture::setName(const std::string &name) {
 }
 
 size_t Texture::memorySize(vk::ImageAspectFlags aspectMask) const {
-    double block_size = static_cast<double>(FormatElementSize(static_cast<VkFormat>(format), static_cast<VkImageAspectFlags>(aspectMask)));
-    VkExtent3D block_extent = FormatTexelBlockExtent(static_cast<VkFormat>(format));
-    uint32_t texels_per_block = block_extent.width * block_extent.height * block_extent.depth;
-    uint32_t texels = width * height * depth;
-    uint32_t blocks = texels / texels_per_block;
+    const size_t block_size = (FormatElementSize(static_cast<VkFormat>(format), static_cast<VkImageAspectFlags>(aspectMask)));
+    const VkExtent3D block_extent = FormatTexelBlockExtent(static_cast<VkFormat>(format));
+    const uint32_t texels_per_block = block_extent.width * block_extent.height * block_extent.depth;
+    const uint32_t texels = width * height * depth;
+    const uint32_t blocks = texels / texels_per_block;
 
     return blocks * block_size;
 }
@@ -83,7 +83,7 @@ vk::ImageCreateInfo Texture::defaultImageCreateInfo() const {
 }
 
 vk::ImageMemoryBarrier Texture::queueOwnershipTransfer(uint32_t fromQueueFamilyIndex, vk::AccessFlagBits srcAccess, uint32_t toQueueFamilyIndex, vk::AccessFlagBits dstAccess,
-                                                       vk::ImageLayout transitionToLayout) {
+                                                       vk::ImageLayout transitionToLayout) const {
 
     // const bool hasQueueTransition = fromQueueFamilyIndex != toQueueFamilyIndex;
     // const bool hasLayoutTransition = transitionToLayout != descriptor.imageLayout;

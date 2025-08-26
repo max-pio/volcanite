@@ -34,9 +34,9 @@ namespace volcanite {
 class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuContext {
 
   public:
-    CompressedSegmentationVolumeRenderer(bool release_version = false) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false),
-                                                                         m_pcamera_hash(0ul), m_resolution(1920, 1080), m_accumulated_frames(0), m_frame(0u),
-                                                                         m_release_version(release_version) {
+    explicit CompressedSegmentationVolumeRenderer(bool release_version) : WithGpuContext(nullptr), m_compressed_segmentation_volume(nullptr), m_data_changed(false),
+                                                                          m_pcamera_hash(0ul), m_accumulated_frames(0), m_resolution(1920, 1080), m_frame(0u),
+                                                                          m_release_version(release_version), m_req_limit() {
         // initialize camera in orbital mode
         m_camera = std::make_shared<vvv::Camera>(true);
 
@@ -100,7 +100,7 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
         }
     }
 
-    ~CompressedSegmentationVolumeRenderer() {
+    ~CompressedSegmentationVolumeRenderer() override {
         resetGPU();
         m_compressed_segmentation_volume.reset();
     }
@@ -127,7 +127,12 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
     /// Releases all GPU states and resources but does not reset the segmentation volume.
     void resetGPU();
 
-    void setRenderResolution(vk::Extent2D resolution) {
+
+    /// Resets all rendering caches, framebuffer accumulation, and other accumulated states between multiple evaluation runs.
+    /// For evaluation purposes.
+    void resetAllEvaluationStates() override;
+
+    void setRenderResolution(const vk::Extent2D resolution) {
         m_resolution = resolution;
 
         // trigger a "swapchain" recreation
@@ -138,18 +143,17 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
         }
     }
 
-    vk::Extent2D getRenderResolution() const {
+    [[nodiscard]] vk::Extent2D getRenderResolution() const {
         return m_resolution;
     }
 
     /// Obtains the rendering resolution from the windowing system but limits it to 4K (4096x2160).
     void updateRenderResolutionFromWSI() {
         // TODO: remove hardcoded render resolution or expose it in the GUI as: [max | fix] res: [1920] [1080]
-        const vk::Extent2D max_resolution = {4096u, 2160u};
+        constexpr vk::Extent2D max_resolution = {4096u, 2160u};
 
-        auto wsi = getCtx()->getWsi();
         // context is associated with a window
-        if (wsi) {
+        if (const auto wsi = getCtx()->getWsi()) {
             auto screen = wsi->getScreenExtent();
 
             float oversizeFactor = static_cast<float>(screen.width) / static_cast<float>(max_resolution.width);
@@ -211,9 +215,9 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
         };
         // if the given path does not contain any file system control characters, check if it matches a preset
         if (path.find('.') == std::string::npos && path.find('~') == std::string::npos && path.find('/') == std::string::npos && path.find('\\') == std::string::npos) {
-            for (int i = 0; i < m_data_vcfg_presets.size(); i++) {
-                if (to_tag(m_data_vcfg_presets[i].first) == to_tag(path))
-                    return &m_data_vcfg_presets[i];
+            for (const auto &m_data_vcfg_preset : m_data_vcfg_presets) {
+                if (to_tag(m_data_vcfg_preset.first) == to_tag(path))
+                    return &m_data_vcfg_preset;
             }
         }
         return nullptr;
@@ -232,20 +236,20 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
         bool decode_from_shared_memory = false; ///< requires random access and CACHE_BRICKS cache_mode
         uint32_t cache_mode = CACHE_BRICKS;     ///< CACHE_NOTHING, CACHE_VOXELS, or CACHE_BRICKS (req. w.o. random access)
         uint32_t empty_space_resolution = 2u;   ///< n³ voxels are grouped into one empty space entry. 0 to disable.
-        std::string shader_defines = "";        ///< Space separated additional definitions passed on to shader compilers
+        std::string shader_defines = {};        ///< Space separated additional definitions passed on to shader compilers
     };
 
     /// @brief Configures the CSGV decoding and caching behaviour of the renderer.
-    ///
-    /// @param cache_size_MB the target cache size for the renderer in MB.
+    /// @param config Render configuration decoding.
+    /// cfg.cache_size_MB the target cache size for the renderer in MB.
     /// A size of 0 tries to allocate the maximum available GPU memory.
     /// The cache size must be specified before startup to have an effect.
     /// Actual cache size may be lower if less space is needed or not enough GPU memory is available.
-    /// @param palettized_cached if true, the cache stores palette indices instead of labels. Allows to store larger
+    /// cfg.palettized_cached if true, the cache stores palette indices instead of labels. Allows to store larger
     /// portions of the volume in cache at the expense of a performance decrease.
-    /// @param decode_from_shared_memory if true, the encoding will be copied to shared memory before decoding.
+    /// cfg.decode_from_shared_memory if true, the encoding will be copied to shared memory before decoding.
     /// only works in combination with a random access encoding.
-    void setDecodingParameters(CSGVRenderingConfig config) {
+    void setDecodingParameters(const CSGVRenderingConfig &config) {
         // TODO: instead of copying all CSGVRenderingConfig parameters, simply store such a struct as member
         m_target_cache_size_MB = config.cache_size_MB;
         if (m_target_cache_size_MB * 1024ul * 1024ul > 4294967295ul) {
@@ -267,28 +271,42 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
     void startFrameTimeTracking() override {
         m_enable_frame_time_tracking = true;
         m_last_frame_times.clear();
+        m_last_frame_times.reserve(4096);
         m_last_frame_start_time.reset();
+        if (m_pass->isFrameTimeTrackingAvailable())
+            m_pass->startFrameTimeTracking();
     }
     /// Stops the tracking. Should be immediately called after last renderNextFrame. If awaitLastFrameFinished is set,
     /// either to {} or an awaitable list, the method waits for the awaitables to finish and adds a final timing
     /// measurement for the last frame. Query the results with getLastEvaluationResults()
     void stopFrameTimeTracking(std::optional<AwaitableList> awaitLastFrameFinished) override {
-        // if the last frame is rendering, wait for completion and track
-        if (awaitLastFrameFinished.has_value()) {
+        if (!m_enable_frame_time_tracking)
+            return;
+
+        // if the last frame is rendering, wait for completion
+        if (awaitLastFrameFinished.has_value())
             getCtx()->sync->hostWaitOnDevice(awaitLastFrameFinished.value(), 60 * 1000000000ull);
-            if (m_enable_frame_time_tracking && m_last_frame_start_time.has_value()) {
-                m_last_frame_times.emplace_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                                                        std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value())
-                                                                        .count()) /
-                                                1000000.);
-                m_last_frame_start_time.reset();
-            }
+
+        if (m_last_frame_start_time.has_value()) {
+            m_last_frame_times.emplace_back(static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                                   std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value())
+                                                                   .count()) /
+                                            1000000.f);
         }
         m_enable_frame_time_tracking = false;
         m_last_frame_start_time.reset();
+        if (m_pass->isFrameTimeTrackingAvailable())
+            m_pass->stopFrameTimeTracking(awaitLastFrameFinished);
     }
 
+    const std::vector<float> &getLastTrackingFrameTimes() override { return m_last_frame_times; }
+    const std::vector<glm::vec4> &getLastTrackingFrameTimesGPU() override { return m_pass->getLastFrameTimeTrackingResults(); }
+
     void exportCurrentFrameToImage(std::string image_path) override {
+        if (image_path.empty()) {
+            m_download_frame_to_image_file = {};
+            return;
+        }
         if (!image_path.ends_with(".png") && !image_path.ends_with(".jpg") && !image_path.ends_with(".jpeg")) {
             image_path.append(".png");
         }
@@ -317,7 +335,7 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
     glm::vec4 m_background_color_b = glm::vec4{1.f, 1.f, 1.f, 1.f};
     int m_subsampling = 0; ///< only one pixel per [2^subsampl, 2^subsampl] pixel block is rendered per frame
     bool m_tonemap_enabled = false;
-    float m_gamma = 1.f, m_brightness = 1.f, m_contrast = 1.f;
+    float m_exposure = 1.f, m_gamma = 1.f, m_brightness = 1.f, m_contrast = 1.f;
     bool m_global_illumination_enabled = false;
     bool m_envmap_enabled = false;
     float m_shadow_pathtracing_ratio = 1.0f;
@@ -345,6 +363,8 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
     float m_lod_bias = 0.f;
     bool m_blue_noise = true;
     uint32_t m_debug_vis_flags = 0u;
+    bool m_constant_mouse_pos_enabled = false;
+    glm::vec2 m_constant_mouse_pos = glm::vec2{0.5f};
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
     int m_target_accum_frames = 128;
@@ -368,7 +388,7 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
     void updateRenderUpdateFlags();
     void updateUniformDescriptorset();
 
-    float getCacheFillRate() const {
+    [[nodiscard]] float getCacheFillRate() const {
         const uint32_t cache_elements_per_finest_lod = (m_compressed_segmentation_volume->getBrickSize() / 2u) << 3u;
         return glm::clamp(static_cast<float>(m_last_gpu_stats.used_cache_base_elements) / static_cast<float>(m_cache_capacity - cache_elements_per_finest_lod), 0.f, 1.f);
     }
@@ -481,19 +501,20 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
         bool random_area_pixel = false;        ///< if true, the next pixel for the area is selected randomly instead by min. spp
         int spp_delta = 8u;                    ///< if the min. rendered spp are delta many frames behind the max. spp, limit brick requests
         uint32_t area_start_frame = 0u;        ///< accumulation frame index at which the current request area position was set
-        glm::ivec2 area_min_pixel;             ///< pixel that is the representative in the area (the old global min. pixel)
+        glm::ivec2 area_min_pixel = {0, 0};    ///< pixel that is the representative in the area (the old global min. pixel)
         uint32_t area_min_pixel_last_spp = 0u; ///< minimum samples the area pixel received at start of this area duration (INVALID if unknown)
         int area_duration = 16;                ///< how many times a pixel is rendered before the request area moves to another position
         int area_size = 0;                     ///< if <= 0: no request limitation. otherwise: pixel area that can request bricks
         glm::ivec2 area_pos = {0, 0};          ///< start position of the area of pixels that can request bricks
-        glm::ivec2 global_min_pixel;           ///< pixel that globally has the minimum number of accumulated samples so far
+        glm::ivec2 global_min_pixel = {0, 0};  ///< pixel that globally has the minimum number of accumulated samples so far
     } m_req_limit;
 
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
 
     bool m_enable_frame_time_tracking = false;
     std::optional<std::chrono::high_resolution_clock::time_point> m_last_frame_start_time = {};
-    std::vector<double> m_last_frame_times = {};
+    std::vector<float> m_last_frame_times = {};
 };
 
 } // namespace volcanite
+

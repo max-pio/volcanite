@@ -22,20 +22,22 @@ list(APPEND EXT_TARGETS glm)
 # required packages
 find_package(Vulkan REQUIRED)
 
-# extern shaderc
-set(SHADERC_SKIP_TESTS ON CACHE INTERNAL "")
-set(SHADERC_SKIP_EXAMPLES ON CACHE INTERNAL "")
-add_subdirectory(extern/shaderc)
-list(APPEND EXT_TARGETS GenericCodeGen MachineIndependent OSDependent SPIRV-Tools-diff SPIRV-Tools-link
-        SPIRV-Tools-lint SPIRV-Tools-opt SPIRV-Tools-reduce SPIRV-Tools-shared SPIRV-Tools-static SPIRV SPVRemapper
-        add-copyright build-version check-copyright core_tables enum_string_mapping extinst_tables
-        glslang-default-resource-limits glslang-standalone glslang glslc glslc_exe shaderc shaderc_combined-pkg-config
-        shaderc_combined shaderc_shared shaderc_static-pkg-config shaderc_util spirv-as spirv-cfg spirv-diff spirv-dis
-        spirv-link spirv-lint spirv-objdump spirv-opt spirv-reduce spirv-remap spirv-tools-build-version
-        spirv-tools-cpp-example spirv-tools-header-DebugInfo spirv-tools-header-NonSemanticShaderDebugInfo100
-        spirv-tools-header-OpenCLDebugInfo100 spirv-tools-pkg-config spirv-tools-vimsyntax spirv-val spv-tools-cldi100
-        spv-tools-clspvreflection spv-tools-debuginfo spv-tools-shdi100 spv-tools-spv-amd-gs spv-tools-spv-amd-sb
-        spv-tools-spv-amd-sevp spv-tools-spv-amd-stm spv-tools-vkspreflection update_mappings testdata)
+# extern shaderc (only if not using the system GLSLANG compiler)
+if(NOT USE_SYSTEM_GLSLANG)
+    set(SHADERC_SKIP_TESTS ON CACHE INTERNAL "")
+    set(SHADERC_SKIP_EXAMPLES ON CACHE INTERNAL "")
+    add_subdirectory(extern/shaderc)
+    list(APPEND EXT_TARGETS GenericCodeGen MachineIndependent OSDependent SPIRV-Tools-diff SPIRV-Tools-link
+            SPIRV-Tools-lint SPIRV-Tools-opt SPIRV-Tools-reduce SPIRV-Tools-shared SPIRV-Tools-static SPIRV SPVRemapper
+            add-copyright build-version check-copyright core_tables enum_string_mapping extinst_tables
+            glslang-default-resource-limits glslang-standalone glslang glslc glslc_exe shaderc shaderc_combined-pkg-config
+            shaderc_combined shaderc_shared shaderc_static-pkg-config shaderc_util spirv-as spirv-cfg spirv-diff spirv-dis
+            spirv-link spirv-lint spirv-objdump spirv-opt spirv-reduce spirv-remap spirv-tools-build-version
+            spirv-tools-cpp-example spirv-tools-header-DebugInfo spirv-tools-header-NonSemanticShaderDebugInfo100
+            spirv-tools-header-OpenCLDebugInfo100 spirv-tools-pkg-config spirv-tools-vimsyntax spirv-val spv-tools-cldi100
+            spv-tools-clspvreflection spv-tools-debuginfo spv-tools-shdi100 spv-tools-spv-amd-gs spv-tools-spv-amd-sb
+            spv-tools-spv-amd-sevp spv-tools-spv-amd-stm spv-tools-vkspreflection update_mappings testdata)
+endif()
 
 # extern rANS encoding library
 add_subdirectory(extern/ryg_rans)

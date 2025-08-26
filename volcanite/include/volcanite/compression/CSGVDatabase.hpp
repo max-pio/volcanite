@@ -1,4 +1,4 @@
-//  Copyright (C) 2024, Max Piochowiak and Fabian Schiekel, Karlsruhe Institute of Technology
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -15,8 +15,6 @@
 
 #pragma once
 
-#include "vvv/volren/Volume.hpp"
-
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/compression/CompSegVolHandler.hpp"
 
@@ -26,14 +24,10 @@
 #include <string>
 #include <vector>
 
-#include <SQLiteCpp/SQLiteCpp.h>
-
 // forward decl
 namespace SQLite {
 class Database;
 }
-
-using namespace vvv;
 
 namespace volcanite {
 
@@ -72,13 +66,13 @@ class CSGVDatabase {
         m_attribute_minmax = {glm::vec2(0.f, static_cast<float>(m_label_count))};
     }
 
-    bool isDummy() { return !m_attribute_names.empty() && m_db == nullptr; }
+    [[nodiscard]] bool isDummy() const { return !m_attribute_names.empty() && (m_db == nullptr); }
 
     /// Updates the min / max values of the csgv_id dummy attribute, i.e. the volume labels, from the given volume.
     void updateDummyMinMax(const CompressedSegmentationVolume &csgv) {
         uint32_t min_id = ~0u;
         uint32_t max_id = 0u;
-        size_t brick_idx_count = csgv.getBrickIndexCount();
+        const size_t brick_idx_count = csgv.getBrickIndexCount();
 
 #pragma omp parallel for default(none) shared(csgv, brick_idx_count) reduction(min : min_id) reduction(max : max_id)
         for (size_t brick_idx = 0; brick_idx < brick_idx_count; brick_idx++) {
@@ -93,19 +87,7 @@ class CSGVDatabase {
     }
 
     /// Creates a sql database from a dummy db, i.e. for adding extracted attributes later
-    void createDBfromDummyDB(const std::string &database_path, const CompressedSegmentationVolume &csgv) {
-        m_db = new SQLite::Database(database_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
-        m_db->exec("DROP TABLE IF EXISTS " + CSGV_ATTRIBUTE_TABLE);
-        m_db->exec("CREATE TABLE " + CSGV_ATTRIBUTE_TABLE + " (csgv_id INTEGER PRIMARY KEY)");
-
-        m_label_count = csgv.getNumberOfUniqueLabelsInVolume();
-
-        SQLite::Statement insertStmt(*m_db, "INSERT INTO " + CSGV_ATTRIBUTE_TABLE + " DEFAULT VALUES");
-        for (int i = 1; i <= csgv.getNumberOfUniqueLabelsInVolume(); i++) {
-            insertStmt.exec();
-            insertStmt.reset();
-        }
-    }
+    void createDBfromDummyDB(const std::string &database_path, const CompressedSegmentationVolume &csgv);
 
     /// If a precomputed CSGV database exists already, it is openend.
     /// If not, the given (possibly chunked) volume at input_path is preprocessed and the result is stored in a new database.
@@ -115,7 +97,7 @@ class CSGVDatabase {
     void importOrProcessChunkedVolume(const std::string &volume_input_path, const std::string &sqlite_output_path,
                                       const std::string &attribute_database = "", const std::string &attribute_table = "", const std::string &attribute_label = "",
                                       const std::string &attribute_csv_separator = "",
-                                      bool chunked_input_data = false, glm::uvec3 max_file_index = glm::uvec3(0u)) {
+                                      const bool chunked_input_data = false, const glm::uvec3 max_file_index = glm::uvec3(0u)) {
         if (!std::filesystem::exists(sqlite_output_path)) {
             processVolumeAndCreateSqlite(sqlite_output_path, volume_input_path,
                                          attribute_database, attribute_table, attribute_label, attribute_csv_separator,
@@ -160,7 +142,7 @@ class CSGVDatabase {
     /// Fills the memory area with the float attribute for the given attribute index. The buffer must be large enough
     /// to fit getLabelCount() elements. If maxSize > getLabelCount(), only getLabelCount() elements are written.
     /// @return the number of written elements
-    size_t getAttribute(int attributeIndex, float *begin, size_t maxSize);
+    size_t getAttribute(int attributeIndex, float *begin, size_t maxSize) const;
 
     void addAttributesIfNotExist(const CSGVAttributeExtractor *);
 

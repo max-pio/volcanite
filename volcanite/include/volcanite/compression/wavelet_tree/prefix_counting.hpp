@@ -21,8 +21,6 @@
 
 #pragma once
 
-#include <cstdint>
-
 #include "HuffmanWaveletMatrix.hpp"
 
 namespace volcanite {
@@ -71,3 +69,4 @@ void prefix_counting_huffman(const uint32_t *op_stream_in, uint32_t start4bit, u
                              BitVector &bit_vector_out, uint32_t *level_starts_out);
 
 } // namespace volcanite
+

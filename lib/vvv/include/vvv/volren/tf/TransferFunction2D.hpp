@@ -1,4 +1,4 @@
-//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//  Copyright (C) 2024, Patrick Jaberg, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@ class UniformReflected;
 class TransferFunction2D : public TransferFunction {
   public:
     TransferFunction2D(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering> &multiBuffering, uint32_t resolution, uint32_t queue = 0);
-    ~TransferFunction2D();
+    ~TransferFunction2D() override;
 
     [[nodiscard]] std::pair<vvv::AwaitableHandle, std::shared_ptr<vvv::Buffer>> upload() override;
 

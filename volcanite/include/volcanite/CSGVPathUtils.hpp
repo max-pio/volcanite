@@ -31,6 +31,7 @@ static std::string stripFileExtension(const std::string &path) {
     return path.substr(0, path.find_last_of('.'));
 }
 
+[[maybe_unused]]
 static std::filesystem::path expandPath(std::string path) {
     if (path.empty())
         return "";

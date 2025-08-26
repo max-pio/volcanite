@@ -21,9 +21,7 @@
 #include "vvv/util/Logger.hpp"
 #include "vvv/util/util.hpp"
 #include <cassert>
-#include <cstring>
 
-#include "BitVector.hpp"
 #include "WaveletMatrixBase.hpp"
 
 using namespace vvv;
@@ -40,11 +38,11 @@ struct HuffmanCode {
 
     static constexpr uint32_t CHC_BIT_SIZE = sizeof(bit_code) * 8;
 
-    constexpr HuffmanCode(uint32_t _length, uint32_t _bits) : length(_length), bit_code(_bits << (CHC_BIT_SIZE - length)) {
+    constexpr HuffmanCode(const uint32_t _length, const uint32_t _bits) : length(_length), bit_code(_bits << (CHC_BIT_SIZE - length)) {
         assert(length > 0 && length <= HWM_MAX_CHC_LENGTH && "invalid huffman code length");
     }
 
-    [[nodiscard]] uint32_t getBit(int i) const {
+    [[nodiscard]] uint32_t getBit(const int i) const {
         assert(i < length && "accessing out of bounds bit of huffman code");
         return (bit_code >> (CHC_BIT_SIZE - 1 - i)) & 1u;
     }
@@ -86,6 +84,7 @@ class HuffmanWaveletMatrix : public WaveletMatrixBase {
                   "CHC do not match the criteria by the Huffman Wavelet Matrix Encoder.");
 
     HuffmanWaveletMatrix(const uint32_t *op_stream_in, uint32_t start4bit, uint32_t end4bit);
+    ~HuffmanWaveletMatrix() override { delete m_fr; }
 
     [[nodiscard]] uint32_t access(uint32_t position) const override;
     [[nodiscard]] uint32_t rank(uint32_t position, uint32_t symbol) const override;
@@ -102,9 +101,9 @@ class HuffmanWaveletMatrix : public WaveletMatrixBase {
     [[nodiscard]] const uint32_t *getLevelStarts() const { return &m_level_starts[0]; }
 
     [[nodiscard]] size_t getByteSize() const override {
-        size_t bytes = (4 + 3 * HWM_LEVELS) * sizeof(uint32_t)             // ones_bef, zeros_on_lvl, lvl_starts, text_size
-                       + m_bv.getRawDataSize() * sizeof(BV_WordType)       // bit vector(s) for all levels
-                       + m_fr->getRawDataSize() * sizeof(BV_L12Type) + 12; // FlatRank incl. size and data pointer
+        const size_t bytes = (4 + 3 * HWM_LEVELS) * sizeof(uint32_t)             // ones_bef, zeros_on_lvl, lvl_starts, text_size
+                             + m_bv.getRawDataSize() * sizeof(BV_WordType)       // bit vector(s) for all levels
+                             + m_fr->getRawDataSize() * sizeof(BV_L12Type) + 12; // FlatRank incl. size and data pointer
         return bytes;
     }
 };

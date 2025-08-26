@@ -59,7 +59,7 @@ uint32_t createGraphicsQueues(std::vector<vk::QueueFamilyProperties> const &queu
         queueInfo.queueFamilyIndex = graphicsQueueFamilyIndex;
         queueInfo.queueCount = 1;
         queueInfo.pQueuePriorities = &defaultQueuePriority;
-        queueCreateInfos->push_back(queueInfo);
+        queueCreateInfos->emplace_back(queueInfo);
     }
 
     return graphicsQueueFamilyIndex;

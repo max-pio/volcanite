@@ -54,8 +54,8 @@ struct Buffer {
     /// upload() data to staging buffer and copy to this buffer
     void uploadWithStagingBuffer(vk::CommandBuffer commandBuffer, const Buffer &staging, const void *rawData, size_t byteSize, size_t dstOffset = 0ul) const;
     /// upload() data to new staging buffer and copy to this buffer using Awaitable API
-    std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> uploadWithStagingBuffer(const void *const rawData, size_t byteSize, const detail::OpenGLStyleSubmitOptions opts = {}) const;
-    std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> uploadWithStagingBuffer(const void *const rawData, size_t byteSize, size_t dstOffset, const detail::OpenGLStyleSubmitOptions opts = {}) const;
+    std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> uploadWithStagingBuffer(const void *const rawData, size_t byteSize, const detail::OpenGLStyleSubmitOptions &opts = {}) const;
+    std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> uploadWithStagingBuffer(const void *const rawData, size_t byteSize, size_t dstOffset, const detail::OpenGLStyleSubmitOptions &opts = {}) const;
     /// upload() data to new staging buffer and copy to this buffer using Awaitable API
     template <typename T>
     std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> uploadWithStagingBuffer(const std::vector<T> &data, const detail::OpenGLStyleSubmitOptions opts = {}) const {

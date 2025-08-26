@@ -1,4 +1,4 @@
-//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//  Copyright (C) 2024, Patrick Jaberg, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -18,8 +18,6 @@
 
 #include <imgui/imgui.h>
 
-#include <utility>
-
 namespace vvv {
 
 const std::map<PassSsao::Algorithm, const char *> PassSsao::algorithmToDefine = {
@@ -32,13 +30,13 @@ const std::map<PassSsao::Algorithm, const char *> PassSsao::algorithmToGuiNames 
     {Hbao, "HBAO"}};
 
 PassSsao::PassSsao(GpuContextPtr ctx, const std::shared_ptr<MultiBuffering> &multiBuffering, vk::ImageUsageFlags outputImageUsage, const std::string &label, Algorithm algorithm)
-    : WithGpuContext(ctx), WithMultiBuffering(multiBuffering), g_ssaoAlgorithm(algorithm),
-      SinglePassCompute(SinglePassComputeSettings{.ctx = ctx, .label = label, .multiBuffering = multiBuffering, .queueFamilyIndex = ctx->getQueueFamilyIndices().graphics.value()},
-                        SimpleGlslShaderRequest{
-                            .filename = "passes/ssao.comp",
-                            .defines = {algorithmToDefine.at(algorithm)},
-                            .label = label + ".shader",
-                        }),
+    : WithMultiBuffering(multiBuffering), WithGpuContext(ctx), SinglePassCompute(SinglePassComputeSettings{.ctx = ctx, .label = label, .multiBuffering = multiBuffering, .queueFamilyIndex = ctx->getQueueFamilyIndices().graphics.value()},
+                                                                                 SimpleGlslShaderRequest{
+                                                                                     .filename = "passes/ssao.comp",
+                                                                                     .defines = {algorithmToDefine.at(algorithm)},
+                                                                                     .label = label + ".shader",
+                                                                                 }),
+      g_ssaoAlgorithm(algorithm),
       m_outputImageUsage(outputImageUsage), m_perFrameConstantsUniform(nullptr) {}
 
 void PassSsao::addToGui(GuiInterface::GuiElementList *gui, std::optional<std::function<void(int, bool)>> shaderRecompileCallback) {
@@ -123,7 +121,7 @@ RendererOutput PassSsao::renderSsao(AwaitableList awaitBeforeExecution, BinaryAw
     if (hasDescriptors())
         commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_pipelineLayout, 0, m_descriptorSets->getActive(), nullptr);
 
-    auto extent = getCtx()->getWsi()->getScreenExtent();
+    const auto extent = getCtx()->getWsi()->getScreenExtent();
     commandBuffer.dispatch(extent.width / 16, extent.height / 16, 1);
 
     commandBuffer.end();

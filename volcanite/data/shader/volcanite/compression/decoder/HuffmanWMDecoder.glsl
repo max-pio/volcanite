@@ -12,6 +12,9 @@
 //
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
+// Parts of this code are based on the pasta-toolkit Wavelet Tree implementation by Florian Kurpicz which is licensed
+// under the GPLv3 license. https://github.com/pasta-toolbox/wavelet_tree
 
 #ifndef HUFFMAN_WM_DECODER_GLSL
 #define HUFFMAN_WM_DECODER_GLSL
@@ -456,7 +459,7 @@ void decompressCSGVVoxelToCache(const uint output_i, const uint target_inv_lod, 
                                                 #ifndef DECODE_FROM_SHARED_MEMORY
                                                     , wm_header, bit_vector
                                                 #endif
-// TODO: should the stop bits be moved to shared memory as well for DECODE_FORM_SHARED_MEMORY, as with WM_HEADER..?
+    // Note: stop bits could be moved to shared memory as well for DECODE_FORM_SHARED_MEMORY, as with WM_HEADER
                                                 #if (OP_MASK & OP_STOP_BIT)
                                                     #ifndef DECODE_FROM_SHARED_MEMORY
                                                         , getWMHStopBitsFromEncoding(brick_encoding,

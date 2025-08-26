@@ -68,8 +68,6 @@ std::shared_ptr<Volume<T>> load_volcanite_raw_(std::string url, std::string form
     }
 
     // header is always two lines
-    uint32_t lineNum = 2;
-
     float max_dim = static_cast<float>(std::max(img_width, std::max(img_height, img_depth)));
     float physical_size_x = static_cast<float>(img_width) / max_dim;
     float physical_size_y = static_cast<float>(img_height) / max_dim;

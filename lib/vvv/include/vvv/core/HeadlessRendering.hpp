@@ -17,37 +17,51 @@
 
 #include "vvv/core/DefaultGpuContext.hpp"
 #include "vvv/core/Renderer.hpp"
-#include "vvv/core/Shader.hpp"
 
 #include <memory>
-#include <optional>
 #include <thread>
 #include <utility>
 
 namespace vvv {
 
-class DummyGuiInterface : public vvv::GuiInterface {
+class DummyGuiInterface : public GuiInterface {
   public:
-    explicit DummyGuiInterface() {};
+    explicit DummyGuiInterface() = default;
+    virtual ~DummyGuiInterface() = default;
     void updateGui() override {}
 };
 
 struct HeadlessRenderingConfig {
-    const std::string &record_file_in = "";                    ///< if set, replays pre-recorded camera positions from this file
-    const std::string &video_fmt_file_out = "";                ///< if set, outputs video frames to file path with an integer fmt placeholder , e.g.
+    std::string record_file_in = {};                           ///< if set, replays pre-recorded camera positions from this file
+    std::string video_fmt_file_out = {};                       ///< if set, outputs video frames to file path with an integer fmt placeholder , e.g.
+    int video_out_frame_rate = 30;                             ///< when a video file is created it uses this frame rate. 0 for real time.
     size_t accumulation_samples = 1;                           ///< number of frames after which a new camera position is read and a video frame is exported
     void (*frameFinishedCallback)(RendererOutput *) = nullptr; ///< will be called each time a frame finished rendering after accumulation_samples
+    // if no record_file_in pre-recorded path is given:
+    int duration = 300;         ///< if a video output file and no record_file_in is given: either number of frames to render (> 0) or target duration in seconds (< 0).
+    const std::vector<float>* video_frame_times = nullptr; ///< if set, uses these pre-measured frame timings instead of measuring new timings
+    float cam_rot_start = 0.f;  ///< start camera rotation angle relative to the init config
+    float cam_rot_end = 0.f;    ///< end camera rotation angle relative to the init config
+    float cam_zoom_start = 0.f; ///< start camera zoom relative to the init config
+    float cam_zoom_end = 0.f;   ///< end camera zoom relative to the init config
+    enum Interpolant { Linear = 0,
+                       Smooth = 1,
+                       Smoother = 2 };
+    Interpolant interpolation = Linear;
+    float edge_start = 0.f;
+    float edge_end = 1.f;
+    bool verbose = true;        ///< logs the rendering progress to the console
 };
 
-class HeadlessRendering : public vvv::DefaultGpuContext, public std::enable_shared_from_this<HeadlessRendering> {
+class HeadlessRendering : public DefaultGpuContext, public std::enable_shared_from_this<HeadlessRendering> {
   private:
-    HeadlessRendering(std::string appName, std::shared_ptr<vvv::Renderer> renderer, std::shared_ptr<vvv::DebugUtilities> debugUtilities)
+    HeadlessRendering(std::string appName, std::shared_ptr<Renderer> renderer, std::shared_ptr<DebugUtilities> debugUtilities)
         : DefaultGpuContext({.debugUtilities = std::move(debugUtilities), .appName = std::move(appName)}),
           m_renderer(std::move(renderer)), m_pendingRecreation(false), m_gui(std::make_unique<DummyGuiInterface>()) {
           };
 
   public:
-    [[nodiscard]] static std::shared_ptr<HeadlessRendering> create(std::string appName, std::shared_ptr<vvv::Renderer> renderer, std::shared_ptr<vvv::DebugUtilities> debugUtilities = {}) {
+    [[nodiscard]] static std::shared_ptr<HeadlessRendering> create(std::string appName, std::shared_ptr<Renderer> renderer, std::shared_ptr<DebugUtilities> debugUtilities = {}) {
         // Not using std::make_shared<Best> because the constructor is private.
         return std::shared_ptr<HeadlessRendering>(new HeadlessRendering(std::move(appName), std::move(renderer), std::move(debugUtilities)));
     }
@@ -61,12 +75,14 @@ class HeadlessRendering : public vvv::DefaultGpuContext, public std::enable_shar
     void releaseResources();
 
     /// Run the renderloop for number_of_frames taking ownership of the current thread.
-    /// @param number_of_frames number of frames to render. can be zero if record_file_in is given to use record length.
-    /// @param record_file_in a previously recorded camera path that is played when rendering the frames. "" for none.
-    /// @param video_fmt_file_out image file path string that contains a single replacement field {*} for
+    /// The render engine will start and stop frame time tracking of the renderer.
+    /// @param cfg the rendeirng configuration
+    /// number_of_frames number of frames to render. can be zero if record_file_in is given to use record length.
+    /// record_file_in a previously recorded camera path that is played when rendering the frames. "" for none.
+    /// video_fmt_file_out image file path string that contains a single replacement field {*} for
     /// <a href="https://fmt.dev/latest/syntax/">fmt::format</a> for the integer frame index.
     /// Example: "./out{:3}.png"
-    /// @param frameFinishedCallback is called everytime a frame finished with the current texture output.
+    /// frameFinishedCallback is called everytime a frame finished with the current texture output.
     /// @return the final Texture of the render loop.
     std::shared_ptr<Texture> renderFrames(const HeadlessRenderingConfig &cfg);
 
@@ -75,15 +91,15 @@ class HeadlessRendering : public vvv::DefaultGpuContext, public std::enable_shar
     //    void execAsync();
     //    std::thread execAsyncAttached();
 
-    vvv::Camera *getCamera() const { return m_renderer->getCamera().get(); }
+    Camera *getCamera() const { return m_renderer->getCamera().get(); }
 
-    virtual ~HeadlessRendering() {
+    ~HeadlessRendering() override {
         releaseResources();
         m_gui = nullptr;
     }
 
     /// @return an GuiInterface to which GUI controlled properties can be added in a sequential manner.
-    vvv::GuiInterface *getGui() const { return m_gui.get(); }
+    GuiInterface *getGui() const { return m_gui.get(); }
 
   private:
     void createQueues();
@@ -95,7 +111,7 @@ class HeadlessRendering : public vvv::DefaultGpuContext, public std::enable_shar
 
     RendererOutput renderFrame(AwaitableList awaitBeforeExecution);
 
-    std::shared_ptr<vvv::Renderer> m_renderer;
+    std::shared_ptr<Renderer> m_renderer;
     bool m_pendingRecreation;
 
     std::unique_ptr<DummyGuiInterface> m_gui = nullptr;

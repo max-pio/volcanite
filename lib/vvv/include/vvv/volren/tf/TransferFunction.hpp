@@ -39,6 +39,7 @@ class TransferFunction : public WithGpuContext {
 
   protected:
     explicit TransferFunction(GpuContextPtr ctx) : WithGpuContext(ctx) {}
+    virtual ~TransferFunction() = default;
 
     /// Preintegrated transfer function. Implementers are should at least support vk::ImageUsageFlagBits::eSampled.
     std::shared_ptr<Texture> m_texture;

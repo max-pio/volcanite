@@ -5,7 +5,7 @@ The latter is especially useful for automating tasks or rendering images on remo
 
 ## Supported Segmentation Volume File Formats
 
-See the [Python](Python.md) readme and [converter.py](../volcanite/python/converter.py) for converting
+See the [Python](Python.md) readme and [converter.py](../python/volcanite/src/volcanite/converter.py) for converting
 file types that are not listed here into Volcanite compatible formats using Python.
 If you have no segmentation volume at hand, you can either have a look at the [Example Data](ExampleData.md) or let Volcanite create a synthetic volume with `./volcanite +synth`.  
 
@@ -108,11 +108,12 @@ Pressing `CTRL` + [`0`-`9`] stores the current setup while pressing one of [`0`-
 
 Hitting `F9` starts recording the camera pose and frame time of frame until it is pressed again.
 Both resulting output files are stored in a subfolder `volcanite_video`.
-The record can be replayed by hitting `F10`.
-`F11` replays the record and outputs a PNG image for each frame that can later be concatenated to a video using an external program like ffmpeg, possibly including the frame time log:
+The record can be replayed with `F10`. `F11` stops any replay of a recording.
+`F12` replays the record and outputs a PNG image for each frame that can later be concatenated to a video using an external program like ffmpeg, possibly including the frame time log:
 ```
 ffmpeg -f concat -safe 0 -i ./volcanite_video/video_timing.txt ./volcanite_video/video.mp4
 ```
+An ffmpeg call to create a video file is automatically performed through a system call, but note that this might fail if it is not available.
 
 `ESC`closes the application which is useful if Volcanite is executed with the `--fullscreen` command line option.
 If you are developing your own renderers, hitting `F5` is useful to recompile all currently used shaders.
@@ -239,14 +240,20 @@ The general usage of Volcanite is
   Video output with one image output file per frame. The formatted file path must contain a single {} placeholder
   which will be replaced with frame index. Example: ./out{:04}.jpg
 
+* `--video-cfg <options string>`
+
+  Camera animation configuration when using `-v` given as `{param}*` where `{param}` is one of:
+  * `d<int>` duration: either number of frames (>0) or until (-value) seconds elapsed (<0)
+  * `o<int>` frame rate of the output video (0 to use real frame times)
+  * `s<int>` how many rendering frames are accumluated for each output video frame
+  * `r[<float>:]<float>` start:end camera rotation angle offsets in degrees in [-360;+360]
+  * `z[<float>:]<float>` start:end camera zoom offsets relative to initial configuration
+  * `i{0,1,2}` interpolant: 0 linear, 1 smoothstep, 2 smootherstep
+  * `e[<float>:]<float>` start:end edge before interpolation starts in [0;1]
+
 * `--record-in <file>`
 
   File that stores a previously exported camera path for replay on startup. Must be used with `-i` or `-v`.
-
-* `--record-frames <int>`
-
-  How many render frames are accumulated per output frame, or viewpoint respectively, of a camera path.
-  Must be used with `--record-in` or `-v`.
 
 #### Rendering
 
@@ -314,7 +321,7 @@ The general usage of Volcanite is
 #### Random Access Compression (CSGV-R)
 
 The following arguments will provide alternative random access encodings as in
-*Piochowiak, Kurpicz, and Dachsbacher (2025) Random Access Segemtantion Volume Compression for Interactive Visualization. Proc. EuroVis 25.* 
+*Piochowiak, Kurpicz, and Dachsbacher (2025) Random Access Segmentation Volume Compression for Interactive Visualization. Proc. EuroVis 25.* 
 
 * `--random-access`
   Encode in a format that supports random access and in-brick parallelism for the decompression.

@@ -124,12 +124,12 @@ gui_id GuiInterface::GuiElementList::addAction(void (*callback)(), const std::st
     m_entries.push_back(entry);
     return entry->id;
 }
-gui_id GuiInterface::GuiElementList::addAction(std::function<void()> callback, const std::string &name) {
+gui_id GuiInterface::GuiElementList::addAction(const std::function<void()> callback, const std::string &name) {
     auto entry = new GuiFuncEntry();
     entry->id = m_id_counter++;
     entry->type = GuiAction;
     entry->label = name;
-    entry->function = callback;
+    entry->function = std::move(callback);
     m_entries.push_back(entry);
     return entry->id;
 }
@@ -138,11 +138,11 @@ gui_id GuiInterface::GuiElementList::addCustomCode(std::function<void()> callbac
     entry->id = m_id_counter++;
     entry->type = GuiCustomCode;
     entry->label = name;
-    entry->function = callback;
+    entry->function = std::move(callback);
     m_entries.push_back(entry);
     return entry->id;
 }
-gui_id GuiInterface::GuiElementList::addLabel(std::string name) {
+gui_id GuiInterface::GuiElementList::addLabel(const std::string &name) {
     auto entry = new BaseGuiEntry();
     entry->id = m_id_counter++;
     entry->type = GuiLabel;
@@ -150,7 +150,7 @@ gui_id GuiInterface::GuiElementList::addLabel(std::string name) {
     m_entries.push_back(entry);
     return entry->id;
 }
-gui_id GuiInterface::GuiElementList::addDynamicText(std::string *text, std::string name) {
+gui_id GuiInterface::GuiElementList::addDynamicText(std::string *text, const std::string &name) {
     auto entry = new GuiEntry<std::string>();
     entry->id = m_id_counter++;
     entry->value = text;
@@ -289,14 +289,14 @@ bool GuiInterface::GuiElementList::writeParameters(std::ostream &out) const {
                 vstr.append(std::to_string(mat.emission) + " ");
                 vstr.append(std::to_string(mat.wrapping) + " ");
                 //
-                const auto &cm = e->colormapConfig[i];
-                vstr.append(std::to_string(cm.color.size()) + " ");
-                for (int j = 0; j < cm.color.size(); j++) {
-                    auto &c = cm.color[j];
+                const auto &[type, precomputedIdx, color] = e->colormapConfig[i];
+                vstr.append(std::to_string(color.size()) + " ");
+                for (int j = 0; j < color.size(); j++) {
+                    auto &c = color[j];
                     vstr.append(std::to_string(c.r) + " " + std::to_string(c.g) + " " + std::to_string(c.b) + " ");
                 }
-                vstr.append(std::to_string(cm.precomputedIdx) + " ");
-                vstr.append(std::to_string(static_cast<int>(cm.type)));
+                vstr.append(std::to_string(precomputedIdx) + " ");
+                vstr.append(std::to_string(static_cast<int>(type)));
                 if (i != e->materials->size() - 1)
                     vstr.append(" ");
             }
@@ -340,7 +340,7 @@ bool GuiInterface::GuiElementList::readParameter(const std::string &parameter_la
     // check if this element list contains a parameter of the given label_name
     if (auto it = std::ranges::find_if(m_entries, [parameter_label](const BaseGuiEntry *g) { return sanitizeExportString(g->label, g->id) + ":" == parameter_label; });
         it != m_entries.end()) {
-        auto gui_set = []<class T>(GuiEntry<T> *e, bool changed, T value) {
+        auto gui_set = []<class T>(GuiEntry<T> *e, const bool changed, T value) {
             if (changed) {
                 if (e->setter)
                     e->setter(value);

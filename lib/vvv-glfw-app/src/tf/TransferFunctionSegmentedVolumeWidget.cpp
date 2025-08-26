@@ -15,7 +15,6 @@
 
 #include "vvvwindow/tf/TransferFunctionSegmentedVolumeWidget.hpp"
 
-#include <imgui/backends/imgui_impl_vulkan.h>
 #include <imgui/imgui.h>
 
 #include "vvv/util/Paths.hpp"
@@ -188,7 +187,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                             break;
                         }
                         auto selected_file = pfd::open_file("Color Map Image File",
-                                                    Paths::getHomeDirectory().string(),
+                                                            Paths::getHomeDirectory().string() + "/*",
                                                             {"Image File",
                                                              "*.jpg *.jpeg *.bmp *.gif *.png *.pic *.pnm"});
                         if (!selected_file.result().empty()) {

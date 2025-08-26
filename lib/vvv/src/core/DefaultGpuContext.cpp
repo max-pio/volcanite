@@ -152,7 +152,7 @@ void vvv::DefaultGpuContext::createInstance() {
 #if VK_HEADER_VERSION >= 255
     VULKAN_HPP_DEFAULT_DISPATCHER.init();
 #else
-    static vk::DynamicLoader dl;
+    static vk::detail::DynamicLoader dl;
     PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 #endif
@@ -210,7 +210,7 @@ void vvv::DefaultGpuContext::createInstance() {
     } catch (std::runtime_error &e) {
         Logger(Error) << "Error encountered in vk::createInstance(): " << e.what();
         Logger(Info) << "Try running with VK_LOADER_DEBUG=all to see errors from broken layers.";
-        throw e;
+        throw;
     }
 
 #if (VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1)
@@ -403,9 +403,9 @@ void vvv::DefaultGpuContext::createPhysicalDevice() {
             else
                 Logger(Warn) << "Environment variable VOLCANITE_DEVICE is out of range. VOLCANITE_DEVICE will be ignored.";
         } catch (std::invalid_argument &e) {
-            Logger(Warn) << "Environment variable VOLCANITE_DEVICE is not a valid number. VOLCANITE_DEVICE will be ignored.";
+            Logger(Warn) << "Environment variable VOLCANITE_DEVICE is not a valid number. VOLCANITE_DEVICE will be ignored. " << e.what();
         } catch (std::out_of_range &e) {
-            Logger(Warn) << "Environment variable VOLCANITE_DEVICE is not a valid number. VOLCANITE_DEVICE will be ignored.";
+            Logger(Warn) << "Environment variable VOLCANITE_DEVICE is not a valid number. VOLCANITE_DEVICE will be ignored. " << e.what();
         }
     }
 
@@ -452,8 +452,8 @@ void vvv::DefaultGpuContext::createLogicalDevice() {
 
     enabledDeviceLayers.reserve(m_builder.deviceLayers.size());
 
-    for (size_t i = 0; i < m_builder.deviceLayers.size(); ++i)
-        enabledDeviceLayers.push_back(const_cast<char *>(m_builder.deviceLayers[i].c_str()));
+    for (const auto &deviceLayer : m_builder.deviceLayers)
+        enabledDeviceLayers.push_back(const_cast<char *>(deviceLayer.c_str()));
 
     std::vector<char const *> enabledDeviceExtensions = {};
 
@@ -465,8 +465,8 @@ void vvv::DefaultGpuContext::createLogicalDevice() {
 
     enabledDeviceExtensions.reserve(m_builder.deviceExtensions.size());
 
-    for (size_t i = 0; i < m_builder.deviceExtensions.size(); ++i)
-        enabledDeviceExtensions.push_back(const_cast<char *>(m_builder.deviceExtensions[i].c_str()));
+    for (const auto &deviceExtension : m_builder.deviceExtensions)
+        enabledDeviceExtensions.push_back(const_cast<char *>(deviceExtension.c_str()));
 
     log_supported_device_extensions(getPhysicalDevice());
     Logger(Debug) << "enabling device extensions:";

@@ -1,4 +1,4 @@
-//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//  Copyright (C) 2024, Patrick Jaberg, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -26,7 +26,6 @@
 #include <vvv/util/Logger.hpp>
 
 #include <map>
-#include <utility>
 
 namespace vvv {
 

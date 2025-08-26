@@ -42,7 +42,7 @@ class GLFWCameraController {
     GLFWCameraController(Camera *camera) : m_window(nullptr), m_camera(camera) {}
 
     void setCamera(Camera *camera) { m_camera = camera; }
-    Camera *getCamera() { return m_camera; }
+    Camera *getCamera() const { return m_camera; }
 
     void setWindow(GLFWwindow *window);
 

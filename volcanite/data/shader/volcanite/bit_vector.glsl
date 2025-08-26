@@ -12,6 +12,9 @@
 //
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
+// Parts of this code are based on code from the pasta-toolkit BitVector implementation by Florian Kurpicz which is
+// licensed under the GPLv3 license. https://github.com/pasta-toolbox/bit_vector
 
 #ifndef VOLCANITE_BITVECTOR_GLSL
 #define VOLCANITE_BITVECTOR_GLSL

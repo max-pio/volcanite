@@ -70,9 +70,9 @@ vec4 blendWithBackground(ivec2 pixel, vec4 pixel_rgba) {
 void writeFinalFramebuffer(ivec2 pixel, vec4 accum_rgba) {
 
     // expore correction, tonemapping, color space conversion
+    accum_rgba.rgb *= g_exposure;
     if (g_tonemap_enable) {
-        const float EXPOSURE_CORRECTION = 1.f;
-        accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb * EXPOSURE_CORRECTION);
+        accum_rgba.rgb = tonemap_ACES(accum_rgba.rgb);
     }
     accum_rgba.rgb = rgb2srgb(clamp((accum_rgba.rgb + vec3(g_brightness - 0.5f)) * g_contrast + vec3(0.5f), vec3(0.f), vec3(1.f)), g_gamma);
 
@@ -151,8 +151,8 @@ void main() {
     float weight = 1.f;
     float weight_sum  = 0.f;
 
-    // TODO: change the order from these loops to radially iterate from the center pixel outwards.
-    //       This would allow optimizations like early breaking out of the upsampling search.
+    // Could change the order from these loops to radially iterate from the center pixel outwards.
+    // This would allow optimizations like early breaking out of the upsampling search.
     for (int dy = -g_denoise_filter_kernel_size; dy <= g_denoise_filter_kernel_size; dy++) {
         for (int dx = -g_denoise_filter_kernel_size; dx <= g_denoise_filter_kernel_size; dx++) {
             ivec2 filter_pixel = pixel + (ivec2(dx, dy) * step_size);

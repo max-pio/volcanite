@@ -176,7 +176,6 @@ void memcpy_type<glm::mat3>(SpvReflectBlockVariable *member, char *uniformset, g
     // mat3 is column major, each column is padded from vec3 to a vec4, so we have to insert padding after
     // every 3 members
     auto mat_offset = uniformset + member->offset;
-    uint32_t bitToByte = 8;
     auto unpadded_col_size = reinterpret_cast<char *>(&(*value)[1]) - reinterpret_cast<char *>(&(*value)[0]); // sizeof(glm::mat3::col_type); //member->numeric.matrix.row_count * (member->numeric.scalar.width / bitToByte);
     for (int col = 0; col < member->numeric.matrix.column_count; col++) {
         memcpy(mat_offset + col * member->numeric.matrix.stride, reinterpret_cast<char *>(value) + col * unpadded_col_size, unpadded_col_size);
@@ -188,7 +187,7 @@ void memcpy_type<glm::mat3>(SpvReflectBlockVariable *member, char *uniformset, g
 /// Let's you work with uniform sets without first creating a CPP struct through a stringly-typed API.
 class UniformReflected {
   public:
-    UniformReflected(const SpvReflectDescriptorBinding *const binding) : m_dirty({}), m_data(binding->block.size), m_binding(binding) {}
+    explicit UniformReflected(const SpvReflectDescriptorBinding *const binding) : m_dirty({}), m_data(binding->block.size), m_binding(binding) {}
     // there is block.member_count and block.members
     // there is alternatively block.type_description.members and block.type_description.member_count
     // but each member also has a block.members[i].type_description

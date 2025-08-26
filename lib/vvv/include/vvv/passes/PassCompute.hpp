@@ -25,8 +25,6 @@
 #include <vvv/reflection/UniformReflection.hpp>
 
 #include <functional>
-#include <map>
-#include <utility>
 
 namespace vvv {
 

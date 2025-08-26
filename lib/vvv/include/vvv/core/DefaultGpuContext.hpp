@@ -41,7 +41,7 @@ struct HeadFeaturesKhr {
 /// that only announce change for data within the stable class reference.
 class DefaultGpuContext : public GpuContext {
   public:
-    DefaultGpuContext(GpuContextOptions const opts) : GpuContext(opts.debugUtilities) {
+    explicit DefaultGpuContext(GpuContextOptions const opts) : GpuContext(opts.debugUtilities) {
         m_builder.appName = opts.appName;
         m_builder.enableDebug = opts.enableDebug;
         m_builder.deviceFeatures2.pNext = &m_builder.deviceFeaturesV12;
@@ -88,15 +88,15 @@ class DefaultGpuContext : public GpuContext {
     /// Release all GPU resources. This method is reintrant.
     void destroyGpuContext() override;
     /// Check if GPU resources are currently acquired or not.
-    bool isGpuContextCreated() { return m_gpu.device != static_cast<vk::Device>(nullptr); }
+    bool isGpuContextCreated() const { return m_gpu.device != static_cast<vk::Device>(nullptr); }
 
-    ~DefaultGpuContext() { destroyGpuContext(); }
+    ~DefaultGpuContext() { DefaultGpuContext::destroyGpuContext(); }
 
   protected:
     /// by default, a context without present capabilities will be created
     virtual vk::SurfaceKHR createSurface() { return nullptr; };
     virtual void destroySurface();
-    vk::SurfaceKHR getSurface() { return m_gpu.surface; }
+    vk::SurfaceKHR getSurface() const { return m_gpu.surface; }
 
   private:
     vk::DebugUtilsMessengerCreateInfoEXT getDebugMessengerCreateInfo() const;

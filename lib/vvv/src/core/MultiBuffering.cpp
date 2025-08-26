@@ -13,13 +13,14 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#include <utility>
 #include <vvv/core/MultiBuffering.hpp>
 
 #include <vvv/core/Texture.hpp>
 
 namespace vvv {
 
-MultiBufferedTexture::MultiBufferedTexture(std::shared_ptr<MultiBuffering> m, const std::shared_ptr<Texture> &value) : MultiBufferedResource(m, value) {
+MultiBufferedTexture::MultiBufferedTexture(std::shared_ptr<MultiBuffering> m, const std::shared_ptr<Texture> &value) : MultiBufferedResource(std::move(m), value) {
     for (size_t i = 0; i < size(); i++) {
         (*this)[i] = std::make_shared<Texture>(*value);
         (*this)[i]->setName((*this)[i]->getName() + "." + std::to_string(i));

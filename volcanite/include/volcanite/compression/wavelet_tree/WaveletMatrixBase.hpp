@@ -35,8 +35,9 @@ class WaveletMatrixBase {
     uint32_t m_text_size;
 
   public:
-    WaveletMatrixBase(const uint32_t *op_stream_in, uint32_t start4bit, uint32_t end4bit)
+    WaveletMatrixBase(const uint32_t *op_stream_in, const uint32_t start4bit, const uint32_t end4bit)
         : m_text_size(end4bit - start4bit) {}
+    virtual ~WaveletMatrixBase() = default;
 
     [[nodiscard]] virtual uint32_t access(uint32_t position) const = 0;
     [[nodiscard]] virtual uint32_t rank(uint32_t position, uint32_t symbol) const = 0;

@@ -91,7 +91,7 @@ template <typename T>
 class MultiBufferedResource : public WithMultiBuffering {
   public:
     MultiBufferedResource() : WithMultiBuffering(nullptr) {}
-    MultiBufferedResource(std::shared_ptr<MultiBuffering> m) : WithMultiBuffering(m), m_resources(m->getIndexCount()) {}
+    explicit MultiBufferedResource(std::shared_ptr<MultiBuffering> m) : WithMultiBuffering(m), m_resources(m->getIndexCount()) {}
     MultiBufferedResource(std::shared_ptr<MultiBuffering> m, const T &value) : WithMultiBuffering(m), m_resources(m->getIndexCount(), value) {}
     MultiBufferedResource(std::shared_ptr<MultiBuffering> m, T &&args) : WithMultiBuffering(m), m_resources(m->getIndexCount(), std::forward<T>(args)) {}
     MultiBufferedResource(std::shared_ptr<MultiBuffering> m, std::vector<T> values) : WithMultiBuffering(m), m_resources(std::move(values)) {

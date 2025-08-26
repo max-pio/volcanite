@@ -37,9 +37,9 @@ namespace vvv {
 /// modernize and use the GraphicsPass abstraction.
 class Application : public DefaultGpuContext, public WindowingSystemIntegration, public std::enable_shared_from_this<Application> {
   private:
-    Application(std::string appName, std::shared_ptr<Renderer> renderer, std::shared_ptr<DebugUtilities> debugUtilities)
+    Application(const std::string &appName, const std::shared_ptr<Renderer> &renderer, const std::shared_ptr<DebugUtilities> &debugUtilities)
         : DefaultGpuContext({.debugUtilities = debugUtilities, .appName = appName}), m_renderer(renderer),
-          m_camera_controller(), m_gui(std::make_unique<GuiImgui>(this)), m_startup_resolution(1920, 1080) {
+          m_camera_controller(), m_gui(std::make_unique<GuiImgui>(this)), m_startup_resolution(1920, 1080), m_fullscreen(false) {
         // choose a camera controller for the renderer
         m_renderer->setCamera(std::make_shared<Camera>(true));
         m_camera_controller.setCamera(&(*m_renderer->getCamera()));

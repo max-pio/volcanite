@@ -24,8 +24,8 @@ namespace volcanite {
 class CSGVSerialBrickEncoder : public CSGVBrickEncoder {
 
   public:
-    CSGVSerialBrickEncoder(uint32_t brick_size, EncodingMode encoding_mode, uint32_t op_mask = OP_ALL)
-        : CSGVBrickEncoder(brick_size, encoding_mode, op_mask) {}
+    CSGVSerialBrickEncoder(const uint32_t brick_size, const EncodingMode encoding_mode, const uint32_t op_mask = OP_ALL)
+        : CSGVBrickEncoder(brick_size, encoding_mode, op_mask), m_rans_initialized(false) {}
 
     // SERIAL ENCODING -------------------------------------------------------------------------------------------------
 
@@ -44,9 +44,9 @@ class CSGVSerialBrickEncoder : public CSGVBrickEncoder {
     /// @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
     /// @param valid_brick_size is used to clamp used voxels for border bricks. Values outside are undefined.
     /// @param inv_lod the LOD until which to decompress, or rather, the decompression iterations. 0 is the coarsest and log2(brick_size) is the original / finest level.
-    virtual void decodeBrick(const uint32_t *brick_encoding, const uint32_t brick_encoding_length,
-                             const uint32_t *brick_detail_encoding, const uint32_t brick_detail_encoding_length,
-                             uint32_t *output_brick, glm::uvec3 valid_brick_size, int inv_lod) const override;
+    void decodeBrick(const uint32_t *brick_encoding, const uint32_t brick_encoding_length,
+                     const uint32_t *brick_detail_encoding, const uint32_t brick_detail_encoding_length,
+                     uint32_t *output_brick, glm::uvec3 valid_brick_size, int inv_lod) const override;
 
     /// Splits the encoding for the brick at brick_encoding into the base encoding including its palette at
     /// base_encoding_out and the encoding of the finest level-of-detail at detail_encoding_out.

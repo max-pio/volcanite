@@ -42,7 +42,7 @@ int entrypoint_main(int (*main)(int, char **), int argc, char **argv, const std:
         } catch (const std::exception &exc) {
             using namespace vvv;
             Logger(Error) << "An exception occurred: " << exc.what();
-            throw exc;
+            throw;
         }
     } else {
         vvv::Logger(vvv::Debug) << "Running in DEBUG mode";

@@ -138,7 +138,7 @@ struct Shader {
     vk::Extent3D reflectWorkgroupSize() const;
 
     vk::ShaderStageFlagBits reflectShaderStage() const;
-    const char *const reflectEntryPointName() const;
+    const char *reflectEntryPointName() const;
 
     std::optional<DescriptorBinding> reflectBindingByName(const std::string &name) const;
 
@@ -245,7 +245,7 @@ struct Shader {
     std::unique_ptr<spv_reflect::ShaderModule> m_reflection = nullptr;
 };
 
-void setShaderIncludeDirectory(std::string v);
+void setShaderIncludeDirectory(const std::string &v);
 std::string const &getShaderIncludeDirectory();
 
 } // namespace vvv

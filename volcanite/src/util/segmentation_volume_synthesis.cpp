@@ -1,3 +1,18 @@
+//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include "volcanite/util/segmentation_volume_synthesis.hpp"
 
 #include "csgv_constants.incl"
@@ -25,13 +40,14 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(SyntheticSegment
     std::uniform_int_distribution<unsigned int> urd(0u, ~0u);
 #define V_RND_UINT() urd(eng)
 
+    const size_t voxel_count = (static_cast<size_t>(cfg.dim[0]) * cfg.dim[1] * cfg.dim[2]);
     std::srand(cfg.seed);
     std::shared_ptr<Volume<uint32_t>> volume = std::make_shared<Volume<uint32_t>>(cfg.dim[0], cfg.dim[1], cfg.dim[2],
                                                                                   cfg.dim[0], cfg.dim[1], cfg.dim[2], vk::Format::eR32Uint,
-                                                                                  cfg.dim[0] * cfg.dim[1] * cfg.dim[2]);
-    memset(volume->data().data(), 0, cfg.dim[0] * cfg.dim[1] * cfg.dim[2] * sizeof(uint32_t));
+                                                                                  voxel_count);
+    memset(volume->data().data(), 0, voxel_count * sizeof(uint32_t));
 
-    const size_t number_of_areas = static_cast<size_t>(cfg.dim[0] * cfg.dim[1] * cfg.dim[2] + cfg.voxels_per_label - 1u) / cfg.voxels_per_label;
+    const size_t number_of_areas = (voxel_count + cfg.voxels_per_label - 1u) / cfg.voxels_per_label;
 
     Logger(Info) << "Creating synthetic segmentation volume with dimension " << str(cfg.dim)
                  << " and approx. " << number_of_areas << " label regions, " << cfg.voxels_per_label << " voxels/label.";

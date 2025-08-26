@@ -21,7 +21,6 @@
 #include "vvv/util/Logger.hpp"
 #include "vvv/util/util.hpp"
 #include <cassert>
-#include <cstring>
 
 #include "ryg_rans/rans_nibble.h"
 
@@ -54,7 +53,7 @@ class RANS {
     bool has_frequency_tables = false;
 
   public:
-    RANS(const uint32_t *frequency_array = nullptr) {
+    explicit RANS(const uint32_t *frequency_array = nullptr) {
         if (frequency_array)
             recomputeFrequencyTables(frequency_array);
     }
@@ -81,7 +80,7 @@ class RANS {
     /**
      * Decodes number_of_out_elements packed half bytes to the byte array starting at out. Out will have half the size of the actual elements (since it is a vector of bytes instead of half bytes).
      */
-    int unpackRANS(uint8_t *rans_begin, uint8_t *out, size_t number_of_output_elements) const;
+    int unpackRANS(const uint8_t *rans_begin, uint8_t *out, size_t number_of_output_elements) const;
 
     /**
      * Initializes iterative decoding for reading single elements from the decoding with itr_nextSymbol(). The state is carried in both of the parameters.
@@ -118,3 +117,4 @@ class RANS {
 };
 
 } // namespace volcanite
+

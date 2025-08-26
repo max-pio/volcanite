@@ -25,7 +25,7 @@ vec3 dummy_envmap(vec3 dir) {
     float axz = atan(dir.z, dir.x) / (2.f * 3.1415f) + 0.5f;
     float ay = acos(dir.y) / (3.1415f);
 
-    vec3 light_color = vec3(1.f, 0.6f, 0.f);
+    vec3 light_color = vec3(2.f, 1.2f, 0.f);
     vec3 base_color = vec3(0.4f, 0.6f, 1.f);
 
     vec3 c = vec3(0.f);
@@ -34,7 +34,8 @@ vec3 dummy_envmap(vec3 dir) {
     c = mix(c, light_color, max(dir.x * dir.x * dir.x * max(dir.y + 0.2f, 0.f), 0.f));
     c += vec3(0.3f);
 
-    return clamp(c * 1.2f, vec3(0.f), vec3(1.2f));
+    // TODO: use a proper HDR environment map and tone mapping
+    return c * 1.4f;
 }
 
 /// The background is a tilted interpolation between two colors g_background_color_a and g_background_color_b

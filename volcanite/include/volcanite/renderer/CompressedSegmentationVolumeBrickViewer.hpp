@@ -23,7 +23,6 @@
 #include "vvv/core/Renderer.hpp"
 #include "vvv/passes/PassCompute.hpp"
 #include "vvv/reflection/UniformReflection.hpp"
-#include <fmt/core.h>
 
 #ifdef IMGUI
 #include "imgui.h"
@@ -148,3 +147,4 @@ class CompressedSegmentationVolumeBrickViewer : public Renderer, public WithGpuC
 };
 
 } // namespace volcanite
+

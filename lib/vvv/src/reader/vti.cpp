@@ -34,7 +34,6 @@ namespace vvv {
 
 uint32_t swapEndian(uint32_t v) {
     uint32_t b0, b1, b2, b3;
-    uint32_t res;
     b0 = (v & 0x000000ff) << 24u;
     b1 = (v & 0x0000ff00) << 8u;
     b2 = (v & 0x00ff0000) >> 8u;

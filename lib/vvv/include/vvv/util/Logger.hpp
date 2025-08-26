@@ -21,7 +21,6 @@
  * original author: Alberto Lepe <dev@alepe.com>, December 1, 2015, 6:00 PM
  */
 
-#include <cassert>
 #include <chrono>
 #include <iostream>
 #include <sstream>

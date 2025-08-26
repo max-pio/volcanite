@@ -139,7 +139,7 @@ class Camera {
     /// @param callbackFunction function that is called on camera updates, may be nullptr to remove the current callback function
     void registerCameraUpdateCallback(std::function<void()> callbackFunction);
 
-    void onCameraUpdate();
+    void onCameraUpdate() const;
 
     void writeTo(std::ostream &out, bool human_readable = false) {
         if (human_readable) {

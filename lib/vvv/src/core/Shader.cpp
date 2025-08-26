@@ -13,19 +13,21 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include <vvv/core/Shader.hpp>
+#include "vvv/core/Shader.hpp"
 
-#include <vvv/util/Paths.hpp>
+#include "vvv/util/Paths.hpp"
 
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include <cstdio>
 
 #include "vvv/config.hpp"
 #include <SPIRV-Reflect/spirv_reflect.h>
-#include <shaderc/shaderc.hpp>
-#include <utility>
+#ifndef USE_SYSTEM_GLSLANG_COMPILER
+    #include <shaderc/shaderc.hpp>
+#endif
 
 namespace vvv {
 /// Returns the standardized name for the given shader stage, e.g. "vert" or "frag". Only one bit of
@@ -211,6 +213,7 @@ void Shader::createShader(const GlslShaderRequest &request, const ShaderCompileE
     reflectShader();
 }
 
+#ifndef USE_SYSTEM_GLSLANG_COMPILER
 shaderc_shader_kind get_shaderc_kind(vk::ShaderStageFlagBits stage) {
     switch (stage) {
     case vk::ShaderStageFlagBits::eVertex:
@@ -335,8 +338,12 @@ shaderc::CompileOptions getDefaultShaderCCompileOptions(const GlslShaderRequest 
 
     return options;
 }
+#endif // ifndef USE_SYSTEM_GLSLANG_COMPILER
 
 std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderRequest &request, bool write_spirv_tmp_file) {
+#ifdef USE_SYSTEM_GLSLANG_COMPILER
+    throw std::runtime_error("compileGlslShader not avilable as USE_SYSTEM_GLSLANG_COMPILER is set. Use compileGlslShaderCMD.");
+#else
 
     // obtain spirv output file path
     std::optional<std::filesystem::path> spirv_path =
@@ -362,18 +369,18 @@ std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderR
     shaderc::CompileOptions options = getDefaultShaderCCompileOptions(request);
 
     // (optional) run shader preprocessor to check for preprocessor failures
-    if (false) {
-        shaderc::PreprocessedSourceCompilationResult preprocess_result =
-            compiler.PreprocessGlsl(glsl_source, get_shaderc_kind(request.stage),
-                                    request.label.c_str(), options);
-
-        if (preprocess_result.GetCompilationStatus() != shaderc_compilation_status_success) {
-            throw ShaderCompileError(request, spirv_path.has_value() ? spirv_path.value() : "",
-                                     preprocess_result.GetCompilationStatus(),
-                                     preprocess_result.GetErrorMessage(),
-                                     "shaderc preprocess " + request.shader_file_path.string());
-        }
-    }
+    // if (false) {
+    //    shaderc::PreprocessedSourceCompilationResult preprocess_result =
+    //        compiler.PreprocessGlsl(glsl_source, get_shaderc_kind(request.stage),
+    //                                request.label.c_str(), options);
+    //
+    //    if (preprocess_result.GetCompilationStatus() != shaderc_compilation_status_success) {
+    //        throw ShaderCompileError(request, spirv_path.has_value() ? spirv_path.value() : "",
+    //                                 preprocess_result.GetCompilationStatus(),
+    //                                 preprocess_result.GetErrorMessage(),
+    //                                 "shaderc preprocess " + request.shader_file_path.string());
+    //    }
+    // }
 
     // compile the shader to spirv
     shaderc::SpvCompilationResult compilation_result =
@@ -421,6 +428,7 @@ std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderR
     }
 
     return spirv_path;
+#endif
 }
 
 std::filesystem::path Shader::compileGlslShaderCMD(const GlslShaderRequest &request) {
@@ -501,15 +509,14 @@ std::filesystem::path Shader::compileGlslShaderCMD(const GlslShaderRequest &requ
 }
 
 void Shader::loadSpirvFromFile(const std::filesystem::path &path) {
-    std::ifstream source_file = std::ifstream(path, std::ios::binary);
-    if (source_file.is_open()) {
+    if (std::ifstream source_file = std::ifstream(path, std::ios::binary); source_file.is_open()) {
         auto file_size = std::filesystem::file_size(path);
         if (file_size == 0)
             throw std::runtime_error("SPIRV binary file " + path.string() + " has size 0.");
         if ((file_size / sizeof(uint32_t)) * sizeof(uint32_t) != file_size)
             throw std::runtime_error("SPIRV binary file " + path.string() + " is not a uint32 stream as expected.");
         spirv_binary.resize(file_size / sizeof(uint32_t));
-        source_file.read(reinterpret_cast<char *>(spirv_binary.data()), file_size);
+        source_file.read(reinterpret_cast<char *>(spirv_binary.data()), static_cast<std::streamsize>(file_size));
         source_file.close();
     } else {
         throw std::runtime_error("could not open SPIRV file " + path.string());
@@ -594,12 +601,12 @@ std::optional<DescriptorBinding> Shader::reflectBindingByName(const std::string 
 
     // the name struct name of uniforms is in paranthesis if `struct NAME {};` is used instead of
     // `struct SOME_IDENTIFIER {} NAME;`
-    std::string enclosed_name = "(" + name + ")";
+    const std::string enclosed_name = "(" + name + ")";
 
-    for (size_t i_set = 0; i_set < sets.size(); ++i_set) {
-        const SpvReflectDescriptorSet &refl_set = *(sets[i_set]);
-        for (uint32_t i_binding = 0; i_binding < refl_set.binding_count; ++i_binding) {
-            const SpvReflectDescriptorBinding &refl_binding = *(refl_set.bindings[i_binding]);
+    for (auto &i_set : sets) {
+        const auto &[set, binding_count, bindings] = *i_set;
+        for (uint32_t i_binding = 0; i_binding < binding_count; ++i_binding) {
+            const SpvReflectDescriptorBinding &refl_binding = *(bindings[i_binding]);
 
             // type name is used for uniform names
             auto type_name = refl_binding.type_description->type_name;
@@ -611,7 +618,7 @@ std::optional<DescriptorBinding> Shader::reflectBindingByName(const std::string 
                 for (uint32_t i_dim = 0; i_dim < refl_binding.array.dims_count; ++i_dim) {
                     binding.binding.descriptorCount *= refl_binding.array.dims[i_dim];
                 }
-                binding.set_number = refl_set.set;
+                binding.set_number = set;
                 binding.spirv_binding = &refl_binding;
 
                 return binding;
@@ -623,19 +630,19 @@ std::optional<DescriptorBinding> Shader::reflectBindingByName(const std::string 
 }
 
 vk::Extent3D Shader::reflectWorkgroupSize() const {
-    auto entrypoint = spvReflectGetEntryPoint(&m_reflection->GetShaderModule(), reflectEntryPointName());
+    const auto entrypoint = spvReflectGetEntryPoint(&m_reflection->GetShaderModule(), reflectEntryPointName());
     assert(entrypoint != nullptr);
 
-    return vk::Extent3D(entrypoint->local_size.x, entrypoint->local_size.y, entrypoint->local_size.z);
+    return {entrypoint->local_size.x, entrypoint->local_size.y, entrypoint->local_size.z};
 }
 
 vk::ShaderStageFlagBits Shader::reflectShaderStage() const { return static_cast<vk::ShaderStageFlagBits>(m_reflection->GetShaderStage()); }
 
-const char *const Shader::reflectEntryPointName() const { return m_reflection->GetEntryPointName(); }
+const char *Shader::reflectEntryPointName() const { return m_reflection->GetEntryPointName(); }
 
 std::string _shader_include_dir = vvv::default_shader_include_dir;
 
-void setShaderIncludeDirectory(std::string v) { _shader_include_dir = v; }
+void setShaderIncludeDirectory(const std::string &v) { _shader_include_dir = v; }
 std::string const &getShaderIncludeDirectory() { return _shader_include_dir; }
 
 } // namespace vvv

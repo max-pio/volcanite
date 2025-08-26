@@ -1,4 +1,4 @@
-//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//  Copyright (C) 2024, Patrick Jaberg, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,3 +17,4 @@
 
 const std::vector<float> vvv::VectorTransferFunction::linearOpacityRamp = {0.0, 0.0, 1.0, 1.0};
 const std::vector<float> vvv::VectorTransferFunction::fullyOpaque = {0.0, 1.0, 1.0, 1.0};
+

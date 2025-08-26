@@ -33,7 +33,10 @@
 
 typedef size_t gui_id;
 
-// ToDo: Refactor GuiInterface to ParameterInterface as parameters can be managed with it without having a visible GUI
+// Note: for historical reasons, parameters and parameter management use the term GUI - graphical user interface -
+// even though the parameters and their structure can technically be managed without any graphical interface at all.
+// An example is a python binding interface where parameters can be managed through scripts.
+// We could rename all of Gui* to Param* but this would have large side effects.
 
 // Steps to add a new data or entry type T:
 // (1) create an entry to GuiType enum
@@ -108,6 +111,7 @@ class GuiInterface {
 
     // ------------------------------- GUI ENTRIES ------------------------------------ //
   public:
+    virtual ~GuiInterface() = default;
     struct BaseGuiEntry {
         virtual ~BaseGuiEntry() = default;
         gui_id id{};
@@ -214,6 +218,7 @@ class GuiInterface {
         gui_id add(std::function<void(T)> setter, std::function<T()> getter, const std::string &name, GuiType type, T min, T max, T step, int decimals = 3);
 
       public:
+        virtual ~GuiElementList() = default;
         virtual bool remove(gui_id id);
         virtual bool remove(std::string name) { throw std::runtime_error("not implemented yet!"); }
         virtual void clear();
@@ -257,8 +262,8 @@ class GuiInterface {
         virtual gui_id addAction(void (*callback)(), const std::string &name);
         virtual gui_id addAction(std::function<void()> callback, const std::string &name);
         virtual gui_id addCustomCode(std::function<void()> callback, const std::string &name);
-        virtual gui_id addLabel(std::string name);
-        virtual gui_id addDynamicText(std::string *text, std::string name = "");
+        virtual gui_id addLabel(const std::string &name);
+        virtual gui_id addDynamicText(std::string *text, const std::string &name = "");
         virtual gui_id addProgress(std::function<float()> getter, const std::string &name = "") { return add<float>(nullptr, getter, name, GuiProgress); }
         virtual gui_id addSeparator();
 
@@ -283,10 +288,10 @@ class GuiInterface {
 
       public:
         explicit GuiWindow(std::string name) : m_name(std::move(name)), m_columns{GuiElementList()}, m_visible(true) {}
-        GuiWindow() : m_name(), m_columns{GuiElementList()} {}
-        virtual ~GuiWindow() { clear(); }
+        GuiWindow() : m_name(), m_columns{GuiElementList()}, m_visible(true) {}
+        virtual ~GuiWindow() { GuiWindow::clear(); }
 
-        void setVisible(bool visible) { m_visible = visible; }
+        void setVisible(const bool visible) { m_visible = visible; }
         bool isVisible() const { return m_visible; }
 
         const std::string &getName() const { return m_name; }
@@ -413,7 +418,7 @@ class GuiInterface {
         return m_windows[windowName].removeColumn(column);
     }
 
-    bool writeParameters(std::ostream &out) {
+    bool writeParameters(std::ostream &out) const {
         for (const auto &w : m_windows) {
             if (!w.second.writeParameters(out))
                 return false;

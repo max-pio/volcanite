@@ -380,7 +380,7 @@ class small_container {
         inner_iterator it;
 
       public:
-        iterator() {}
+        iterator() : parent(nullptr), index(0) {}
 
         iterator operator++() {
             if (index < N) {
@@ -433,7 +433,7 @@ class small_container {
         inner_iterator it;
 
       public:
-        const_iterator() {}
+        const_iterator() : parent(nullptr), index(0) {}
 
         const_iterator operator++() {
             if (index < N) {

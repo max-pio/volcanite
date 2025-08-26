@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <sstream>
 #include <vulkan/vulkan.hpp>
 
 namespace vvv {
@@ -33,7 +34,7 @@ namespace vvv {
 //     }
 // }
 
-std::string getVersionString(uint32_t versionBitmask) {
+inline std::string getVersionString(uint32_t versionBitmask) {
     uint32_t uMajorAPIVersion = versionBitmask >> 22;
     uint32_t uMinorAPIVersion = ((versionBitmask << 10) >> 10) >> 12;
     uint32_t uPatchAPIVersion = (versionBitmask << 20) >> 20;

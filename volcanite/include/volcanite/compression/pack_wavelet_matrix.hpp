@@ -16,9 +16,7 @@
 #pragma once
 
 #include "volcanite/compression/wavelet_tree/BitVector.hpp"
-#include <cstdint>
 #include <glm/glm.hpp>
-#include <vector>
 
 namespace volcanite {
 
@@ -97,3 +95,4 @@ uint32_t wm_huffman_access(uint32_t position, const WMHBrickHeader *wm_header, c
 uint32_t wm_huffman_rank(uint32_t position, uint32_t symbol, const WMHBrickHeader *wm_header, const BV_WordType *bit_vector);
 
 } // namespace volcanite
+

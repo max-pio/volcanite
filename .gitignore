@@ -4,6 +4,7 @@
 compile_commands.json
 .ipynb_checkpoints/
 *.pkl
+.aider*
 
 # gitlab merge conflict backups
 **/**.orig
@@ -20,13 +21,10 @@ compile_commands.json
 **/.env/*
 
 # large evaluation files
-/eurovis/eval/**/**.csgv
-/eurovis/eval/out/**/**.png
-/eurovis/eval/out/**/**.jpg
-/eurovis/eval/out/**/**.mp4
 /demo/**
 /vid/**
 /*.mp4
+eval/results
 
 # operating system and IDE specific ignores
 /.idea*

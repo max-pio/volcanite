@@ -30,10 +30,10 @@ namespace volcanite {
 
 // Makes some of the GLSL functions available:
 
-inline uint32_t bitfieldInsert(uint32_t base, uint32_t insert, int offset, int bits) {
+inline uint32_t bitfieldInsert(const uint32_t base, const uint32_t insert, const int offset, const int bits) {
     return glm::bitfieldInsert(base, insert, offset, bits);
 }
-inline uint64_t bitfieldInsert(uint64_t base, uint64_t insert, int offset, int bits) {
+inline uint64_t bitfieldInsert(const uint64_t base, const uint64_t insert, const int offset, const int bits) {
     return glm::bitfieldInsert(base, insert, offset, bits);
 }
 inline uint32_t bitfieldExtract(uint32_t value, int offset, int bits) {
@@ -50,10 +50,10 @@ inline uint64_t bitfieldExtract(uint64_t value, int offset, int bits) {
     return (value >> offset) & ((1ull << bits) - 1u);
 #endif
 }
-inline uint32_t bitCount(uint32_t value) {
+inline uint32_t bitCount(const uint32_t value) {
     return std::popcount(value);
 }
-inline uint32_t bitCount(uint64_t value) {
+inline uint32_t bitCount(const uint64_t value) {
     return std::popcount(value);
 }
 
@@ -78,22 +78,22 @@ class BitVector {
 
   public:
     BitVector() : m_size(0u), m_data() {}
-    BitVector(const std::vector<bool> &boolVector) : m_size(boolVector.size()),
-                                                     m_data(words_for_size(boolVector.size())) {
+    explicit BitVector(const std::vector<bool> &boolVector) : m_size(boolVector.size()),
+                                                              m_data(words_for_size(boolVector.size())) {
         for (uint32_t i = 0; i < boolVector.size(); i++)
             set(i, boolVector[i]);
     }
-    BitVector(uint32_t size) : m_size(size), m_data(words_for_size(size)) {}
+    explicit BitVector(const uint32_t size) : m_size(size), m_data(words_for_size(size)) {}
 
-    BitVector(uint32_t size, uint8_t bit) : m_size(size),
-                                            m_data(words_for_size(size), bit ? ~0ull : 0ull) {}
+    BitVector(const uint32_t size, const uint8_t bit) : m_size(size),
+                                                        m_data(words_for_size(size), bit ? ~0ull : 0ull) {}
 
-    [[nodiscard]] uint8_t access(uint32_t index) const {
+    [[nodiscard]] uint8_t access(const uint32_t index) const {
         assert(index / BV_WORD_BIT_SIZE < m_data.size() && "bit vector access out of bounds");
         return bitfieldExtract(m_data[index / BV_WORD_BIT_SIZE], static_cast<int>(index % BV_WORD_BIT_SIZE), 1);
     }
 
-    void set(uint32_t index, uint8_t bit_value) {
+    void set(const uint32_t index, const uint8_t bit_value) {
         assert(index < m_size && "trying to set bit in bit vector that is out of bounds.");
         assert(bit_value <= 1u && "bit_value must be 0 or 1.");
 
@@ -104,20 +104,20 @@ class BitVector {
     }
 
     /// Resizes the vector so that it stores size many bits.
-    void resize(uint32_t size) {
+    void resize(const uint32_t size) {
         m_size = size;
         m_data.resize(words_for_size(size));
     }
 
     /// Reserves space for size many bits in memory without altering the bit vectors actual size.
-    void reserve(uint32_t size) {
+    void reserve(const uint32_t size) {
         m_data.resize(words_for_size(m_size));
     }
 
     /// Removes all unused memory space if capacity() is greater than size().
     /// Note that this is a non-binding request to the underlying BVWordType std::vector.
     void shrink_to_fit() {
-        uint32_t target_size = words_for_size(m_size);
+        const uint32_t target_size = words_for_size(m_size);
         if (capacity() > target_size)
             m_data.resize(target_size);
         m_data.shrink_to_fit();
@@ -126,7 +126,7 @@ class BitVector {
     /// Appends bit_value to the end of the bit vector. If this requires a capacity increase, the bit vector's current
     /// capacity is doubled.
     /// @param bit_value the bit value to append to the vector. Must be either 0 or 1.
-    void push_back(uint8_t bit_value) {
+    void push_back(const uint8_t bit_value) {
         m_size++;
         if (m_size > capacity())
             reserve(m_size * 2u);
@@ -152,7 +152,7 @@ class BitVector {
 
   private:
     /// @return how many BVWordType entries are needed to store size many bits.
-    static inline uint32_t words_for_size(uint32_t size) { return (size + BV_WORD_BIT_SIZE - 1u) / BV_WORD_BIT_SIZE; }
+    static uint32_t words_for_size(const uint32_t size) { return (size + BV_WORD_BIT_SIZE - 1u) / BV_WORD_BIT_SIZE; }
 
     uint32_t m_size;                 ///< number of bits stored in the bit vector
     std::vector<BV_WordType> m_data; ///< the raw data array storing bits in BVWordType words
@@ -212,7 +212,7 @@ static_assert((1u << BV_STORE_L1_BITS) + (BV_STORE_L2_PER_L1 + 1u) * (1u << BV_S
 static_assert((1u << BV_STORE_L2_BITS) > BV_STORE_L2_PER_L1 * BV_L2_WORD_SIZE * BV_WORD_BIT_SIZE,
               "L2 bit depth cannot index the maximum possible number of bits within an L1 block.");
 
-inline uint32_t rank1Word(BV_WordType value, uint32_t index) {
+inline uint32_t rank1Word(const BV_WordType value, const uint32_t index) {
     return index ? bitCount(value << (BV_WORD_BIT_SIZE - index)) : 0u;
 }
 
@@ -220,7 +220,7 @@ inline uint32_t getL1Entry(const BV_L12Type &v) {
     return bitfieldExtract(v, 0, BV_STORE_L1_BITS); // the least significant BV_STORE_L1_BITS store the L1-information
 }
 
-inline uint32_t getL2Entry(const BV_L12Type &v, uint32_t i) {
+inline uint32_t getL2Entry(const BV_L12Type &v, const uint32_t i) {
     // First L2-information is always zero and not stored explicitly. For i > 0, BV_STORE_L2_BITS bits are stored per
     // L2-information (e.g. 9 bits per for all except the first one L2-block each). They are ordered in the BV_L12Type
     // from LSB to MSB, starting after the least significant BV_STORE_L1_BITS bits (e.g. 19) that are used for L1-info.
@@ -228,7 +228,7 @@ inline uint32_t getL2Entry(const BV_L12Type &v, uint32_t i) {
     return i ? bitfieldExtract(v, static_cast<int>(i * BV_STORE_L2_BITS + OFFSET), BV_STORE_L2_BITS) : 0u;
 }
 
-inline BV_L12Type buildL12Type(uint32_t l1, const uint32_t l2[BV_STORE_L2_PER_L1]) {
+inline BV_L12Type buildL12Type(const uint32_t l1, const uint32_t l2[BV_STORE_L2_PER_L1]) {
     // L1-information in LSB
     BV_L12Type entry = l1;
     assert(l1 < (1u << BV_STORE_L1_BITS) && "l1 value is too large to be stored in L12 block");
@@ -245,7 +245,7 @@ inline BV_L12Type buildL12Type(uint32_t l1, const uint32_t l2[BV_STORE_L2_PER_L1
 class FlatRank {
 
   public:
-    FlatRank(const BitVector &bv) {
+    explicit FlatRank(const BitVector &bv) {
         assert(bv.size() < maximumBitVectorSize() && "Bit Vector is too large for FlatRank construction.");
 
         // determine required number of L1-blocks and create array
@@ -307,10 +307,10 @@ class FlatRank {
     [[nodiscard]] const BV_L12Type *getRawData() const { return m_data; }
     [[nodiscard]] uint32_t getRawDataSize() const { return m_size; }
 
-    [[nodiscard]] uint32_t rank0(uint32_t index) const { return index - rank1(index); }
+    [[nodiscard]] uint32_t rank0(const uint32_t index) const { return index - rank1(index); }
 
     /// @return the number of 1 bits in the bit vector that occur before index
-    [[nodiscard]] uint32_t rank1(uint32_t index) const {
+    [[nodiscard]] uint32_t rank1(const uint32_t index) const {
 
         // ........ ........  bits
         // ┌┐┌┐┌┐┌┐ ┌┐┌┐┌┐┌┐  words
@@ -354,3 +354,4 @@ class FlatRank {
 };
 
 } // namespace volcanite
+

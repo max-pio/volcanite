@@ -25,7 +25,7 @@ class WithGpuContext {
     WithGpuContext(GpuContextPtr ctx) : m_ctx(ctx) {}
 
   public:
-    GpuContextPtr getCtx() const;
+    [[nodiscard]] GpuContextPtr getCtx() const;
     vk::Device device() const;
     std::shared_ptr<DebugUtilities> debug() const;
 

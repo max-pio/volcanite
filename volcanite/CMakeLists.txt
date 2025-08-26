@@ -48,38 +48,31 @@ set(VOLCANITE_HEADERS
         include/volcanite/renderer/PassCompSegVolRender.hpp
         include/volcanite/util/args_and_csgv_provider.hpp
         include/volcanite/util/segmentation_volume_synthesis.hpp
-        # eurovis related work:
-        #        include/related_work/cpp-compresso.h
-        #        include/related_work/compress_segmentation.h
-        #        include/related_work/cpp-neuroglancer.h
 )
 
 set(VOLCANITE_SOURCES
-        src/volcanite/eval/CSGVBenchmarkPass.cpp
-        src/volcanite/eval/EvaluationLogExport.cpp
-        src/volcanite/compression/encoder/CSGVBrickEncoder.cpp
-        src/volcanite/compression/encoder/CSGVSerialBrickEncoder.cpp
-        src/volcanite/compression/encoder/NibbleEncoder.cpp
-        src/volcanite/compression/encoder/RangeANSEncoder.cpp
-        src/volcanite/compression/encoder/WaveletMatrixEncoder.cpp
-        src/volcanite/compression/CompressedSegmentationVolume.cpp
-        src/volcanite/compression/CompressedSegmentationVolumeStats.cpp
-        src/volcanite/compression/CompressedSegmentationVolumeParallel.cpp
-        src/volcanite/compression/CSGVDatabase.cpp
-        src/volcanite/compression/pack_nibble.cpp
-        src/volcanite/compression/pack_rans.cpp
-        src/volcanite/compression/pack_wavelet_matrix.cpp
-        src/volcanite/compression/wavelet_tree/prefix_counting.cpp
-        src/volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.cpp
-        src/volcanite/compression/wavelet_tree/WaveletMatrix.cpp
+        src/eval/CSGVBenchmarkPass.cpp
+        src/eval/EvaluationLogExport.cpp
+        src/compression/encoder/CSGVBrickEncoder.cpp
+        src/compression/encoder/CSGVSerialBrickEncoder.cpp
+        src/compression/encoder/NibbleEncoder.cpp
+        src/compression/encoder/RangeANSEncoder.cpp
+        src/compression/encoder/WaveletMatrixEncoder.cpp
+        src/compression/CompressedSegmentationVolume.cpp
+        src/compression/CompressedSegmentationVolumeStats.cpp
+        src/compression/CompressedSegmentationVolumeParallel.cpp
+        src/compression/CSGVDatabase.cpp
+        src/compression/pack_nibble.cpp
+        src/compression/pack_rans.cpp
+        src/compression/pack_wavelet_matrix.cpp
+        src/compression/wavelet_tree/prefix_counting.cpp
+        src/compression/wavelet_tree/HuffmanWaveletMatrix.cpp
+        src/compression/wavelet_tree/WaveletMatrix.cpp
+        src/util/args_and_csgv_provider.cpp
         src/util/segmentation_volume_synthesis.cpp
         src/renderer/CompressedSegmentationVolumeRenderer.cpp
         src/renderer/CompressedSegmentationVolumeBrickViewer.cpp
         src/renderer/PassCompSegVolRender.cpp
-        # eurovis related work:
-        #        src/related_work/cpp-compresso.cpp
-        #        src/related_work/compress_segmentation.cpp
-        #        src/related_work/cpp-neuroglancer.cpp
 )
 
 makeVolcaniteLibrary(libvolcanite ${VOLCANITE_HEADERS} ${VOLCANITE_SOURCES})
@@ -93,5 +86,3 @@ installVolcaniteExecutable(volcanite)
 makeVolcaniteExecutable(csgv_benchmark)
 makeVolcaniteExecutable(csgv_brick_viewer)
 
-# eurovis related work:
-# makeVolcaniteExecutable(eval_related_work)

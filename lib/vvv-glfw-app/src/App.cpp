@@ -23,6 +23,8 @@
 #define GLFW_INCLUDE_NONE
 #endif
 #include "stb/stb_image.hpp"
+#include "vvv/util/video_encoding.hpp"
+
 #include <GLFW/glfw3.h>
 
 #ifdef IMGUI
@@ -41,7 +43,7 @@ const auto IMAGE_NOT_IN_FLIGHT = std::numeric_limits<size_t>::max();
 
 static void check_vk_result(VkResult err) {
     if (err != 0) {
-        vvv::Logger(vvv::Error) << "Vulkan error " << vk::to_string(static_cast<vk::Result>(err));
+        Logger(Error) << "Vulkan error " << vk::to_string(static_cast<vk::Result>(err));
         if (err < 0) {
             abort();
         }
@@ -71,10 +73,9 @@ void Application::recreateSwapchain() {
 
 void Application::renderFrame() {
     const auto frameIndex = currentInFlightFrameIndex();
-    const auto device = getDevice();
 
     if (m_swapchain.frameInFlightAwaitable[frameIndex])
-        sync->hostWaitOnDevice(vvv::AwaitableList{m_swapchain.frameInFlightAwaitable[frameIndex]});
+        sync->hostWaitOnDevice(AwaitableList{m_swapchain.frameInFlightAwaitable[frameIndex]});
     stateInFlight()->cleanKeepAlives(frameIndex);
 
     // TODO: fix Application synchronization
@@ -97,7 +98,7 @@ void Application::renderFrame() {
     case vk::Result::eSuccess:
         break;
     case vk::Result::eSuboptimalKHR:
-        vvv::Logger(vvv::Warn)
+        Logger(Warn)
             << "VK_SUBOPTIMAL_KHR: A swapchain no longer matches the surface properties exactly (returned from vkAcquireNextImageKHR)";
         break;
     case vk::Result::eErrorOutOfDateKHR:
@@ -116,7 +117,7 @@ void Application::renderFrame() {
     if (m_swapchain.imageInFlightFrame[currentImageIndex] != IMAGE_NOT_IN_FLIGHT) {
         const auto fenceIdx = m_swapchain.imageInFlightFrame[currentImageIndex];
         if (m_swapchain.frameInFlightAwaitable[fenceIdx])
-            sync->hostWaitOnDevice(vvv::AwaitableList{m_swapchain.frameInFlightAwaitable[fenceIdx]});
+            sync->hostWaitOnDevice(AwaitableList{m_swapchain.frameInFlightAwaitable[fenceIdx]});
     }
     m_swapchain.imageInFlightFrame[currentImageIndex] = frameIndex;
 
@@ -148,13 +149,11 @@ void Application::renderFrame() {
     commandBuffer.end();
 
     // ------------------------ SUBMIT THE WORK TO THE GPU
-    std::array<vk::CommandBuffer, 1> commandBuffers = {commandBuffer};
-
     // make sure the swapchain allows us to write again. Since we only sync against the blit, we are guaranteed to
     // have the right queue type for `eColorAttachmentOutput`. If the sync against the swapchain would be passed
     // into the inner renderer, this would not be guaranteed. The inner renderer for example, could be compute queue only.
     // This would force us to use `eAllCommands` -- which would unnecessary restrict parallelism.
-    vvv::BinaryAwaitableList swapchainPresentComplete{std::make_shared<vvv::BinaryAwaitable>(vvv::BinaryAwaitable{
+    BinaryAwaitableList swapchainPresentComplete{std::make_shared<BinaryAwaitable>(BinaryAwaitable{
         .semaphore = m_swapchain.presentCompleteSemaphore[frameIndex],
         .stages = vk::PipelineStageFlagBits::eAllCommands, // vk::PipelineStageFlagBits::eColorAttachmentOutput,
     })};
@@ -165,7 +164,7 @@ void Application::renderFrame() {
             m_video_frame = {};
         } else {
             ldrRendererOutput.texture->writePng(
-                m_video_file_path + "_" + std::to_string(m_video_frame.value()) + ".png");
+                m_video_file_path + "_" + std::to_string(m_video_frame.value()) + ".jpg");
             m_video_frame = m_video_frame.value() + 1;
         }
     }
@@ -186,7 +185,7 @@ void Application::renderFrame() {
         break;
     case vk::Result::eSuboptimalKHR:
     case vk::Result::eErrorOutOfDateKHR:
-        // vvv::Logger(vvv::WARN) << "vk::Queue::presentKHR returned << " << result;
+        // Logger(WARN) << "vk::Queue::presentKHR returned << " << result;
         recreateSwapchain();
         break;
     default:
@@ -197,7 +196,7 @@ void Application::renderFrame() {
 }
 
 void Application::renderFrameRecordCommands(vk::CommandBuffer commandBuffer,
-                                            vvv::RendererOutput const &ldrRendererOutput) {
+                                            RendererOutput const &ldrRendererOutput) {
     assert(m_swapchain.depthFormat == vk::Format::eUndefined &&
            "This function does currently not setup depth buffering!");
 
@@ -209,7 +208,6 @@ void Application::renderFrameRecordCommands(vk::CommandBuffer commandBuffer,
 
     updateBlitDescriptorSet(ldrRendererOutput, currentInFlightFrameIndex());
 
-    VkClearColorValue clearColor = {{0, 0, 0, 1}};
     VkClearValue clearValues[1];
     memset(clearValues, 0, sizeof(clearValues));
 
@@ -419,9 +417,9 @@ void Application::createWindow() {
     m_camera_controller.setWindow(m_window);
 
     GLFWimage icon = {.pixels = nullptr};
-    if (vvv::Paths::hasDataPath("icons/volcanite_icon_256.png")) {
+    if (Paths::hasDataPath("icons/volcanite_icon_256.png")) {
         int icon_channels;
-        icon.pixels = stbi_load(vvv::Paths::findDataPath("icons/volcanite_icon_256.png").string().c_str(), &icon.width,
+        icon.pixels = stbi_load(Paths::findDataPath("icons/volcanite_icon_256.png").string().c_str(), &icon.width,
                                 &icon.height, &icon_channels, STBI_rgb_alpha);
     }
     if (icon.pixels) {
@@ -452,7 +450,7 @@ void Application::createSwapChain() {
     m_swapchain.pendingRecreation = false;
 
     const auto surface = getSurface();
-    const auto surfaceFormat = vvv::chooseSurfaceFormat(getPhysicalDevice().getSurfaceFormatsKHR(surface));
+    const auto surfaceFormat = chooseSurfaceFormat(getPhysicalDevice().getSurfaceFormatsKHR(surface));
     const auto swapImageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eStorage;
 
     vk::SurfaceCapabilitiesKHR surfaceCapabilities = getPhysicalDevice().getSurfaceCapabilitiesKHR(surface);
@@ -489,7 +487,7 @@ void Application::createSwapChain() {
                                                        ? vk::CompositeAlphaFlagBitsKHR::eInherit
                                                        : vk::CompositeAlphaFlagBitsKHR::eOpaque;
 
-    vk::PresentModeKHR presentMode = vvv::chooseSwapPresentMode(
+    vk::PresentModeKHR presentMode = chooseSwapPresentMode(
         getPhysicalDevice().getSurfacePresentModesKHR(surface), m_swapchain.vsync);
 
     const auto oldSwapchain = nullptr;
@@ -666,7 +664,7 @@ void Application::destroyBlitDescriptorSet() {
     VK_DEVICE_DESTROY(getDevice(), m_renderpass.descSetLayout)
 }
 
-void Application::updateBlitDescriptorSet(const vvv::RendererOutput &output, uint32_t inFlightFrameIdx) {
+void Application::updateBlitDescriptorSet(const RendererOutput &output, uint32_t inFlightFrameIdx) {
     auto lastImageDescriptor = m_renderpass.lastImageDescriptor[inFlightFrameIdx];
 
     // In theory there should never be a need to update the descriptor set when the inner rendering engine
@@ -684,11 +682,11 @@ void Application::updateBlitDescriptorSet(const vvv::RendererOutput &output, uin
 }
 
 void Application::createBlitShaders() {
-    const auto shaderDirectory = vvv::getShaderIncludeDirectory();
+    const auto shaderDirectory = getShaderIncludeDirectory();
 
-    m_renderpass.shaderFragment = new vvv::Shader(
+    m_renderpass.shaderFragment = new Shader(
         SimpleGlslShaderRequest{.filename = "blit.frag", .label = "Application.m_shaderFragment"});
-    m_renderpass.shaderVertex = new vvv::Shader(
+    m_renderpass.shaderVertex = new Shader(
         SimpleGlslShaderRequest{.filename = "blit.vert", .label = "Application.m_shaderVertex"});
 }
 
@@ -823,7 +821,7 @@ void Application::processHotKeys() {
 
     // shader reload
     if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
-        vvv::Logger(vvv::Info) << "reloading shaders";
+        Logger(Info) << "reloading shaders";
         recreateShaderResources();
         writePipelineCacheToDisk(getDevice());
     }
@@ -836,9 +834,11 @@ void Application::processHotKeys() {
             if (ImGui::IsKeyPressed(quick_keys[slot])) {
                 const std::string path = fmt::vformat(m_quick_access_file_fmt, fmt::make_format_args(slot));
                 // ctrl pressed: store. not pressed: load
-                if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl))
-                    m_renderer->writeParameterFile(path);
-                else if (std::filesystem::exists(path))
+                if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl)) {
+                    if (!m_renderer->writeParameterFile(path)) {
+                        Logger(Warn) << "Could not write configuration file " << path;
+                    }
+                } else if (std::filesystem::exists(path))
                     m_renderer->readParameterFile(path);
                 break;
             }
@@ -846,29 +846,32 @@ void Application::processHotKeys() {
     }
 
     // record camera path and time stamps
-    if (!m_record_in.has_value() && !m_video_frame.has_value() && ImGui::IsKeyPressed(ImGuiKey_F9)) {
-        // stop recording of camera path
+    if (!m_record_in.has_value() && !m_video_frame.has_value() &&
+        (ImGui::IsKeyPressed(ImGuiKey_F10) || ImGui::IsKeyPressed(ImGuiKey_F9))) {
+        // both F9 and F10 stop the recording of a camera path
         if (m_record_out.has_value()) {
             m_record_out->close();
             m_record_out = {};
             if (m_video_timing.has_value()) {
                 m_video_timing->close();
                 m_video_timing = {};
-                vvv::Logger(vvv::Info) << "compute video file from frames in " << m_video_file_path << " with:";
-                vvv::Logger(vvv::Info) << " ffmpeg -f concat -safe 0 -i video_timing.txt video.mp4";
+                // Logger(Info) << "compute video file from frames in " << m_video_file_path << " with:";
+                // Logger(Info) << " ffmpeg -f concat -safe 0 -i " << m_video_file_path << "_timing.txt " << m_video_file_path;
             }
 
             // output timing of path
             avg_ms /= static_cast<double>(avg_ms_samples);
             var_ms /= static_cast<double>(avg_ms_samples);
-            vvv::Logger(vvv::Info) << "min / avg (std.dev.) / max [ms/frame]";
-            vvv::Logger(vvv::Info) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms << " ("
+            Logger(Info) << "min / avg (std.dev.) / max [ms/frame]";
+            Logger(Info) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms << " ("
                                    << std::sqrt(var_ms - (avg_ms * avg_ms)) << ") " << " / " << max_ms
                                    << " | " << avg_ms_samples << " frames rendered.";
-        } else {
+        }
+        // F9 starts recording camera positions into a .rec file and frame timings into a timings.txt file
+        else if (ImGui::IsKeyPressed(ImGuiKey_F9)) {
             m_record_out = std::ofstream(m_record_file_path, std::ios::out | std::ios::binary);
             if (!m_record_out->is_open()) {
-                vvv::Logger(vvv::Warn) << "could not open recording output file " << m_record_file_path;
+                Logger(Warn) << "could not open recording output file " << m_record_file_path;
                 m_record_out = {};
                 return;
             }
@@ -876,7 +879,7 @@ void Application::processHotKeys() {
             // create an output file for our timings
             m_video_timing = std::ofstream(m_video_file_path + "_timing.txt", std::ios::out);
             if (!m_video_timing->is_open()) {
-                vvv::Logger(vvv::Warn) << "could not open video timing file " << m_video_file_path << "_timing.txt";
+                Logger(Warn) << "could not open video timing file " << m_video_file_path << "_timing.txt";
                 m_video_timing = {};
             }
             m_video_last_timestamp = glfwGetTime();
@@ -891,7 +894,7 @@ void Application::processHotKeys() {
     // replay camera path
     else if (!m_record_out.has_value() && !m_video_timing.has_value() && !m_video_frame.has_value() &&
              (ImGui::IsKeyPressed(ImGuiKey_F10) || ImGui::IsKeyPressed(ImGuiKey_F11))) {
-        // stop replay
+        // both F10 and F11 stop replay
         if (m_record_in.has_value()) {
             m_record_in->close();
             m_record_in = {};
@@ -899,15 +902,16 @@ void Application::processHotKeys() {
             // output timing of path
             avg_ms /= static_cast<double>(avg_ms_samples);
             var_ms /= static_cast<double>(avg_ms_samples);
-            vvv::Logger(vvv::Warn) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms
-                                   << " ($\\sigma=" << std::sqrt(var_ms - (avg_ms * avg_ms)) << "$) " << " / "
-                                   << max_ms << " total avg ms " << avg_ms << " | " << avg_ms_samples << " frames rendered.";
+            Logger(Info) << "min / avg (std.dev.) / max [ms/frame]";
+            Logger(Info) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms << " ("
+                                   << std::sqrt(var_ms - (avg_ms * avg_ms)) << ") " << " / " << max_ms
+                                   << " | " << avg_ms_samples << " frames rendered.";
         }
-        // start replay
-        else {
+        // only F11 starts replay
+        else if (ImGui::IsKeyPressed(ImGuiKey_F11)) {
             m_record_in = std::ifstream(m_record_file_path, std::ios::in | std::ios::binary);
             if (!m_record_in->is_open()) {
-                vvv::Logger(vvv::Warn) << "could not open recording input file " << m_record_file_path;
+                Logger(Warn) << "could not open recording input file " << m_record_file_path;
                 m_record_in = {};
             }
 
@@ -919,13 +923,13 @@ void Application::processHotKeys() {
         }
         m_video_frame_count = 0u;
     }
-    // output images for camera path
+    // F12 outputs rendered images along pre-recorded camera path
     else if (!m_record_out.has_value() && !m_record_in.has_value() && !m_video_frame.has_value() &&
              !m_video_timing.has_value() && ImGui::IsKeyPressed(ImGuiKey_F12)) {
         // open the camera path file
         m_record_in = std::ifstream(m_record_file_path, std::ios::in | std::ios::binary);
         if (!m_record_in->is_open()) {
-            vvv::Logger(vvv::Warn) << "could not open recording input file " << m_record_file_path;
+            Logger(Warn) << "could not open recording input file " << m_record_file_path;
             m_record_in = {};
             return;
         }
@@ -986,9 +990,17 @@ void Application::processParameterRecording() {
             // output timing of path
             avg_ms /= static_cast<double>(avg_ms_samples);
             var_ms /= static_cast<double>(avg_ms_samples);
-            vvv::Logger(vvv::Warn) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms
-                                   << " ($\\sigma=" << std::sqrt(var_ms - (avg_ms * avg_ms)) << "$) " << " / "
-                                   << max_ms << " | " << avg_ms_samples << " frames rendered.";
+            Logger(Info) << "min / avg (std.dev.) / max [ms/frame]";
+            Logger(Info) << std::fixed << std::setprecision(0) << min_ms << " / " << avg_ms << " ("
+                                   << std::sqrt(var_ms - (avg_ms * avg_ms)) << ") " << " / " << max_ms
+                                   << " | " << avg_ms_samples << " frames rendered.";
+
+            // if rendered frames were written to disk: try to encode video file
+            if (m_video_frame.has_value()) {
+                try_ffmpeg_video_encoding_with_timing(m_video_file_path + "_timing.txt",
+                                                      m_video_file_path + (m_video_file_path.back() == '/' || m_video_file_path.back() == '\\' ? "video" : "") + ".mp4");
+                m_video_frame = {};
+            }
         }
     }
 }
@@ -996,7 +1008,7 @@ void Application::processParameterRecording() {
 void Application::processVideoRecording() {
     // write time stamps
     if (m_video_timing.has_value()) {
-        *m_video_timing << "file '" << m_video_file_path << "_" << m_video_frame_count << ".png'" << std::endl;
+        *m_video_timing << "file '" << m_video_file_path << "_" << m_video_frame_count << ".jpg'" << std::endl;
         double new_time = glfwGetTime();
         *m_video_timing << "duration " << (new_time - m_video_last_timestamp) << std::endl;
         m_video_frame_count++;
@@ -1103,9 +1115,9 @@ void Application::recreateSwapchainImGui() {
 #endif
 
 void Application::logLibraryAvailabilty() {
-    vvv::logLibraryAvailabilty();
+    logLibraryAvailabilty();
 #ifdef IMGUI
-    vvv::Logger(vvv::Debug) << "ImGUI " + std::string(ImGui::GetVersion()) << +" available.";
+    Logger(Debug) << "ImGUI " + std::string(ImGui::GetVersion()) << +" available.";
 #endif
 }
 

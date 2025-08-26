@@ -23,7 +23,6 @@
 
 #include <vvv/reflection/GraphicsPipelineReflection.hpp>
 #include <vvv/reflection/TextureReflection.hpp>
-#include <vvv/reflection/UniformReflection.hpp>
 
 #include <unordered_map>
 #include <utility>

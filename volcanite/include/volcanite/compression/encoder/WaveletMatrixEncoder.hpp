@@ -43,7 +43,7 @@ class WaveletMatrixEncoder : public CSGVBrickEncoder {
     /// @param start the start position of the brick. Should be a multiple of the configured brick size.
     /// @param volume_dim the volume size in voxels in each dimension
     /// @return number of uint32_t elements written to out.
-    [[nodiscard]] virtual uint32_t
+    [[nodiscard]] uint32_t
     encodeBrick(const std::vector<uint32_t> &volume, std::vector<uint32_t> &out, glm::uvec3 start,
                 glm::uvec3 volume_dim) const override {
         return encodeBrickForRandomAccess(volume, out, start, volume_dim);
@@ -116,9 +116,9 @@ class WaveletMatrixEncoder : public CSGVBrickEncoder {
     // FILE IMPORT AND EXPORT ------------------------------------------------------------------------------------------
 
     uint32_t getCompileConstantsHash() {
-        std::vector<uint32_t> keys = {sizeof(BV_WordType), sizeof(BV_L12Type), HWM_LEVELS, BV_L1_BIT_SIZE,
-                                      BV_L2_BIT_SIZE, BV_L2_WORD_SIZE, BV_STORE_L1_BITS, BV_STORE_L2_BITS,
-                                      BV_WORD_BIT_SIZE, getWMHeaderIndex()};
+        const std::vector<uint32_t> keys = {sizeof(BV_WordType), sizeof(BV_L12Type), HWM_LEVELS, BV_L1_BIT_SIZE,
+                                            BV_L2_BIT_SIZE, BV_L2_WORD_SIZE, BV_STORE_L1_BITS, BV_STORE_L2_BITS,
+                                            BV_WORD_BIT_SIZE, getWMHeaderIndex()};
         uint32_t hash = 0u;
         for (const auto &k : keys)
             hash = (std::hash<unsigned char>{}(k ^ (std::rotl<size_t>(hash, 1))));
@@ -207,8 +207,8 @@ class WaveletMatrixEncoder : public CSGVBrickEncoder {
     inline const WMHBrickHeader *getWMHBrickHeaderFromEncoding(const uint32_t *v) const;
     inline const BV_L12Type *getWMHFlatRankFromEncoding(const uint32_t *v) const;
     inline const BV_WordType *getWMHBitVectorFromEncoding(const uint32_t *v) const;
-    FlatRank_BitVector_ptrs getWMHStopBitsFromEncoding(const uint32_t *brick_encoding,
-                                                       uint32_t brick_encoding_length, uint32_t palette_size) const;
+    static FlatRank_BitVector_ptrs getWMHStopBitsFromEncoding(const uint32_t *brick_encoding,
+                                                              uint32_t brick_encoding_length, uint32_t palette_size);
 };
 
 } // namespace volcanite

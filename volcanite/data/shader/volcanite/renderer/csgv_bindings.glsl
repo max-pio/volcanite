@@ -27,8 +27,6 @@ layout(std430, buffer_reference, buffer_reference_align = 4) buffer readonly res
     uvec4 buf[];
 };
 
-// TODO: use push constants for camera parameters and uniform buffers for things that change rarely
-
 // static information that does not change as long as the segmentation volume or cache parameters are not udpated
 // all of these could become compile time constants if shaders are created after buffer and volume construction
 layout(std140, set=0, binding=0) uniform segmented_volume_info {
@@ -84,6 +82,9 @@ layout(std430, binding = 3) buffer restrict brick_cache_infos
 };
 #define BRICK_INFO_REQ_INV_LOD 0
 #define BRICK_INFO_CUR_INV_LOD 1
+// either the start index of the decoded brick in the cache (0 < CUR_INV_LOD < LOD_COUNT),
+// or the label of the corasest inv. lod 0 (0 == CUR_INV_LOD),
+// or INVALID (CUR_INV_LOD >= LOD_COUNT)
 #define BRICK_INFO_CACHE_INDEX 2
 #define BRICK_INFO_REQ_SLOT 3
 
@@ -199,13 +200,14 @@ layout (std140, binding = 11) uniform camera_info {
     mat4 g_view_to_world_space;
     mat3 g_pixel_to_ray_direction_world_space;
     vec3 g_camera_position_world_space;
-    float g_voxels_per_pixel_per_dist;
+    vec3 g_voxels_per_pixel_per_dist; // per axis: (d * voxel_per_distance) #voxels projected per pixel at distance d to near
 };
 
 layout (std140, binding = 12) uniform resolve_info {
     vec4 g_background_color_a;
     vec4 g_background_color_b;
     bool g_tonemap_enable;
+    float g_exposure;
     float g_brightness;
     float g_contrast;
     float g_gamma;

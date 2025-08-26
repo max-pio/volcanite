@@ -1,4 +1,4 @@
-//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//  Copyright (C) 2024, Patrick Jaberg, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -14,7 +14,6 @@
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <cmath>
-#include <utility>
 #include <vvv/passes/PassBlur.hpp>
 
 namespace vvv {

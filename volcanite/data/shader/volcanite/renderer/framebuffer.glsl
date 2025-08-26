@@ -23,7 +23,7 @@
 // Work Item to Pixel Mapping / Subsampling ----------------------------------------------------------------------------
 
 vec2 subpixelOffset(const ivec2 pixel) {
-    // TODO: code duplication with initialization of the random state. the
+    // TODO: code duplication in initialization of the random state
     const uint prev_sample_count = imageLoad(accuSampleCountIn, pixel).r;
     const vec2 u = randomVec3(pixel,((g_camera_still_frames / 256u) << 8u) ^ (prev_sample_count << 31u) ^ prev_sample_count).xy;
 

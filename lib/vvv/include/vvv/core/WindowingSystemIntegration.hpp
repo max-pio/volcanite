@@ -24,7 +24,8 @@ namespace vvv {
 
 class WindowingSystemIntegration {
   public:
-    virtual vk::Extent2D getScreenExtent() const = 0;
+    virtual ~WindowingSystemIntegration() = default;
+    [[nodiscard]] virtual vk::Extent2D getScreenExtent() const = 0;
     virtual float getScreenContentScale() const = 0;
 
     virtual void setWindowSize(int width, int height) const = 0;

@@ -18,13 +18,10 @@
 #include <glm/glm.hpp>
 #include <memory>
 #include <optional>
-#include <utility>
 
 #include "vvv/core/Renderer.hpp"
-#include "vvv/core/Shader.hpp"
 #include "vvv/passes/PassCompute.hpp"
 #include "vvv/reflection/UniformReflection.hpp"
-#include "vvv/util/hash_memory.hpp"
 
 using namespace vvv;
 
@@ -83,3 +80,4 @@ class HelloVolumeRenderer : public Renderer, public WithGpuContext {
 };
 
 } // namespace volcanite
+

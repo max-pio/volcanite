@@ -34,9 +34,7 @@ void Buffer::createBuffer(vk::BufferUsageFlags bufferUsage, vk::MemoryPropertyFl
     bool enable_device_address = (bufferUsage & (vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eShaderDeviceAddressEXT | vk::BufferUsageFlagBits::eShaderDeviceAddressKHR)) != vk::BufferUsageFlags();
     if (enable_device_address) {
         vk::MemoryAllocateFlagsInfo flags_info(vk::MemoryAllocateFlagBits::eDeviceAddress);
-        vk::MemoryAllocateInfo allocateInfo(memoryRequirements.size, memoryTypeIndex);
-        allocateInfo.pNext = &flags_info;
-        m_bufferMemory = device.allocateMemory(allocateInfo);
+        m_bufferMemory = device.allocateMemory(vk::MemoryAllocateInfo(memoryRequirements.size, memoryTypeIndex, &flags_info));
     } else {
         m_bufferMemory = device.allocateMemory(vk::MemoryAllocateInfo(memoryRequirements.size, memoryTypeIndex));
     }
@@ -80,7 +78,7 @@ void Buffer::download(void *dest, size_t deviceOffset, size_t byteSize) const {
 
 void Buffer::upload(const void *rawData, size_t byteSize) const {
     const auto device = getCtx()->getDevice();
-    vk::MemoryRequirements memoryRequirements = device.getBufferMemoryRequirements(getBuffer());
+    // vk::MemoryRequirements memoryRequirements = device.getBufferMemoryRequirements(getBuffer());
     assert(byteSize <= m_byteSize);
     void *data = device.mapMemory(getMemory(), 0, byteSize, vk::MemoryMapFlags());
     std::memcpy(data, rawData, byteSize);
@@ -88,7 +86,7 @@ void Buffer::upload(const void *rawData, size_t byteSize) const {
 }
 void Buffer::upload(size_t device_offset, const void *rawData, size_t byteSize) const {
     const auto device = getCtx()->getDevice();
-    vk::MemoryRequirements memoryRequirements = device.getBufferMemoryRequirements(getBuffer());
+    // vk::MemoryRequirements memoryRequirements = device.getBufferMemoryRequirements(getBuffer());
     assert(byteSize <= m_byteSize);
     void *data = device.mapMemory(getMemory(), device_offset, byteSize, vk::MemoryMapFlags());
     std::memcpy(data, rawData, byteSize);
@@ -102,7 +100,7 @@ void Buffer::uploadWithStagingBuffer(vk::CommandBuffer commandBuffer, const Buff
     commandBuffer.copyBuffer(staging.getBuffer(), m_buffer, vk::BufferCopy(0, dstOffset, byteSize));
 }
 
-std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> Buffer::uploadWithStagingBuffer(const void *const rawData, size_t byteSize, const detail::OpenGLStyleSubmitOptions opts) const {
+std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> Buffer::uploadWithStagingBuffer(const void *const rawData, size_t byteSize, const detail::OpenGLStyleSubmitOptions &opts) const {
     auto staging = std::make_shared<vvv::Buffer>(m_ctx, vvv::BufferSettings{
                                                             .label = "staging" + (!m_label.empty() ? "(" + m_label + ")" : ""),
                                                             .byteSize = m_byteSize,
@@ -114,7 +112,7 @@ std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> Buffer::uploadWithStagi
     return {awaitable, staging};
 }
 
-std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> Buffer::uploadWithStagingBuffer(const void *const rawData, size_t byteSize, size_t dstOffset, const detail::OpenGLStyleSubmitOptions opts) const {
+std::pair<AwaitableHandle, std::shared_ptr<vvv::Buffer>> Buffer::uploadWithStagingBuffer(const void *const rawData, size_t byteSize, size_t dstOffset, const detail::OpenGLStyleSubmitOptions &opts) const {
     auto staging = std::make_shared<vvv::Buffer>(m_ctx, vvv::BufferSettings{
                                                             .label = "staging" + (!m_label.empty() ? "(" + m_label + ")" : ""),
                                                             .byteSize = m_byteSize,

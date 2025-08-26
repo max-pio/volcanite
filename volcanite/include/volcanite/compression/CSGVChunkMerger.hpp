@@ -79,7 +79,7 @@ class CSGVChunkMerger {
                                                                                                    glm::ivec3 max_input_csgv_index) {
         // TODO: make target_uints_per_split_encoding a parameter for merging or obtain it from the first input chunk
         // target a size of ~2GB per split encoding vector
-        uint32_t target_uints_per_split_encoding = 536870912u;
+        static constexpr uint32_t target_uints_per_split_encoding = 536870912u;
 
         Logger(Info, true) << "Merging Compressed Segmentation Volume chunk files 0%";
 
@@ -248,7 +248,7 @@ class CSGVChunkMerger {
             }
 
             // write current brick's encoding
-            encoding_file.write(reinterpret_cast<const char *>(brick_encoding), static_cast<size_t>(brick_encoding_size) * sizeof(uint32_t));
+            encoding_file.write(reinterpret_cast<const char *>(brick_encoding), static_cast<std::streamsize>(brick_encoding_size) * sizeof(uint32_t));
             encoding_size += brick_encoding_size;
 
             if ((static_cast<long>(brick_idx) * 100l / total_brick_count) * total_brick_count == static_cast<long>(brick_idx) * 100l) {
@@ -363,9 +363,6 @@ class CSGVChunkMerger {
 
         // reimport complete CSGV file
         Logger(Info) << "Merging Compressed Segmentation Volume chunk files 100%. complete volume size " << str(complete_volume_dim) << "                ";
-
-        // TODO: only if detail separation takes too long to perform on every import of the merged volume,
-        //  perform detail separation here if requested and overwrite output file with separated detail.
 
         // everything is complete. we can clean up the tmp files and return the merged compressed segmentation volume after loading it from the hard drive
         std::filesystem::remove(brickstarts_path);

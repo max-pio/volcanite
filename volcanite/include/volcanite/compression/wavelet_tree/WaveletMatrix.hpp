@@ -18,10 +18,7 @@
 
 #pragma once
 
-#include "vvv/util/Logger.hpp"
 #include "vvv/util/util.hpp"
-#include <cassert>
-#include <cstring>
 
 #include "BitVector.hpp"
 #include "WaveletMatrixBase.hpp"
@@ -43,6 +40,7 @@ class WaveletMatrix : public WaveletMatrixBase {
 
   public:
     WaveletMatrix(const uint32_t *op_stream_in, uint32_t start4bit, uint32_t end4bit);
+    ~WaveletMatrix() override { delete m_fr; };
 
     [[nodiscard]] uint32_t access(uint32_t position) const override;
     [[nodiscard]] uint32_t rank(uint32_t position, uint32_t symbol) const override;
@@ -55,9 +53,9 @@ class WaveletMatrix : public WaveletMatrixBase {
     [[nodiscard]] const uint32_t *getOnesBeforeLevel() const override { return &m_ones_before[0]; }
 
     [[nodiscard]] size_t getByteSize() const override {
-        size_t bytes = (1 + 2 * WM_LEVELS) * sizeof(uint32_t)              // ones_before, zeros_on_level, text_size
-                       + m_bv.getRawDataSize() * sizeof(BV_WordType)       // bit vector(s) for all levels
-                       + m_fr->getRawDataSize() * sizeof(BV_L12Type) + 12; // FlatRank incl. size and data pointer
+        const size_t bytes = (1 + 2 * WM_LEVELS) * sizeof(uint32_t)              // ones_before, zeros_on_level, text_size
+                             + m_bv.getRawDataSize() * sizeof(BV_WordType)       // bit vector(s) for all levels
+                             + m_fr->getRawDataSize() * sizeof(BV_L12Type) + 12; // FlatRank incl. size and data pointer
         return bytes;
     }
 };

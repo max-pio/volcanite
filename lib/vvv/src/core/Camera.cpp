@@ -64,7 +64,7 @@ void vvv::Camera::registerCameraUpdateCallback(std::function<void()> cameraUpdat
     m_cameraUpdateFunction = std::move(cameraUpdateFunction);
 }
 
-void vvv::Camera::onCameraUpdate() {
+void vvv::Camera::onCameraUpdate() const {
     if (m_cameraUpdateFunction) {
         m_cameraUpdateFunction();
     }

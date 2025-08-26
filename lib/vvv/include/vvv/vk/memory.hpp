@@ -16,7 +16,6 @@
 #pragma once
 
 #include "vvv/core/GpuContext.hpp"
-#include "vvv/vk/destroy.hpp"
 #include <vulkan/vulkan.hpp>
 
 namespace vvv {

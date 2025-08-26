@@ -1,4 +1,4 @@
-//  Copyright (C) 2024, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
+//  Copyright (C) 2024, Patrick Jaberg, Max Piochowiak and Reiner Dolp, Karlsruhe Institute of Technology
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -51,7 +51,6 @@ void GuiTF1DData::renderGui() {
     if (canvas_sz.x < 50.0f)
         canvas_sz.x = 50.0f;
     canvas_sz.y = canvasHeight;
-    glm::vec2 canvas_p1 = canvas_p0 + canvas_sz;
 
     // This will catch our interactions
     ImGui::InvisibleButton("canvas", canvas_sz, ImGuiButtonFlags_MouseButtonLeft);
@@ -71,7 +70,7 @@ bool GuiTF1DData::renderButtons() {
     ImGui::PushItemWidth(ImGui::CalcTextSize("X:0.99").x + 10);
     {
         ImGui::SetNextItemWidth(ImGui::CalcTextSize("Index:99").x + 20);
-        ImGui::DragInt("##index", &selectedControlPoint, 0.25f, 0, tf.m_controlPointsOpacity.size() / 2 - 1, "Index:%d");
+        ImGui::DragInt("##index", &selectedControlPoint, 0.25f, 0, static_cast<int>(tf.m_controlPointsOpacity.size() / 2 - 1), "Index:%d");
         ImGui::SameLine();
         if (ImGui::Button("remove") && selectedControlPoint > 0 && selectedControlPoint < tf.m_controlPointsOpacity.size() / 2 - 1) {
             tf.m_controlPointsOpacity.erase(tf.m_controlPointsOpacity.begin() + 2 * selectedControlPoint);
@@ -130,20 +129,20 @@ void GuiTF1DData::renderCanvas(glm::vec2 canvas_p0, glm::vec2 canvas_sz) {
 
     // Draw Colormap
     for (int x = static_cast<int>(canvas_p0.x) + 5; x <= static_cast<int>(canvas_p1.x) - 5; x++) {
-        float value_x = (x - canvas_p0.x - 5) / (canvas_sz.x - 10);
-        auto color = entry.value->sampleColor(value_x);
-        draw_list->AddRectFilled({static_cast<float>(x), canvas_p0.y + 5}, {static_cast<float>(x + 1), canvas_p1.y - 5}, ImGui::GetColorU32(ImVec4(color.r, color.g, color.b, 1)));
+        const float value_x = (static_cast<float>(x) - canvas_p0.x - 5.f) / (canvas_sz.x - 10.f);
+        const auto color = entry.value->sampleColor(value_x);
+        draw_list->AddRectFilled({static_cast<float>(x), canvas_p0.y + 5.f}, {static_cast<float>(x + 1), canvas_p1.y - 5.f}, ImGui::GetColorU32(ImVec4(color.r, color.g, color.b, 1.f)));
     }
 
     // Draw histogram
     if (entry.histogram) {
-        const auto histColor1 = ImGui::GetColorU32(IM_COL32(0, 0, 0, 64));
-        const auto histColor2 = ImGui::GetColorU32(IM_COL32(255, 255, 255, 64));
-        float maxValue = *std::max_element(entry.histogram->begin(), entry.histogram->end());
+        // const auto histColor1 = ImGui::GetColorU32(IM_COL32(0, 0, 0, 64));
+        // const auto histColor2 = ImGui::GetColorU32(IM_COL32(255, 255, 255, 64));
+        const float maxValue = *std::max_element(entry.histogram->begin(), entry.histogram->end());
 
         for (int i = 0; i < entry.histogram->size(); i++) {
 
-            auto transform = [this, canvas_p0, canvas_sz](int i) {
+            auto transform = [this](const int i) {
                 auto x = static_cast<float>(i) / static_cast<float>(entry.histogram->size());
                 if (entry.histogramMin && entry.histogramMax)
                     x = (x - *entry.histogramMin) / (*entry.histogramMax - *entry.histogramMin);

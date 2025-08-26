@@ -22,7 +22,7 @@ class GuiImgui : public vvv::GuiInterface, public vvv::WithGpuContext {
 
   public:
     explicit GuiImgui(vvv::GpuContextPtr ctx, float scale = 1.f) : m_gui_scaling(scale), m_firstCall(true), WithGpuContext(ctx) {};
-    ~GuiImgui() = default;
+    ~GuiImgui() override = default;
 
     void updateGui() override;
 

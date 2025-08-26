@@ -111,7 +111,7 @@ struct Awaitable {
     /// deleted after submission.
     std::optional<std::vector<std::shared_ptr<Awaitable>>> awaitBeforeExecution;
 
-    SemaphoreState getInclusivePlaningState() const {
+    [[nodiscard]] SemaphoreState getInclusivePlaningState() const {
         SemaphoreState planingState(predecessorPlaningState);
         if (semaphoreId >= planingState.size()) {
             planingState.resize(semaphoreId + 1, 0);
