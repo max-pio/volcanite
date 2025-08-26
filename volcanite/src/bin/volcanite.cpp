@@ -92,14 +92,8 @@ int volcanite_main(int argc, char *argv[]) {
     }
 
     if (args.performDecompression()) {
-        auto payload = compressedSegmentationVolume->decompress();
-        auto dim = compressedSegmentationVolume->getVolumeDim();
-        vvv::Volume<uint32_t> decompressed_volume{static_cast<float>(dim.x), static_cast<float>(dim.y), static_cast<float>(dim.z),
-                                                  dim.x, dim.y, dim.z, vk::Format::eUndefined, *payload};
-        if (!decompressed_volume.write(args.decompress_export_file))
-            Logger(Error) << "volume could not be decompressed";
-        else
-            Logger(Info) << "volume decompressed to " << args.decompress_export_file;
+        CompSegVolHandler::decompressCompressedSegmentationVolume(compressedSegmentationVolume, args.decompress_export_file,
+                                                                  {args.decompress_chunk_size[0], args.decompress_chunk_size[1], args.decompress_chunk_size[2]});
     }
 
     if (!args.brickstats_file.empty()) {
@@ -153,7 +147,7 @@ int volcanite_main(int argc, char *argv[]) {
                 // run a short pre-pass to ensure that static resources (shaders, data set buffer..) are generated
                 // and that the GPU heats up before the actual evaluation run takes place.
                 static constexpr int HEATUP_FRAMES = 4;
-                renderEngine->renderFrames({.accumulation_samples=HEATUP_FRAMES , .duration=1, .verbose=false});
+                renderEngine->renderFrames({.accumulation_samples = HEATUP_FRAMES, .duration = 1, .verbose = false});
 
                 // perform a dry evaluation run first, gathering frame times etc., if required
                 if (args.performHeadlessEvaluationPrepass()) {
@@ -200,9 +194,9 @@ int volcanite_main(int argc, char *argv[]) {
                             Logger(Warn) << "could not write vcfg file " << (stripFileExtension(args.eval_logfiles.at(0)) + ".vcfg");
                         for (const auto &eval_logfile : args.eval_logfiles) {
                             if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
-                                                                        compressedSegmentationVolume->getLastEvaluationResults(),
-                                                                        {}, // TODO: add decompression benchmark for evaluation logging
-                                                                        renderer->getLastEvaluationResults())) {
+                                                                         compressedSegmentationVolume->getLastEvaluationResults(),
+                                                                         {}, // TODO: add decompression benchmark for evaluation logging
+                                                                         renderer->getLastEvaluationResults())) {
                                 Logger(Info) << "exported evaluation results to " << eval_logfile;
                             } else {
                                 Logger(Warn) << "could not export evaluation results to " << eval_logfile;
@@ -237,7 +231,7 @@ int volcanite_main(int argc, char *argv[]) {
                 // let the render engine render all frames
                 if (!args.screenshot_output_file.empty()) {
                     Logger(Info) << "--------------------\n        Screenshot (High Quality) Export Pass";
-                    
+
                     // ensure that a high quality screenshot is rendered (enough accumulation frames)
                     auto hr_cfg = args.hr_cfg;
                     hr_cfg.duration = 1;
@@ -258,7 +252,7 @@ int volcanite_main(int argc, char *argv[]) {
 
                 renderEngine->releaseResources();
 
-            } catch (const vk::Error& vk_error) {
+            } catch (const vk::Error &vk_error) {
                 Logger(Error) << "Headless Rendering Failure. Vulkan Error: " << vk_error.what();
             }
         }
@@ -269,9 +263,9 @@ int volcanite_main(int argc, char *argv[]) {
             // If no rendering is requested: export the copmression results here
             for (const auto &eval_logfile : args.eval_logfiles) {
                 if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
-                                                            compressedSegmentationVolume->getLastEvaluationResults(),
-                                                            {}, // TODO: add decompression benchmark
-                                                            {})) {
+                                                             compressedSegmentationVolume->getLastEvaluationResults(),
+                                                             {}, // TODO: add decompression benchmark
+                                                             {})) {
                     Logger(Info) << "exported evaluation results to " << eval_logfile;
                 } else {
                     Logger(Warn) << "could not export evaluation results to " << eval_logfile;

@@ -217,14 +217,17 @@ struct VolcaniteArgs {
     bool compute_attributes = false;           ///< if additional attributes are computed from the segmentation volume
 
     // compression args
-    std::string compress_export_file;   ///< !empty = perform compression to file         Only one of
-    std::string decompress_export_file; ///< !empty = perform decompression to file       both can be set!
+    std::string compress_export_file;          ///< !empty = perform compression to file
     std::string segmented_volume_file;
     uint32_t brick_size = 32;
     EncodingMode encoding_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC;
     uint32_t freq_subsampling = 8;                  ///< n^3 factor for subsampling bricks for frequency table computation with rANS
     uint32_t operation_mask = OP_ALL_WITHOUT_DELTA; // enables certain CSGV operations and stop bits through OP_*_BIT
     bool random_access = false;                     ///< encode bricks so that they support random access within a brick
+
+    // decompression args
+    std::string decompress_export_file;                         ///< !empty = perform decompression to file
+    uint32_t decompress_chunk_size[3] = {1024u, 1024u, 1024u};  ///< decompressed volume is split into chunks. must be multiple of CSGV brick size.
 
     // evaluation and statistics
     HeadlessRenderingConfig hr_cfg;     ///< configuration parameters for the automated headless rendering pass
@@ -290,7 +293,6 @@ struct VolcaniteArgs {
             // could include TCLAP grouping here using AnyOf, EitherOf
 
             // compression arguments
-            ValueArg<std::string> decompresspathArg("d", "decompress", "Export the decompressed volume to given file.", false, va.decompress_export_file, "file", cmd);
             ValueArg<std::string> compresspathArg("c", "compress", "Export the compressed volume to the given csgv file and any attribute database along with it.", false, va.compress_export_file, "file", cmd);
             ValueArg<std::string> chunkedArg("", "chunked", "Compress chunked segmented volume using formatted <volume> path with inclusive x, y, and z chunk file ranges as: \".*{[0..<xn>]}.*{[0..<yn>]}.*{[0..<zn>]}.*\".", false, "", "xn,yn,zn", cmd);
             ValueArg<uint32_t> subsamplingArg("", "freq-sampling", "Compression prepass acceleration by given factor cubed. Affects strength 1 or 2 only.", false, va.freq_subsampling, "int", cmd);
@@ -305,6 +307,11 @@ struct VolcaniteArgs {
             cmd.add(bricksizeArg);
             ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits. Quick: [a]ll or [o]ptimized (no Pdelta).", false, "a", "none|(a|o|p|n|x|y|z|l|d[-]|s)*", cmd);
             SwitchArg randomAccessArg("", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
+
+            // decompression arguments
+            ValueArg<std::string> decompresspathArg("d", "decompress", "Export the decompressed volume to given file.", false, va.decompress_export_file, "file", cmd);
+            ValueArg<std::string> decompressChunkSizeArg("", "decompress-chunk", "Decompression file chunk size in voxels as {width},{height},{depth}. A single value is treated as uniform size.", false, "", "{width},{height},{depth}", cmd);
+
             // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             ValueArg<std::string> brickStatsArg("", "brickstats-logfile", "File into which statistics per brick are exported", false, "", "file", cmd);
@@ -357,11 +364,30 @@ struct VolcaniteArgs {
                 throw ArgException("Volcanite was build with CMake option HEADLESS set. volcanite must be run with --headless option and can not use interactive windows.", headlessArg.longID());
             }
 #endif
-            va.decompress_export_file = expandPathStr(decompresspathArg.getValue());
             va.compress_export_file = expandPathStr(compresspathArg.getValue());
             if (!parseOperationMaskString(va.operation_mask, opMaskArg.getValue()))
                 throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d[-],s only", opMaskArg.longID());
             va.random_access = randomAccessArg.getValue();
+
+            va.decompress_export_file = expandPathStr(decompresspathArg.getValue());
+            if (const std::string& decomp_chunk_str = decompressChunkSizeArg.getValue();
+                !decomp_chunk_str.empty()) {
+
+                std::stringstream ss(decompressChunkSizeArg.getValue());
+                ss >> va.render_resolution[0];
+                if (ss.peek() != std::char_traits<char>::eof()) {
+                    ss.ignore();
+                    ss >> va.render_resolution[1];
+                    ss.ignore();
+                    ss >> va.render_resolution[2];
+                } else {
+                    va.decompress_chunk_size[2] = va.decompress_chunk_size[1] = va.decompress_chunk_size[0];
+                }
+
+                if (ss.fail())
+                    throw ArgException(decompressChunkSizeArg.longID() + " must be a single size or three sizes '{width},{height},{depth}' in voxels.", resolutionArg.longID());
+            }
+
             // rendering arguments
             if (!parseRenderingConfigsString(va.rendering_configs, renderconfigArg.getValue()))
                 throw ArgException(renderconfigArg.longID() + " must be a ; separated list of .vcfg files or config strings.", renderconfigArg.longID());

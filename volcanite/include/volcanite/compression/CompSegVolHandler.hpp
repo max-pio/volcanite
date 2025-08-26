@@ -51,6 +51,8 @@ namespace volcanite {
 /// If rANS encoding is applied when compressing, a quick pre-pass for obtaining operation frequency tables is performed.
 class CompSegVolHandler {
 
+    // TODO: split CompSegVolHandler in .hpp and .cpp definitions
+
   public:
     CompSegVolHandler() = default;
     ~CompSegVolHandler() {
@@ -139,23 +141,28 @@ class CompSegVolHandler {
         }
     }
 
-    struct CSGVCompressionConfig {
-        uint32_t brick_dim = 32;
-        EncodingMode encoding_mode = DOUBLE_TABLE_RANS_ENC;
-        uint32_t op_mask = OP_ALL;
-        bool random_access = false;
-        std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> label_remapping = nullptr;
-        uint32_t cpu_threads = 0u;
-        bool use_detail_separation = false;
-        bool force_recompute = false;
-        bool chunked_input_data = false;
-        glm::uvec3 max_file_index = glm::uvec3(0u);
-        uint32_t freq_subsampling = 8u;
-        bool run_tests = false;
-        bool export_stats_per_chunk = false;
-        bool verbose = true;
-    };
 
+    static void decompressCompressedSegmentationVolume(std::shared_ptr<const CompressedSegmentationVolume> csgv, const std::string &output_path, const glm::uvec3 chunk_size = glm::uvec3(1024u, 1024u, 1024u)) {
+        // TODO: implement chunked decompression for large data sets
+        // 1. check if the chunk size is a multiple of the brick size (throw runtime_error otherwise)
+        // 2. reserve a Volume<uint32_t> out_chunk of the chunk size
+        // 3. iterate over output chunks: decode all bricks (openmp parallel) into the out_chunk, export out_chunk to its file
+        // 3b. if the decompression will create more than one chunk: export "volume.abc" as chunks "volume_x{0...}y{0...}z{0...}.abc"
+        // 5. you can create a test (see csgv_test.cpp or volcanite_render_test.cpp): create a 128x256x256 synthetic volume, export to chunk size 64,128,256 tmp files, compress from tmp files and check equality
+        // 4. handle chunks on upper borders: might export smaller volumes if the CSGV size is not a full multiple of the chunk size (update test?)
+
+        throw std::runtime_error("decompressCompressedSegmentationVolume not implemented");
+
+
+        auto payload = csgv->decompress();
+        auto dim = csgv->getVolumeDim();
+        Volume<uint32_t> decompressed_volume{static_cast<float>(dim.x), static_cast<float>(dim.y), static_cast<float>(dim.z),
+                                                  dim.x, dim.y, dim.z, vk::Format::eUndefined, *payload};
+        if (!decompressed_volume.write(output_path))
+            Logger(Error) << "volume could not be decompressed";
+        else
+            Logger(Info) << "volume decompressed to " << output_path;
+    }
 
 private:
     std::string m_last_volume_path = {};
@@ -173,6 +180,23 @@ private:
     }
 
 public:
+    struct CSGVCompressionConfig {
+        uint32_t brick_dim = 32;
+        EncodingMode encoding_mode = DOUBLE_TABLE_RANS_ENC;
+        uint32_t op_mask = OP_ALL;
+        bool random_access = false;
+        std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> label_remapping = nullptr;
+        uint32_t cpu_threads = 0u;
+        bool use_detail_separation = false;
+        bool force_recompute = false;
+        bool chunked_input_data = false;
+        glm::uvec3 max_file_index = glm::uvec3(0u);
+        uint32_t freq_subsampling = 8u;
+        bool run_tests = false;
+        bool export_stats_per_chunk = false;
+        bool verbose = true;
+    };
+
     std::shared_ptr<CompressedSegmentationVolume> createCompressedSegmentationVolume(const std::string &volume_input_path,
                                                                                             const std::string &csgv_path, const CSGVCompressionConfig &cfg) {
         uint32_t cpu_threads = cfg.cpu_threads;
@@ -441,6 +465,8 @@ public:
         Logger(Info) << "Total info: " << csgv->getEncodingInfoString();
         return csgv;
     }
+
+
 };
 
 } // namespace volcanite
