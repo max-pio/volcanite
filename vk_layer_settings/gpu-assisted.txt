@@ -2,4 +2,5 @@
 # Documentation for further configuration of this feature see:
 # https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/main/docs/gpu_validation.md
 # usage: VK_LAYER_SETTINGS_PATH=gpu-assisted.txt ./volcanite
-khronos_validation.enables = VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT
+khronos_validation.enables = VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT
+khronos_validation.disables = VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT

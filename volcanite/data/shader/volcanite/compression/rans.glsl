@@ -42,14 +42,15 @@ void _RansDecAdvanceSymbol(inout uint r, in EncodingRef enc_start, inout uint by
     // renormalize
     if (x < RANS_BYTE_L) {
         uint idx = byte_index;
-        do {
+        // TODO: this was a do .. while(); but that crashes in createPipelines with GPU-assisted validation
+        while (x < RANS_BYTE_L) {
             // read the next byte from our uint32 array
             uint shift = 8 * (idx % 4);
             // TODO: use bitfieldExtract instead of manual bit selection
-            uint byte = (enc_start.buf[idx / 4] >> shift) & 0xFFu;
+            uint byte = (enc_start.buf[idx / 4u] >> shift) & 0xFFu;
             x = (x << 8) | byte;
             idx++;
-        } while (x < RANS_BYTE_L);
+        }
         byte_index = idx;
     }
 
