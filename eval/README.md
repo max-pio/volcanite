@@ -16,7 +16,7 @@ It is advised to do this inside a python virtual environment:
 python -m venv ./.venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install ../python/volcanite[all]
+pip install ../python/volcanite[all] pandas
 ```
 
 ### Data Set Download
