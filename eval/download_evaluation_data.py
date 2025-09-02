@@ -484,7 +484,7 @@ if __name__ == '__main__':
                                                     f"--headless -c {csgv_directory / (name + ".csgv")}"
                                                     + " " + ve.VolcaniteArg.concat_arg_string(data_specific_compression_args(name)) + \
                                                     f" {__preview_arg(args.preview, csgv_directory, name)}"
-                                                    f" {cur_dir / "cells_065.hdf5"}")
+                                                    f" {cur_dir / "cells_055.hdf5"}")
 
                 if ret.returncode != 0:
                     print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
