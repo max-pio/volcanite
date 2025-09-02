@@ -374,12 +374,12 @@ struct VolcaniteArgs {
                 !decomp_chunk_str.empty()) {
 
                 std::stringstream ss(decompressChunkSizeArg.getValue());
-                ss >> va.render_resolution[0];
-                if (ss.peek() != std::char_traits<char>::eof()) {
+                ss >> va.decompress_chunk_size[0];
+                if (!ss.eof()) { // .peek() != std::char_traits<char>::eof()) {
                     ss.ignore();
-                    ss >> va.render_resolution[1];
+                    ss >> va.decompress_chunk_size[1];
                     ss.ignore();
-                    ss >> va.render_resolution[2];
+                    ss >> va.decompress_chunk_size[2];
                 } else {
                     va.decompress_chunk_size[2] = va.decompress_chunk_size[1] = va.decompress_chunk_size[0];
                 }
