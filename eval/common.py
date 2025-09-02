@@ -24,7 +24,7 @@ def data_specific_rendering_args(data : str, cache_palette : bool = True, stream
     return vargs
 
 
-def data_specific_compression_args(data: str, volume_data_dir: Path, input_file: bool = True, brick_size: bool = True, operations: bool = True):
+def data_specific_compression_args(data: str, volume_data_dir: Path | None = None, brick_size: bool = True, operations: bool = True):
     vargs = []
 
     if brick_size:
