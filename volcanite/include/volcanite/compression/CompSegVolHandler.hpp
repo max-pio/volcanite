@@ -1,4 +1,4 @@
-//  Copyright (C) 2024, Max Piochowiak, Karlsruhe Institute of Technology
+//  Copyright (C) 2024, Max Piochowiak and Fabian Schiekel Karlsruhe Institute of Technology
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -141,9 +141,14 @@ class CompSegVolHandler {
         }
     }
 
+    struct ThreadBlock {
+        unsigned int start_x;
+        unsigned int end_x;
+        unsigned int start_y;
+        unsigned int end_y;
+    };
 
     static void decompressCompressedSegmentationVolume(std::shared_ptr<const CompressedSegmentationVolume> csgv, const std::string &output_path, const glm::uvec3 chunk_size = glm::uvec3(1024u, 1024u, 1024u)) {
-        // TODO: implement chunked decompression for large data sets
         // 1. check if the chunk size is a multiple of the brick size (throw runtime_error otherwise)
         // 2. reserve a Volume<uint32_t> out_chunk of the chunk size
         // 3. iterate over output chunks: decode all bricks (openmp parallel) into the out_chunk, export out_chunk to its file
@@ -151,26 +156,173 @@ class CompSegVolHandler {
         // 5. you can create a test (see csgv_test.cpp or volcanite_render_test.cpp): create a 128x256x256 synthetic volume, export to chunk size 64,128,256 tmp files, compress from tmp files and check equality
         // 4. handle chunks on upper borders: might export smaller volumes if the CSGV size is not a full multiple of the chunk size (update test?)
 
-        throw std::runtime_error("decompressCompressedSegmentationVolume not implemented");
+        const auto brick_size = csgv->getBrickSize();
+        if (chunk_size.x % brick_size != 0 && chunk_size.y % brick_size != 0 && chunk_size.z % brick_size != 0)
+            throw std::runtime_error("chunk size has to be a multiple of the brick size");
 
+        auto payload = csgv->decompress(); // (X,Y,Z) -> like decompressed_bricks from AttributeExtractor
+        const auto volume_dim = csgv->getVolumeDim();
+        const auto number_of_output_chunks = glm::vec3(glm::ceil(volume_dim.x / static_cast<float>(chunk_size.x)), glm::ceil(volume_dim.y / static_cast<float>(chunk_size.y)), glm::ceil(volume_dim.z / static_cast<float>(chunk_size.z)));
 
-        auto payload = csgv->decompress();
-        auto dim = csgv->getVolumeDim();
-        Volume<uint32_t> decompressed_volume{static_cast<float>(dim.x), static_cast<float>(dim.y), static_cast<float>(dim.z),
-                                                  dim.x, dim.y, dim.z, vk::Format::eUndefined, *payload};
-        if (!decompressed_volume.write(output_path))
-            Logger(Error) << "volume could not be decompressed";
-        else
+        double preliminary_cpu_threads = glm::min(std::thread::hardware_concurrency(), volume_dim.z);
+        // round cpu threads to nearest square -> for parallelization
+        const unsigned int cpu_threads = glm::max(static_cast<int>(std::pow(std::ceil(std::sqrt(preliminary_cpu_threads)), 2)), 2);
+
+        std::vector<ThreadBlock> thread_blocks;
+        // divide volume for parallelization
+        {
+            const int cpu_threads_sqrt = static_cast<int>(std::sqrt(cpu_threads));
+            const unsigned int x_per_thread = volume_dim.x / cpu_threads_sqrt;
+            const unsigned int x_remainder = volume_dim.x % cpu_threads_sqrt;
+            const unsigned int y_per_thread = volume_dim.y / cpu_threads_sqrt;
+            const unsigned int y_remainder = volume_dim.y % cpu_threads_sqrt;
+
+            unsigned int current_x = 0;
+            unsigned int current_y = 0;
+
+            for (int threads_y_id = 0; threads_y_id < cpu_threads_sqrt; threads_y_id++) {
+                unsigned int y_start = current_y;
+                unsigned int y_size = y_per_thread + (threads_y_id < y_remainder ? 1 : 0);
+                unsigned int y_end = y_start + y_size;
+                current_x = 0;
+                for (int threads_x_id = 0; threads_x_id < cpu_threads_sqrt; threads_x_id++) {
+                    unsigned int x_start = current_x;
+                    unsigned int x_size = x_per_thread + (threads_x_id < x_remainder ? 1 : 0);
+                    unsigned int x_end = x_start + x_size;
+
+                    ThreadBlock tb = {x_start, x_end, y_start, y_end};
+                    thread_blocks.emplace_back(tb);
+
+                    current_x = x_end;
+                }
+                current_y = y_end;
+            }
+        }
+        std::vector<glm::uvec3> real_chunk_size;
+        std::vector<std::vector<uint32_t>> output_chunks; // (Z,Y,X)
+        {
+            // calculate the exact size of each chunk
+            for (uint32_t z = 0; z < volume_dim.z; z += chunk_size.z) {
+                for (uint32_t x = 0; x < volume_dim.x; x += chunk_size.x) {
+                    for (uint32_t y = 0; y < volume_dim.y; y += chunk_size.y) {
+                        // Compute extent of this block (clip at border)
+                        uint32_t x_end = std::min(x + chunk_size.x, volume_dim.x);
+                        uint32_t y_end = std::min(y + chunk_size.y, volume_dim.y);
+                        uint32_t z_end = std::min(z + chunk_size.z, volume_dim.z);
+
+                        glm::uvec3 individual_chunk_size = {(x_end - x), (y_end - y), (z_end - z)};
+
+                        if (chunk_size.x % brick_size != 0 && chunk_size.y % brick_size != 0 && chunk_size.z % brick_size != 0)
+                            throw std::runtime_error("each resulting chunk has to be a multiple of the brick size");
+
+                        // Initialize the chunk with correct size
+                        output_chunks.emplace_back(individual_chunk_size.x * individual_chunk_size.y * individual_chunk_size.z);
+                        real_chunk_size.emplace_back(individual_chunk_size);
+                    }
+                }
+            }
+        }
+
+        MiniTimer t;
+
+#pragma omp parallel num_threads(cpu_threads) default(shared)
+        {
+            // parallelization done by dividing the xy-plane between threads and every thread's writes its own part of the output
+
+            unsigned int thread_id = omp_get_thread_num();
+            ThreadBlock tb = thread_blocks[thread_id];
+
+            // determine how many individual output chunks every threads needs to write to
+            uint32_t first_output_chunk_x = tb.start_x / chunk_size.x;
+            uint32_t last_output_chunk_x = (tb.end_x - 1) / chunk_size.x;
+            uint32_t first_output_chunk_y = tb.start_y / chunk_size.y;
+            uint32_t last_output_chunk_y = (tb.end_y - 1) / chunk_size.y;
+
+            uint32_t count_output_chunks_x = last_output_chunk_x - first_output_chunk_x + 1;
+            uint32_t count_output_chunks_y = last_output_chunk_y - first_output_chunk_y + 1;
+
+            // calculate starting offset after chunk one
+            glm::uvec2 elements_in_first_chunk;
+            elements_in_first_chunk.x = chunk_size.x - (tb.start_x % chunk_size.x);
+            elements_in_first_chunk.y = chunk_size.y - (tb.start_y % chunk_size.y);
+            glm::uvec2 start_offset(0);
+            for (uint32_t thread_output_chunk_y = 0; thread_output_chunk_y < count_output_chunks_y; thread_output_chunk_y++) {
+                if (thread_output_chunk_y != 0)
+                    // increment start_offset after first chunk
+                    start_offset.y += thread_output_chunk_y == 1 ? elements_in_first_chunk.y : chunk_size.y;
+                start_offset.x = 0;
+                for (uint32_t thread_output_chunk_x = 0; thread_output_chunk_x < count_output_chunks_x; thread_output_chunk_x++) {
+                    if (thread_output_chunk_x != 0)
+                        start_offset.x += thread_output_chunk_x == 1 ? elements_in_first_chunk.x : chunk_size.x;
+                    for (uint32_t y = tb.start_y + start_offset.y; y < (thread_output_chunk_y + first_output_chunk_y + 1) * chunk_size.y; y++) {
+                        for (uint32_t x = tb.start_x + start_offset.x; x < (thread_output_chunk_x + first_output_chunk_x + 1) * chunk_size.x; x++) {
+                            if (y >= tb.end_y || x >= tb.end_x || y >= volume_dim.y || x >= volume_dim.x)
+                                continue;
+                            for (uint32_t z = 0; z < volume_dim.z; z++) {
+                                auto output_chunk_idx = brick_pos2idx({x / chunk_size.x, y / chunk_size.y, z / chunk_size.z}, {number_of_output_chunks.x, number_of_output_chunks.y, number_of_output_chunks.z});
+                                auto output_chunk_idx_idx = brick_pos2idx({x % chunk_size.x, y % chunk_size.y, z % chunk_size.z}, {real_chunk_size[output_chunk_idx]});
+                                auto payload_chunk_idx = voxel_pos2idx({x, y, z}, volume_dim);
+
+                                output_chunks[output_chunk_idx][output_chunk_idx_idx] = payload->at(payload_chunk_idx);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // construct output_path template
+        const std::string file_extension = output_path.substr(output_path.find_last_of('.'), output_path.length());
+        const std::string chunk_output_path_template = output_path.substr(0, output_path.length() - 5) + "_x{}y{}z{}" + file_extension;
+
+        bool decompression_successful = true;
+        auto write_chunk = [&](size_t i) {
+            Volume<uint32_t> decompressed_chunk{static_cast<float>(chunk_size.x), static_cast<float>(chunk_size.y), static_cast<float>(chunk_size.z),
+                                                real_chunk_size[i].x, real_chunk_size[i].y, real_chunk_size[i].z, vk::Format::eUndefined, output_chunks[i]};
+
+            const auto chunk_position = brick_idx2pos(i, number_of_output_chunks);
+            const std::string chunk_output_path = formatChunkPath(chunk_output_path_template, chunk_position.x, chunk_position.y, chunk_position.z);
+            if (std::filesystem::exists(chunk_output_path))
+                std::filesystem::remove(chunk_output_path);
+
+            return decompressed_chunk.write(chunk_output_path);
+        };
+
+        if (file_extension.ends_with(".hdf5") || file_extension.ends_with(".h5")) {
+            // cannot write hdf5 in parallel
+            for (int i = 0; i < output_chunks.size(); i++) {
+                if (!write_chunk(i))
+                    decompression_successful = false;
+            }
+        } else {
+            omp_lock_t lock;
+            omp_init_lock(&lock);
+
+#pragma omp parallel for schedule(dynamic) num_threads(cpu_threads) default(shared)
+            for (int i = 0; i < output_chunks.size(); i++) {
+                if (!write_chunk(i)) {
+                    omp_set_lock(&lock);
+                    decompression_successful = false;
+                    omp_unset_lock(&lock);
+                }
+            }
+        }
+
+        if (decompression_successful)
             Logger(Info) << "volume decompressed to " << output_path;
+        else
+            Logger(Error) << "volume could not be decompressed";
+
+        Logger(Debug) << "finished decompression of csgv into " << number_of_output_chunks.x * number_of_output_chunks.y * number_of_output_chunks.z << " chunks in " << t.elapsed() << " seconds";
     }
 
-private:
+  private:
     std::string m_last_volume_path = {};
     glm::ivec3 m_volume_dim = glm::ivec3(0);
     std::shared_ptr<Volume<uint32_t>> m_volume = nullptr;
-    void loadSegmentationVolumeFileCached(const std::string& path,
-                                   const std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> &label_remapping = nullptr,
-                                   uint32_t cpu_threads = std::thread::hardware_concurrency()) {
+    void loadSegmentationVolumeFileCached(const std::string &path,
+                                          const std::shared_ptr<std::unordered_map<uint32_t, uint32_t>> &label_remapping = nullptr,
+                                          uint32_t cpu_threads = std::thread::hardware_concurrency()) {
         // only load the volume file if it differs from the previously loaded volume
         if (path != m_last_volume_path || !m_volume) {
             loadSegmentationVolumeFile(path, m_volume, label_remapping, cpu_threads);
@@ -179,7 +331,7 @@ private:
         }
     }
 
-public:
+  public:
     struct CSGVCompressionConfig {
         uint32_t brick_dim = 32;
         EncodingMode encoding_mode = DOUBLE_TABLE_RANS_ENC;
@@ -198,7 +350,7 @@ public:
     };
 
     std::shared_ptr<CompressedSegmentationVolume> createCompressedSegmentationVolume(const std::string &volume_input_path,
-                                                                                            const std::string &csgv_path, const CSGVCompressionConfig &cfg) {
+                                                                                     const std::string &csgv_path, const CSGVCompressionConfig &cfg) {
         uint32_t cpu_threads = cfg.cpu_threads;
         if (cpu_threads == 0u)
             cpu_threads = std::thread::hardware_concurrency();
@@ -295,7 +447,7 @@ public:
 
                             size_t tmp_code_frequencies[32];
                             csgv->setLabel(std::filesystem::path(chunk_input_path).stem().string());
-                            csgv->setCompressionOptions({.brick_size=cfg.brick_dim, .encoding_mode=NIBBLE_ENC, .op_mask=cfg.op_mask, .random_access=cfg.random_access});
+                            csgv->setCompressionOptions({.brick_size = cfg.brick_dim, .encoding_mode = NIBBLE_ENC, .op_mask = cfg.op_mask, .random_access = cfg.random_access});
                             csgv->compressForFrequencyTable(m_volume->data(), m_volume_dim, tmp_code_frequencies, cfg.freq_subsampling, cfg.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
                             for (int i = 0; i < 16; i++) {
                                 code_frequencies[i] += tmp_code_frequencies[i];
@@ -355,8 +507,7 @@ public:
                         // perform the actual compression
                         csgv->clear();
                         csgv->setLabel(chunk_input_path);
-                        csgv->setCompressionOptions({.brick_size=cfg.brick_dim, .encoding_mode=cfg.encoding_mode, .op_mask=cfg.op_mask, .random_access=cfg.random_access,
-                                                    .code_frequencies=code_frequencies.data(), .detail_code_frequencies=detail_code_frequencies.data()});
+                        csgv->setCompressionOptions({.brick_size = cfg.brick_dim, .encoding_mode = cfg.encoding_mode, .op_mask = cfg.op_mask, .random_access = cfg.random_access, .code_frequencies = code_frequencies.data(), .detail_code_frequencies = detail_code_frequencies.data()});
                         csgv->compress(m_volume->data(), m_volume_dim, cfg.verbose);
                         total_encoding_seconds += csgv->getLastTotalEncodingSeconds();
                         if (std::filesystem::exists(chunk_output_path)) {
@@ -465,8 +616,6 @@ public:
         Logger(Info) << "Total info: " << csgv->getEncodingInfoString();
         return csgv;
     }
-
-
 };
 
 } // namespace volcanite
