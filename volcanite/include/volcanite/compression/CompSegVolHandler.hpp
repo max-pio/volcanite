@@ -199,13 +199,12 @@ class CompSegVolHandler {
             }
         }
         std::vector<glm::uvec3> real_chunk_size;
-        std::vector<std::vector<uint32_t>> output_chunks; // (Z,Y,X)
+        std::vector<std::vector<uint32_t>> output_chunks; // (X,Y,Z)
         {
             // calculate the exact size of each chunk
             for (uint32_t z = 0; z < volume_dim.z; z += chunk_size.z) {
-                for (uint32_t x = 0; x < volume_dim.x; x += chunk_size.x) {
-                    for (uint32_t y = 0; y < volume_dim.y; y += chunk_size.y) {
-                        // Compute extent of this block (clip at border)
+                for (uint32_t y = 0; y < volume_dim.y; y += chunk_size.y) {
+                    for (uint32_t x = 0; x < volume_dim.x; x += chunk_size.x) {
                         uint32_t x_end = std::min(x + chunk_size.x, volume_dim.x);
                         uint32_t y_end = std::min(y + chunk_size.y, volume_dim.y);
                         uint32_t z_end = std::min(z + chunk_size.z, volume_dim.z);
