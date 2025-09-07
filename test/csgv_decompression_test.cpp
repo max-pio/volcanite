@@ -65,9 +65,9 @@ int main() {
 
     // decompress the volume
     glm::uvec3 chunk_size = {64, 128, 256};
-    const auto decompressed_volume_export_path_base = std::filesystem::temp_directory_path() / "volcanite/render_test/";
+    const auto decompressed_volume_export_path_base = std::filesystem::temp_directory_path() / "volcanite/render_test";
     if (!std::filesystem::exists(decompressed_volume_export_path_base))
-        std::filesystem::create_directory(decompressed_volume_export_path_base);
+        std::filesystem::create_directories(decompressed_volume_export_path_base);
 
     const auto decompressed_volume_export_path = decompressed_volume_export_path_base / "decompressed_test_volume.hdf5";
     const auto decompressed_volume_export_format_path = decompressed_volume_export_path_base / "decompressed_test_volume_x{}y{}z{}.hdf5";
@@ -100,7 +100,7 @@ int main() {
         }
     }
 
-
+    Logger(Debug) << "Decompression test was successful.";
 
     return true;
 }
