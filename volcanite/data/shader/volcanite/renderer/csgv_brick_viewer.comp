@@ -220,7 +220,7 @@ void main() {
         }
 
         // make everything flat if different display modes are selected
-        if ((g_show_code_mode == 1 && code != 5) || g_show_code_mode == 2)
+        if ((g_show_code_mode == 1 && (code & 7u) != PALETTE_ADV) || g_show_code_mode == 2)
             code = max_code;
         if (code < max_code) {
             vec2 tex_uv = fract(local * (float(g_brick_size) / float(lod_width)));
