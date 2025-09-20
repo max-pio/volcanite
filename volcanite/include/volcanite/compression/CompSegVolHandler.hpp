@@ -141,178 +141,64 @@ class CompSegVolHandler {
         }
     }
 
-    struct ThreadBlock {
-        unsigned int start_x;
-        unsigned int end_x;
-        unsigned int start_y;
-        unsigned int end_y;
-    };
-
     static void decompressCompressedSegmentationVolume(std::shared_ptr<const CompressedSegmentationVolume> csgv, const std::string &output_path, const glm::uvec3 chunk_size = glm::uvec3(1024u, 1024u, 1024u)) {
-        // 1. check if the chunk size is a multiple of the brick size (throw runtime_error otherwise)
-        // 2. reserve a Volume<uint32_t> out_chunk of the chunk size
-        // 3. iterate over output chunks: decode all bricks (openmp parallel) into the out_chunk, export out_chunk to its file
-        // 3b. if the decompression will create more than one chunk: export "volume.abc" as chunks "volume_x{0...}y{0...}z{0...}.abc"
-        // 5. you can create a test (see csgv_test.cpp or volcanite_render_test.cpp): create a 128x256x256 synthetic volume, export to chunk size 64,128,256 tmp files, compress from tmp files and check equality
-        // 4. handle chunks on upper borders: might export smaller volumes if the CSGV size is not a full multiple of the chunk size (update test?)
-
         const auto brick_size = csgv->getBrickSize();
         if (chunk_size.x % brick_size != 0 && chunk_size.y % brick_size != 0 && chunk_size.z % brick_size != 0)
             throw std::runtime_error("chunk size has to be a multiple of the brick size");
 
-        auto payload = csgv->decompress(); // (X,Y,Z) -> like decompressed_bricks from AttributeExtractor
         const auto volume_dim = csgv->getVolumeDim();
-        const auto number_of_output_chunks = glm::vec3(glm::ceil(volume_dim.x / static_cast<float>(chunk_size.x)), glm::ceil(volume_dim.y / static_cast<float>(chunk_size.y)), glm::ceil(volume_dim.z / static_cast<float>(chunk_size.z)));
+        const auto number_of_bricks_per_chunk = chunk_size / brick_size;
+        const auto combined_number_of_bricks_per_chunk = number_of_bricks_per_chunk.x * number_of_bricks_per_chunk.y * number_of_bricks_per_chunk.z;
+        const auto number_of_output_chunks = glm::uvec3(glm::ceil(volume_dim.x / static_cast<float>(chunk_size.x)), glm::ceil(volume_dim.y / static_cast<float>(chunk_size.y)), glm::ceil(volume_dim.z / static_cast<float>(chunk_size.z)));
+        const auto combined_number_of_output_chunks = number_of_output_chunks.x * number_of_output_chunks.y * number_of_output_chunks.z;
 
-        double preliminary_cpu_threads = glm::min(std::thread::hardware_concurrency(), volume_dim.z);
-        // round cpu threads to nearest square -> for parallelization
-        const unsigned int cpu_threads = glm::max(static_cast<int>(std::pow(std::ceil(std::sqrt(preliminary_cpu_threads)), 2)), 2);
-
-        std::vector<ThreadBlock> thread_blocks;
-        // divide volume for parallelization
-        {
-            const int cpu_threads_sqrt = static_cast<int>(std::sqrt(cpu_threads));
-            const unsigned int x_per_thread = volume_dim.x / cpu_threads_sqrt;
-            const unsigned int x_remainder = volume_dim.x % cpu_threads_sqrt;
-            const unsigned int y_per_thread = volume_dim.y / cpu_threads_sqrt;
-            const unsigned int y_remainder = volume_dim.y % cpu_threads_sqrt;
-
-            unsigned int current_x = 0;
-            unsigned int current_y = 0;
-
-            for (int threads_y_id = 0; threads_y_id < cpu_threads_sqrt; threads_y_id++) {
-                unsigned int y_start = current_y;
-                unsigned int y_size = y_per_thread + (threads_y_id < y_remainder ? 1 : 0);
-                unsigned int y_end = y_start + y_size;
-                current_x = 0;
-                for (int threads_x_id = 0; threads_x_id < cpu_threads_sqrt; threads_x_id++) {
-                    unsigned int x_start = current_x;
-                    unsigned int x_size = x_per_thread + (threads_x_id < x_remainder ? 1 : 0);
-                    unsigned int x_end = x_start + x_size;
-
-                    ThreadBlock tb = {x_start, x_end, y_start, y_end};
-                    thread_blocks.emplace_back(tb);
-
-                    current_x = x_end;
-                }
-                current_y = y_end;
-            }
-        }
-        std::vector<glm::uvec3> real_chunk_size;
-        std::vector<std::vector<uint32_t>> output_chunks; // (X,Y,Z)
-        {
-            // calculate the exact size of each chunk
-            for (uint32_t z = 0; z < volume_dim.z; z += chunk_size.z) {
-                for (uint32_t y = 0; y < volume_dim.y; y += chunk_size.y) {
-                    for (uint32_t x = 0; x < volume_dim.x; x += chunk_size.x) {
-                        uint32_t x_end = std::min(x + chunk_size.x, volume_dim.x);
-                        uint32_t y_end = std::min(y + chunk_size.y, volume_dim.y);
-                        uint32_t z_end = std::min(z + chunk_size.z, volume_dim.z);
-
-                        glm::uvec3 individual_chunk_size = {(x_end - x), (y_end - y), (z_end - z)};
-
-                        if (chunk_size.x % brick_size != 0 && chunk_size.y % brick_size != 0 && chunk_size.z % brick_size != 0)
-                            throw std::runtime_error("each resulting chunk has to be a multiple of the brick size");
-
-                        // Initialize the chunk with correct size
-                        output_chunks.emplace_back(individual_chunk_size.x * individual_chunk_size.y * individual_chunk_size.z);
-                        real_chunk_size.emplace_back(individual_chunk_size);
-                    }
-                }
-            }
-        }
-
-        MiniTimer t;
-
-#pragma omp parallel num_threads(cpu_threads) default(shared)
-        {
-            // parallelization done by dividing the xy-plane between threads and every thread's writes its own part of the output
-
-            unsigned int thread_id = omp_get_thread_num();
-            ThreadBlock tb = thread_blocks[thread_id];
-
-            // determine how many individual output chunks every threads needs to write to
-            uint32_t first_output_chunk_x = tb.start_x / chunk_size.x;
-            uint32_t last_output_chunk_x = (tb.end_x - 1) / chunk_size.x;
-            uint32_t first_output_chunk_y = tb.start_y / chunk_size.y;
-            uint32_t last_output_chunk_y = (tb.end_y - 1) / chunk_size.y;
-
-            uint32_t count_output_chunks_x = last_output_chunk_x - first_output_chunk_x + 1;
-            uint32_t count_output_chunks_y = last_output_chunk_y - first_output_chunk_y + 1;
-
-            // calculate starting offset after chunk one
-            glm::uvec2 elements_in_first_chunk;
-            elements_in_first_chunk.x = chunk_size.x - (tb.start_x % chunk_size.x);
-            elements_in_first_chunk.y = chunk_size.y - (tb.start_y % chunk_size.y);
-            glm::uvec2 start_offset(0);
-            for (uint32_t thread_output_chunk_y = 0; thread_output_chunk_y < count_output_chunks_y; thread_output_chunk_y++) {
-                if (thread_output_chunk_y != 0)
-                    // increment start_offset after first chunk
-                    start_offset.y += thread_output_chunk_y == 1 ? elements_in_first_chunk.y : chunk_size.y;
-                start_offset.x = 0;
-                for (uint32_t thread_output_chunk_x = 0; thread_output_chunk_x < count_output_chunks_x; thread_output_chunk_x++) {
-                    if (thread_output_chunk_x != 0)
-                        start_offset.x += thread_output_chunk_x == 1 ? elements_in_first_chunk.x : chunk_size.x;
-                    for (uint32_t y = tb.start_y + start_offset.y; y < (thread_output_chunk_y + first_output_chunk_y + 1) * chunk_size.y; y++) {
-                        for (uint32_t x = tb.start_x + start_offset.x; x < (thread_output_chunk_x + first_output_chunk_x + 1) * chunk_size.x; x++) {
-                            if (y >= tb.end_y || x >= tb.end_x || y >= volume_dim.y || x >= volume_dim.x)
-                                continue;
-                            for (uint32_t z = 0; z < volume_dim.z; z++) {
-                                auto output_chunk_idx = brick_pos2idx({x / chunk_size.x, y / chunk_size.y, z / chunk_size.z}, {number_of_output_chunks.x, number_of_output_chunks.y, number_of_output_chunks.z});
-                                auto output_chunk_idx_idx = brick_pos2idx({x % chunk_size.x, y % chunk_size.y, z % chunk_size.z}, {real_chunk_size[output_chunk_idx]});
-                                auto payload_chunk_idx = voxel_pos2idx({x, y, z}, volume_dim);
-
-                                output_chunks[output_chunk_idx][output_chunk_idx_idx] = payload->at(payload_chunk_idx);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        std::vector<uint32_t> output_chunk(chunk_size.x * chunk_size.y * chunk_size.z); // (X,Y,Z)
 
         // construct output_path template
         const std::string file_extension = output_path.substr(output_path.find_last_of('.'), output_path.length());
         const std::string chunk_output_path_template = output_path.substr(0, output_path.length() - 5) + "_x{}y{}z{}" + file_extension;
 
-        bool decompression_successful = true;
-        auto write_chunk = [&](size_t i) {
-            Volume<uint32_t> decompressed_chunk{static_cast<float>(chunk_size.x), static_cast<float>(chunk_size.y), static_cast<float>(chunk_size.z),
-                                                real_chunk_size[i].x, real_chunk_size[i].y, real_chunk_size[i].z, vk::Format::eUndefined, output_chunks[i]};
+        const unsigned int cpu_threads = glm::min(std::thread::hardware_concurrency(), volume_dim.z);
 
-            const auto chunk_position = brick_idx2pos(i, number_of_output_chunks);
-            const std::string chunk_output_path = formatChunkPath(chunk_output_path_template, chunk_position.x, chunk_position.y, chunk_position.z);
-            if (std::filesystem::exists(chunk_output_path))
-                std::filesystem::remove(chunk_output_path);
+        MiniTimer t;
 
-            return decompressed_chunk.write(chunk_output_path);
-        };
+        // parallelization done by dividing the volume in its resulting chunks
+        // decompress the bricks from each chunk in parallel
+        for (size_t chunk_idx = 0; chunk_idx < combined_number_of_output_chunks; chunk_idx++) {
+            glm::uvec3 chunk_start_pos = brick_idx2pos(chunk_idx, number_of_output_chunks) * chunk_size; // chunk start position
+            // const auto brick_idx_start = chunk_start_pos / brick_size; // brick_idx of first brick in chunk
 
-        if (file_extension.ends_with(".hdf5") || file_extension.ends_with(".h5")) {
-            // cannot write hdf5 in parallel
-            for (int i = 0; i < output_chunks.size(); i++) {
-                if (!write_chunk(i))
-                    decompression_successful = false;
-            }
-        } else {
-            omp_lock_t lock;
-            omp_init_lock(&lock);
+#pragma omp parallel for num_threads(cpu_threads) default(shared)
+            for (size_t brick_count = 0; brick_count < combined_number_of_bricks_per_chunk; brick_count++) {
+                // calculate the bricks position inside the resulting chunk
+                const auto brick_global_thread_pos = brick_idx2pos(brick_count, number_of_bricks_per_chunk) * brick_size + chunk_start_pos; // start pos of brick in volume
+                // const auto brick_global_thread_index = brick_pos2idx(brick_global_thread_pos / brick_size, csgv->getBrickCount()); // serialized idx of brick
+                const auto brick_global_thread_id = brick_global_thread_pos / brick_size; // id of brick
+                const auto brick_pos_in_chunk = brick_global_thread_pos % chunk_size;     // brick pos inside its resulting output chunk
 
-#pragma omp parallel for schedule(dynamic) num_threads(cpu_threads) default(shared)
-            for (int i = 0; i < output_chunks.size(); i++) {
-                if (!write_chunk(i)) {
-                    omp_set_lock(&lock);
-                    decompression_successful = false;
-                    omp_unset_lock(&lock);
+                if (glm::any(glm::greaterThanEqual(brick_global_thread_id, csgv->getBrickCount())))
+                    // outside of volume
+                    continue;
+
+                std::vector<uint32_t> tmp(brick_size * brick_size * brick_size, INVALID);
+                csgv->decompressBrickTo(tmp.data(), brick_global_thread_id, static_cast<int>(csgv->getLodCountPerBrick() - 1u));
+                // fill output array with decoded brick entries
+                for (uint32_t j = 0; j < brick_size * brick_size * brick_size; j++) {
+                    if (glm::uvec3 pos_in_brick = enumBrickPos(j); glm::all(glm::lessThan(pos_in_brick, {brick_size, brick_size, brick_size}))) {
+                        const auto pos_in_chunk = pos_in_brick + brick_pos_in_chunk;
+                        output_chunk[brick_pos2idx(pos_in_chunk, chunk_size)] = tmp[j];
+                    }
                 }
+            }
+
+            if (!write_output_chunk(chunk_output_path_template, chunk_size, chunk_start_pos / chunk_size, output_chunk)) {
+                Logger(Error) << "volume could not be decompressed";
+                return;
             }
         }
 
-        if (decompression_successful)
-            Logger(Info) << "volume decompressed to " << output_path;
-        else
-            Logger(Error) << "volume could not be decompressed";
-
-        Logger(Debug) << "finished decompression of csgv into " << number_of_output_chunks.x * number_of_output_chunks.y * number_of_output_chunks.z << " chunks in " << t.elapsed() << " seconds";
+        Logger(Debug) << "finished decompression of csgv into " << combined_number_of_output_chunks << " chunks in " << t.elapsed() << " seconds";
+        Logger(Info) << "volume decompressed to " << output_path;
     }
 
   private:
@@ -328,6 +214,17 @@ class CompSegVolHandler {
             m_volume_dim = glm::ivec3(m_volume->dim_x, m_volume->dim_y, m_volume->dim_z);
             m_last_volume_path = path;
         }
+    }
+
+    static bool write_output_chunk(const std::string &chunk_output_path_template, const glm::uvec3 chunk_size, const glm::uvec3 chunk_id, const std::vector<uint32_t> &output_chunk) {
+        Volume<uint32_t> decompressed_chunk{static_cast<float>(chunk_size.x), static_cast<float>(chunk_size.y), static_cast<float>(chunk_size.z),
+                                            chunk_size.x, chunk_size.y, chunk_size.z, vk::Format::eUndefined, output_chunk};
+
+        const std::string chunk_output_path = formatChunkPath(chunk_output_path_template, chunk_id.x, chunk_id.y, chunk_id.z);
+        if (std::filesystem::exists(chunk_output_path))
+            std::filesystem::remove(chunk_output_path);
+
+        return decompressed_chunk.write(chunk_output_path);
     }
 
   public:
