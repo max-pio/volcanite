@@ -155,19 +155,19 @@ void write_volcanite_raw_(std::string url, const Volume<T> *volume, std::string 
 }
 
 template <>
-void Volume<uint8_t>::write_volcanite_raw(std::string url) {
+void Volume<uint8_t>::write_volcanite_raw(std::string url) const {
     write_volcanite_raw_(std::move(url), this, "uint8");
 }
 template <>
-void Volume<uint16_t>::write_volcanite_raw(std::string url) {
+void Volume<uint16_t>::write_volcanite_raw(std::string url) const {
     write_volcanite_raw_(std::move(url), this, "uint16");
 }
 template <>
-void Volume<uint32_t>::write_volcanite_raw(std::string url) {
+void Volume<uint32_t>::write_volcanite_raw(std::string url) const {
     write_volcanite_raw_(std::move(url), this, "uint32");
 }
 template <>
-void Volume<uint64_t>::write_volcanite_raw(std::string url) {
+void Volume<uint64_t>::write_volcanite_raw(std::string url) const {
     write_volcanite_raw_(std::move(url), this, "uint64");
 }
 

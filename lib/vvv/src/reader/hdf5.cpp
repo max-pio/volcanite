@@ -69,7 +69,7 @@ std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_hdf5(std::string path, bo
 }
 
 template <typename T>
-void write_hdf5_(Volume<T> *volume, const std::string &path) {
+void write_hdf5_(const Volume<T> *volume, const std::string &path) {
 #ifdef LIB_HIGHFIVE
     HighFive::File file(path, HighFive::File::ReadWrite | HighFive::File::Create | HighFive::File::Truncate);
     const std::string datasetName = "decompressed_volume_data";
@@ -81,11 +81,12 @@ void write_hdf5_(Volume<T> *volume, const std::string &path) {
     // rewrite volume data s.t. it is a 3D vector
     std::vector<std::vector<std::vector<T>>> tmp_volume_data(dim[0], std::vector<std::vector<T>>(dim[1], std::vector<T>(dim[2])));
 
+    // TODO: the copy to vector of vector of vector for the HighFive export is extremely expensive
     for (size_t z = 0; z < dim[0]; ++z) {
         for (size_t y = 0; y < dim[1]; ++y) {
             for (size_t x = 0; x < dim[2]; ++x) {
                 size_t index = z * dim[1] * dim[2] + y * dim[2] + x;
-                tmp_volume_data[z][y][x] = volume->data()[index];
+                tmp_volume_data[z][y][x] = volume->dataConst()[index];
             }
         }
     }
@@ -104,15 +105,15 @@ void write_hdf5_(Volume<T> *volume, const std::string &path) {
 }
 
 template <>
-void Volume<uint32_t>::write_hdf5(const std::string &path) {
+void Volume<uint32_t>::write_hdf5(const std::string &path) const {
     write_hdf5_<uint32_t>(this, path);
 }
 template <>
-void Volume<uint16_t>::write_hdf5(const std::string &path) {
+void Volume<uint16_t>::write_hdf5(const std::string &path) const {
     write_hdf5_<uint16_t>(this, path);
 }
 template <>
-void Volume<uint8_t>::write_hdf5(const std::string &path) {
+void Volume<uint8_t>::write_hdf5(const std::string &path) const {
     write_hdf5_<uint8_t>(this, path);
 }
 } // namespace vvv
