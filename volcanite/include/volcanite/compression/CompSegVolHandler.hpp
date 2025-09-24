@@ -141,8 +141,16 @@ class CompSegVolHandler {
         }
     }
 
-    static void decompressCompressedSegmentationVolume(std::shared_ptr<const CompressedSegmentationVolume> csgv, const std::string &output_path, const glm::uvec3 chunk_size = glm::uvec3(1024u, 1024u, 1024u)) {
+    static void decompressCompressedSegmentationVolume(std::shared_ptr<const CompressedSegmentationVolume> csgv, const std::string &output_path, glm::uvec3 chunk_size = glm::uvec3(1024u, 1024u, 1024u)) {
         const auto brick_size = csgv->getBrickSize();
+
+        // if chunk_size is 0 in any dimension, disable chunking in this dimension
+        // (set chunk_size to next multiple of brick_size after the volume dimension)
+        for (int d = 0; d < 3; d++) {
+            if (chunk_size[d] == 0u)
+                chunk_size[d] = ((csgv->getVolumeDim()[d] + brick_size - 1u) / brick_size) * brick_size;
+        }
+
         if (chunk_size.x % brick_size != 0 && chunk_size.y % brick_size != 0 && chunk_size.z % brick_size != 0)
             throw std::runtime_error("chunk size has to be a multiple of the brick size");
 
