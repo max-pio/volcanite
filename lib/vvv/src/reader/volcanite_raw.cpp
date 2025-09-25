@@ -144,12 +144,12 @@ void write_volcanite_raw_(std::string url, const Volume<T> *volume, std::string 
     vraw << line << std::endl;
     vraw << formatLabel << std::endl;
     auto volume_data = volume->getRawData_const();
-    constexpr size_t CHUNK_ELEMENTS = 16 * 1024 * 1024; // 16M elements ~64MB
-    const auto num_elements = volume->size();
+    constexpr size_t CHUNK_BYTES = 64 * 1024 * 1024;
+    const auto num_bytes = volume->memorySize();
 
-    for (size_t i = 0; i < num_elements; i += CHUNK_ELEMENTS) {
-        size_t to_write = std::min(CHUNK_ELEMENTS, num_elements - i);
-        vraw.write(reinterpret_cast<const char *>(volume_data + i), to_write * sizeof(uint32_t));
+    for (size_t i = 0; i < num_bytes; i += CHUNK_BYTES) {
+        size_t to_write = std::min(CHUNK_BYTES, num_bytes - i);
+        vraw.write(volume_data + i, to_write);
     }
     vraw.close();
 }
