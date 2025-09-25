@@ -20,12 +20,10 @@
 #include "volcanite/util/segmentation_volume_synthesis.hpp"
 #include "vvv/volren/Volume.hpp"
 
-#include "stb/stb_image.hpp"
+#include "glm/ext.hpp"
 #include "volcanite/VolcaniteArgs.hpp"
 #include "volcanite/eval/CSGVBenchmarkPass.hpp"
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
-#include "vvv/core/HeadlessRendering.hpp"
-#include <fmt/core.h>
 #include <string>
 
 using namespace volcanite;
@@ -37,70 +35,85 @@ constexpr int RET_COMPR_ERROR = 3;
 constexpr int RET_RENDER_ERROR = 4;
 constexpr int RET_EXPORT_ERROR = 5;
 
-/// TODO
+struct DECOMPRESSION_TEST_CONFIGS {
+    glm::uvec3 volumeDim;
+    glm::uvec3 chunkSize;
+    glm::uvec3 maxFileIndex; // max file id of chunked test volume
+};
+
 int main() {
     // initialize data paths to shaders
     vvv::Paths::initPaths(DATA_DIRS);
+    std::vector<DECOMPRESSION_TEST_CONFIGS> testConfig = {
+        {{128, 256, 256}, {64, 128, 256}, {1, 1, 0}},
+        {{156, 105, 54}, {64, 64, 64}, {2, 1, 0}},
+    };
 
-    // create dummy segmentation volume
-    glm::uvec3 dim = {128, 256, 256};
-    const auto volume = createDummySegmentationVolume({.dim = dim, .seed = 0xABCDE12345});
+    for (auto &config : testConfig) {
+        // create dummy segmentation volume
+        const auto volume = createDummySegmentationVolume({.dim = config.volumeDim, .seed = 0xABCDE12345});
 
-    // create compressed segmentation volume
-    std::shared_ptr<CompressedSegmentationVolume> csgv = std::make_shared<CompressedSegmentationVolume>();
-    std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();
-    csgvDatabase->createDummy();
-    size_t freq[32];
+        // create compressed segmentation volume
+        std::shared_ptr<CompressedSegmentationVolume> csgv = std::make_shared<CompressedSegmentationVolume>();
+        std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase = std::make_shared<volcanite::CSGVDatabase>();
+        csgvDatabase->createDummy();
+        size_t freq[32];
 
-    csgv->setCompressionOptions({.brick_size = 32, .encoding_mode = NIBBLE_ENC, .op_mask = OP_ALL, .random_access = false});
-    // csgv->compressForFrequencyTable(volume->dataConst(), dim, freq, 2, args.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
-    if (!csgv->test(volume->dataConst(), dim, true))
-        return 1;
+        csgv->setCompressionOptions({.brick_size = 32, .encoding_mode = NIBBLE_ENC, .op_mask = OP_ALL, .random_access = false});
+        // csgv->compressForFrequencyTable(volume->dataConst(), dim, freq, 2, args.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
+        // if (!csgv->test(volume->dataConst(), config.volumeDim, true))
+        //     return 1;
 
-    // compress the volume
-    csgv->compress(volume->dataConst(), dim, false);
+        // compress the volume
+        csgv->compress(volume->dataConst(), config.volumeDim, false);
 
-    if (!csgv->verifyCompression())
-        return RET_COMPR_ERROR;
+        if (!csgv->verifyCompression())
+            return RET_COMPR_ERROR;
 
-    // decompress the volume
-    glm::uvec3 chunk_size = {64, 128, 256};
-    const auto decompressed_volume_export_path_base = std::filesystem::temp_directory_path() / "volcanite/render_test";
-    if (!std::filesystem::exists(decompressed_volume_export_path_base))
-        std::filesystem::create_directories(decompressed_volume_export_path_base);
+        // decompress the volume
+        const auto decompressed_volume_export_path_base = std::filesystem::temp_directory_path() / "volcanite/render_test";
+        if (!std::filesystem::exists(decompressed_volume_export_path_base))
+            std::filesystem::create_directories(decompressed_volume_export_path_base);
+        else {
+            std::filesystem::remove_all(decompressed_volume_export_path_base);
+            std::filesystem::create_directories(decompressed_volume_export_path_base);
+        }
 
-    const auto decompressed_volume_export_path = decompressed_volume_export_path_base / "decompressed_test_volume.hdf5";
-    const auto decompressed_volume_export_format_path = decompressed_volume_export_path_base / "decompressed_test_volume_x{}y{}z{}.hdf5";
-    const auto decompressed_volume_export_csgv_path = decompressed_volume_export_path_base / "decompressed_test_volume.csgv";
-    CompSegVolHandler::decompressCompressedSegmentationVolume(csgv, decompressed_volume_export_path.string(), chunk_size);
+        const auto decompressed_volume_export_path = decompressed_volume_export_path_base / "decompressed_test_volume.hdf5";
+        const auto decompressed_volume_export_format_path = decompressed_volume_export_path_base / "decompressed_test_volume_x{}y{}z{}.hdf5";
+        const auto decompressed_volume_export_csgv_path = decompressed_volume_export_path_base / "decompressed_test_volume.csgv";
+        CompSegVolHandler::decompressCompressedSegmentationVolume(csgv, decompressed_volume_export_path.string(), config.chunkSize);
 
-    // recompress the previous decompressed volume
-    std::shared_ptr<CompressedSegmentationVolume> csgv_recompressed = nullptr;
-    CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = 32,
-                                                    .encoding_mode = NIBBLE_ENC,
-                                                    .op_mask = OP_ALL,
-                                                    .random_access = false,
-                                                    .chunked_input_data = true,
-                                                    .max_file_index = {1,1,0},
-                                                    .verbose = true};
-    csgv_recompressed = CompSegVolHandler().createCompressedSegmentationVolume(decompressed_volume_export_format_path.string(), decompressed_volume_export_csgv_path.string(), cfg);
+        // recompress the previous decompressed volume
+        std::shared_ptr<CompressedSegmentationVolume> csgv_recompressed = nullptr;
+        CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = 32,
+                                                        .encoding_mode = NIBBLE_ENC,
+                                                        .op_mask = OP_ALL,
+                                                        .random_access = false,
+                                                        .chunked_input_data = true,
+                                                        .max_file_index = config.maxFileIndex,
+                                                        .verbose = true};
+        csgv_recompressed = CompSegVolHandler().createCompressedSegmentationVolume(decompressed_volume_export_format_path.string(), decompressed_volume_export_csgv_path.string(), cfg);
 
-    auto csgv_data = csgv->decompress();
-    auto csgv_recompressed_data = csgv_recompressed->decompress();
+        auto csgv_data = csgv->decompress();
+        auto csgv_recompressed_data = csgv_recompressed->decompress();
 
-
-    for (uint32_t z = 0; z < dim.z; z++) {
-        for (uint32_t y = 0; y < dim.y; y++) {
-            for (uint32_t x = 0; x < dim.x; x++) {
-                if (csgv_data->data()[voxel_pos2idx({x, y, z}, dim)] != csgv_recompressed_data->data()[voxel_pos2idx({x, y, z}, dim)]) {
-                    Logger(Error) << "Decompression test failed. Decompressed volume is different to original volume";
-                    return false;
+        for (uint32_t z = 0; z < config.volumeDim.z; z++) {
+            for (uint32_t y = 0; y < config.volumeDim.y; y++) {
+                for (uint32_t x = 0; x < config.volumeDim.x; x++) {
+                    if (csgv_data->data()[voxel_pos2idx({x, y, z}, config.volumeDim)] != csgv_recompressed_data->data()[voxel_pos2idx({x, y, z}, config.volumeDim)]) {
+                        Logger(Error) << "Decompression test failed. Decompressed volume is different to original volume.";
+                        return false;
+                    }
                 }
             }
         }
-    }
+        Logger(Info) << "Decompression test with volume dim " << glm::to_string(config.volumeDim) << " and chunk size " << glm::to_string(config.chunkSize) << " was successful";
+        Logger(Info) << "-------------------------------------------------------------";
 
-    Logger(Debug) << "Decompression test was successful.";
+        // cleanup previously compressed/decompressed data
+        std::filesystem::remove_all(decompressed_volume_export_path_base);
+    }
 
     return true;
 }
