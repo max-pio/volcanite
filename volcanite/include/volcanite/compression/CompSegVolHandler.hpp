@@ -162,7 +162,7 @@ class CompSegVolHandler {
 
         // construct output_path template
         const std::string file_extension = output_path.substr(output_path.find_last_of('.'), output_path.length());
-        const std::string chunk_output_path_template = output_path.substr(0, output_path.length() - 5) + "_x{}y{}z{}" + file_extension;
+        const std::string chunk_output_path_template = output_path.substr(0, output_path.length() - 5) + (combined_number_of_output_chunks > 1 ? "_x{}y{}z{}" + file_extension : file_extension);
 
         // create directory of output file if it does not exist
         std::filesystem::create_directories(std::filesystem::path(chunk_output_path_template).remove_filename());
