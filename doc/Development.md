@@ -66,7 +66,7 @@ ln -s Debug/compile_commands.json .
 ```
 
 * The project contains a `.clang-format` file following a LLVM-like code style. It is located in the project root.
-  To format the whole codebase try the following command:
+  To format the whole codebase, install `clang-format` and try the following command:
 ```
 find . -regex './\(volcanite\|test\|lib\)/.*\.\(cpp\|hpp\|cc\|cxx\)' -exec clang-format -verbose -style=file -i {} \;
 ```
