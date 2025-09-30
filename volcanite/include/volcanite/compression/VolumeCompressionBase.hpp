@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <glm/glm.hpp>
 #include <memory>
 #include <unordered_map>

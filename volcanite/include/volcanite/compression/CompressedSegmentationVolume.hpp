@@ -165,6 +165,10 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
         return m_detail_starts[brick_idx + 1u];
     }
 
+    /// Computes general volume information (number of unique labels and maximum label in volume) for later use.
+    /// Called after importVolume() or compress(), i.e. anytime the volume is changed.
+    void computeVolumeInfo();
+
   public:
     /// Moves the detail encoding stream from each brick to the detail buffer. The detail starts buffer contains the start positions of such detail encodings afterwards.
     /// This has no effect on compression rates, but is usually only necessary when using detail level CPU to GPU streaming for rendering very large data sets.
@@ -245,6 +249,24 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
         }
         return testLOD(volume, volume_dim);
     }
+
+    [[nodiscard]] bool hasContiguousLabels() const {
+        return (getMaxLabelInVolume() == getNumberOfUniqueLabelsInVolume() - 1);
+    }
+
+    [[nodiscard]] uint32_t getNumberOfUniqueLabelsInVolume() const {
+        return m_volume_info.unique_labels_in_volume;
+    }
+
+    [[nodiscard]] uint32_t getMaxLabelInVolume() const {
+        return m_volume_info.max_label_in_volume;
+    }
+
+    /// returns the maximum number of uint32 palette entries that any brick in the volume contains.
+    [[nodiscard]] uint32_t getMaxBrickPaletteCount() const {
+	return m_volume_info.max_brick_palette_size;
+    };
+
 
     // ACCESSING FULL BUFFERS: -----------------------------------------------------------------------------------------
     /// @return vector containing all split encoding arrays.
@@ -356,9 +378,6 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
     [[nodiscard]] uint32_t getOperationMask() const { return m_op_mask; }
     [[nodiscard]] bool isUsingWaveletMatrix() const { return m_encoding_mode == WAVELET_MATRIX_ENC; }
 
-    /// returns the maximum number of uint32 palette entries that any brick in the volume contains.
-    [[nodiscard]] uint32_t getMaxBrickPaletteCount() const { return m_max_brick_palette_count; };
-
     /// Sets the options for the compression step. If using rANS, a frequency table as a uint32_t[16] array must be given for the base.
     /// If using detail separation (use_detail) and rANS, an additional frequency table must be given for the detail buffer.
     void setCompressionOptions(const CSGVOptions& options);
@@ -389,8 +408,8 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
         m_op_mask = OP_ALL;
         m_separate_detail = false;
         m_brick_idx_to_enc_vector = ~0u;
-        m_max_brick_palette_count = 0u;
         m_encoder = {};
+        m_volume_info = {};
     }
 
     size_t getCompressedSizeInBytes() const {
@@ -441,7 +460,7 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
            << (brick_starts_memory + encoding_memory + detail_starts_memory + detail_memory) << "MB / " << volume_memory
            << "MB original size (" << (static_cast<double>(brick_starts_memory + encoding_memory + detail_starts_memory + detail_memory) / volume_memory * 100.f) << "%) "
            << str(m_volume_dim) << " voxels (" << bytes_per_voxel << " byte/voxel) for " << label_count << " labels."
-           << " max. brick palette size " << m_max_brick_palette_count << ".";
+           << " max. brick palette size " << m_volume_info.max_brick_palette_size << ".";
         if (m_encodings.size() > 1) {
             ss << "\n        Split encoding buffers (" << m_encodings.size() << "):";
             uint32_t brick_index_count = getBrickCount().x * getBrickCount().y * getBrickCount().z;
@@ -631,41 +650,6 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
     /// @return true if no errors are found, false otherwise.
     bool verifyCompression() const;
 
-    uint32_t getNumberOfUniqueLabelsInVolume() const {
-        std::vector<std::unordered_set<uint32_t>> label_set(m_cpu_threads);
-// process the next m_cpu_threads bricks in parallel
-#pragma omp parallel num_threads(m_cpu_threads) default(none) shared(label_set)
-        {
-            unsigned int thread_id = omp_get_thread_num();
-            for (size_t n = thread_id; n < getBrickIndexCount(); n += m_cpu_threads) {
-
-                if (n < getBrickIndexCount()) {
-                    auto brick_encoding = getBrickEncoding(n);
-                    uint32_t brick_encoding_length = getBrickEncodingLength(n);
-                    uint32_t palette_size = getBrickPaletteLength(n);
-
-                    for (int p = 1; p <= palette_size; p++) {
-                        uint32_t label = brick_encoding[brick_encoding_length - p];
-                        if (!label_set[thread_id].contains(label)) {
-                            label_set[thread_id].insert(label);
-                        }
-                    }
-                }
-            }
-        }
-
-        // gather all thread-private label sets into one global set (the first one)
-        for (int thread_id = 1; thread_id < m_cpu_threads; thread_id++) {
-            for (const auto &label : label_set[thread_id]) {
-                if (!label_set[0].contains(label)) {
-                    label_set[0].insert(label);
-                }
-            }
-            label_set[thread_id].clear();
-        }
-        return label_set[0].size();
-    }
-
   private:
     uint32_t m_cpu_threads; ///< number of CPU threads to parallelize computations
 
@@ -691,6 +675,13 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
     float m_last_total_encoding_seconds = 0.f;
     float m_last_total_freq_prepass_seconds = 0.f;
     std::string m_label = "";
+
+    struct VolumeInfo {
+        bool initialized = false;
+        uint32_t max_brick_palette_size = ~0u; ///< max. palette length of any brick as a number of label entries
+        uint32_t max_label_in_volume = ~0u;       ///< the highest existing label in the volume
+        uint32_t unique_labels_in_volume = ~0u;   ///< the number of unique labels in the volume
+    } m_volume_info;
 };
 
 } // namespace volcanite

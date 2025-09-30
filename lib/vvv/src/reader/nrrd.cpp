@@ -460,7 +460,7 @@ std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_nrrd(std::string path, bo
 };
 
 template <typename T>
-void write_nrrd_(Volume<T> *volume, const std::string &path, bool separatePayloadFile) {
+void write_nrrd_(const Volume<T> *volume, const std::string &path, bool separatePayloadFile) {
     const std::string pathmeta = path + (separatePayloadFile ? ".nhdr" : ".nrrd");
     const std::string formatLabel = VolumeDataTypes::getUnsignedTypeForByteSize(sizeof(T));
 
@@ -504,15 +504,15 @@ void write_nrrd_(Volume<T> *volume, const std::string &path, bool separatePayloa
 }
 
 template <>
-void Volume<uint32_t>::write_nrrd(const std::string &path, bool separatePayloadFile) {
+void Volume<uint32_t>::write_nrrd(const std::string &path, bool separatePayloadFile) const {
     write_nrrd_(this, path, separatePayloadFile);
 }
 template <>
-void Volume<uint16_t>::write_nrrd(const std::string &path, bool separatePayloadFile) {
+void Volume<uint16_t>::write_nrrd(const std::string &path, bool separatePayloadFile) const {
     write_nrrd_(this, path, separatePayloadFile);
 }
 template <>
-void Volume<uint8_t>::write_nrrd(const std::string &path, bool separatePayloadFile) {
+void Volume<uint8_t>::write_nrrd(const std::string &path, bool separatePayloadFile) const {
     write_nrrd_(this, path, separatePayloadFile);
 }
 

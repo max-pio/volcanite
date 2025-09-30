@@ -16,12 +16,13 @@
 #pragma once
 
 #include "volcanite/VolcaniteArgs.hpp"
-#include "volcanite/compression/CSGVDatabase.hpp"
-#include "volcanite/compression/CompressedSegmentationVolume.hpp"
 
 using namespace vvv;
 
 namespace volcanite {
+
+class CSGVDatabase;
+class CompressedSegmentationVolume;
 
 constexpr int RET_SUCCESS = 0;
 constexpr int RET_INVALID_ARG = 1;
@@ -45,3 +46,4 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
                                     int argc, char *argv[]);
 
 } // namespace volcanite
+

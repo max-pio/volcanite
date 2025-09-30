@@ -214,16 +214,20 @@ struct VolcaniteArgs {
     std::string attribute_label;               ///< name of the label attribute
     std::string attribute_csv_separator = ","; //< only for csv attribute databases
     bool label_remapping = false;              ///< if label ids in the volume should be remapped to a consecutive interval
+    bool compute_attributes = false;           ///< if additional attributes are computed from the segmentation volume
 
     // compression args
-    std::string compress_export_file;   ///< !empty = perform compression to file         Only one of
-    std::string decompress_export_file; ///< !empty = perform decompression to file       both can be set!
+    std::string compress_export_file;          ///< !empty = perform compression to file
     std::string segmented_volume_file;
     uint32_t brick_size = 32;
     EncodingMode encoding_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC;
     uint32_t freq_subsampling = 8;                  ///< n^3 factor for subsampling bricks for frequency table computation with rANS
     uint32_t operation_mask = OP_ALL_WITHOUT_DELTA; // enables certain CSGV operations and stop bits through OP_*_BIT
     bool random_access = false;                     ///< encode bricks so that they support random access within a brick
+
+    // decompression args
+    std::string decompress_export_file;                         ///< !empty = perform decompression to file
+    uint32_t decompress_chunk_size[3] = {1024u, 1024u, 1024u};  ///< decompressed volume is split into chunks. must be multiple of CSGV brick size.
 
     // evaluation and statistics
     HeadlessRenderingConfig hr_cfg;     ///< configuration parameters for the automated headless rendering pass
@@ -289,7 +293,6 @@ struct VolcaniteArgs {
             // could include TCLAP grouping here using AnyOf, EitherOf
 
             // compression arguments
-            ValueArg<std::string> decompresspathArg("d", "decompress", "Export the decompressed volume to given file.", false, va.decompress_export_file, "file", cmd);
             ValueArg<std::string> compresspathArg("c", "compress", "Export the compressed volume to the given csgv file and any attribute database along with it.", false, va.compress_export_file, "file", cmd);
             ValueArg<std::string> chunkedArg("", "chunked", "Compress chunked segmented volume using formatted <volume> path with inclusive x, y, and z chunk file ranges as: \".*{[0..<xn>]}.*{[0..<yn>]}.*{[0..<zn>]}.*\".", false, "", "xn,yn,zn", cmd);
             ValueArg<uint32_t> subsamplingArg("", "freq-sampling", "Compression prepass acceleration by given factor cubed. Affects strength 1 or 2 only.", false, va.freq_subsampling, "int", cmd);
@@ -304,6 +307,11 @@ struct VolcaniteArgs {
             cmd.add(bricksizeArg);
             ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits. Quick: [a]ll or [o]ptimized (no Pdelta).", false, "a", "none|(a|o|p|n|x|y|z|l|d[-]|s)*", cmd);
             SwitchArg randomAccessArg("", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
+
+            // decompression arguments
+            ValueArg<std::string> decompresspathArg("d", "decompress", "Export the decompressed volume to given file.", false, va.decompress_export_file, "file", cmd);
+            ValueArg<std::string> decompressChunkSizeArg("", "decompress-chunk", "Decompression file chunk size in voxels as {width},{height},{depth}. A single value is treated as uniform size.", false, "", "{width},{height},{depth}", cmd);
+
             // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             ValueArg<std::string> brickStatsArg("", "brickstats-logfile", "File into which statistics per brick are exported", false, "", "file", cmd);
@@ -314,7 +322,8 @@ struct VolcaniteArgs {
             ValueArg<std::string> shaderDefineArg("", "shader-def", "String of ; separated definitions that will be passed on to the shader. e.g. 'MY_VAL=64;MY_DEF'. Use with care.", false, va.shader_defines, "string", cmd);
 
             // attribute arguments
-            SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
+            SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used. Enables --gen-attributes if no database is used.", cmd);
+            SwitchArg computeAttributesArg("", "gen-attributes", "Generate common attributes from the volume and add them to the attribute database.", cmd);
             ValueArg<std::string> attributeArg("a", "attribute", R"(SQLite or CSV Attribute database: "{file.sqlite}[,{table/view name}[,{label column referenced in volume}]]" or "{file.csv}[,{label column referenced in volume}[,{csv separator}]]".)", false, "", "database.sqlite[,table[,label]] or database.csv[,label[,separator]]", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal development GUI and enable shader debug outputs.", cmd);
@@ -355,11 +364,30 @@ struct VolcaniteArgs {
                 throw ArgException("Volcanite was build with CMake option HEADLESS set. volcanite must be run with --headless option and can not use interactive windows.", headlessArg.longID());
             }
 #endif
-            va.decompress_export_file = expandPathStr(decompresspathArg.getValue());
             va.compress_export_file = expandPathStr(compresspathArg.getValue());
             if (!parseOperationMaskString(va.operation_mask, opMaskArg.getValue()))
                 throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d[-],s only", opMaskArg.longID());
             va.random_access = randomAccessArg.getValue();
+
+            va.decompress_export_file = expandPathStr(decompresspathArg.getValue());
+            if (const std::string& decomp_chunk_str = decompressChunkSizeArg.getValue();
+                !decomp_chunk_str.empty()) {
+
+                std::stringstream ss(decompressChunkSizeArg.getValue());
+                ss >> va.decompress_chunk_size[0];
+                if (!ss.eof()) { // .peek() != std::char_traits<char>::eof()) {
+                    ss.ignore();
+                    ss >> va.decompress_chunk_size[1];
+                    ss.ignore();
+                    ss >> va.decompress_chunk_size[2];
+                } else {
+                    va.decompress_chunk_size[2] = va.decompress_chunk_size[1] = va.decompress_chunk_size[0];
+                }
+
+                if (ss.fail())
+                    throw ArgException(decompressChunkSizeArg.longID() + " must be a single size or three sizes '{width},{height},{depth}' in voxels.", resolutionArg.longID());
+            }
+
             // rendering arguments
             if (!parseRenderingConfigsString(va.rendering_configs, renderconfigArg.getValue()))
                 throw ArgException(renderconfigArg.longID() + " must be a ; separated list of .vcfg files or config strings.", renderconfigArg.longID());
@@ -433,7 +461,7 @@ struct VolcaniteArgs {
                     throw ArgException("Must provide input file as file dialogs are unavailable", inputpathArg.longID(""));
 
                 // Open a file dialog to choose a file
-                auto selected_file = pfd::open_file("Open Segmentation Volume", Paths::getHomeDirectory().string(),
+                auto selected_file = pfd::open_file("Open Segmentation Volume", Paths::getHomeDirectory().string() + "/*",
                                                     {"Segmentation Volumes (.csgv .vti .hdf5 .h5 .raw .vraw .nrrd .nhdr)", "*.csgv *.vti *.hdf5 *.h5 *.raw *.vraw *.nrrd *.nhdr", "All Files", "*"});
                 if (selected_file.result().empty()) {
                     throw ArgException("No input file was provided. Pass " CSGV_SYNTH_PREFIX_STR " as input file to create a synthetic volume.", inputpathArg.longID(""));
@@ -575,6 +603,12 @@ struct VolcaniteArgs {
                 }
                 va.run_tests = testArg.getValue();
             }
+
+            // it is possible to obtain new attributes for the volume and append them to the attribute database
+            // this requires that the csgv volume IDs are contiguous however (use --relabel or -a).
+            //va.compute_attributes = (va.attribute_database.empty() && va.label_remapping) || computeAttributesArg.getValue();
+            va.compute_attributes = computeAttributesArg.getValue();
+
             va.brickstats_file = expandPath(brickStatsArg.getValue()).generic_string();
             va.rendertimes_file = expandPath(renderTimesArg.getValue()).generic_string();
             std::string comma_separated_logfiles = evalLogFilesArg.getValue();

@@ -15,8 +15,10 @@
 
 #include "volcanite/compression/CSGVDatabase.hpp"
 
-#include "SQLiteCpp/VariadicBind.h"
+#include "volcanite/compression/CSGVAttributeExtractor.hpp"
+
 #include <SQLiteCpp/SQLiteCpp.h>
+#include "SQLiteCpp/VariadicBind.h"
 
 namespace volcanite {
 
@@ -196,7 +198,7 @@ bool CSGVDatabase::databaseExportAndOpen(const std::string &sqlite_path, const s
                 while (column_query.executeStep()) {
                     std::string c = column_query.getColumn(0).getString();
                     if (!std::equal(c.begin(), c.end(), label_column.begin(), label_column.end(),
-                                    [](const char a, const char b) { return tolower(a) == tolower(b); })) {
+                                    [](char a, char b) { return tolower(a) == tolower(b); })) {
                         attr_col_names.push_back(c);
                         attr_col_types.push_back(column_query.getColumn(1));
                     }
@@ -272,7 +274,7 @@ bool CSGVDatabase::databaseExportAndOpen(const std::string &sqlite_path, const s
         // remove broken database file and forward the exception
         if (std::filesystem::exists(sqlite_path))
             std::filesystem::remove(sqlite_path);
-        throw std::runtime_error(std::string("SQLite error: ") + e.what());
+        throw std::runtime_error(std::string("SQLite error: ") + e.what() + ". Data base: " + sqlite_path);
     }
 
     // reimport database as read only
@@ -280,8 +282,22 @@ bool CSGVDatabase::databaseExportAndOpen(const std::string &sqlite_path, const s
     return true;
 }
 
+void CSGVDatabase::createDBfromDummyDB(const std::string &database_path, const CompressedSegmentationVolume &csgv) {
+    m_db = new SQLite::Database(database_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
+    m_db->exec("DROP TABLE IF EXISTS " + CSGV_ATTRIBUTE_TABLE);
+    m_db->exec("CREATE TABLE " + CSGV_ATTRIBUTE_TABLE + " (csgv_id INTEGER PRIMARY KEY)");
+
+    m_label_count = csgv.getNumberOfUniqueLabelsInVolume();
+
+    SQLite::Statement insertStmt(*m_db, "INSERT INTO " + CSGV_ATTRIBUTE_TABLE + " DEFAULT VALUES");
+    for (int i = 1; i <= csgv.getNumberOfUniqueLabelsInVolume(); i++) {
+        insertStmt.exec();
+        insertStmt.reset();
+    }
+}
+
 void CSGVDatabase::importFromSqlite(const std::string &sqlite_path) {
-    m_db = new SQLite::Database(sqlite_path, SQLite::OPEN_READONLY);
+    m_db = new SQLite::Database(sqlite_path, SQLite::OPEN_READWRITE);
 
     // read label count, attribute names, and min/max values from columns
     m_label_count = m_db->execAndGet("SELECT COUNT(*) FROM " + CSGV_ATTRIBUTE_TABLE).getInt64();
@@ -327,9 +343,8 @@ void CSGVDatabase::processVolumeAndCreateSqlite(const std::string &sqlite_export
                                                                                 static_cast<int>(chunk_index.z))
                                                               : volume_input_path;
             // load chunk volume
-            Logger(Debug, true) << "  label preprocessing " << chunk_input_path << " "
-                                << (1 + sfc::Cartesian::p2i(chunk_index, max_file_index + glm::uvec3(1))) << "/" << (1 + sfc::Cartesian::p2i(max_file_index, max_file_index + glm::uvec3(1)));
-
+            //Logger(Debug, true) << "  label preprocessing " << chunk_input_path << " "
+            //                    << (1 + sfc::Cartesian::p2i(chunk_index, max_file_index + glm::uvec3(1))) << "/" << (1 + sfc::Cartesian::p2i(max_file_index, max_file_index + glm::uvec3(1)));
             CompSegVolHandler::loadSegmentationVolumeFile(chunk_input_path, volume);
             glm::uvec3 cur_chunk_dim(volume->dim_x, volume->dim_y, volume->dim_z);
 
@@ -351,6 +366,7 @@ void CSGVDatabase::processVolumeAndCreateSqlite(const std::string &sqlite_export
             // the index_to_label vector if they did not occur before.
             {
                 const uint64_t last_i = sfc::Morton3D::p2i_64(cur_chunk_dim);
+                uint32_t last_progress_pcnt = ~0u;
                 constexpr int NUM_THREADS = 8;
                 size_t voxels_per_thread = (32ul * 32ul * 32ul);
                 // parallel processing will only have a benefit if we can run at least 4 threads in parallel
@@ -397,8 +413,12 @@ void CSGVDatabase::processVolumeAndCreateSqlite(const std::string &sqlite_export
                         }
                     }
 
-                    if (i % (last_i / 100) == 0u)
-                        Logger(Info, true) << " re-labelling map computation " << static_cast<int>(static_cast<float>(i) / static_cast<float>(last_i) * 100.f) << "%";
+                    if ((i * 10) / last_i != last_progress_pcnt) {
+                        last_progress_pcnt = (i * 10) / last_i;
+                        Logger(Info, true) << " re-labelling map computation [chunk "
+                                           << str(chunk_index) << "/" << str(max_file_index) << "] "
+                                           << last_progress_pcnt*10 << "%";
+                    }
                 }
 
                 if (index_to_label.size() != label_set.size())
@@ -406,6 +426,7 @@ void CSGVDatabase::processVolumeAndCreateSqlite(const std::string &sqlite_export
             }
         }
 
+        Logger(Info, true) << " re-labelling map computation [chunk " << str(chunk_index) << "/" << str(max_file_index) << "] 100%";
         chunk_index1D++;
     } while (chunked_input_data && glm::any(glm::lessThanEqual(chunk_index, max_file_index)));
 
@@ -439,7 +460,7 @@ void CSGVDatabase::processVolumeAndCreateSqlite(const std::string &sqlite_export
     return label_to_index;
 }
 
-size_t CSGVDatabase::getAttribute(const int attributeIndex, float *begin, const size_t maxSize) {
+size_t CSGVDatabase::getAttribute(const int attributeIndex, float *begin, const size_t maxSize) const {
     if (!m_db)
         throw std::runtime_error("No CSGV attribute database present.");
 
@@ -458,6 +479,81 @@ size_t CSGVDatabase::getAttribute(const int attributeIndex, float *begin, const 
     return (it - begin);
 }
 
+void CSGVDatabase::addAttributesIfNotExist(const CSGVAttributeExtractor *attribute_extractor) {
+    if (!m_db)
+        throw std::runtime_error("No CSGV attribute database present.");
+
+    // extract column names from existing attribute database
+    auto extracted_attribute_names = attribute_extractor->getAttributeNames();
+
+    std::vector<std::string> attribute_names;
+    try {
+        SQLite::Statement query(*m_db, "PRAGMA table_info(" + CSGV_ATTRIBUTE_TABLE + ");");
+
+        while (query.executeStep()) {
+            std::string columnName = query.getColumn(1).getText();
+            attribute_names.push_back(columnName);
+        }
+    } catch (const SQLite::Exception &e) {
+        std::cerr << "SQLite exception: " << e.what() << std::endl;
+    }
+
+    // compare db attribute with extracted attributes
+    int i = 0;
+    std::vector<int> missing_attribute_indices; // store only indices of missing attribute names to enable better access to the extracted attribute values
+    for (const std::string &extracted_attribute_name : extracted_attribute_names) {
+        if (std::find(attribute_names.begin(), attribute_names.end(), extracted_attribute_name) == attribute_names.end())
+            missing_attribute_indices.emplace_back(i);
+        i++;
+    }
+
+    // add columns for every missing attribute and prepare sql insert statement
+    std::string sql_insert = "UPDATE '" + CSGV_ATTRIBUTE_TABLE + "' SET ";
+    for (int j = 0; j < missing_attribute_indices.size(); j++) {
+        auto attribute_name = extracted_attribute_names[missing_attribute_indices[j]];
+        std::string addColum = "ALTER TABLE '" + CSGV_ATTRIBUTE_TABLE + "' ADD COLUMN '" + attribute_name + "' REAL";
+        m_db->exec(addColum);
+
+        sql_insert += "'" + attribute_name + "' = ?";
+        if (j < missing_attribute_indices.size() - 1)
+            sql_insert += ", ";
+
+        m_attribute_names.emplace_back(attribute_name);
+    }
+
+    // add values for each missing attribute to database
+    if (!missing_attribute_indices.empty()) {
+        sql_insert += " WHERE rowid = ?";
+        SQLite::Statement insertValues(*m_db, sql_insert);
+        const auto &extracted_values = attribute_extractor->getAttributeValues();
+        for (size_t rowID = 1; rowID <= extracted_values.size(); rowID++) {
+            SQLite::Transaction transaction(*m_db);
+            const auto &attribute_values = extracted_values[rowID - 1];
+
+            int idx_insert = 1; // rowID starts from 1
+            for (int missing_attribute_index : missing_attribute_indices) {
+                insertValues.bind(idx_insert, attribute_values[missing_attribute_index]);
+                idx_insert++;
+            }
+
+            insertValues.bind(idx_insert, static_cast<int>(rowID));
+            insertValues.exec();
+            insertValues.reset();
+            insertValues.clearBindings();
+
+            transaction.commit();
+        }
+    }
+
+    // calculate min/max for new added attributes
+    for (int attribute_index : missing_attribute_indices) {
+        const auto &attribute_name = extracted_attribute_names[attribute_index];
+        m_attribute_minmax.emplace_back(static_cast<float>(m_db->execAndGet("SELECT MIN(" + attribute_name + ") FROM " + CSGV_ATTRIBUTE_TABLE).getDouble()),
+                                        static_cast<float>(m_db->execAndGet("SELECT MAX(" + attribute_name + ") FROM " + CSGV_ATTRIBUTE_TABLE).getDouble()));
+    }
+    Logger(Debug) << extracted_attribute_names.size() << " extracted attributes are added to existing database " << m_db->getFilename();
+}
+
 void CSGVDatabase::close() {
     if (m_db) {
         delete m_db;
@@ -467,4 +563,5 @@ void CSGVDatabase::close() {
     m_attribute_minmax.clear();
     m_label_count = 0;
 }
+
 } // namespace volcanite

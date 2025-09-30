@@ -147,3 +147,4 @@ class CompressedSegmentationVolumeBrickViewer : public Renderer, public WithGpuC
 };
 
 } // namespace volcanite
+

@@ -75,3 +75,4 @@ std::shared_ptr<Volume<uint32_t>> createDummySegmentationVolume(std::string_view
 std::shared_ptr<Volume<uint32_t>> createWorstCaseSegmentationVolume(glm::uvec3 dim = {100, 100, 100});
 
 } // namespace volcanite
+

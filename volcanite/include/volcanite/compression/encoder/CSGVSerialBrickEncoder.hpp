@@ -44,7 +44,7 @@ class CSGVSerialBrickEncoder : public CSGVBrickEncoder {
     /// @param output_brick is an uint32_t array of the decoded brick. It always has to have brick_size^3 elements.
     /// @param valid_brick_size is used to clamp used voxels for border bricks. Values outside are undefined.
     /// @param inv_lod the LOD until which to decompress, or rather, the decompression iterations. 0 is the coarsest and log2(brick_size) is the original / finest level.
-    void decodeBrick(const uint32_t *brick_encoding, uint32_t brick_encoding_length,
+    void decodeBrick(const uint32_t *brick_encoding, const uint32_t brick_encoding_length,
                      const uint32_t *brick_detail_encoding, const uint32_t brick_detail_encoding_length,
                      uint32_t *output_brick, glm::uvec3 valid_brick_size, int inv_lod) const override;
 

@@ -31,6 +31,8 @@ class Database;
 
 namespace volcanite {
 
+class CSGVAttributeExtractor;
+
 class CSGVDatabase {
 
   private:
@@ -83,6 +85,9 @@ class CSGVDatabase {
         }
         m_attribute_minmax.at(0) = {static_cast<float>(min_id), static_cast<float>(max_id)};
     }
+
+    /// Creates a sql database from a dummy db, i.e. for adding extracted attributes later
+    void createDBfromDummyDB(const std::string &database_path, const CompressedSegmentationVolume &csgv);
 
     /// If a precomputed CSGV database exists already, it is openend.
     /// If not, the given (possibly chunked) volume at input_path is preprocessed and the result is stored in a new database.
@@ -137,7 +142,9 @@ class CSGVDatabase {
     /// Fills the memory area with the float attribute for the given attribute index. The buffer must be large enough
     /// to fit getLabelCount() elements. If maxSize > getLabelCount(), only getLabelCount() elements are written.
     /// @return the number of written elements
-    size_t getAttribute(int attributeIndex, float *begin, size_t maxSize);
+    size_t getAttribute(int attributeIndex, float *begin, size_t maxSize) const;
+
+    void addAttributesIfNotExist(const CSGVAttributeExtractor *);
 
   private:
     SQLite::Database *m_db = nullptr; // sqlite database
