@@ -21,9 +21,10 @@
 #endif
 
 #include "CSGVPathUtils.hpp"
+#include "compression/memory_mapping.hpp"
 #include "csgv_constants.incl"
-#include "util/segmentation_volume_synthesis.hpp"
 #include "eval/EvaluationLogExport.hpp"
+#include "util/segmentation_volume_synthesis.hpp"
 #include "vvv/core/HeadlessRendering.hpp"
 #include "vvv/util/Logger.hpp"
 
@@ -217,7 +218,7 @@ struct VolcaniteArgs {
     bool compute_attributes = false;           ///< if additional attributes are computed from the segmentation volume
 
     // compression args
-    std::string compress_export_file;          ///< !empty = perform compression to file
+    std::string compress_export_file; ///< !empty = perform compression to file
     std::string segmented_volume_file;
     uint32_t brick_size = 32;
     EncodingMode encoding_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC;
@@ -226,8 +227,8 @@ struct VolcaniteArgs {
     bool random_access = false;                     ///< encode bricks so that they support random access within a brick
 
     // decompression args
-    std::string decompress_export_file;                         ///< !empty = perform decompression to file
-    uint32_t decompress_chunk_size[3] = {1024u, 1024u, 1024u};  ///< decompressed volume is split into chunks. must be multiple of CSGV brick size.
+    std::string decompress_export_file;                        ///< !empty = perform decompression to file
+    uint32_t decompress_chunk_size[3] = {1024u, 1024u, 1024u}; ///< decompressed volume is split into chunks. must be multiple of CSGV brick size.
 
     // evaluation and statistics
     HeadlessRenderingConfig hr_cfg;     ///< configuration parameters for the automated headless rendering pass
@@ -370,7 +371,7 @@ struct VolcaniteArgs {
             va.random_access = randomAccessArg.getValue();
 
             va.decompress_export_file = expandPathStr(decompresspathArg.getValue());
-            if (const std::string& decomp_chunk_str = decompressChunkSizeArg.getValue();
+            if (const std::string &decomp_chunk_str = decompressChunkSizeArg.getValue();
                 !decomp_chunk_str.empty()) {
 
                 std::stringstream ss(decompressChunkSizeArg.getValue());
@@ -600,13 +601,25 @@ struct VolcaniteArgs {
                             throw ArgException("input volume must be a formatted file path string containing three {} keys to be replaced with x,y,z chunk indices. Example: ./x{}y{}z{}.hdf5", inputpathArg.longID(""));
                         }
                     }
+
+                    // check if files with the provided chunk indices exists.
+                    {
+                        for (int i = 0; i < (va.chunk_files[0] + 1) * (va.chunk_files[1] + 1) * (va.chunk_files[2] + 1); i++) {
+                            auto chunk_index = glm::uvec3(i % (va.chunk_files[0] + 1), (i / (va.chunk_files[0] + 1)) % (va.chunk_files[1] + 1), (i / (va.chunk_files[0] + 1) / (va.chunk_files[1] + 1)) % (va.chunk_files[2] + 1));
+                            if (chunk_index[0] > va.chunk_files[0] || chunk_index[1] > va.chunk_files[1] || chunk_index[2] > va.chunk_files[2])
+                                continue;
+                            auto chunk_path = fmt::vformat(va.input_file, fmt::make_format_args(chunk_index[0], chunk_index[1], chunk_index[2]));
+                            if (!std::filesystem::exists(chunk_path))
+                                throw ArgException("provided chunk indices does not match with the files in the provided path. At least the following file is missing: " + chunk_path, chunkedArg.longID(""));
+                        }
+                    }
                 }
                 va.run_tests = testArg.getValue();
             }
 
             // it is possible to obtain new attributes for the volume and append them to the attribute database
             // this requires that the csgv volume IDs are contiguous however (use --relabel or -a).
-            //va.compute_attributes = (va.attribute_database.empty() && va.label_remapping) || computeAttributesArg.getValue();
+            // va.compute_attributes = (va.attribute_database.empty() && va.label_remapping) || computeAttributesArg.getValue();
             va.compute_attributes = computeAttributesArg.getValue();
 
             va.brickstats_file = expandPath(brickStatsArg.getValue()).generic_string();
