@@ -452,6 +452,8 @@ struct VolcaniteArgs {
             else
                 Logger(Debug) << getDummySegmentationVolumeHelpStr();
             input_volume_required = input_volume_required && !evalPrintArg.getValue();
+
+            bool file_dialog_start_with_additional_properties;
             if (input_file.empty() && input_volume_required) {
 #ifdef HEADLESS
                 throw ArgException("Must provide input file in headless mode", inputpathArg.longID(""));
@@ -462,13 +464,74 @@ struct VolcaniteArgs {
                     throw ArgException("Must provide input file as file dialogs are unavailable", inputpathArg.longID(""));
 
                 // Open a file dialog to choose a file
-                auto selected_file = pfd::open_file("Open Segmentation Volume", Paths::getHomeDirectory().string() + "/*",
+                auto selected_file = pfd::open_file("Open Segmentation Volume", Paths::getHomeDirectory().string(),
                                                     {"Segmentation Volumes (.csgv .vti .hdf5 .h5 .raw .vraw .nrrd .nhdr)", "*.csgv *.vti *.hdf5 *.h5 *.raw *.vraw *.nrrd *.nhdr", "All Files", "*"});
                 if (selected_file.result().empty()) {
                     throw ArgException("No input file was provided. Pass " CSGV_SYNTH_PREFIX_STR " as input file to create a synthetic volume.", inputpathArg.longID(""));
                 }
 
                 input_file = selected_file.result().at(0);
+
+                // extract the chunked attribute as well as possible attribute databases inside the directory of the provided volume
+                if (!input_file.ends_with(".csgv")) {
+                    try {
+                        const std::string PATTERN_FOR_CHUNKED_FILES = R"(_x\d+_y\d+_z\d+)";
+                        const std::string PATTERN_FOR_CHUNKED_FILES_CAPTURED = R"(_x(\d+)_y(\d+)_z(\d+))";
+                        std::string base_volume_name = stripFileExtension(expandPath(input_file).filename().string());
+
+                        // base_volume_name is potentially a chunked file so the chunked numbers (x{}y{}z{}) needs to be removed
+                        if (std::regex_search(base_volume_name, std::regex{PATTERN_FOR_CHUNKED_FILES})) {
+                            base_volume_name = std::regex_replace(base_volume_name, std::regex{PATTERN_FOR_CHUNKED_FILES}, "");
+                        }
+
+                        std::string file_extension = std::filesystem::path(input_file).extension().string();
+                        auto path = expandPath(input_file).parent_path().string();
+                        for (const auto &entry : std::filesystem::directory_iterator(path)) {
+                            if (!entry.is_regular_file())
+                                continue;
+
+                            std::string filename = entry.path().filename().string();
+
+                            if (filename.find(base_volume_name) == 0) {
+                                std::smatch chunk_indices;
+                                if (std::regex_match(filename, chunk_indices, std::regex{"^" + base_volume_name + PATTERN_FOR_CHUNKED_FILES_CAPTURED + file_extension + "$"})) {
+                                    // file is chunked -> extract maximum number of chunks
+                                    va.chunked = true;
+                                    va.compress_export_file = (std::filesystem::path(path) / base_volume_name).string() + ".csgv";
+                                    va.chunk_files[0] = std::max(va.chunk_files[0], static_cast<uint32_t>(std::stoul(chunk_indices[1].str())));
+                                    va.chunk_files[1] = std::max(va.chunk_files[1], static_cast<uint32_t>(std::stoul(chunk_indices[2].str())));
+                                    va.chunk_files[2] = std::max(va.chunk_files[2], static_cast<uint32_t>(std::stoul(chunk_indices[3].str())));
+                                }
+
+                                if (va.attribute_database.empty()) {
+                                    // TODO What to do with attribute databases? Assume standard separators, label columns etc.?
+                                    if (std::regex_match(filename, chunk_indices, std::regex{"^" + base_volume_name + ".sqlite$"}) | std::regex_match(filename, chunk_indices, std::regex{"^" + base_volume_name + ".db3$"})) {
+                                        va.attribute_database = (std::filesystem::path(path) / std::filesystem::path(base_volume_name)).string() + std::filesystem::path(filename).extension().string();
+                                        va.attribute_table = "cells";
+                                        va.attribute_label = "CellID";
+                                        va.label_remapping = true;
+
+                                    } else if (std::regex_match(filename, chunk_indices, std::regex{"^" + base_volume_name + ".csv$"})) {
+                                        va.attribute_database = (std::filesystem::path(path) / std::filesystem::path(base_volume_name)).string() + std::filesystem::path(filename).extension().string();
+                                        va.attribute_table = "";
+                                        va.attribute_label = "CellID";
+                                        va.attribute_csv_separator = " ";
+                                        va.label_remapping = true;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (va.attribute_database.empty())
+                            va.compute_attributes = true;
+                        else if (!std::filesystem::exists(va.attribute_database))
+                            throw ArgException(attributeArg.longID() + " attribute database file does not exists or can not be accessed.", attributeArg.longID());
+
+                    } catch (std::filesystem::filesystem_error &e) {
+                        std::cerr << "Filesystem error: " << e.what() << std::endl;
+                    }
+                }
+                file_dialog_start_with_additional_properties = va.chunked | va.label_remapping;
 #endif
             }
             va.input_file = input_file;
@@ -499,7 +562,7 @@ struct VolcaniteArgs {
                 }
 
                 // attribute arguments (if we import a .csgv file, the attributes are already stored in a database along with it)
-                va.label_remapping = labelRemappingArg.getValue();
+                va.label_remapping |= labelRemappingArg.getValue();
                 if (!attributeArg.getValue().empty()) {
                     va.label_remapping = true;
 
@@ -574,20 +637,22 @@ struct VolcaniteArgs {
                 }
                 va.freq_subsampling = subsamplingArg.getValue();
                 va.threads = threadsArg.getValue();
-                va.chunked = !chunkedArg.getValue().empty();
+                va.chunked |= !chunkedArg.getValue().empty();
                 if (va.chunked) {
                     if (va.compress_export_file.empty())
                         throw ArgException("A csgv export path must be specified with " + compresspathArg.longID() + " when processing chunked volumes!");
 
-                    const std::string &chunk_indices = chunkedArg.getValue();
-                    std::stringstream ss(chunk_indices);
-                    ss >> va.chunk_files[0];
-                    ss.ignore();
-                    ss >> va.chunk_files[1];
-                    ss.ignore();
-                    ss >> va.chunk_files[2];
-                    if (ss.fail())
-                        throw ArgException(chunkedArg.longID() + " must have the format 'xn,yn,zn' with *n being integer numbers", chunkedArg.longID());
+                    if (!file_dialog_start_with_additional_properties) {
+                        const std::string &chunk_indices = chunkedArg.getValue();
+                        std::stringstream ss(chunk_indices);
+                        ss >> va.chunk_files[0];
+                        ss.ignore();
+                        ss >> va.chunk_files[1];
+                        ss.ignore();
+                        ss >> va.chunk_files[2];
+                        if (ss.fail())
+                            throw ArgException(chunkedArg.longID() + " must have the format 'xn,yn,zn' with *n being integer numbers", chunkedArg.longID());
+                    }
                     if (va.chunk_files[0] == 0u && va.chunk_files[1] == 0u && va.chunk_files[2] == 0u)
                         throw ArgException(chunkedArg.longID() + " inclusive xn,yn,zn range must contain at least 2 chunks", chunkedArg.longID());
 
