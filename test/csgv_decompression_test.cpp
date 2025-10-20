@@ -103,7 +103,7 @@ int main() {
                 for (uint32_t x = 0; x < config.volumeDim.x; x++) {
                     if (csgv_data->data()[voxel_pos2idx({x, y, z}, config.volumeDim)] != csgv_recompressed_data->data()[voxel_pos2idx({x, y, z}, config.volumeDim)]) {
                         Logger(Error) << "Decompression test failed. Decompressed volume is different to original volume.";
-                        return false;
+                        return RET_COMPR_ERROR;
                     }
                 }
             }
@@ -115,5 +115,5 @@ int main() {
         std::filesystem::remove_all(decompressed_volume_export_path_base);
     }
 
-    return true;
+    return RET_SUCCESS;
 }
