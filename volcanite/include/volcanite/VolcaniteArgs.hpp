@@ -504,11 +504,8 @@ struct VolcaniteArgs {
                                 }
 
                                 if (va.attribute_database.empty()) {
-                                    // TODO What to do with attribute databases? Assume standard separators, label columns etc.?
                                     if (std::regex_match(filename, chunk_indices, std::regex{"^" + base_volume_name + ".sqlite$"}) | std::regex_match(filename, chunk_indices, std::regex{"^" + base_volume_name + ".db3$"})) {
                                         va.attribute_database = (std::filesystem::path(path) / std::filesystem::path(base_volume_name)).string() + std::filesystem::path(filename).extension().string();
-                                        va.attribute_table = "cells";
-                                        va.attribute_label = "CellID";
                                         va.label_remapping = true;
 
                                     } else if (std::regex_match(filename, chunk_indices, std::regex{"^" + base_volume_name + ".csv$"})) {
