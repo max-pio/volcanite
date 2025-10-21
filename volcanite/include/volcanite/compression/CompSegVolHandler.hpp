@@ -432,7 +432,7 @@ class CompSegVolHandler {
 
                         // perform the actual compression
                         csgv->clear();
-                        csgv->setLabel(chunk_input_path);
+                        csgv->setLabel(std::filesystem::path(chunk_input_path).stem().string());
                         csgv->setCompressionOptions({.brick_size = cfg.brick_dim, .encoding_mode = cfg.encoding_mode, .op_mask = cfg.op_mask, .random_access = cfg.random_access, .code_frequencies = code_frequencies.data(), .detail_code_frequencies = detail_code_frequencies.data()});
                         csgv->compress(m_volume->data(), m_volume_dim, cfg.verbose);
                         total_encoding_seconds += csgv->getLastTotalEncodingSeconds();
