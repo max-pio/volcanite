@@ -27,6 +27,7 @@
 #include "util/segmentation_volume_synthesis.hpp"
 #include "vvv/core/HeadlessRendering.hpp"
 #include "vvv/util/Logger.hpp"
+#include "vvv/util/csv_utils.hpp"
 
 #include <fmt/core.h>
 #include <optional>
@@ -511,8 +512,9 @@ struct VolcaniteArgs {
                                     } else if (std::regex_match(filename, chunk_indices, std::regex{"^" + base_volume_name + ".csv$"})) {
                                         va.attribute_database = (std::filesystem::path(path) / std::filesystem::path(base_volume_name)).string() + std::filesystem::path(filename).extension().string();
                                         va.attribute_table = "";
-                                        va.attribute_label = "CellID";
-                                        va.attribute_csv_separator = " ";
+                                        va.attribute_csv_separator = ",";
+                                        // assume the first column is the attribute label
+                                        va.attribute_label = get_column_names_from_csv_file(va.attribute_database, va.attribute_csv_separator)[0];
                                         va.label_remapping = true;
                                     }
                                 }
