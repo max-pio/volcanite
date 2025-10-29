@@ -39,10 +39,10 @@ If your IDE supports generating build files, you can directly open the `CMakeLis
 1. Install recent GPU drivers. This should happen automatically with Windows updates. Otherwise, find them at your GPU vendor webpage.
 2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
 3. Install [CMake](https://cmake.org/download/) and select "Add CMake to the system PATH".
-4. *Optional: Install packages to support a wider range of volume file formats. 
-   Install the [vcpkg](https://vcpkg.io/en/getting-started) package manager and install the optional 64 bit packages in a powershell console from the vcpkg directory:*
+4. *Optional: Install packages to support a wider range of volume file formats. This requires installing [Visual Studio](https://visualstudio.microsoft.com/downloads/) first.
+Then install the [vcpkg](https://vcpkg.io/en/getting-started) package manager and provide the optional 64 bit packages in a powershell console from the vcpkg directory:*
 ```
-cd [path into which vcpkg is installed]
+cd [path into which vcpkg will be installed]
 git clone https://github.com/microsoft/vcpkg.git
 cd vcpkg; .\bootstrap-vcpkg.bat
 .\vcpkg install hdf5 vtk tiff --triplet=x64-windows
