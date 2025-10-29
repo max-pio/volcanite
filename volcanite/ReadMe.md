@@ -27,7 +27,7 @@ paper since our cache management follows its fundamental structure.
 
 You can find the main renderer in [csgv_renderer.comp](./data/shader/volcanite/renderer/csgv_renderer.comp).
 The caching and decompression for visible volume bricks is handled in
-the [csgv_request](./data/shader/volcanite/renderer/csgv_request.comp), [csgv_resolve](./data/shader/volcanite/renderer/csgv_resolve.comp),
+the [csgv_request](./data/shader/volcanite/renderer/csgv_request.comp), [csgv_provision](./data/shader/volcanite/renderer/csgv_provision.comp),
 and [csgv_assign](./data/shader/volcanite/renderer/csgv_assign.comp) shaders.
 As the renderer uses the brick compression from the
 paper ["Fast Compressed Segmenation Volumes for Scientific Visualization"](https://cg.ivd.kit.edu/english/compsegvol.php),
