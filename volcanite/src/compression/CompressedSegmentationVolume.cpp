@@ -371,7 +371,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
 
         // append the results
         m_encodings.back().resize(new_encoding_size);
-#pragma omp parallel num_threads(m_cpu_threads) default(none) shared(brick_index, encoded_element_count, encoded_element_count_prefix_sum, encodedBrick, old_encoding_size)
+#pragma omp parallel for num_threads(m_cpu_threads) default(none) shared(brick_index, encoded_element_count, encoded_element_count_prefix_sum, encodedBrick, old_encoding_size)
         for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
             if (encoded_element_count[thread_id] == 0u)
                 continue;
