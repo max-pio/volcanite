@@ -165,7 +165,7 @@ AwaitableHandle PassCompSegVolRender::execute(AwaitableList awaitBeforeExecution
             commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryRead, vk::AccessFlagBits::eMemoryWrite)}, nullptr, nullptr);
             PushConstants pushConstants{.denoising_iteration = i, .last_denoising_iteration = (m_atrous_iterations - 1u)};
             commandBuffer.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eCompute, 0, sizeof(PushConstants), &pushConstants);
-            commandBuffer.dispatch(m_work_group_sizes[RESOLVE].width, m_work_group_sizes[RESOLVE].height, m_work_group_sizes[RESOLVE].depth);
+            commandBuffer.dispatch(m_work_group_counts[RESOLVE].width, m_work_group_counts[RESOLVE].height, m_work_group_counts[RESOLVE].depth);
             commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eComputeShader, {}, {vk::MemoryBarrier(vk::AccessFlagBits::eMemoryWrite, vk::AccessFlagBits::eMemoryRead)}, nullptr, nullptr);
         }
         stopTimingQuery(commandBuffer, POSTPROCESS_MS);
@@ -191,7 +191,7 @@ void PassCompSegVolRender::executeCommands(vk::CommandBuffer commandBuffer, CSGV
     if (hasDescriptors()) {
         commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_pipelineLayout, 0, m_descriptorSets->getActive(), nullptr);
     }
-    commandBuffer.dispatch(m_work_group_sizes[pipeline_index].width, m_work_group_sizes[pipeline_index].height, m_work_group_sizes[pipeline_index].depth);
+    commandBuffer.dispatch(m_work_group_counts[pipeline_index].width, m_work_group_counts[pipeline_index].height, m_work_group_counts[pipeline_index].depth);
 }
 
 std::vector<std::shared_ptr<Shader>> PassCompSegVolRender::createShaders() {

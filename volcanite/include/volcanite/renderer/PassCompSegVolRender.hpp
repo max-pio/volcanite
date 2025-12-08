@@ -127,7 +127,7 @@ class PassCompSegVolRender : public PassCompute {
 
     void setGlobalInvocationSize(CSGVRenderStage shader_index, uint32_t width, uint32_t height, uint32_t depth) {
         assert(shader_index < m_shaders.size());
-        m_work_group_sizes[shader_index] = getDispatchSize(width, height, depth, m_shaders[shader_index]->reflectWorkgroupSize());
+        m_work_group_counts[shader_index] = getDispatchSize(width, height, depth, m_shaders[shader_index]->reflectWorkgroupSize());
     }
     void executeCommands(vk::CommandBuffer commandBuffer, CSGVRenderStage stage);
 
@@ -143,8 +143,8 @@ class PassCompSegVolRender : public PassCompute {
     /// Must be called after the last submitted frame finished all GPU work but before submitting the next frame.
     void readNextGPUTimings();
 
-    /// work group sizes per stage
-    vk::Extent3D m_work_group_sizes[8] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}};
+    /// humber of local work groups that will be dispatched per stage
+    vk::Extent3D m_work_group_counts[8] = {{0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}, {0u, 0u, 0u}};
     uint32_t m_render_update_flags = 0u;                ///< among others: if the GPU cache reset should be triggered on the next call
     uint32_t m_atrous_iterations = 1u;
     const std::vector<std::string> m_shader_defines;    ///< defines that are passed on to shader compilation
