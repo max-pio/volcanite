@@ -17,10 +17,10 @@ volcanite_colors = [
     (253/255, 180/255,  98/255),  # volcanitecol6: orange #FDB462
 ]
 volcanite_colors_dark = [(r * 0.6, g * 0.6, b * 0.6) for (r,g,b) in volcanite_colors]
-
 volcanite_cmap = ListedColormap(volcanite_colors)
 colormaps.register(volcanite_cmap, name='volcanite_cmap')
 
+# setup default plot configurations
 def init_plots():
     rc("text", usetex=True)
     rc("font", family="serif", serif="Computer Modern Roman", size=14)
@@ -28,6 +28,12 @@ def init_plots():
     plt.rc('axes', prop_cycle=(cycler(color=volcanite_colors, edgecolor=volcanite_colors_dark)))
     # rc("image", cmap="volcanite_cmap")
 
+
+# data set names and labels
+data_set_ids = ["Ara2016", "azba", "cells", "fiber", "Griesser2022-sample", "Griesser2022-validation",
+                "H01-bloodvessel", "H01-wm", "liconn", "Motta2019-small", "Motta2019", "pa66", "Wolny2020",
+                "xtm-battery"]
+shading_mode_ids = ["local", "shadow", "ao", "pt"]
 
 def get_data_set_tex(dataset : str):
     _dataset2tex = {"pa66": "\\textsc{Polyamid}",
