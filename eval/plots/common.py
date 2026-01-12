@@ -1,3 +1,4 @@
+import pathlib
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import rc, colormaps
@@ -18,11 +19,37 @@ volcanite_colors = [
 volcanite_colors_dark = [(r * 0.6, g * 0.6, b * 0.6) for (r,g,b) in volcanite_colors]
 
 volcanite_cmap = ListedColormap(volcanite_colors)
-colormaps.register(volcanite_cmap, name='volcanite_cmap')  # For Matplotlib 3.7+ [web:3]
+colormaps.register(volcanite_cmap, name='volcanite_cmap')
 
 def init_plots():
     rc("text", usetex=True)
-    rc("font", family="serif")
-    # rc("image", cmap="volcanite_cmap")
+    rc("font", family="serif", serif="Computer Modern Roman", size=14)
     rc("axes", edgecolor='black')
     plt.rc('axes', prop_cycle=(cycler(color=volcanite_colors, edgecolor=volcanite_colors_dark)))
+    # rc("image", cmap="volcanite_cmap")
+
+
+def get_data_set_tex(dataset : str):
+    _dataset2tex = {"pa66": "\\textsc{Polyamid}",
+                    "Ara2016": "\\textsc{MouseBA}",
+                    "Griesser2022 - sample": "\\textsc{Fabric}",
+                    "Griesser2022 - validation": "\\textsc{Fabric$_{\\textsc{val}}$}",
+                    "Wolny2020": "\\textsc{Plant}",
+                    "xtm-battery": "\\textsc{Battery}",
+                    "azba": "\\textsc{AZBA}",
+                    "H01-bloodvessel": "\\textsc{H01$_{\\textsc{BV}}$}",
+                    "H01-wm": "\\textsc{H01$_{\textsc{WM}}$}}",
+                    "liconn": "\\textsc{Liconn}",
+                    "Motta2019-small": "\\textsc{MouseL4$_\\textsc{S}$}",
+                    "Motta2019": "\\textsc{MouseL4}",
+                    "cells": "\\textsc{Cells}",
+                    "fiber": "\\textsc{Fiber}",
+                    "celegans": "\\textsc{CElegans}",
+                    }
+    return _dataset2tex[dataset]
+
+def save_plot(file : pathlib.Path | str, fig : plt.Figure):
+    if type(file) == str:
+        file = pathlib.Path(file)
+    file.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(file, format="pdf", dpi=1200, bbox_inches="tight")

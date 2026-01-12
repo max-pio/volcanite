@@ -2,3 +2,4 @@ core
 vulkan_pipeline_cache.data
 volcanite-eval-setup.txt
 _old/
+results/*

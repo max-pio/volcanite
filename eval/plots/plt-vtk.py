@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from plots.common import *
+from common import *
 
 init_plots()
 
@@ -19,19 +19,22 @@ vcnt_df = vcnt_df[vcnt_df['Shading Mode'] == "local"]
 width = 0.45
 data_sets = vtk_df["Data Set"].unique()
 
-plt.figure(figsize=(3, 3))
+plt.figure(figsize=(4, 4))
 fig, ax = plt.subplots(layout='constrained')
 cycler = itertools.cycle(plt.rcParams['axes.prop_cycle'])
-print(vtk_df.set_index("Data Set")["frame avg [ms]"])
 
 x = np.arange(len(data_sets))
 edgecolor = next(cycler)['edgecolor']
 bars1 = ax.bar(x - width/2, vtk_df.set_index("Data Set")["frame avg [ms]"], width, label='VTK', linewidth=1, edgecolor=edgecolor)
+ax.bar_label(bars1, padding=2, fmt="%.1f", size=11)
 edgecolor = next(cycler)['edgecolor']
 bars2 = ax.bar(x + width/2, vcnt_df.set_index("Data Set")["frame avg [ms]"], width, label='Volcanite', linewidth=1, edgecolor=edgecolor)
+ax.bar_label(bars2, padding=2, fmt="%.1f", size=11)
 
-ax.set_xticks(x, data_sets, rotation=45, ha='right')
+ax.set_xticks(x, map(get_data_set_tex, data_sets), rotation=45, ha='right')
 
-plt.ylabel("Average frame time [ms]")
+plt.ylabel("Average frame time [ms]", fontsize=14)
 plt.tight_layout()
 plt.show()
+
+save_plot("../results/vtk-eval/vtk-image-timings.pdf", fig)
