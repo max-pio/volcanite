@@ -30,7 +30,7 @@ def plot_gpu_timings(df : pd.DataFrame, stages : list[str], xlabel : str | None 
     if legendstages is None:
         legendstages = stages
 
-    # constant parameters
+    # CONSTANT PARAMETERS
     width = 0.66
 
     plt.figure()
@@ -57,5 +57,54 @@ def plot_gpu_timings(df : pd.DataFrame, stages : list[str], xlabel : str | None 
 
     if show:
         plt.show()
+
+    return fig
+
+def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
+                         xlabel = None, ylabel = None, xticklabels = None, colors = None, edgecolors = None,
+                         barlabelfmt : str | None = None) -> plt.Figure:
+
+    # CONSTANT PARAMETERS
+    width = 0.45
+    offsetscale = 1.
+
+    count = len(ys)
+    xoffset = -(count - 1) * width * offsetscale / 2
+
+    plt.figure(figsize=(4, 4))
+    fig, ax = plt.subplots(layout='constrained')
+    cycler = itertools.cycle(plt.rcParams['axes.prop_cycle'])
+
+    for i, y in enumerate(ys):
+        if edgecolors is None:
+            edgecolor = next(cycler)['edgecolor']
+        else:
+            edgecolor = edgecolors[i]
+
+        if colors is None:
+            color = None
+        else:
+            color = colors[i]
+
+        if labels is None:
+            label = None
+        else:
+            label = labels[i]
+
+        bars = ax.bar(x + xoffset + i * width * offsetscale,
+                      y, width, label=label, linewidth=1,
+                       edgecolor=edgecolor, color=color)
+        if barlabelfmt:
+            ax.bar_label(bars, padding=2, fmt=barlabelfmt, size=11)
+
+    if xticklabels:
+        ax.set_xticks(x, xticklabels, rotation=45, ha='right')
+    if xlabel:
+        plt.xlabel(xlabel, fontsize=14)
+    if ylabel:
+        plt.ylabel(ylabel, fontsize=14)
+
+    plt.tight_layout()
+    plt.show()
 
     return fig
