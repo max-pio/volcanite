@@ -58,7 +58,7 @@ Decompression_LOD_Bias: 0.000000
 [General]
 Rendering_Preset: Global~Shadows
 Voxel_Size: 1.000000 1.000000 1.000000
-Splitting_Plane_X: 0 700
+Splitting_Plane_X: 0 560
 Splitting_Plane_Y: 0 560
 Splitting_Plane_Z: 0 560
 X_Axis: 0
