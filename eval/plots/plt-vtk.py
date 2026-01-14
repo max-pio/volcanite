@@ -35,7 +35,8 @@ data_df["Voxels"] = data_df["DimX"] * data_df["DimY"] * data_df["DimZ"]
 data_df["Labels/Voxels"] = data_df["Labels"] / data_df["Voxels"]
 
 # create bar plots
-data_df = data_df.sort_values(by="Voxels")
+SORT_KEY = "Voxels"
+data_df = data_df.sort_values(by=SORT_KEY)
 data_sets = data_df["Data Set"]
 x = np.arange(len(data_sets))
 
@@ -46,11 +47,11 @@ fig, ax = plot_timings_grouped(x, [vtk_df.set_index("Data Set").reindex(data_set
 
 # Add secondary y-axis on right for data set sizes
 ax2 = ax.twinx()
-#ax2.scatter(x, data_df.set_index("Data Set")["Labels"], color=volcanite_colors[2], marker="_", s=100, zorder=1)
-#ax2.scatter(x, data_df.set_index("Data Set")["Voxels"], color=volcanite_colors_dark[2], marker="_", s=2000, zorder=1, linewidth=2, alpha=0.5)
-ax2.bar(x, data_df.set_index("Data Set").reindex(data_sets).reset_index()["Voxels"], color=volcanite_colors_dark[2], zorder=1, alpha=0.3, width=0.9)
-ax2.set_ylabel("Number of Voxels", color=volcanite_colors_dark[2])
+ax2.bar(x, data_df.set_index("Data Set").reindex(data_sets).reset_index()[SORT_KEY], color=volcanite_colors_dark[2], zorder=1, alpha=0.3, width=0.9)
+ax2.set_ylabel(f"Number of {SORT_KEY}", color=volcanite_colors_dark[2])
 ax2.tick_params(axis='y', labelcolor=volcanite_colors_dark[2])
+if SORT_KEY == "Labels":
+    ax2.set_yscale('log')
 
 # move alternative axis behind
 ax2.set_zorder(1)
@@ -61,4 +62,4 @@ ax.patch.set_visible(False)
 fig.tight_layout()
 plt.show()
 
-save_plot("../results/vtk-eval/vtk-image-timings.pdf", fig)
+save_plot(f"../results/vtk-eval/vtk-image-timings-{SORT_KEY.lower()}.pdf", fig)
