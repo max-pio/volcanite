@@ -26,17 +26,39 @@ init_plots()
 # load data
 vtk_df = pd.read_csv("../results/vtk-eval/vtk-eval.csv", comment="#")
 vcnt_df = pd.read_csv("../results/image-eval/image-eval.csv", comment="#")
+vcnt_df = vcnt_df[vcnt_df['Shading Mode'] == "local"]   # VTK only supports local shading
+data_df = pd.read_csv("../results/dataset-eval.csv", comment="#")
 # only use VTK evaluated data sets and shading mode
 vcnt_df = vcnt_df[vcnt_df['Data Set'].isin(vtk_df['Data Set'])]
-vcnt_df = vcnt_df[vcnt_df['Shading Mode'] == "local"]
+data_df = data_df[data_df['Data Set'].isin(vtk_df['Data Set'])]
+data_df["Voxels"] = data_df["DimX"] * data_df["DimY"] * data_df["DimZ"]
+data_df["Labels/Voxels"] = data_df["Labels"] / data_df["Voxels"]
 
 # create bar plots
-
-data_sets = vtk_df["Data Set"].unique()
+data_df = data_df.sort_values(by="Voxels")
+data_sets = data_df["Data Set"]
 x = np.arange(len(data_sets))
 
-fig = plot_timings_grouped(x, [vtk_df.set_index("Data Set")["frame avg [ms]"], vcnt_df.set_index("Data Set")["frame avg [ms]"]],
-                   ylabel="Average frame time [ms]", xticklabels=map(get_data_set_tex, data_sets), labels=data_sets, barlabelfmt="%.1f")
+fig, ax = plot_timings_grouped(x, [vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"],
+                                   vcnt_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"]],
+                               ylabel="Average frame time [ms]", xticklabels=map(get_data_set_tex, data_sets),
+                               labels=["VTK", "Volcanite"], barlabelfmt="%.1f")
 
+# Add secondary y-axis on right for data set sizes
+ax2 = ax.twinx()
+#ax2.scatter(x, data_df.set_index("Data Set")["Labels"], color=volcanite_colors[2], marker="_", s=100, zorder=1)
+#ax2.scatter(x, data_df.set_index("Data Set")["Voxels"], color=volcanite_colors_dark[2], marker="_", s=2000, zorder=1, linewidth=2, alpha=0.5)
+ax2.bar(x, data_df.set_index("Data Set").reindex(data_sets).reset_index()["Voxels"], color=volcanite_colors_dark[2], zorder=1, alpha=0.3, width=0.9)
+ax2.set_ylabel("Number of Voxels", color=volcanite_colors_dark[2])
+ax2.tick_params(axis='y', labelcolor=volcanite_colors_dark[2])
+
+# move alternative axis behind
+ax2.set_zorder(1)
+ax.set_zorder(2)
+ax2.patch.set_visible(True)
+ax.patch.set_visible(False)
+
+fig.tight_layout()
+plt.show()
 
 save_plot("../results/vtk-eval/vtk-image-timings.pdf", fig)

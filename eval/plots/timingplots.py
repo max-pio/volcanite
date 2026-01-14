@@ -18,6 +18,7 @@ import itertools
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from cycler import cycler
 
 from common import *
 
@@ -25,7 +26,7 @@ init_plots()
 
 def plot_gpu_timings(df : pd.DataFrame, stages : list[str], xlabel : str | None = None,
                      legendstages : list [str] | None  = None, legend : bool = True, frames : int = 16,
-                     framestep : int = 1, show : bool = False) -> plt.Figure:
+                     framestep : int = 1, show : bool = False) -> (plt.Figure, plt.Axes):
 
     if legendstages is None:
         legendstages = stages
@@ -35,15 +36,16 @@ def plot_gpu_timings(df : pd.DataFrame, stages : list[str], xlabel : str | None 
 
     plt.figure()
     fig, ax = plt.subplots(layout='constrained', figsize=(9, 3))
-    cycler = itertools.cycle(plt.rcParams['axes.prop_cycle'])
 
     x = np.arange(frames)
     bottom = np.zeros_like(x, dtype='float64')
     for i,s in enumerate(stages):
         y = [df[s][f] for f in x]
 
-        edgecolor = next(cycler)['edgecolor']
-        ax.bar(x, y, width=width, bottom=bottom, label=legendstages[i], edgecolor=edgecolor, zorder=3)
+        edgecolor = volcanite_colors_dark[i]
+        color = volcanite_colors[i]
+
+        ax.bar(x, y, width=width, bottom=bottom, label=legendstages[i], color=color, edgecolor=edgecolor, zorder=3)
         bottom += y
 
     ax.grid(axis='y', color='gray', alpha=0.5, linewidth=0.5, zorder=0)
@@ -58,11 +60,11 @@ def plot_gpu_timings(df : pd.DataFrame, stages : list[str], xlabel : str | None 
     if show:
         plt.show()
 
-    return fig
+    return fig, ax
 
 def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
                          xlabel = None, ylabel = None, xticklabels = None, colors = None, edgecolors = None,
-                         barlabelfmt : str | None = None) -> plt.Figure:
+                         barlabelfmt : str | None = None) -> (plt.Figure, plt.Axes):
 
     # CONSTANT PARAMETERS
     width = 0.45
@@ -73,16 +75,15 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
 
     plt.figure(figsize=(4, 4))
     fig, ax = plt.subplots(layout='constrained')
-    cycler = itertools.cycle(plt.rcParams['axes.prop_cycle'])
 
     for i, y in enumerate(ys):
         if edgecolors is None:
-            edgecolor = next(cycler)['edgecolor']
+            edgecolor = volcanite_colors_dark[i]
         else:
             edgecolor = edgecolors[i]
 
         if colors is None:
-            color = None
+            color = volcanite_colors[i]
         else:
             color = colors[i]
 
@@ -92,7 +93,7 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
             label = labels[i]
 
         bars = ax.bar(x + xoffset + i * width * offsetscale,
-                      y, width, label=label, linewidth=1,
+                      y, width, label=label, linewidth=1, zorder=3,
                        edgecolor=edgecolor, color=color)
         if barlabelfmt:
             ax.bar_label(bars, padding=2, fmt=barlabelfmt, size=11)
@@ -104,7 +105,7 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
     if ylabel:
         plt.ylabel(ylabel, fontsize=14)
 
-    plt.tight_layout()
-    plt.show()
+    if labels:
+        ax.legend(labels=labels, loc='upper left', ncol=1)
 
-    return fig
+    return fig, ax

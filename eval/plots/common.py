@@ -39,8 +39,7 @@ colormaps.register(volcanite_cmap, name='volcanite_cmap')
 def init_plots():
     rc("text", usetex=True)
     rc("font", family="serif", serif="Computer Modern Roman", size=14)
-    rc("axes", edgecolor='black')
-    plt.rc('axes', prop_cycle=(cycler(color=volcanite_colors, edgecolor=volcanite_colors_dark)))
+    #rc('axes', prop_cycle=(cycler(color=volcanite_colors, edgecolor=volcanite_colors_dark)))
     # rc("image", cmap="volcanite_cmap")
 
 
@@ -70,6 +69,8 @@ def get_data_set_tex(dataset : str):
     return _dataset2tex[dataset]
 
 def save_plot(file : pathlib.Path | str, fig : plt.Figure):
+    plt.tight_layout()
+
     if type(file) == str:
         file = pathlib.Path(file)
     file.parent.mkdir(parents=True, exist_ok=True)

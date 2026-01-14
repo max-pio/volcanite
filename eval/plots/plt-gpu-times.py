@@ -31,5 +31,5 @@ for data in data_set_ids:
             print(f"Plotting {data} {shading}")
 
             df = pd.read_csv(gpu_csv, comment="#")
-            fig = plot_gpu_timings(df, stages=["Cache","Decompress","Render","Post-Process"], frames=21, xlabel="Image Frame")
+            fig, ax = plot_gpu_timings(df, stages=["Cache","Decompress","Render","Post-Process"], frames=21, xlabel="Image Frame")
             save_plot(f"../results/image-eval/{data}_{shading}_timing.pdf", fig)
