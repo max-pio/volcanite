@@ -27,7 +27,7 @@ init_plots()
 vtk_df = pd.read_csv("../results/vtk-eval/vtk-eval.csv", comment="#")
 vcnt_df = pd.read_csv("../results/image-eval/image-eval.csv", comment="#")
 vcnt_df = vcnt_df[vcnt_df['Shading Mode'] == "local"]   # VTK only supports local shading
-data_df = pd.read_csv("../results/dataset-eval.csv", comment="#")
+data_df = pd.read_csv("../results/csgv-eval/csgv-eval.csv", comment="#")
 # only use VTK evaluated data sets and shading mode
 vcnt_df = vcnt_df[vcnt_df['Data Set'].isin(vtk_df['Data Set'])]
 data_df = data_df[data_df['Data Set'].isin(vtk_df['Data Set'])]
@@ -60,6 +60,5 @@ ax2.patch.set_visible(True)
 ax.patch.set_visible(False)
 
 fig.tight_layout()
-plt.show()
 
 save_plot(f"../results/vtk-eval/vtk-image-timings-{SORT_KEY.lower()}.pdf", fig)

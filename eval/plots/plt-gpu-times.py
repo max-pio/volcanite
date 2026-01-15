@@ -18,6 +18,7 @@ from common import data_set_ids, shading_mode_ids, save_plot
 
 import pandas as pd
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 
 # image rendering (no camera movement)
@@ -33,3 +34,7 @@ for data in data_set_ids:
             df = pd.read_csv(gpu_csv, comment="#")
             fig, ax = plot_gpu_timings(df, stages=["Cache","Decompress","Render","Post-Process"], frames=21, xlabel="Image Frame")
             save_plot(f"../results/image-eval/{data}_{shading}_timing.pdf", fig)
+           
+            ax.clear()
+            plt.clf()
+            plt.close('all')
