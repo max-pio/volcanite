@@ -517,3 +517,4 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 };
 
 } // namespace volcanite
+

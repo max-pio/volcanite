@@ -163,3 +163,4 @@ class PassCompSegVolRender : public PassCompute {
 };
 
 } // namespace volcanite
+

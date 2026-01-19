@@ -54,3 +54,4 @@ std::vector<uint8_t> convertPacked32bit2PackedByte(const std::vector<uint32_t> &
 std::vector<uint8_t> unpackHalfByte2Byte(std::vector<uint8_t> &v);
 
 } // namespace volcanite
+

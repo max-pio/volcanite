@@ -109,3 +109,32 @@ std::vector<unsigned int> vvv::csv_label_column_import(const std::string &csv_pa
         return {};
     }
 }
+
+std::vector<std::string> vvv::get_column_names_from_csv_file(const std::string &csv_path, const std::string &attribute_csv_separator) {
+    std::ifstream csv(csv_path, std::ios::in);
+    if (csv.is_open()) {
+        std::vector<std::string> label_columns;
+
+        std::string first_line;
+        std::getline(csv, first_line);
+        if (first_line.front() == '#')
+            first_line.erase(0, 1); // line starts with a '#'
+
+        // extract names of label_columns
+        size_t pos = 0;
+        while ((pos = first_line.find(attribute_csv_separator)) != std::string::npos || pos == std::string::npos && !first_line.empty()) {
+            if (pos == std::string::npos)
+                pos = first_line.size();
+            label_columns.emplace_back(first_line.substr(0, pos));
+            first_line.erase(0, pos + attribute_csv_separator.length());
+        }
+
+        return label_columns;
+    } else {
+        Logger(Error) << "Could not open CSV file " << csv_path;
+        return {};
+    }
+
+
+
+}

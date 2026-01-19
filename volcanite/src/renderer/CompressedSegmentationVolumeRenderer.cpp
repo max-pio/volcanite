@@ -1307,7 +1307,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         }
 
         // Open a file dialog to choose a file
-        auto selected_file = pfd::save_file("Save Screenshot", Paths::getHomeDirectory().string(),
+        auto selected_file = pfd::save_file("Save Screenshot", Paths::getHomeDirectory().string() + "/*",
                                             {"Image File (.png .jpg .jpeg)", "*.png *.jpg *.jpeg", "All Files", "*"});
         if (!selected_file.result().empty()) {
             Logger(Info) << "exporting screenshot to " << selected_file.result();

@@ -36,6 +36,8 @@ std::vector<std::vector<float>> csv_float_import(const std::string &csv_path, co
 
 std::vector<unsigned int> csv_label_column_import(const std::string &csv_path, const std::string &attribute_csv_separator, std::string &label_column);
 
+std::vector<std::string> get_column_names_from_csv_file(const std::string &csv_path, const std::string &attribute_csv_separator);
+
 template <typename T>
 void csv_export(const std::vector<std::map<std::string, T>> &s, const std::string &path) {
     std::ofstream fout(path, std::ios::out);

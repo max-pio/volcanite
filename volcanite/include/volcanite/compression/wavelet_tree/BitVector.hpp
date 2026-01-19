@@ -20,6 +20,7 @@
 
 #include <bit>
 #include <cassert>
+#include <cstdint>
 #include <glm/integer.hpp>
 #include <sstream>
 #include <string>
@@ -353,3 +354,4 @@ class FlatRank {
 };
 
 } // namespace volcanite
+

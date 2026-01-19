@@ -21,11 +21,14 @@
 #endif
 
 #include "CSGVPathUtils.hpp"
+#include "compression/memory_mapping.hpp"
 #include "csgv_constants.incl"
 #include "util/segmentation_volume_synthesis.hpp"
 #include "eval/EvaluationLogExport.hpp"
+#include "util/segmentation_volume_synthesis.hpp"
 #include "vvv/core/HeadlessRendering.hpp"
 #include "vvv/util/Logger.hpp"
+#include "vvv/util/csv_utils.hpp"
 
 #include <fmt/core.h>
 #include <optional>
@@ -214,16 +217,20 @@ struct VolcaniteArgs {
     std::string attribute_label;               ///< name of the label attribute
     std::string attribute_csv_separator = ","; //< only for csv attribute databases
     bool label_remapping = false;              ///< if label ids in the volume should be remapped to a consecutive interval
+    bool compute_attributes = false;           ///< if additional attributes are computed from the segmentation volume
 
     // compression args
-    std::string compress_export_file;   ///< !empty = perform compression to file         Only one of
-    std::string decompress_export_file; ///< !empty = perform decompression to file       both can be set!
+    std::string compress_export_file; ///< !empty = perform compression to file
     std::string segmented_volume_file;
     uint32_t brick_size = 32;
     EncodingMode encoding_mode = EncodingMode::DOUBLE_TABLE_RANS_ENC;
     uint32_t freq_subsampling = 8;                  ///< n^3 factor for subsampling bricks for frequency table computation with rANS
     uint32_t operation_mask = OP_ALL_WITHOUT_DELTA; // enables certain CSGV operations and stop bits through OP_*_BIT
     bool random_access = false;                     ///< encode bricks so that they support random access within a brick
+
+    // decompression args
+    std::string decompress_export_file;                        ///< !empty = perform decompression to file
+    uint32_t decompress_chunk_size[3] = {1024u, 1024u, 1024u}; ///< decompressed volume is split into chunks. must be multiple of CSGV brick size.
 
     // evaluation and statistics
     HeadlessRenderingConfig hr_cfg;     ///< configuration parameters for the automated headless rendering pass
@@ -289,7 +296,6 @@ struct VolcaniteArgs {
             // could include TCLAP grouping here using AnyOf, EitherOf
 
             // compression arguments
-            ValueArg<std::string> decompresspathArg("d", "decompress", "Export the decompressed volume to given file.", false, va.decompress_export_file, "file", cmd);
             ValueArg<std::string> compresspathArg("c", "compress", "Export the compressed volume to the given csgv file and any attribute database along with it.", false, va.compress_export_file, "file", cmd);
             ValueArg<std::string> chunkedArg("", "chunked", "Compress chunked segmented volume using formatted <volume> path with inclusive x, y, and z chunk file ranges as: \".*{[0..<xn>]}.*{[0..<yn>]}.*{[0..<zn>]}.*\".", false, "", "xn,yn,zn", cmd);
             ValueArg<uint32_t> subsamplingArg("", "freq-sampling", "Compression prepass acceleration by given factor cubed. Affects strength 1 or 2 only.", false, va.freq_subsampling, "int", cmd);
@@ -304,6 +310,11 @@ struct VolcaniteArgs {
             cmd.add(bricksizeArg);
             ValueArg<std::string> opMaskArg("o", "operations", "Combination of [p]arent, all [n]eighbors / [x,y,z] neighbor, palette [l]ast, palette [d]elta, [s]top bits. Quick: [a]ll or [o]ptimized (no Pdelta).", false, "a", "none|(a|o|p|n|x|y|z|l|d[-]|s)*", cmd);
             SwitchArg randomAccessArg("", "random-access", "Encode in a format that supports random access and in-brick parallelism for the decompression.", cmd);
+
+            // decompression arguments
+            ValueArg<std::string> decompresspathArg("d", "decompress", "Export the decompressed volume to given file.", false, va.decompress_export_file, "file", cmd);
+            ValueArg<std::string> decompressChunkSizeArg("", "decompress-chunk", "Decompression file chunk size in voxels as {width},{height},{depth}. A single value is treated as uniform size.", false, "", "{width},{height},{depth}", cmd);
+
             // evaluation and statistics arguments
             SwitchArg testArg("t", "test", "Run test after performing the compression", cmd);
             ValueArg<std::string> brickStatsArg("", "brickstats-logfile", "File into which statistics per brick are exported", false, "", "file", cmd);
@@ -314,7 +325,8 @@ struct VolcaniteArgs {
             ValueArg<std::string> shaderDefineArg("", "shader-def", "String of ; separated definitions that will be passed on to the shader. e.g. 'MY_VAL=64;MY_DEF'. Use with care.", false, va.shader_defines, "string", cmd);
 
             // attribute arguments
-            SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used.", cmd);
+            SwitchArg labelRemappingArg("", "relabel", "Relabel the voxel labels even if no attribute database is used. Enables --gen-attributes if no database is used.", cmd);
+            SwitchArg computeAttributesArg("", "gen-attributes", "Generate common attributes from the volume and add them to the attribute database.", cmd);
             ValueArg<std::string> attributeArg("a", "attribute", R"(SQLite or CSV Attribute database: "{file.sqlite}[,{table/view name}[,{label column referenced in volume}]]" or "{file.csv}[,{label column referenced in volume}[,{csv separator}]]".)", false, "", "database.sqlite[,table[,label]] or database.csv[,label[,separator]]", cmd);
             // rendering arguments
             SwitchArg devArg("", "dev", "Reveal development GUI and enable shader debug outputs.", cmd);
@@ -355,11 +367,30 @@ struct VolcaniteArgs {
                 throw ArgException("Volcanite was build with CMake option HEADLESS set. volcanite must be run with --headless option and can not use interactive windows.", headlessArg.longID());
             }
 #endif
-            va.decompress_export_file = expandPathStr(decompresspathArg.getValue());
             va.compress_export_file = expandPathStr(compresspathArg.getValue());
             if (!parseOperationMaskString(va.operation_mask, opMaskArg.getValue()))
                 throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d[-],s only", opMaskArg.longID());
             va.random_access = randomAccessArg.getValue();
+
+            va.decompress_export_file = expandPathStr(decompresspathArg.getValue());
+            if (const std::string &decomp_chunk_str = decompressChunkSizeArg.getValue();
+                !decomp_chunk_str.empty()) {
+
+                std::stringstream ss(decompressChunkSizeArg.getValue());
+                ss >> va.decompress_chunk_size[0];
+                if (!ss.eof()) { // .peek() != std::char_traits<char>::eof()) {
+                    ss.ignore();
+                    ss >> va.decompress_chunk_size[1];
+                    ss.ignore();
+                    ss >> va.decompress_chunk_size[2];
+                } else {
+                    va.decompress_chunk_size[2] = va.decompress_chunk_size[1] = va.decompress_chunk_size[0];
+                }
+
+                if (ss.fail())
+                    throw ArgException(decompressChunkSizeArg.longID() + " must be a single size or three sizes '{width},{height},{depth}' in voxels.", resolutionArg.longID());
+            }
+
             // rendering arguments
             if (!parseRenderingConfigsString(va.rendering_configs, renderconfigArg.getValue()))
                 throw ArgException(renderconfigArg.longID() + " must be a ; separated list of .vcfg files or config strings.", renderconfigArg.longID());
@@ -423,6 +454,8 @@ struct VolcaniteArgs {
             else
                 Logger(Debug) << getDummySegmentationVolumeHelpStr();
             input_volume_required = input_volume_required && !evalPrintArg.getValue();
+
+            bool file_dialog_start_with_additional_properties = false;
             if (input_file.empty() && input_volume_required) {
 #ifdef HEADLESS
                 throw ArgException("Must provide input file in headless mode", inputpathArg.longID(""));
@@ -440,10 +473,69 @@ struct VolcaniteArgs {
                 }
 
                 input_file = selected_file.result().at(0);
+
+                // extract the chunked attribute as well as possible attribute databases inside the directory of the provided volume
+                if (!input_file.ends_with(".csgv")) {
+                    try {
+                        const std::string PATTERN_FOR_CHUNKED_FILES = R"(_x\d+_y\d+_z\d+)";
+                        const std::string PATTERN_FOR_CHUNKED_FILES_CAPTURED = R"(_x(\d+)_y(\d+)_z(\d+))";
+                        std::string base_volume_name = stripFileExtension(expandPath(input_file).filename().string());
+
+                        // base_volume_name is potentially a chunked file so the chunked numbers (x{}y{}z{}) needs to be removed
+                        if (std::regex_search(base_volume_name, std::regex{PATTERN_FOR_CHUNKED_FILES})) {
+                            base_volume_name = std::regex_replace(base_volume_name, std::regex{PATTERN_FOR_CHUNKED_FILES}, "");
+                        }
+
+                        std::string file_extension = std::filesystem::path(input_file).extension().string();
+                        auto path = expandPath(input_file).parent_path().string();
+                        for (const auto &entry : std::filesystem::directory_iterator(path)) {
+                            if (!entry.is_regular_file())
+                                continue;
+
+                            std::string filename = entry.path().filename().string();
+
+                            if (filename.find(base_volume_name) == 0) {
+                                std::smatch chunk_indices;
+                                if (std::regex_match(filename, chunk_indices, std::regex{"^" + base_volume_name + PATTERN_FOR_CHUNKED_FILES_CAPTURED + file_extension + "$"})) {
+                                    // file is chunked -> extract maximum number of chunks
+                                    va.chunked = true;
+                                    va.compress_export_file = (std::filesystem::path(path) / base_volume_name).string() + ".csgv";
+                                    va.chunk_files[0] = std::max(va.chunk_files[0], static_cast<uint32_t>(std::stoul(chunk_indices[1].str())));
+                                    va.chunk_files[1] = std::max(va.chunk_files[1], static_cast<uint32_t>(std::stoul(chunk_indices[2].str())));
+                                    va.chunk_files[2] = std::max(va.chunk_files[2], static_cast<uint32_t>(std::stoul(chunk_indices[3].str())));
+                                }
+
+                                if (va.attribute_database.empty()) {
+                                    if (std::regex_match(filename, chunk_indices, std::regex{"^" + base_volume_name + ".sqlite$"}) | std::regex_match(filename, chunk_indices, std::regex{"^" + base_volume_name + ".db3$"})) {
+                                        va.attribute_database = (std::filesystem::path(path) / std::filesystem::path(base_volume_name)).string() + std::filesystem::path(filename).extension().string();
+                                        va.label_remapping = true;
+
+                                    } else if (std::regex_match(filename, chunk_indices, std::regex{"^" + base_volume_name + ".csv$"})) {
+                                        va.attribute_database = (std::filesystem::path(path) / std::filesystem::path(base_volume_name)).string() + std::filesystem::path(filename).extension().string();
+                                        va.attribute_table = "";
+                                        va.attribute_csv_separator = ",";
+                                        // assume the first column is the attribute label
+                                        va.attribute_label = get_column_names_from_csv_file(va.attribute_database, va.attribute_csv_separator)[0];
+                                        va.label_remapping = true;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (va.attribute_database.empty())
+                            va.compute_attributes = true;
+                        else if (!std::filesystem::exists(va.attribute_database))
+                            throw ArgException(attributeArg.longID() + " attribute database file does not exists or can not be accessed.", attributeArg.longID());
+
+                    } catch (std::filesystem::filesystem_error &e) {
+                        std::cerr << "Filesystem error: " << e.what() << std::endl;
+                    }
+                }
+                file_dialog_start_with_additional_properties = va.chunked | va.label_remapping;
 #endif
             }
             va.input_file = input_file;
-            // some arguments depend on if we import a previously compressed .csgv file..
+            // some arguments depend on if we import a previously compressed .csgv file...
             if (input_file.ends_with(".csgv")) {
                 // we could forbid to set any compression parameters at all if we are in this branch
                 if (!va.compress_export_file.empty()) {
@@ -452,7 +544,7 @@ struct VolcaniteArgs {
 
                 va.working_dir = expandPath(input_file).parent_path();
             }
-            // .. or if we compress a volume
+            // ... or if we compress a volume
             else {
                 if (input_volume_required && !(input_file.starts_with(CSGV_SYNTH_PREFIX_STR) || input_file.ends_with(".vti") || input_file.ends_with(".raw") || input_file.ends_with(".vraw") || input_file.ends_with(".hdf5") || input_file.ends_with(".h5") || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {
                     throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.h5|.raw|.vraw|.nrrd|.nhdr})", inputpathArg.longID(""));
@@ -470,7 +562,7 @@ struct VolcaniteArgs {
                 }
 
                 // attribute arguments (if we import a .csgv file, the attributes are already stored in a database along with it)
-                va.label_remapping = labelRemappingArg.getValue();
+                va.label_remapping |= labelRemappingArg.getValue();
                 if (!attributeArg.getValue().empty()) {
                     va.label_remapping = true;
 
@@ -545,24 +637,26 @@ struct VolcaniteArgs {
                 }
                 va.freq_subsampling = subsamplingArg.getValue();
                 va.threads = threadsArg.getValue();
-                va.chunked = !chunkedArg.getValue().empty();
+                va.chunked |= !chunkedArg.getValue().empty();
                 if (va.chunked) {
                     if (va.compress_export_file.empty())
                         throw ArgException("A csgv export path must be specified with " + compresspathArg.longID() + " when processing chunked volumes!");
 
-                    const std::string &chunk_indices = chunkedArg.getValue();
-                    std::stringstream ss(chunk_indices);
-                    ss >> va.chunk_files[0];
-                    ss.ignore();
-                    ss >> va.chunk_files[1];
-                    ss.ignore();
-                    ss >> va.chunk_files[2];
-                    if (ss.fail())
-                        throw ArgException(chunkedArg.longID() + " must have the format 'xn,yn,zn' with *n being integer numbers", chunkedArg.longID());
+                    if (!file_dialog_start_with_additional_properties) {
+                        const std::string &chunk_indices = chunkedArg.getValue();
+                        std::stringstream ss(chunk_indices);
+                        ss >> va.chunk_files[0];
+                        ss.ignore();
+                        ss >> va.chunk_files[1];
+                        ss.ignore();
+                        ss >> va.chunk_files[2];
+                        if (ss.fail())
+                            throw ArgException(chunkedArg.longID() + " must have the format 'xn,yn,zn' with *n being integer numbers", chunkedArg.longID());
+                    }
                     if (va.chunk_files[0] == 0u && va.chunk_files[1] == 0u && va.chunk_files[2] == 0u)
                         throw ArgException(chunkedArg.longID() + " inclusive xn,yn,zn range must contain at least 2 chunks", chunkedArg.longID());
 
-                    // count occurrences of {} in the string. It must be exactly 3 and there must be at least one
+                    // count occurrences of {} in the input file string. It must be exactly 3 and there must be at least one
                     // character between consecutive placeholders {}.
                     {
                         try {
@@ -573,8 +667,29 @@ struct VolcaniteArgs {
                         }
                     }
                 }
+
+                // check if the provided (chunk) input file(s) exist.
+                if (va.chunked) {
+                    for (int i = 0; i < (va.chunk_files[0] + 1) * (va.chunk_files[1] + 1) * (va.chunk_files[2] + 1); i++) {
+                        auto chunk_index = glm::uvec3(i % (va.chunk_files[0] + 1), (i / (va.chunk_files[0] + 1)) % (va.chunk_files[1] + 1), (i / (va.chunk_files[0] + 1) / (va.chunk_files[1] + 1)) % (va.chunk_files[2] + 1));
+                        if (chunk_index[0] > va.chunk_files[0] || chunk_index[1] > va.chunk_files[1] || chunk_index[2] > va.chunk_files[2])
+                            continue;
+                        auto chunk_path = fmt::vformat(va.input_file, fmt::make_format_args(chunk_index[0], chunk_index[1], chunk_index[2]));
+                        if (!std::filesystem::exists(chunk_path))
+                            throw ArgException("provided chunk indices does not match with the files in the provided path. At least the following file is missing: " + chunk_path, chunkedArg.longID(""));
+                    }
+                } else {
+                    if (!std::filesystem::exists(va.input_file))
+                        throw ArgException("provided input file does not exist: " + va.input_file, inputpathArg.longID(""));
+                }
                 va.run_tests = testArg.getValue();
             }
+
+            // it is possible to obtain new attributes for the volume and append them to the attribute database
+            // this requires that the csgv volume IDs are contiguous however (use --relabel or -a).
+            // va.compute_attributes = (va.attribute_database.empty() && va.label_remapping) || computeAttributesArg.getValue();
+            va.compute_attributes = computeAttributesArg.getValue();
+
             va.brickstats_file = expandPath(brickStatsArg.getValue()).generic_string();
             va.rendertimes_file = expandPath(renderTimesArg.getValue()).generic_string();
             std::string comma_separated_logfiles = evalLogFilesArg.getValue();

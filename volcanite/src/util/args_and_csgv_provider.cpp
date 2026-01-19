@@ -14,6 +14,9 @@
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "volcanite/util/args_and_csgv_provider.hpp"
+#include "volcanite/compression/CSGVDatabase.hpp"
+#include "volcanite/compression/CSGVAttributeExtractor.hpp"
+#include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/compression/CompSegVolHandler.hpp"
 #include "volcanite/eval/EvaluationLogExport.hpp"
@@ -194,6 +197,30 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
     if (compressedSegmentationVolume == nullptr) {
         Logger(Error) << "could not create or load Compressed Segmentation Volume. Aborting.";
         return RET_COMPR_ERROR;
+    }
+
+    // optionally, add additional attributes from the attribute extraction
+    if (args.compute_attributes) {
+        if (!compressedSegmentationVolume->hasContiguousLabels())
+            throw std::runtime_error("Compressed Segmentation Volume must have contiguous labels. Compress with --relabel or -a.");
+
+        if (csgvDatabase->isDummy()) {
+            // convert dummy db to an sql db to insert extracted attributes
+            csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
+            csgvDatabase->createDBfromDummyDB(stripFileExtension(args.input_file) + "_csgv.db3", *compressedSegmentationVolume);
+        }
+
+        Logger(Debug, true) << "Computing attributes from CSGV..";
+        MiniTimer t;
+
+        CSGVAttributeExtractor csgvAttributeExtractor(compressedSegmentationVolume);
+        csgvDatabase->addAttributesIfNotExist(&csgvAttributeExtractor);
+
+        // (optionally), export the connectivity information, i.e. which labels are neighboring each other in the volume
+        // TODO: create a command line argument for connectivity .csv export
+        // csgvAttributeExtractor.exportNeighborsPerLabel(stripFileExtension(args.input_file) + "_connectivity.csv");
+
+        Logger(Debug) << "Computing attributes from CSGV. Finished in " << t.elapsed() << " seconds.";
     }
 
     return RET_SUCCESS;

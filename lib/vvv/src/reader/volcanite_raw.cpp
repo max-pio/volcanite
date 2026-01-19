@@ -143,26 +143,31 @@ void write_volcanite_raw_(std::string url, const Volume<T> *volume, std::string 
     std::string line = std::to_string(volume->dim_x) + " " + std::to_string(volume->dim_y) + " " + std::to_string(volume->dim_z);
     vraw << line << std::endl;
     vraw << formatLabel << std::endl;
-    // write binary data
-    vraw.write(volume->getRawData_const(), volume->memorySize());
+    auto volume_data = volume->getRawData_const();
+    constexpr size_t CHUNK_BYTES = 64 * 1024 * 1024;
+    const auto num_bytes = volume->memorySize();
 
+    for (size_t i = 0; i < num_bytes; i += CHUNK_BYTES) {
+        size_t to_write = std::min(CHUNK_BYTES, num_bytes - i);
+        vraw.write(volume_data + i, to_write);
+    }
     vraw.close();
 }
 
 template <>
-void Volume<uint8_t>::write_volcanite_raw(std::string url) {
+void Volume<uint8_t>::write_volcanite_raw(std::string url) const {
     write_volcanite_raw_(std::move(url), this, "uint8");
 }
 template <>
-void Volume<uint16_t>::write_volcanite_raw(std::string url) {
+void Volume<uint16_t>::write_volcanite_raw(std::string url) const {
     write_volcanite_raw_(std::move(url), this, "uint16");
 }
 template <>
-void Volume<uint32_t>::write_volcanite_raw(std::string url) {
+void Volume<uint32_t>::write_volcanite_raw(std::string url) const {
     write_volcanite_raw_(std::move(url), this, "uint32");
 }
 template <>
-void Volume<uint64_t>::write_volcanite_raw(std::string url) {
+void Volume<uint64_t>::write_volcanite_raw(std::string url) const {
     write_volcanite_raw_(std::move(url), this, "uint64");
 }
 

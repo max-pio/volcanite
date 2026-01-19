@@ -18,11 +18,11 @@
 #include "vvv/util/Logger.hpp"
 #include <string>
 
-#include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/VolcaniteArgs.hpp"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/eval/CSGVBenchmarkPass.hpp"
 #include "volcanite/util/args_and_csgv_provider.hpp"
+#include "vvv/util/csv_utils.hpp"
 
 using namespace volcanite;
 
