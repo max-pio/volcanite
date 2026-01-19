@@ -12,6 +12,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+import pathlib
 
 import volcanite.converter as vc
 import re
@@ -291,8 +292,38 @@ def write_chunked_volume(volume: np.ndarray, path_out_format: str, chunk_size: t
     return ((volume.shape[2] - 1) // chunk_size[2], (volume.shape[1] - 1) // chunk_size[1], (volume.shape[0] - 1) // chunk_size[0])
 
 
-def read_chunked_volume(path_out_format: str, chunk_count) -> np.ndarray:
+def read_chunked_volume(path_in_format: str, chunk_count: tuple[int, int, int]) -> np.ndarray:
+
     raise NotImplementedError("reading chunked volumes is not yet implemented")
+
+    if vc.__get_format_key_count(path_in_format) != 3:
+        raise Exception("File path must contain exactly 3 python string format keys")
+
+    chunk_size = (0,0,0)
+    for z in range(0, chunk_count[0]):
+        for y in range(0, chunk_count[1]):
+            for x in range(0, chunk_count[2]):
+
+                chunk_file = pathlib.Path(path_in_format.format(x, y, z))
+                if not chunk_file.exists():
+                    raise Exception(f"Chunk file {chunk_file} does not exist")
+
+                print(f"Reading {chunk_file}")
+                chunk_volume = vc.read_volume(chunk_file)
+                if x == 0 and y == 0 and z == 0:
+                    chunk_size = (chunk_volume.shape[2], chunk_volume.shape[1], chunk_volume.shape[0])
+                    volume = np.empty((chunk_count[2] * chunk_size[0], chunk_count[1] * chunk_size[1], chunk_count[0] * chunk_size[2]), 'uint32')
+                else:
+                    if chunk_volume.shape[0] != chunk_size[2] and x != chunk_count[0] - 1:
+                        raise Exception(f"Inner chunks must have chunk size {chunk_size} but {chunk_file} has size {chunk_volume.shape}")
+                    if chunk_volume.shape[1] != chunk_size[1] and y != chunk_count[1] - 1:
+                        raise Exception(f"Inner chunks must have chunk size {chunk_size} but {chunk_file} has size {chunk_volume.shape}")
+                    if chunk_volume.shape[2] != chunk_size[0] and z != chunk_count[2] - 1:
+                        raise Exception(f"Inner chunks must have chunk size {chunk_size} but {chunk_file} has size {chunk_volume.shape}")
+
+                # volume[] = ... TODO: copy chunk_volume to the right sub-slices in volume
+
+    return volume
 
 
 if __name__ == '__main__':
