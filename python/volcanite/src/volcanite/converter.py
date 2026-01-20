@@ -290,6 +290,8 @@ def write_volume(volume: np.ndarray, path_out: str | os.PathLike, dtype = None,
     """Automatically selects the writer for the respective format based on the path_out file type.
     Volumes are always written in XYZ memory axis order for Volcanite compatibility."""
 
+    Path(path_out).parent.mkdir(parents=True, exist_ok=True)
+
     extensions = [e.lower() for e in Path(path_out).suffixes]
     if len(extensions) == 0:
         raise ValueError("Output file path for writing volume must have a file type.")
@@ -318,7 +320,7 @@ def write_volume(volume: np.ndarray, path_out: str | os.PathLike, dtype = None,
         raise Exception("unknown segmentation volume file extension " + "".join(extensions))
 
     if apply_gzip:
-        # zip the file, delte the uncompressed initial file
+        # zip the file, delete the uncompressed initial file
         copy_to_gzip(path_out)
         Path(path_out).unlink()
 
@@ -337,21 +339,21 @@ def read_volume(path_in: str | os.PathLike, input_axis_order: str = 'zyx') -> np
         path_in = copy_from_gzip(path_in)
 
     if extensions[-1] == ".vraw" or extensions[-1] == ".raw":
-        _volume_in = read_vraw(path_in)
+        __volume_in = read_vraw(path_in)
     elif extensions[-1] == ".nrrd":
-        _volume_in = read_nrrd(path_in)
+        __volume_in = read_nrrd(path_in)
     elif extensions[-1] == ".hdf5" or extensions[-1] == ".h5":
-        _volume_in = read_hdf5(path_in)
+        __volume_in = read_hdf5(path_in)
     elif extensions[-1] == ".tif" or extensions[-1] == ".tiff":
-        _volume_in = read_sliced_tiff(path_in)
+        __volume_in = read_sliced_tiff(path_in)
     elif extensions[-1] == ".png":
-        _volume_in = read_sliced_png(path_in)
+        __volume_in = read_sliced_png(path_in)
     elif extensions[-1] == ".npy" or extensions[-1] == ".npz":
-        _volume_in = read_numpy(path_in)
+        __volume_in = read_numpy(path_in)
     elif extensions[-1] == ".nii" or extensions[-2:] == [".nii", ".gz"]:
-        _volume_in = read_nifti(path_in)
+        __volume_in = read_nifti(path_in)
     elif extensions[-1] == ".vti":
-        _volume_in = read_vti(path_in)
+        __volume_in = read_vti(path_in)
     else:
         raise Exception("unknown segmentation volume file extension " + "".join(extensions))
 
@@ -359,9 +361,9 @@ def read_volume(path_in: str | os.PathLike, input_axis_order: str = 'zyx') -> np
         # remove temporary uncompressed file
         path_in.unlink()
 
-    _volume_in = reshape_memory_order(_volume_in, input_axis_order, 'zyx')
+    __volume_in = reshape_memory_order(__volume_in, input_axis_order, 'zyx')
 
-    return _volume_in
+    return __volume_in
 
 
 def __guard_volume_dtype(volume: np.ndarray, dtype) -> np.ndarray:
