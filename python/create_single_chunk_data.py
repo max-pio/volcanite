@@ -25,8 +25,6 @@ if __name__ == '__main__':
         epilog='')
 
     parser.add_argument("data_directory", metavar='data-directory', type=str, help="Directory where downloaded cloud data was stored.")
-    parser.add_argument("-v", "--verbose", action="store_true")
-
     args = parser.parse_args()
     directory = Path(args.data_directory)
 
