@@ -272,7 +272,7 @@ def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, i
         __update_and_reset_params(volume_information, chunk_information, 0, chunk_size_out, volume_dim)
 
 
-def write_chunked_volume(volume: np.ndarray, path_out_format: str, chunk_size: tuple[int, int, int]) -> None:
+def write_chunked_volume(volume: np.ndarray, path_out_format: str, chunk_size: tuple[int, int, int]) -> tuple[int, int, int]:
     """Exports the volume to a set of files where each file is a volume chunk with dimensions chunk_size^3. The file
     output format is selected based on the file extension of path_out_format. path_out_format must contain exactly
      three python string format keys that will be replaced with x y z chunk indices. e.g. 'my_volume_x{}y{}z{}.raw'."""
@@ -289,20 +289,30 @@ def write_chunked_volume(volume: np.ndarray, path_out_format: str, chunk_size: t
                              x:(min(volume.shape[2], x + chunk_size[2]))],
                              path_out_format.format(x // chunk_size[2], y // chunk_size[1], z // chunk_size[0]))
                 
-    return ((volume.shape[2] - 1) // chunk_size[2], (volume.shape[1] - 1) // chunk_size[1], (volume.shape[0] - 1) // chunk_size[0])
+    return (volume.shape[2] - 1) // chunk_size[2], (volume.shape[1] - 1) // chunk_size[1], (volume.shape[0] - 1) // chunk_size[0]
 
 
-def read_chunked_volume(path_in_format: str, chunk_count: tuple[int, int, int]) -> np.ndarray:
-
-    raise NotImplementedError("reading chunked volumes is not yet implemented")
-
+def read_chunked_volume(path_in_format: str, last_chunk_xyz: tuple[int, int, int]) -> np.ndarray:
     if vc.__get_format_key_count(path_in_format) != 3:
         raise Exception("File path must contain exactly 3 python string format keys")
 
-    chunk_size = (0,0,0)
-    for z in range(0, chunk_count[0]):
-        for y in range(0, chunk_count[1]):
-            for x in range(0, chunk_count[2]):
+    # dry run: check if all chunk files exist
+    chunk_count_xyz = (last_chunk_xyz[0] + 1, last_chunk_xyz[1] + 1, last_chunk_xyz[2] + 1)
+    for z in range(0, chunk_count_xyz[2]):
+        for y in range(0, chunk_count_xyz[1]):
+            for x in range(0, chunk_count_xyz[0]):
+
+                chunk_file = pathlib.Path(path_in_format.format(x, y, z))
+                if not chunk_file.exists():
+                    raise Exception(f"Chunk file {chunk_file} does not exist")
+
+
+    chunk_size_zyx = (0,0,0)
+    last_chunk_size_xyz = (0,0,0)
+    volume = np.empty(shape=(0,0,0))
+    for z in range(0, chunk_count_xyz[2]):
+        for y in range(0, chunk_count_xyz[1]):
+            for x in range(0, chunk_count_xyz[0]):
 
                 chunk_file = pathlib.Path(path_in_format.format(x, y, z))
                 if not chunk_file.exists():
@@ -311,17 +321,27 @@ def read_chunked_volume(path_in_format: str, chunk_count: tuple[int, int, int]) 
                 print(f"Reading {chunk_file}")
                 chunk_volume = vc.read_volume(chunk_file)
                 if x == 0 and y == 0 and z == 0:
-                    chunk_size = (chunk_volume.shape[2], chunk_volume.shape[1], chunk_volume.shape[0])
-                    volume = np.empty((chunk_count[2] * chunk_size[0], chunk_count[1] * chunk_size[1], chunk_count[0] * chunk_size[2]), 'uint32')
+                    chunk_size_zyx = (chunk_volume.shape[0], chunk_volume.shape[1], chunk_volume.shape[1])
+                    volume = np.empty((chunk_count_xyz[2] * chunk_size_zyx[0], chunk_count_xyz[1] * chunk_size_zyx[1], chunk_count_xyz[0] * chunk_size_zyx[2]), 'uint32')
+                elif x == last_chunk_xyz[0] and y == last_chunk_xyz[1] and z == last_chunk_xyz[2]:
+                    last_chunk_size_zyx = (chunk_volume.shape[0], chunk_volume.shape[1], chunk_volume.shape[2])
                 else:
-                    if chunk_volume.shape[0] != chunk_size[2] and x != chunk_count[0] - 1:
-                        raise Exception(f"Inner chunks must have chunk size {chunk_size} but {chunk_file} has size {chunk_volume.shape}")
-                    if chunk_volume.shape[1] != chunk_size[1] and y != chunk_count[1] - 1:
-                        raise Exception(f"Inner chunks must have chunk size {chunk_size} but {chunk_file} has size {chunk_volume.shape}")
-                    if chunk_volume.shape[2] != chunk_size[0] and z != chunk_count[2] - 1:
-                        raise Exception(f"Inner chunks must have chunk size {chunk_size} but {chunk_file} has size {chunk_volume.shape}")
+                    if chunk_volume.shape[0] != chunk_size_zyx[0] and z != last_chunk_xyz[2]:
+                        raise Exception(f"Inner chunks must have chunk size {chunk_size_zyx} but {chunk_file} has size {chunk_volume.shape}")
+                    if chunk_volume.shape[1] != chunk_size_zyx[1] and y != last_chunk_xyz[1]:
+                        raise Exception(f"Inner chunks must have chunk size {chunk_size_zyx} but {chunk_file} has size {chunk_volume.shape}")
+                    if chunk_volume.shape[2] != chunk_size_zyx[2] and x != last_chunk_xyz[0]:
+                        raise Exception(f"Inner chunks must have chunk size {chunk_size_zyx} but {chunk_file} has size {chunk_volume.shape}")
 
-                # volume[] = ... TODO: copy chunk_volume to the right sub-slices in volume
+                chunk_start = (z * chunk_size_zyx[0], y * chunk_size_zyx[1], x * chunk_size_zyx[2])
+                volume[chunk_start[0]:(chunk_start[0] + chunk_volume.shape[0]),
+                       chunk_start[1]:(chunk_start[1] + chunk_volume.shape[1]),
+                       chunk_start[2]:(chunk_start[2] + chunk_volume.shape[2])] = chunk_volume
+
+    # last border chunks might be smaller than chunk_size. resize:
+    volume = volume[0:((chunk_count_xyz[2] - 1) * chunk_size_zyx[0] +  last_chunk_size_zyx[0]),
+                    0:((chunk_count_xyz[1] - 1) * chunk_size_zyx[1] + last_chunk_size_zyx[1]),
+                    0:((chunk_count_xyz[0] - 1) * chunk_size_zyx[2] + last_chunk_size_zyx[2])]
 
     return volume
 
