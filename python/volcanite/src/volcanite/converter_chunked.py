@@ -20,6 +20,7 @@ import re
 import numpy as np
 import time
 import threading
+import gc
 
 def __read_tmp_chunk_zy(chunk_information, volume_information):
     tmp_chunk = np.zeros(shape=volume_information['chunk_size_in'], dtype=volume_information['dtype_out'])
@@ -360,33 +361,48 @@ def read_chunked_volume(path_in_format: str, last_chunk_xyz: tuple[int, int, int
                     raise Exception(f"Chunk file {chunk_file} does not exist")
 
                 print(f"Reading {chunk_file}")
-                # TODO: reshape chunk volumes here if input_axis_order != xyz?
-                chunk_volume = vc.read_volume(chunk_file)
+                chunk_volume = vc.read_volume(chunk_file, input_axis_order=input_axis_order)
 
                 if x == 0 and y == 0 and z == 0:
                     chunk_size_zyx = (chunk_volume.shape[0], chunk_volume.shape[1], chunk_volume.shape[1])
-                    __volume_in = np.empty((chunk_count_xyz[2] * chunk_size_zyx[0], chunk_count_xyz[1] * chunk_size_zyx[1], chunk_count_xyz[0] * chunk_size_zyx[2]), 'uint32')
+                    size_in_gb = (chunk_count_xyz[2] * chunk_size_zyx[0] * chunk_count_xyz[1]
+                                  * chunk_size_zyx[1] * chunk_count_xyz[0] * chunk_size_zyx[2]) / 1024 / 1024 / 1024
+                    print(f"Allocating volume <= size {(chunk_count_xyz[2] * chunk_size_zyx[0],
+                                                        chunk_count_xyz[1] * chunk_size_zyx[1],
+                                                        chunk_count_xyz[0] * chunk_size_zyx[2])} ({size_in_gb} GB).")
+                    __volume_in = np.empty((chunk_count_xyz[2] * chunk_size_zyx[0],
+                                            chunk_count_xyz[1] * chunk_size_zyx[1],
+                                            chunk_count_xyz[0] * chunk_size_zyx[2]), 'uint32')
                 elif x == last_chunk_xyz[0] and y == last_chunk_xyz[1] and z == last_chunk_xyz[2]:
                     last_chunk_size_zyx = (chunk_volume.shape[0], chunk_volume.shape[1], chunk_volume.shape[2])
                 else:
                     if chunk_volume.shape[0] != chunk_size_zyx[0] and z != last_chunk_xyz[2]:
-                        raise Exception(f"Inner chunks must have chunk size {chunk_size_zyx} but {chunk_file} has size {chunk_volume.shape}")
+                        raise Exception(f"Inner chunks must have chunk size {chunk_size_zyx}"
+                                        f" but {chunk_file} has size {chunk_volume.shape}")
                     if chunk_volume.shape[1] != chunk_size_zyx[1] and y != last_chunk_xyz[1]:
-                        raise Exception(f"Inner chunks must have chunk size {chunk_size_zyx} but {chunk_file} has size {chunk_volume.shape}")
+                        raise Exception(f"Inner chunks must have chunk size {chunk_size_zyx}"
+                                        f" but {chunk_file} has size {chunk_volume.shape}")
                     if chunk_volume.shape[2] != chunk_size_zyx[2] and x != last_chunk_xyz[0]:
-                        raise Exception(f"Inner chunks must have chunk size {chunk_size_zyx} but {chunk_file} has size {chunk_volume.shape}")
+                        raise Exception(f"Inner chunks must have chunk size {chunk_size_zyx}"
+                                        f" but {chunk_file} has size {chunk_volume.shape}")
 
                 chunk_start = (z * chunk_size_zyx[0], y * chunk_size_zyx[1], x * chunk_size_zyx[2])
                 __volume_in[chunk_start[0]:(chunk_start[0] + chunk_volume.shape[0]),
-                       chunk_start[1]:(chunk_start[1] + chunk_volume.shape[1]),
-                       chunk_start[2]:(chunk_start[2] + chunk_volume.shape[2])] = chunk_volume
+                            chunk_start[1]:(chunk_start[1] + chunk_volume.shape[1]),
+                            chunk_start[2]:(chunk_start[2] + chunk_volume.shape[2])] = chunk_volume
+                del chunk_volume
+                gc.collect()
 
     # last border chunks might be smaller than chunk_size. resize:
+    # print(f"resize to {((chunk_count_xyz[2] - 1) * chunk_size_zyx[0] + last_chunk_size_zyx[0],
+    #                    ((chunk_count_xyz[1] - 1) * chunk_size_zyx[1] + last_chunk_size_zyx[1]),
+    #                    ((chunk_count_xyz[0] - 1) * chunk_size_zyx[2] + last_chunk_size_zyx[2]))}")
     __volume_in = __volume_in[0:((chunk_count_xyz[2] - 1) * chunk_size_zyx[0] + last_chunk_size_zyx[0]),
                               0:((chunk_count_xyz[1] - 1) * chunk_size_zyx[1] + last_chunk_size_zyx[1]),
                               0:((chunk_count_xyz[0] - 1) * chunk_size_zyx[2] + last_chunk_size_zyx[2])]
 
-    __volume_in = vc.reshape_memory_order(__volume_in, input_axis_order, 'zyx')
+    # TODO: reshape axis order of chunked volume after merging or for each chunk (read_volume see above)
+    # __volume_in = vc.reshape_memory_order(__volume_in, input_axis_order, 'zyx')
     return __volume_in
 
 
