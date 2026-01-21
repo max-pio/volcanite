@@ -18,17 +18,14 @@ from volcanite import converter_chunked as vcchunked
 import argparse
 from pathlib import Path
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        prog='Segmentation Volume Merger',
-        description='Merges segmentation volumes downloaded via download_cloud_data.py into single chunked hdf5 files.',
-        epilog='')
-
-    parser.add_argument("data_directory", metavar='data-directory', type=str, help="Directory where downloaded cloud data was stored.")
-    args = parser.parse_args()
-    directory = Path(args.data_directory)
-
-    chunked_volumes = [("Ara2016/Ara2016_x{}y{}z{}.hdf5", (2,1,2), "Ara2016/Ara2016_full.hdf5"),]
+def merge_data_to_single_chunk(directory : Path):
+    chunked_volumes = [("Ara2016/Ara2016_x{}y{}z{}.hdf5", (2, 1, 2), "Ara2016/Ara2016_full.hdf5"),
+                       ("Griesser2022-sample/Griesser2022-sample_x{}y{}z{}.hdf5", (15,3,2), "Griesser2022-sample/Griesser2022-sample_full.hdf5"),
+                       ("Griesser2022-validation/Griesser2022-validation_x{}y{}z{}.hdf5", (1,1,0), "Griesser2022-validation/Griesser2022-validation_full.hdf5"),
+                       # H01-wm is too large (~2TB)
+                       ("liconn/liconn_x{}y{}z{}.hdf5", (3,4,0), "liconn/liconn_full.hdf5"),
+                       # Motta2019 is too large (~1TB)
+                      ]
 
     for data_path, chunks_in, output_path in chunked_volumes:
 
@@ -40,3 +37,14 @@ if __name__ == '__main__':
             print(f"Exported: {output_path}")
         else:
             print(f"Skipping {directory / Path(data_path)} (does not exist).")
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        prog='Segmentation Volume Merger',
+        description='Merges segmentation volumes downloaded via download_cloud_data.py into single chunked hdf5 files.',
+        epilog='')
+
+    parser.add_argument("data_directory", metavar='data-directory', type=str, help="Directory where downloaded cloud data was stored.")
+    args = parser.parse_args()
+    merge_data_to_single_chunk(Path(args.data_directory))
