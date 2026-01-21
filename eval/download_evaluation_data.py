@@ -26,6 +26,7 @@ import zipfile_deflate64 as zipfile
 from volcanite import converter as vc, converter_chunked as vcc, clouddata as vcd, volcaniteeval as ve
 from volcanite.volcaniteeval import VolcaniteArg
 from common import data_specific_compression_args, data_specific_rendering_args
+from merge_data_to_single_chunk import merge_data_to_single_chunk
 
 
 def download_file(url: str, directory: Path, file_name: str | None = None, log: bool = True, overwrite: bool = False) -> Path | None:
@@ -250,6 +251,7 @@ if __name__ == '__main__':
     parser.add_argument("--preview", action="store_true", help="Render a preview image for each data set.")
     parser.add_argument("--no-abort", action="store_true", help="Continue the script even when creating a data set fails.")
     parser.add_argument("--only", help="Only download a single data set from [azba|ara2016|pa66|wolny2020|griesser2022-validation|xtm-battery|motta2019-small|motta2019|h01-wm|liconn|griesser2022-sample].")
+    parser.add_argument("--single-chunk-copy", action="store_true", help="Create single-chunk copies of medium sized chunked data sets.")
     args = parser.parse_args()
 
     csgv_directory = Path(args.directory)
@@ -657,5 +659,10 @@ if __name__ == '__main__':
 
     print("------------------------------- ")
     print(f"done! csgv data sets are available at {csgv_directory}")
+
+    if args.single_chunk_copy:
+        print("Creating single-chunk copies of medium sized data sets..")
+        merge_data_to_single_chunk(csgv_directory)
+
     exit(0)
 
