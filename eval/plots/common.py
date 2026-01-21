@@ -52,13 +52,13 @@ shading_mode_ids = ["local", "shadow", "ao", "pt"]
 def get_data_set_tex(dataset : str):
     _dataset2tex = {"pa66": "\\textsc{Polyamid}",
                     "Ara2016": "\\textsc{MouseBA}",
-                    "Griesser2022 - sample": "\\textsc{Fabric}",
-                    "Griesser2022 - validation": "\\textsc{Fabric$_{\\textsc{val}}$}",
+                    "Griesser2022-sample": "\\textsc{Fabric}",
+                    "Griesser2022-validation": "\\textsc{Fabric$_{\\textsc{val}}$}",
                     "Wolny2020": "\\textsc{Plant}",
                     "xtm-battery": "\\textsc{Battery}",
                     "azba": "\\textsc{AZBA}",
                     "H01-bloodvessel": "\\textsc{H01$_{\\textsc{BV}}$}",
-                    "H01-wm": "\\textsc{H01$_{\textsc{WM}}$}}",
+                    "H01-wm": "\\textsc{H01$_{\\textsc{WM}}$}",
                     "liconn": "\\textsc{Liconn}",
                     "Motta2019-small": "\\textsc{MouseL4$_\\textsc{S}$}",
                     "Motta2019": "\\textsc{MouseL4}",
@@ -69,7 +69,7 @@ def get_data_set_tex(dataset : str):
     return _dataset2tex[dataset]
 
 def save_plot(file : pathlib.Path | str, fig : plt.Figure):
-    plt.tight_layout()
+    # plt.tight_layout()
 
     if type(file) == str:
         file = pathlib.Path(file)

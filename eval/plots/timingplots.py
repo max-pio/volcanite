@@ -35,7 +35,7 @@ def plot_gpu_timings(df : pd.DataFrame, stages : list[str], xlabel : str | None 
     width = 0.66
 
     plt.figure()
-    fig, ax = plt.subplots(layout='constrained', figsize=(9, 3))
+    fig, ax = plt.subplots(constrained_layout=True, figsize=(9, 3))
 
     x = np.arange(frames)
     bottom = np.zeros_like(x, dtype='float64')
@@ -55,7 +55,7 @@ def plot_gpu_timings(df : pd.DataFrame, stages : list[str], xlabel : str | None 
     plt.ylabel("Frame time [ms]", fontsize=14)
     if legend:
         plt.legend(ncol=len(stages), loc='upper right')
-    plt.tight_layout()
+    # plt.tight_layout()
 
     if show:
         plt.show()
@@ -74,7 +74,7 @@ def plot_timings(x, y,
     xoffset = -(count - 1) * width * offsetscale / 2
 
     plt.figure(figsize=(4, 4))
-    fig, ax = plt.subplots(layout='constrained')
+    fig, ax = plt.subplots(constrained_layout=True)
     cycler = itertools.cycle(plt.rcParams['axes.prop_cycle'])
 
     for i, y in enumerate(ys):
@@ -106,14 +106,14 @@ def plot_timings(x, y,
     if ylabel:
         plt.ylabel(ylabel, fontsize=14)
 
-    plt.tight_layout()
+    #plt.tight_layout()
     #plt.show()
 
     return fig
 
 def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
                          xlabel = None, ylabel = None, xticklabels = None, colors = None, edgecolors = None,
-                         barlabelfmt : str | None = None) -> (plt.Figure, plt.Axes):
+                         barlabelfmt : str | None = None, marknan : bool = True) -> (plt.Figure, plt.Axes):
 
     # CONSTANT PARAMETERS
     width = 0.45
@@ -123,7 +123,7 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
     xoffset = -(count - 1) * width * offsetscale / 2
 
     plt.figure(figsize=(4, 4))
-    fig, ax = plt.subplots(layout='constrained')
+    fig, ax = plt.subplots(constrained_layout=True)
 
     for i, y in enumerate(ys):
         if edgecolors is None:
@@ -145,8 +145,9 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
                       y, width, label=label, linewidth=1, zorder=3,
                        edgecolor=edgecolor, color=color)
         if barlabelfmt:
-            ax.bar_label(bars, padding=2, fmt=barlabelfmt, size=11)
+            ax.bar_label(bars, padding=2, fmt=barlabelfmt, size=9)
 
+    # add ticks and colors
     if xticklabels:
         ax.set_xticks(x, xticklabels, rotation=45, ha='right')
     if xlabel:
@@ -156,5 +157,29 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
 
     if labels:
         ax.legend(labels=labels, loc='upper left', ncol=1)
+
+    # add markers for non-existing values
+    if marknan:
+        nan_marker_height = (3 * ax.get_ylim()[0] + ax.get_ylim()[1]) / 4
+        for i, y in enumerate(ys):
+            if edgecolors is None:
+                edgecolor = volcanite_colors_dark[i]
+            else:
+                edgecolor = edgecolors[i]
+
+            if colors is None:
+                color = volcanite_colors[i]
+            else:
+                color = colors[i]
+
+            # Add markers for non-existing entries
+            # filter NaN positions (non-existing data)
+            nan_mask = pd.isna(y)
+            x_nan = x[nan_mask.values] + xoffset + i * width * offsetscale
+            # plot X markers at bottom of
+            # for j in x:
+            ax.scatter(x_nan, np.full_like(x_nan, nan_marker_height),
+                       marker='X', s=100, color=color, edgecolor=edgecolor,
+                       label='N/A', zorder=5)
 
     return fig, ax

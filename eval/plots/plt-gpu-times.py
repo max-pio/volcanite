@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 
 
 # image rendering (no camera movement)
+print("--------------\nPlotting GPU Timings")
 for data in data_set_ids:
     for shading in shading_mode_ids:
 
@@ -29,7 +30,7 @@ for data in data_set_ids:
         gpu_csv = Path("../results/image-eval/" + tag + "_timing.csv")
 
         if gpu_csv.exists():
-            print(f"Plotting {data} {shading}")
+            print(f"  Plotting {data} {shading}")
 
             df = pd.read_csv(gpu_csv, comment="#")
             fig, ax = plot_gpu_timings(df, stages=["Cache","Decompress","Render","Post-Process"], frames=21, xlabel="Image Frame")

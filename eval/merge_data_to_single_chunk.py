@@ -20,21 +20,24 @@ from pathlib import Path
 
 def merge_data_to_single_chunk(directory : Path):
     chunked_volumes = [("Ara2016/Ara2016_x{}y{}z{}.hdf5", (2, 1, 2), "Ara2016/Ara2016_full.hdf5"),
-                       ("Griesser2022-sample/Griesser2022-sample_x{}y{}z{}.hdf5", (15,3,2), "Griesser2022-sample/Griesser2022-sample_full.hdf5"),
+                       # Griesser2022-sample is too large (~768GB)
                        ("Griesser2022-validation/Griesser2022-validation_x{}y{}z{}.hdf5", (1,1,0), "Griesser2022-validation/Griesser2022-validation_full.hdf5"),
                        # H01-wm is too large (~2TB)
-                       ("liconn/liconn_x{}y{}z{}.hdf5", (3,4,0), "liconn/liconn_full.hdf5"),
+                       # H01-bloodvessel is too large (~237GB)
+                       # liconn is too large (~66GB)
                        # Motta2019 is too large (~1TB)
                       ]
 
     for data_path, chunks_in, output_path in chunked_volumes:
-
-        if (directory / Path(data_path.format(0, 0, 0))).exists():
-            print(f"Reading volume {directory / Path(data_path)} ")
+        if (directory / output_path).exists():
+            print(f"Skipping already existing {directory / output_path}")
+        elif (directory / Path(data_path.format(0, 0, 0))).exists():
+            print(f"\nReading volume {directory / Path(data_path)} ")
             volume = vcchunked.read_chunked_volume(str((directory / Path(data_path)).absolute()), chunks_in, "zyx")
             print(f"done. Size {volume.shape[2]}, {volume.shape[1]}, {volume.shape[0]}. ", end="")
-            vc.write_volume(volume, output_path, dtype='uint32')
-            print(f"Exported: {output_path}")
+            vc.write_volume(volume, directory / output_path, dtype='uint32')
+            print(f"Exported: {directory / output_path}\n")
+            del volume
         else:
             print(f"Skipping {directory / Path(data_path)} (does not exist).")
 
