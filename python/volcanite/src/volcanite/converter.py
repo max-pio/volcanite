@@ -105,7 +105,6 @@ def write_nrrd(volume: np.ndarray, path_out: str | os.PathLike, dtype = None) ->
 # HDF5
 def read_hdf5(path_in: str | os.PathLike, key_path: list[str] | None = None) -> np.ndarray:
     f = h5py.File(path_in, 'r')
-    # obtain the volume in xyz shape
     if key_path:
         # iterate through keys
         _data = f[key_path[0]]
@@ -116,15 +115,11 @@ def read_hdf5(path_in: str | os.PathLike, key_path: list[str] | None = None) -> 
     # iterate through tree depth first from starting point until the first data set is found
     while not isinstance(_data, h5py.Dataset) and len(_data.keys()) > 0:
         _data = _data[list(_data.keys())[0]]
-    volume = _data[()]
-    # return it in zyx shape (numpy convention)
-    return volume.reshape((volume.shape[2], volume.shape[1], volume.shape[0]))
+    return _data[()]
 
 def write_hdf5(volume: np.ndarray, path_out: str | os.PathLike, dtype = None) -> None:
-    volume = __guard_volume_dtype(volume, dtype)
-    shape = volume.shape
     with h5py.File(path_out, "w") as f:
-        f.create_dataset("data", data=volume, shape=(shape[2], shape[1], shape[0]), compression="gzip")
+        f.create_dataset("data", data=__guard_volume_dtype(volume, dtype), compression="gzip")
 
 
 # Sliced TIFF
@@ -158,7 +153,7 @@ def write_sliced_tiff(volume: np.ndarray, path_out_format) -> None:
 def read_sliced_png(path_in_format) -> np.ndarray:
     raise NotImplementedError("reading sliced PNG files not yet implemented")
 
-def write_sliced_png(volume: np.ndarray, path_out_format : str) -> None:
+def write_sliced_png(volume: np.ndarray, path_out_format : str, no_alpha : bool = False) -> None:
     """Write the volume as 2D RGBA8 PNG files slices along the z-axis. Each of the RGBA channels stores 8 bits of the
      32 bit volume labels. The least significant 8 bits are stored in the red channel. path_format must use python3
      format to insert integer slice ids, e.g. 'my_volume_{}.png' will write files my_volume_0.png, my_volume_1.png ...
@@ -168,8 +163,11 @@ def write_sliced_png(volume: np.ndarray, path_out_format : str) -> None:
         raise Exception("File path must contain exactly 1 python string format key")
 
     for z in range(volume.shape[0]):
-        png_slice = np.stack([volume[z] % 256, (volume[z] / 256) % 256, (volume[z] / (256 * 256)) % 256,
-                              (volume[z] / (256 * 256 * 256) % 256)], axis=-1)
+        if no_alpha:
+            png_slice = np.stack([volume[z] % 256, (volume[z] / 256) % 256, (volume[z] / (256 * 256)) % 256], axis=-1)
+        else:
+            png_slice = np.stack([volume[z] % 256, (volume[z] / 256) % 256, (volume[z] / (256 * 256)) % 256,
+                                  (volume[z] / (256 * 256 * 256)) % 256], axis=-1)
         image = Image.fromarray(png_slice.astype('uint8'))
         image.save(path_out_format.format(z), 'png')
 
@@ -205,11 +203,13 @@ def read_vti(path_in: str | os.PathLike) -> np.ndarray:
     reader.SetFileName(path_in)
     reader.Update(None)
     image = reader.GetOutput()
+    # TODO: might have to reshape VTI import to Dimensions[2],[1],[0] for numpy conventions
     if image.GetCellData().GetNumberOfArrays() > 0:
         return vtk_to_numpy(image.GetCellData().GetArray(0)).reshape(np.array(image.GetDimensions()) - 1)
     elif image.GetPointData().GetNumberOfArrays() > 0:
         return vtk_to_numpy(image.GetPointData().GetArray(0)).reshape(image.GetDimensions())
     else:
+        print(image.GetDimensions())
         raise IOError("Could not find any cell or point data in vtk image.")
 
 def write_vti(volume: np.ndarray, path_out: str | os.PathLike, dtype = None, as_cell_data: bool = False) -> None:
@@ -221,10 +221,10 @@ def write_vti(volume: np.ndarray, path_out: str | os.PathLike, dtype = None, as_
 
     if as_cell_data:
         image.GetCellData().SetScalars(vtk_data)
-        image.SetDimensions(volume.shape[0] + 1, volume.shape[1] + 1, volume.shape[2] + 1)
+        image.SetDimensions(volume.shape[2] + 1, volume.shape[1] + 1, volume.shape[0] + 1)
     else:
         image.GetPointData().SetScalars(vtk_data)
-        image.SetDimensions(volume.shape[0], volume.shape[1], volume.shape[2])
+        image.SetDimensions(volume.shape[2], volume.shape[1], volume.shape[0])
 
     writer = vtkXMLImageDataWriter()
     writer.SetFileName(path_out)

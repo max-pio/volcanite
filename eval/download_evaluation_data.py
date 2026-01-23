@@ -344,7 +344,7 @@ if __name__ == '__main__':
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, name)
             download_file("https://zenodo.org/records/4587827/files/pa66_volumes.h5", cur_dir, "pa66.h5", overwrite=args.overwrite)
-            vc.write_volume(vc.reshape_memory_order(vc.read_hdf5(cur_dir / "pa66.h5", ['pa66', 'ground_truth']), 'xyz', 'zyx'), cur_dir / "pa66_segm.hdf5")
+            vc.write_volume(vc.read_hdf5(cur_dir / "pa66.h5", ['pa66', 'ground_truth']), cur_dir / "pa66_segm.hdf5")
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
                                                 + " " + ve.VolcaniteArg.concat_arg_string(data_specific_compression_args(name)) + \
@@ -432,7 +432,7 @@ if __name__ == '__main__':
             with zipfile.ZipFile(cur_dir / "8Cycles.zip", 'r') as zf:
                 zf.extract("8Cycles.h5", cur_dir)
 
-            vc.write_volume(vc.reshape_memory_order(vc.read_hdf5(cur_dir / "8Cycles.h5", ['Electrode1', 'Segmentation']), 'xyz', 'zyx'), cur_dir / "xtm-battery.hdf5")
+            vc.write_volume(vc.read_hdf5(cur_dir / "8Cycles.h5", ['Electrode1', 'Segmentation']), cur_dir / "xtm-battery.hdf5")
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
                                                 + " " + ve.VolcaniteArg.concat_arg_string(data_specific_compression_args(name)) + \
