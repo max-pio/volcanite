@@ -82,7 +82,7 @@ def plot_timings(x, y,
 
     return fig, ax
 
-def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
+def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None,
                          xlabel = None, ylabel = None, xticklabels = None, colors = None, edgecolors = None,
                          barlabelfmt : str | None = None, marknan : bool = True, barwidth = 0.45,
                          fig = None, ax = None) -> (plt.Figure, plt.Axes):

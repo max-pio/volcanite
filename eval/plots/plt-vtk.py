@@ -55,7 +55,8 @@ for SECOND_VALUE_KEY in ["Voxels", "Labels"]:     # sort key for data set order,
 
             # Add secondary y-axis on right for data set sizes
             ax2 = ax.twinx()
-            ax2.bar(x, data_df.set_index("Data Set").reindex(data_sets).reset_index()[SECOND_VALUE_KEY], color=volcanite_colors_dark[2], zorder=1, alpha=0.3, width=0.9)
+            ax2.bar(x, data_df.set_index("Data Set").reindex(data_sets).reset_index()[SECOND_VALUE_KEY],
+                    color=volcanite_colors_dark[2], zorder=1, alpha=0.3, width=0.9)
             ax2.set_ylabel(f"Number of {SECOND_VALUE_KEY}", color=volcanite_colors_dark[2])
             ax2.tick_params(axis='y', labelcolor=volcanite_colors_dark[2])
             if SECOND_VALUE_LOG:
@@ -69,4 +70,5 @@ for SECOND_VALUE_KEY in ["Voxels", "Labels"]:     # sort key for data set order,
 
             #fig.tight_layout()
 
-            save_plot(f"../results/plts/vtk-img-timings_{SECOND_VALUE_KEY.lower()}{"-log" if SECOND_VALUE_LOG else ""}{"" if ONLY_VTK_DATA else "_all"}.pdf", fig)
+            save_plot(f"../results/plts/vtk-img-timings_{SECOND_VALUE_KEY.lower()}"
+                      f"{"-log" if SECOND_VALUE_LOG else ""}{"" if ONLY_VTK_DATA else "_all"}.pdf", fig)
