@@ -50,7 +50,7 @@ for SECOND_VALUE_KEY in ["Voxels", "Labels"]:     # sort key for data set order,
 
             fig, ax = plot_timings_grouped(x, [vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"],
                                                vcnt_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"]],
-                                           ylabel="Average frame time [ms]", xticklabels=map(get_data_set_tex, data_sets),
+                                           ylabel="$\varnothing$ Frame Time [ms]", xticklabels=map(get_data_set_tex, data_sets),
                                            labels=["VTK", "Volcanite"], barlabelfmt="%.1f")
 
             # Add secondary y-axis on right for data set sizes
@@ -69,4 +69,4 @@ for SECOND_VALUE_KEY in ["Voxels", "Labels"]:     # sort key for data set order,
 
             #fig.tight_layout()
 
-            save_plot(f"../results/vtk-eval/plts/vtk-img-timings_{SECOND_VALUE_KEY.lower()}{"-log" if SECOND_VALUE_LOG else ""}{"" if ONLY_VTK_DATA else "_all"}.pdf", fig)
+            save_plot(f"../results/plts/vtk-img-timings_{SECOND_VALUE_KEY.lower()}{"-log" if SECOND_VALUE_LOG else ""}{"" if ONLY_VTK_DATA else "_all"}.pdf", fig)

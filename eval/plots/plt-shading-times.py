@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 
 # image rendering (no camera movement)
 print("--------------\nPlotting Shading Timings")
+init_plots()
 
 x = np.arange(4)
 avg_ms = np.zeros_like(x, dtype=float)
@@ -47,7 +48,7 @@ for data in data_set_ids:
 
     fig, ax = plot_timings(x, avg_ms, errors=sdv_ms, xticklabels=shading_mode_ids,
                            color=color, edgecolor="#000000", ylabel="Average frame time [ms]")
-    save_plot(f"../results/image-eval/plts/shading-img-timings_{data}.pdf", fig)
+    save_plot(f"../results/plts/shading-img-timings_{data}.pdf", fig)
 
     ax.clear()
     plt.clf()

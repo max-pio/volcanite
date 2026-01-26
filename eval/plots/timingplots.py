@@ -24,20 +24,18 @@ from common import *
 
 init_plots()
 
-def plot_gpu_timings(df : pd.DataFrame, stages : list[str], xlabel : str | None = None,
-                     legendstages : list [str] | None  = None, legend : bool = True, frames : int = 16,
-                     framestep : int = 1, show : bool = False) -> (plt.Figure, plt.Axes):
+def plot_gpu_timings(df : pd.DataFrame, x, stages : list[str], xlabel : str | None = None, ylabel : str | None = None,
+                     legendstages : list [str] | None  = None, legend : bool = True,
+                     framestep : int = 1, barwidth = 0.66, xticklabels = None,
+                     fig = None, ax = None) -> (plt.Figure, plt.Axes):
 
     if legendstages is None:
         legendstages = stages
 
-    # CONSTANT PARAMETERS
-    width = 0.66
+    if fig is None or ax is None:
+        plt.figure()
+        fig, ax = plt.subplots(constrained_layout=True, figsize=(9, 3))
 
-    plt.figure()
-    fig, ax = plt.subplots(constrained_layout=True, figsize=(9, 3))
-
-    x = np.arange(frames)
     bottom = np.zeros_like(x, dtype='float64')
     for i,s in enumerate(stages):
         y = [df[s][f] for f in x]
@@ -45,33 +43,30 @@ def plot_gpu_timings(df : pd.DataFrame, stages : list[str], xlabel : str | None 
         edgecolor = volcanite_colors_dark[i]
         color = volcanite_colors[i]
 
-        ax.bar(x, y, width=width, bottom=bottom, label=legendstages[i], color=color, edgecolor=edgecolor, zorder=3)
+        ax.bar(x, y, width=barwidth, bottom=bottom, label=legendstages[i], color=color, edgecolor=edgecolor, zorder=3)
         bottom += y
 
     ax.grid(axis='y', color='gray', alpha=0.5, linewidth=0.5, zorder=0)
-    plt.xticks(x)
+    plt.xticks(x, xticklabels)
     if xlabel:
         plt.xlabel(xlabel)
-    plt.ylabel("Frame time [ms]", fontsize=14)
+    if ylabel:
+        plt.ylabel(ylabel, fontsize=14)
     if legend:
         plt.legend(ncol=len(stages), loc='upper right')
-    # plt.tight_layout()
-
-    if show:
-        plt.show()
 
     return fig, ax
 
 def plot_timings(x, y,
-                 xlabel = None, ylabel = None, xticklabels = None, color = None, edgecolor = None, errors = None) -> plt.Figure:
+                 xlabel = None, ylabel = None,
+                 xticklabels = None, color = None, edgecolor = None, barwidth=0.3, errors = None,
+                 fig = None, ax = None) -> plt.Figure:
 
-    # CONSTANT PARAMETERS
-    width = 0.3
+    if fig is None or ax is None:
+        plt.figure()
+        fig, ax = plt.subplots(constrained_layout=True, figsize=(3,2))
 
-    plt.figure(figsize=(3, 2))
-    fig, ax = plt.subplots(constrained_layout=True)
-
-    ax.bar(x, y, yerr=errors, capsize=8, width=width, linewidth=1, edgecolor=(edgecolor if edgecolor else volcanite_colors_dark[0]),
+    ax.bar(x, y, yerr=errors, capsize=8, width=barwidth, linewidth=1, edgecolor=(edgecolor if edgecolor else volcanite_colors_dark[0]),
            color=(color if color else volcanite_colors[0]), zorder=3)
 
     ax.grid(axis='y', color='gray', alpha=0.5, linewidth=0.5, zorder=0)
@@ -89,17 +84,18 @@ def plot_timings(x, y,
 
 def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
                          xlabel = None, ylabel = None, xticklabels = None, colors = None, edgecolors = None,
-                         barlabelfmt : str | None = None, marknan : bool = True) -> (plt.Figure, plt.Axes):
+                         barlabelfmt : str | None = None, marknan : bool = True, barwidth = 0.45,
+                         fig = None, ax = None) -> (plt.Figure, plt.Axes):
 
     # CONSTANT PARAMETERS
-    width = 0.45
     offsetscale = 1.
 
-    count = len(ys)
-    xoffset = -(count - 1) * width * offsetscale / 2
+    if fig is None or ax is None:
+        plt.figure()
+        fig, ax = plt.subplots(constrained_layout=True, figsize=(4,4))
 
-    plt.figure(figsize=(4, 4))
-    fig, ax = plt.subplots(constrained_layout=True)
+    count = len(ys)
+    xoffset = -(count - 1) * barwidth * offsetscale / 2
 
     for i, y in enumerate(ys):
         if edgecolors is None:
@@ -117,8 +113,8 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
         else:
             label = labels[i]
 
-        bars = ax.bar(x + xoffset + i * width * offsetscale,
-                      y, width, label=label, linewidth=1, zorder=3,
+        bars = ax.bar(x + xoffset + i * barwidth * offsetscale,
+                      y, barwidth, label=label, linewidth=1, zorder=3,
                        edgecolor=edgecolor, color=color)
         if barlabelfmt:
             ax.bar_label(bars, padding=2, fmt=barlabelfmt, size=9)
@@ -152,7 +148,7 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
             # Add markers for non-existing entries
             # filter NaN positions (non-existing data)
             nan_mask = pd.isna(y)
-            x_nan = x[nan_mask.values] + xoffset + i * width * offsetscale
+            x_nan = x[nan_mask.values] + xoffset + i * barwidth * offsetscale
             # plot X markers at bottom of
             # for j in x:
             ax.scatter(x_nan, np.full_like(x_nan, nan_marker_height),

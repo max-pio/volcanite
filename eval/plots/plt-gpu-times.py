@@ -12,6 +12,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+import numpy as np
 
 from timingplots import plot_gpu_timings
 from common import data_set_ids, shading_mode_ids, save_plot
@@ -23,6 +24,8 @@ import matplotlib.pyplot as plt
 
 # image rendering (no camera movement)
 print("--------------\nPlotting GPU Timings")
+init_plots()
+
 for data in data_set_ids:
     for shading in shading_mode_ids:
 
@@ -33,8 +36,9 @@ for data in data_set_ids:
             print(f"  Plotting {data} {shading}")
 
             df = pd.read_csv(gpu_csv, comment="#")
-            fig, ax = plot_gpu_timings(df, stages=["Cache","Decompress","Render","Post-Process"], frames=21, xlabel="Image Frame")
-            save_plot(f"../results/image-eval/plts/gpu-img-timings_{data}_{shading}.pdf", fig)
+            fig, ax = plot_gpu_timings(df, x=np.arange(21), stages=["Cache","Decompress","Render","Post-Process"],
+                                       xlabel="Image Frame", ylabel="Frame Time [ms]")
+            save_plot(f"../results/plts/gpu-img-timings_{data}_{shading}.pdf", fig)
            
             ax.clear()
             plt.clf()
