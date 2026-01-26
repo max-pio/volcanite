@@ -69,4 +69,4 @@ for SECOND_VALUE_KEY in ["Voxels", "Labels"]:     # sort key for data set order,
 
             #fig.tight_layout()
 
-            save_plot(f"../results/vtk-eval/vtk-image-timings_{SECOND_VALUE_KEY.lower()}{"-log" if SECOND_VALUE_LOG else ""}{"" if ONLY_VTK_DATA else "_all"}.pdf", fig)
+            save_plot(f"../results/vtk-eval/plts/vtk-img-timings_{SECOND_VALUE_KEY.lower()}{"-log" if SECOND_VALUE_LOG else ""}{"" if ONLY_VTK_DATA else "_all"}.pdf", fig)

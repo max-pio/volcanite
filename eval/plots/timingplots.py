@@ -63,42 +63,18 @@ def plot_gpu_timings(df : pd.DataFrame, stages : list[str], xlabel : str | None 
     return fig, ax
 
 def plot_timings(x, y,
-                 xlabel = None, ylabel = None, xticklabels = None, colors = None, edgecolors = None,
-                         barlabelfmt : str | None = None) -> plt.Figure:
+                 xlabel = None, ylabel = None, xticklabels = None, color = None, edgecolor = None, errors = None) -> plt.Figure:
 
     # CONSTANT PARAMETERS
-    width = 0.45
-    offsetscale = 1.
+    width = 0.3
 
-    count = len(ys)
-    xoffset = -(count - 1) * width * offsetscale / 2
-
-    plt.figure(figsize=(4, 4))
+    plt.figure(figsize=(3, 2))
     fig, ax = plt.subplots(constrained_layout=True)
-    cycler = itertools.cycle(plt.rcParams['axes.prop_cycle'])
 
-    for i, y in enumerate(ys):
-        if edgecolors is None:
-            edgecolor = next(cycler)['edgecolor']
-        else:
-            edgecolor = edgecolors[i]
+    ax.bar(x, y, yerr=errors, capsize=8, width=width, linewidth=1, edgecolor=(edgecolor if edgecolor else volcanite_colors_dark[0]),
+           color=(color if color else volcanite_colors[0]), zorder=3)
 
-        if colors is None:
-            color = None
-        else:
-            color = colors[i]
-
-        if labels is None:
-            label = None
-        else:
-            label = labels[i]
-
-        bars = ax.bar(x + xoffset + i * width * offsetscale,
-                      y, width, label=label, linewidth=1,
-                       edgecolor=edgecolor, color=color)
-        if barlabelfmt:
-            ax.bar_label(bars, padding=2, fmt=barlabelfmt, size=11)
-
+    ax.grid(axis='y', color='gray', alpha=0.5, linewidth=0.5, zorder=0)
     if xticklabels:
         ax.set_xticks(x, xticklabels, rotation=45, ha='right')
     if xlabel:
@@ -109,7 +85,7 @@ def plot_timings(x, y,
     #plt.tight_layout()
     #plt.show()
 
-    return fig
+    return fig, ax
 
 def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
                          xlabel = None, ylabel = None, xticklabels = None, colors = None, edgecolors = None,
@@ -148,6 +124,7 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str],
             ax.bar_label(bars, padding=2, fmt=barlabelfmt, size=9)
 
     # add ticks and colors
+    ax.grid(axis='y', color='gray', alpha=0.5, linewidth=0.5, zorder=0)
     if xticklabels:
         ax.set_xticks(x, xticklabels, rotation=45, ha='right')
     if xlabel:
