@@ -1,8 +1,17 @@
 #!/bin/bash
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "This script must be run as root (use sudo)" 1>&2
-  exit 1
+  echo "This script should be run as root (use sudo) when using [entry-|exit-]commands for locking GPU clocks."
+  read -p "Continue as non-root? [y/N] " response
+  case "$response" in
+    [yY][eE][sS]|[yY])
+      echo "Continuing as non-root..."
+      ;;
+    *)
+      echo "Exiting."
+      exit 1
+      ;;
+  esac
 fi
 
 source ../.venv/bin/activate
@@ -30,3 +39,5 @@ sleep 30
 python3 ./csgv-ablation-eval.py
 sleep 30
 python3 ./deltaoperation-b64-eval.py
+
+echo "all finished."
