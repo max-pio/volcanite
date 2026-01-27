@@ -30,7 +30,7 @@ X_SORT_KEY = "Orig Size [GB]"
 Y_KEY = "Palette Length max"
 
 # load data
-palette_df = pd.read_csv("../results/deltaoperation-b64-eval.csv", comment="#")
+palette_df = pd.read_csv("../results/deltaoperation-b64-eval/deltaoperation-b64-eval.csv", comment="#")
 data_df = pd.read_csv("../results/csgv-eval/csgv-eval.csv", comment="#")
 
 # palette length evaluation is only relevant for data with many labels
@@ -57,20 +57,18 @@ for op_delta in ["","d-","d"]:
 
 fig, ax = plot_timings_grouped(x, ys,
                                ylabel=r"max $\lvert P \rvert$", xticklabels=map(get_data_set_tex, data_sets),
-                               labels=["None", r"${\cdot \; \;}{{\star}}$ Lim.", r"${\cdot \; \;}{\phantom{\star}}$ Unlim."], marknan=False, barwidth=0.3)
+                               labels=["None", r"${\cdot \; \;}{{\star}}$ Lim.", r"${\cdot \; \;}{\phantom{\star}}$ Unlim."],
+                               marknan=False, barwidth=0.3)
 
 
 # add the palette delta images to the legend
 import matplotlib.image as mpimg
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-image = mpimg.imread("./palette_delta.png")  # Loads RGBA or RGB PNG
+image = mpimg.imread("./img/op_palette_delta.png")
 imagebox = OffsetImage(image, zoom=0.1, cmap='gray')
 ax.add_artist(AnnotationBbox(imagebox, (0.25, 0.83), frameon=False, boxcoords="axes fraction", zorder=10))
 ax.add_artist(AnnotationBbox(imagebox, (0.25, 0.75), frameon=False, boxcoords="axes fraction", zorder=10))
 
 
 save_plot("../results/plts/palette-delta.pdf", fig)
-
-# Create new figure with ONLY the legend
 plt.close(fig)
-
