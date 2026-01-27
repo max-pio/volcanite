@@ -15,7 +15,7 @@
 import numpy as np
 
 from timingplots import plot_timings
-from common import data_set_ids, shading_mode_ids, save_plot
+from common import *
 
 import pandas as pd
 from pathlib import Path
