@@ -57,7 +57,7 @@ for op_delta in ["","d-","d"]:
 
 fig, ax = plot_timings_grouped(x, ys,
                                ylabel=r"max $\lvert P \rvert$", xticklabels=map(get_data_set_tex, data_sets),
-                               labels=["None", r"${\cdot \; \;}{{\star}}$ Lim.", r"${\cdot \; \;}{\phantom{\star}}$ Unlim."], legend=True, marknan=False, barwidth=0.3)
+                               labels=["None", r"${\cdot \; \;}{{\star}}$ Lim.", r"${\cdot \; \;}{\phantom{\star}}$ Unlim."], marknan=False, barwidth=0.3)
 
 
 # add the palette delta images to the legend
