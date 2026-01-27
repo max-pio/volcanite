@@ -34,7 +34,7 @@ sleep 30
 python3 ./cache-rngcontrol-eval.py
 sleep 30
 
-python3 ./csgv-eval.p
+python3 ./csgv-eval.py
 sleep 30
 python3 ./csgv-ablation-eval.py
 sleep 30
