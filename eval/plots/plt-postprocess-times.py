@@ -15,7 +15,7 @@
 import numpy as np
 
 from timingplots import plot_gpu_timings
-from common import init_plots, data_set_ids, shading_mode_ids, save_plot
+from common import *
 
 import pandas as pd
 from pathlib import Path

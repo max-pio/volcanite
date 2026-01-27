@@ -70,7 +70,7 @@ def plot_timings(x, y,
            color=(color if color else volcanite_colors[0]), zorder=3)
 
     ax.grid(axis='y', color='gray', alpha=0.5, linewidth=0.5, zorder=0)
-    if xticklabels:
+    if not xticklabels is None:
         ax.set_xticks(x, xticklabels, rotation=45, ha='right')
     if xlabel:
         plt.xlabel(xlabel, fontsize=14)
@@ -84,18 +84,16 @@ def plot_timings(x, y,
 
 def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None,
                          xlabel = None, ylabel = None, xticklabels = None, colors = None, edgecolors = None,
-                         barlabelfmt : str | None = None, marknan : bool = True, barwidth = 0.45,
+                         barlabelfmt : str | None = None, marknan : bool = True, barwidth = 0.45, baroffsetscale = 1.,
                          fig = None, ax = None) -> (plt.Figure, plt.Axes):
 
-    # CONSTANT PARAMETERS
-    offsetscale = 1.
 
     if fig is None or ax is None:
         plt.figure()
         fig, ax = plt.subplots(constrained_layout=True, figsize=(4,4))
 
     count = len(ys)
-    xoffset = -(count - 1) * barwidth * offsetscale / 2
+    xoffset = -(count - 1) * barwidth * baroffsetscale / 2
 
     for i, y in enumerate(ys):
         if edgecolors is None:
@@ -113,9 +111,9 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None,
         else:
             label = labels[i]
 
-        bars = ax.bar(x + xoffset + i * barwidth * offsetscale,
+        bars = ax.bar(x + xoffset + i * barwidth * baroffsetscale,
                       y, barwidth, label=label, linewidth=1, zorder=3,
-                       edgecolor=edgecolor, color=color)
+                      edgecolor=edgecolor, color=color)
         if barlabelfmt:
             ax.bar_label(bars, padding=2, fmt=barlabelfmt, size=9)
 
@@ -148,7 +146,7 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None,
             # Add markers for non-existing entries
             # filter NaN positions (non-existing data)
             nan_mask = pd.isna(y)
-            x_nan = x[nan_mask.values] + xoffset + i * barwidth * offsetscale
+            x_nan = x[nan_mask.values] + xoffset + i * barwidth * baroffsetscale
             # plot X markers at bottom of
             # for j in x:
             ax.scatter(x_nan, np.full_like(x_nan, nan_marker_height),

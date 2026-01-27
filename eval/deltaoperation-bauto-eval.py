@@ -21,6 +21,8 @@ from common import data_specific_compression_args, data_specific_rendering_args
 
 if __name__ == "__main__":
 
+    KEEP_CSGV_FILES = False
+
     # set up the evaluation output directory and the log files
     evaluation_name = Path(__file__).stem
     with VolcaniteEvaluation(eval_out_directory=f"./results/{evaluation_name}/", existing_policy=ExistingPolicy.DELETE,
@@ -72,9 +74,14 @@ if __name__ == "__main__":
                 args_rendering = data_specific_rendering_args(arg_csgv.identifier, cache_palette=False, stream_lod=False)
 
                 # chunked data must have a decompression path
-                arg_csgv_export = VolcaniteArg(["-c", str(Path(f"./results/{evaluation_name}/{VolcaniteArg.concat_ids([arg_csgv, arg_operation])}.csgv").resolve())])
+                decompression_path = Path(f"./results/{evaluation_name}/{VolcaniteArg.concat_ids([arg_csgv, arg_operation])}.csgv")
+                arg_csgv_export = VolcaniteArg(["-c", str(decompression_path.resolve())])
 
                 # execute Volcanite and pass the Volcanite log file into which the results are appended
                 # stream-lod is necessary to force detail separation (and obtain the detail encoding size)
                 # cache-palette is enabled to obtain cache packing factors
                 volcanite.exec(args_data_input + args_rendering + [arg_operation, arg_csgv_export, VolcaniteArg("--stream-lod"), VolcaniteArg("--cache-palette")])
+
+                # this evaluation creates large files: remove them to prevent disk space exhaustion
+                if not KEEP_CSGV_FILES:
+                    decompression_path.unlink()
