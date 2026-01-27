@@ -20,7 +20,10 @@ source ../.venv/bin/activate
 timestamp="$(date +'%Y-%m-%d_%H-%M-%S')"
 logfile="eval-log-${timestamp}.log"
 # redirect all outputs to the logfile (and keep on console)
-exec > >(tee -a "$logfile") 2>&1
+exec > "$logfile" 2>&1
+# to receive console output as well: use unbuffered tee
+# exec > >(stdbuf -oL tee -a "$logfile") 2>&1
+
 
 echo "<<<<<<< image-eval.py >>>>>>>"
 python3 ./image-eval.py

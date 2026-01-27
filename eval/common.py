@@ -104,7 +104,7 @@ def data_specific_compression_args(data: str, volume_data_dir: Path | None = Non
         elif data == "Motta2019-small":
             _input_path = volume_data_dir / data / "Motta2019_x2y3z2.hdf5"
         elif data == "cells":
-            _input_path = volume_data_dir / data / "cells_065.hdf5"
+            _input_path = volume_data_dir / data / "cells_055.hdf5"
         elif data == "fiber":
             _input_path = volume_data_dir / data / "maurer_glassfiberpolymer.hdf5"
         elif data == "Motta2019":

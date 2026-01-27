@@ -63,10 +63,10 @@ if __name__ == "__main__":
             
             for arg_csgv in VolcaniteArg.args_csgv_datasets.values():
 
-                if not arg_csgv.identifier in ["pa66","Griesser2022-sample","Ara2016","cells","xtm-battery","azba", "H01-bloodvessel", "Wolny2020", "liconn", "fiber", "Motta2019-small", "Griesser2022-validation"]:
-                    continue
+                # if not arg_csgv.identifier in ["pa66","Griesser2022-sample","Ara2016","cells","xtm-battery","azba", "H01-bloodvessel", "Wolny2020", "liconn", "fiber", "Motta2019-small", "Griesser2022-validation"]:
+                #     continue
 
-                # H01-wm is too large to be processed on our evaluation system with 64 GB of RAM if not compressed with all operations
+                # H01-wm, Motta2019 are too large to be processed on our evaluation system with 64 GB of RAM if not compressed with all operations
                 if arg_csgv.identifier in ["H01-wm", "Motta2019"]:
                     continue
 
@@ -99,11 +99,11 @@ if __name__ == "__main__":
                     # remove the csgv file, otherwise this would store hundreds of GB
                     csgv_out_path.resolve().unlink()
 
-    # separate ablation evaluation results into separate files for each data set
-    df = pd.read_csv(f'./results/{evaluation_name}/{evaluation_name}.csv',  comment='#')
-    df["Stop Bit"] = df["Operations"].str.endswith("s").map({True: 'y', False: 'n'})
-    df["Operations"] = df["Operations"].str.rstrip("s")
-    # export Operations and compresion rate to each unique data set's csv file
-    for data_name in df["Data Set"].unique():
-        filtered = df[df["Data Set"] == data_name][["Operations", "Stop Bit", "Compression Rate [Pcnt]"]]
-        filtered.to_csv(f"./results/{evaluation_name}/{evaluation_name}_{data_name}.csv", index=False)
+    # # separate ablation evaluation results into separate files for each data set
+    # df = pd.read_csv(f'./results/{evaluation_name}/{evaluation_name}.csv',  comment='#')
+    # df["Stop Bit"] = df["Operations"].str.endswith("s").map({True: 'y', False: 'n'})
+    # df["Operations"] = df["Operations"].str.rstrip("s")
+    # # export Operations and compresion rate to each unique data set's csv file
+    # for data_name in df["Data Set"].unique():
+    #     filtered = df[df["Data Set"] == data_name][["Operations", "Stop Bit", "Compression Rate [Pcnt]"]]
+    #     filtered.to_csv(f"./results/{evaluation_name}/{evaluation_name}_{data_name}.csv", index=False)
