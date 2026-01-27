@@ -226,7 +226,8 @@ def download_cloud_data(dataset: str, directory: Path, output_name: str | None =
     data = vcd.CloudDataDownload(data_set_url, data_set_cfg=data_set_cfg)
     # download all chunks from the cloud
     return data.download(output_dir=directory, output_name=output_name, output_format=filetype,
-                         volume_size=size, origin=origin, chunk_size=chunk_size, continue_download=True)
+                         volume_size=size, origin=origin, chunk_size=chunk_size, continue_download=True,
+                         interactive=False)
 
 def __preview_arg(enable: bool, directory: Path, dataset: str):
     if not enable:
@@ -293,21 +294,25 @@ if __name__ == '__main__':
         name = "azba"
         cur_dir = csgv_directory / Path(name)
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
-            write_citation(csgv_directory, name)
-            download_file("https://datadryad.org/api/v2/files/1098598/download", cur_dir, "azba.nii.gz", overwrite=args.overwrite)
-            vc.convert_volume(cur_dir / "azba.nii.gz", cur_dir / "azba.hdf5")
-            ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
-                                                f"--headless -c {csgv_directory / (name + ".csgv")}"
-                                                + " " + ve.VolcaniteArg.concat_arg_string(data_specific_compression_args(name)) + \
-                                                f" {__preview_arg(args.preview, csgv_directory, name)}"
-                                                f" {cur_dir / "azba.hdf5"}")
-            if ret.returncode != 0:
-                print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
-                if not args.no_abort:
-                    exit(ret.returncode)
-            # cleanup
-            if not args.keep:
-                shutil.rmtree(cur_dir)
+            if not (cur_dir / "azba.nii.gz").exists():
+                print(f"AZBA source data cannot automatically downloaded. Skipping.\n"
+                      f"  Please download https://datadryad.org/downloads/file_stream/1098598 azba.nii.gz file to directory {cur_dir} and run again.")
+                sleep(5)
+            else:
+                write_citation(csgv_directory, name)
+                # TODO: DataDryad now prohibits downloads over the API for anonymous users. Provide 2021-08-22_AZBA_segmentation.nii.gz otherwise.
+                # download_file("https://datadryad.org/api/v2/files/1098598/download", cur_dir, "azba.nii.gz", overwrite=args.overwrite)
+                vc.convert_volume(cur_dir / "azba.nii.gz", cur_dir / "azba.hdf5")
+                ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
+                                                    f"--headless -c {csgv_directory / (name + ".csgv")}"
+                                                    + " " + ve.VolcaniteArg.concat_arg_string(data_specific_compression_args(name)) + \
+                                                    f" {__preview_arg(args.preview, csgv_directory, name)}"
+                                                    f" {cur_dir / "azba.hdf5"}")
+                if ret.returncode != 0:
+                    print(f"Volcanite compression '{' '.join(ret.args)}' returned {ret.returncode}. Aborting.")
+                    if not args.no_abort:
+                        exit(ret.returncode)
+                # closed source data set input files are not removed / cleaned up
         else:
             print(f"{(csgv_directory / "azba.csgv")} already exists. Skipping download.")
 
@@ -368,8 +373,8 @@ if __name__ == '__main__':
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, name)
             # data set: Ovules N_428_ds2x
-            download_file("https://osf.io/download/ghpjq/", cur_dir, "N_428_ds2x.h5", overwrite=args.overwrite)
-            vc.write_volume(vc.read_volume(cur_dir / "N_428_ds2x.h5", "xyz"), cur_dir / (name + ".hdf5"))
+            download_file("https://osf.io/download/ghpjq/", cur_dir, (name + ".hdf5"), overwrite=args.overwrite)
+            # vc.write_volume(vc.read_volume(cur_dir / "N_428_ds2x.h5"), cur_dir / (name + ".hdf5"))
             ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                 f"--headless -c {csgv_directory / (name + ".csgv")}"
                                                 + " " + ve.VolcaniteArg.concat_arg_string(data_specific_compression_args(name)) + \
@@ -428,7 +433,7 @@ if __name__ == '__main__':
         cur_dir = csgv_directory / Path(name)
         if not (csgv_directory / (name + ".csgv")).exists() or args.overwrite:
             write_citation(csgv_directory, name)
-            download_file("https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/505935/8Cycles.zip?sequence=9&isAllowed=y", cur_dir, "8Cycles.zip", overwrite=args.overwrite)
+            download_file("https://www.research-collection.ethz.ch/server/api/core/bitstreams/7e72bead-c4b5-4e20-b019-641386655c9e/content", cur_dir, "8Cycles.zip", overwrite=args.overwrite)
             with zipfile.ZipFile(cur_dir / "8Cycles.zip", 'r') as zf:
                 zf.extract("8Cycles.h5", cur_dir)
 
@@ -506,6 +511,7 @@ if __name__ == '__main__':
                 print(f"Closed source data set {name} is not publicly available. Skipping.")
             else:
                 write_citation(csgv_directory, name)
+                vc.convert_volume((cur_dir / "glassfibrereinforcedpolymer_unloaded_1579x1092x1651_2umVS_labeled_16bit.hdf5"), (cur_dir / "maurer_glassfiberpolymer.hdf5"), "xyz")
                 ret = ve.VolcaniteExec.run_volcanite(volcanite_bin_dir,
                                                     f"--headless -c {csgv_directory / (name + ".csgv")}"
                                                     + " " + ve.VolcaniteArg.concat_arg_string(data_specific_compression_args(name)) + \

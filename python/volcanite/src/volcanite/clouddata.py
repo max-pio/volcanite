@@ -106,7 +106,7 @@ class CloudDataDownload:
 
     def download(self, output_dir : str | os.PathLike, volume_size: tuple[int, int, int] | None = None, output_name: str = "x{}y{}z{}.{}",
                  origin : tuple[int, int, int] | None = None, chunk_size : tuple[int, int, int] | None = (1024, 1024, 1024),
-                 output_format : str = "hdf5", continue_download: bool = False) -> tuple[int, int, int]:
+                 output_format : str = "hdf5", continue_download: bool = False, interactive=True) -> tuple[int, int, int]:
 
         if not output_format in converter.supported_formats():
             raise ValueError(f"unknown output format {output_format} is not in " + ",".join(converter.supported_formats()))
@@ -161,12 +161,12 @@ class CloudDataDownload:
               f"\n volume {(in_total_end - in_total_start)[self.__axis_in_to_xyz]} with chunk size {out_chunk_size} [xyz]")
 
         total_gb = out_volume_size[0] * out_volume_size[1] * out_volume_size[2] * 4 / 1024 / 1024 / 1024
-        if total_gb > 2048:
+        if total_gb > 2048 and interactive:
             confirm = input(f"WARNING: attempting to download volume with (uncompressed) size of {total_gb} GiB. Continue? (y/n) ").lower()
             if confirm != 'y':
                 exit(1)
         chunk_gb = total_chunk_count * 4 / 1024 / 1024 / 1024
-        if chunk_gb > 4:
+        if chunk_gb > 4 and interactive:
             confirm = input(f"WARNING: attempting to download volume as chunks with an (uncompressed) size of up to {chunk_gb} GiB per file. Continue? (y/n) ").lower()
             if confirm != 'y':
                 exit(1)
