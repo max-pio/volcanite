@@ -259,12 +259,19 @@ if __name__ == '__main__':
     if args.volcanite_src:
         volcanite_src_dir = Path(args.volcanite_src)
     else:
-        volcanite_src_dir = Path(__file__).parent.parent
-        print(f"obtained volcanite source directory from script location as {volcanite_src_dir}")
+        volcanite_src_dir = Path(__file__).parent
+        while(volcanite_src_dir.exists() and
+              not (volcanite_src_dir / "volcanite" / "src" / "bin" / "volcanite.cpp").exists()):
+            volcanite_src_dir = volcanite_src_dir.parent
 
-    if not volcanite_src_dir.exists():
-        print(f"Volcanite source directory {volcanite_src_dir} does not exist.")
-        exit(1)
+        if (volcanite_src_dir.exists() and volcanite_src_dir.is_dir() and
+                (volcanite_src_dir / "volcanite" / "src" / "bin" / "volcanite.cpp").exists()):
+            volcanite_src_dir = Path(__file__).parent.parent.parent
+            print(f"obtained volcanite source directory from script location as {volcanite_src_dir}")
+        else:
+            print("Volcanite source directory could not be found. Provide as --volcanite-src /path/to/volcanite/")
+            exit(1)
+
     config_dir = volcanite_src_dir / Path("eval/config")
     if not config_dir.exists():
         print(f"Volcanite source directory does not contain configuration subdirectory {config_dir}.")
