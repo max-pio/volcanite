@@ -60,5 +60,6 @@ sleep 30
 echo "<<<<<<< deltaoperation-b64-eval.py >>>>>>>"
 python3 ./deltaoperation-b64-eval.py
 
-echo "\n-------------------"
+echo ""
+echo "-------------------"
 echo "all done."
