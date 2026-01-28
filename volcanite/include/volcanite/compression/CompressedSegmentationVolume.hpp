@@ -500,9 +500,11 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
     static std::vector<glm::uvec4> createBrickPosBuffer(uint32_t brick_size);
 
     /// Time needed for the full compression pass (without the freq. pre-pass) in seconds.
-    float getLastTotalEncodingSeconds() const { return m_last_total_encoding_seconds; }
+    [[nodiscard]] double getLastTotalEncodingPassSeconds() const { return m_last_total_encoding_seconds; }
     /// Time needed for the frequency pre-pass in seconds.
-    float getLastTotalFreqPrepassSeconds() const { return m_last_total_freq_prepass_seconds; }
+    [[nodiscard]] double getLastTotalFreqPrepassSeconds() const { return m_last_total_freq_prepass_seconds; }
+    /// Time needed for the full compression including time to read volume files from disk.
+    [[nodiscard]] double getLastTotalCompressionWithFileIOSeconds() const { return m_last_total_compression_with_io_seconds; }
 
     CSGVCompressionEvaluationResults getLastEvaluationResults() {
         uint32_t label_count = getNumberOfUniqueLabelsInVolume();
@@ -524,6 +526,7 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
         res.compression_prepass_seconds = m_last_total_freq_prepass_seconds;
         res.compression_mainpass_seconds = m_last_total_encoding_seconds;
         res.compression_total_seconds = m_last_total_freq_prepass_seconds + m_last_total_encoding_seconds;
+        res.compression_total_seconds_with_fileio = m_last_total_compression_with_io_seconds;
         res.volume_dim = m_volume_dim;
         res.volume_labels = label_count;
         res.original_volume_bytes = volume_memory;
@@ -672,8 +675,9 @@ class CompressedSegmentationVolume : public VolumeCompressionBase {
     uint32_t m_max_brick_palette_count; ///< max. palette length of any brick as a number of label entries
 
     // timings [s] of the last compression run (without freq. pre-pass) and the frequency pre-pass
-    float m_last_total_encoding_seconds = 0.f;
-    float m_last_total_freq_prepass_seconds = 0.f;
+    double m_last_total_encoding_seconds = 0.;
+    double m_last_total_freq_prepass_seconds = 0.;
+    double m_last_total_compression_with_io_seconds = 0.;
     std::string m_label = "";
 
     struct VolumeInfo {

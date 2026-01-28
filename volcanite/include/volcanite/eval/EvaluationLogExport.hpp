@@ -29,6 +29,7 @@ struct CSGVCompressionEvaluationResults {
     double compression_mainpass_seconds = 0.; ///< total compression time [s] without pre-pass and IO
     double compression_prepass_seconds = 0.;
     double compression_total_seconds = 0.;
+    double compression_total_seconds_with_fileio = 0.;
     double csgv_base_encoding_bytes = 0.;
     double csgv_detail_encoding_bytes = 0.;
     double csgv_bytes = 0.;

@@ -57,6 +57,7 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     fmt_args.push_back(fmt::arg("comprate", comp_res.compression_rate));
     fmt_args.push_back(fmt::arg("comprate_pcnt", comp_res.compression_rate * 100.));
     fmt_args.push_back(fmt::arg("comp_s", comp_res.compression_total_seconds));
+    fmt_args.push_back(fmt::arg("comp_with_fileio_s", comp_res.compression_total_seconds_with_fileio));
     fmt_args.push_back(fmt::arg("comp_mainpass_s", comp_res.compression_mainpass_seconds));
     fmt_args.push_back(fmt::arg("comp_prepass_s", comp_res.compression_prepass_seconds));
     fmt_args.push_back(fmt::arg("comp_gb_per_s", comp_res.compression_GB_per_s));
@@ -172,6 +173,7 @@ std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
         "comprate",
         "comprate_pcnt",
         "comp_s",
+        "comp_with_fileio_s",
         "comp_mainpass_s",
         "comp_prepass_s",
         "comp_gb_per_s",
