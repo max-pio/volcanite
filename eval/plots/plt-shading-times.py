@@ -48,14 +48,14 @@ for data in data_set_ids:
         max_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['frame max [ms]'].iloc[0]
         sdv_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['stdv'].iloc[0]
 
-    fig, ax = plt.subplots(constrained_layout=True, figsize=(4,4))
+    fig, ax = plt.subplots(constrained_layout=True, figsize=(5,4))
     plot_timings(x, avg_ms, errors=sdv_ms, xticklabels=shading_mode_ids,
                  color=color, edgecolor="#000000", ylabel="Average frame time [ms]", fig=fig, ax=ax)
 
     # Twin y-axis: frames per second (computed, but no bars plotted)
     add_fps_twin_axis_for_ms_axis(fig, ax, color='gray')
 
-    save_plot(f"../results/plts/shading-img-timings_{data}.pdf", fig)
+    save_plot(f"../results/plots/shading-img-timings_{data}.pdf", fig)
 
     ax.clear()
     plt.clf()

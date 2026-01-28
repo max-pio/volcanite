@@ -38,7 +38,7 @@ for data in data_set_ids:
             df = pd.read_csv(gpu_csv, comment="#")
             fig, ax = plot_gpu_timings(df, x=np.arange(21), stages=["Cache","Decompress","Render","Post-Process"],
                                        xlabel="Image Frame", ylabel="Frame Time [ms]")
-            save_plot(f"../results/plts/gpu-img-timings_{data}_{shading}.pdf", fig)
+            save_plot(f"../results/plots/gpu-img-timings_{data}_{shading}.pdf", fig)
            
             ax.clear()
             plt.clf()

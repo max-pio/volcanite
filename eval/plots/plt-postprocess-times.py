@@ -53,7 +53,7 @@ for data in ["cells"]:
         plot_gpu_timings(df.set_index("Denoising-Subsampling").reindex(postprocess_modes).reset_index()[stages],
                          stages=stages, x=np.arange(6), ylabel=r"Average Frame Time [ms]",
                          xticklabels=xlabels, fig=fig, ax=ax, legend=False)
-        save_plot(f"../results/plts/postprocess-timings_{data}.pdf", fig)
+        save_plot(f"../results/plots/postprocess-timings_{data}.pdf", fig)
 
         # store for separated legend plot
         handles, _ = ax.get_legend_handles_labels()

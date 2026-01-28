@@ -14,11 +14,9 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import pathlib
-import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import rc, colormaps
 from matplotlib.colors import ListedColormap
-from cycler import cycler
 
 
 # create Volcanite colormap and register with matplotlib
@@ -37,7 +35,7 @@ colormaps.register(volcanite_cmap, name='volcanite_cmap')
 
 # setup default plot configurations
 def init_plots():
-    plt.rc("text", usetex=True)
+    plt.rcParams["text.usetex"] = True
     plt.rcParams["text.latex.preamble"] = r"\usepackage{amsmath}"
     plt.rcParams["font.family"] = "serif"
     plt.rcParams["font.serif"] = "Computer Modern Roman"

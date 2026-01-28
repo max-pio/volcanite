@@ -44,14 +44,17 @@ ablation_df["Operations"] = ablation_df["Operations"].str.rstrip('s')
 # create bar plots
 for data in data_sets:
 
+    print(f"  Plotting CSGV ablation study for {data}")
+
     ys = [ablation_df[ablation_df["Data Set"].eq(data) & (ablation_df["Stop Bit"] == False)].set_index("Operations").reindex(op_runs).reset_index()["Compression Rate [Pcnt]"],
           ablation_df[ablation_df["Data Set"].eq(data) & (ablation_df["Stop Bit"] == True)].set_index("Operations").reindex(op_runs).reset_index()["Compression Rate [Pcnt]"],]
 
-    fig, ax = plot_timings_grouped(np.arange(len(op_runs)), ys,
-                                ylabel=r"Compression Rate [\%]",
-                                xticklabels=[r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$"],
-                                labels=["Without Stop Bits", "With Stop Bits"],
-                                marknan=False, barwidth=0.5, baroffsetscale=0.4)
+    fig, ax = plt.subplots(constrained_layout=True, figsize=(5, 4))
+    plot_timings_grouped(np.arange(len(op_runs)), ys,
+                         ylabel=r"Compression Rate [\%]",
+                         xticklabels=[r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$"],
+                         labels=["Without Stop Bits", "With Stop Bits"],
+                         marknan=False, barwidth=0.5, baroffsetscale=0.4, fig=fig, ax=ax)
 
     ax.set_title(get_data_set_tex(data))
     ax.legend().set_loc('upper right')
@@ -73,5 +76,5 @@ for data in data_sets:
                                      boxcoords="offset points",frameon=False, pad=0.0, arrowprops=None, zorder=10))
 
 
-    save_plot(f"../results/plts/csgv-ablation_{data}.pdf", fig)
+    save_plot(f"../results/plots/csgv-ablation_{data}.pdf", fig)
     plt.close(fig)

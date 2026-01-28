@@ -55,10 +55,11 @@ for op_delta in ["","d-","d"]:
         df = palette_df[palette_df['Unlimited Pdelta'].eq(op_delta)]
     ys = ys + [df.set_index("Data Set").reindex(data_sets).reset_index()[Y_KEY]]
 
-fig, ax = plot_timings_grouped(x, ys,
-                               ylabel=r"max $\lvert P \rvert$", xticklabels=map(get_data_set_tex, data_sets),
-                               labels=["None", r"Lim. $\; \; \cdot$", r"Unlim. $\; \; \; \cdot$"],
-                               marknan=False, barwidth=0.3)
+fig, ax = plt.subplots(constrained_layout=True, figsize=(4, 4))
+plot_timings_grouped(x, ys,
+                     ylabel=r"max $\lvert P \rvert$", xticklabels=map(get_data_set_tex, data_sets),
+                     labels=["None", r"Lim. $\; \; \cdot$", r"Unlim. $\; \; \; \cdot$"],
+                     marknan=False, barwidth=0.3, fig=fig, ax=ax)
 
 
 # add the palette delta images to the legend
@@ -72,5 +73,5 @@ imagebox = OffsetImage(image, zoom=0.1, cmap='gray')
 ax.add_artist(AnnotationBbox(imagebox, (0.46, 0.745), frameon=False, boxcoords="axes fraction", zorder=10))
 
 
-save_plot("../results/plts/palette-delta.pdf", fig)
+save_plot("../results/plots/palette-delta.pdf", fig)
 plt.close(fig)

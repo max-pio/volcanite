@@ -59,6 +59,6 @@ for X_AXIS, xlabel, pdfname  in zip(["Labels", "Brick Labels avg"],
     for x, y, label in zip(data_df[X_AXIS], data_df["CSGV bits/voxel"], data_df["Data Set"]):
         ax.text(x, y, get_data_set_tex(label), fontsize=8, color='gray', rotation=45, ha='left', va='bottom',)
 
-    save_plot(f"../results/plts/bits-per-voxel_{pdfname}.pdf", fig)
+    save_plot(f"../results/plots/bits-per-voxel_{pdfname}.pdf", fig)
     plt.close(fig)
 
