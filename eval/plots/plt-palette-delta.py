@@ -57,7 +57,7 @@ for op_delta in ["","d-","d"]:
 
 fig, ax = plot_timings_grouped(x, ys,
                                ylabel=r"max $\lvert P \rvert$", xticklabels=map(get_data_set_tex, data_sets),
-                               labels=["None", r"${\cdot \; \;}{{\star}}$ Lim.", r"${\cdot \; \;}{\phantom{\star}}$ Unlim."],
+                               labels=["None", r"Lim. $\; \; \cdot$", r"Unlim. $\; \; \; \cdot$"],
                                marknan=False, barwidth=0.3)
 
 
@@ -66,8 +66,10 @@ import matplotlib.image as mpimg
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 image = mpimg.imread("./img/op_palette_delta.png")
 imagebox = OffsetImage(image, zoom=0.1, cmap='gray')
-ax.add_artist(AnnotationBbox(imagebox, (0.25, 0.83), frameon=False, boxcoords="axes fraction", zorder=10))
-ax.add_artist(AnnotationBbox(imagebox, (0.25, 0.75), frameon=False, boxcoords="axes fraction", zorder=10))
+ax.add_artist(AnnotationBbox(imagebox, (0.40, 0.83), frameon=False, boxcoords="axes fraction", zorder=10))
+image = mpimg.imread("./img/op_palette_delta_old.png")
+imagebox = OffsetImage(image, zoom=0.1, cmap='gray')
+ax.add_artist(AnnotationBbox(imagebox, (0.46, 0.745), frameon=False, boxcoords="axes fraction", zorder=10))
 
 
 save_plot("../results/plts/palette-delta.pdf", fig)
