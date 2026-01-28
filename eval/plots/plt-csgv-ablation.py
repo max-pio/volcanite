@@ -49,15 +49,14 @@ for data in data_sets:
 
     fig, ax = plot_timings_grouped(np.arange(len(op_runs)), ys,
                                 ylabel=r"Compression Rate [\%]",
-                                xticklabels=[r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"${\cdot\;}{{\star}}$", r"$\cdot$"],
+                                xticklabels=[r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$"],
                                 labels=["Without Stop Bits", "With Stop Bits"],
                                 marknan=False, barwidth=0.5, baroffsetscale=0.4)
 
+    ax.set_title(get_data_set_tex(data))
     ax.legend().set_loc('upper right')
 
-    #fig.canvas.draw()
-
-    TODO: the star for old delta must be moved further to the right
+    fig.canvas.draw()
 
     # add the operation images to the x ticks
     offset_from_tick = (-1, -14)
@@ -65,7 +64,7 @@ for data in data_sets:
     #
     import matplotlib.image as mpimg
     from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-    operations = ["parent", "neighbor_x", "neighbor_y", "neighbor_z", "palette_last", "palette_delta", "palette_delta"]
+    operations = ["parent", "neighbor_x", "neighbor_y", "neighbor_z", "palette_last", "palette_delta_old", "palette_delta"]
     xticks = ax.get_xticks()
     for i, op in enumerate(operations):
         image = mpimg.imread(f"./img/op_{op}.png")
@@ -76,6 +75,3 @@ for data in data_sets:
 
     save_plot(f"../results/plts/csgv-ablation_{data}.pdf", fig)
     plt.close(fig)
-
-    exit(0)
-

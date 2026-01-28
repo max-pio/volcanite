@@ -39,7 +39,7 @@ data_sets = data_df["Data Set"]
 x = np.arange(len(data_sets))
 
 
-print("  Plotting compression rates.")
+print("  Plotting compression rates")
 
 fig, ax = plt.subplots(figsize=(10, 4))
 plot_timings(x, data_df.set_index("Data Set").reindex(data_sets).reset_index()["Compression Rate [Pcnt]"],
@@ -50,7 +50,7 @@ plot_timings(x, data_df.set_index("Data Set").reindex(data_sets).reset_index()["
 save_plot("../results/plts/csgv-compression-rates.pdf", fig)
 plt.close(fig)
 
-print("  Plotting orig. and csgv sizes (log).")
+print("  Plotting orig. and csgv sizes (log)")
 
 fig, ax = plt.subplots(figsize=(10, 4))
 plot_timings_grouped(x, [data_df.set_index("Data Set").reindex(data_sets).reset_index()["Orig Size [GB]"],
