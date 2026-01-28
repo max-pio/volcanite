@@ -14,7 +14,7 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import numpy as np
 
-from timingplots import plot_timings
+from timingplots import plot_timings, add_fps_twin_axis_for_ms_axis
 from common import *
 
 import pandas as pd
@@ -40,14 +40,21 @@ df = pd.read_csv(shading_csv, comment="#")
 
 for data in data_set_ids:
 
+    print(f"  Plotting shading times for {data}")
+
     for i, shading in enumerate(shading_mode_ids):
         avg_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['frame avg [ms]'].iloc[0]
         min_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['frame min [ms]'].iloc[0]
         max_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['frame max [ms]'].iloc[0]
         sdv_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['stdv'].iloc[0]
 
-    fig, ax = plot_timings(x, avg_ms, errors=sdv_ms, xticklabels=shading_mode_ids,
-                           color=color, edgecolor="#000000", ylabel="Average frame time [ms]")
+    fig, ax = plt.subplots(constrained_layout=True, figsize=(4,4))
+    plot_timings(x, avg_ms, errors=sdv_ms, xticklabels=shading_mode_ids,
+                 color=color, edgecolor="#000000", ylabel="Average frame time [ms]", fig=fig, ax=ax)
+
+    # Twin y-axis: frames per second (computed, but no bars plotted)
+    add_fps_twin_axis_for_ms_axis(fig, ax, color='gray')
+
     save_plot(f"../results/plts/shading-img-timings_{data}.pdf", fig)
 
     ax.clear()
