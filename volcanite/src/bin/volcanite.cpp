@@ -32,6 +32,7 @@
 #include "vvv/util/video_encoding.hpp"
 #include "vvv/volren/Volume.hpp"
 
+#include <chrono>
 #include <string>
 
 #include <fmt/core.h>
@@ -91,6 +92,9 @@ int volcanite_main(int argc, char *argv[]) {
         return ret;
     }
 
+    // set timestamp for "time to first frame" measurements
+    auto timestamp_before_preprocessing = std::chrono::high_resolution_clock::now();
+
     if (args.performDecompression()) {
         CompSegVolHandler::decompressCompressedSegmentationVolume(compressedSegmentationVolume, args.decompress_export_file,
                                                                   {args.decompress_chunk_size[0], args.decompress_chunk_size[1], args.decompress_chunk_size[2]});
@@ -148,6 +152,8 @@ int volcanite_main(int argc, char *argv[]) {
                 // and that the GPU heats up before the actual evaluation run takes place.
                 static constexpr int HEATUP_FRAMES = 4;
                 renderEngine->renderFrames({.accumulation_samples = HEATUP_FRAMES, .duration = 1, .verbose = false});
+                // for time to first frame: get timestamp after first frame finished execution.
+                auto timestamp_after_first_frame = renderer->getFirstFrameFinishedTimeStamp();
 
                 // perform a dry evaluation run first, gathering frame times etc., if required
                 if (args.performHeadlessEvaluationPrepass()) {
@@ -196,7 +202,7 @@ int volcanite_main(int argc, char *argv[]) {
                             if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
                                                                          compressedSegmentationVolume->getLastEvaluationResults(),
                                                                          {}, // TODO: add decompression benchmark for evaluation logging
-                                                                         renderer->getLastEvaluationResults())) {
+                                                                         renderer->getLastEvaluationResults(timestamp_before_preprocessing))) {
                                 Logger(Info) << "exported evaluation results to " << eval_logfile;
                             } else {
                                 Logger(Warn) << "could not export evaluation results to " << eval_logfile;
@@ -257,7 +263,7 @@ int volcanite_main(int argc, char *argv[]) {
             }
         }
 
-        // if no evaluation results were exported before, do it now
+        // if no evaluation results were exported before (no rendering results), do it now
         if (evaluation_export_pending) {
             evaluation_export_pending = false;
             // If no rendering is requested: export the copmression results here

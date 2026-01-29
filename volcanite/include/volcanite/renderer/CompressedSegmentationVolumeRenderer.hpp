@@ -102,6 +102,7 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 
     ~CompressedSegmentationVolumeRenderer() override {
         resetGPU();
+        resetAllEvaluationStates();
         m_compressed_segmentation_volume.reset();
     }
 
@@ -129,7 +130,7 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 
 
     /// Resets all rendering caches, framebuffer accumulation, and other accumulated states between multiple evaluation runs.
-    /// For evaluation purposes.
+    /// For evaluation purposes. After the next rendered frame finishes execution, the first frame finished time step is set.
     void resetAllEvaluationStates() override;
 
     void setRenderResolution(const vk::Extent2D resolution) {
@@ -301,6 +302,9 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 
     const std::vector<float> &getLastTrackingFrameTimes() override { return m_last_frame_times; }
     const std::vector<glm::vec4> &getLastTrackingFrameTimesGPU() override { return m_pass->getLastFrameTimeTrackingResults(); }
+    /// @returns the system time stamp of the point after the first overall frame finished rendering.
+    /// Useful for "time to first frame" measurements. Reset with resetAllEvaluationStates().
+    std::optional<std::chrono::high_resolution_clock::time_point> getFirstFrameFinishedTimeStamp() const { return m_total_first_frame_finish_time; }
 
     void exportCurrentFrameToImage(std::string image_path) override {
         if (image_path.empty()) {
@@ -315,7 +319,8 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 
     /// Returns statistics about frame times and GPU memory consumption. Frame times are only available if tracking was
     /// enabled via startFrameTimeTracking(). Tracking should have been stopped with stopFrameTimeTracking() when called.
-    CSGVRenderEvaluationResults getLastEvaluationResults();
+    /// @param preprocessing_start_time_point if available, sets time_to_first_frame_s as (getFirstFrameFinishedTimeStamp() - preprocessing_start_time_point)
+    CSGVRenderEvaluationResults getLastEvaluationResults(std::optional<std::chrono::time_point<std::chrono::high_resolution_clock>> preprocessing_start_time_point = {});
     void printGPUMemoryUsage();
 
   private:
@@ -511,8 +516,9 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
 
+    std::optional<std::chrono::high_resolution_clock::time_point> m_total_first_frame_finish_time = {}; ///< reset with resetAllEvaluationStates();
     bool m_enable_frame_time_tracking = false;
-    std::optional<std::chrono::high_resolution_clock::time_point> m_last_frame_start_time = {};
+    std::optional<std::chrono::high_resolution_clock::time_point> m_last_frame_start_time = {};         ///< reset with startFrameTimeTracking();
     std::vector<float> m_last_frame_times = {};
 };
 

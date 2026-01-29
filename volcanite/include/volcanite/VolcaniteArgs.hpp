@@ -320,7 +320,7 @@ struct VolcaniteArgs {
             ValueArg<std::string> brickStatsArg("", "brickstats-logfile", "File into which statistics per brick are exported", false, "", "file", cmd);
             ValueArg<std::string> renderTimesArg("", "timings-logfile", "File into which frame render timings [ms] are exported", false, "", "file", cmd);
             ValueArg<std::string> evalLogFilesArg("", "eval-logfiles", "Comma separated files into which evaluation results are appended.", false, "", "file", cmd);
-            ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"{name}\". Must be used with --eval-logfile.", false, va.eval_name, "string", cmd);
+            ValueArg<std::string> evalNameArg("", "eval-name", "Title of this evaluation which will be available in log files as \"{name}\". Must be used with --eval-logfiles.", false, va.eval_name, "string", cmd);
             SwitchArg evalPrintArg("", "eval-print-keys", "Print all available evaluation keys to the console and exit.", cmd);
             ValueArg<std::string> shaderDefineArg("", "shader-def", "String of ; separated definitions that will be passed on to the shader. e.g. 'MY_VAL=64;MY_DEF'. Use with care.", false, va.shader_defines, "string", cmd);
 
@@ -669,7 +669,9 @@ struct VolcaniteArgs {
                 }
 
                 // check if the provided (chunk) input file(s) exist.
-                if (va.chunked) {
+                if (input_file.starts_with(CSGV_SYNTH_PREFIX_STR)) {
+                    // could check synth volume arguments string for validity here
+                } else if (va.chunked) {
                     for (int i = 0; i < (va.chunk_files[0] + 1) * (va.chunk_files[1] + 1) * (va.chunk_files[2] + 1); i++) {
                         auto chunk_index = glm::uvec3(i % (va.chunk_files[0] + 1), (i / (va.chunk_files[0] + 1)) % (va.chunk_files[1] + 1), (i / (va.chunk_files[0] + 1) / (va.chunk_files[1] + 1)) % (va.chunk_files[2] + 1));
                         if (chunk_index[0] > va.chunk_files[0] || chunk_index[1] > va.chunk_files[1] || chunk_index[2] > va.chunk_files[2])
@@ -708,7 +710,7 @@ struct VolcaniteArgs {
             }
             va.eval_name = evalNameArg.getValue();
             if (!va.eval_name.empty() && va.eval_logfiles.empty()) {
-                throw ArgException("Evaluation name must be used in combination with --eval-logfile",
+                throw ArgException("Evaluation name must be used in combination with --eval-logfiles",
                                    evalNameArg.longID(""));
             }
             va.print_eval_keys = evalPrintArg.getValue();

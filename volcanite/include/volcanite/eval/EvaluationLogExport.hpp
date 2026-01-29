@@ -95,6 +95,7 @@ struct CSGVRenderEvaluationResults {
     int accumulated_frames = 0;
     int min_samples_per_pixel = 0;
     int max_samples_per_pixel = 0;
+    double time_to_first_frame_s = -1.;
     //    double spp_min = 0.f;
     //    double spp_avg = 0.f;
     //    double spp_max = 0.f;

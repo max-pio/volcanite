@@ -132,6 +132,7 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     }
 
     fmt_args.push_back(fmt::arg("render_total_max", render_res.total_ms));
+    fmt_args.push_back(fmt::arg("time_to_first_frame_s", render_res.time_to_first_frame_s));
     fmt_args.push_back(fmt::arg("rendered_frames", render_res.accumulated_frames));
     fmt_args.push_back(fmt::arg("mem_framebuffer_mb", render_res.mem_framebuffers_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_uniformbuffer_mb", render_res.mem_ubos_bytes * BYTE_TO_MB));
@@ -191,7 +192,7 @@ std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
         "detail_separation",
         "orig_gb",
         "orig_bits_per_voxel",
-        "orig_bytes_per_voxel"
+        "orig_bytes_per_voxel",
         "volume_dim",
         "volume_dim_x",
         "volume_dim_y",
@@ -321,6 +322,7 @@ std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
         "frame_gpu_post_14_ms",
         "frame_gpu_post_15_ms",
         "render_total_max",
+        "time_to_first_frame_s",
         "rendered_frames",
         "mem_framebuffer_mb",
         "mem_uniformbuffer_mb",

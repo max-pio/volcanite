@@ -151,6 +151,10 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
                                         1000000.);
         m_last_frame_start_time.reset();
     }
+    // track the time point after which the first frame finished execution (for time to first frame tracking)
+    if (m_frame == 1) {
+        m_total_first_frame_finish_time = std::chrono::high_resolution_clock::now();
+    }
 
     // if a screenshot export was requested, we do this here (not timed)
     if (m_download_frame_to_image_file.has_value() && m_mostRecentFrame.has_value() && m_mostRecentFrame->texture) {
@@ -929,6 +933,7 @@ void CompressedSegmentationVolumeRenderer::resetAllEvaluationStates() {
     m_pmaterial_reset = true;
     m_accumulated_frames = 0u;
     m_frame = 0u;
+    m_total_first_frame_finish_time = {};
 }
 
 void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
@@ -1814,7 +1819,7 @@ void CompressedSegmentationVolumeRenderer::printGPUMemoryUsage() {
                  << available_vram_bytes * BYTE_TO_GB << " GB";
 }
 
-CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluationResults() {
+CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluationResults(std::optional<std::chrono::time_point<std::chrono::high_resolution_clock>> preprocessing_start_time_point) {
     CSGVRenderEvaluationResults results = {};
 
     // obtain GPU memory consumption
@@ -1948,6 +1953,9 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
             results.frame_gpu_med_ms[stage] = *(frame_time_cpy.begin() + static_cast<long>(frame_time_cpy.size() / 2));
         }
     }
+
+    if (preprocessing_start_time_point.has_value() && m_total_first_frame_finish_time.has_value())
+        results.time_to_first_frame_s = static_cast<std::chrono::duration<double>>(m_total_first_frame_finish_time.value() - preprocessing_start_time_point.value()).count();
     return results;
 }
 
