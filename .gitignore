@@ -20,11 +20,14 @@ compile_commands.json
 **/.venv/*
 **/.env/*
 
-# large evaluation files
+# (large) evaluation files
 /demo/**
 /vid/**
 /*.mp4
-eval/results
+eval/**/*results
+eval/**/*log
+eval/**/*log.*
+eval/**/volcanite-eval-setup.txt
 
 # operating system and IDE specific ignores
 /.idea*
