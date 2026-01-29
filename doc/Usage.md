@@ -125,7 +125,7 @@ a requested index. Otherwise, Volcanite will select an appropriate device, usual
 The categorized command line arguments are explained below.
 See `./volcanite --help` for the most recent list of command line arguments.
 Some arguments like chunked input volume names (`--chunked`), video output frames (`-v`),
-or evaluation log formatting templates (`--eval-logfile`) contain templated placeholders in braces `{}`.
+or evaluation log formatting templates (`--eval-logfiles`) contain templated placeholders in braces `{}`.
 These arguments usually follow the C++ [fmt formatting principles](https://hackingcpp.com/cpp/libs/fmt.html), e.g. specifying `-v out_{:4}.jpg`
 will export video frames to files `out_0000.jpg`, `out_0001.jpg` and so forth.  
 The general usage of Volcanite is
