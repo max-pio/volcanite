@@ -20,45 +20,51 @@ source ../.venv/bin/activate
 timestamp="$(date +'%Y-%m-%d_%H-%M-%S')"
 logfile="eval-log-${timestamp}.log"
 # redirect all outputs to the logfile (and keep on console)
+echo "Redirecting all logging outputs to ${logfile}"
+echo "To view live logs, execute in another shell:"
+echo "tail -f ${logfile}"
 exec > "$logfile" 2>&1
-# to receive console output as well: use unbuffered tee
+# to receive console output as well: use tee (might impact performance)
 # exec > >(stdbuf -oL tee -a "$logfile") 2>&1
 
 
+
+# calling python scripts unbuffered (-u) to prevent output mixing
+
 echo "<<<<<<< image-eval.py >>>>>>>"
-python3 ./image-eval.py
+python3 -u ./image-eval.py
 sleep 30
 echo "<<<<<<< video-eval.py >>>>>>>"
-python3 ./video-eval.py
+python3 -u ./video-eval.py
 sleep 30
 echo "<<<<<<< vram-eval.py >>>>>>>"
-python3 ./vram-eval.py
+python3 -u ./vram-eval.py
 sleep 30
 echo "<<<<<<< resolve-eval.py >>>>>>>"
-python3 ./resolve-video-eval.py
+python3 -u ./resolve-video-eval.py
 sleep 30
 
 echo "<<<<<<< cache-palette-eval.py >>>>>>>"
-python3 ./cache-palette-eval.py
+python3 -u ./cache-palette-eval.py
 sleep 30
 echo "<<<<<<< cache-pathlimit-eval.py >>>>>>>"
-python3 ./cache-pathlimit-eval.py
+python3 -u ./cache-pathlimit-eval.py
 sleep 30
 echo "<<<<<<< cache-reqlimit-eval.py >>>>>>>"
-python3 ./cache-reqlimit-eval.py
+python3 -u ./cache-reqlimit-eval.py
 sleep 30
 echo "<<<<<<< cache-rngcontrol-eval.py >>>>>>>"
-python3 ./cache-rngcontrol-eval.py
+python3 -u ./cache-rngcontrol-eval.py
 sleep 30
 
 echo "<<<<<<< csgv-eval.py >>>>>>>"
-python3 ./csgv-eval.py
+python3 -u ./csgv-eval.py
 sleep 30
 echo "<<<<<<< csgv-ablation-eval.py >>>>>>>"
-python3 ./csgv-ablation-eval.py
+python3 -u ./csgv-ablation-eval.py
 sleep 30
 echo "<<<<<<< deltaoperation-b64-eval.py >>>>>>>"
-python3 ./deltaoperation-b64-eval.py
+python3 -u ./deltaoperation-b64-eval.py
 
 echo ""
 echo "-------------------"
