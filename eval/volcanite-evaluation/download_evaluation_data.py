@@ -272,9 +272,9 @@ if __name__ == '__main__':
             print("Volcanite source directory could not be found. Provide as --volcanite-src /path/to/volcanite/")
             exit(1)
 
-    config_dir = volcanite_src_dir / Path("eval/config")
+    config_dir = Path(__file__).parent / Path("config")
     if not config_dir.exists():
-        print(f"Volcanite source directory does not contain configuration subdirectory {config_dir}.")
+        print(f"Directory does not contain configuration subdirectory {config_dir}.")
         exit(2)
 
     # write the paths to the config file
