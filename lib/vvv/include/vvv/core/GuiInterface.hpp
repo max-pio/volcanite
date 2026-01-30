@@ -168,7 +168,7 @@ class GuiInterface {
         static std::vector<std::string> availableColormaps;
         static int getDefaultColorMapIdx() {
             const std::vector<std::string> &c = getAvailableColormaps();
-            int l = static_cast<int>(std::find(c.begin(), c.end(), "coolwarm") - c.begin());
+            int l = static_cast<int>(std::find(c.begin(), c.end(), "viridis") - c.begin());
             return l < getAvailableColormaps().size() ? l : 0;
         }
 
