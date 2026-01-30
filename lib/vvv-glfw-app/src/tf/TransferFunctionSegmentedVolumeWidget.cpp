@@ -187,7 +187,7 @@ void vvv::GuiTFSegmentedVolumeData::renderGui(vvv::GpuContextPtr ctx) {
                             break;
                         }
                         auto selected_file = pfd::open_file("Color Map Image File",
-                                                            Paths::getHomeDirectory().string(),
+                                                            Paths::getHomeDirectory().string() + "/*",
                                                             {"Image File",
                                                              "*.jpg *.jpeg *.bmp *.gif *.png *.pic *.pnm"});
                         if (!selected_file.result().empty()) {
