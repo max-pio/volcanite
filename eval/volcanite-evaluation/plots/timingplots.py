@@ -34,7 +34,7 @@ def plot_gpu_timings(df : pd.DataFrame, x, stages : list[str], xlabel : str | No
 
     if fig is None or ax is None:
         plt.figure()
-        fig, ax = plt.subplots(constrained_layout=True, figsize=(9, 3))
+        fig, ax = plt.subplots(constrained_layout=True, figsize=(8, 2.5))
 
     bottom = np.zeros_like(x, dtype='float64')
     for i,s in enumerate(stages):

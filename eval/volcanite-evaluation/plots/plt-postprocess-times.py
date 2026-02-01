@@ -36,7 +36,7 @@ for data in ["cells"]:
         print(f"  Plotting post-process timings for {data}")
 
         plt.figure()
-        fig, ax = plt.subplots(constrained_layout=True, figsize=(4, 4))
+        fig, ax = plt.subplots(constrained_layout=True, figsize=(4, 3))
 
         df = pd.read_csv(resolve_csv, comment="#")
         stages = ["cache avg [ms]", "decompress avg [ms]", "render avg [ms]", "post-process avg [ms]"]
