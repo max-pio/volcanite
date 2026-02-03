@@ -35,28 +35,30 @@ sdv_ms = np.zeros_like(x, dtype=float)
 color = ["#999999","#ffd068", "#6c8ebf", "#b85450"]
 edgecolor = ["#000000", "#000000", "#000000", "#000000"]
 
-shading_csv = Path("../results/image-eval/image-eval.csv")
-df = pd.read_csv(shading_csv, comment="#")
+for cam in ["image", "video"]:
 
-for data in data_set_ids:
+    shading_csv = Path(f"../results/{cam}-eval/{cam}-eval.csv")
+    df = pd.read_csv(shading_csv, comment="#")
 
-    print(f"  Plotting shading times for {data}")
+    for data in data_set_ids:
 
-    for i, shading in enumerate(shading_mode_ids):
-        avg_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['frame avg [ms]'].iloc[0]
-        min_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['frame min [ms]'].iloc[0]
-        max_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['frame max [ms]'].iloc[0]
-        sdv_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['stdv'].iloc[0]
+        print(f"  Plotting shading times for {cam} {data}")
 
-    fig, ax = plt.subplots(constrained_layout=True, figsize=(5,4))
-    plot_timings(x, avg_ms, errors=sdv_ms, xticklabels=shading_mode_ids,
-                 color=color, edgecolor="#000000", ylabel="Average frame time [ms]", fig=fig, ax=ax)
+        for i, shading in enumerate(shading_mode_ids):
+            avg_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['frame avg [ms]'].iloc[0]
+            min_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['frame min [ms]'].iloc[0]
+            max_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['frame max [ms]'].iloc[0]
+            sdv_ms[i] = df[(df['Data Set'] == data) & (df['Shading Mode'] == shading)]['stdv'].iloc[0]
 
-    # Twin y-axis: frames per second (computed, but no bars plotted)
-    add_fps_twin_axis_for_ms_axis(fig, ax, color='gray')
+        fig, ax = plt.subplots(constrained_layout=True, figsize=(4,2.5))
+        plot_timings(x, avg_ms, errors=sdv_ms, xticklabels=shading_mode_ids, barwidth=0.4,
+                     color=color, edgecolor="#000000", ylabel="Average frame time [ms]", fig=fig, ax=ax)
 
-    save_plot(f"../results/plots/shading-img-timings_{data}.pdf", fig)
+        # Twin y-axis: frames per second (computed, but no bars plotted)
+        add_fps_twin_axis_for_ms_axis(fig, ax, color='gray')
 
-    ax.clear()
-    plt.clf()
-    plt.close('all')
+        save_plot(f"../results/plots/shading-{cam}-timings_{data}.pdf", fig)
+
+        ax.clear()
+        plt.clf()
+        plt.close('all')
