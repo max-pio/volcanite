@@ -106,10 +106,26 @@ int volcanite_main(int argc, char *argv[]) {
         Logger(Info) << "export brick statistics to " << args.brickstats_file << " done";
     }
 
-    if (!args.headless || args.performHeadlessRendering()) {
+    // If no rendering is requested: export copmression results and exit
+    if(args.no_render) {
+        for (const auto &eval_logfile : args.eval_logfiles) {
+            if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
+                                                            compressedSegmentationVolume->getLastEvaluationResults(),
+                                                            {}, // TODO: add decompression benchmark
+                                                            {})) {
+                Logger(Info) << "exported evaluation results to " << eval_logfile;
+            } else {
+                Logger(Warn) << "could not export evaluation results to " << eval_logfile;
+                return RET_IO_ERROR;
+            }
+        }
 
-        Logger(Info) << "--------------------------------------------------- ";
-        Logger(Info) << "initializing Volcanite renderer";
+        if (!args.headless || args.performHeadlessRendering())
+            Logger(Error) << "Any rendering / GPU execution prohibited (--no-render). Exiting.";
+        return RET_SUCCESS;
+    } 
+    
+    if (!args.headless || args.performHeadlessRendering()) {
 
         // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
         if (args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
@@ -122,7 +138,10 @@ int volcanite_main(int argc, char *argv[]) {
         if (csgvDatabase->isDummy())
             csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
 
-        const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
+        Logger(Info) << "--------------------------------------------------- ";
+        Logger(Info) << "initializing Volcanite renderer";
+
+        std::shared_ptr<volcanite::CompressedSegmentationVolumeRenderer> renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
         renderer->setDecodingParameters({.cache_size_MB = args.cache_size_MB,
                                          .palettized_cache = args.cache_palettized,
                                          .decode_from_shared_memory = args.decode_from_shared_memory,
@@ -282,7 +301,7 @@ int volcanite_main(int argc, char *argv[]) {
 
 #ifndef HEADLESS
         // only start the application if we are not in headless mode
-        if (!args.headless) {
+        if (!args.headless && !args.no_render) {
 
             Logger(Info) << "--------------------\n        Starting Volcanite Application";
 

@@ -192,11 +192,12 @@ struct VolcaniteArgs {
     // general args
     bool verbose = false;
     bool headless = false;
+    bool no_render = false;                 ///< prevents any GPU execution or context creation even with evaluations
     std::string input_file;                 ///< must be .csgv if compress is false, otherwise vti / raw / hdf5
     bool chunked = false;                   ///< if the first 3 {} in the input string should be chunk ids formatted
     uint32_t chunk_files[3] = {0u, 0u, 0u}; ///< max. xyz index of chunk files. e.g. (1,3,0) would load 8 chunk files
     uint32_t threads = 0;                   ///< number of CPU threads (0 = system supported concurrent threads)
-    std::filesystem::path working_dir;      ///< working directory, usually contains the .csgv. Maybe a temp directory.
+    std::filesystem::path working_dir;      ///< working directory, usually contains the .csgv. Maybe a temp directory
 
     // rendering args
     std::vector<std::string> rendering_configs; ///< one or more .vcfg files (ends with .vcfg) or config strings
@@ -329,7 +330,6 @@ struct VolcaniteArgs {
             SwitchArg computeAttributesArg("", "gen-attributes", "Generate common attributes from the volume and add them to the attribute database.", cmd);
             ValueArg<std::string> attributeArg("a", "attribute", R"(SQLite or CSV Attribute database: "{file.sqlite}[,{table/view name}[,{label column referenced in volume}]]" or "{file.csv}[,{label column referenced in volume}[,{csv separator}]]".)", false, "", "database.sqlite[,table[,label]] or database.csv[,label[,separator]]", cmd);
             // rendering arguments
-            SwitchArg devArg("", "dev", "Reveal development GUI and enable shader debug outputs.", cmd);
             SwitchArg noVsyncArg("", "no-vsync", "Disable vertical synchronization in renderer.", cmd);
             ValueArg<uint32_t> cacheSizeMBArg("", "cache-size", "Size in MB of the renderer's brick cache. 0 to allocate all available.", false, va.cache_size_MB, "size", cmd);
             SwitchArg cachePalettizedArg("", "cache-palette", "Store palette indices in brick cache instead of labels.", cmd);
@@ -350,8 +350,10 @@ struct VolcaniteArgs {
             SwitchArg fullscreenArg("", "fullscreen", "Start renderer in fullscreen mode.", cmd);
             MultiArg<std::string> renderconfigArg("", "config", "List of .vcfg files, rendering presets, or direct config strings '[{GUI window}] {parameter label}: {parameter value(s)}', separated by ;", false, "{(.vcfg file | rendering preset | string);}*", cmd);
             // general arguments
-            SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
+            SwitchArg devArg("", "dev", "Reveal development GUI and enable shader debug outputs.", cmd);
             SwitchArg verboseArg("", "verbose", "Verbose debug output.", cmd);
+            SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
+            SwitchArg noRenderArg("", "no-render", "Prohibit any rendering / GPU execution in all cases (even for evaluations).", cmd);
 
             // input file (file ending determines if we are on the import/decompress side (.csgv) or can specify compression options (other)
             UnlabeledValueArg<std::string> inputpathArg("input", "Either a previously compressed .csgv file to render, or a segmentation volume file to compress or render. " CSGV_SYNTH_PREFIX_STR " to create and process a synthetic volume.", false, "", "(<volume file>|" CSGV_SYNTH_PREFIX_STR "[_args*])", cmd, true);
@@ -362,6 +364,7 @@ struct VolcaniteArgs {
             // general arguments
             va.verbose = verboseArg.getValue();
             va.headless = headlessArg.getValue();
+            va.no_render = noRenderArg.getValue();
 #ifdef HEADLESS
             if (!va.headless) {
                 throw ArgException("Volcanite was build with CMake option HEADLESS set. volcanite must be run with --headless option and can not use interactive windows.", headlessArg.longID());
