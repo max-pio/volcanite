@@ -15,8 +15,8 @@ It is advisable to place this directory in the
 We take no responsibility for any problems this might cause.** 
 
 * AMD or NVIDIA GPU with at least 16 GB VRAM,
-* 48 GB RAM,
-* approx. 1 TB free disk space.
+* 64 GB RAM,
+* 2 TB free disk space.
 
 You might be able to run a subset of evaluation scripts on a subset of data sets if your system does not meet these requirements.
 

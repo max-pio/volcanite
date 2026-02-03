@@ -76,4 +76,4 @@ if __name__ == "__main__":
                     volcanite.exec(vargs)
 
 
-        # create a eate_formatted_copy(evaluation.eval_out_directory / Path("image-eval.csv"), newline_separator="\\\\")
+        # create_formatted_copy(evaluation.eval_out_directory / Path("image-eval.csv"), newline_separator="\\\\")
