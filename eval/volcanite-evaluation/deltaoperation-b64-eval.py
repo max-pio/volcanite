@@ -34,14 +34,14 @@ if __name__ == "__main__":
                                                                     "{brick_palette_size_min},{brick_palette_size_avg},{brick_palette_size_max},"
                                                                     "{brick_palette_duplicates_min},{brick_palette_duplicates_avg},{brick_palette_duplicates_max},"
                                                                     "{brick_labels_min},{brick_labels_avg},{brick_labels_max}"
-                                                                    #"{mem_cache_mb},{mem_cache_used_mb},{mem_cache_fillrate_pcnt},{mem_cache_packing_factor}"
+                                                                    "{mem_cache_mb},{mem_cache_used_mb},{mem_cache_fillrate_pcnt},{mem_cache_packing_factor}"
                                                                    ],
                                                               headers=["Data Set,Unlimited Pdelta,Operations,Labels,Orig Size [GB],Orig bits/voxel,"
                                                                        "CSGV Size [GB],CSGV bits/voxel,Compression Rate [Pcnt],Detail Encoding Size [GB],Detail Encoding [Pcnt],Brick Size,"
                                                                        "Palette Length min,Palette Length avg,Palette Length max,"
                                                                        "Palette Duplicates min,Palette Duplicates avg,Palette Duplicates max,"
                                                                        "Brick Labels min,Brick Labels avg,Brick Labels max"
-                                                                       #"Cache Size [MB],Used Size [MB],Used Size [Pcnt],Packing Factor"
+                                                                       "Cache Size [MB],Used Size [MB],Used Size [Pcnt],Packing Factor"
                                                                       ])],
                                         enable_log=True, dry_run=False) as evaluation:
 

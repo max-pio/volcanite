@@ -28,7 +28,7 @@ if __name__ == "__main__":
                                         log_files=[VolcaniteLogFileCfg(f"{evaluation_name}.csv",
                                                               fmts=["{volume_dim_x},{volume_dim_y},{volume_dim_z},{volume_labels},{orig_gb},{orig_bits_per_voxel},"
                                                                     "{csgv_gb},{csgv_bits_per_voxel},{comprate_pcnt},{csgv_detail_gb},{csgv_detail_pcnt},{brick_size},{operation_mask},"
-                                                                    "{comp_prepass_s},{comp_mainpass_s}{comp_s},{comp_with_fileio_s},{time_to_first_frame_s}",
+                                                                    "{comp_prepass_s},{comp_mainpass_s},{comp_s},{comp_with_fileio_s},{time_to_first_frame_s},"
                                                                     "{brick_palette_size_min},{brick_palette_size_avg},{brick_palette_size_max},"
                                                                     "{brick_palette_duplicates_min},{brick_palette_duplicates_avg},{brick_palette_duplicates_max},"
                                                                     "{brick_labels_min},{brick_labels_avg},{brick_labels_max}"],
