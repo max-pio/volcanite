@@ -33,37 +33,41 @@ exec > "$logfile" 2>&1
 
 echo "<<<<<<< image-eval.py >>>>>>>"
 python3 -u ./image-eval.py
-sleep 120
+sleep 30
 echo "<<<<<<< video-eval.py >>>>>>>"
 python3 -u ./video-eval.py
-sleep 120
+sleep 30
 echo "<<<<<<< vram-eval.py >>>>>>>"
 python3 -u ./vram-eval.py
-sleep 120
+sleep 30
 echo "<<<<<<< resolve-eval.py >>>>>>>"
 python3 -u ./resolve-video-eval.py
-sleep 120
+sleep 30
 
 echo "<<<<<<< cache-palette-eval.py >>>>>>>"
 python3 -u ./cache-palette-eval.py
-sleep 120
+sleep 30
 echo "<<<<<<< cache-pathlimit-eval.py >>>>>>>"
 python3 -u ./cache-pathlimit-eval.py
-sleep 120
+sleep 30
 echo "<<<<<<< cache-reqlimit-eval.py >>>>>>>"
 python3 -u ./cache-reqlimit-eval.py
-sleep 120
-#echo "<<<<<<< cache-rngcontrol-eval.py >>>>>>>"
-#python3 -u ./cache-rngcontrol-eval.py
-#sleep 30
+sleep 30
+echo "<<<<<<< cache-rngcontrol-eval.py >>>>>>>"
+python3 -u ./cache-rngcontrol-eval.py
+sleep 30
 
 echo "<<<<<<< csgv-eval.py >>>>>>>"
 python3 -u ./csgv-eval.py
+sleep 30
+echo "<<<<<<< csgv-eval.py >>>>>>>"
+python3 -u ./compression-eval.py
+sleep 30
 
-# the following evaluations pose significant stress on IO since they involve many compressions.
-# at the same time, their results do not depend on CPU / GPU performance and can therefore be
-# executed on a different system (i.e. a server with high memory resources).
-#sleep 30
+# The following evaluations pose significant stress on IO since they involve
+# many CSGV compressions. At the same time, their results do not depend on
+# CPU / GPU performance and can therefore be executed on a different system
+# (i.e. a server with higher memory resources). See: run-ablation-delta.sh
 #echo "<<<<<<< csgv-ablation-eval.py >>>>>>>"
 #python3 -u ./csgv-ablation-eval.py
 #sleep 30
