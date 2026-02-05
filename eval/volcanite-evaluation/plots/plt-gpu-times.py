@@ -26,20 +26,32 @@ import matplotlib.pyplot as plt
 print("--------------\nPlotting GPU Timings")
 init_plots()
 
-for data in data_set_ids:
-    for shading in shading_mode_ids:
+for cam in ["image", "video"]:
+    for data in data_set_ids:
+        for shading in shading_mode_ids:
 
-        tag = data + "_" + shading
-        gpu_csv = Path("../results/image-eval/" + tag + "_timing.csv")
+            gpu_csv = Path(f"../results/{cam}-eval/{data}_{shading}_timing.csv")
 
-        if gpu_csv.exists():
-            print(f"  Plotting {data} {shading}")
+            if gpu_csv.exists():
+                print(f"  Plotting {cam} {data} {shading}")
 
-            df = pd.read_csv(gpu_csv, comment="#")
-            fig, ax = plot_gpu_timings(df, x=np.arange(21), stages=["Cache","Decompress","Render","Post-Process"],
-                                       xlabel="Image Frame", ylabel="Frame Time [ms]")
-            save_plot(f"../results/plots/gpu-img-timings_{data}_{shading}.pdf", fig)
-           
-            ax.clear()
-            plt.clf()
-            plt.close('all')
+                df = pd.read_csv(gpu_csv, comment="#")
+                df["Other"] = df["Total"] - df["Cache"] - df["Decompress"] - df["Render"] - df["Post-Process"]
+
+                if cam == "image":
+                    fig, ax = plot_gpu_timings(df, x=np.arange(21),
+                                               stages=["Cache","Decompress","Render","Post-Process","Other"],
+                                               xlabel="Image Frame", ylabel="Frame Time [ms]")
+                    ax.legend(ncols=3)
+                else:
+                    fig, ax = plot_gpu_timings(df, x=np.arange(0, 600, 20),
+                                               stages=["Cache", "Decompress", "Render", "Post-Process", "Other"],
+                                               xlabel="Video Frame", ylabel="Frame Time [ms]", barwidth=(20 * 0.66))
+                    ax.set_xticks(np.arange(0, 600, 40))
+                    ax.legend()
+                    ax.get_legend().remove()
+                save_plot(f"../results/plots/gpu-{cam}-timings_{data}_{shading}.pdf", fig)
+
+                ax.clear()
+                plt.clf()
+                plt.close('all')

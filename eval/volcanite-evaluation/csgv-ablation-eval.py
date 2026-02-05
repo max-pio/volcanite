@@ -13,6 +13,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import time
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
@@ -98,6 +99,11 @@ if __name__ == "__main__":
 
                     # remove the csgv file, otherwise this would store hundreds of GB
                     csgv_out_path.resolve().unlink()
+
+                    # to reduce stress on storage drives and RAM: cool off for some minutes
+                    time.sleep(60)
+
+                time.sleep(500)            
 
     # # separate ablation evaluation results into separate files for each data set
     # df = pd.read_csv(f'./results/{evaluation_name}/{evaluation_name}.csv',  comment='#')

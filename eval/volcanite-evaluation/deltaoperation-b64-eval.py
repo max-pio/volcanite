@@ -13,6 +13,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import time
 from datetime import datetime
 from pathlib import Path
 from volcanite.volcaniteeval import VolcaniteArg, VolcaniteEvaluation, VolcaniteExec, VolcaniteLogFileCfg, ExistingPolicy
@@ -32,14 +33,16 @@ if __name__ == "__main__":
                                                                     "{csgv_gb},{csgv_bits_per_voxel},{comprate_pcnt},{csgv_detail_gb},{csgv_detail_pcnt},{brick_size},"
                                                                     "{brick_palette_size_min},{brick_palette_size_avg},{brick_palette_size_max},"
                                                                     "{brick_palette_duplicates_min},{brick_palette_duplicates_avg},{brick_palette_duplicates_max},"
-                                                                    "{brick_labels_min},{brick_labels_avg},{brick_labels_max},"
-                                                                    "{mem_cache_mb},{mem_cache_used_mb},{mem_cache_fillrate_pcnt},{mem_cache_packing_factor}"],
+                                                                    "{brick_labels_min},{brick_labels_avg},{brick_labels_max}"
+                                                                    "{mem_cache_mb},{mem_cache_used_mb},{mem_cache_fillrate_pcnt},{mem_cache_packing_factor}"
+                                                                   ],
                                                               headers=["Data Set,Unlimited Pdelta,Operations,Labels,Orig Size [GB],Orig bits/voxel,"
                                                                        "CSGV Size [GB],CSGV bits/voxel,Compression Rate [Pcnt],Detail Encoding Size [GB],Detail Encoding [Pcnt],Brick Size,"
                                                                        "Palette Length min,Palette Length avg,Palette Length max,"
                                                                        "Palette Duplicates min,Palette Duplicates avg,Palette Duplicates max,"
-                                                                       "Brick Labels min,Brick Labels avg,Brick Labels max,"
-                                                                       "Cache Size [MB],Used Size [MB],Used Size [Pcnt],Packing Factor"])],
+                                                                       "Brick Labels min,Brick Labels avg,Brick Labels max"
+                                                                       "Cache Size [MB],Used Size [MB],Used Size [Pcnt],Packing Factor"
+                                                                      ])],
                                         enable_log=True, dry_run=False) as evaluation:
 
         volcanite = VolcaniteExec(evaluation, build_subdir="cmake-build-release")
@@ -66,7 +69,6 @@ if __name__ == "__main__":
                 #    # instead of skipping the computation, they are commented out in the .csv
                 #    # continue
                 #    evaluation.get_log().log_manual("#", end="")
-
                 # the first two columns are written from the python script
                 evaluation.get_log().log_manual(arg_csgv.identifier + "," + arg_unlim_pdelta + ",", end="")
 
@@ -92,3 +94,8 @@ if __name__ == "__main__":
                 # this evaluation creates large files: remove them to prevent disk space exhaustion
                 if not KEEP_CSGV_FILES:
                     decompression_path.unlink()
+
+                # to reduce stress on storage drives and RAM: cool off for some minutes
+                time.sleep(60)
+
+            time.sleep(500)

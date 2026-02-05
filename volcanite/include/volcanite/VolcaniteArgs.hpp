@@ -21,9 +21,7 @@
 #endif
 
 #include "CSGVPathUtils.hpp"
-#include "compression/memory_mapping.hpp"
 #include "csgv_constants.incl"
-#include "util/segmentation_volume_synthesis.hpp"
 #include "eval/EvaluationLogExport.hpp"
 #include "util/segmentation_volume_synthesis.hpp"
 #include "vvv/core/HeadlessRendering.hpp"
@@ -31,6 +29,7 @@
 #include "vvv/util/csv_utils.hpp"
 
 #include <fmt/core.h>
+#include <cstdlib>
 #include <optional>
 #include <ranges>
 #include <sstream>
@@ -192,11 +191,12 @@ struct VolcaniteArgs {
     // general args
     bool verbose = false;
     bool headless = false;
+    bool no_render = false;                 ///< prevents any GPU execution or context creation even with evaluations
     std::string input_file;                 ///< must be .csgv if compress is false, otherwise vti / raw / hdf5
     bool chunked = false;                   ///< if the first 3 {} in the input string should be chunk ids formatted
     uint32_t chunk_files[3] = {0u, 0u, 0u}; ///< max. xyz index of chunk files. e.g. (1,3,0) would load 8 chunk files
     uint32_t threads = 0;                   ///< number of CPU threads (0 = system supported concurrent threads)
-    std::filesystem::path working_dir;      ///< working directory, usually contains the .csgv. Maybe a temp directory.
+    std::filesystem::path working_dir;      ///< working directory, usually contains the .csgv. Maybe a temp directory
 
     // rendering args
     std::vector<std::string> rendering_configs; ///< one or more .vcfg files (ends with .vcfg) or config strings
@@ -329,7 +329,6 @@ struct VolcaniteArgs {
             SwitchArg computeAttributesArg("", "gen-attributes", "Generate common attributes from the volume and add them to the attribute database.", cmd);
             ValueArg<std::string> attributeArg("a", "attribute", R"(SQLite or CSV Attribute database: "{file.sqlite}[,{table/view name}[,{label column referenced in volume}]]" or "{file.csv}[,{label column referenced in volume}[,{csv separator}]]".)", false, "", "database.sqlite[,table[,label]] or database.csv[,label[,separator]]", cmd);
             // rendering arguments
-            SwitchArg devArg("", "dev", "Reveal development GUI and enable shader debug outputs.", cmd);
             SwitchArg noVsyncArg("", "no-vsync", "Disable vertical synchronization in renderer.", cmd);
             ValueArg<uint32_t> cacheSizeMBArg("", "cache-size", "Size in MB of the renderer's brick cache. 0 to allocate all available.", false, va.cache_size_MB, "size", cmd);
             SwitchArg cachePalettizedArg("", "cache-palette", "Store palette indices in brick cache instead of labels.", cmd);
@@ -350,8 +349,10 @@ struct VolcaniteArgs {
             SwitchArg fullscreenArg("", "fullscreen", "Start renderer in fullscreen mode.", cmd);
             MultiArg<std::string> renderconfigArg("", "config", "List of .vcfg files, rendering presets, or direct config strings '[{GUI window}] {parameter label}: {parameter value(s)}', separated by ;", false, "{(.vcfg file | rendering preset | string);}*", cmd);
             // general arguments
-            SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
+            SwitchArg devArg("", "dev", "Reveal development GUI and enable shader debug outputs.", cmd);
             SwitchArg verboseArg("", "verbose", "Verbose debug output.", cmd);
+            SwitchArg headlessArg("", "headless", "Do not start GUI application.", cmd);
+            SwitchArg noRenderArg("", "no-render", "Prohibit any rendering / GPU execution in all cases (even for evaluations).", cmd);
 
             // input file (file ending determines if we are on the import/decompress side (.csgv) or can specify compression options (other)
             UnlabeledValueArg<std::string> inputpathArg("input", "Either a previously compressed .csgv file to render, or a segmentation volume file to compress or render. " CSGV_SYNTH_PREFIX_STR " to create and process a synthetic volume.", false, "", "(<volume file>|" CSGV_SYNTH_PREFIX_STR "[_args*])", cmd, true);
@@ -359,19 +360,48 @@ struct VolcaniteArgs {
             // parse arguments
             cmd.parse(argc, argv);
 
+            // evaluation arguments
+            va.brickstats_file = expandPath(brickStatsArg.getValue()).generic_string();
+            va.rendertimes_file = expandPath(renderTimesArg.getValue()).generic_string();
+            std::string comma_separated_logfiles = evalLogFilesArg.getValue();
+            va.eval_logfiles.clear();
+            for (const auto &logfile : comma_separated_logfiles | std::views::split(',') | std::views::transform([](const auto &&range) -> std::string {
+                                           // string_view and string constructors do not accept the range iterators in C++17
+                                           std::string tmp;
+                                           for (const char c : range)
+                                               tmp.push_back(c);
+                                           return tmp;
+                                       })) {
+                va.eval_logfiles.emplace_back(expandPathStr(std::string(logfile)));
+                if (std::optional<std::string> logfile_err = EvaluationLogExport::check_eval_logfile(va.eval_logfiles.back()); logfile_err.has_value()) {
+                    throw ArgException(logfile_err.value() + " (" + va.eval_logfiles.back() + ")", evalLogFilesArg.longID());
+                }
+                                       }
+            va.eval_name = evalNameArg.getValue();
+            va.print_eval_keys = evalPrintArg.getValue();
+            if (va.print_eval_keys) {
+                Logger(Info) << "Available evaluation log keys (used in --eval-logfiles):";
+                for (const auto &key : EvaluationLogExport::get_all_evaluation_keys())
+                    Logger(Info) << "  {" << key << "}";
+                // exit after printing the keys
+                std::exit(0);
+            }
+
             // general arguments
             va.verbose = verboseArg.getValue();
             va.headless = headlessArg.getValue();
+            va.no_render = noRenderArg.getValue();
+
+            Logger(Warn) << "Volcanite was build with CMake option HEADLESS but executed without" << headlessArg.longID() << ". Force enabling headless mode.";
+            va.headless = true;
 #ifdef HEADLESS
             if (!va.headless) {
-                throw ArgException("Volcanite was build with CMake option HEADLESS set. volcanite must be run with --headless option and can not use interactive windows.", headlessArg.longID());
+                Logger(Warn) << "Volcanite was build with CMake option HEADLESS but executed without" << headlessArg.longID() << ". Force enabling headless mode.";
+                va.headless = true;
             }
 #endif
-            va.compress_export_file = expandPathStr(compresspathArg.getValue());
-            if (!parseOperationMaskString(va.operation_mask, opMaskArg.getValue()))
-                throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d[-],s only", opMaskArg.longID());
-            va.random_access = randomAccessArg.getValue();
 
+            // decompression arguments
             va.decompress_export_file = expandPathStr(decompresspathArg.getValue());
             if (const std::string &decomp_chunk_str = decompressChunkSizeArg.getValue();
                 !decomp_chunk_str.empty()) {
@@ -544,17 +574,16 @@ struct VolcaniteArgs {
 
                 va.working_dir = expandPath(input_file).parent_path();
             }
-            // ... or if we compress a volume
+            // ... or if a non-csgv volume is compressed
             else {
-                if (input_volume_required && !(input_file.starts_with(CSGV_SYNTH_PREFIX_STR) || input_file.ends_with(".vti") || input_file.ends_with(".raw") || input_file.ends_with(".vraw") || input_file.ends_with(".hdf5") || input_file.ends_with(".h5") || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {
+                if (input_volume_required && !(input_file.starts_with(CSGV_SYNTH_PREFIX_STR)
+                    || input_file.ends_with(".vti") || input_file.ends_with(".raw") || input_file.ends_with(".vraw") || input_file.ends_with(".hdf5") || input_file.ends_with(".h5") || input_file.ends_with(".nrrd") || input_file.ends_with(".nhdr"))) {
                     throw ArgException("Unsupported input file ending (not in {.csgv|.vti|.hdf5|.h5|.raw|.vraw|.nrrd|.nhdr})", inputpathArg.longID(""));
                 }
 
-                // if (input_volume_required && !va.decompress_export_file.empty()) {
-                //    throw ArgException(decompresspathArg.longID() + " can only be used with a .csgv input file.", decompresspathArg.longID());
-                // }
-
                 // set the working directory to store the csgv output volume, runtime configuration files etc.
+                va.compress_export_file = expandPathStr(compresspathArg.getValue());
+
                 if (!va.compress_export_file.empty())
                     va.working_dir = expandPath(va.compress_export_file).parent_path();
                 else {
@@ -619,6 +648,9 @@ struct VolcaniteArgs {
 
                 // compression arguments
                 va.brick_size = bricksizeArg.getValue();
+                if (!parseOperationMaskString(va.operation_mask, opMaskArg.getValue()))
+                    throw ArgException(opMaskArg.longID() + " must be a list of characters in p,x,y,z,n,l,d[-],s only", opMaskArg.longID());
+                va.random_access = randomAccessArg.getValue();
                 if (va.random_access) {
                     constexpr EncodingMode _strengths[] = {NIBBLE_ENC, WAVELET_MATRIX_ENC, HUFFMAN_WM_ENC};
                     va.encoding_mode = _strengths[strengthArg.getValue()];
@@ -680,7 +712,7 @@ struct VolcaniteArgs {
                         if (!std::filesystem::exists(chunk_path))
                             throw ArgException("provided chunk indices does not match with the files in the provided path. At least the following file is missing: " + chunk_path, chunkedArg.longID(""));
                     }
-                } else {
+                } else if (!evalPrintArg.getValue()) {  // some args will immediately exit
                     if (!std::filesystem::exists(va.input_file))
                         throw ArgException("provided input file does not exist: " + va.input_file, inputpathArg.longID(""));
                 }
@@ -692,28 +724,7 @@ struct VolcaniteArgs {
             // va.compute_attributes = (va.attribute_database.empty() && va.label_remapping) || computeAttributesArg.getValue();
             va.compute_attributes = computeAttributesArg.getValue();
 
-            va.brickstats_file = expandPath(brickStatsArg.getValue()).generic_string();
-            va.rendertimes_file = expandPath(renderTimesArg.getValue()).generic_string();
-            std::string comma_separated_logfiles = evalLogFilesArg.getValue();
-            va.eval_logfiles.clear();
-            for (const auto &logfile : comma_separated_logfiles | std::views::split(',') | std::views::transform([](const auto &&range) -> std::string {
-                                           // string_view and string constructors do not accept the range iterators in C++17
-                                           std::string tmp;
-                                           for (const char c : range)
-                                               tmp.push_back(c);
-                                           return tmp;
-                                       })) {
-                va.eval_logfiles.emplace_back(expandPathStr(std::string(logfile)));
-                if (std::optional<std::string> logfile_err = EvaluationLogExport::check_eval_logfile(va.eval_logfiles.back()); logfile_err.has_value()) {
-                    throw ArgException(logfile_err.value() + " (" + va.eval_logfiles.back() + ")", evalLogFilesArg.longID());
-                }
-            }
-            va.eval_name = evalNameArg.getValue();
-            if (!va.eval_name.empty() && va.eval_logfiles.empty()) {
-                throw ArgException("Evaluation name must be used in combination with --eval-logfiles",
-                                   evalNameArg.longID(""));
-            }
-            va.print_eval_keys = evalPrintArg.getValue();
+
             va.shader_defines = shaderDefineArg.getValue();
             std::ranges::replace(va.shader_defines, ';', ' ');
 

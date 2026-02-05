@@ -17,7 +17,12 @@ from datetime import datetime
 from pathlib import Path
 from volcanite.volcaniteeval import VolcaniteArg, VolcaniteEvaluation, VolcaniteExec, VolcaniteLogFileCfg, ExistingPolicy
 
-from common import data_specific_rendering_args
+from common import data_specific_compression_args, data_specific_rendering_args
+
+
+# This evaluation is separate from csgv-eval.py for these reasons:
+# - it re-compresses all data for compression timings (therefore requiring the raw data not just csgv files)
+# - it measures time to first frame (incl. compression), therefore --stream-lod is only applied to relevant data
 
 if __name__ == "__main__":
 
@@ -53,11 +58,20 @@ if __name__ == "__main__":
         evaluation.get_log().log_manual("# " + datetime.now().strftime("%Y.%m.%d-%H:%M:%S"))
 
         # iterate over all configuration combinations and execute Volcanite
-        for arg_data in VolcaniteArg.args_csgv_datasets.values():
+        # (precomputed csgv files are not actually loaded)
+        for arg_csgv in VolcaniteArg.args_csgv_datasets.values():
+
+            # the raw input data and compression parameters for the compression.
+            # input data sets are assumed to be structured in subdirectories in the same location as the csgv files,
+            # as created by the download_evaluation_data.py download script.
+            args_data_input = data_specific_compression_args(arg_csgv.identifier,
+                                                             volume_data_dir=VolcaniteArg.get_csgv_directory())
+
+            # use the default rendering parameters for each data set to obtain time-to-first-frame
+            args_rendering = data_specific_rendering_args(arg_csgv.identifier)
 
             # the first column is written from the python script
-            evaluation.get_log().log_manual(arg_data.identifier + "," , end="")
+            evaluation.get_log().log_manual(arg_csgv.identifier + "," , end="")
             # execute Volcanite and pass the Volcanite log file into which the results are appended
-            # stream-lod is necessary to force detail separation (and obtain the detail encoding size)
-            volcanite.exec([arg_data, VolcaniteArg("--stream-lod"), VolcaniteArg("--verbose")])
+            volcanite.exec(args_data_input + args_rendering)
 
