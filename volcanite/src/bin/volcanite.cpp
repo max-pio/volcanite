@@ -30,7 +30,6 @@
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "volcanite/util/args_and_csgv_provider.hpp"
 #include "vvv/util/video_encoding.hpp"
-#include "vvv/volren/Volume.hpp"
 
 #include <chrono>
 #include <string>
