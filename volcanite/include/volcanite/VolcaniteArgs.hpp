@@ -392,8 +392,6 @@ struct VolcaniteArgs {
             va.headless = headlessArg.getValue();
             va.no_render = noRenderArg.getValue();
 
-            Logger(Warn) << "Volcanite was build with CMake option HEADLESS but executed without" << headlessArg.longID() << ". Force enabling headless mode.";
-            va.headless = true;
 #ifdef HEADLESS
             if (!va.headless) {
                 Logger(Warn) << "Volcanite was build with CMake option HEADLESS but executed without" << headlessArg.longID() << ". Force enabling headless mode.";
