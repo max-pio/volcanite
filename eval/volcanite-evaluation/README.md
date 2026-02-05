@@ -38,7 +38,7 @@ Install python dependencies. On Ubuntu:
 sudo apt update && sudo apt install python3-venv python3-dev build-essential
 ```
 
-Install packages inside a python virtual environment:
+Install packages inside a local python virtual environment:
 ```bash
 python3 -m venv ./.venv
 source .venv/bin/activate

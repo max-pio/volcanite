@@ -14,7 +14,8 @@ if [ "$(id -u)" -ne 0 ]; then
   esac
 fi
 
-source ../.venv/bin/activate
+echo "activating python venv in ./.venv/bin/activate"
+source ./.venv/bin/activate
 
 # create timestamped logfile name
 timestamp="$(date +'%Y-%m-%d_%H-%M-%S')"
