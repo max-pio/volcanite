@@ -15,8 +15,8 @@ It is advisable to place this directory in the
 We take no responsibility for any problems this might cause.** 
 
 * AMD or NVIDIA GPU with at least 16 GB VRAM,
-* 64 GB RAM,
-* 2 TB free disk space.
+* 48 GB RAM,
+* approx. 1 TB free disk space.
 
 You might be able to run a subset of evaluation scripts on a subset of data sets if your system does not meet these requirements.
 
@@ -30,12 +30,17 @@ git clone git@github.com:max-pio/volcanite.git
 And place this volcanite-evalution directory inside its source tree.
 We recommend `<volcanite-root-src-dir>/eval/`.
 
-You need all Volcanite [build dependencies](../doc/Setup.md), including the optional hdf5 libraries.
-The evaluation scripts require python and the Volcanite python package located in `<volcanite-src-root-dir>/python/volcanite/` to be installed. 
-It is advised to do this inside a python virtual environment:
+You need the Volcanite [build dependencies](../doc/Setup.md), including the optional hdf5 libraries.
+The evaluation scripts require python and the Volcanite python package located in `<volcanite-src-root-dir>/python/volcanite/` to be installed.
 
+Install python dependencies. On Ubuntu:
 ```bash
-python -m venv ./.venv
+sudo apt update && sudo apt install python3-venv python3-dev build-essential
+```
+
+Install packages inside a python virtual environment:
+```bash
+python3 -m venv ./.venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install pandas numpy matplotlib
