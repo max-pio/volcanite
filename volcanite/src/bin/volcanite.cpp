@@ -220,7 +220,7 @@ int volcanite_main(int argc, char *argv[]) {
                             if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
                                                                          compressedSegmentationVolume->getLastEvaluationResults(),
                                                                          {}, // TODO: add decompression benchmark for evaluation logging
-                                                                         renderer->getLastEvaluationResults(timestamp_before_preprocessing))) {
+                                                                         renderer->getLastEvaluationResults(timestamp_after_first_frame.value() - timestamp_before_preprocessing))) {
                                 Logger(Info) << "exported evaluation results to " << eval_logfile;
                             } else {
                                 Logger(Warn) << "could not export evaluation results to " << eval_logfile;

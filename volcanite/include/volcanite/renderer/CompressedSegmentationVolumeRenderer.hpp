@@ -304,7 +304,7 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
     const std::vector<glm::vec4> &getLastTrackingFrameTimesGPU() override { return m_pass->getLastFrameTimeTrackingResults(); }
     /// @returns the system time stamp of the point after the first overall frame finished rendering.
     /// Useful for "time to first frame" measurements. Reset with resetAllEvaluationStates().
-    std::optional<std::chrono::high_resolution_clock::time_point> getFirstFrameFinishedTimeStamp() const { return m_total_first_frame_finish_time; }
+    [[nodiscard]] std::optional<std::chrono::high_resolution_clock::time_point> getFirstFrameFinishedTimeStamp() const { return m_total_first_frame_finish_time; }
 
     void exportCurrentFrameToImage(std::string image_path) override {
         if (image_path.empty()) {
@@ -319,8 +319,8 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 
     /// Returns statistics about frame times and GPU memory consumption. Frame times are only available if tracking was
     /// enabled via startFrameTimeTracking(). Tracking should have been stopped with stopFrameTimeTracking() when called.
-    /// @param preprocessing_start_time_point if available, sets time_to_first_frame_s as (getFirstFrameFinishedTimeStamp() - preprocessing_start_time_point)
-    CSGVRenderEvaluationResults getLastEvaluationResults(std::optional<std::chrono::time_point<std::chrono::high_resolution_clock>> preprocessing_start_time_point = {});
+    /// @param time_to_first_frame if available, sets time_to_first_frame_s to this duration
+    CSGVRenderEvaluationResults getLastEvaluationResults(std::optional<std::chrono::high_resolution_clock::duration> time_to_first_frame = {});
     void printGPUMemoryUsage();
 
   private:

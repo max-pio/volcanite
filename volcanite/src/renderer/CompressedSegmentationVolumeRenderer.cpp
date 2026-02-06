@@ -1819,7 +1819,7 @@ void CompressedSegmentationVolumeRenderer::printGPUMemoryUsage() {
                  << available_vram_bytes * BYTE_TO_GB << " GB";
 }
 
-CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluationResults(std::optional<std::chrono::time_point<std::chrono::high_resolution_clock>> preprocessing_start_time_point) {
+CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluationResults(std::optional<std::chrono::high_resolution_clock::duration> time_to_first_frame) {
     CSGVRenderEvaluationResults results = {};
 
     // obtain GPU memory consumption
@@ -1954,8 +1954,8 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
         }
     }
 
-    if (preprocessing_start_time_point.has_value() && m_total_first_frame_finish_time.has_value())
-        results.time_to_first_frame_s = static_cast<std::chrono::duration<double>>(m_total_first_frame_finish_time.value() - preprocessing_start_time_point.value()).count();
+    if (time_to_first_frame.has_value())
+        results.time_to_first_frame_s = static_cast<std::chrono::duration<double>>(time_to_first_frame.value()).count();
     return results;
 }
 
