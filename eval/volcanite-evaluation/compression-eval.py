@@ -67,7 +67,14 @@ if __name__ == "__main__":
             args_data_input = data_specific_compression_args(arg_csgv.identifier,
                                                              volume_data_dir=VolcaniteArg.get_csgv_directory())
 
-            # use the default rendering parameters for each data set to obtain time-to-first-frame
+            # chunked data sets require a compression export path:
+            if any("--chunked" in a.args for a in args_data_input):
+                decompression_path = Path(f"./results/{evaluation_name}/{VolcaniteArg.concat_ids([arg_csgv])}.csgv")
+                args_data_input.append(VolcaniteArg(["-c", str(decompression_path.resolve())]))
+            else:
+                decompression_path = None
+
+            # use the default rendering parameters for each data set (req. to obtain time-to-first-frame)
             args_rendering = data_specific_rendering_args(arg_csgv.identifier)
 
             # the first column is written from the python script
@@ -75,3 +82,6 @@ if __name__ == "__main__":
             # execute Volcanite and pass the Volcanite log file into which the results are appended
             volcanite.exec(args_data_input + args_rendering)
 
+            # remove any large cmpressed files
+            if decompression_path:
+                decompression_path.unlink()
