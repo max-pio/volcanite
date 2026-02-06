@@ -14,12 +14,13 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import numpy as np
 
-from timingplots import plot_gpu_timings
+from timingplots import plot_gpu_timings, add_fps_twin_axis_for_ms_axis
 from common import *
 
 import pandas as pd
 from pathlib import Path
 import matplotlib.pyplot as plt
+
 
 
 # image rendering (no camera movement)
@@ -38,20 +39,58 @@ for cam in ["image", "video"]:
                 df = pd.read_csv(gpu_csv, comment="#")
                 df["Other"] = df["Total"] - df["Cache"] - df["Decompress"] - df["Render"] - df["Post-Process"]
 
+                fig, ax = plt.subplots(constrained_layout=True, figsize=(8, 2))
                 if cam == "image":
-                    fig, ax = plot_gpu_timings(df, x=np.arange(21),
-                                               stages=["Cache","Decompress","Render","Post-Process","Other"],
-                                               xlabel="Image Frame", ylabel="Frame Time [ms]")
+                    plot_gpu_timings(df, x=np.arange(21),
+                                     stages=["Cache","Decompress","Render","Post-Process","Other"],
+                                     xlabel="Image Frame", ylabel="Frame Time [ms]",
+                                     fig=fig, ax=ax)
                     ax.legend(ncols=3)
                 else:
-                    fig, ax = plot_gpu_timings(df, x=np.arange(0, 600, 20),
-                                               stages=["Cache", "Decompress", "Render", "Post-Process", "Other"],
-                                               xlabel="Video Frame", ylabel="Frame Time [ms]", barwidth=(20 * 0.66))
+                    plot_gpu_timings(df, x=np.arange(0, 600, 20),
+                                     stages=["Cache", "Decompress", "Render", "Post-Process", "Other"],
+                                     xlabel="Video Frame", ylabel="Frame Time [ms]", barwidth=(20 * 0.66),
+                                     fig=fig, ax=ax)
                     ax.set_xticks(np.arange(0, 600, 40))
-                    ax.legend()
-                    ax.get_legend().remove()
+                    ax.legend(loc="upper left")
+
+                add_fps_twin_axis_for_ms_axis(fig, ax, labelpad=-5)
+
+                # save once with legend
+                save_plot(f"../results/plots/gpu-{cam}-timings_{data}_{shading}_leg.pdf", fig)
+
+                # save once without legend
+                ax.legend()
+                ax.get_legend().remove()
+                # special case for images without legends: shorter width to put image next to plot in document
+                if cam == "image":
+                    width, height = fig.get_size_inches()
+                    fig.set_figwidth(0.75 * width)
                 save_plot(f"../results/plots/gpu-{cam}-timings_{data}_{shading}.pdf", fig)
+
+                # store for separated legend plot
+                handles, _ = ax.get_legend_handles_labels()
 
                 ax.clear()
                 plt.clf()
                 plt.close('all')
+
+
+# Create new figure with ONLY the legend
+legend_path = Path(f"../results/plots/gpu-timings-legend.pdf")
+if not legend_path.exists():
+    print(f"  Plotting gpu timings legend")
+    fig_legend = plt.figure(constrained_layout=True)  # Adjust size as needed
+
+    # Create custom patch: white fill, black edge
+    legend = fig_legend.legend(handles,
+                               ["Cache", "Decompress", "Render", "Post-Process"],
+                               loc='center', frameon=True, ncols=4,
+                               # handlelength=1.0,
+                               # handleheight=1.0,
+                               # handletextpad=0.2,
+                               # columnspacing=0.4
+                               )
+
+    save_plot(legend_path, fig_legend)
+    plt.close(fig_legend)

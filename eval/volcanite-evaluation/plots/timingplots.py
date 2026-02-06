@@ -156,7 +156,7 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None,
     return fig, ax
 
 
-def add_fps_twin_axis_for_ms_axis(fig, ax, color='gray'):
+def add_fps_twin_axis_for_ms_axis(fig, ax, color='gray', labelpad=-10):
     """For a Y axis plot measuring [ms], adds another Y axis that shows the FPS for each y tick."""
 
     fig.canvas.draw()
@@ -167,6 +167,6 @@ def add_fps_twin_axis_for_ms_axis(fig, ax, color='gray'):
     ax2.set_ylim(ax.get_ylim())
     ax2.tick_params(axis='y', colors=color)
     ax2.set_yticklabels([f'{1000. / t:.0f}%' for t in ticks], color=color)
-    ax2.set_ylabel("FPS", color=color, labelpad=-10)
+    ax2.set_ylabel("FPS", color=color, labelpad=labelpad)
     ax2.yaxis.label.set_position((0, 0.04))
     ax2.yaxis.label.set_rotation(0)
