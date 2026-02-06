@@ -80,7 +80,7 @@ if __name__ == "__main__":
             # the first column is written from the python script
             evaluation.get_log().log_manual(arg_csgv.identifier + "," , end="")
             # execute Volcanite and pass the Volcanite log file into which the results are appended
-            volcanite.exec(args_data_input + args_rendering)
+            volcanite.exec(args_data_input + args_rendering, eval_name=arg_csgv.identifier)
 
             # remove any large cmpressed files
             if decompression_path:
