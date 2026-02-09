@@ -27,9 +27,11 @@ if __name__ == "__main__":
                                         eval_name=evaluation_name,
                                         log_files=[VolcaniteLogFileCfg(f"{evaluation_name}.csv",
                                                               fmts=["{frame_min_ms},{frame_avg_ms},{frame_max_ms},{frame_sdv_ms},{frame_med_ms},"
-                                                                     + ",".join("{{frame_{:02}_ms}}".format(i) for i in range(16))],
+                                                                     + ",".join("{{frame_{:02}_ms}}".format(i) for i in range(16))
+                                                                     + ",{time_to_first_frame_s}"],
                                                               headers=["Data Set,Shading Mode,frame min [ms],frame avg [ms],frame max [ms],stdv,frame med [ms],"
-                                                                        + ",".join("Frame {:02}".format(i) for i in range(16))])],
+                                                                        + ",".join("Frame {:02}".format(i) for i in range(16))]),
+                                                                       ",time to first frame [s]"],
                                         enable_log=True, dry_run=False) as evaluation:
 
         volcanite = VolcaniteExec(evaluation, build_subdir="cmake-build-release")

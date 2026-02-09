@@ -32,6 +32,12 @@ We recommend `<volcanite-root-src-dir>/eval/`.
 
 You need the Volcanite [build dependencies](../doc/Setup.md), including the optional hdf5 libraries.
 The evaluation scripts require python and the Volcanite python package located in `<volcanite-src-root-dir>/python/volcanite/` to be installed.
+Volcanite must be built with `Release` build type in `<volcanite-src-root-dir>/cmake-build-release`:
+```bash
+cd <volcanite-src-root-dir>
+mkdir cmake-build-release && cd cmake-build-release
+cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . -j --target volcanite
+```
 
 Install python dependencies. On Ubuntu:
 ```bash
@@ -85,7 +91,7 @@ For most accurate render timing measurements, it is optionally recommended to fi
 To that end, the [volcanite-eval-setup.txt](volcanite-eval-setup.txt) allows to set an entry- and shell exit-command that are execute before and after an evaluation script is run respectively.
 
 Example for an NVIDIA GPU with a maximum GPU clock speed of 3105 MHz and a maximum memory clock speed of 10501 MHz:
-```
+```bash
 entry-command: sudo nvidia-smi --lock-gpu-clocks=3105 && sudo nvidia-smi --lock-memory-clocks=10501 && sudo nvidia-smi -pm 1
 exit-command: sudo nvidia-smi --reset-gpu-clocks && sudo nvidia-smi --reset-memory-clocks && sudo nvidia-smi -pm 0
 ```
@@ -94,17 +100,19 @@ exit-command: sudo nvidia-smi --reset-gpu-clocks && sudo nvidia-smi --reset-memo
 
 Evaluation scripts are named `*-eval.py` and located in this directory.
 They can be directly executed in the previously created virtual environment.
-
-For convenience, a shell script (Ubuntu Linux) executes all evaluations:
-```
-./run-all.sh
-```
-If entry- or exit-commands require root privileges, execute ./run-all.sh with sudo as well.  
-
-Single scripts can be executed as:
-```
+To that end, run a single evaluation with:
+```bash
+source .venv/bin/activate
 python3 image-eval.py
 ```
+
+For convenience, a shell script (Ubuntu Linux) executes all evaluations:
+```bash
+./run-all.sh
+```
+If entry- or exit-commands require root privileges (e.g. fixing GPU clocks), execute ./run-all.sh with sudo as well.
+Note: Evaluations that put excessive strain on hard drives (CSGV ablation study, palette delta operation evaluation)
+are not included and executed from ./run-ablation-delta.sh instead.
 
 Afterward, results can be found in the [results/](./results) subdirectory.
 If not all data sets could be downloaded or were requested for download, some result tables may return missing entries.
