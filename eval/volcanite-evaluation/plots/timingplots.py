@@ -82,9 +82,9 @@ def plot_timings(x, y,
 
     return fig, ax
 
-def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None,
+def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None = None,
                          xlabel = None, ylabel = None, xticklabels = None, colors = None, edgecolors = None,
-                         barlabelfmt : str | None = None, marknan : bool = True, barwidth = 0.45, baroffsetscale = 1.,
+                         barlabelfmt : str | None = None, marknan : bool = True, barwidth = None, baroffsetscale = 1.,
                          fig = None, ax = None) -> (plt.Figure, plt.Axes):
 
 
@@ -93,6 +93,8 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None,
         fig, ax = plt.subplots(constrained_layout=True, figsize=(4,4))
 
     count = len(ys)
+    if barwidth is None:
+        barwidth = 1. / count - 0.05
     xoffset = -(count - 1) * barwidth * baroffsetscale / 2
 
     for i, y in enumerate(ys):
@@ -150,7 +152,7 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None,
             # plot X markers at bottom of
             # for j in x:
             ax.scatter(x_nan, np.full_like(x_nan, nan_marker_height),
-                       marker='X', s=100, color=color, edgecolor=edgecolor,
+                       marker='X', s=(barwidth * barwidth * 500), color=color, edgecolor=edgecolor,
                        label='N/A', zorder=5)
 
     return fig, ax
