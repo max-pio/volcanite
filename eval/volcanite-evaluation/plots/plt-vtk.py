@@ -49,17 +49,17 @@ for SECOND_VALUE_KEY in ["Voxels", "Labels"]:     # sort key for data set order,
             x = np.arange(len(data_sets))
 
             fig, ax = plt.subplots(constrained_layout=True, figsize=(6, 4))
-            plot_timings_grouped(x, [vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"],
-                                     vcnt_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"]],
+            plot_timings_grouped(x, [vcnt_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"],
+                                     vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"]],
                                  ylabel=r"Avg. Frame Time [ms]", xticklabels=map(get_data_set_tex, data_sets),
-                                 labels=["VTK", "Volcanite"], barlabelfmt="%.1f", fig=fig, ax=ax)
+                                 labels=["Volcanite", "VTK"], barlabelfmt="%.1f", fig=fig, ax=ax)
 
             # Add secondary y-axis on right for data set sizes
             ax2 = ax.twinx()
             ax2.bar(x, data_df.set_index("Data Set").reindex(data_sets).reset_index()[SECOND_VALUE_KEY],
-                    color=volcanite_colors_dark[2], zorder=1, alpha=0.3, width=0.9)
-            ax2.set_ylabel(f"Number of {SECOND_VALUE_KEY}", color=volcanite_colors_dark[2])
-            ax2.tick_params(axis='y', labelcolor=volcanite_colors_dark[2])
+                    color='gray', zorder=1, alpha=0.3, width=0.9)
+            ax2.set_ylabel(f"Number of {SECOND_VALUE_KEY}", color='gray')
+            ax2.tick_params(axis='y', labelcolor='gray')
             if SECOND_VALUE_LOG:
                 ax2.set_yscale('log')
 
