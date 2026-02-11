@@ -26,8 +26,17 @@ from matplotlib.patches import Patch
 print("--------------\nPlotting Neuroglancer\\VTK\\Volcanite Preprocessing")
 init_plots()
 
-# create overlapping bar plots:
-# preprocess, preprocess with IO, time to first frame
+
+# config
+csgv_col = volcanite_colors[0]
+vtk_col = volcanite_colors[1]
+ng_col = volcanite_colors[4]
+csgv_col_dark = volcanite_colors_dark[0]
+vtk_col_dark = volcanite_colors_dark[1]
+ng_col_dark = volcanite_colors_dark[4]
+barwidth = 0.2
+scale = 'linear'
+
 
 # load data
 csgv_df = pd.read_csv("../results/compression-eval/compression-eval.csv", comment="#")
@@ -55,24 +64,16 @@ data_sets = csgv_df["Data Set"]
 x = np.arange(len(data_sets))
 
 
-# colors
-csgv_col = volcanite_colors[0]
-vtk_col = volcanite_colors[1]
-ng_col = volcanite_colors[4]
-csgv_col_dark = volcanite_colors_dark[0]
-vtk_col_dark = volcanite_colors_dark[1]
-ng_col_dark = volcanite_colors_dark[4]
 
-
-
-fig, ax = plt.subplots(constrained_layout=True, figsize=(8, 4))
+fig, ax = plt.subplots(constrained_layout=True, figsize=(10, 4))
 
 # overlay multiple bar plots (start with the highest values and plot lower values above)
+# time to first frame, preprocess, preprocess with IO
 plot_timings_grouped(x, [csgv_df.set_index("Data Set").reindex(data_sets).reset_index()["Time To First Frame [s]"],
                          vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["time to first frame [s]"],
                          ng_df.set_index("Data Set").reindex(data_sets).reset_index()["time to first frame [s]"],
                          ],
-                     colors=["white", "white", "white"],
+                     colors=["white", "white", "white"], barwidth=barwidth,
                      edgecolors=[csgv_col_dark, vtk_col_dark, ng_col_dark],
                      ylabel=r"Total Preprocess", xticklabels=map(get_data_set_tex, data_sets), marknan=False,
                      fig=fig, ax=ax)
@@ -80,7 +81,7 @@ plot_timings_grouped(x, [csgv_df.set_index("Data Set").reindex(data_sets).reset_
                          vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["preprocess IO time [s]"],
                          ng_df.set_index("Data Set").reindex(data_sets).reset_index()["preprocess IO time [s]"],
                          ],
-                     colors=[csgv_col, vtk_col, ng_col],
+                     colors=[csgv_col, vtk_col, ng_col], barwidth=barwidth,
                      edgecolors=[csgv_col_dark, vtk_col_dark, ng_col_dark],
                      ylabel=r"Total Preprocess", xticklabels=map(get_data_set_tex, data_sets), marknan=True,
                      fig=fig, ax=ax)
@@ -88,12 +89,12 @@ plot_timings_grouped(x, [csgv_df.set_index("Data Set").reindex(data_sets).reset_
                          vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["preprocess time [s]"],
                          ng_df.set_index("Data Set").reindex(data_sets).reset_index()["preprocess time [s]"],
                          ],
-                     colors=[csgv_col, vtk_col, ng_col],
+                     colors=[csgv_col, vtk_col, ng_col], barwidth=barwidth,
                      edgecolors=[csgv_col_dark, vtk_col_dark, ng_col_dark],
                      ylabel=r"Total Preprocess", xticklabels=map(get_data_set_tex, data_sets), marknan=False,
                      fig=fig, ax=ax)
 
-ax.set_yscale('log')
+ax.set_yscale(scale)
 ax.set_ylabel("Preprocessing Time [s]")
 
 legend = ax.legend([Patch(facecolor=csgv_col, edgecolor=csgv_col_dark, label='Denoise On'),
@@ -116,7 +117,6 @@ def whiten(c, w=0.2):
 #background_colors = (whiten(csgv_col), whiten(vtk_col), whiten(ng_col))
 background_colors = ('gray', 'gray', 'gray')
 
-barwidth = 1. / 3 - 0.05
 xoffset = -(3 - 1) * barwidth * 1 / 2
 for i,y in enumerate([csgv_df.set_index("Data Set").reindex(data_sets).reset_index()["CSGV Size [GB]"],
                       vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["Total Size [GB]"],
@@ -131,7 +131,7 @@ for i,y in enumerate([csgv_df.set_index("Data Set").reindex(data_sets).reset_ind
 
 ax2.set_ylabel(f"Size on Disk [GB]", color='gray')
 ax2.tick_params(axis='y', labelcolor='gray')
-ax2.set_yscale('log')
+ax2.set_yscale(scale)
 
 
 
