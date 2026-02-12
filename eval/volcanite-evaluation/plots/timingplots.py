@@ -84,7 +84,8 @@ def plot_timings(x, y,
 
 def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None = None,
                          xlabel = None, ylabel = None, xticklabels = None, colors = None, edgecolors = None,
-                         barlabelfmt : str | None = None, marknan : bool = True, barwidth = None, baroffsetscale = 1.,
+                         barlabelfmt : str | None = None, barwidth = None, baroffsetscale = 1.,
+                         marknan: bool = True, marknan_offset = 0.75,
                          fig = None, ax = None) -> (plt.Figure, plt.Axes):
 
 
@@ -133,7 +134,7 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None = 
 
     # add markers for non-existing values
     if marknan:
-        nan_marker_height = (3 * ax.get_ylim()[0] + ax.get_ylim()[1]) / 4
+        nan_marker_height = marknan_offset * (ax.get_ylim()[1] + ax.get_ylim()[0]) - ax.get_ylim()[0]
         for i, y in enumerate(ys):
             if edgecolors is None:
                 edgecolor = volcanite_colors_dark[i]

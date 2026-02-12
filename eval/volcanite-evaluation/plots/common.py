@@ -36,7 +36,7 @@ colormaps.register(volcanite_cmap, name='volcanite_cmap')
 # setup default plot configurations
 def init_plots():
     plt.rcParams["text.usetex"] = True
-    plt.rcParams["text.latex.preamble"] = r"\usepackage{amsmath}"
+    plt.rcParams["text.latex.preamble"] = r"\usepackage{amsmath}\usepackage{amssymb}"
     plt.rcParams["font.family"] = "serif"
     plt.rcParams["font.serif"] = "Computer Modern Roman"
     plt.rcParams["font.size"] = 14
