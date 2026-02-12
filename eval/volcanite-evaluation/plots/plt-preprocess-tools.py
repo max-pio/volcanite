@@ -80,8 +80,8 @@ for ONLY_MUTUAL_DATA in [False, True]:
             data_sets = csgv_df["Data Set"]
             x = np.arange(len(data_sets))
 
-
-            fig, ax = plt.subplots(constrained_layout=True, figsize=(10, 4))
+            figwidth = 10 if ONLY_MUTUAL_DATA else 14
+            fig, ax = plt.subplots(constrained_layout=True, figsize=(figwidth, 4))
 
             # overlay multiple bar plots (start with the highest values and plot lower values above)
             # time to first frame, preprocess, preprocess with IO
