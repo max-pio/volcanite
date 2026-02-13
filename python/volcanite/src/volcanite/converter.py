@@ -104,18 +104,19 @@ def write_nrrd(volume: np.ndarray, path_out: str | os.PathLike, dtype = None) ->
 
 # HDF5
 def read_hdf5(path_in: str | os.PathLike, key_path: list[str] | None = None) -> np.ndarray:
-    f = h5py.File(path_in, 'r')
-    if key_path:
-        # iterate through keys
-        _data = f[key_path[0]]
-        for i in range(1, len(key_path)):
-            _data = _data[key_path[i]]
-    else:
-        _data = f[list(f.keys())[0]]
-    # iterate through tree depth first from starting point until the first data set is found
-    while not isinstance(_data, h5py.Dataset) and len(_data.keys()) > 0:
-        _data = _data[list(_data.keys())[0]]
-    return _data[()]
+    with h5py.File(path_in, 'r') as f:
+        if key_path:
+            # iterate through keys
+            _data = f[key_path[0]]
+            for i in range(1, len(key_path)):
+                _data = _data[key_path[i]]
+        else:
+            _data = f[list(f.keys())[0]]
+        # iterate through tree depth first from starting point until the first data set is found
+        while not isinstance(_data, h5py.Dataset) and len(_data.keys()) > 0:
+            _data = _data[list(_data.keys())[0]]
+        return _data[()]
+
 
 def write_hdf5(volume: np.ndarray, path_out: str | os.PathLike, dtype = None) -> None:
     with h5py.File(path_out, "w") as f:
