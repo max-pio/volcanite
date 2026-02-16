@@ -31,14 +31,16 @@ csgv_data_set_count = len(csgv_df["Data Set"].unique())
 csgv_df["Voxels"] = csgv_df["DimX"] * csgv_df["DimY"] * csgv_df["DimZ"]
 csgv_df["Labels/Voxels"] = csgv_df["Labels"] / csgv_df["Voxels"]
 csgv_df["Import IO Time [s]"] = csgv_df["Compression Time Total with IO [s]"] - csgv_df["Compression Time Total [s]"]
+csgv_df.sort_values(by="Orig Size [GB]", inplace=True, ignore_index=True)
 csgv_df["table_name"] = ""; csgv_df.loc[0, "table_name"] = f"\\multirow{{{csgv_data_set_count}}}{{*}}{{\\rotatebox[origin=c]{{90}}{{Volcanite}}}}"
 csgv_df["empty"] = ""
 
 vtk_df = pd.read_csv("../results/vtk-eval/vtk-eval.csv", comment="#")
 vtk_data_set_count = len(vtk_df["Data Set"].unique())
 vtk_df["empty"] = ""
-vtk_df["table_name"] = ""; vtk_df.loc[0, "table_name"] = f"\\multirow{{{vtk_data_set_count}}}{{*}}{{\\rotatebox[origin=c]{{90}}{{VTK}}}}"
 vtk_df = vtk_df.merge(csgv_df[["Data Set", "Orig Size [GB]"]], on="Data Set", how="left")
+vtk_df.sort_values(by="Orig Size [GB]", inplace=True, ignore_index=True)
+vtk_df["table_name"] = ""; vtk_df.loc[0, "table_name"] = f"\\multirow{{{vtk_data_set_count}}}{{*}}{{\\rotatebox[origin=c]{{90}}{{VTK}}}}"
 
 ng_df = pd.read_csv("../results/neuroglancer-eval/neuroglancer-eval.csv", comment="#")
 ng_data_set_count = len(ng_df["Data Set"].unique())
@@ -46,7 +48,10 @@ ng_df["preprocess IO time [s]"] = ng_df["Precomputed Time [s]"] + ng_df["Meshing
 ng_df["Total Size (gzip) [GB]"] = ng_df["Mesh Size (gzip) [GB]"] + ng_df["Precomputed Size (gzip) [GB]"]
 ng_df["Total Size [GB]"] = ng_df["Mesh Size [GB]"] + ng_df["Precomputed Size [GB]"]
 ng_df["empty"] = ""
+ng_df = ng_df.merge(csgv_df[["Data Set", "Orig Size [GB]"]], on="Data Set", how="left")
+ng_df.sort_values(by="Orig Size [GB]", inplace=True, ignore_index=True)
 ng_df["table_name"] = ""; ng_df.loc[0, "table_name"] = f"\\multirow{{{ng_data_set_count}}}{{*}}{{\\rotatebox[origin=c]{{90}}{{Neuroglancer}}}}"
+
 
 
 times_path = Path("../results/tables/tab-tools-preprocess_times.tex")
@@ -64,6 +69,7 @@ with open(times_path, 'w') as f:
                              ["{}", "\\dataNameFromCSV{{{}}}", "{:.3f}", "{:.3f}", "{:.3f}", "{:.3f}", "{:.3f}", "{}"]))
 
     # VTK
+    f.write(r"\multicolumn{8}{c}{}\\")
     f.write("% For VTK, preprocessing time is the IO file import. TTFF includes GPU uploads etc.\n")
     f.write("& Data Set & & & Total with IO [s] & TTFF [s] & Size [GB] & (gzip) [GB] \\\\\n")
     f.write("\\midrule\n")
@@ -73,6 +79,7 @@ with open(times_path, 'w') as f:
                              ["{}", "\\dataNameFromCSV{{{}}}", "{}", "{}", "{:.3f}", "{:.3f}", "{:.3f}", "{}"]))
 
     # Neuroglancer
+    f.write(r"\multicolumn{8}{c}{}\\")
     f.write("% For neuroglancer, all timings are with IO included (not separable).\n")
     f.write("& Data Set & Compr. Segm. [s] & Meshing [s] & Total with IO [s] & & Size [GB] & (gzip) [GB] \\\\\n")
     f.write("\\midrule\n")
