@@ -15,6 +15,7 @@
 
 import pathlib
 import matplotlib.pyplot as plt
+import pandas as pd
 from matplotlib import rc, colormaps
 from matplotlib.colors import ListedColormap
 
@@ -76,3 +77,18 @@ def save_plot(file : pathlib.Path | str, fig : plt.Figure):
         file = pathlib.Path(file)
     file.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(file, format="pdf", dpi=1200, bbox_inches="tight")
+
+
+######### tables
+
+def df_to_latex_rows(df : pd.DataFrame, column_fmts = None):
+    rows = []
+    for _, row in df.iterrows():
+        if column_fmts:
+            row_str = ' & '.join(fmt.format(val) for fmt, val in zip(column_fmts, row.values)) + ' \\\\'
+        else:
+            row_str = ' & '.join(str(val) for val in row.values) + ' \\\\'
+        rows.append(row_str)
+
+    latex_rows_only = '\n'.join(rows)
+    return latex_rows_only
