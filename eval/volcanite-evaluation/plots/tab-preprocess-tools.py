@@ -52,6 +52,9 @@ ng_df = ng_df.merge(csgv_df[["Data Set", "Orig Size [GB]"]], on="Data Set", how=
 ng_df.sort_values(by="Orig Size [GB]", inplace=True, ignore_index=True)
 ng_df["table_name"] = ""; ng_df.loc[0, "table_name"] = f"\\multirow{{{ng_data_set_count}}}{{*}}{{\\rotatebox[origin=c]{{90}}{{Neuroglancer}}}}"
 
+file_df = pd.read_csv("../results/filesize-eval/filesize-eval.csv", comment="#")
+vtk_df = vtk_df.merge(csgv_df[["hdf5 (gzip) Filesize [GB]"]], on="Data Set", how="left")
+csgv_df = csgv_df.merge(csgv_df[["CSGV Filesize [GB]", "CSGV (gzip) Filesize [GB]", "CSGV (lzma) Filesize [GB]"]], on="Data Set", how="left")
 
 
 times_path = Path("../results/tables/tab-tools-preprocess_times.tex")
@@ -65,8 +68,8 @@ with open(times_path, 'w') as f:
     f.write("\\midrule\n")
     f.write(df_to_latex_rows(csgv_df[["table_name", "Data Set", "Compression Time Total [s]", "Import IO Time [s]",
                                       "Compression Time Total with IO [s]", "Time To First Frame [s]",
-                                      "CSGV Size [GB]", "empty"]],
-                             ["{}", "\\dataNameFromCSV{{{}}}", "{:.3f}", "{:.3f}", "{:.3f}", "{:.3f}", "{:.3f}", "{}"]))
+                                      "CSGV Filesize [GB]", "CSGV (gzip) Filesize [GB]"]],
+                             ["{}", "\\dataNameFromCSV{{{}}}", "{:.3f}", "{:.3f}", "{:.3f}", "{:.3f}", "{:.3f}", "{:.3f}"]))
 
     # VTK
     f.write(r"\multicolumn{8}{c}{}\\")
@@ -75,8 +78,8 @@ with open(times_path, 'w') as f:
     f.write("\\midrule\n")
     f.write(df_to_latex_rows(vtk_df[["table_name", "Data Set", "empty", "empty",
                                      "preprocess IO time [s]","time to first frame [s]",
-                                     "Orig Size [GB]", "empty"]],
-                             ["{}", "\\dataNameFromCSV{{{}}}", "{}", "{}", "{:.3f}", "{:.3f}", "{:.3f}", "{}"]))
+                                     "Orig Size [GB]", "hdf5 (gzip) Filesize [GB]"]],
+                             ["{}", "\\dataNameFromCSV{{{}}}", "{}", "{}", "{:.3f}", "{:.3f}", "{:.3f}", "{:.3f}"]))
 
     # Neuroglancer
     f.write(r"\multicolumn{8}{c}{}\\")
