@@ -85,31 +85,31 @@ for ONLY_MUTUAL_DATA in [False, True]:
 
             # overlay multiple bar plots (start with the highest values and plot lower values above)
             # time to first frame, preprocess, preprocess with IO
-            plot_timings_grouped(x, [csgv_df.set_index("Data Set").reindex(data_sets).reset_index()["Time To First Frame [s]"],
-                                     vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["time to first frame [s]"],
-                                     ng_df.set_index("Data Set").reindex(data_sets).reset_index()["time to first frame [s]"],
-                                     ],
-                                 colors=["white", "white", "white"], barwidth=barwidth,
-                                 edgecolors=[csgv_col_dark, vtk_col_dark, ng_col_dark],
-                                 ylabel=r"Total Preprocess", xticklabels=map(get_data_set_tex, data_sets), marknan=False,
-                                 fig=fig, ax=ax)
+            # plot_timings_grouped(x, [csgv_df.set_index("Data Set").reindex(data_sets).reset_index()["Time To First Frame [s]"],
+            #                          vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["time to first frame [s]"],
+            #                          ng_df.set_index("Data Set").reindex(data_sets).reset_index()["time to first frame [s]"],
+            #                          ],
+            #                      colors=["white", "white", "white"], barwidth=barwidth,
+            #                      edgecolors=[csgv_col_dark, vtk_col_dark, ng_col_dark],
+            #                      ylabel=r"Time To First Frame [s]", xticklabels=map(get_data_set_tex, data_sets), marknan=False,
+            #                      fig=fig, ax=ax)
             plot_timings_grouped(x, [csgv_df.set_index("Data Set").reindex(data_sets).reset_index()["Compression Time Total with IO [s]"],
                                      vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["preprocess IO time [s]"],
                                      ng_df.set_index("Data Set").reindex(data_sets).reset_index()["preprocess IO time [s]"],
                                      ],
                                  colors=whiten([csgv_col, vtk_col, ng_col]), barwidth=barwidth,
                                  edgecolors=[csgv_col_dark, vtk_col_dark, ng_col_dark],
-                                 ylabel=r"Total Preprocess", xticklabels=map(get_data_set_tex, data_sets),
-                                 marknan=True, marknan_offset=(0.001 if SCALE == 'log' else 0.25),
+                                 ylabel=r"Preprocess (with IO)", xticklabels=map(get_data_set_tex, data_sets),
+                                 marknan=True, marknan_offset=(0.01 if SCALE == 'log' else 0.25),
                                  fig=fig, ax=ax)
-            plot_timings_grouped(x, [csgv_df.set_index("Data Set").reindex(data_sets).reset_index()["Compression Time Total [s]"],
-                                     vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["preprocess time [s]"],
-                                     ng_df.set_index("Data Set").reindex(data_sets).reset_index()["preprocess time [s]"],
-                                     ],
-                                 colors=whiten([csgv_col, vtk_col, ng_col], 0.5), barwidth=barwidth,
-                                 edgecolors=[csgv_col_dark, vtk_col_dark, ng_col_dark],
-                                 ylabel=r"Total Preprocess", xticklabels=map(get_data_set_tex, data_sets), marknan=False,
-                                 fig=fig, ax=ax)
+            # plot_timings_grouped(x, [csgv_df.set_index("Data Set").reindex(data_sets).reset_index()["Compression Time Total [s]"],
+            #                          vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["preprocess time [s]"],
+            #                          ng_df.set_index("Data Set").reindex(data_sets).reset_index()["preprocess time [s]"],
+            #                          ],
+            #                      colors=whiten([csgv_col, vtk_col, ng_col], 0.5), barwidth=barwidth,
+            #                      edgecolors=[csgv_col_dark, vtk_col_dark, ng_col_dark],
+            #                      ylabel=r"Preprocess (no IO)", xticklabels=map(get_data_set_tex, data_sets), marknan=False,
+            #                      fig=fig, ax=ax)
 
             ax.set_yscale(SCALE)
             ax.set_ylabel("Preprocessing Time [s]")
@@ -117,13 +117,14 @@ for ONLY_MUTUAL_DATA in [False, True]:
             legend = ax.legend([Patch(facecolor=csgv_col, edgecolor=csgv_col_dark, label='Volcanite'),
                                 Patch(facecolor=vtk_col, edgecolor=csgv_col_dark, label='VTK'),
                                 Patch(facecolor=ng_col, edgecolor=csgv_col_dark, label='Neuroglancer'),
-                                Patch(facecolor='#FFFFFF', edgecolor='#333333', label='Time To First Frame'),
-                                Patch(facecolor='#888888', edgecolor='#333333', label='Compression (w. IO)'),
-                                Patch(facecolor='#CCCCCC', edgecolor='#333333', label='Compression (no IO)'),
+                                # Patch(facecolor='#FFFFFF', edgecolor='#333333', label='Time To First Frame'),
+                                # Patch(facecolor='#888888', edgecolor='#333333', label='Compression (w. IO)'),
+                                # Patch(facecolor='#CCCCCC', edgecolor='#333333', label='Compression (no IO)'),
                                 ],
                                  ["Volcanite", "VTK", "Neuroglancer",
-                                  "Time to First Frame", "with IO", "without IO"],
-                                 loc='upper left', frameon=True, ncols=2,
+                                  # "Time to First Frame", "with IO", "without IO"
+                                 ],
+                                 loc='upper left', frameon=True, ncols=3,
                                  handlelength=1.0,
                                  handleheight=1.0,
                                  handletextpad=0.2,

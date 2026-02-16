@@ -136,10 +136,11 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None = 
     if marknan:
         nan_marker_height = marknan_offset * (ax.get_ylim()[1] + ax.get_ylim()[0]) - ax.get_ylim()[0]
         for i, y in enumerate(ys):
-            if edgecolors is None:
-                edgecolor = volcanite_colors_dark[i]
-            else:
-                edgecolor = edgecolors[i]
+            # if edgecolors is None:
+            #     edgecolor = volcanite_colors_dark[i]
+            # else:
+            #     edgecolor = edgecolors[i]
+            edgecolor = '#dd0000'
 
             if colors is None:
                 color = volcanite_colors[i]
@@ -153,8 +154,8 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None = 
             # plot X markers at bottom of
             # for j in x:
             ax.scatter(x_nan, np.full_like(x_nan, nan_marker_height),
-                       marker='X', s=(barwidth * barwidth * 500), color=color, edgecolor=edgecolor,
-                       label='N/A', zorder=5)
+                       marker='X', s=(barwidth * barwidth * 1000), color=color, edgecolor=edgecolor,
+                       label='N/A', zorder=0.5)
 
     return fig, ax
 

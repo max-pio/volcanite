@@ -48,14 +48,29 @@ for SECOND_VALUE_KEY in ["Voxels", "Labels"]:     # sort key for data set order,
             data_sets = data_df["Data Set"]
             x = np.arange(len(data_sets))
 
-            fig, ax = plt.subplots(constrained_layout=True, figsize=(6, 4))
-            plot_timings_grouped(x, [vcnt_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"],
-                                     vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"]],
-                                 ylabel=r"Avg. Frame Time [ms]", xticklabels=map(get_data_set_tex, data_sets),
-                                 labels=["Volcanite", "VTK"], barlabelfmt="%.1f", fig=fig, ax=ax)
+            # fig, ax = plt.subplots(constrained_layout=True, figsize=(6, 4))
+            # plot_timings_grouped(x, [vcnt_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"],
+            #                          vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"]],
+            #                      ylabel=r"Avg. Frame Time [ms]", xticklabels=map(get_data_set_tex, data_sets),
+            #                      labels=["Volcanite", "VTK"], barlabelfmt="%.1f", fig=fig, ax=ax)
 
+            # Replace single subplot with dual subplots
+            height_ratios = [0.2, 0.8]
+            fig, (ax_outliers, ax_main) = plt.subplots(2, 1, sharex=True,
+                                                       constrained_layout=True,
+                                                       figsize=(6, 4), height_ratios=height_ratios)
+
+            # plot lower half of plot (main axis)
+            plot_timings_grouped(x, [vcnt_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"],
+                                         vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"]],
+                                 ylabel=r"Avg. Frame Time [ms]", xticklabels=map(get_data_set_tex, data_sets),
+                                 labels=None, barlabelfmt="%.1f",
+                                 marknan=True, marknan_offset=0.025,
+                                 fig=fig, ax=ax_main)
+
+            # BEGIN SECONDARY AXIS
             # Add secondary y-axis on right for data set sizes
-            ax2 = ax.twinx()
+            ax2 = ax_main.twinx()
             ax2.bar(x, data_df.set_index("Data Set").reindex(data_sets).reset_index()[SECOND_VALUE_KEY],
                     color='gray', zorder=1, alpha=0.3, width=0.9)
             ax2.set_ylabel(f"Number of {SECOND_VALUE_KEY}", color='gray')
@@ -65,11 +80,42 @@ for SECOND_VALUE_KEY in ["Voxels", "Labels"]:     # sort key for data set order,
 
             # move alternative axis behind
             ax2.set_zorder(1)
-            ax.set_zorder(2)
+            ax_main.set_zorder(2)
             ax2.patch.set_visible(True)
-            ax.patch.set_visible(False)
+            ax_main.patch.set_visible(False)
+            # END SECONDARY AXIS
 
-            #fig.tight_layout()
+
+            # plot upper half of plot (outliers axis)
+            plot_timings_grouped(x, [vcnt_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"],
+                                        vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"]],
+                                 ylabel="", xticklabels=map(get_data_set_tex, data_sets),
+                                 marknan=False,
+                                 labels=["Volcanite", "VTK"], barlabelfmt="%.1f",
+                                 fig=fig, ax=ax_outliers)
+            ax_outliers.legend(fontsize=12, loc="upper left", ncol=1)
+
+            # Configure y-limits: main data (0-50), outliers (350-max)
+            ax_main.set_ylim(0, 50)
+            ax_outliers.set_ylim(350, 1450)
+
+            # Hide connecting spines and adjust ticks
+            ax_outliers.spines['bottom'].set_visible(False)
+            ax_main.spines['top'].set_visible(False)
+            ax2.spines['top'].set_visible(False)
+            ax_outliers.xaxis.tick_top()
+            ax_outliers.tick_params(labeltop=False)
+
+            # Add diagonal break lines
+            d = 0.015
+            kwargs = dict(transform=ax_main.transAxes, color='k', linewidth=1.5, clip_on=False)
+            ax_main.plot((-d, +d), (1 - d, 1 + d), **kwargs)  # Bottom axis: up to right
+            ax_main.plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs)
+            h = height_ratios[1] / height_ratios[0]
+            kwargs.update(transform=ax_outliers.transAxes)
+            ax_outliers.plot((-d, +d), (-d*h, +d*h), **kwargs)  # Top axis: down to right
+            ax_outliers.plot((1 - d, 1 + d), (-d*h, +d*h), **kwargs)
+
 
             save_plot(f"../results/plots/vtk-image-timings_{SECOND_VALUE_KEY.lower()}"
                       f"{"-log" if SECOND_VALUE_LOG else ""}{"" if ONLY_VTK_DATA else "_all"}.pdf", fig)
