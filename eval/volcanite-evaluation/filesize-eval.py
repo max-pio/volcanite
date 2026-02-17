@@ -17,6 +17,7 @@ import lzma
 import os
 import struct
 from datetime import datetime
+import time
 from io import BytesIO
 from pathlib import Path
 from volcanite.volcaniteeval import VolcaniteArg, VolcaniteEvaluation, VolcaniteExec, VolcaniteLogFileCfg, ExistingPolicy
@@ -71,14 +72,16 @@ if __name__ == "__main__":
 
         with open(f"./results/{evaluation_name}/{evaluation_name}.csv", "w") as f:
             f.write("# " + datetime.now().strftime("%Y.%m.%d-%H:%M:%S") + "\n")
-            f.write("Data Set,hdf5 (gzip) Filesize [GB],CSGV Filesize [GB],CSGV (gzip) Filesize [GB],CSGV (lzma) Filesize [GB]\n")
+            f.write("Data Set,hdf5 (gzip) Filesize [GB],CSGV Filesize [GB],CSGV (gzip) Filesize [GB],CSGV (lzma) Filesize [GB],Time CSGV gzip [s],Time CSGV lzma [s]\n")
 
             for arg_data in VolcaniteArg.args_csgv_datasets.values():
                 arg_input = data_specific_compression_args(arg_data.identifier,
                                                            volume_data_dir=VolcaniteArg.get_csgv_directory(),
                                                            brick_size=False, operations=False)[0].args
 
+
                 # gzip compressed hdf5 files
+                start_time_hdf5 = time.time()
                 input_files = []
                 if arg_input[0] == "--chunked":
                     last_chunk = [int(v) for v in arg_input[1].split(",")]
@@ -89,24 +92,35 @@ if __name__ == "__main__":
                 else:
                     input_files = [Path(arg_input[0])]
                 size_hdf5 = sum([os.path.getsize(os.path.join(file)) / GB_TO_BYTE for file in input_files])
+                end_time_hdf5 = time.time()
 
                 # csgv file
                 csgv_file = Path(arg_data.args[0])
                 size_csgv = os.path.getsize(os.path.join(csgv_file)) / GB_TO_BYTE
 
+                print(f"  {arg_data.identifier} ({csgv_file})")
+
                 # gzip compressed csgv file
+                start_time_gzip = time.time()
                 output = BytesIO()
                 with csgv_file.open('rb') as f_in, gzip.GzipFile(fileobj=output, mode='wb') as f_out:
                     # Stream copy (shutil.copyfileobj works too)
                     while chunk := f_in.read(8192):
                         f_out.write(chunk)
                 size_csgv_gzip = output.tell() / GB_TO_BYTE
+                end_time_gzip = time.time()
 
                 # LZMA file size
+                start_time_lzma = time.time()
                 output = BytesIO()
                 with csgv_file.open('rb') as f_in, lzma.LZMAFile(output, mode='wb') as f_out:
                     while chunk := f_in.read(8192):
                         f_out.write(chunk)
                 size_csgv_lzma = output.tell() / GB_TO_BYTE
+                end_time_lzma = time.time()
 
-                f.write(f"{arg_data.identifier},{size_hdf5},{size_csgv},{size_csgv_gzip},{size_csgv_lzma}\n")
+                f.write(f"{arg_data.identifier},{size_hdf5},{size_csgv},{size_csgv_gzip},{size_csgv_lzma},"
+                        f"{end_time_gzip - start_time_gzip},{end_time_lzma-start_time_lzma}\n")
+
+                print(f"    hdf5 in {end_time_hdf5 - start_time_hdf5}, gzip in {end_time_gzip - start_time_gzip}"
+                      f"lzma in {end_time_lzma - start_time_lzma} [s].")

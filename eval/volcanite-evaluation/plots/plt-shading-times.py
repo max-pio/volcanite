@@ -52,7 +52,7 @@ for cam in ["image", "video"]:
 
         fig, ax = plt.subplots(constrained_layout=True, figsize=(4,2.5))
         plot_timings(x, avg_ms, errors=sdv_ms, xticklabels=shading_mode_ids, barwidth=0.4,
-                     color=color, edgecolor="#000000", ylabel="Average frame time [ms]", fig=fig, ax=ax)
+                     color=color, edgecolor="#000000", ylabel="Avg. frame time [ms]", fig=fig, ax=ax)
 
         # Twin y-axis: frames per second (computed, but no bars plotted)
         add_fps_twin_axis_for_ms_axis(fig, ax, color='gray')
