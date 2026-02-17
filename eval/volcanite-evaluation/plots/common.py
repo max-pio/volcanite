@@ -90,5 +90,5 @@ def df_to_latex_rows(df : pd.DataFrame, column_fmts = None):
             row_str = ' & '.join(str(val) for val in row.values) + ' \\\\'
         rows.append(row_str)
 
-    latex_rows_only = '\n'.join(rows)
+    latex_rows_only = '\n'.join(rows) + "\n"
     return latex_rows_only

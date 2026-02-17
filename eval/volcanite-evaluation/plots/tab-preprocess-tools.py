@@ -25,7 +25,6 @@ from matplotlib.patches import Patch
 
 print("--------------\nTabulating Neuroglancer\\VTK\\Volcanite Preprocessing")
 
-
 csgv_df = pd.read_csv("../results/compression-eval/compression-eval.csv", comment="#")
 csgv_data_set_count = len(csgv_df["Data Set"].unique())
 csgv_df["Voxels"] = csgv_df["DimX"] * csgv_df["DimY"] * csgv_df["DimZ"]
@@ -53,18 +52,19 @@ ng_df.sort_values(by="Orig Size [GB]", inplace=True, ignore_index=True)
 ng_df["table_name"] = ""; ng_df.loc[0, "table_name"] = f"\\multirow{{{ng_data_set_count}}}{{*}}{{\\rotatebox[origin=c]{{90}}{{Neuroglancer}}}}"
 
 file_df = pd.read_csv("../results/filesize-eval/filesize-eval.csv", comment="#")
-vtk_df = vtk_df.merge(csgv_df[["hdf5 (gzip) Filesize [GB]"]], on="Data Set", how="left")
-csgv_df = csgv_df.merge(csgv_df[["CSGV Filesize [GB]", "CSGV (gzip) Filesize [GB]", "CSGV (lzma) Filesize [GB]"]], on="Data Set", how="left")
+vtk_df = vtk_df.merge(file_df[["Data Set", "hdf5 (gzip) Filesize [GB]"]], on="Data Set", how="left")
+csgv_df = csgv_df.merge(file_df[["Data Set", "CSGV Filesize [GB]", "CSGV (gzip) Filesize [GB]", "CSGV (lzma) Filesize [GB]"]], on="Data Set", how="left")
 
 
 times_path = Path("../results/tables/tab-tools-preprocess_times.tex")
 times_path.parent.mkdir(parents=True, exist_ok=True)
 with open(times_path, 'w') as f:
-    f.write("\\begin{tabular}{clrrrrrr}\n")
+    f.write("\\begin{tabular}{cl|rrrr|rr}\n")
 
     # Volcanite
     f.write("% For Volcanite, compression only (without IO) includes freq. prepass and main pass.\n")
-    f.write("& Data Set & Compr. only [s] & File IO [s] & Total with IO [s] & TTFF [s] & Size [GB] & (gzip) [GB] \\\\\n")
+    f.write(r"& & \multicolumn{4}{l|}{Preprocessing Times [s]} & \multicolumn{2}{l}{File Sizes [GB]} \\" + "\n")
+    f.write("& Data Set & Compr. only& File IO& Total with IO& TTFF& Direct & gzip \\\\\n")
     f.write("\\midrule\n")
     f.write(df_to_latex_rows(csgv_df[["table_name", "Data Set", "Compression Time Total [s]", "Import IO Time [s]",
                                       "Compression Time Total with IO [s]", "Time To First Frame [s]",
@@ -72,9 +72,10 @@ with open(times_path, 'w') as f:
                              ["{}", "\\dataNameFromCSV{{{}}}", "{:.3f}", "{:.3f}", "{:.3f}", "{:.3f}", "{:.3f}", "{:.3f}"]))
 
     # VTK
-    f.write(r"\multicolumn{8}{c}{}\\")
+    f.write(r"\multicolumn{8}{c}{}\\" + "\n")
     f.write("% For VTK, preprocessing time is the IO file import. TTFF includes GPU uploads etc.\n")
-    f.write("& Data Set & & & Total with IO [s] & TTFF [s] & Size [GB] & (gzip) [GB] \\\\\n")
+    f.write(r"& & \multicolumn{4}{l|}{Preprocessing Times [s]} & \multicolumn{2}{l}{File Sizes [GB]} \\" + "\n")
+    f.write("& Data Set & & & Total with IO & TTFF & Direct & gzip \\\\\n")
     f.write("\\midrule\n")
     f.write(df_to_latex_rows(vtk_df[["table_name", "Data Set", "empty", "empty",
                                      "preprocess IO time [s]","time to first frame [s]",
@@ -82,9 +83,10 @@ with open(times_path, 'w') as f:
                              ["{}", "\\dataNameFromCSV{{{}}}", "{}", "{}", "{:.3f}", "{:.3f}", "{:.3f}", "{:.3f}"]))
 
     # Neuroglancer
-    f.write(r"\multicolumn{8}{c}{}\\")
+    f.write(r"\multicolumn{8}{c}{}\\" + "\n")
     f.write("% For neuroglancer, all timings are with IO included (not separable).\n")
-    f.write("& Data Set & Compr. Segm. [s] & Meshing [s] & Total with IO [s] & & Size [GB] & (gzip) [GB] \\\\\n")
+    f.write(r"& & \multicolumn{4}{l|}{Preprocessing Times [s]} & \multicolumn{2}{l}{File Sizes [GB]} \\" + "\n")
+    f.write("& Data Set & Compr. Segm. & Meshing & Total with IO & & Direct & gzip \\\\\n")
     f.write("\\midrule\n")
     f.write(df_to_latex_rows(ng_df[["table_name", "Data Set", "Precomputed Time [s]", "Meshing Time [s]",
                                     "preprocess IO time [s]", "empty",
