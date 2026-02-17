@@ -12,6 +12,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import numpy as np
 
 from timingplots import plot_gpu_timings
@@ -63,7 +64,7 @@ for data in ["cells"]:
         plt.close('all')
 
         # Create new figure with ONLY the legend
-        legend_path = Path(f"../results/plts/postprocess-timings-legend.pdf")
+        legend_path = Path(f"../results/plots/postprocess-timings-legend.pdf")
         if not legend_path.exists():
             print(f"  Plotting post-process timings legend")
             fig_legend = plt.figure(constrained_layout=True)  # Adjust size as needed

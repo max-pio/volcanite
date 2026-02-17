@@ -41,10 +41,10 @@ x = np.arange(len(data_sets))
 
 print("  Plotting compression rates")
 
-fig, ax = plt.subplots(figsize=(10, 4))
+fig, ax = plt.subplots(figsize=(10, 2.5))
 plot_timings(x, data_df.set_index("Data Set").reindex(data_sets).reset_index()["Compression Rate [Pcnt]"],
              xticklabels=map(get_data_set_tex, data_sets), color=volcanite_colors[0],
-             barwidth=0.8, ylabel=r"Compression Rate [\%]",
+             barwidth=0.6, ylabel=r"Compression Rate [\%]",
              fig=fig, ax=ax)
 
 save_plot("../results/plots/csgv-compression-rates.pdf", fig)
@@ -53,7 +53,7 @@ plt.close(fig)
 for l in ["linear", "log"]:
     print(f"  Plotting orig. and csgv sizes {l}")
 
-    fig, ax = plt.subplots(figsize=(10, 4))
+    fig, ax = plt.subplots(figsize=(10, 2.5))
     plot_timings_grouped(x, [data_df.set_index("Data Set").reindex(data_sets).reset_index()["Orig Size [GB]"],
                                  data_df.set_index("Data Set").reindex(data_sets).reset_index()["CSGV Size [GB]"]],
                          ylabel="Size [GB]", xticklabels=map(get_data_set_tex, data_sets),

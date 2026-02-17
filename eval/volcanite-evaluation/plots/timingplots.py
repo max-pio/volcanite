@@ -82,9 +82,10 @@ def plot_timings(x, y,
 
     return fig, ax
 
-def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None,
+def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None = None,
                          xlabel = None, ylabel = None, xticklabels = None, colors = None, edgecolors = None,
-                         barlabelfmt : str | None = None, marknan : bool = True, barwidth = 0.45, baroffsetscale = 1.,
+                         barlabelfmt : str | None = None, barwidth = None, baroffsetscale = 1.,
+                         marknan: bool = True, marknan_offset = 0.75,
                          fig = None, ax = None) -> (plt.Figure, plt.Axes):
 
 
@@ -93,6 +94,8 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None,
         fig, ax = plt.subplots(constrained_layout=True, figsize=(4,4))
 
     count = len(ys)
+    if barwidth is None:
+        barwidth = 1. / count - 0.05
     xoffset = -(count - 1) * barwidth * baroffsetscale / 2
 
     for i, y in enumerate(ys):
@@ -131,12 +134,13 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None,
 
     # add markers for non-existing values
     if marknan:
-        nan_marker_height = (3 * ax.get_ylim()[0] + ax.get_ylim()[1]) / 4
+        nan_marker_height = marknan_offset * (ax.get_ylim()[1] + ax.get_ylim()[0]) - ax.get_ylim()[0]
         for i, y in enumerate(ys):
-            if edgecolors is None:
-                edgecolor = volcanite_colors_dark[i]
-            else:
-                edgecolor = edgecolors[i]
+            # if edgecolors is None:
+            #     edgecolor = volcanite_colors_dark[i]
+            # else:
+            #     edgecolor = edgecolors[i]
+            edgecolor = '#dd0000'
 
             if colors is None:
                 color = volcanite_colors[i]
@@ -150,13 +154,13 @@ def plot_timings_grouped(x, ys : list, labels : np.ndarray | list[str] | None,
             # plot X markers at bottom of
             # for j in x:
             ax.scatter(x_nan, np.full_like(x_nan, nan_marker_height),
-                       marker='X', s=100, color=color, edgecolor=edgecolor,
-                       label='N/A', zorder=5)
+                       marker='X', s=(barwidth * barwidth * 1000), color=color, edgecolor=edgecolor,
+                       label='N/A', zorder=0.5)
 
     return fig, ax
 
 
-def add_fps_twin_axis_for_ms_axis(fig, ax, color='gray'):
+def add_fps_twin_axis_for_ms_axis(fig, ax, color='gray', labelpad=-10):
     """For a Y axis plot measuring [ms], adds another Y axis that shows the FPS for each y tick."""
 
     fig.canvas.draw()
@@ -167,6 +171,6 @@ def add_fps_twin_axis_for_ms_axis(fig, ax, color='gray'):
     ax2.set_ylim(ax.get_ylim())
     ax2.tick_params(axis='y', colors=color)
     ax2.set_yticklabels([f'{1000. / t:.0f}%' for t in ticks], color=color)
-    ax2.set_ylabel("FPS", color=color, labelpad=-10)
+    ax2.set_ylabel("FPS", color=color, labelpad=labelpad)
     ax2.yaxis.label.set_position((0, 0.04))
     ax2.yaxis.label.set_rotation(0)

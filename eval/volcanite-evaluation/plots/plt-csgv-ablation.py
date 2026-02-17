@@ -49,7 +49,7 @@ for data in data_sets:
     ys = [ablation_df[ablation_df["Data Set"].eq(data) & (ablation_df["Stop Bit"] == False)].set_index("Operations").reindex(op_runs).reset_index()["Compression Rate [Pcnt]"],
           ablation_df[ablation_df["Data Set"].eq(data) & (ablation_df["Stop Bit"] == True)].set_index("Operations").reindex(op_runs).reset_index()["Compression Rate [Pcnt]"],]
 
-    fig, ax = plt.subplots(constrained_layout=True, figsize=(5, 4))
+    fig, ax = plt.subplots(constrained_layout=True, figsize=(5, 3.5))
     plot_timings_grouped(np.arange(len(op_runs)), ys,
                          ylabel=r"Compression Rate [\%]",
                          xticklabels=[r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$", r"$\cdot$"],
