@@ -26,7 +26,8 @@ from matplotlib.patches import Patch
 print("--------------\nTabulating Neuroglancer\\VTK\\Volcanite Preprocessing")
 
 csgv_df = pd.read_csv("../results/compression-eval/compression-eval.csv", comment="#")
-csgv_data_set_count = len(csgv_df["Data Set"].unique())
+csgv_evaluated_data = csgv_df["Data Set"].unique()
+csgv_data_set_count = len(csgv_evaluated_data)
 csgv_df["Voxels"] = csgv_df["DimX"] * csgv_df["DimY"] * csgv_df["DimZ"]
 csgv_df["Labels/Voxels"] = csgv_df["Labels"] / csgv_df["Voxels"]
 csgv_df["Import IO Time [s]"] = csgv_df["Compression Time Total with IO [s]"] - csgv_df["Compression Time Total [s]"]
@@ -35,14 +36,16 @@ csgv_df["table_name"] = ""; csgv_df.loc[0, "table_name"] = f"\\multirow{{{csgv_d
 csgv_df["empty"] = ""
 
 vtk_df = pd.read_csv("../results/vtk-eval/vtk-eval.csv", comment="#")
-vtk_data_set_count = len(vtk_df["Data Set"].unique())
+vtk_evaluated_data = vtk_df["Data Set"].unique()
+vtk_data_set_count = len(vtk_evaluated_data)
 vtk_df["empty"] = ""
 vtk_df = vtk_df.merge(csgv_df[["Data Set", "Orig Size [GB]"]], on="Data Set", how="left")
 vtk_df.sort_values(by="Orig Size [GB]", inplace=True, ignore_index=True)
 vtk_df["table_name"] = ""; vtk_df.loc[0, "table_name"] = f"\\multirow{{{vtk_data_set_count}}}{{*}}{{\\rotatebox[origin=c]{{90}}{{VTK}}}}"
 
 ng_df = pd.read_csv("../results/neuroglancer-eval/neuroglancer-eval.csv", comment="#")
-ng_data_set_count = len(ng_df["Data Set"].unique())
+ng_evaluated_data = ng_df["Data Set"].unique()
+ng_data_set_count = len(ng_evaluated_data)
 ng_df["preprocess IO time [s]"] = ng_df["Precomputed Time [s]"] + ng_df["Meshing Time [s]"]
 ng_df["Total Size (gzip) [GB]"] = ng_df["Mesh Size (gzip) [GB]"] + ng_df["Precomputed Size (gzip) [GB]"]
 ng_df["Total Size [GB]"] = ng_df["Mesh Size [GB]"] + ng_df["Precomputed Size [GB]"]
@@ -81,6 +84,11 @@ with open(times_path, 'w') as f:
                                      "preprocess IO time [s]","time to first frame [s]",
                                      "Orig Size [GB]", "hdf5 (gzip) Filesize [GB]"]],
                              ["{}", "\\dataNameFromCSV{{{}}}", "{}", "{}", "{:.3f}", "{:.3f}", "{:.3f}", "{:.3f}"]))
+    missing_vtk = [x for x in csgv_evaluated_data if x not in vtk_evaluated_data]
+    if len(missing_vtk) > 0:
+        f.write(r"& \dots & \multicolumn{4}{r|}{\textcolor{gray}{\tiny "
+                + ", ".join([f"\\dataNameFromCSV{{{d}}}" for d in missing_vtk])
+                + r": out of memory}} & & \\")
 
     # Neuroglancer
     f.write(r"\multicolumn{8}{c}{}\\" + "\n")
@@ -92,6 +100,12 @@ with open(times_path, 'w') as f:
                                     "preprocess IO time [s]", "empty",
                                     "Total Size [GB]", "Total Size (gzip) [GB]"]],
                              ["{}", "\\dataNameFromCSV{{{}}}", "{:.3f}", "{:.3f}", "{:.3f}", "{}", "{:.3f}", "{:.3f}"]))
+
+    missing_ng = [x for x in csgv_evaluated_data if x not in ng_evaluated_data]
+    if len(missing_ng) > 0:
+        f.write(r"& \dots & \multicolumn{4}{r|}{\textcolor{gray}{\tiny "
+                + ", ".join([f"\\dataNameFromCSV{{{d}}}" for d in missing_ng])
+                + r": out of memory}} & & \\")
 
     f.write("\\end{tabular}\n")
 

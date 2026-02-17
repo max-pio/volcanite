@@ -83,5 +83,5 @@ if __name__ == "__main__":
             volcanite.exec(args_data_input + args_rendering, eval_name=arg_csgv.identifier)
 
             # remove any large cmpressed files
-            if decompression_path:
+            if decompression_path and decompression_path.exists():
                 decompression_path.unlink()
