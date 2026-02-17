@@ -83,6 +83,10 @@ int tryImportRenderConfigs(VolcaniteArgs &args, std::shared_ptr<CompressedSegmen
 }
 
 int volcanite_main(int argc, char *argv[]) {
+
+    // set timestamp for "time to first frame" measurements
+    const auto timestamp_before_preprocessing = std::chrono::high_resolution_clock::now();
+
     VolcaniteArgs args;
     std::shared_ptr<volcanite::CompressedSegmentationVolume> compressedSegmentationVolume;
     std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase;
@@ -90,9 +94,6 @@ int volcanite_main(int argc, char *argv[]) {
     if (ret != RET_SUCCESS) {
         return ret;
     }
-
-    // set timestamp for "time to first frame" measurements
-    auto timestamp_before_preprocessing = std::chrono::high_resolution_clock::now();
 
     if (args.performDecompression()) {
         CompSegVolHandler::decompressCompressedSegmentationVolume(compressedSegmentationVolume, args.decompress_export_file,
