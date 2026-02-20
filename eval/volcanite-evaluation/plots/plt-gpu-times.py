@@ -75,22 +75,26 @@ for cam in ["image", "video"]:
                 plt.clf()
                 plt.close('all')
 
+                break
+            break
+        break
+    break
+
 
 # Create new figure with ONLY the legend
 legend_path = Path(f"../results/plots/gpu-timings-legend.pdf")
-if not legend_path.exists():
-    print(f"  Plotting gpu timings legend")
-    fig_legend = plt.figure(constrained_layout=True)  # Adjust size as needed
+print(f"  Plotting gpu timings legend")
+fig_legend = plt.figure(constrained_layout=True)  # Adjust size as needed
 
-    # Create custom patch: white fill, black edge
-    legend = fig_legend.legend(handles,
-                               ["Cache", "Decompress", "Render", "Post-Process"],
-                               loc='center', frameon=True, ncols=4,
-                               # handlelength=1.0,
-                               # handleheight=1.0,
-                               # handletextpad=0.2,
-                               # columnspacing=0.4
-                               )
+# Create custom patch: white fill, black edge
+legend = fig_legend.legend(handles,
+                           ["Cache", "Decompress", "Render", "Post-Process", "Other"],
+                           loc='center', frameon=True, ncols=5,
+                           # handlelength=1.0,
+                           # handleheight=1.0,
+                           # handletextpad=0.2,
+                           # columnspacing=0.4
+                           )
 
-    save_plot(legend_path, fig_legend)
-    plt.close(fig_legend)
+save_plot(legend_path, fig_legend)
+plt.close(fig_legend)

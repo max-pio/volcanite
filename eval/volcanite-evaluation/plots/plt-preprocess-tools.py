@@ -128,7 +128,8 @@ for ONLY_MUTUAL_DATA in [False, True]:
                                  handlelength=1.0,
                                  handleheight=1.0,
                                  handletextpad=0.2,
-                                 columnspacing=0.4
+                                 columnspacing=0.4,
+                                 fontsize=20
                                  )
 
             # Add secondary y-axis on right for compressed data set sizes
