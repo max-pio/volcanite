@@ -204,11 +204,12 @@ def read_vti(path_in: str | os.PathLike) -> np.ndarray:
     reader.SetFileName(path_in)
     reader.Update(None)
     image = reader.GetOutput()
-    # TODO: might have to reshape VTI import to Dimensions[2],[1],[0] for numpy conventions
+    # reshape VTI import to Dimensions[2],[1],[0] for numpy conventions
+    dims = np.array([image.GetDimensions()[2], image.GetDimensions()[1], image.GetDimensions()[0]])
     if image.GetCellData().GetNumberOfArrays() > 0:
-        return vtk_to_numpy(image.GetCellData().GetArray(0)).reshape(np.array(image.GetDimensions()) - 1)
+        return vtk_to_numpy(image.GetCellData().GetArray(0)).reshape(dims - 1)
     elif image.GetPointData().GetNumberOfArrays() > 0:
-        return vtk_to_numpy(image.GetPointData().GetArray(0)).reshape(image.GetDimensions())
+        return vtk_to_numpy(image.GetPointData().GetArray(0)).reshape(dims)
     else:
         print(image.GetDimensions())
         raise IOError("Could not find any cell or point data in vtk image.")
