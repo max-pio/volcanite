@@ -75,10 +75,6 @@ for cam in ["image", "video"]:
                 plt.clf()
                 plt.close('all')
 
-                break
-            break
-        break
-    break
 
 
 # Create new figure with ONLY the legend

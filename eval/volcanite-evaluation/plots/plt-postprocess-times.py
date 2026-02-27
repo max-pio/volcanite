@@ -28,18 +28,21 @@ from matplotlib.patches import Patch
 print("--------------\nPlotting Post-Processing Timings")
 init_plots()
 
+resolve_csv = Path(f"../results/resolve-video-eval/resolve-video-eval.csv")
+if not resolve_csv.exists():
+    print(f"  Skip post-process timings (no .csv).")
+    exit(0)
+
+df = pd.read_csv(resolve_csv, comment="#")
+df["Denoising-Subsampling"] = df["Denoising"] + "-" + df["Subsampling"]
 
 #for data in data_set_ids:
 for data in ["cells"]:
-    resolve_csv = Path(f"../results/resolve-video-eval_{data}.csv")
-
-    if resolve_csv.exists():
-        print(f"  Plotting post-process timings for {data}")
+        print(f"  Plotting post-process timings for {data} (pt)")
 
         plt.figure()
         fig, ax = plt.subplots(constrained_layout=True, figsize=(4, 3))
 
-        df = pd.read_csv(resolve_csv, comment="#")
         stages = ["cache avg [ms]", "decompress avg [ms]", "render avg [ms]", "post-process avg [ms]"]
 
         postprocess_modes = ["n-1", "n-1/4", "n-1/16", "y-1", "y-1/4", "y-1/16"]
@@ -51,7 +54,7 @@ for data in ["cells"]:
                    r"\fbox{$\frac{1}{16}$}"]
 
 
-        plot_gpu_timings(df.set_index("Denoising-Subsampling").reindex(postprocess_modes).reset_index()[stages],
+        plot_gpu_timings(df[df["Data Set"] == data].set_index("Denoising-Subsampling").reindex(postprocess_modes).reset_index()[stages],
                          stages=stages, x=np.arange(6), ylabel=r"Average Frame Time [ms]",
                          xticklabels=xlabels, fig=fig, ax=ax, legend=False)
         save_plot(f"../results/plots/postprocess-timings_{data}.pdf", fig)
@@ -83,5 +86,4 @@ for data in ["cells"]:
             save_plot(legend_path, fig_legend)
             plt.close(fig_legend)
 
-    else:
-        print(f"  Skip post-process timings for {data} (no .csv).")
+

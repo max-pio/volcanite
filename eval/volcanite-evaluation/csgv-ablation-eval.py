@@ -58,9 +58,9 @@ if __name__ == "__main__":
         for stopbit_code in ["", "s"]:
 
             if stopbit_code == "s":
-                evaluation.get_log().log_manual("With Stop Bits,,,,,,,,,,,,,,,,,,,,,,,,")
+                evaluation.get_log().log_manual("# With Stop Bits,,,,,,,,,,,,,,,,,,,,,,,,")
             else:
-                evaluation.get_log().log_manual("Without Stop Bits,,,,,,,,,,,,,,,,,,,,,,,,")
+                evaluation.get_log().log_manual("# Without Stop Bits,,,,,,,,,,,,,,,,,,,,,,,,")
             
             for arg_csgv in VolcaniteArg.args_csgv_datasets.values():
 
