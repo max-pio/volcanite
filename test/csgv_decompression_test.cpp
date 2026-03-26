@@ -13,7 +13,9 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#define HEADLESS
+#ifndef HEADLESS
+    #define HEADLESS
+#endif
 
 #include "shaderc/third_party/spirv-tools/include/spirv-tools/libspirv.h"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"

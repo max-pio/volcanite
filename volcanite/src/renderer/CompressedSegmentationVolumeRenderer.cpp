@@ -24,11 +24,11 @@
 #include "vvv/util/hash_memory.hpp"
 
 #include "glm/gtc/matrix_transform.hpp"
-#include "implot/implot.h"
-#include "vvvwindow/App.hpp"
 
 #ifndef HEADLESS
 #include "portable-file-dialogs.h"
+#include "implot/implot.h"
+#include "vvvwindow/App.hpp"
 #endif
 #ifdef IMGUI
 #include "imgui.h"
