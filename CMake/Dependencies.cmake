@@ -36,7 +36,7 @@ if(NOT USE_SYSTEM_GLSLANG)
             spirv-tools-cpp-example spirv-tools-header-DebugInfo spirv-tools-header-NonSemanticShaderDebugInfo100
             spirv-tools-header-OpenCLDebugInfo100 spirv-tools-pkg-config spirv-tools-vimsyntax spirv-val spv-tools-cldi100
             spv-tools-clspvreflection spv-tools-debuginfo spv-tools-shdi100 spv-tools-spv-amd-gs spv-tools-spv-amd-sb
-            spv-tools-spv-amd-sevp spv-tools-spv-amd-stm spv-tools-vkspreflection update_mappings testdata)
+            spv-tools-spv-amd-sevp spv-tools-spv-amd-stm spv-tools-vkspreflection testdata)
 endif()
 
 # extern rANS encoding library
@@ -132,7 +132,7 @@ if(NOT HEADLESS)
     set(GLFW_INSTALL OFF CACHE INTERNAL "")
     set(GLFW_BUILD_WAYLAND OFF)
     add_subdirectory(extern/glfw)
-    list(APPEND EXT_TARGETS glfw)
+    list(APPEND EXT_TARGETS glfw update_mappings)
 
     # platform independent file dialogs
     add_subdirectory(extern/portable-file-dialogs)
