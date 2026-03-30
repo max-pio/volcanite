@@ -440,7 +440,7 @@ int EvaluationLogExport::write_eval_logfile(const std::string &eval_logfile, con
         const auto &keys = get_all_evaluation_keys();
         for (int k = 0; k < keys.size(); k++) {
             header_ss << k;
-            format_ss << "{" << k << "}";
+            format_ss << "{" << keys[k] << "}";
             if (k < keys.size() - 1) {
                 header_ss << ",";
                 format_ss << ",";
