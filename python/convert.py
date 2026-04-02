@@ -71,7 +71,7 @@ if __name__ == '__main__':
 
         # chunked output
         if args.output_file:
-            if not args.chunk_in and not args.chunk_size_out:
+            if not args.chunk_in and args.chunk_size_out:
                 if len(args.chunk_size_out) != 3:
                     parser.error(f"--chunk-size-out W H D must have three dimensions but got {len(args.chunk_size_out)}.")
 
