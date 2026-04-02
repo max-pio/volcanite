@@ -58,7 +58,7 @@ for SECOND_VALUE_KEY in ["Voxels", "Labels"]:     # sort key for data set order,
             height_ratios = [0.2, 0.8]
             fig, (ax_outliers, ax_main) = plt.subplots(2, 1, sharex=True,
                                                        constrained_layout=True,
-                                                       figsize=(6, 4), height_ratios=height_ratios)
+                                                       figsize=(8, 4), height_ratios=height_ratios)
 
             # plot lower half of plot (main axis)
             plot_timings_grouped(x, [vcnt_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"],
