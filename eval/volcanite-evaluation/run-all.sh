@@ -28,8 +28,6 @@ exec > "$logfile" 2>&1
 # to receive console output as well: use tee (might impact performance)
 # exec > >(stdbuf -oL tee -a "$logfile") 2>&1
 
-
-
 # calling python scripts unbuffered (-u) to prevent output mixing
 
 echo "<<<<<<< image-eval.py >>>>>>>"
@@ -38,30 +36,21 @@ sleep 30
 echo "<<<<<<< video-eval.py >>>>>>>"
 python3 -u ./video-eval.py
 sleep 30
+
 echo "<<<<<<< vram-eval.py >>>>>>>"
 python3 -u ./vram-eval.py
 sleep 30
 echo "<<<<<<< resolve-eval.py >>>>>>>"
 python3 -u ./resolve-video-eval.py
 sleep 30
-
 echo "<<<<<<< cache-palette-eval.py >>>>>>>"
 python3 -u ./cache-palette-eval.py
-sleep 30
-echo "<<<<<<< cache-pathlimit-eval.py >>>>>>>"
-python3 -u ./cache-pathlimit-eval.py
-sleep 30
-echo "<<<<<<< cache-reqlimit-eval.py >>>>>>>"
-python3 -u ./cache-reqlimit-eval.py
-sleep 30
-echo "<<<<<<< cache-rngcontrol-eval.py >>>>>>>"
-python3 -u ./cache-rngcontrol-eval.py
 sleep 30
 
 echo "<<<<<<< csgv-eval.py >>>>>>>"
 python3 -u ./csgv-eval.py
 sleep 30
-echo "<<<<<<< csgv-eval.py >>>>>>>"
+echo "<<<<<<< compression-eval.py >>>>>>>"
 python3 -u ./compression-eval.py
 sleep 30
 
