@@ -58,13 +58,13 @@ for SECOND_VALUE_KEY in ["Voxels", "Labels"]:     # sort key for data set order,
             height_ratios = [0.2, 0.8]
             fig, (ax_outliers, ax_main) = plt.subplots(2, 1, sharex=True,
                                                        constrained_layout=True,
-                                                       figsize=(8, 4), height_ratios=height_ratios)
+                                                       figsize=(10, 4), height_ratios=height_ratios)
 
             # plot lower half of plot (main axis)
             plot_timings_grouped(x, [vcnt_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"],
                                          vtk_df.set_index("Data Set").reindex(data_sets).reset_index()["frame avg [ms]"]],
                                  ylabel=r"Avg. Frame Time [ms]", xticklabels=map(get_data_set_tex, data_sets),
-                                 labels=None, barlabelfmt="%.1f",
+                                 labels=None, barlabelfmt="%.1f", barwidth=0.4,
                                  marknan=True, marknan_offset=0.025,
                                  fig=fig, ax=ax_main)
 
