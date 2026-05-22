@@ -45,12 +45,6 @@
 #endif
 
 
-// UTILITY FUNCTIONS ---------------------------------------------------------------------------------------------------
-
-uint _unpack4BitFromEncoding(EncodingRef brick_start, uint entry_id) {
-    return bitfieldExtract(brick_start.buf[entry_id/8], 28 - int(entry_id % 8u) * 4, 4);
-}
-
 // SERIAL ENCODING -----------------------------------------------------------------------------------------------------
 
 struct CSGVReadState {

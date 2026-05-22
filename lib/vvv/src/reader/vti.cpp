@@ -23,6 +23,7 @@
 #include <vtkDataArrayRange.h>
 #include <vtkImageData.h>
 #include <vtkIntArray.h>
+#include <vtkPointData.h>
 #include <vtkSmartPointer.h>
 #include <vtkXMLImageDataReader.h>
 #include <vtkXMLParser.h>
@@ -185,9 +186,9 @@ std::shared_ptr<Volume<T>> load_nastja_volume_from_vti(std::string url, std::str
 }
 
 template <typename T>
-std::shared_ptr<Volume<T>> load_volume_from_vti(std::string url, std::string formatLabel, vk::Format gpuFormat) {
+std::shared_ptr<Volume<T>> load_volume_from_vti(std::string url, std::string formatLabel, vk::Format gpuFormat, bool allowCast) {
 #ifdef LIB_VTK
-    vtkSmartPointer<vtkXMLImageDataReader> reader = vtkSmartPointer<vtkXMLImageDataReader>::New();
+    const vtkSmartPointer<vtkXMLImageDataReader> reader = vtkSmartPointer<vtkXMLImageDataReader>::New();
     if (!reader->CanReadFile(url.c_str()))
         throw std::runtime_error("XML image data reader can not read file " + url);
 
@@ -195,12 +196,23 @@ std::shared_ptr<Volume<T>> load_volume_from_vti(std::string url, std::string for
     reader->Update();
 
     vtkSmartPointer<vtkImageData> vti_image = reader->GetOutput();
-    vtkSmartPointer<vtkCellData> vti_cell = vti_image->GetCellData();
-    if (!vti_cell)
-        throw std::runtime_error("could not load cell data from vti file");
-    vtkSmartPointer<vtkDataArray> vti_data = vti_cell->GetArray(0);
+    vtkSmartPointer<vtkDataArray> vti_data = {};
+
+    // either load cell or point data from the file data
+    bool is_cell_data = false;
+    if (const vtkSmartPointer<vtkCellData> vti_cell = vti_image->GetCellData();
+        vti_cell && vti_cell->GetNumberOfArrays() > 0) {
+        vti_data = vti_cell->GetArray(0);
+        is_cell_data = true;
+    } else if (const vtkSmartPointer<vtkPointData> vti_point = vti_image->GetPointData();
+               vti_point && vti_point->GetNumberOfArrays() > 0) {
+        vti_data = vti_point->GetArray(0);
+    } else {
+        throw std::runtime_error("could not load cell or point data from vti file");
+    }
+
     if (!vti_data)
-        throw std::runtime_error("could not load cell data array from vti file");
+        throw std::runtime_error("could not load cell or point data array from vti file");
 
     int expected_vtk_type = -1;
     if (formatLabel == "UInt8")
@@ -214,17 +226,19 @@ std::shared_ptr<Volume<T>> load_volume_from_vti(std::string url, std::string for
     else
         throw std::runtime_error("Data type " + formatLabel + " not yet supported for .vti import");
 
-    if (vti_data->GetDataType() != expected_vtk_type) {
+    if (!allowCast && vti_data->GetDataType() != expected_vtk_type) {
         throw std::runtime_error("Expected .vti data type " + formatLabel + " (vtkType " + std::to_string(expected_vtk_type) + ") but got vtkType " + std::to_string(vti_data->GetDataType()));
     }
 
     int img_dims[3];
     vti_image->GetDimensions(img_dims);
-    for (int &img_dim : img_dims)
-        img_dim = img_dim - 1;
+    if (is_cell_data) {
+        for (int &img_dim : img_dims)
+            img_dim = img_dim - 1;
+    }
 
-    // copy the data
-    std::vector<T> payload(img_dims[0] * img_dims[1] * img_dims[2]);
+    // copy the data (auto handle cast)
+    std::vector<T> payload(static_cast<size_t>(img_dims[0]) * img_dims[1] * img_dims[2]);
     const auto range = vtk::DataArrayValueRange<1>(vti_data);
     std::copy(range.cbegin(), range.cend(), payload.begin());
 
@@ -258,22 +272,22 @@ std::shared_ptr<Volume<T>> load_volume_from_vti(std::string url, std::string for
 template <>
 std::shared_ptr<Volume<uint8_t>> Volume<uint8_t>::load_vti(std::string path, bool allowCast) {
     assert(!allowCast && "Casting not yet supported for vti volume loaders.");
-    return load_volume_from_vti<uint8_t>(path, "UInt8", vk::Format::eR8Uint);
+    return load_volume_from_vti<uint8_t>(path, "UInt8", vk::Format::eR8Uint, allowCast);
 }
 template <>
 std::shared_ptr<Volume<uint16_t>> Volume<uint16_t>::load_vti(std::string path, bool allowCast) {
     assert(!allowCast && "Casting not yet supported for vti volume loaders.");
-    return load_volume_from_vti<uint16_t>(path, "UInt16", vk::Format::eR16Uint);
+    return load_volume_from_vti<uint16_t>(path, "UInt16", vk::Format::eR16Uint, allowCast);
 }
 template <>
 std::shared_ptr<Volume<uint32_t>> Volume<uint32_t>::load_vti(std::string path, bool allowCast) {
     assert(!allowCast && "Casting not yet supported for vti volume loaders.");
-    return load_volume_from_vti<uint32_t>(path, "UInt32", vk::Format::eR32Uint);
+    return load_volume_from_vti<uint32_t>(path, "UInt32", vk::Format::eR32Uint, allowCast);
 }
 template <>
 std::shared_ptr<Volume<uint64_t>> Volume<uint64_t>::load_vti(std::string path, bool allowCast) {
     assert(!allowCast && "Casting not yet supported for vti volume loaders.");
-    return load_volume_from_vti<uint64_t>(path, "UInt64", vk::Format::eR64Uint);
+    return load_volume_from_vti<uint64_t>(path, "UInt64", vk::Format::eR64Uint, allowCast);
 }
 
 } // namespace vvv

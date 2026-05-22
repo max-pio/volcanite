@@ -16,6 +16,7 @@
 #include "volcanite/compression/pack_nibble.hpp"
 
 #include <cassert>
+#include <cstddef>
 
 namespace volcanite {
 

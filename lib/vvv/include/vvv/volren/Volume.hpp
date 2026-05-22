@@ -70,18 +70,18 @@ class Volume {
     /// A non-standard conformant NRRD reader that is able to read files from https://klacansky.com/open-scivis-datasets/
     /// @param allowCast By default, an error is thrown if the volume component type and the component type stored in the file mismatch. If set to true, a conversion is attempted instead.
     static std::shared_ptr<Volume<ElementType, HolderType>> load_nrrd(std::string path, bool allowCast = true); // { throw std::runtime_error("element holder type combination unsupported for NRRD"); }
-    void write_nrrd(const std::string &path, bool separatePayloadFile = true);
+    void write_nrrd(const std::string &path, bool separatePayloadFile = true) const;
 
     /// An even more simplified nrrd format for the cellsinsilico volume data that Max hands out to students. Format is: one line "dim_x dim_y dim_z" and one line data type "uint[8|16|32]" followed by payload.
     static std::shared_ptr<Volume<ElementType, HolderType>> load_volcanite_raw(std::string path, bool allowCast = false);
-    void write_volcanite_raw(std::string path);
+    void write_volcanite_raw(std::string path) const;
 
     /// Hdf5 file which is expected to have a 3D array as its first root object which will be loaded as the volume
     static std::shared_ptr<Volume<ElementType, HolderType>> load_hdf5(std::string path, bool allowCast = false);
-    void write_hdf5(const std::string &path);
+    void write_hdf5(const std::string &path) const;
 
     /// vti file format from the vtk library, but we expect a very precise format: an ImageData file
-    static std::shared_ptr<Volume<ElementType, HolderType>> load_vti(std::string path, bool allowCast = false);
+    static std::shared_ptr<Volume<ElementType, HolderType>> load_vti(std::string path, bool allowCast = true);
     // static void write_vti(std::string path);
 
     static std::shared_ptr<Volume<ElementType, HolderType>> load(std::string filepath) {
@@ -100,7 +100,7 @@ class Volume {
         }
     }
 
-    bool write(std::string filepath) {
+    bool write(std::string filepath) const {
         if (filepath.ends_with(".nrrd")) {
             Volume<ElementType, HolderType>::write_nrrd(filepath);
         } else if (filepath.ends_with(".hdf5") || filepath.ends_with(".h5")) {
@@ -202,7 +202,7 @@ class Volume {
 
     inline void setElement(size_t x, size_t y, size_t z, ElementType v) { m_payload[z * (dim_x * dim_y) + y * dim_x + x] = v; }
 
-    inline void setElement(int x, int y, int z, ElementType v) { m_payload[z * (dim_x * dim_y) + y * dim_x + x] = v; }
+    inline void setElement(int x, int y, int z, ElementType v) { m_payload[static_cast<size_t>(z) * (dim_x * dim_y) + y * dim_x + x] = v; }
 
     bool isTextureInitialized() const { return m_texture != nullptr; }
 

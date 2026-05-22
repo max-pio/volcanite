@@ -13,8 +13,9 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#define HEADLESS
-
+#ifndef HEADLESS
+    #define HEADLESS
+#endif
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/util/segmentation_volume_synthesis.hpp"
 #include "vvv/volren/Volume.hpp"
@@ -196,10 +197,10 @@ int main() {
         csgv->clear();
         if (args.encoding_mode == SINGLE_TABLE_RANS_ENC || args.encoding_mode == DOUBLE_TABLE_RANS_ENC) {
             // obtain frequency table(s)
-            csgv->setCompressionOptions64(args.brick_size, NIBBLE_ENC, args.operation_mask, args.random_access);
+            csgv->setCompressionOptions({.brick_size=args.brick_size, .encoding_mode=NIBBLE_ENC, .op_mask=args.operation_mask, .random_access=args.random_access});
             csgv->compressForFrequencyTable(volume->dataConst(), dim, freq, 2, args.encoding_mode == DOUBLE_TABLE_RANS_ENC, false);
         }
-        csgv->setCompressionOptions64(args.brick_size, args.encoding_mode, args.operation_mask, args.random_access, freq, freq + 16);
+        csgv->setCompressionOptions({.brick_size=args.brick_size, .encoding_mode=args.encoding_mode, .op_mask=args.operation_mask, .random_access=args.random_access, .code_frequencies=freq, .detail_code_frequencies=(freq + 16)});
         csgv->compress(volume->dataConst(), dim, false);
         // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
         if (args.stream_lod && !csgv->isUsingSeparateDetail()) {

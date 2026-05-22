@@ -5,7 +5,7 @@ project(RygrANS CXX)
 add_library(libryg-rans
 #    rans64.h
     platform.h
-        rans_nibble.h
+        rans_uint32.h
 #    rans_byte.h
 #    rans_word_sse41.h
 #

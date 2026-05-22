@@ -21,6 +21,7 @@ import shutil
 import re
 from datetime import datetime
 from time import sleep
+import traceback
 from typing import Self
 
 class ExistingPolicy(Enum):
@@ -34,24 +35,18 @@ class VolcaniteLogFile:
     Encapsulates the log file into which new Volcanite evaluation results are appended.
     The initial log file will be created as a copy from log_file_template.
     If a fallback_log is given, it is appended to the log_file when a Volcanite run fails instead of aborting the
-    evaluation. It may use the %name placeholder for the name of the current evaluation.
+    evaluation. It may use the {name} placeholder for the name of the current evaluation.
     """
 
     def __create_fallback_string(self, replace_with: str = "") -> str | None:
-        """Reads the format string from the log file and replaces all placeholders with replace_with."""
-        possible_keys: list[str] = [# "name", name can be used in the fallback string
-                                    "time", "args",
-                                    "cr", "comp_s", "comp_mainpass_s", "comp_prepass_s", "comp_gb_per_s"
-                                    "csgv_gb", "orig_gb", "volume_dim",
-                                    "decomp_cpu_gb_per_s", "decomp_gpu_gb_per_s",
-                                    "frame_min_ms", "frame_avg_ms", "frame_sdv_ms", "frame_med_ms", "frame_max_ms",
-                                    "render_total_ms", "min_spp", "max_spp",
-                                    "mem_framebuffer_mb", "mem_uniformbuffer_mb", "mem_materials_mb", "mem_encoding_ms",
-                                    "mem_cache_mb", "mem_cache_used_mb", "mem_cache_fillrate", "mem_cache_fillrate_pcnt",
-                                    "mem_emptyspace_mb", "mem_total_mb", "render_frames"]
+        """Reads the format string from the log file and replaces all placeholders (anything within {...} curly braces) with replace_with."""
+
         format_string = '\n'.join(self.__fmt_strs)
-        for possible_key in possible_keys:
-            format_string = format_string.replace("%" + possible_key, replace_with)
+
+        # replace any {...} except {name} which is available in the fallback string
+        pattern = r'\{(?!name\}).*?\}'
+        format_string = re.sub(pattern, lambda m: replace_with, format_string)
+
         return format_string
 
     @classmethod
@@ -75,6 +70,7 @@ class VolcaniteLogFile:
         header_strings: list[str] = lines[i::]
         return format_strings, header_strings
 
+
     def __init__(self, log_file: Path, fmt_strs: list[str], header_strings: list[str],
                  fallback_log_line: str | None, use_fmt_from_existing_log: bool = True):
         """
@@ -85,15 +81,15 @@ class VolcaniteLogFile:
         :param fallback_log_line: line written to log_file if a Volcanite run fails. May only use {name} key.
         :param use_fmt_from_existing_log: if True: use the fmt strings from the current log file if it already exists.
         """
-        self.log_file: Path = log_file
+        self.file_path: Path = log_file
         self.__fmt_strs = fmt_strs
         self.__header_strings = header_strings
 
-        self.fallback_log: str = ""
-        if use_fmt_from_existing_log and self.log_file.exists():
-            self.__fmt_strs, _ = VolcaniteLogFile.get_fmt_and_remainder_lines_from_file(self.log_file)
-        self.__fallback_log = fallback_log_line if fallback_log_line is not None else self.__create_fallback_string()
+        if use_fmt_from_existing_log and self.file_path.exists():
+            self.__fmt_strs, _ = VolcaniteLogFile.get_fmt_and_remainder_lines_from_file(self.file_path)
+        self.fallback_log: str = fallback_log_line if fallback_log_line is not None else self.__create_fallback_string()
         self.disable_manual_logs = False
+
 
     @classmethod
     def create_from_template_log_file(cls, log_file: Path, template_log_file: Path,
@@ -102,11 +98,14 @@ class VolcaniteLogFile:
         return cls(log_file=log_file, fmt_strs=format_strings, header_strings=header_strings,
                    fallback_log_line=fallback_log_line, use_fmt_from_existing_log=use_fmt_from_existing_log)
 
+
     def get_log_file(self) -> Path:
-        return self.log_file
+        return self.file_path
+
 
     def get_fmt_and_header_lines(self) -> tuple[list[str], list[str]]:
         return self.__fmt_strs, self.__header_strings
+
 
     def setup(self, old_log_policy: ExistingPolicy = ExistingPolicy.ABORT):
         """
@@ -114,31 +113,33 @@ class VolcaniteLogFile:
         :param old_log_policy: handling of existing log files, either 'abort' (default), 'append', or 'overwrite'
         """
 
-        if self.log_file.exists():
+        if self.file_path.exists():
             if old_log_policy == ExistingPolicy.ABORT:
-                raise IOError("Log file " + str(self.log_file) + " exist and existing policy is 'abort'")
+                raise IOError("Log file " + str(self.file_path) + " exist and existing policy is 'abort'")
             elif old_log_policy == ExistingPolicy.MOVE:
-                shutil.move(self.log_file, str(self.log_file.resolve()) + "_" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+                shutil.move(self.file_path, str(self.file_path.resolve()) + "_" + datetime.now().strftime("%Y%m%d-%H%M%S"))
             elif old_log_policy == ExistingPolicy.DELETE:
-                self.log_file.unlink()
+                self.file_path.unlink()
 
             if old_log_policy != ExistingPolicy.APPEND:
-                with(open(self.log_file, "w")) as f:
+                with(open(self.file_path, "w")) as f:
                     f.writelines(self.__fmt_strs)
                     f.writelines(self.__header_strings)
         else:
-            with(open(self.log_file, "w")) as f:
+            with(open(self.file_path, "w")) as f:
                 f.writelines("#fmt:" + line + "\n" for line in self.__fmt_strs)
                 f.writelines(line + "\n" for line in self.__header_strings)
 
-        if not self.log_file.exists():
-            raise IOError(f"Could not create log file {self.log_file}")
+        if not self.file_path.exists():
+            raise IOError(f"Could not create log file {self.file_path}")
+
 
     def log_manual(self, output: str, end: str = "\n") -> None:
         if self.disable_manual_logs:
             return
-        with open(str(self.log_file), "a") as log_out:
+        with open(str(self.file_path), "a") as log_out:
             log_out.write(output + end)
+
 
     def create_formatted_copy(self, dest: Path, newline_separator: str = None, remove_line_prefixes: list[str] = None,
                               replace_map: dict[str, str] = None):
@@ -148,9 +149,9 @@ class VolcaniteLogFile:
         Removes existing line breaks and creates new line breaks at any occurring newline_separator if it is given.
         Uses the replace_map to replace any key with its value if it is given.
         """
-        if not self.log_file.exists():
-            raise FileNotFoundError(f"Log file {self.log_file} does not exist")
-        with open(self.log_file, 'r') as log_in:
+        if not self.file_path.exists():
+            raise FileNotFoundError(f"Log file {self.file_path} does not exist")
+        with open(self.file_path, 'r') as log_in:
             formatted_log = log_in.read()
             # remove all lines starting with any of the remove_line_prefixes:
             if remove_line_prefixes:
@@ -166,12 +167,14 @@ class VolcaniteLogFile:
                     formatted_log = formatted_log.replace(repl[0], repl[1])
             with open(dest, 'w') as file_out:
                 file_out.write(formatted_log)
-            print(f"create formated copy of {self.log_file} to {dest}")
+            print(f"create formated copy of {self.file_path} to {dest}")
+
 
     @classmethod
     def initialize_log_files(cls, log_files : list[Self], old_logs: ExistingPolicy = ExistingPolicy.ABORT):
         for log_file in log_files:
             log_file.setup(old_logs)
+
 
 class VolcaniteLogFileCfg:
     def __init__(self, log_file_name: str | None, fmts: list[str] | None = None, headers: list[str] | None = None,
@@ -206,9 +209,13 @@ class VolcaniteLogFileCfg:
         self.fallback_log_line = fallback_log_line
         self.use_fmt_from_existing_log = use_fmt_from_existing_log
 
+
 class VolcaniteEvaluation:
     """
     Encapsulates one evaluation. The evaluation results are stored in a single directory (eval_out_directory).
+    If VolcaniteEvaluation is used as a Context Manager (using the with keyword) it will call the entry-command
+    and exit-command if those exist it the evaluation setup file (typically volcanite-eval-setup.txt).
+
     :var eval_out_directory: directory to store evaluation results in
     :var log_files: list of Volcanite evaluation log files that are used in the evaluation
     :var name: name of the evaluation
@@ -294,11 +301,48 @@ class VolcaniteEvaluation:
 
         # automatically register this evaluation with the VolcaniteArgs if it has none
         if VolcaniteArg.get_eval_directory() is None:
-            VolcaniteArg.setup_directories(veval=self, csgv_directory=VolcaniteArg.get_csgv_directory(),
-                                           vcfg_directory=VolcaniteArg.get_vcfg_directory())
-
+            VolcaniteArg.setup_directories(veval=self,
+                                           git_base_directory=VolcaniteArg.get_git_directory(),
+                                           csgv_directory=VolcaniteArg.get_csgv_directory(),
+                                           vcfg_directory=VolcaniteArg.get_vcfg_directory(),
+                                           entry_command=VolcaniteArg.get_entry_command(),
+                                           exit_command=VolcaniteArg.get_exit_command())
+    
+    
     def is_initialized(self) -> bool:
         return self.__initialized
+
+
+    def __enter__(self) -> Self:
+        """
+        Prints and calls the entry-commmand as a subprocess if one exists.
+        """
+
+        if VolcaniteArg.get_entry_command():
+            print("> " + VolcaniteArg.get_entry_command())
+            if not self.dry_run:
+                subp.run(VolcaniteArg.get_entry_command(), shell=True)
+        else:
+            print("> no entry command")
+
+        return self
+
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        Prints and calls the exit-commmand as a subprocess if one exists.
+        """
+
+        if exc_type is not None:
+            traceback.print_exception(exc_type, exc_val, exc_tb)
+
+        if VolcaniteArg.get_exit_command():
+            print("> " + VolcaniteArg.get_exit_command())
+            if not self.dry_run:
+                subp.run(VolcaniteArg.get_exit_command(), shell=True)
+        else:
+            print("> no exit command")
+
 
     def get_log(self, filename: str = None) -> VolcaniteLogFile:
         """
@@ -332,33 +376,99 @@ class VolcaniteArg:
     args_shading: dict[str, Self] = {}
     args_default: dict[str, Self] = {}
     args_datasynth: dict[str, Self] = {}
+    args_csgv_datasets: dict[str, Self] = {}
 
-    __csgv_directory: Path = None
-    __vcfg_directory: Path = None
-    __eval_directory: Path = None
+    __csgv_directory: Path | None = None
+    __vcfg_directory: Path | None = None
+    __eval_directory: Path | None = None
+    __git_directory: Path | None = None
+    __entry_command: str | None = None
+    __exit_command: str | None = None
 
     @classmethod
-    def setup_directories(cls, veval: VolcaniteEvaluation | None = None,
-                          csgv_directory: PathLike | None = None, vcfg_directory: PathLike | None = None):
+    def get_path_setup_filename(cls) -> Path:
+        """
+        Name of a setup file from which all evaluation scripts will automatically read relevant paths.
+        The file must contain the following newline terminated lines:
+        vcfg-dir: [directory storing one {name}.vcfg file per {name}.csgv data sets]
+        csgv-dir: [directory storing previously compressed {name}.csgv data sets]
+        volcanite-src: [base directory of the cloned Volcanite git repository]
+        entry-command: [syscall comamnd to execute before evaluation]
+        exit-command: [syscall comamnd to execute after evaluation]
+        """
+        return Path("volcanite-eval-setup.txt")
+
+    @classmethod
+    def setup_directories(cls, veval: VolcaniteEvaluation | None = None, git_base_directory: PathLike | None = None,
+                          csgv_directory: PathLike | None = None, vcfg_directory: PathLike | None = None,
+                          entry_command: str | None = None, exit_command: str | None = None):
         """
         Sets static paths to directories that are referenced when creating certain VolcaniteArgs.
+        If csgv_directory or vcfg_directory are None, it is attempted to set them up from a previously created
+        path setup file (with the name returned by get_path_setup_filename()) in the current working directory.
+        :param veval: the Volcanite evaluation specifying the evaluation output directory for images and videos
+        :param git_base_directory: base directory of the cloned Volcanite git repository
         :param csgv_directory: directory where newly compressed CSGV files are exported to and imported from
         :param vcfg_directory: directory containing config and rec files for the argument sets
-        :param veval: the Volcanite evaluation specifying the evaluation output directory for images and videos
+        :param entry_command: command to call at entry if VolcaniteEvaluation is used as Context Manager
+        :param exit_command: command to call at exit if VolcaniteEvaluation is used as Context Manager
         """
         if not veval:
             raise ValueError("VolcaniteEvaluation must not be None")
 
         cls.__csgv_directory = Path(csgv_directory) if csgv_directory else None
         cls.__vcfg_directory = Path(vcfg_directory) if vcfg_directory else None
+        cls.__git_directory = Path(git_base_directory) if git_base_directory else None
+        cls.__entry_command = entry_command if entry_command else None
+        cls.__exit_command = exit_command if exit_command else None
         cls.__eval_directory = veval.eval_out_directory if veval else None
+
+        if not cls.__git_directory:
+            cls.__git_directory = Path(subp.Popen(["git", "rev-parse", "--show-toplevel"], stdout=subp.PIPE).communicate()[0].rstrip().decode('utf-8'))
+            print(f"obtained volcanite git base directory {cls.__git_directory} with 'git rev-parse --show-toplevel'")
+
+        # auto initialize non-passed paths from possible evaluation setup file in working directory
+        if not csgv_directory or not vcfg_directory or not git_base_directory or not entry_command or not exit_command:
+            setup_file = cls.get_path_setup_filename()
+            if not setup_file.exists() and cls.__git_directory:
+                setup_file = cls.__git_directory / "eval" / cls.get_path_setup_filename()
+                print(setup_file)
+            if setup_file.exists():
+                print(f"setup paths from {setup_file}")
+                with open(setup_file, 'r') as file:
+                    for l in file.readlines():
+                        parts = l.split(":", 1)
+                        if len(parts) != 2:
+                            continue
+                        if parts[0] == "csgv-dir" and not csgv_directory:
+                            cls.__csgv_directory = Path(parts[1].strip())
+                        if parts[0] == "vcfg-dir" and not vcfg_directory:
+                            cls.__vcfg_directory = Path(parts[1].strip())
+                        if parts[0] == "volcanite-src" and not git_base_directory:
+                            cls.__git_directory = Path(parts[1].strip())
+                        if parts[0] == "entry-command" and not entry_command:
+                            cls.__entry_command = parts[1].strip()
+                        if parts[0] == "exit-command" and not exit_command:
+                            cls.__exit_command = parts[1].strip()
+            else:
+                print(f"unable to setup paths. missing {cls.get_path_setup_filename()} file.")
+
 
         if cls.__csgv_directory and not cls.__csgv_directory.exists():
             raise FileNotFoundError(f"CSGV directory {cls.__csgv_directory} not found")
         if cls.__vcfg_directory and not cls.__vcfg_directory.exists():
             raise FileNotFoundError(f"vcfg config directory {cls.__vcfg_directory} not found")
-        if cls.__eval_directory and not cls.__eval_directory.exists():
-            raise FileNotFoundError(f"Evaluation output directory {cls.__eval_directory} not found")
+        if cls.__git_directory:
+            if not cls.__git_directory.exists():
+                raise FileNotFoundError(f"Volcanite git directory {cls.__git_directory} not found")
+            elif cls.__git_directory.name != "volcanite":
+                print(f"Warning: expected Volcanite git directory to be named volcanite but is {cls.__git_directory.name}")
+
+        # setup list of .csgv data sets from directory
+        if cls.__csgv_directory:
+            for file in cls.__csgv_directory.glob('*.csgv'):
+                cls.args_csgv_datasets[file.stem] = cls.arg_csgv_import(name=file.stem)
+        
 
     @classmethod
     def get_csgv_directory(cls):
@@ -371,74 +481,194 @@ class VolcaniteArg:
     @classmethod
     def get_eval_directory(cls):
         return cls.__eval_directory
+    
+    @classmethod
+    def get_git_directory(cls):
+        return cls.__git_directory
+    
+    @classmethod
+    def get_entry_command(cls):
+        return cls.__entry_command
+    
+    @classmethod
+    def get_exit_command(cls):
+        return cls.__exit_command
 
-    def __init__(self, args: list[str], identifier: str, priority: float):
+
+    def __init__(self, args: list[str] | str, identifier: str | None = None, priority: float | None = None):
         """
         Encapsulates a Volcanite command line argument.
+        If no identifier or priority are given, this argument will not be included in concat_id identifier strings.
 
-        :param args: list of space separated arguments passed to the Volcanite call
+        :param args: list or string of space separated arguments passed to the Volcanite call
         :param identifier: short identifier of the argument used to form evaluation name strings
         :param prio: priority to sort the identifiers in the evaluation name string
         """
-        self.args = args
-        self.identifier = identifier
-        self.prio = priority
+        if isinstance(args, str):
+            # split by ' ' but do not split substrings within quotes ""
+            self.args = [quoted if quoted else unquoted for quoted, unquoted in re.findall(r'"([^"]*)"|(\S+)', args)]
+        else:
+            self.args = args
+
+
+        self.identifier = "" if identifier is None else identifier
+        self.prio = 1000 if priority is None else priority
+
+
+    @classmethod 
+    def concat_arg_string(cls, args: list[Self] | None) -> str:
+        """Create the combined plain argument string passed for all passed args sorted by their priority."""
+        if not args:
+            return ""
+        
+        sorted_by_prio = sorted(args, key=lambda a: a.prio)
+        return " ".join([" ".join(a.args) for a in sorted_by_prio])
 
     @classmethod
-    def concat_ids(cls, args: list[Self]) -> str:
-        """Create a concatenated identifier for all passed args sorted by their priority."""
+    def concat_ids(cls, args: list[Self] | None) -> str:
+        """Create a concatenated string identifier for all passed args sorted by their priority."""
+        if not args:
+            return ""
+        
         sorted_by_prio = sorted(args, key=lambda a: a.prio)
-        return ''.join([a.identifier for a in sorted_by_prio])
+        return "_".join([a.identifier for a in sorted_by_prio if a.identifier])
 
     @classmethod
     def arg_csgv_export(cls, args: list[Self]) -> Self:
         if cls.__csgv_directory is None:
             raise RuntimeError("VolcaniteArg static csgv directory must be initialized before usage"
                                "(VolcaniteArg.set_directories)")
-        return cls(["-c", str(cls.__csgv_directory) + "/" + cls.concat_ids(args) + ".csgv"], "", 1000)
+        return cls(["-c", str(cls.__csgv_directory) + "/" + cls.concat_ids(args) + ".csgv"])
+
     @classmethod
-    def arg_csgv_import(cls, args: list[Self]) -> Self:
+    def arg_csgv_import(cls, name: str | None = None, args: list[Self] | None = None) -> Self:
+        """
+        Returns args for importing a previously compressed csgv file from the csgv directory.
+        The csgv file will be assumed to be {name}{concatenated arg ids}.csgv in that directory.
+        The arg id will be {name} with priority 0.
+        """
         if cls.__csgv_directory is None:
             raise RuntimeError("VolcaniteArg static csgv directory must be initialized before usage"
                                "(VolcaniteArg.set_directories)")
-        return cls([str(cls.__csgv_directory) + "/" + cls.concat_ids(args) + ".csgv"], "", 1000)
+        
+        if not name and (not args or args.empty()):
+            raise RuntimeError("Must provide at least one of name or args when creating .csgv import VolcaniteArg.")
+        
+        return cls([str(cls.__csgv_directory) + "/" + name + cls.concat_ids(args) + ".csgv"], name, 0)
 
     @classmethod
     def arg_image_export(cls, args: list[Self], filetype: str = "png") -> Self:
         if cls.__eval_directory is None:
             raise RuntimeError("VolcaniteArg static evaluation directory must be initialized before usage"
                                "(VolcaniteArg.set_directories)")
-        return cls(["-i", str(cls.__eval_directory) + "/" + cls.concat_ids(args) + "." + filetype], "", 1000)
-
+        return cls(["-i", str(cls.__eval_directory) + "/" + cls.concat_ids(args) + "." + filetype], "", 110)
+    
     @classmethod
-    def arg_video_export(cls, args, create_dir=True) -> Self:
-        if cls.__eval_directory is None:
-            raise RuntimeError("VolcaniteArg static evaluation directory must be initialized before usage"
-                               "(VolcaniteArg.set_directories)")
-        video_dir = (Path(cls.__eval_directory) / cls.concat_ids(args)).absolute()
-        if create_dir:
-            video_dir.mkdir(parents=True, exist_ok=True)
-        return cls(["-v", str(video_dir) + "/" + cls.concat_ids(args) + "_{:04}.jpg"], "", 1000)
+    def arg_image_eval_cfg(cls, sample_count: int = 1024):
+        """
+        Returns an argument to set the evaluation rendering configuration to a still perspective
+        (e.g. set by arg_config_import). Cannot be used in combination with arg_video_cfg.
 
-    @classmethod
-    def arg_vcfg_import(cls, args: list[Self], resolution: str = "1920x1080") -> Self:
-        if cls.__vcfg_directory is None:
-            raise RuntimeError("VolcaniteArg static vcfg directory must be initialized before usage"
-                               "(VolcaniteArg.set_directories)")
-        return cls(["--config", str(cls.__vcfg_directory / cls.concat_ids(args) + ".vcfg"), "--resolution", resolution], "", 1000)
+        :param sample_count: how many frames are rendered in the still perspective.
+        """
 
+        if sample_count <= 0:
+            raise RuntimeError("Sample count for arg_image_eval_cfg must be > 0.")
+
+        return cls(["--video-cfg", f"d1s{sample_count}r0:0z0:0", "--config", f"[Display] Accumulation Frames: {sample_count}"], "", 111)
+
+    
     @classmethod
     def arg_rec_import(cls, args: list[Self]) -> Self:
         if cls.__vcfg_directory is None:
             raise RuntimeError("VolcaniteArg static vcfg directory must be initialized before usage"
                                "(VolcaniteArg.set_directories)")
-        return cls(["--record-in", str(cls.__vcfg_directory / cls.concat_ids(args) + ".rec")], "", 1000)
+        return cls(["--record-in", str(cls.__vcfg_directory / cls.concat_ids(args) + ".rec")])
+
+    @classmethod
+    def arg_video_eval_cfg(cls, rotation=(-360, 0), zoom=(2, 0), duration=600, duration_is_seconds=False,
+                      output_framerate=30, interpolant : str = "smooth", edge=(0.2, 0.8)):
+        """
+        Creates a VolcaniteArg for animating video rendering camera paths.
+        This path will be used for evaluations and video export.
+        Cannot be used in combination with arg_image_eval_cfg().
+
+        :param rotation: min/max camera rotation in degrees.
+        :param zoom: min/max camera zoom.
+        :param duration: either number of frames or number of seconds to render.
+        :param duration_is_seconds: if the duration parameter is in seconds instead of frame count.
+        :param output_framerate: either the frame rate of the encoded video file or 0 to use real frame durations.
+        """
+        if output_framerate < 0:
+            raise RuntimeError("Video encoding frame rate must be >= 0")
+        
+        # other cfg parameters: interpolant, edge
+        if interpolant.lower() == "smooth":
+            interpol_str = "i1"
+        elif interpolant.lower() == "smoother":
+            interpol_str = "i2"
+        else:
+            interpol_str = "i0"
+        return cls(["--video-cfg", f"d{-duration if duration_is_seconds else duration}r{rotation[0]}:{rotation[1]}z{zoom[0]}:{zoom[1]}o{output_framerate}{interpol_str}e{edge[0]}:{edge[1]}"])
+
+    @classmethod
+    def arg_video_export(cls, args) -> Self:
+        if cls.__eval_directory is None:
+            raise RuntimeError("VolcaniteArg static evaluation directory must be initialized before usage"
+                               "(VolcaniteArg.set_directories)")
+        video_dir = (Path(cls.__eval_directory) / cls.concat_ids(args)).absolute()
+        video_dir.mkdir(parents=True, exist_ok=True)
+        return cls(["-v", str(video_dir) + "/" + cls.concat_ids(args) + "_{:04}.jpg"])
+
+    @classmethod
+    def arg_timing_export(cls, args) -> Self:
+        if cls.__eval_directory is None:
+            raise RuntimeError("VolcaniteArg static evaluation directory must be initialized before usage"
+                               "(VolcaniteArg.set_directories)")
+        timing_dir = (Path(cls.__eval_directory)).absolute()
+        timing_dir.mkdir(parents=True, exist_ok=True)
+        return cls(["--timings-logfile", str(timing_dir) + "/" + cls.concat_ids(args) + "_timing.csv"])
+
+    @classmethod
+    def arg_cache_size(cls, cache_size_mb: int):
+        return cls(["--cache-size", str(cache_size_mb)], "cs" + str(cache_size_mb), 19)   
+
+    @classmethod
+    def arg_config_import(cls, eval_config_file: list[Self] | str | None, additional_configs: list[str] | str | None = None, resolution: str = "1920x1080") -> Self:
+        if eval_config_file and cls.__vcfg_directory is None:
+            raise RuntimeError("VolcaniteArg static vcfg directory must be initialized before usage"
+                               "(VolcaniteArg.set_directories)")
+        
+        args_config_file = []
+        if eval_config_file:
+            if not isinstance(eval_config_file, str):
+                eval_config_file = cls.concat_ids(eval_config_file) + ".vcfg"
+            elif not eval_config_file.endswith(".vcfg"):
+                eval_config_file += ".vcfg"
+            
+            eval_config_file = str(cls.__vcfg_directory / eval_config_file)
+            args_config_file += ["--config", eval_config_file]
+
+        # example additional_configs: ["path-tracing", "[Display] Accumulation Frames: 8"]
+        # should become: ["path-tracing,"\"[Display]", "Accumulation", "Frames:", "8\""]
+        args_config_str = []
+        if additional_configs:
+            if isinstance(additional_configs, str):
+                additional_configs = [additional_configs]
+
+            for cfg in additional_configs:
+                cfg = cfg.strip()
+                if not cfg:
+                    continue
+                args_config_str += ["--config", cfg]
+
+        return cls(args_config_file + args_config_str + ["--resolution", resolution], "", 100)
 
     @classmethod
     def arg_dataset(cls, data_path: str, identifier: str | None = None,
                     chunks: tuple[int, int, int] | None = None):
         """
-        Creates a VolcaniteArg for loading the data set located ata data_path.
+        Creates a VolcaniteArg for loading the data set (.csgv or non-.csgv) located at data_path.
         If chunked is not none, the data path must contain three {} placeholders for the chunk x, y, and z indices and
         chunks must be a tuple of the last inclusive x, y, and z chunk index.
 
@@ -457,32 +687,38 @@ class VolcaniteArg:
         else:
             return cls([data_path], identifier, 0)
 
+    @classmethod
+    def arg_operations(cls, operations: str):
+        if operations != "none" and (not set(operations).issubset(set("pnxyzld-sao")) or len(operations) != len(set(operations))):
+            raise ValueError("Operations argument can only consist of unique characters in: pnxyzld-sao")
+        return cls(["-o", operations], "op-" + operations, 2.5)
+
 
 # several default VolcaniteArgs:
-VolcaniteArg.args_encoding = {"nibble": VolcaniteArg(["-s", "0"], "_nb", 1),
-                              "nibble_ra": VolcaniteArg(["-s", "0", "-p", "-o", "pnls"], "_nb-ra", 1),
-                              "rANS1": VolcaniteArg(["-s", "1"], "_rans1", 1),
-                              "rANS": VolcaniteArg(["-s", "2"], "_rans", 1),
-                              "wmh_nosb": VolcaniteArg(["-s", "2", "-p", "-o", "pnl", "p"], "_wm-sb", 1),
-                              "wmh": VolcaniteArg(["-s", "2", "-p", "-o" ,"pnls"], "_wm-sb", 1)}
-VolcaniteArg.args_brick_size = {"16": VolcaniteArg(["-b", "16"], "_b16", 2),
-                                "32": VolcaniteArg(["-b", "32"], "_b32", 2),
-                                "64": VolcaniteArg(["-b", "64"], "_b64", 2)}
-VolcaniteArg.args_cache_mode = {"none": VolcaniteArg(["--cache-mode", "n"], "_csh-n", 3),
-                            "voxel": VolcaniteArg(["--cache-mode", "v", "--empty-space-res", "0"], "_csh-v", 3),
-                            "voxel_es": VolcaniteArg(["--cache-mode", "v", "--empty-space-res", "2"], "_csh-v_es", 3),
-                            "brick": VolcaniteArg(["--cache-mode", "b"], "_csh-b", 3),
-                            "brick_sm": VolcaniteArg(["--cache-mode", "b", "--decode-sm"], "_csh-bsm", 3)}
-VolcaniteArg.args_shading = {"local": VolcaniteArg([], "_local", 0.5),
-                             "shadow": VolcaniteArg([], "_shadow", 0.5),
-                             "ao": VolcaniteArg([], "_ao", 0.5),
-                             "pt": VolcaniteArg([], "_pt", 0.5)}
+VolcaniteArg.args_encoding = {"nibble": VolcaniteArg(["-s", "0"], "nb", 1),
+                              "nibble_ra": VolcaniteArg(["-s", "0", "-p", "-o", "pnls"], "nb-ra", 1),
+                              "rANS1": VolcaniteArg(["-s", "1"], "rans1", 1),
+                              "rANS": VolcaniteArg(["-s", "2"], "rans", 1),
+                              "wmh_nosb": VolcaniteArg(["-s", "2", "-p", "-o", "pnl", "p"], "wm-sb", 1),
+                              "wmh": VolcaniteArg(["-s", "2", "-p", "-o" ,"pnls"], "wm-sb", 1)}
+VolcaniteArg.args_brick_size = {"16": VolcaniteArg(["-b", "16"], "b16", 2),
+                                "32": VolcaniteArg(["-b", "32"], "b32", 2),
+                                "64": VolcaniteArg(["-b", "64"], "b64", 2)}
+VolcaniteArg.args_cache_mode = {"none": VolcaniteArg(["--cache-mode", "n"], "csh-n", 3),
+                            "voxel": VolcaniteArg(["--cache-mode", "v", "--empty-space-res", "0"], "csh-v", 3),
+                            "voxel_es": VolcaniteArg(["--cache-mode", "v", "--empty-space-res", "2"], "csh-v_es", 3),
+                            "brick": VolcaniteArg(["--cache-mode", "b"], "csh-b", 3),
+                            "brick_sm": VolcaniteArg(["--cache-mode", "b", "--decode-sm"], "csh-bsm", 3)}
+VolcaniteArg.args_shading = {"local": VolcaniteArg(["--config", "local-shading"], "local", 105),
+                             "shadow": VolcaniteArg(["--config", "global-shadows"], "shadow", 105),
+                             "ao": VolcaniteArg(["--config", "ambient-occlusion"], "ao", 105),
+                             "pt": VolcaniteArg(["--config", "path-tracing"], "pt", 105)}
 VolcaniteArg.args_datasynth = {"dSynth8": VolcaniteArg(["+synth_1024x1024x1024_r6x6x6-10x10x10"], "dSynth8", 0),
                             "dSynth32": VolcaniteArg(["+synth_1024x1024x1024_r24x24x24-40x40x40"], "dSynth32", 0),
                             "dSynth128": VolcaniteArg(["+synth_1024x1024x1024_r96x96x96-160x160x160"], "dSynth128", 0),
                             "dSynth512": VolcaniteArg(["+synth_1024x1024x1024_r384x384x384-640x640x640"], "dSynth512", 0)}
-VolcaniteArg.args_default = {"verbose": VolcaniteArg(["--verbose"], "", 1000),
-                             "headless": VolcaniteArg(["--headless"], "", 1000)}
+VolcaniteArg.args_default = {"verbose": VolcaniteArg(["--verbose"]),
+                             "headless": VolcaniteArg(["--headless"])}
 
 class VolcaniteExec:
     """
@@ -493,7 +729,13 @@ class VolcaniteExec:
     """
 
     @classmethod
-    def __run_with_log(cls, call_args: list[str], cwd: str | PathLike | None = None, print_log=True, *args, **kwargs):
+    def __run_process(cls, call_args: list[str] | str, cwd: str | PathLike | None = None, print_log=True, *args, **kwargs):
+        # remove empty argument strings ""
+        if isinstance(call_args, str):
+            # split by ' ' but do not split substrings within quotes ""
+            call_args = [quoted if quoted else unquoted for quoted, unquoted in re.findall(r'"([^"]*)"|(\S+)', call_args.strip())]
+
+        call_args = list(filter(None, call_args))
         if print_log:
             print(str(cwd) + "> " + " ".join(call_args))
         return subp.run(call_args, cwd=cwd, *args, **kwargs)
@@ -506,19 +748,22 @@ class VolcaniteExec:
         if not build_dir.exists():
             build_dir.mkdir(parents=True, exist_ok=True)
             build_type = "-DCMAKE_BUILD_TYPE=Debug" if "deb" in str(build_dir.stem).lower() else "-DCMAKE_BUILD_TYPE=Release"
-            res = cls.__run_with_log(["cmake", build_type, ".."], cwd=build_dir)
+            res = cls.__run_process(["cmake", build_type, ".."], cwd=build_dir)
             if res.returncode != 0:
                 raise RuntimeError(f"Error: cmake returned {res.returncode}")
 
-        res = cls.__run_with_log(["cmake", "--build", ".", "-j", "--target", "volcanite"], cwd=build_dir)
+        res = cls.__run_process(["cmake", "--build", ".", "-j", "--target", "volcanite"], cwd=build_dir)
         if res.returncode != 0:
             raise RuntimeError(f"Error: building target volcanite returned {res.returncode}")
         return build_dir / "volcanite"
 
     @classmethod
-    def run_volcanite(cls, binary_dir: str | PathLike, args : str):
+    def run_volcanite(cls, binary_dir: str | PathLike, args: list[str] | str, print_log: bool = True):
         """Executes Volcanite with args as argument string and no special evaluation log file handling."""
-        return VolcaniteExec.__run_with_log(["./volcanite"] + args.split(' '), print_log=True, cwd=binary_dir)
+        if isinstance(args, str):
+            return VolcaniteExec.__run_process("./volcanite " + args.strip(), print_log=print_log, cwd=binary_dir)
+        else:
+            return VolcaniteExec.__run_process(["volcanite"] + args, print_log=print_log, cwd=binary_dir)
 
     def __init__(self, evaluation: VolcaniteEvaluation, git_base_dir: str | PathLike | None = None,
                  git_checkout : str | None = None, build_subdir: str | PathLike = "cmake-build-release",
@@ -552,8 +797,11 @@ class VolcaniteExec:
             if git_base_dir:
                 self.git_base_dir = Path(git_base_dir)
             else:
-                self.git_base_dir = Path(subp.Popen(["git", "rev-parse", "--show-toplevel"], stdout=subp.PIPE).communicate()[0].rstrip().decode('utf-8'))
-                print(f"obtained volcanite git base directory {self.git_base_dir} with 'git rev-parse --show-toplevel'")
+                if VolcaniteArg.get_git_directory():
+                    self.git_base_dir = VolcaniteArg.get_git_directory()
+                else:
+                    self.git_base_dir = Path(subp.Popen(["git", "rev-parse", "--show-toplevel"], stdout=subp.PIPE).communicate()[0].rstrip().decode('utf-8'))
+                    print(f"obtained volcanite git base directory {self.git_base_dir} with 'git rev-parse --show-toplevel'")
             if self.git_base_dir.name != "volcanite":
                 print(f"Warning: expected git base directory to be named volcanite but is {self.git_base_dir.name}")
                 self.git_base_dir = None
@@ -586,12 +834,12 @@ class VolcaniteExec:
             return
 
         if self.git_checkout:
-            VolcaniteExec.__run_with_log(["git", "checkout", self.git_checkout], cwd=self.git_base_dir)
-            res = VolcaniteExec.__run_with_log(["git", "pull"], cwd=self.git_base_dir)
+            VolcaniteExec.__run_process(["git", "checkout", self.git_checkout], cwd=self.git_base_dir)
+            res = VolcaniteExec.__run_process(["git", "pull"], cwd=self.git_base_dir)
             if res.returncode != 0:
                 raise RuntimeError(f"Error: git pull returned {res.returncode}")
 
-        VolcaniteExec.build_volcanite()
+        VolcaniteExec.build_volcanite(build_dir=self.build_dir)
         self.__is_build = True
 
     def exec(self, args : list[VolcaniteArg], eval_name: str = None, headless: bool = True):
@@ -613,29 +861,29 @@ class VolcaniteExec:
         if headless:
             exec_call_args += ["--headless"]
         if self.evaluation.enable_log:
-            exec_call_args += ["--eval-logfiles", str(','.join([str(log.log_file.resolve())
+            exec_call_args += ["--eval-logfiles", str(','.join([str(log.file_path.resolve())
                                                                 for log in self.evaluation.log_files]))]
             if eval_name:
                 exec_call_args += ["--eval-name", eval_name]
 
         # append all user passed arguments that are encapsulated in VolcaniteArg objects, sorted by priority
-        # args example:   [VolcaniteArg(["-b", "16"], "_b16"), VolcaniteArg(["-s", "0"], "_nb")]
-        args = sorted(args, key=lambda a: a.prio)
+        # args example:   [VolcaniteArg(["-b", "16"], "b16"), VolcaniteArg(["-s", "0"], "nb")]
+        args.sort(key=lambda a: a.prio)
         exec_call_args = exec_call_args + [a for volcanite_arg in args for a in volcanite_arg.args]
         print("RUN VOLCANITE -----------------  " + eval_name)
         print(" ".join(exec_call_args))
         print("-------------------------------")
         if not self.evaluation.dry_run:
-            res = VolcaniteExec.__run_with_log(exec_call_args, print_log=False, cwd=self.binary_dir)
+            res = VolcaniteExec.__run_process(exec_call_args, print_log=False, cwd=self.binary_dir)
             if res.returncode != 0:
                 print("Error: volcanite returned " + str(res.returncode))
                 if self.evaluation.enable_log:
                     for log in self.evaluation.log_files:
                         if log.fallback_log:
                             print("Error: Volcanite returned " + str(res.returncode))
-                            log.log_manual(log.fallback_log.replace("%name", eval_name) + "\n")
+                            log.log_manual(log.fallback_log.replace("{name}", eval_name))
                         else:
-                            raise RuntimeError(f"Volcanite returned {res.returncode} and no fallback log exists for {log.log_file_name}")
+                            raise RuntimeError(f"Volcanite returned {res.returncode} and no fallback log exists for {log.file_path}")
                 else:
                     raise RuntimeError(f"Volcanite returned {res.returncode}")
 
@@ -661,5 +909,5 @@ class VolcaniteExec:
             files = prefix + "*" + _name[_name.rfind("}")+1:]
             cmd = ["ffmpeg -n -framerate 60 -pattern_type glob -i '" + files + "' -c:v libx264 -pix_fmt yuv420p " + prefix + ".mp4"]
             print("Creating video file in " + str(_dir.absolute()) + " with\n  " + cmd[0])
-            VolcaniteExec.__run_with_log(cmd, cwd=str(_dir.absolute()), shell=True)
+            VolcaniteExec.__run_process(cmd, cwd=str(_dir.absolute()), shell=True)
 

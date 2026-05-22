@@ -98,12 +98,12 @@ void vvv::logLibraryAvailabilty() {
             vvv::Logger(vvv::Debug) << "OpenMP " + std::to_string(_OPENMP) + " available.";
     }
 #else
-    vvv::Logger(vvv::WARN) << "OpenMP not available.";
+    vvv::Logger(vvv::Warn) << "OpenMP not available.";
 #endif
 
 #ifdef LIB_HIGHFIVE
     vvv::Logger(vvv::Debug) << "HDF5 library available.";
 #else
-    vvv::Logger(vvv::WARN) << "HDF5 library not available.";
+    vvv::Logger(vvv::Warn) << "HDF5 library not available.";
 #endif
 }

@@ -18,6 +18,8 @@
 #include "volcanite/compression/wavelet_tree/HuffmanWaveletMatrix.hpp"
 #include "volcanite/compression/wavelet_tree/WaveletMatrix.hpp"
 
+#include <cstddef>
+
 namespace volcanite {
 
 // HELPER FUNCTIONS FOR BIT VECTOR ACCESS AND RANK =================================================================

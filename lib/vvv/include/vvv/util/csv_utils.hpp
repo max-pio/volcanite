@@ -36,6 +36,8 @@ std::vector<std::vector<float>> csv_float_import(const std::string &csv_path, co
 
 std::vector<unsigned int> csv_label_column_import(const std::string &csv_path, const std::string &attribute_csv_separator, std::string &label_column);
 
+std::vector<std::string> get_column_names_from_csv_file(const std::string &csv_path, const std::string &attribute_csv_separator);
+
 template <typename T>
 void csv_export(const std::vector<std::map<std::string, T>> &s, const std::string &path) {
     std::ofstream fout(path, std::ios::out);
@@ -61,6 +63,38 @@ void csv_export(const std::vector<std::map<std::string, T>> &s, const std::strin
             else
                 ss << v;
             if (i < attributes.size() - 1)
+                ss << ",";
+        }
+        ss << "\n";
+        fout << ss.str();
+    }
+
+    fout.close();
+}
+
+template <typename T>
+void csv_export(const std::vector<std::vector<float>> &s, const std::vector<std::string> &column_names, const std::string &path) {
+    std::ofstream fout(path, std::ios::out);
+    assert(fout.is_open());
+
+    std::stringstream ss;
+    int i = 0;
+    for (auto const &entry : column_names) {
+        ss << entry;
+        if (i++ < s[0].size() - 1)
+            ss << ",";
+    }
+    ss << "\n";
+    fout << ss.str();
+    for (const auto &m : s) {
+        ss.str(std::string());
+        for (i = 0; i < column_names.size(); i++) {
+            T v = s.at(i);
+            if (std::is_floating_point<T>() && v == std::floor(v))
+                ss << std::to_string(static_cast<long long>(v));
+            else
+                ss << v;
+            if (i < column_names.size() - 1)
                 ss << ",";
         }
         ss << "\n";

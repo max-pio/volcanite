@@ -27,7 +27,7 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--size", type=int, nargs=3, help="size of downloaded volume in voxels (default: full volume).")
     parser.add_argument("-f", "--filetype", default="hdf5", help="file type in which chunks are stored.")
     parser.add_argument("-o", "--origin", type=int, nargs=3, help="origin of the sub-volume in the full data set.")
-    parser.add_argument("--axis-order", default="xyz", help="axis order of the volume: a permutation of XYZ (default XYZ). exported chunks always have XYZ order.")
+    parser.add_argument("--axis-order", default="xyz", help="axis order of the volume: a permutation of XYZ (default XYZ). Exported chunks always have XYZ order.")
     parser.add_argument("-c", "--chunk_size", type=int, nargs=3, default=(1024,1024,1024), help="volume is split into XYZ chunks of this size. should be dividable by 64.")
     parser.add_argument("-a", "--append", action="store_true", default=False, help="ignore non-empty output directory and skip existing chunk files.")
     parser.add_argument("-n", "--name", help="file name prefix for chunks that will be extended to [name]_x{}y{}z{}.[filetype]")
@@ -36,8 +36,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     example_data = {"h01": ("gs://h01-release/data/20210601/c3/", {"axis_order": "xyz"}),
-                    "witvliet2020": ("bossdb://witvliet2020/Dataset_8/segmentation", {"axis_order": "zyx"}),
-                    "ara2016": ("bossdb://ara_2016/sagittal_10um/annotation_10um_2017", {"axis_order": "zyx"}),
+                    "witvliet2020": ("bossdb://witvliet2020/Dataset_8/segmentation", {"axis_order": "xyz"}),
+                    "ara2016": ("bossdb://ara_2016/sagittal_10um/annotation_10um_2017", {"axis_order": "xyz"}),
                     }
     if args.dataset == "list-examples":
         print("Available short keys for dataset argument:\n  " + "\n  ".join(example_data.keys()))

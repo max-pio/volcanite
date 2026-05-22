@@ -17,6 +17,7 @@
 // https://github.com/rygorous/ryg_rans
 
 #include "volcanite/compression/pack_rans.hpp"
+#include <cstddef>
 
 using namespace vvv;
 

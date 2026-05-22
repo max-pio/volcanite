@@ -29,6 +29,7 @@ int entrypoint_main(int (*main)(int, char **), int argc, char **argv, const std:
     /* print uncaught exceptions before segmentation fault. But don't do this when a debugger is attached, otherwise the stacktrace is lost. */
     if (!vvv::debuggerIsAttached()) {
         try {
+            vvv::Logger::s_minLevel = vvv::Info;
             vvv::Paths::initPaths(dataDirs);
             int ret = main(argc, argv);
 
@@ -48,6 +49,7 @@ int entrypoint_main(int (*main)(int, char **), int argc, char **argv, const std:
             throw;
         }
     } else {
+        vvv::Logger::s_minLevel = vvv::Debug;
         vvv::Logger(vvv::Debug) << "Running in DEBUG mode";
         vvv::Paths::initPaths(dataDirs);
         return main(argc, argv);

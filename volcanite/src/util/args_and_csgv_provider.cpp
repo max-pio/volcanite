@@ -14,6 +14,9 @@
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "volcanite/util/args_and_csgv_provider.hpp"
+#include "volcanite/compression/CSGVDatabase.hpp"
+#include "volcanite/compression/CSGVAttributeExtractor.hpp"
+#include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/CSGVPathUtils.hpp"
 #include "volcanite/compression/CompSegVolHandler.hpp"
 #include "volcanite/eval/EvaluationLogExport.hpp"
@@ -41,17 +44,11 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
             return RET_INVALID_ARG;
         }
         args = _args.value();
-        if (args.print_eval_keys) {
-            Logger(Info) << "Available evaluation log keys (used with --eval-log):";
-            const auto keys = EvaluationLogExport::get_all_evaluation_keys();
-            for (const auto &key : keys) {
-                Logger(Info) << " " << key;
-            }
-            return RET_SUCCESS;
-        }
     }
 
-    if (!vvv::debuggerIsAttached() && !args.verbose)
+    if (debuggerIsAttached() || args.verbose)
+        Logger::s_minLevel = Debug;
+    else
         Logger::s_minLevel = Info;
 
     // if we have to compress the input file (.vti/.raw/.hdf5..) we do it here
@@ -119,21 +116,23 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
             csgvDatabase->createDummy();
         }
 
-        CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = static_cast<int>(args.brick_size),
+        CompSegVolHandler::CSGVCompressionConfig cfg = {.brick_dim = args.brick_size,
                                                         .encoding_mode = args.encoding_mode,
                                                         .op_mask = args.operation_mask,
                                                         .random_access = args.random_access,
                                                         .label_remapping = label_remapping,
                                                         .cpu_threads = args.threads,
-                                                        .use_detail_separation = args.stream_lod,
+                                                        // this could be args.stream_lod but exported volumes should never have a separated detail.
+                                                        // detail separation will be performed right before rendering (after file import):
+                                                        .use_detail_separation = false,
                                                         .force_recompute = !args.chunked,
                                                         .chunked_input_data = args.chunked,
                                                         .max_file_index = max_chunk_id,
                                                         .freq_subsampling = args.freq_subsampling,
                                                         .run_tests = args.run_tests,
-                                                        .export_stats_per_chunk = args.export_stats && args.chunked,
+                                                        .export_stats_per_chunk = !args.brickstats_file.empty() && args.chunked,
                                                         .verbose = args.verbose};
-        compressedSegmentationVolume = CompSegVolHandler::createCompressedSegmentationVolume(args.input_file,
+        compressedSegmentationVolume = CompSegVolHandler().createCompressedSegmentationVolume(args.input_file,
                                                                                              complete_csgv_path, cfg);
 
         if (use_temporary_output_file) {
@@ -190,6 +189,30 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
     if (compressedSegmentationVolume == nullptr) {
         Logger(Error) << "could not create or load Compressed Segmentation Volume. Aborting.";
         return RET_COMPR_ERROR;
+    }
+
+    // optionally, add additional attributes from the attribute extraction
+    if (args.compute_attributes) {
+        if (!compressedSegmentationVolume->hasContiguousLabels())
+            throw std::runtime_error("Compressed Segmentation Volume must have contiguous labels. Compress with --relabel or -a.");
+
+        if (csgvDatabase->isDummy()) {
+            // convert dummy db to an sql db to insert extracted attributes
+            csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
+            csgvDatabase->createDBfromDummyDB(stripFileExtension(args.input_file) + "_csgv.db3", *compressedSegmentationVolume);
+        }
+
+        Logger(Debug, true) << "Computing attributes from CSGV..";
+        MiniTimer t;
+
+        CSGVAttributeExtractor csgvAttributeExtractor(compressedSegmentationVolume);
+        csgvDatabase->addAttributesIfNotExist(&csgvAttributeExtractor);
+
+        // (optionally), export the connectivity information, i.e. which labels are neighboring each other in the volume
+        // TODO: create a command line argument for connectivity .csv export
+        // csgvAttributeExtractor.exportNeighborsPerLabel(stripFileExtension(args.input_file) + "_connectivity.csv");
+
+        Logger(Debug) << "Computing attributes from CSGV. Finished in " << t.elapsed() << " seconds.";
     }
 
     return RET_SUCCESS;

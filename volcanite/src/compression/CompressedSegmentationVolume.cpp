@@ -25,21 +25,18 @@ using namespace vvv;
 
 namespace volcanite {
 
-void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, EncodingMode encoding_mode,
-                                                         uint32_t op_mask, bool random_access,
-                                                         const uint32_t *code_frequencies,
-                                                         const uint32_t *detail_code_frequencies) {
-    if (!(brick_size > 0 && !(brick_size & (brick_size - 1))))
+void CompressedSegmentationVolume::setCompressionOptions(const CSGVOptions& options) {
+    if (!(options.brick_size > 0 && !(options.brick_size & (options.brick_size - 1))))
         throw std::runtime_error("Brick size must be a power of two greater than zero.");
     if (!m_encodings.empty()) {
         Logger(Warn) << "CompressedSegmentationVolume was already compressed. Clearing old data on new config.";
         clear();
     }
 
-    m_brick_size = brick_size;
-    m_encoding_mode = encoding_mode;
-    m_op_mask = op_mask;
-    m_random_access = random_access;
+    m_brick_size = options.brick_size;
+    m_encoding_mode = options.encoding_mode;
+    m_op_mask = options.op_mask;
+    m_random_access = options.random_access;
 
     // TODO: replace with switch / case
     // set up the respective brick encoder
@@ -50,16 +47,16 @@ void CompressedSegmentationVolume::setCompressionOptions(uint32_t brick_size, En
             throw std::runtime_error("Nibble random access encoding does not support stop bits.");
         m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     } else if (m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
-        if (code_frequencies == nullptr)
+        if (options.code_frequencies == nullptr)
             throw std::runtime_error("Operation frequencies must be given if using rANS.");
-        if (random_access)
+        if (m_random_access)
             throw std::runtime_error("Random access encoding is not compatible with rANS.");
 
         // normalize the symbol frequencies and setup encoder
         m_encoder = std::make_unique<RangeANSEncoder>(m_brick_size, m_encoding_mode, m_op_mask,
-                                                      normalizeCodeFrequencies(code_frequencies).data(),
+                                                      normalizeCodeFrequencies(options.code_frequencies).data(),
                                                       (m_encoding_mode == DOUBLE_TABLE_RANS_ENC)
-                                                          ? normalizeCodeFrequencies(detail_code_frequencies).data()
+                                                          ? normalizeCodeFrequencies(options.detail_code_frequencies).data()
                                                           : nullptr);
     } else if (m_encoding_mode == WAVELET_MATRIX_ENC || m_encoding_mode == HUFFMAN_WM_ENC) {
         if (m_random_access && (m_op_mask & OP_PALETTE_D_BIT))
@@ -134,6 +131,8 @@ float CompressedSegmentationVolume::separateDetail() {
             detail_start = 0u;
             // finish the last (now completed) base encoding vector and shrink to fit
             m_encodings.at((brick_idx - 1u) / m_brick_idx_to_enc_vector).resize(m_brick_starts[brick_idx]);
+            // Technically, shrink_to_fit is not required to release the excess memory, but every practical implementation will do this.
+            m_encodings.at((brick_idx - 1u) / m_brick_idx_to_enc_vector).shrink_to_fit();
             cur_base_enc_brick_end = 0u;
             assert(brick_idx % m_brick_idx_to_enc_vector == 0 && "new split encoding does not start with first brick");
             assert(next_old_brick_start == 0u && "base encoding and new detail encoding start at different split points");
@@ -157,10 +156,11 @@ float CompressedSegmentationVolume::separateDetail() {
             next_old_brick_start = getBrickStart(brick_idx + 1);
             next_old_brick_length = getBrickEncodingLength(brick_idx + 1);
         }
-        m_brick_starts[brick_idx + 1] = cur_base_enc_brick_end;
+        m_brick_starts.at(brick_idx + 1) = cur_base_enc_brick_end;
     }
     // shrink last encoding buffer
     m_encodings.back().resize(m_brick_starts[brick_idx_count]);
+    m_encodings.back().shrink_to_fit();
 
     m_separate_detail = true;
     m_encoder->setDecodeWithSeparateDetail(true);
@@ -286,7 +286,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     m_brick_starts.resize(brick_index_count + 1, INVALID);
     // reset brick to split encoding vector mapping, and max. palette entry count
     m_brick_idx_to_enc_vector = ~0u;
-    m_max_brick_palette_count = 0u;
+    m_volume_info = {};
 
     // detail buffers can only be filled with a subsequent call to separateDetail()
     m_separate_detail = false;
@@ -371,7 +371,7 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
 
         // append the results
         m_encodings.back().resize(new_encoding_size);
-#pragma omp parallel num_threads(m_cpu_threads) default(none) shared(brick_index, encoded_element_count, encoded_element_count_prefix_sum, encodedBrick, old_encoding_size)
+#pragma omp parallel for num_threads(m_cpu_threads) default(none) shared(brick_index, encoded_element_count, encoded_element_count_prefix_sum, encodedBrick, old_encoding_size)
         for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
             if (encoded_element_count[thread_id] == 0u)
                 continue;
@@ -392,13 +392,6 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
         // vector. An easy check for this case is brick_starts[j] > brick_starts[j+1].
         if (m_encodings.size() > 1 && old_encoding_size == 0ul) {
             m_brick_starts[brick_index] = static_cast<uint32_t>(m_encodings[m_encodings.size() - 2].size());
-        }
-
-        // update the maximum palette size
-        for (int thread_id = 0; thread_id < m_cpu_threads; thread_id++) {
-            if (encoded_element_count[thread_id] > 0u && encodedBrick[thread_id][m_encoder->getPaletteSizeHeaderIndex()] > m_max_brick_palette_count) {
-                m_max_brick_palette_count = encodedBrick[thread_id][m_encoder->getPaletteSizeHeaderIndex()];
-            }
         }
 
         // output a progress update
@@ -433,6 +426,9 @@ void CompressedSegmentationVolume::compress(const std::vector<uint32_t> &volume,
     Logger(Info) << getLabel() << " Compression Progress 100% in " << std::fixed << std::setprecision(3) << m_last_total_encoding_seconds << "s (" << (static_cast<float>(volume.size()) / m_last_total_encoding_seconds / 1000000.f) << " million voxels/second) " << getEncodingInfoString();
 
     assert(verifyCompression() && "Compression did produce invalid encodings.");
+
+    // update general volume information
+    computeVolumeInfo();
 }
 
 // #define NO_BRICK_DECODE_INDEX_REMAP
@@ -613,6 +609,60 @@ bool CompressedSegmentationVolume::testLOD(const std::vector<uint32_t> &volume, 
     return error_count == 0;
 }
 
+void CompressedSegmentationVolume::computeVolumeInfo() {
+    // computes and stores for later use:
+    // * the maximum label in the volume
+    // * the maximum palette size of any brick
+    // * the number of unique labels in the volume
+    {
+        std::vector<std::unordered_set<uint32_t>> label_set(m_cpu_threads);
+        // process the next m_cpu_threads bricks in parallel
+        uint32_t max_label = 0u;
+        uint32_t max_palette_size = 0u;
+#pragma omp parallel num_threads(m_cpu_threads) default(none) shared(label_set) reduction(max : max_label) reduction(max : max_palette_size)
+        {
+            const unsigned int thread_id = omp_get_thread_num();
+            for (size_t n = thread_id; n < getBrickIndexCount(); n += m_cpu_threads) {
+
+                if (n < getBrickIndexCount()) {
+                    const auto brick_encoding = getBrickEncoding(n);
+                    const uint32_t brick_encoding_length = getBrickEncodingLength(n);
+                    const uint32_t palette_size = getBrickPaletteLength(n);
+
+                    // track maximum palette size
+                    if (palette_size > max_palette_size)
+                        max_palette_size = palette_size;
+
+                    for (int p = 1; p <= palette_size; p++) {
+                        uint32_t label = brick_encoding[brick_encoding_length - p];
+                        if (!label_set[thread_id].contains(label)) {
+                            label_set[thread_id].insert(label);
+                        }
+
+                        // track maximum label in volume
+                        if (label > max_label)
+                            max_label = label;
+                    }
+                }
+            }
+        }
+        m_volume_info.max_label_in_volume = max_label;
+        m_volume_info.max_brick_palette_size = max_palette_size;
+
+        // gather all thread-private label sets into one global set (the first one)
+        for (int thread_id = 1; thread_id < m_cpu_threads; thread_id++) {
+            for (const auto &label : label_set[thread_id]) {
+                if (!label_set[0].contains(label)) {
+                    label_set[0].insert(label);
+                }
+            }
+            label_set[thread_id].clear();
+        }
+        m_volume_info.unique_labels_in_volume = label_set[0].size();
+    }
+    m_volume_info.initialized = true;
+}
+
 void CompressedSegmentationVolume::exportToFile(const std::string &path, bool verbose) {
     if (m_encodings.empty()) {
         Logger(Error) << "Compression was not yet computed. Call compress(..) first. Skipping.";
@@ -623,8 +673,7 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
         return;
     }
     try {
-        // TODO: if the path is only one file in root it has no parent_path() which causes an invalid argument
-        std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+        std::filesystem::create_directories(std::filesystem::path(path).remove_filename());
     } catch (const std::filesystem::filesystem_error &e) {
         throw std::runtime_error("Filesystem error: could not create parent directories for path " + std::filesystem::path(path).string());
     }
@@ -658,7 +707,8 @@ void CompressedSegmentationVolume::exportToFile(const std::string &path, bool ve
     file.write(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
     file.write(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode));       // since 0011
     file.write(reinterpret_cast<char *>(&m_random_access), sizeof(bool));               // since 015
-    file.write(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t)); // since 012
+    // TODO: exporting max. palette size is deprecated. It will be computed in computeVolumeInfo() after import.
+    file.write(reinterpret_cast<char *>(&m_volume_info.max_brick_palette_size), sizeof(uint32_t)); // since 012
 
     file.write(reinterpret_cast<char *>(&m_op_mask), sizeof(uint32_t)); // since 015
     m_encoder->exportToFile(file);
@@ -733,12 +783,14 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     fin.read(reinterpret_cast<char *>(&m_volume_dim), sizeof(glm::uvec3));
     fin.read(reinterpret_cast<char *>(&m_encoding_mode), sizeof(EncodingMode));
     fin.read(reinterpret_cast<char *>(&m_random_access), sizeof(bool));
-    fin.read(reinterpret_cast<char *>(&m_max_brick_palette_count), sizeof(uint32_t));
+    // TODO: exporting max. palette size is deprecated. It will be computed in computeVolumeInfo() after import.
+    fin.read(reinterpret_cast<char *>(&m_volume_info.max_brick_palette_size), sizeof(uint32_t));
 
     // update encoder
     fin.read(reinterpret_cast<char *>(&m_op_mask), sizeof(uint32_t));
-    if (_numeric_version == 15)
+    if (_numeric_version == 15) {
         m_op_mask |= OP_USE_OLD_PAL_D_BIT; // compatibility: changed behavior of palette delta operation in 0016
+    }
     if (m_encoding_mode == NIBBLE_ENC) {
         m_encoder = std::make_unique<NibbleEncoder>(m_brick_size, m_encoding_mode, m_op_mask);
     } else if (m_encoding_mode == SINGLE_TABLE_RANS_ENC || m_encoding_mode == DOUBLE_TABLE_RANS_ENC) {
@@ -792,13 +844,21 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     if (verbose && !fin.eof())
         Logger(Warn) << "Unexpected end of file during Compressed Segmentation Volume import!";
     fin.close();
-    if (verbose)
+
+    // update the general information about the volume
+    computeVolumeInfo();
+
+    if (verbose) {
+        std::string op_mask_str = OperationMask_STR(m_op_mask);
         Logger(Debug) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim)
                       << " = " << (static_cast<size_t>(m_volume_dim.x) * m_volume_dim.y * m_volume_dim.z)
                       << " voxels and " << getNumberOfUniqueLabelsInVolume() << " unique labels,"
                       << " encoded in " << str(getBrickCount()) << " = " << getBrickIndexCount() << " bricks"
-                      << " [b=" << m_brick_size << ",e=" << EncodingMode_STR(m_encoding_mode) << "]"
+                      << " [b=" << m_brick_size << ",e=" << EncodingMode_STR(m_encoding_mode)
+                      << ", op=" << op_mask_str
+                      << (m_random_access ? ", p" : "") << "]"
                       << (isUsingSeparateDetail() ? " with seperated detail LoD" : "");
+    }
 
     if (verify) {
         Logger(Debug, true) << "verifying..";
@@ -808,9 +868,9 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
             return false;
         } else {
             Logger(Debug) << "verifying: ok (" << verifyTimer.elapsed() << "s)";
-            return true;
         }
     }
+
     return true;
 }
 

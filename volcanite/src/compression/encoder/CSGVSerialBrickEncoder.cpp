@@ -130,8 +130,14 @@ void CSGVSerialBrickEncoder::verifyBrickCompression(const uint32_t *brick_encodi
     }
 
     // check palette size + encoding start of last LoD being shorter than the brick encoding
-    if (palette_size + brick_encoding[header_start_lods] / 8u > brick_encoding_length) {
-        error << "  palette size and encoding of first (L-1) levels are longer than the total brick encoding\n";
+    if (m_encoding_mode == NIBBLE_ENC && palette_size + brick_encoding[header_start_lods] / 8u > brick_encoding_length) {
+        error << "  palette size (" << palette_size << ") and encoding of first (L-1) levels ("
+                << brick_encoding[header_start_lods] / 8u << ")  are longer than the total brick encoding\n";
+    }
+    // if rANS encoding is used, the operation count does not count 4 bit elements (variable bit-length).
+    // only check the palette size.
+    else if (m_encoding_mode != NIBBLE_ENC && palette_size > brick_encoding_length) {
+        error << "  palette size (" << palette_size << ") is longer than the total brick encoding\n";
     }
 
     // check detail encoding having at least 1 entry

@@ -80,3 +80,4 @@ class HelloVolumeRenderer : public Renderer, public WithGpuContext {
 };
 
 } // namespace volcanite
+

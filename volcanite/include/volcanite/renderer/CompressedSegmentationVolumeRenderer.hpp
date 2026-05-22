@@ -102,6 +102,7 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 
     ~CompressedSegmentationVolumeRenderer() override {
         resetGPU();
+        resetAllEvaluationStates();
         m_compressed_segmentation_volume.reset();
     }
 
@@ -126,6 +127,11 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 
     /// Releases all GPU states and resources but does not reset the segmentation volume.
     void resetGPU();
+
+
+    /// Resets all rendering caches, framebuffer accumulation, and other accumulated states between multiple evaluation runs.
+    /// For evaluation purposes. After the next rendered frame finishes execution, the first frame finished time step is set.
+    void resetAllEvaluationStates() override;
 
     void setRenderResolution(const vk::Extent2D resolution) {
         m_resolution = resolution;
@@ -266,28 +272,45 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
     void startFrameTimeTracking() override {
         m_enable_frame_time_tracking = true;
         m_last_frame_times.clear();
+        m_last_frame_times.reserve(4096);
         m_last_frame_start_time.reset();
+        if (m_pass->isFrameTimeTrackingAvailable())
+            m_pass->startFrameTimeTracking();
     }
     /// Stops the tracking. Should be immediately called after last renderNextFrame. If awaitLastFrameFinished is set,
     /// either to {} or an awaitable list, the method waits for the awaitables to finish and adds a final timing
     /// measurement for the last frame. Query the results with getLastEvaluationResults()
     void stopFrameTimeTracking(std::optional<AwaitableList> awaitLastFrameFinished) override {
-        // if the last frame is rendering, wait for completion and track
-        if (awaitLastFrameFinished.has_value()) {
+        if (!m_enable_frame_time_tracking)
+            return;
+
+        // if the last frame is rendering, wait for completion
+        if (awaitLastFrameFinished.has_value())
             getCtx()->sync->hostWaitOnDevice(awaitLastFrameFinished.value(), 60 * 1000000000ull);
-            if (m_enable_frame_time_tracking && m_last_frame_start_time.has_value()) {
-                m_last_frame_times.emplace_back(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                                                        std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value())
-                                                                        .count()) /
-                                                1000000.);
-                m_last_frame_start_time.reset();
-            }
+
+        if (m_last_frame_start_time.has_value()) {
+            m_last_frame_times.emplace_back(static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                                   std::chrono::high_resolution_clock::now() - m_last_frame_start_time.value())
+                                                                   .count()) /
+                                            1000000.f);
         }
         m_enable_frame_time_tracking = false;
         m_last_frame_start_time.reset();
+        if (m_pass->isFrameTimeTrackingAvailable())
+            m_pass->stopFrameTimeTracking(awaitLastFrameFinished);
     }
 
+    const std::vector<float> &getLastTrackingFrameTimes() override { return m_last_frame_times; }
+    const std::vector<glm::vec4> &getLastTrackingFrameTimesGPU() override { return m_pass->getLastFrameTimeTrackingResults(); }
+    /// @returns the system time stamp of the point after the first overall frame finished rendering.
+    /// Useful for "time to first frame" measurements. Reset with resetAllEvaluationStates().
+    [[nodiscard]] std::optional<std::chrono::high_resolution_clock::time_point> getFirstFrameFinishedTimeStamp() const { return m_total_first_frame_finish_time; }
+
     void exportCurrentFrameToImage(std::string image_path) override {
+        if (image_path.empty()) {
+            m_download_frame_to_image_file = {};
+            return;
+        }
         if (!image_path.ends_with(".png") && !image_path.ends_with(".jpg") && !image_path.ends_with(".jpeg")) {
             image_path.append(".png");
         }
@@ -296,7 +319,8 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 
     /// Returns statistics about frame times and GPU memory consumption. Frame times are only available if tracking was
     /// enabled via startFrameTimeTracking(). Tracking should have been stopped with stopFrameTimeTracking() when called.
-    CSGVRenderEvaluationResults getLastEvaluationResults();
+    /// @param time_to_first_frame if available, sets time_to_first_frame_s to this duration
+    CSGVRenderEvaluationResults getLastEvaluationResults(std::optional<std::chrono::high_resolution_clock::duration> time_to_first_frame = {});
     void printGPUMemoryUsage();
 
   private:
@@ -344,6 +368,8 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
     float m_lod_bias = 0.f;
     bool m_blue_noise = true;
     uint32_t m_debug_vis_flags = 0u;
+    bool m_constant_mouse_pos_enabled = false;
+    glm::vec2 m_constant_mouse_pos = glm::vec2{0.5f};
     bool m_clear_cache_every_frame = false;
     bool m_clear_accum_every_frame = false;
     int m_target_accum_frames = 128;
@@ -490,9 +516,11 @@ class CompressedSegmentationVolumeRenderer : public Renderer, public WithGpuCont
 
     std::shared_ptr<Buffer> m_gpu_stats_buffer = nullptr;
 
+    std::optional<std::chrono::high_resolution_clock::time_point> m_total_first_frame_finish_time = {}; ///< reset with resetAllEvaluationStates();
     bool m_enable_frame_time_tracking = false;
-    std::optional<std::chrono::high_resolution_clock::time_point> m_last_frame_start_time = {};
-    std::vector<double> m_last_frame_times = {};
+    std::optional<std::chrono::high_resolution_clock::time_point> m_last_frame_start_time = {};         ///< reset with startFrameTimeTracking();
+    std::vector<float> m_last_frame_times = {};
 };
 
 } // namespace volcanite
+

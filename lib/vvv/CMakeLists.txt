@@ -72,6 +72,7 @@ set(VVV_HEADERS
         include/vvv/util/random_gpu.hpp
         include/vvv/util/space_filling_curves.hpp
         include/vvv/util/util.hpp
+        include/vvv/util/video_encoding.hpp
         include/vvv/util/volume_data_types.hpp
         include/vvv/util/vertex_primitives.hpp
         include/vvv/util/Paths.hpp
@@ -129,6 +130,7 @@ set(VVV_SOURCES
         src/util/detect_debugger.cpp
         src/util/random_gpu.cpp
         src/util/util.cpp
+        src/util/video_encoding.cpp
         src/util/Paths.cpp
 
         src/reader/hdf5.cpp
@@ -157,7 +159,6 @@ add_library(LibVVV::libvvv ALIAS libvvv)
 find_package(OpenMP)
 
 # setting glslangValidator via the Vulkan package requires CMAKE 3.21
-# TODO: REMOVE set(SHADER_COMPILER_EXECUTABLE ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE})
 set(SHADER_COMPILER_EXECUTABLE ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE})
 string(TIMESTAMP BUILD_TIME_ISO8601 "%Y-%m-%dT%H:%M:%SZ" UTC)
 set(VVV_BUILD_TIME_ISO8601 ${BUILD_TIME_ISO8601})
@@ -172,7 +173,13 @@ target_compile_definitions(libvvv PRIVATE -DVULKAN_HPP_STORAGE_SHARED=1)
 target_compile_definitions(libvvv PUBLIC -DGLM_ENABLE_EXPERIMENTAL -DGLM_FORCE_DEPTH_ZERO_TO_ONE -DLIB_VVV_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\")
 
 # link required libraries
-target_link_libraries(libvvv PUBLIC Vulkan::Vulkan glm::glm shaderc fmt::fmt)
+target_link_libraries(libvvv PUBLIC Vulkan::Vulkan glm::glm fmt::fmt)
+# select either shaderc (compiled) or system glslangValidator (syscall to SHADER_COMPILER_EXECUTABLE) as shader compiler
+if(NOT USE_SYSTEM_GLSLANG)
+    target_link_libraries(libvvv PUBLIC shaderc)
+else()
+    target_compile_definitions(libvvv PUBLIC -DUSE_SYSTEM_GLSLANG_COMPILER)
+endif()
 
 # link optional libraries
 if (OpenMP_CXX_FOUND)

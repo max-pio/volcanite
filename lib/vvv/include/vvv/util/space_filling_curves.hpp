@@ -32,8 +32,8 @@ namespace sfc {
 
 class Cartesian {
   public:
-    static size_t p2i(glm::uvec3 p, glm::uvec3 brick_size) { return static_cast<size_t>(p.x) + static_cast<size_t>(p.y) * brick_size.x + static_cast<size_t>(p.z) * brick_size.x * brick_size.y; }
-    static glm::uvec3 i2p(size_t i, glm::uvec3 brick_size) { return {i % brick_size.x, (i / brick_size.x) % brick_size.y, (i / brick_size.x / brick_size.y) % brick_size.z}; }
+    static size_t p2i(const glm::uvec3& p, const glm::uvec3& brick_size) { return static_cast<size_t>(p.x) + static_cast<size_t>(p.y) * brick_size.x + static_cast<size_t>(p.z) * brick_size.x * brick_size.y; }
+    static glm::uvec3 i2p(const size_t i, const glm::uvec3& brick_size) { return {i % brick_size.x, (i / brick_size.x) % brick_size.y, (i / brick_size.x / brick_size.y) % brick_size.z}; }
 };
 
 // TODO: add asserts for position / index limits that can be indexed using 2D / 3D Morton codes in 32 or 64 bit

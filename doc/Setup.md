@@ -12,7 +12,7 @@ See [Headless Builds](#headless-builds).
 *Tested on Ubuntu 24.04*
 
 1. Install recent GPU drivers. Under Ubuntu, you can select recent proprietary drivers in the "Additional Drivers" GUI.
-2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
+2. Download and extract the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) tarball. Add the `source /path/to/vulkan/1.x.xxx.x/setup-env.sh` to `~/.profile` and `~/.bashrc` or [export all Vulkan paths](https://vulkan.lunarg.com/doc/view/latest/linux/getting_started.html). Verify with `vulkaninfo`.
 3. Install all required packages:
 ```
 sudo apt install -y build-essential cmake xorg-dev
@@ -29,7 +29,7 @@ mkdir cmake-build-release && cd cmake-build-release
 cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . -j --target volcanite
 ```
 
-Instead of the commandline build from step 5, you can alternatively open the CMake project with an IDE of your choice, e.g. CLion or MS Visual Studio Code.
+Instead of the commandline build from step 5, you can alternatively open the CMake project with an IDE of your choice, e.g. CLion or Visual Studio Code.
 If your IDE supports generating build files, you can directly open the `CMakeLists.txt` in the root folder.
 
 
@@ -52,7 +52,7 @@ cd vcpkg; .\bootstrap-vcpkg.bat
 
 **CMake** Build either using the CMake GUI or by running the following commands in the project root directory:
 ```
-mkdir cmake-build-release && cd cmake-build-release
+mkdir cmake-build-release; cd cmake-build-release
 cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release ..
 cmake --build . -j --target volcanite
 ```
@@ -108,7 +108,8 @@ To start Volcanite without opening a window, pass the optional command line argu
 
 Volcanite can be built without any windowing system and GUI window dependencies by enabling the CMake option `HEADLESS`, e.g. with
 ```
-cmake -DHEADLESS=ON -DCMAKE_BUILD_TYPE=Release .. && cmake --build . -j --target volcanite
+cmake -DHEADLESS=ON -DCMAKE_BUILD_TYPE=Release ..
+cmake --build . -j --target volcanite
 ```
 In this case, the `xorg-dev` package is not required.
 GPU drivers and the Vulkan SDK still need to be available and Volcanite can only be run with the `--headless` argument.
@@ -131,5 +132,5 @@ How do I solve an `ErrorOutOfDeviceMemory` error?
   `--stream-lod` and `--cache-packed` arguments (see [Usage.md](Usage.md#command-line-interface) for details) to minimize
   the required memory. If this is not enough either, your segmentation volume is simply too big to be rendered. Try to
  render a smaller sub-volume in this case. Have a look at the startup message
- `Device memory on startup: GPU Memory: used/avail/total GB` to find out how much total memory your GPU has and how much
+ `Device memory on startup: GPU Memory: used/avail/total GB` when executed with `--verbose` to find out how much total memory your GPU has and how much
  of it is actually available to Volcanite.

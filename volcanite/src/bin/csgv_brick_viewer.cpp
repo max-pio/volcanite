@@ -58,3 +58,4 @@ int csgv_brick_viewer(int argc, char *argv[]) {
 ENTRYPOINT(csgv_brick_viewer)
 
 #endif // HEADLESS
+

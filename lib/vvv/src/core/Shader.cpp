@@ -13,19 +13,21 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include <vvv/core/Shader.hpp>
+#include "vvv/core/Shader.hpp"
 
-#include <vvv/util/Paths.hpp>
+#include "vvv/util/Paths.hpp"
 
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include <cstdio>
 
 #include "vvv/config.hpp"
 #include <SPIRV-Reflect/spirv_reflect.h>
-#include <shaderc/shaderc.hpp>
-#include <utility>
+#ifndef USE_SYSTEM_GLSLANG_COMPILER
+    #include <shaderc/shaderc.hpp>
+#endif
 
 namespace vvv {
 /// Returns the standardized name for the given shader stage, e.g. "vert" or "frag". Only one bit of
@@ -211,6 +213,7 @@ void Shader::createShader(const GlslShaderRequest &request, const ShaderCompileE
     reflectShader();
 }
 
+#ifndef USE_SYSTEM_GLSLANG_COMPILER
 shaderc_shader_kind get_shaderc_kind(vk::ShaderStageFlagBits stage) {
     switch (stage) {
     case vk::ShaderStageFlagBits::eVertex:
@@ -335,8 +338,12 @@ shaderc::CompileOptions getDefaultShaderCCompileOptions(const GlslShaderRequest 
 
     return options;
 }
+#endif // ifndef USE_SYSTEM_GLSLANG_COMPILER
 
 std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderRequest &request, bool write_spirv_tmp_file) {
+#ifdef USE_SYSTEM_GLSLANG_COMPILER
+    throw std::runtime_error("compileGlslShader not avilable as USE_SYSTEM_GLSLANG_COMPILER is set. Use compileGlslShaderCMD.");
+#else
 
     // obtain spirv output file path
     std::optional<std::filesystem::path> spirv_path =
@@ -421,6 +428,7 @@ std::optional<std::filesystem::path> Shader::compileGlslShader(const GlslShaderR
     }
 
     return spirv_path;
+#endif
 }
 
 std::filesystem::path Shader::compileGlslShaderCMD(const GlslShaderRequest &request) {

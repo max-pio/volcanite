@@ -198,9 +198,12 @@ void vvv::DefaultGpuContext::createInstance() {
 
     // enable GLSL debugPrintfEXT() output and synchronization validation by default
     // TODO: enabling DebugPrintf by default makes it impossible to enable GPU assisted validation (can only use one)
+    // see: https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/8192
     vk::ValidationFeaturesEXT valFeatures;
     auto features = {vk::ValidationFeatureEnableEXT::eDebugPrintf,
-                     vk::ValidationFeatureEnableEXT::eSynchronizationValidation};
+                     //vk::ValidationFeatureEnableEXT::eGpuAssisted, vk::ValidationFeatureEnableEXT::eGpuAssistedReserveBindingSlot,
+                     vk::ValidationFeatureEnableEXT::eSynchronizationValidation
+                    };
     valFeatures.setEnabledValidationFeatures(features);
     valFeatures.pNext = instanceCreateInfo.pNext;
     instanceCreateInfo.pNext = &valFeatures;
