@@ -844,6 +844,10 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
     if (verbose && !fin.eof())
         Logger(Warn) << "Unexpected end of file during Compressed Segmentation Volume import!";
     fin.close();
+
+    // update the general information about the volume
+    computeVolumeInfo();
+
     if (verbose) {
         std::string op_mask_str = OperationMask_STR(m_op_mask);
         Logger(Debug) << "Imported Compressed Segmentation Volume from " << path << " with " << str(m_volume_dim)
@@ -866,9 +870,6 @@ bool CompressedSegmentationVolume::importFromFile(const std::string &path, bool 
             Logger(Debug) << "verifying: ok (" << verifyTimer.elapsed() << "s)";
         }
     }
-
-    // update the general information about the volume
-    computeVolumeInfo();
 
     return true;
 }
