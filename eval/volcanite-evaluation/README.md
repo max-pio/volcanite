@@ -8,7 +8,7 @@ The structure of the directory is as follows:
 * `./results/` will contain the results of the evaluation scripts,
 * `./plots/` contains scripts for creating all results plots in PDF format inside the results directory.
 
-It is advisable to place this directory in the 
+It is advisable to place this directory in the `<volcanite-root-src-dir>/eval/` subdirectory of the cloned Volcanite repository. 
 
 ## System Requirements
 **Important: The evaluations can pose heavy loads on GPU, RAM, and disk storage.
@@ -18,6 +18,7 @@ We take no responsibility for any problems this might cause.**
 * 48 GB RAM,
 * approx. 1 TB free disk space.
 
+The evaluation runs were only tested with Ubuntu 24.04 and some shell scripts will not work on Windows systems. 
 You might be able to run a subset of evaluation scripts on a subset of data sets if your system does not meet these requirements.
 
 
@@ -28,9 +29,9 @@ If not already present, first clone the Volcanite repository:
 git clone git@github.com:max-pio/volcanite.git
 ```
 And place this volcanite-evalution directory inside its source tree.
-We recommend `<volcanite-root-src-dir>/eval/`.
+We recommend to place it in `<volcanite-root-src-dir>/eval/`.
 
-You need the Volcanite [build dependencies](../doc/Setup.md), including the optional hdf5 libraries.
+You need to install the Volcanite build dependencies (see its [doc/Setup.md](https://github.com/max-pio/dev-volcanite/blob/main/doc/Setup.md)), including the optional hdf5 libraries.
 The evaluation scripts require python and the Volcanite python package located in `<volcanite-src-root-dir>/python/volcanite/` to be installed.
 Volcanite must be built with `Release` build type in `<volcanite-src-root-dir>/cmake-build-release`:
 ```bash
@@ -66,7 +67,7 @@ is stored for the evaluation scripts.
 
 In addition, the following arguments exist as well:
 * `--keep` Will keep the original input data once the CSGV files are created (~1 TB extra memory).
-* `--big-data` Downloads and compresses large, chunked data sets (~1 TB extra memory)
+* `--big-data` Downloads and compresses large, chunked data sets (~1 TB extra memory).
 * `--volcanite-src` If the download script is not run from inside the volcanite source tree, the path to the volcanite source root must be specified.
 * `--overwrite` Overwrites previously created data.
 * `--preview` Will create preview images of the data sets as well.
@@ -74,21 +75,22 @@ In addition, the following arguments exist as well:
 * `--only <dataset>` Only download a single specified data set.
 * `--single-chunk-copy` Create single chunked raw data copies of smaller chunked data sets. 
 
-To be able to execute all evaluation scripts, the following arguments are mandatory, (except `--preview` and `--no-abort` which are just recommended):  
+To be able to execute *all* evaluation scripts, the following arguments are mandatory, (except `--preview` and `--no-abort` which are just recommended):
 ```bash
 python3 download_evaluation_data.py /your/data/dir --big-data --keep --single-chunk-copy --preview --no-abort
 ```
  
-The evaluations assume a system with at least 64 GB RAM and a GPU with at least 16 GB VRAM.
+The evaluations assume a system with at least 48 GB RAM, a GPU with at least 16 GB VRAM, and at least 1 TB of free storage space in the data download directory.
 If your system does not meet these requirements, consider downloading only the smaller data
 (i.e. omitting `--big-data` in the data set download script).
 Some evaluations will create many large files (videos, compressed volumes, etc.) in `./results`.
-Make sure that enough free disk space is available.
+Make sure that enough free disk space is available on the drive where the evaluation directory located.
 
 ### Optional: Fixing GPU clock speeds
 
 For most accurate render timing measurements, it is optionally recommended to fix performance counters and GPU and VRAM clock speeds before each evaluation run.
-To that end, the [volcanite-eval-setup.txt](volcanite-eval-setup.txt) allows to set an entry- and shell exit-command that are execute before and after an evaluation script is run respectively.
+Use these at your own risk.
+To that end, the [volcanite-eval-setup.txt](volcanite-eval-setup.txt) allows to set entry and exit shell commands that are execute before and after an evaluation script is run respectively.
 
 Example for an NVIDIA GPU with a maximum GPU clock speed of 3105 MHz and a maximum memory clock speed of 10501 MHz:
 ```bash
@@ -106,13 +108,14 @@ source .venv/bin/activate
 python3 image-eval.py
 ```
 
-For convenience, a shell script (Ubuntu Linux) executes all evaluations:
+For convenience, a shell script (Ubuntu Linux) executes all evaluations
 ```bash
 ./run-all.sh
 ```
+except csgv-ablation-eval.py and deltaoperation-b64-eval.py which put excessive strain on storage drives through heavy read/write usage and storage output.
+These can be run through `./run-ablation-delta.sh`.
+
 If entry- or exit-commands require root privileges (e.g. fixing GPU clocks), execute ./run-all.sh with sudo as well.
-Note: Evaluations that put excessive strain on hard drives (CSGV ablation study, palette delta operation evaluation)
-are not included and executed from ./run-ablation-delta.sh instead.
 
 Afterward, results can be found in the [results/](./results) subdirectory.
 If not all data sets could be downloaded or were requested for download, some result tables may return missing entries.
