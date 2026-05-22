@@ -1,7 +1,7 @@
 # Volcanite Segmentation Volume Renderer
-[![version](https://img.shields.io/badge/version-0.6.0-blue)](https://gitlab.kit.edu/max.piochowiak/volcanite/-/tags/0.6.0)
+[![version](https://img.shields.io/badge/version-1.0.0-blue)](https://gitlab.kit.edu/max.piochowiak/volcanite/-/tags/1.0.0)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-<!--[![doi](https://img.shields.io/badge/doi-10.1109/TVCG.2023.3326573-blue?logo=ieee&logoColor=white)](https://www.doi.org/10.1109/TVCG.2023.3326573)-->
+[![doi](https://img.shields.io/badge/doi-10.1109/TVCG.2023.3326573-blue?logo=ieee&logoColor=white)](https://www.doi.org/10.1109/TVCG.2023.3326573)
 
 Volcanite is a GPU renderer for segmentation volumes implemented using C++ and the Vulkan API.
 Segmentation volumes are voxel data sets that store an integer object label per voxel.
