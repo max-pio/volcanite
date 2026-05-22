@@ -198,7 +198,7 @@ bool CSGVDatabase::databaseExportAndOpen(const std::string &sqlite_path, const s
                 while (column_query.executeStep()) {
                     std::string c = column_query.getColumn(0).getString();
                     if (!std::equal(c.begin(), c.end(), label_column.begin(), label_column.end(),
-                                    [](char a, char b) { return tolower(a) == tolower(b); })) {
+                                    [](const char a, const char b) { return tolower(a) == tolower(b); })) {
                         attr_col_names.push_back(c);
                         attr_col_types.push_back(column_query.getColumn(1));
                     }

@@ -12,7 +12,7 @@ See [Headless Builds](#headless-builds).
 *Tested on Ubuntu 24.04*
 
 1. Install recent GPU drivers. Under Ubuntu, you can select recent proprietary drivers in the "Additional Drivers" GUI.
-2. Install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) using the SDK Installer.
+2. Download and extract the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) tarball. Add the `source /path/to/vulkan/1.x.xxx.x/setup-env.sh` to `~/.profile` and `~/.bashrc` or [export all Vulkan paths](https://vulkan.lunarg.com/doc/view/latest/linux/getting_started.html). Verify with `vulkaninfo`.
 3. Install all required packages:
 ```
 sudo apt install -y build-essential cmake xorg-dev
@@ -29,7 +29,7 @@ mkdir cmake-build-release && cd cmake-build-release
 cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build . -j --target volcanite
 ```
 
-Instead of the commandline build from step 5, you can alternatively open the CMake project with an IDE of your choice, e.g. CLion or MS Visual Studio Code.
+Instead of the commandline build from step 5, you can alternatively open the CMake project with an IDE of your choice, e.g. CLion or Visual Studio Code.
 If your IDE supports generating build files, you can directly open the `CMakeLists.txt` in the root folder.
 
 

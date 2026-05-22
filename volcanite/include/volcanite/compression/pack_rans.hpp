@@ -22,7 +22,7 @@
 #include "vvv/util/util.hpp"
 #include <cassert>
 
-#include "ryg_rans/rans_nibble.h"
+#include "ryg_rans/rans_uint32.h"
 
 using namespace vvv;
 

@@ -63,6 +63,15 @@ source .venv/bin/activate
 pip install ./volcanite[all]
 ```
 
+### Evaluation and Results
+The [eval](./eval) directory contains additional information on how to use the python interface for evaluation purposes.
+See the designated [README](./eval/README.md) for details.
+The [volcanite-evaluation](https://github.com/max-pio/volcanite-evaluation/tree/main) git repository contains scripts for downloading a variety of segmentation volumes and generating a wide range of evaluation results.
+Simply clone the repository as a subdirectory of `./eval` and see its README for details:
+```bash
+git clone git@github.com:max-pio/volcanite-evaluation.git ./eval/volcanite-evaluation
+```
+
 ## License
 If not stated otherwise, the code in this repository uses a GPLv3 license.
 If you require alternative licensing options, please contact the authors.

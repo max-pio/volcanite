@@ -29,6 +29,7 @@ struct CSGVCompressionEvaluationResults {
     double compression_mainpass_seconds = 0.; ///< total compression time [s] without pre-pass and IO
     double compression_prepass_seconds = 0.;
     double compression_total_seconds = 0.;
+    double compression_total_seconds_with_fileio = 0.;
     double csgv_base_encoding_bytes = 0.;
     double csgv_detail_encoding_bytes = 0.;
     double csgv_bytes = 0.;
@@ -94,6 +95,7 @@ struct CSGVRenderEvaluationResults {
     int accumulated_frames = 0;
     int min_samples_per_pixel = 0;
     int max_samples_per_pixel = 0;
+    double time_to_first_frame_s = -1.;
     //    double spp_min = 0.f;
     //    double spp_avg = 0.f;
     //    double spp_max = 0.f;

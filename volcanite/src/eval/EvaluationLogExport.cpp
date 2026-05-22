@@ -57,6 +57,7 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     fmt_args.push_back(fmt::arg("comprate", comp_res.compression_rate));
     fmt_args.push_back(fmt::arg("comprate_pcnt", comp_res.compression_rate * 100.));
     fmt_args.push_back(fmt::arg("comp_s", comp_res.compression_total_seconds));
+    fmt_args.push_back(fmt::arg("comp_with_fileio_s", comp_res.compression_total_seconds_with_fileio));
     fmt_args.push_back(fmt::arg("comp_mainpass_s", comp_res.compression_mainpass_seconds));
     fmt_args.push_back(fmt::arg("comp_prepass_s", comp_res.compression_prepass_seconds));
     fmt_args.push_back(fmt::arg("comp_gb_per_s", comp_res.compression_GB_per_s));
@@ -131,6 +132,7 @@ fmt::dynamic_format_arg_store<fmt::format_context> create_fmt_args(const std::st
     }
 
     fmt_args.push_back(fmt::arg("render_total_max", render_res.total_ms));
+    fmt_args.push_back(fmt::arg("time_to_first_frame_s", render_res.time_to_first_frame_s));
     fmt_args.push_back(fmt::arg("rendered_frames", render_res.accumulated_frames));
     fmt_args.push_back(fmt::arg("mem_framebuffer_mb", render_res.mem_framebuffers_bytes * BYTE_TO_MB));
     fmt_args.push_back(fmt::arg("mem_uniformbuffer_mb", render_res.mem_ubos_bytes * BYTE_TO_MB));
@@ -172,6 +174,7 @@ std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
         "comprate",
         "comprate_pcnt",
         "comp_s",
+        "comp_with_fileio_s",
         "comp_mainpass_s",
         "comp_prepass_s",
         "comp_gb_per_s",
@@ -189,7 +192,7 @@ std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
         "detail_separation",
         "orig_gb",
         "orig_bits_per_voxel",
-        "orig_bytes_per_voxel"
+        "orig_bytes_per_voxel",
         "volume_dim",
         "volume_dim_x",
         "volume_dim_y",
@@ -319,6 +322,7 @@ std::vector<std::string> EvaluationLogExport::get_all_evaluation_keys() {
         "frame_gpu_post_14_ms",
         "frame_gpu_post_15_ms",
         "render_total_max",
+        "time_to_first_frame_s",
         "rendered_frames",
         "mem_framebuffer_mb",
         "mem_uniformbuffer_mb",
@@ -436,7 +440,7 @@ int EvaluationLogExport::write_eval_logfile(const std::string &eval_logfile, con
         const auto &keys = get_all_evaluation_keys();
         for (int k = 0; k < keys.size(); k++) {
             header_ss << k;
-            format_ss << "{" << k << "}";
+            format_ss << "{" << keys[k] << "}";
             if (k < keys.size() - 1) {
                 header_ss << ",";
                 format_ss << ",";

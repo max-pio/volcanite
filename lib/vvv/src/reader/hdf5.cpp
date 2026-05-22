@@ -31,19 +31,21 @@ std::shared_ptr<Volume<T>> load_volume_from_hdf5(std::string url, vk::Format gpu
     HighFive::File file(url, HighFive::File::ReadOnly);
     auto dataset = file.getDataSet(file.getObjectName(0));
 
-    // read dimension
+    // read dimensions
+    // note: in hdf5 files, the last dimension changes fastest in memory
+    //       dimensions are therefore interpreted as ZYX on load as Volcanite assumes X to change fastest.
     std::vector<size_t> dimensions = dataset.getDimensions();
     float max_dim = static_cast<float>(std::max(dimensions.at(0), std::max(dimensions.at(1), dimensions.at(2))));
-    float physical_size_x = static_cast<float>(dimensions.at(0)) / max_dim;
+    float physical_size_x = static_cast<float>(dimensions.at(2)) / max_dim;
     float physical_size_y = static_cast<float>(dimensions.at(1)) / max_dim;
-    float physical_size_z = static_cast<float>(dimensions.at(2)) / max_dim;
+    float physical_size_z = static_cast<float>(dimensions.at(0)) / max_dim;
 
     if (physical_size_x <= 0.f || physical_size_y <= 0.f || physical_size_z <= 0.f || !std::isfinite(physical_size_x) || !std::isfinite(physical_size_y) || !std::isfinite(physical_size_z)) {
         throw std::invalid_argument("invalid hdf5 physical volume size");
     }
 
     // allocate a memory region and read hdf5 object to it
-    auto volume = std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, dimensions.at(0), dimensions.at(1), dimensions.at(2), gpuFormat, dimensions.at(0) * dimensions.at(1) * dimensions.at(2));
+    auto volume = std::make_shared<Volume<T>>(physical_size_x, physical_size_y, physical_size_z, dimensions.at(2), dimensions.at(1), dimensions.at(0), gpuFormat, dimensions.at(2) * dimensions.at(1) * dimensions.at(0));
     dataset.read(volume->data().data());
     return volume;
 #else
@@ -76,7 +78,8 @@ void write_hdf5_(const Volume<T> *volume, const std::string &path) {
     if (file.exist(datasetName))
         file.unlink(datasetName);
 
-    auto dim = std::vector<size_t>{volume->dim_x, volume->dim_y, volume->dim_z};
+    // hdf5 assumes the last dimension to change fastest in memory: flip z and x
+    auto dim = std::vector<size_t>{volume->dim_z, volume->dim_y, volume->dim_x};
 
     // rewrite volume data s.t. it is a 3D vector
     std::vector<std::vector<std::vector<T>>> tmp_volume_data(dim[0], std::vector<std::vector<T>>(dim[1], std::vector<T>(dim[2])));

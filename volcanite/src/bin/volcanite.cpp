@@ -30,8 +30,8 @@
 #include "volcanite/renderer/CompressedSegmentationVolumeRenderer.hpp"
 #include "volcanite/util/args_and_csgv_provider.hpp"
 #include "vvv/util/video_encoding.hpp"
-#include "vvv/volren/Volume.hpp"
 
+#include <chrono>
 #include <string>
 
 #include <fmt/core.h>
@@ -83,6 +83,10 @@ int tryImportRenderConfigs(VolcaniteArgs &args, std::shared_ptr<CompressedSegmen
 }
 
 int volcanite_main(int argc, char *argv[]) {
+
+    // set timestamp for "time to first frame" measurements
+    const auto timestamp_before_preprocessing = std::chrono::high_resolution_clock::now();
+
     VolcaniteArgs args;
     std::shared_ptr<volcanite::CompressedSegmentationVolume> compressedSegmentationVolume;
     std::shared_ptr<volcanite::CSGVDatabase> csgvDatabase;
@@ -102,10 +106,26 @@ int volcanite_main(int argc, char *argv[]) {
         Logger(Info) << "export brick statistics to " << args.brickstats_file << " done";
     }
 
-    if (!args.headless || args.performHeadlessRendering()) {
+    // If no rendering is requested: export copmression results and exit
+    if(args.no_render) {
+        for (const auto &eval_logfile : args.eval_logfiles) {
+            if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
+                                                            compressedSegmentationVolume->getLastEvaluationResults(),
+                                                            {}, // TODO: add decompression benchmark
+                                                            {})) {
+                Logger(Info) << "exported evaluation results to " << eval_logfile;
+            } else {
+                Logger(Warn) << "could not export evaluation results to " << eval_logfile;
+                return RET_IO_ERROR;
+            }
+        }
 
-        Logger(Info) << "--------------------------------------------------- ";
-        Logger(Info) << "initializing Volcanite renderer";
+        if (!args.headless || args.performHeadlessRendering())
+            Logger(Error) << "Any rendering / GPU execution prohibited (--no-render). Exiting.";
+        return RET_SUCCESS;
+    } 
+    
+    if (!args.headless || args.performHeadlessRendering()) {
 
         // possibly separate the detail level-of-detail in the csgv if detail streaming is requested
         if (args.stream_lod && !compressedSegmentationVolume->isUsingSeparateDetail()) {
@@ -118,7 +138,10 @@ int volcanite_main(int argc, char *argv[]) {
         if (csgvDatabase->isDummy())
             csgvDatabase->updateDummyMinMax(*compressedSegmentationVolume);
 
-        const auto renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
+        Logger(Info) << "--------------------------------------------------- ";
+        Logger(Info) << "initializing Volcanite renderer";
+
+        std::shared_ptr<volcanite::CompressedSegmentationVolumeRenderer> renderer = std::make_shared<volcanite::CompressedSegmentationVolumeRenderer>(!args.show_development_gui);
         renderer->setDecodingParameters({.cache_size_MB = args.cache_size_MB,
                                          .palettized_cache = args.cache_palettized,
                                          .decode_from_shared_memory = args.decode_from_shared_memory,
@@ -148,6 +171,8 @@ int volcanite_main(int argc, char *argv[]) {
                 // and that the GPU heats up before the actual evaluation run takes place.
                 static constexpr int HEATUP_FRAMES = 4;
                 renderEngine->renderFrames({.accumulation_samples = HEATUP_FRAMES, .duration = 1, .verbose = false});
+                // for time to first frame: get timestamp after first frame finished execution.
+                auto timestamp_after_first_frame = renderer->getFirstFrameFinishedTimeStamp();
 
                 // perform a dry evaluation run first, gathering frame times etc., if required
                 if (args.performHeadlessEvaluationPrepass()) {
@@ -196,7 +221,7 @@ int volcanite_main(int argc, char *argv[]) {
                             if (!EvaluationLogExport::write_eval_logfile(eval_logfile, args.eval_name, argc, argv,
                                                                          compressedSegmentationVolume->getLastEvaluationResults(),
                                                                          {}, // TODO: add decompression benchmark for evaluation logging
-                                                                         renderer->getLastEvaluationResults())) {
+                                                                         renderer->getLastEvaluationResults(timestamp_after_first_frame.value() - timestamp_before_preprocessing))) {
                                 Logger(Info) << "exported evaluation results to " << eval_logfile;
                             } else {
                                 Logger(Warn) << "could not export evaluation results to " << eval_logfile;
@@ -257,7 +282,7 @@ int volcanite_main(int argc, char *argv[]) {
             }
         }
 
-        // if no evaluation results were exported before, do it now
+        // if no evaluation results were exported before (no rendering results), do it now
         if (evaluation_export_pending) {
             evaluation_export_pending = false;
             // If no rendering is requested: export the copmression results here
@@ -276,7 +301,7 @@ int volcanite_main(int argc, char *argv[]) {
 
 #ifndef HEADLESS
         // only start the application if we are not in headless mode
-        if (!args.headless) {
+        if (!args.headless && !args.no_render) {
 
             Logger(Info) << "--------------------\n        Starting Volcanite Application";
 

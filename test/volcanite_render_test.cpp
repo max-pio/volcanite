@@ -13,8 +13,9 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#define HEADLESS
-
+#ifndef HEADLESS
+    #define HEADLESS
+#endif
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
 #include "volcanite/util/segmentation_volume_synthesis.hpp"
 #include "vvv/volren/Volume.hpp"

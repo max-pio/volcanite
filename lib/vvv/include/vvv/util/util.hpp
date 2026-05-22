@@ -153,6 +153,10 @@ class MiniTimer {
         return static_cast<float>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) / 1000.f;
     }
 
+    static double getSystemClock() {
+        return static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) / 1000.;
+    }
+
     static std::string getCurrentDateTime(const std::string &format = "%Y-%m-%d %X") {
         auto now = std::chrono::system_clock::now();
         auto in_time_t = std::chrono::system_clock::to_time_t(now);

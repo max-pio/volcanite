@@ -292,10 +292,7 @@ class CompSegVolHandler {
 
         const bool create_log_file = false;
         const bool create_operation_freq_file = cfg.chunked_input_data;
-        double total_freq_prepass_seconds = 0.f;
-        double total_encoding_seconds = 0.f;
 
-        MiniTimer total_encoding_import_export_timer;
 
         // check output path for the complete volume
         if (!csgv_path.ends_with(".csgv")) {
@@ -337,6 +334,13 @@ class CompSegVolHandler {
             Logger(Info) << "Imported previously compressed file " << csgv_path << ". Skipping compression.";
             return csgv;
         }
+
+
+        // timing measurements
+        double total_freq_prepass_seconds = 0.f;        // only the freq. pre-pass (if required, without IO)
+        double total_encoding_seconds = 0.f;            // only the main encoding pass (without IO)
+        double total_compression_with_io_seconds = 0.;  // the total compression time, including all IO operations
+        MiniTimer total_encoding_import_export_timer;
 
         // if we use rANS, we need to get a global frequency table shared over all chunks
         std::vector<size_t> code_frequencies(16, 0u);
@@ -432,10 +436,10 @@ class CompSegVolHandler {
 
                         // perform the actual compression
                         csgv->clear();
-                        csgv->setLabel(chunk_input_path);
+                        csgv->setLabel(std::filesystem::path(chunk_input_path).stem().string());
                         csgv->setCompressionOptions({.brick_size = cfg.brick_dim, .encoding_mode = cfg.encoding_mode, .op_mask = cfg.op_mask, .random_access = cfg.random_access, .code_frequencies = code_frequencies.data(), .detail_code_frequencies = detail_code_frequencies.data()});
                         csgv->compress(m_volume->data(), m_volume_dim, cfg.verbose);
-                        total_encoding_seconds += csgv->getLastTotalEncodingSeconds();
+                        total_encoding_seconds += csgv->getLastTotalEncodingPassSeconds();
                         if (std::filesystem::exists(chunk_output_path)) {
                             Logger(Warn) << "overwriting file " << chunk_output_path;
                             std::filesystem::remove(chunk_output_path);
@@ -475,18 +479,20 @@ class CompSegVolHandler {
         }
 
         // if we have multiple chunks, we have to merge them
+        total_compression_with_io_seconds = total_encoding_import_export_timer.elapsed();
         Logger(Info) << "Total raw compression time: " << std::setprecision(3) << total_freq_prepass_seconds << " + "
                      << total_encoding_seconds << " = " << (total_freq_prepass_seconds + total_encoding_seconds) << "s, "
-                     << "including file IO: " << total_encoding_import_export_timer.elapsed() << "s.";
+                     << "including file IO: " << total_compression_with_io_seconds << "s.";
         if (cfg.chunked_input_data && glm::any(glm::greaterThan(cfg.max_file_index, glm::uvec3(0)))) {
             CSGVChunkMerger merger;
             csgv = merger.mergeCompressedSegmentationVolumeChunksFromFiles(csgv_path, chunk_output_path_template, cfg.max_file_index);
             if (!csgv)
                 return nullptr;
             csgv->setCPUThreadCount(cpu_threads);
-            csgv->m_last_total_freq_prepass_seconds = static_cast<float>(total_freq_prepass_seconds);
-            csgv->m_last_total_encoding_seconds = static_cast<float>(total_encoding_seconds);
+            csgv->m_last_total_freq_prepass_seconds = total_freq_prepass_seconds;
+            csgv->m_last_total_encoding_seconds = total_encoding_seconds;
         }
+        csgv->m_last_total_compression_with_io_seconds = total_compression_with_io_seconds;
 
         // create a log file
         if (create_log_file) {
@@ -498,7 +504,8 @@ class CompSegVolHandler {
                 file << "Compression time [s] excluding file import and export:" << std::endl;
                 file << "  Frequency prepass: " << total_freq_prepass_seconds << "s" << std::endl;
                 file << "   Compression pass: " << total_encoding_seconds << "s" << std::endl;
-                file << "  Total compression: " << (total_freq_prepass_seconds + total_encoding_seconds) << std::endl;
+                file << "  Total compression: " << (total_freq_prepass_seconds + total_encoding_seconds) << "s" << std::endl;
+                file << "  including file IO: " << total_compression_with_io_seconds << "s" << std::endl;
                 file << "" << std::endl;
                 file << "Compressed volume information:" << std::endl;
                 file << "  " << csgv->getEncodingInfoString() << std::endl;

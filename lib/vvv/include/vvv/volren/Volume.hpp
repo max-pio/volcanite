@@ -81,7 +81,7 @@ class Volume {
     void write_hdf5(const std::string &path) const;
 
     /// vti file format from the vtk library, but we expect a very precise format: an ImageData file
-    static std::shared_ptr<Volume<ElementType, HolderType>> load_vti(std::string path, bool allowCast = false);
+    static std::shared_ptr<Volume<ElementType, HolderType>> load_vti(std::string path, bool allowCast = true);
     // static void write_vti(std::string path);
 
     static std::shared_ptr<Volume<ElementType, HolderType>> load(std::string filepath) {

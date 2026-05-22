@@ -44,14 +44,6 @@ int volcanite_provide_args_and_csgv(VolcaniteArgs &args,
             return RET_INVALID_ARG;
         }
         args = _args.value();
-        if (args.print_eval_keys) {
-            Logger(Info) << "Available evaluation log keys (used with --eval-log):";
-            const auto keys = EvaluationLogExport::get_all_evaluation_keys();
-            for (const auto &key : keys) {
-                Logger(Info) << " " << key;
-            }
-            return RET_SUCCESS;
-        }
     }
 
     if (debuggerIsAttached() || args.verbose)

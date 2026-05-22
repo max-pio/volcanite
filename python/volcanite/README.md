@@ -11,13 +11,23 @@ sizes, and to download example data sets from online cloud storages.
 It is advised to install the package within a [python virtual environment (venv)](https://docs.python.org/3/library/venv.html):
 
 ### Ubuntu
+
+Install python dependencies:
 ```bash
-python -m venv ./.venv
+sudo apt update && sudo apt install python3-venv python3-dev build-essential
+```
+
+Create virtual environment: 
+```bash
+python3 -m venv ./.venv
 source .venv/bin/activate
 ```
 
 ### Windows 
-On windows the bin folder is named `Scripts`.
+
+[Install Python from setup](https://www.python.org/downloads/) and select `Add Python to PATH`.
+
+Create virtual environment:
 ```bash
 python -m venv ./.venv
 source .venv/Scripts/activate

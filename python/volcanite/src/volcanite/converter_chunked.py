@@ -12,6 +12,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+import pathlib
 
 import volcanite.converter as vc
 import re
@@ -19,12 +20,25 @@ import re
 import numpy as np
 import time
 import threading
+import gc
 
 def __read_tmp_chunk_zy(chunk_information, volume_information):
     tmp_chunk = np.zeros(shape=volume_information['chunk_size_in'], dtype=volume_information['dtype_out'])
 
-    tmp_chunk[:, :] = vc.read_volume(volume_information['path_in_format'].format(chunk_information['chunk_index'][2] - 1, chunk_information['chunk_index'][1] - 1, chunk_information['chunk_index'][0] - 1))
+    # TODO: fix padding if border chunks do not have the right size
+    cur_chunk_idx = (chunk_information['chunk_index'][2] - 1, chunk_information['chunk_index'][1] - 1, chunk_information['chunk_index'][0] - 1)
+    cur_chunk_shape = (np.minimum(chunk_information['chunk_index'] * volume_information['chunk_size_in'], volume_information['volume_dim'])
+                       - (chunk_information['chunk_index'] - (1,1,1)) * volume_information['chunk_size_in'])
 
+    # outer border chunks might need padding:
+    pad_width = []
+    for input_dim, target_dim in zip(cur_chunk_shape, volume_information['chunk_size_in']):
+        if input_dim >= target_dim:
+            pad_width.append((0, 0))
+        else:
+            pad_width.append((0, target_dim - input_dim))
+    tmp_chunk[:, :] = np.pad(vc.read_volume(volume_information['path_in_format'].format(cur_chunk_idx[0], cur_chunk_idx[1], cur_chunk_idx[2])),
+                             pad_width, mode='constant', constant_values=0)
     return tmp_chunk
 
 
@@ -150,9 +164,10 @@ def __launch_threads(chunk_information, volume_information, slice_count_offset, 
         thread.join()
 
 
-def __calculate_volume_dim(chunk_size_in: tuple[int, int, int], last_chunk: str):
-    volume_size = re.findall(r"\d+", last_chunk.split(".")[0])
-    return np.array(chunk_size_in, dtype=int) * np.array(volume_size, dtype=int) + vc.read_volume(last_chunk).shape
+def __calculate_volume_dim(chunk_size_in: tuple[int, int, int], path_in_format: str, last_input_chunk_xyz: tuple[int, int, int]):
+    # total volume dimension: inner chunk size * inner chunk count + last border chunk size
+    return (np.array(chunk_size_in, dtype=int) * np.array(last_input_chunk_xyz, dtype=int)
+            + vc.read_volume(path_in_format.format(last_input_chunk_xyz[0], last_input_chunk_xyz[1], last_input_chunk_xyz[2])).shape)
 
 
 def __update_and_reset_params(volume_information, chunk_information, dim, chunk_size_out, volume_dim):
@@ -181,24 +196,40 @@ def is_volume_conversion_valid(chunk_size_in, chunk_size_out, volume_dim):
         return False
     return True
 
-def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, int], last_chunk: str,
+def convert_chunked_volume(path_in_format: str, last_input_chunk_xyz: tuple[int, int, int],
                            path_out_format: str, chunk_size_out: tuple[int, int, int], thread_count: int = 16,
-                           dtype_out=None):
-    volume_dim = __calculate_volume_dim(chunk_size_in, last_chunk)
+                           dtype_out=None, input_axis_order: str = 'zyx', apply_gzip: bool = False):
 
-    # TODO: regarding axis orders: numpy volumes returned by read_volume are in ZYX shape (by np convention). This means
-    #  that read_volume().shape = (DIM_Z, DIM_Y, DIM_X). write_volume() expects the same ZYX shape of the np array, but
-    #  chunk file indices x{}y{}z{} are in XYZ order
+    print("Warning: file streaming convert_chunked_volume does not work with any combination of volume (chunk) sizes.")
+
+    if vc.__get_format_key_count(path_in_format) != 3:
+        raise Exception(f"Input file path must contain exactly 3 python string format keys but is {path_in_format}.")
+    if vc.__get_format_key_count(path_out_format) != 3:
+        raise Exception(f"Output file path must contain exactly 3 python string format keys but is {path_out_format}.")
+    if input_axis_order.lower() != 'zyx':
+        # TODO: regarding axis orders: numpy volumes returned by read_volume are in ZYX shape (by np convention). This means
+        #  that read_volume().shape = (DIM_Z, DIM_Y, DIM_X). write_volume() expects the same ZYX shape of the np array, but
+        #  chunk file indices x{}y{}z{} are in XYZ order
+        raise Exception("Writing chunked volumes only supports zyx input axis order.")
+
+    pathlib.Path(path_out_format).parent.mkdir(parents=True, exist_ok=True)
+
+    # read the inner chunk size from chunk 0,0,0
+    __first_chunk_shape = np.array(vc.read_volume(path_in_format.format(0, 0, 0)).shape)
+    chunk_size_in_xyz = (int(__first_chunk_shape[2]), int(__first_chunk_shape[1]), int(__first_chunk_shape[0]))
+    volume_dim = __calculate_volume_dim(chunk_size_in_xyz, path_in_format, last_input_chunk_xyz)
 
     # construct each output chunk from up to 8 input chunks
 
     # first and last dimension is swapped: numpy arrays are in ZYX, but files are written / chunk sizes are given in XYZ
     chunk_size_out = np.array((chunk_size_out[2], chunk_size_out[1], chunk_size_out[0]))
-    chunk_size_in = np.array((chunk_size_in[2], chunk_size_in[1], chunk_size_in[0]))
+    chunk_size_in = np.array((chunk_size_in_xyz[2], chunk_size_in_xyz[1], chunk_size_in_xyz[0]))
     volume_dim = np.array((volume_dim[2], volume_dim[1], volume_dim[0]))
 
     if not is_volume_conversion_valid(chunk_size_in, chunk_size_out, volume_dim):
-        raise ValueError("Conversion is not valid, chunk_size_in should be less than twice as large as chunk_size_out and volume_dim should be larger than chunk_size_out")
+        raise ValueError(f"Invalid chunked volume conversion: chunk_size_in ({chunk_size_in}) must be less than twice"
+                         f" as large as chunk_size_out ({chunk_size_out}). volume_dim ({volume_dim}) must be larger"
+                         f" than chunk_size_out ({chunk_size_out}).")
     # z
     # ^
     # |
@@ -211,6 +242,7 @@ def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, i
     #   2    3
 
     volume_information = {'path_in_format' : path_in_format,
+                          'last_chunk_in_xyz' : last_input_chunk_xyz,
                           'chunk_size_in' : chunk_size_in,
                           'volume_dim' : volume_dim,
                           'path_out_format' : path_out_format,
@@ -271,42 +303,118 @@ def convert_chunked_volume(path_in_format: str, chunk_size_in: tuple[int, int, i
         __update_and_reset_params(volume_information, chunk_information, 0, chunk_size_out, volume_dim)
 
 
-def write_chunked_volume(volume: np.ndarray, path_out_format: str, chunk_size: tuple[int, int, int]) -> None:
+def write_chunked_volume(volume: np.ndarray, path_out_format: str, chunk_size: tuple[int, int, int],
+                         dtype=None, input_axis_order: str = 'zyx', apply_gzip: bool = False) -> tuple[int, int, int]:
     """Exports the volume to a set of files where each file is a volume chunk with dimensions chunk_size^3. The file
     output format is selected based on the file extension of path_out_format. path_out_format must contain exactly
      three python string format keys that will be replaced with x y z chunk indices. e.g. 'my_volume_x{}y{}z{}.raw'."""
 
     if vc.__get_format_key_count(path_out_format) != 3:
         raise Exception("File path must contain exactly 3 python string format keys")
+    if input_axis_order.lower() != 'zyx':
+        raise Exception("Writing chunked volumes only supports zyx input axis order.")
+
+    pathlib.Path(path_out_format).parent.mkdir(parents=True, exist_ok=True)
 
     for z in range(0, volume.shape[0], chunk_size[0]):
         for y in range(0, volume.shape[1], chunk_size[1]):
             for x in range(0, volume.shape[2], chunk_size[2]):
-                print("Writing " + path_out_format.format(x // chunk_size[2], y // chunk_size[1], z // chunk_size[0]))
+                __chunk_output_path = path_out_format.format(x // chunk_size[2], y // chunk_size[1], z // chunk_size[0])
+                print("Writing " + __chunk_output_path)
                 vc.write_volume(volume[z:(min(volume.shape[0], z + chunk_size[0])),
-                             y:(min(volume.shape[1], y + chunk_size[1])),
-                             x:(min(volume.shape[2], x + chunk_size[2]))],
-                             path_out_format.format(x // chunk_size[2], y // chunk_size[1], z // chunk_size[0]))
+                                y:(min(volume.shape[1], y + chunk_size[1])),
+                                x:(min(volume.shape[2], x + chunk_size[2]))],
+                                __chunk_output_path, dtype=dtype, apply_gzip=apply_gzip)
                 
-    return ((volume.shape[2] - 1) // chunk_size[2], (volume.shape[1] - 1) // chunk_size[1], (volume.shape[0] - 1) // chunk_size[0])
+    return (volume.shape[2] - 1) // chunk_size[2], (volume.shape[1] - 1) // chunk_size[1], (volume.shape[0] - 1) // chunk_size[0]
 
 
-def read_chunked_volume(path_out_format: str, chunk_count) -> np.ndarray:
-    raise NotImplementedError("reading chunked volumes is not yet implemented")
+def read_chunked_volume(path_in_format: str, last_chunk_xyz: tuple[int, int, int], input_axis_order: str = 'zyx') -> np.ndarray:
+    if vc.__get_format_key_count(path_in_format) != 3:
+        raise Exception("File path must contain exactly 3 python string format keys")
+
+    if input_axis_order.lower() != 'zyx':
+        # TODO: if input_axis_order != zyx: is it enough to reshape the full volume in the end or must each chunk be
+        #   reshaped individually?
+        print("Warning: reading chunked volumes might break with input_axis_order other than 'zyx'.")
+
+    # dry run: check if all chunk files exist
+    chunk_count_xyz = (last_chunk_xyz[0] + 1, last_chunk_xyz[1] + 1, last_chunk_xyz[2] + 1)
+    for z in range(0, chunk_count_xyz[2]):
+        for y in range(0, chunk_count_xyz[1]):
+            for x in range(0, chunk_count_xyz[0]):
+
+                chunk_file = pathlib.Path(path_in_format.format(x, y, z))
+                if not chunk_file.exists():
+                    raise Exception(f"Chunk file {chunk_file} does not exist")
 
 
-if __name__ == '__main__':
-    # example code
-    # split chunks s.t three input chunks results in four output chunks, split in the first dimension
-    shape = (1024, 1024, 1024)
-    new_shape = (768, 1024, 1024)
-    print("convert volume now")
-    start_time = time.time()
-    convert_chunked_volume("input/x{}y{}z{}.hdf5", shape, "input/x3y0z2.hdf5", "output/out_x{}y{}z{}.hdf5", new_shape, dtype_out=np.float32)
-    end_time = time.time()
+    chunk_size_zyx = (0,0,0)
+    last_chunk_size_xyz = (0,0,0)
+    __volume_in = np.empty(shape=(0,0,0))
+    for z in range(0, chunk_count_xyz[2]):
+        for y in range(0, chunk_count_xyz[1]):
+            for x in range(0, chunk_count_xyz[0]):
 
-    elapsed_time_minutes = int((end_time - start_time) // 60)
-    elapsed_time_seconds = (end_time - start_time) % 60
-    print(f"diff: {elapsed_time_minutes} min {elapsed_time_seconds: .2f} sec")
+                chunk_file = pathlib.Path(path_in_format.format(x, y, z))
+                if not chunk_file.exists():
+                    raise Exception(f"Chunk file {chunk_file} does not exist")
 
-    exit(0)
+                print(f"Reading {chunk_file}")
+                chunk_volume = vc.read_volume(chunk_file, input_axis_order=input_axis_order)
+
+                if x == 0 and y == 0 and z == 0:
+                    chunk_size_zyx = (chunk_volume.shape[0], chunk_volume.shape[1], chunk_volume.shape[1])
+                    size_in_gb = (chunk_count_xyz[2] * chunk_size_zyx[0] * chunk_count_xyz[1]
+                                  * chunk_size_zyx[1] * chunk_count_xyz[0] * chunk_size_zyx[2]) / 1024 / 1024 / 1024
+                    print(f"Allocating volume <= size {(chunk_count_xyz[2] * chunk_size_zyx[0],
+                                                        chunk_count_xyz[1] * chunk_size_zyx[1],
+                                                        chunk_count_xyz[0] * chunk_size_zyx[2])} ({size_in_gb} GB).")
+                    __volume_in = np.empty((chunk_count_xyz[2] * chunk_size_zyx[0],
+                                            chunk_count_xyz[1] * chunk_size_zyx[1],
+                                            chunk_count_xyz[0] * chunk_size_zyx[2]), 'uint32')
+                elif x == last_chunk_xyz[0] and y == last_chunk_xyz[1] and z == last_chunk_xyz[2]:
+                    last_chunk_size_zyx = (chunk_volume.shape[0], chunk_volume.shape[1], chunk_volume.shape[2])
+                else:
+                    if chunk_volume.shape[0] != chunk_size_zyx[0] and z != last_chunk_xyz[2]:
+                        raise Exception(f"Inner chunks must have chunk size {chunk_size_zyx}"
+                                        f" but {chunk_file} has size {chunk_volume.shape}")
+                    if chunk_volume.shape[1] != chunk_size_zyx[1] and y != last_chunk_xyz[1]:
+                        raise Exception(f"Inner chunks must have chunk size {chunk_size_zyx}"
+                                        f" but {chunk_file} has size {chunk_volume.shape}")
+                    if chunk_volume.shape[2] != chunk_size_zyx[2] and x != last_chunk_xyz[0]:
+                        raise Exception(f"Inner chunks must have chunk size {chunk_size_zyx}"
+                                        f" but {chunk_file} has size {chunk_volume.shape}")
+
+                chunk_start = (z * chunk_size_zyx[0], y * chunk_size_zyx[1], x * chunk_size_zyx[2])
+                __volume_in[chunk_start[0]:(chunk_start[0] + chunk_volume.shape[0]),
+                            chunk_start[1]:(chunk_start[1] + chunk_volume.shape[1]),
+                            chunk_start[2]:(chunk_start[2] + chunk_volume.shape[2])] = chunk_volume
+                del chunk_volume
+                gc.collect()
+
+    # last border chunks might be smaller than chunk_size. resize:
+    # print(f"resize to {((chunk_count_xyz[2] - 1) * chunk_size_zyx[0] + last_chunk_size_zyx[0],
+    #                    ((chunk_count_xyz[1] - 1) * chunk_size_zyx[1] + last_chunk_size_zyx[1]),
+    #                    ((chunk_count_xyz[0] - 1) * chunk_size_zyx[2] + last_chunk_size_zyx[2]))}")
+    __volume_in = __volume_in[0:((chunk_count_xyz[2] - 1) * chunk_size_zyx[0] + last_chunk_size_zyx[0]),
+                              0:((chunk_count_xyz[1] - 1) * chunk_size_zyx[1] + last_chunk_size_zyx[1]),
+                              0:((chunk_count_xyz[0] - 1) * chunk_size_zyx[2] + last_chunk_size_zyx[2])]
+
+    # TODO: reshape axis order of chunked volume after merging or for each chunk (read_volume see above)
+    # __volume_in = vc.reshape_memory_order(__volume_in, input_axis_order, 'zyx')
+    return __volume_in
+
+
+# # example code
+# # split chunks s.t three input chunks results in four output chunks, split in the first dimension
+# shape = (1024, 1024, 1024)
+# new_shape = (768, 1024, 1024)
+# print("convert volume now")
+# start_time = time.time()
+# convert_chunked_volume("input/x{}y{}z{}.hdf5", (3,0,2), "output/out_x{}y{}z{}.hdf5", new_shape, dtype_out=np.float32)
+# end_time = time.time()
+#
+# elapsed_time_minutes = int((end_time - start_time) // 60)
+# elapsed_time_seconds = (end_time - start_time) % 60
+# print(f"diff: {elapsed_time_minutes} min {elapsed_time_seconds: .2f} sec")

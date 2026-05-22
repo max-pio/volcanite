@@ -13,7 +13,9 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#define HEADLESS
+#ifndef HEADLESS
+    #define HEADLESS
+#endif
 
 #include "shaderc/third_party/spirv-tools/include/spirv-tools/libspirv.h"
 #include "volcanite/compression/CompressedSegmentationVolume.hpp"
@@ -35,7 +37,7 @@ constexpr int RET_COMPR_ERROR = 3;
 constexpr int RET_RENDER_ERROR = 4;
 constexpr int RET_EXPORT_ERROR = 5;
 
-struct DECOMPRESSION_TEST_CONFIGS {
+struct DecompressionTestConfig {
     glm::uvec3 volumeDim;
     glm::uvec3 chunkSize;
     glm::uvec3 maxFileIndex; // max file id of chunked test volume
@@ -44,7 +46,7 @@ struct DECOMPRESSION_TEST_CONFIGS {
 int main() {
     // initialize data paths to shaders
     vvv::Paths::initPaths(DATA_DIRS);
-    std::vector<DECOMPRESSION_TEST_CONFIGS> testConfig = {
+    std::vector<DecompressionTestConfig> testConfig = {
         {{128, 256, 256}, {64, 128, 256}, {1, 1, 0}},
         {{156, 105, 54}, {64, 64, 64}, {2, 1, 0}},
     };
@@ -101,7 +103,7 @@ int main() {
         for (uint32_t z = 0; z < config.volumeDim.z; z++) {
             for (uint32_t y = 0; y < config.volumeDim.y; y++) {
                 for (uint32_t x = 0; x < config.volumeDim.x; x++) {
-                    if (csgv_data->data()[voxel_pos2idx({x, y, z}, config.volumeDim)] != csgv_recompressed_data->data()[voxel_pos2idx({x, y, z}, config.volumeDim)]) {
+                    if ((*csgv_data)[voxel_pos2idx({x, y, z}, config.volumeDim)] != (*csgv_recompressed_data)[voxel_pos2idx({x, y, z}, config.volumeDim)]) {
                         Logger(Error) << "Decompression test failed. Decompressed volume is different to original volume.";
                         return RET_COMPR_ERROR;
                     }

@@ -24,11 +24,11 @@
 #include "vvv/util/hash_memory.hpp"
 
 #include "glm/gtc/matrix_transform.hpp"
-#include "implot/implot.h"
-#include "vvvwindow/App.hpp"
 
 #ifndef HEADLESS
 #include "portable-file-dialogs.h"
+#include "implot/implot.h"
+#include "vvvwindow/App.hpp"
 #endif
 #ifdef IMGUI
 #include "imgui.h"
@@ -150,6 +150,10 @@ RendererOutput CompressedSegmentationVolumeRenderer::renderNextFrame(AwaitableLi
                                                                 .count()) /
                                         1000000.);
         m_last_frame_start_time.reset();
+    }
+    // track the time point after which the first frame finished execution (for time to first frame tracking)
+    if (m_frame == 1) {
+        m_total_first_frame_finish_time = std::chrono::high_resolution_clock::now();
     }
 
     // if a screenshot export was requested, we do this here (not timed)
@@ -929,6 +933,7 @@ void CompressedSegmentationVolumeRenderer::resetAllEvaluationStates() {
     m_pmaterial_reset = true;
     m_accumulated_frames = 0u;
     m_frame = 0u;
+    m_total_first_frame_finish_time = {};
 }
 
 void CompressedSegmentationVolumeRenderer::updateRenderUpdateFlags() {
@@ -1326,7 +1331,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         }
 
         // Open a file dialog to choose a file
-        auto selected_file = pfd::open_file("Import Parameters", Paths::getHomeDirectory().string(),
+        auto selected_file = pfd::open_file("Import Parameters", Paths::getHomeDirectory().string() + "/*",
                                             {"Parameter Config (.vcfg)", "*.vcfg", "All Files", "*"});
         if (!selected_file.result().empty()) {
             file = selected_file.result().at(0);
@@ -1343,7 +1348,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
         }
 
         // Open a file dialog to choose a file
-        auto selected_file = pfd::save_file("Export Parameters", Paths::getHomeDirectory().string(),
+        auto selected_file = pfd::save_file("Export Parameters", Paths::getHomeDirectory().string() + "/*",
                                             {"Parameter Config (.vcfg)", "*.vcfg", "All Files", "*"});
         if (!selected_file.result().empty())
             file = selected_file.result();
@@ -1814,7 +1819,7 @@ void CompressedSegmentationVolumeRenderer::printGPUMemoryUsage() {
                  << available_vram_bytes * BYTE_TO_GB << " GB";
 }
 
-CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluationResults() {
+CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluationResults(std::optional<std::chrono::high_resolution_clock::duration> time_to_first_frame) {
     CSGVRenderEvaluationResults results = {};
 
     // obtain GPU memory consumption
@@ -1948,6 +1953,9 @@ CSGVRenderEvaluationResults CompressedSegmentationVolumeRenderer::getLastEvaluat
             results.frame_gpu_med_ms[stage] = *(frame_time_cpy.begin() + static_cast<long>(frame_time_cpy.size() / 2));
         }
     }
+
+    if (time_to_first_frame.has_value())
+        results.time_to_first_frame_s = static_cast<std::chrono::duration<double>>(time_to_first_frame.value()).count();
     return results;
 }
 
