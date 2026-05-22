@@ -57,8 +57,6 @@ entry-command: sudo nvidia-smi --lock-gpu-clocks=3105 && sudo nvidia-smi --lock-
 exit-command: sudo nvidia-smi --reset-gpu-clocks && sudo nvidia-smi --reset-memory-clocks && sudo nvidia-smi -pm 0
 ```
 
-
-
 ## Running an Evaluation
 
 See [test-eval.py](test-eval.py) for an example evaluation script.
@@ -105,6 +103,11 @@ The special key `{name}` takes the value of the command line argument `--eval-na
 
 The setup of such logfiles and format strings can be handled by the `VolcaniteEvaluation` (`log_files=[VolcaniteLogFileCfg(..), ...]`).
 The evaluation `{name}` can be set for each individual Volcanite execution via the `VolcaniteExec` object.
-Note: the special argument `--timings-logfile` triggers the export of individual frame (GPU) rendering timings in a non-configurable.csv format.    
+Note: the special argument `--timings-logfile` triggers the export of individual frame (GPU) rendering timings in a non-configurable.csv format.
 
-
+## Volcanite Main Paper Evaluation
+The evaluations to generate the results of the Volcanite main publication can be found in the [volcanite-evaluation](https://github.com/max-pio/volcanite-evaluation) repository.
+Simply clone the repository into this directory:
+```bash
+git clone git@github.com:max-pio/volcanite-evaluation.git
+```
