@@ -1277,7 +1277,7 @@ void CompressedSegmentationVolumeRenderer::initGui(vvv::GuiInterface *gui) {
 #endif
 
     // General options
-    static int gui_preset_selection = 0;
+    static int gui_preset_selection = 1;
     std::vector<std::string> vcfg_preset_names;
     std::ranges::transform(m_data_vcfg_presets, std::back_inserter(vcfg_preset_names),
                            [](const std::pair<std::string, std::filesystem::path> &c) { return c.first; });
