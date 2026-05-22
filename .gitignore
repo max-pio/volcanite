@@ -41,7 +41,7 @@ eval/**/volcanite-eval-setup.txt
 **/**.code-workspace
 
 # vulkan, volcanite and imgui specific ignores
-/imgui.ini
-/vulkan_pipeline_cache.data
+**/imgui.ini
+**/vulkan_pipeline_cache.data
 /extern/shaderc/third_party/spirv-tools/build_overrides/*
 
