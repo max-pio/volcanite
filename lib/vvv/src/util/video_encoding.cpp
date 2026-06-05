@@ -27,10 +27,10 @@ void try_ffmpeg_video_encoding(const std::string& video_fmt_file_in, int frame_r
     // TODO: use a direct C++ API for video encoding instead of ffmpeg system calls
 
     const std::string prefix = video_fmt_file_in.substr(0, video_fmt_file_in.find('{'));
-    const std::string files = prefix + "*" + video_fmt_file_in.substr(video_fmt_file_in.rfind('}') + 1);
+    const std::string files = prefix + "%d" + video_fmt_file_in.substr(video_fmt_file_in.rfind('}') + 1);
     if (video_output_file.empty())
         video_output_file = (prefix.empty() ? "out" : prefix) + ".mp4";
-    const std::string ffmpeg_cmd = "ffmpeg -y -loglevel quiet -framerate " + std::to_string(frame_rate) + " -pattern_type glob -i '" + files + "' -c:v libx264 -pix_fmt yuv420p " + video_output_file;
+    const std::string ffmpeg_cmd = "ffmpeg -y -loglevel quiet -framerate " + std::to_string(frame_rate) + " -i \"" + files + "\" -c:v libx264 -pix_fmt yuv420p " + video_output_file;
     Logger(Debug) << "Encoding video " << ffmpeg_cmd;
     if (system(ffmpeg_cmd.c_str()) != 0)
         Logger(Warn) << "System call failed: " << ffmpeg_cmd;
