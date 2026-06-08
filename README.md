@@ -81,8 +81,8 @@ The third party open source libraries that Volcanite uses and their licenses are
 ## About
 Volcanite © 2024 Max Piochowiak, Reiner Dolp
 
-Volcanite main contributors are [Max Piochowiak](https://cg.ivd.kit.edu/piochowiak/staff_index.php) and [Reiner Dolp](https://reinerdolp.com/).
-Additional contributions by Fabian Schiekel, Patrick Jaberg, and [Mirco Werner](https://github.com/MircoWerner).
+Volcanite main contributors are [Max Piochowiak](https://cg.ivd.kit.edu/english/staff/research/piochowiak/index_piochowiak.php) and [Reiner Dolp](https://reinerdolp.com/).
+Additional contributions by Fabian Schiekel, Patrick Jaberg, and [Mirco Werner](https://cg.ivd.kit.edu/english/staff/research/werner/index_werner.php).
 All contributors are affiliated with Karlsruhe Institute of Technology (KIT).
 Volcanite builds on the CSGV segmentation volume compression and renderer by Max Piochowiak.
 You can cite the following publication if you use the Volcanite CSGV compression in your projects:
