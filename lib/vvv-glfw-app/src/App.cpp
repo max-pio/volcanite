@@ -1144,6 +1144,9 @@ bool Application::isWindowResizable() const {
 }
 
 void Application::framebufferResizeCallback(GLFWwindow *window, int _width, int _height) {
+    if (_width <= 0 || _height <= 0)
+        return;
+
     auto app = reinterpret_cast<Application *>(glfwGetWindowUserPointer(window));
     app->m_swapchain.pendingRecreation = true;
 }
