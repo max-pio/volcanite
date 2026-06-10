@@ -195,4 +195,13 @@ std::filesystem::path Paths::getHomeDirectory() {
 #endif
 }
 
+
+std::string Paths::getHomeDirectoryPFDOpenEscaped() {
+    #ifdef _WIN32
+        return  absolute(getHomeDirectory()).string();
+    #else
+        return std::filesystem::absolute(getHomeDirectory()).string() + "/*";
+    #endif
+}
+
 } // namespace vvv

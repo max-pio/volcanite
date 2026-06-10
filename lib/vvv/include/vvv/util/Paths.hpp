@@ -46,6 +46,12 @@ class Paths {
     /// returns the home directory of the current user
     static std::filesystem::path getHomeDirectory();
 
+    /// Compatibility function for portable-file-dialogs pfd::open_file: starting the dialog *inside* the directory
+    /// on Linux/Unix currently requires appending "/*" to the directory string.
+    /// return absolute getHomeDirectory() on Windows, and absolute getHomeDirectory() + "/*" on Linux/Unix
+    static std::string getHomeDirectoryPFDOpenEscaped();
+
+
     /// initialize paths.
     /// @param dataPath a list of semi-colon separated paths to data/-Folders. This list is sorted from lowest to highest priority.
     static void initPaths(const std::string &dataPaths);
